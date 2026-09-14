@@ -32,19 +32,84 @@ const { describeBulkTemplateTarget } = require('../../lib/builderPagesStore');
  * one and the operation silently empties pages instead of re-templating them.
  */
 
+/** A live link to a saved section — what makes a section part of the FRAME. */
+function frameRef(id, savedSectionId, title) {
+  return { id, title, canonical: true, savedSectionId };
+}
+
 const modularTemplate = {
   id: '27',
   name: 'Standard Page',
   templateKind: 'modular',
-  layoutSections: [{ id: 's1' }, { id: 's2' }, { id: 's3' }],
+  layoutSections: [
+    frameRef('s1', 'ss-header', 'Public Header'),
+    { id: 's2' },
+    frameRef('s3', 'ss-footer', 'Footer Menu'),
+  ],
 };
 
-test('a real modular template with sections is accepted, and carries its sections through', () => {
+test('a real modular template with a frame is accepted, and carries its sections through', () => {
   const target = describeBulkTemplateTarget(modularTemplate, '27');
   assert.equal(target.ok, true);
   assert.equal(target.id, '27');
   assert.equal(target.name, 'Standard Page');
   assert.equal(target.sections.length, 3);
+  // The frame is counted separately, because the frame is the thing being
+  // applied — the body marker in the middle is never copied onto a page.
+  assert.equal(target.frameCount, 2);
+});
+
+/**
+ * THE 2026-09-14 SEND-BACK, and the reason this predicate counts FRAME rather
+ * than sections.
+ *
+ * A template can be full of ordinary sections and carry no frame at all — a
+ * frame section is a live link to a saved section and nothing else is. Applied
+ * to a page, applyTemplateFrame then returns the body alone: the page's own
+ * header and footer are dropped by design and nothing replaces them, and the
+ * run answers `ok: true, verified: true` for every page, because the read-back
+ * matches on template id, total length and body count.
+ *
+ * Measured in a copy of the production database on 2026-09-14: 36 of 43 page
+ * templates have sections and no frame, and five of those passed the old
+ * `sections.length` test. Delray has 51 pages a visitor reaches with no
+ * publish step in between, which is 2026-09-13 again with the header and
+ * footer taken off instead of the body.
+ */
+test('a template with sections but NO FRAME is refused — the 2026-09-14 send-back', () => {
+  const target = describeBulkTemplateTarget(
+    {
+      id: '7',
+      name: 'Newsletter Basic',
+      templateKind: 'modular',
+      layoutSections: [{ id: 'a', type: 'text' }, { id: 'b', type: 'image' }],
+    },
+    '7',
+  );
+  assert.equal(target.ok, false);
+  assert.equal(target.status, 400);
+  assert.match(target.error, /Newsletter Basic/);
+  // It says it HAS sections, so the operator is not told a template he can see
+  // the contents of is empty.
+  assert.match(target.error, /2 section\(s\) but none of them is a shared header or footer/);
+  assert.match(target.error, /no shared header or footer to apply/);
+  // And it names the move that still works, because refusing with no route
+  // forward reads as the feature being broken.
+  assert.match(target.error, /one page from inside the editor/);
+});
+
+test('one frame section is enough — a template need not carry both ends', () => {
+  const target = describeBulkTemplateTarget(
+    {
+      id: '8',
+      name: 'Header Only',
+      templateKind: 'modular',
+      layoutSections: [frameRef('h', 'ss-header', 'Public Header'), { id: 'body' }],
+    },
+    '8',
+  );
+  assert.equal(target.ok, true);
+  assert.equal(target.frameCount, 1);
 });
 
 test('a template that resolves to nothing is refused, not guessed at', () => {
@@ -64,6 +129,9 @@ test('an EMPTY layout is refused — this is the 2026-08-14 incident', () => {
   assert.equal(target.ok, false);
   assert.equal(target.status, 400);
   assert.match(target.error, /Standard Right-Form/);
+  // No sections at all is the narrower case of "no frame", and it says which
+  // of the two it saw rather than quoting a count of zero.
+  assert.match(target.error, /has no sections at all/);
   // The refusal has to say what applying it would DO, or it reads as a bug in
   // the feature rather than as the feature protecting the pages.
   // Since 2026-09-14 the change keeps each page's body and swaps the frame, so
@@ -79,7 +147,7 @@ test('a missing layoutSections array is treated as empty, not as unknown', () =>
     '99',
   );
   assert.equal(target.ok, false);
-  assert.match(target.error, /no sections/);
+  assert.match(target.error, /has no sections at all/);
 });
 
 test('an email template is refused by kind, before its layout is even considered', () => {

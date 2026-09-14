@@ -211,6 +211,103 @@
   }
 
   /**
+   * HOW MUCH OF THE SELECTION THIS SCREEN ACTUALLY READ.
+   *
+   * `countBulkTemplateBody` can only count what it was handed, and the caller
+   * hands it one entry per selected page — when it remembers to. Called with
+   * no `pageSections` at all it answers `pages: 0, unreadable: 0`, which reads
+   * as "every page was read and none of them has any content", and the plan
+   * then tells the operator "there is nothing to lose here" about five pages
+   * it never looked at. That is round 4's rule broken in its original
+   * direction: a could-not-tell rendered as a definite answer, on the one
+   * sentence this dialog exists to make trustworthy.
+   *
+   * So completeness is a question about the SELECTION, not about the entries:
+   * every selected page must have contributed a readable layout. An entry that
+   * was never supplied and an entry that could not be parsed are the same fact
+   * and are counted together.
+   */
+  function readBulkTemplateBody(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const counted = countBulkTemplateBody(opts.pageSections);
+    const pageCount = Number.isFinite(Number(opts.pageCount))
+      ? Math.max(0, Math.trunc(Number(opts.pageCount)))
+      : counted.pages;
+    return {
+      counted,
+      pageCount,
+      // Both directions. More layouts than pages is a caller bug rather than a
+      // reachable state, and it would make the count an OVERstate — the same
+      // defect with the sign flipped, so it is not licensed either.
+      complete: counted.unreadable === 0 && counted.pages === pageCount,
+      missing: Math.max(0, pageCount - counted.readable),
+    };
+  }
+
+  // The operator's name for a section, or an honest placeholder. Mirrors
+  // sectionLabel in lib/builder-client/builder-template-frame.ts.
+  function sectionLabelLike(section) {
+    const title = section && typeof section.title === 'string' ? section.title.trim() : '';
+    return title || 'Untitled section';
+  }
+
+  /**
+   * WHICH SHARED SECTIONS THE SELECTION LOSES.
+   *
+   * applyTemplateFrame keeps the page's body and replaces its frame with the
+   * template's, so a shared section the chosen template does not carry is
+   * DROPPED. The single-page control in the editor says so by name
+   * (describeTemplateFrameChange); the bulk dialog said only that the shared
+   * sections are "replaced", which describes a swap and hides a removal.
+   *
+   * `templateSections` is the chosen template's layout. Until a template is
+   * picked there is nothing to compare against and the answer is `known:
+   * false` — not an empty list, which would read as "nothing is lost".
+   */
+  /**
+   * Does the chosen template carry a shared header or footer AT ALL?
+   *
+   * `known: false` until a template is picked. A template made entirely of
+   * ordinary sections carries no frame, and applying it takes each page's
+   * shared sections off and puts nothing back — the server refuses it
+   * (describeBulkTemplateTarget), and the dialog has to say so before the
+   * button is pressed rather than letting the operator walk into the refusal.
+   */
+  function countBulkTemplateFrame(templateSections) {
+    if (!Array.isArray(templateSections)) return { known: false, count: 0 };
+    let count = 0;
+    for (const section of templateSections) {
+      if (isFrameSectionLike(section)) count += 1;
+    }
+    return { known: true, count };
+  }
+
+  function countBulkTemplateFrameLoss(pageSections, templateSections) {
+    if (!Array.isArray(templateSections)) return { known: false, names: [], pages: 0 };
+    const incoming = new Set();
+    for (const section of templateSections) {
+      if (isFrameSectionLike(section)) incoming.add(String(section.savedSectionId));
+    }
+    const list = Array.isArray(pageSections) ? pageSections : [];
+    const names = [];
+    const seen = new Set();
+    let pages = 0;
+    for (const sections of list) {
+      if (!Array.isArray(sections)) continue;
+      let lost = 0;
+      for (const section of sections) {
+        if (!isFrameSectionLike(section)) continue;
+        if (incoming.has(String(section.savedSectionId))) continue;
+        lost += 1;
+        const label = sectionLabelLike(section);
+        if (!seen.has(label)) { seen.add(label); names.push(label); }
+      }
+      if (lost) pages += 1;
+    }
+    return { known: true, names, pages };
+  }
+
+  /**
    * EVERY claim this file can make, with the fact that licenses it.
    *
    * The test walks this table across a matrix of inputs and fails if a phrase
@@ -251,9 +348,39 @@
       // could not read makes the total an undercount, and an undercount of
       // "how much of your work is safe" is the same defect as the one this
       // whole dialog was reworded for.
+      //
+      // "Every selected page" is the test, not "every entry I was given".
+      // Licensing this on `unreadable === 0` alone let a caller that passed no
+      // layouts at all — the shape a new call site arrives in — license the
+      // whole family of counted sentences.
       name: 'a content-section count',
       phrase: 'kept exactly as',
-      licensed: (opts) => countBulkTemplateBody(opts.pageSections).unreadable === 0,
+      licensed: (opts) => readBulkTemplateBody(opts).complete,
+    },
+    {
+      // The same fact, and the sentence that needs it most: this one tells the
+      // operator there is NOTHING to lose. Read off a selection nobody looked
+      // at, it is the most reassuring sentence in the file and the least
+      // supported.
+      name: 'the pages have no content to lose',
+      phrase: 'nothing to lose here',
+      licensed: (opts) => readBulkTemplateBody(opts).complete,
+    },
+    {
+      // Naming the shared sections that go needs BOTH the chosen template's
+      // layout to compare against and every page's layout to look in.
+      name: 'which shared sections are removed',
+      phrase: 'will be removed',
+      licensed: (opts) => readBulkTemplateBody(opts).complete
+        && countBulkTemplateFrameLoss(opts.pageSections, opts.templateSections).known,
+    },
+    {
+      // "Nothing is lost" is a claim too, and a stronger one than naming what
+      // is: it has to hold for every page in the selection.
+      name: 'no shared section is removed',
+      phrase: 'No shared section is removed',
+      licensed: (opts) => readBulkTemplateBody(opts).complete
+        && countBulkTemplateFrameLoss(opts.pageSections, opts.templateSections).known,
     },
     {
       name: 'pages are live on the public site',
@@ -524,26 +651,64 @@
    */
   function describeBulkTemplateChangePlan(options) {
     const opts = options && typeof options === 'object' ? options : {};
-    const counted = countBulkTemplateBody(opts.pageSections);
-    const pageCount = Number.isFinite(Number(opts.pageCount))
-      ? Math.max(0, Math.trunc(Number(opts.pageCount)))
-      : counted.pages;
+    const reading = readBulkTemplateBody(opts);
+    const { counted, pageCount } = reading;
     const liveCount = Number.isFinite(Number(opts.liveCount))
       ? Math.max(0, Math.trunc(Number(opts.liveCount)))
       : 0;
+    const frameLoss = countBulkTemplateFrameLoss(opts.pageSections, opts.templateSections);
+
+    // THE DEAD END, NAMED BEFORE IT IS WALKED INTO. A template with no shared
+    // header or footer of its own is refused by the server, and the reason is
+    // worth more here than in an error afterwards: nothing about the picker
+    // distinguishes such a template, and in a copy of the production database
+    // 36 of 43 page templates are that shape. `blocked` is what the caller
+    // reads to keep the button off.
+    const templateFrame = countBulkTemplateFrame(opts.templateSections);
+    if (templateFrame.known && templateFrame.count === 0) {
+      return {
+        message: 'The chosen template carries no shared header or footer of its own, so moving pages onto it '
+          + 'would take the shared sections off them and put nothing back. Pick a template that has a shared '
+          + 'header or footer, or change the template on a single page from inside the page editor, where you '
+          + 'can see exactly what each page loses.',
+        isError: true,
+        blocked: true,
+        counts: {
+          pages: reading.pageCount,
+          bodyCount: null,
+          unreadable: counted.unreadable,
+          unread: reading.missing,
+          frameRemoved: null,
+          liveCount,
+        },
+      };
+    }
 
     const parts = [];
 
-    if (counted.unreadable > 0) {
-      // No number. The claims table refuses the counted phrasing here, and the
-      // reason is said out loud rather than left as a vaguer sentence — an
+    if (!reading.complete) {
+      // No number. The claims table refuses every counted phrasing here, and
+      // the reason is said out loud rather than left as a vaguer sentence — an
       // operator who cannot see why a count is missing reads the omission as
       // the count being zero.
+      //
+      // TWO WAYS TO BE INCOMPLETE, and the sentence has to fit the one that
+      // happened. A layout that could not be read and a page whose layout was
+      // never handed over are the same fact to the operator, so they share a
+      // sentence; being given MORE layouts than pages is a caller bug and
+      // cannot be phrased as "could not read N of M" without inventing a
+      // number, so it says what it actually has.
       parts.push(
-        'Each page keeps its own content sections; only the shared header and footer sections are '
-          + `replaced with the ones the chosen template carries. This screen could not read the layout of `
-          + `${counted.unreadable} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}, `
-          + 'so it cannot tell you the exact number it is keeping.',
+        reading.missing > 0
+          ? 'Each page keeps its own content sections; only the shared header and footer sections are '
+            + 'replaced with the ones the chosen template carries. This screen could not read the layout of '
+            + `${reading.missing} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}, `
+            + 'so it cannot tell you the exact number it is keeping.'
+          : 'Each page keeps its own content sections; only the shared header and footer sections are '
+            + 'replaced with the ones the chosen template carries. This screen was handed '
+            + `${counted.pages} page ${plural(counted.pages, 'layout', 'layouts')} for `
+            + `${pageCount} selected ${plural(pageCount, 'page', 'pages')}, so it cannot tell you the exact `
+            + 'number it is keeping.',
       );
     } else if (counted.bodyCount === 0) {
       parts.push(
@@ -563,6 +728,38 @@
           ? `The 1 content section ${where} is kept exactly as it is.`
           : `All ${counted.bodyCount} content sections ${where} are kept exactly as they are.`,
         'Only the shared header and footer sections are replaced with the ones the chosen template carries.',
+      );
+    }
+
+    // WHAT GOES, NOT ONLY WHAT ARRIVES. "Replaced" describes a swap, and a
+    // shared section the chosen template does not carry is not swapped — it is
+    // removed, and nothing takes its place. The single-page control in the
+    // editor has always named those; this one said only "replaced", so an
+    // operator moving 57 pages was told about the arrivals and not the
+    // departures.
+    //
+    // Until a template is chosen there is nothing to compare against, so the
+    // rule is stated instead of the outcome. That is a description of the
+    // operation rather than a claim about this selection, which is why it is
+    // sayable with no facts in hand.
+    if (!frameLoss.known || !reading.complete) {
+      parts.push(
+        'Any shared section a page carries that the chosen template does not is taken off that page — it '
+          + 'stays in Saved Sections, so it can be put back.',
+      );
+    } else if (!frameLoss.names.length) {
+      parts.push(
+        'No shared section is removed: every shared section these pages carry is in the chosen template too.',
+      );
+    } else {
+      const wherePages = frameLoss.pages === pageCount
+        ? plural(pageCount, 'this page', 'every selected page')
+        : `${frameLoss.pages} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}`;
+      parts.push(
+        `${plural(frameLoss.names.length, 'This shared section is', 'These shared sections are')} not in the `
+          + `chosen template and will be removed from ${wherePages}: ${frameLoss.names.join(', ')}. `
+          + `${plural(frameLoss.names.length, 'It is a saved section', 'They are saved sections')}, so `
+          + `${plural(frameLoss.names.length, 'it', 'they')} can be put back at any time.`,
       );
     }
 
@@ -598,10 +795,15 @@
     return {
       message: parts.join(' '),
       isError: false,
+      blocked: false,
       counts: {
         pages: pageCount,
-        bodyCount: counted.unreadable ? null : counted.bodyCount,
+        // null, never a number, when the reading was incomplete — a caller
+        // reading this back must not find a figure the message refused to say.
+        bodyCount: reading.complete ? counted.bodyCount : null,
         unreadable: counted.unreadable,
+        unread: reading.missing,
+        frameRemoved: frameLoss.known && reading.complete ? frameLoss.names.length : null,
         liveCount,
       },
     };
@@ -611,6 +813,9 @@
     tallyBulkTemplateRows,
     isFrameSectionLike,
     countBulkTemplateBody,
+    readBulkTemplateBody,
+    countBulkTemplateFrame,
+    countBulkTemplateFrameLoss,
     describeBulkTemplateChangePlan,
     describeBulkTemplateOutcome,
     describeBulkTemplateInterruption,

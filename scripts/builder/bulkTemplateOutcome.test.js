@@ -7,6 +7,9 @@ const {
   tallyBulkTemplateRows,
   isFrameSectionLike,
   countBulkTemplateBody,
+  readBulkTemplateBody,
+  countBulkTemplateFrame,
+  countBulkTemplateFrameLoss,
   describeBulkTemplateChangePlan,
   describeBulkTemplateOutcome,
   describeBulkTemplateInterruption,
@@ -674,6 +677,154 @@ test('a page this screen cannot read means NO number is stated', () => {
   assert.equal(plan.counts.unreadable, 1);
 });
 
+/**
+ * THE MOST REASSURING SENTENCE IN THE FILE, AND THE ONE EASIEST TO SAY BLIND.
+ *
+ * Round 1 of the 2026-09-14 review called this with no `pageSections` at all
+ * and got back "These pages have no content sections of their own, so there is
+ * nothing to lose here" for a five-page selection it had never looked at.
+ * `countBulkTemplateBody(undefined)` answers `pages: 0, unreadable: 0`, and
+ * `unreadable === 0` was the whole licence — so a caller that passed nothing
+ * licensed every counted sentence in the dialog.
+ */
+test('a selection this screen was never given the layouts for states NO number', () => {
+  const plan = describeBulkTemplateChangePlan({ pageCount: 5, liveCount: 3 });
+
+  assert.doesNotMatch(plan.message, /nothing to lose here/, 'a definite reassurance about pages it never read');
+  assert.doesNotMatch(plan.message, /kept exactly as/);
+  assert.match(plan.message, /could not read the layout of 5 of the 5 selected pages/);
+  assert.equal(plan.counts.bodyCount, null);
+  assert.equal(plan.counts.unread, 5);
+});
+
+test('a SHORT list of layouts is incomplete, not a smaller selection', () => {
+  // Three pages ticked, one layout handed over. The count would be a genuine
+  // undercount of how much of his work is safe.
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 3,
+    pageSections: [[{ id: 'a', type: 'text' }]],
+  });
+  assert.doesNotMatch(plan.message, /kept exactly as/);
+  assert.match(plan.message, /could not read the layout of 2 of the 3 selected pages/);
+});
+
+test('MORE layouts than pages is refused a count too, and says what it has', () => {
+  // A caller bug rather than a reachable state, and it would OVERstate — the
+  // same defect with the sign flipped, so it is not licensed either.
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[{ id: 'a' }], [{ id: 'b' }], [{ id: 'c' }]],
+  });
+  assert.doesNotMatch(plan.message, /kept exactly as/);
+  assert.match(plan.message, /handed 3 page layouts for 1 selected page/);
+  assert.equal(plan.counts.bodyCount, null);
+});
+
+test('a genuinely empty page IS allowed to say there is nothing to lose', () => {
+  // The guard above must not swallow the true case: every page read, and none
+  // of them has any content of its own.
+  const plan = describeBulkTemplateChangePlan({ pageCount: 2, pageSections: [[], []] });
+  assert.match(plan.message, /nothing to lose here/);
+});
+
+/**
+ * WHAT GOES, NOT ONLY WHAT ARRIVES — the send-back's second item.
+ *
+ * "Replaced" describes a swap. A shared section the chosen template does not
+ * carry is not swapped; it is taken off the page and nothing replaces it. The
+ * single-page control in the editor has always named those by name.
+ */
+test('the shared sections that will be removed are named, once a template is chosen', () => {
+  const frame = (savedSectionId, title) => ({ id: `p-${savedSectionId}`, title, canonical: true, savedSectionId });
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 2,
+    pageSections: [
+      [frame('ss-header', 'Public Header'), { id: 'a', type: 'text' }, frame('ss-old', 'Old Footer')],
+      [frame('ss-header', 'Public Header'), { id: 'b', type: 'text' }],
+    ],
+    templateSections: [frame('ss-header', 'Public Header'), { id: 'body' }, frame('ss-new', 'Copyright')],
+  });
+
+  assert.match(plan.message, /will be removed from 1 of the 2 selected pages: Old Footer/);
+  assert.match(plan.message, /can be put back at any time/);
+  assert.equal(plan.counts.frameRemoved, 1);
+});
+
+test('nothing lost is SAID, rather than left to be inferred from silence', () => {
+  const frame = (savedSectionId, title) => ({ id: `p-${savedSectionId}`, title, canonical: true, savedSectionId });
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[frame('ss-header', 'Public Header'), { id: 'a' }]],
+    templateSections: [frame('ss-header', 'Public Header'), { id: 'body' }, frame('ss-foot', 'Footer')],
+  });
+  assert.match(plan.message, /No shared section is removed/);
+  assert.equal(plan.counts.frameRemoved, 0);
+});
+
+test('with no template chosen the RULE is stated, and no page is named', () => {
+  const frame = (savedSectionId, title) => ({ id: `p-${savedSectionId}`, title, canonical: true, savedSectionId });
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[frame('ss-old', 'Old Footer'), { id: 'a' }]],
+  });
+  assert.doesNotMatch(plan.message, /will be removed/, 'it cannot know that yet — nothing has been chosen');
+  assert.doesNotMatch(plan.message, /No shared section is removed/);
+  assert.match(plan.message, /Any shared section a page carries that the chosen template does not is taken off/);
+  assert.equal(plan.counts.frameRemoved, null);
+});
+
+/**
+ * THE DEAD END, NAMED BEFORE IT IS WALKED INTO.
+ *
+ * A template made entirely of ordinary sections carries no shared header or
+ * footer, and the store refuses it (describeBulkTemplateTarget). 36 of 43 page
+ * templates in a copy of the production database are that shape and nothing
+ * about the picker distinguishes them.
+ */
+test('a template carrying no shared header or footer blocks the change and says why', () => {
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 2,
+    pageSections: [[{ id: 'a' }], [{ id: 'b' }]],
+    templateSections: [{ id: 'hero', type: 'text' }, { id: 'copy', type: 'text' }],
+  });
+
+  assert.equal(plan.blocked, true);
+  assert.equal(plan.isError, true);
+  assert.match(plan.message, /carries no shared header or footer of its own/);
+  assert.match(plan.message, /put nothing back/);
+  // And it names the move that still works.
+  assert.match(plan.message, /a single page from inside the page editor/);
+});
+
+test('an ordinary destination is not blocked', () => {
+  const frame = (savedSectionId, title) => ({ id: `t-${savedSectionId}`, title, canonical: true, savedSectionId });
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[{ id: 'a' }]],
+    templateSections: [frame('ss-header', 'Public Header'), { id: 'body' }],
+  });
+  assert.equal(plan.blocked, false);
+});
+
+test('the two frame counters answer "not told" rather than "none"', () => {
+  assert.deepEqual(countBulkTemplateFrame(undefined), { known: false, count: 0 });
+  assert.deepEqual(countBulkTemplateFrame([]), { known: true, count: 0 });
+  assert.equal(countBulkTemplateFrameLoss([[{ id: 'a' }]], undefined).known, false);
+  assert.equal(countBulkTemplateFrameLoss([[{ id: 'a' }]], []).known, true);
+});
+
+test('the body reading says whether it covered the whole selection', () => {
+  const page = [{ id: 'a', type: 'text' }];
+  assert.equal(readBulkTemplateBody({ pageCount: 2, pageSections: [page, page] }).complete, true);
+  assert.equal(readBulkTemplateBody({ pageCount: 2, pageSections: [page] }).complete, false);
+  assert.equal(readBulkTemplateBody({ pageCount: 2, pageSections: [page, undefined] }).complete, false);
+  assert.equal(readBulkTemplateBody({ pageCount: 2 }).complete, false);
+  assert.equal(readBulkTemplateBody({ pageCount: 2 }).missing, 2);
+  // With no pageCount at all the entries themselves are the selection, which
+  // is what every pre-existing caller relies on.
+  assert.equal(readBulkTemplateBody({ pageSections: [page, page] }).complete, true);
+});
+
 test('the live sentence in the dialog is grammatical at every count', () => {
   // The subject and the verb both come from the LIVE count. Taking one from
   // each is round 3's "they is live on the public site", and the first draft of
@@ -723,11 +874,19 @@ test('the plan makes no claim its input did not license', () => {
     undefined,
   ];
 
+  // The chosen destination is part of the input now: two of the plan's
+  // sentences are claims about what this template takes OFF the pages, so the
+  // matrix has to include having one, not having one, and having one that
+  // carries no frame at all.
+  const FRAME = { id: 't-h', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' };
+  const TEMPLATE_SETS = [undefined, [], [{ id: 'body' }], [FRAME, { id: 'body' }], 'not a list'];
+
   let checked = 0;
   for (const pageSections of SECTION_SETS) {
+   for (const templateSections of TEMPLATE_SETS) {
     for (const pageCount of [undefined, 0, 1, 2, 3]) {
       for (const liveCount of [undefined, 0, 1, 2]) {
-        const opts = { pageCount, liveCount, pageSections };
+        const opts = { pageCount, liveCount, pageSections, templateSections };
         const said = describeBulkTemplateChangePlan(opts).message;
         checked += 1;
         for (const rule of CLAIMS) {
@@ -741,6 +900,7 @@ test('the plan makes no claim its input did not license', () => {
         }
       }
     }
+   }
   }
-  assert.ok(checked > 100, 'the sweep should be a real one');
+  assert.ok(checked > 500, 'the sweep should be a real one');
 });

@@ -4325,6 +4325,49 @@ App.builder = (function () {
     return lists;
   }
 
+  // The chosen destination's OWN sections, or undefined while nothing is
+  // chosen. Undefined and [] are different answers here — one is "I have not
+  // been told", the other is "this template has no sections" — and the wording
+  // module treats them as such, so this must not flatten them to an array.
+  function selectedBulkTemplateSections() {
+    const select = byId('builderPagesChangeTemplateSelect');
+    const template = getSavedPageTemplateById(select && select.value);
+    return template && Array.isArray(template.layoutSections) ? template.layoutSections : undefined;
+  }
+
+  // THE WARNING IS RECOMPUTED WHEN THE DESTINATION CHANGES, because half of
+  // what it has to say depends on which template was picked: whether that
+  // template carries a shared header and footer at all, and which of the
+  // pages' own shared sections it does not carry and will therefore take off
+  // them. Computed once when the dialog opens — before anything is chosen — it
+  // could only ever describe the arrivals, and the operator read a sentence
+  // about a swap on an operation that was also a removal.
+  function renderBulkChangeTemplateWarning() {
+    const warningEl = byId('builderPagesChangeTemplateWarning');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (!warningEl) return;
+    const plan = sayBulkTemplate(
+      'describeBulkTemplateChangePlan',
+      {
+        pageCount: selectedPageIds.size,
+        liveCount: countLiveSelectedPages(),
+        pageSections: selectedPageLayoutSections(),
+        templateSections: selectedBulkTemplateSections(),
+      },
+      // Dull on purpose: no count, because the file that does the counting is
+      // the one that did not load.
+      'Each page keeps its own content sections; the shared header and footer sections are replaced with '
+        + 'the ones the chosen template carries. An archive of all your pages is saved first, and Restore '
+        + 'All on that archive undoes this — along with any other page edits made after it was taken.',
+    );
+    warningEl.textContent = plan.message;
+    // A destination the server will refuse is not offered as a button. The
+    // fallback sentence carries no `blocked`, so a missing module leaves the
+    // button as it was rather than disabling a control for a reason it cannot
+    // state.
+    if (confirmBtn) confirmBtn.disabled = plan.blocked === true;
+  }
+
   function openBulkChangeTemplateDialog() {
     const dialog = byId('builderPagesChangeTemplateDialog');
     const select = byId('builderPagesChangeTemplateSelect');
@@ -4368,20 +4411,11 @@ App.builder = (function () {
       // could only ever be checked by eye (landmine 9). A page whose layout is
       // not in hand would make the count an undercount, and the module refuses
       // to state one at all in that case — it says how many it could not read.
-      warningEl.textContent = sayBulkTemplate(
-        'describeBulkTemplateChangePlan',
-        {
-          pageCount: n,
-          liveCount: countLiveSelectedPages(),
-          pageSections: selectedPageLayoutSections(),
-        },
-        // Dull on purpose: no count, because the file that does the counting is
-        // the one that did not load.
-        'Each page keeps its own content sections; the shared header and footer sections are replaced with '
-          + 'the ones the chosen template carries. An archive of all your pages is saved first, and Restore '
-          + 'All on that archive undoes this — along with any other page edits made after it was taken.',
-      ).message;
       if (confirmBtn) confirmBtn.disabled = false;
+      renderBulkChangeTemplateWarning();
+      // Rebound rather than added, because this dialog is opened many times in
+      // one session and addEventListener would stack a listener per opening.
+      select.onchange = renderBulkChangeTemplateWarning;
     }
     if (confirmBtn) confirmBtn.textContent = 'Change Template';
     dialog.showModal();
@@ -4417,8 +4451,11 @@ App.builder = (function () {
   }
 
   // Archive first, then change. The order is the whole safety of this
-  // operation: it re-pours every selected page, which is what emptied 35
-  // sections off the Delray home page on 2026-08-14.
+  // operation: it rewrites the layout of every selected page — keeping each
+  // page's own content and swapping the shared header/footer sections for the
+  // chosen template's, since 2026-09-14 — and the version that re-poured
+  // instead is what emptied 35 sections off the Delray home page on
+  // 2026-08-14 and 57 Delray pages on 2026-09-13.
   //
   // The archive is not best-effort. If it fails, nothing is written and the
   // failure is what the operator is told. The server refuses the change

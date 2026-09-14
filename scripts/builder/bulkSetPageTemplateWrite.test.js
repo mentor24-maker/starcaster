@@ -356,21 +356,108 @@ test('the body-loss guard refuses when content would be dropped, and only then',
   assert.ok(store.describeBodyLoss(31, 30), 'losing even one is a refusal');
 });
 
-test('a project with NO saved sections is a fact, not a failure — the run goes ahead', async () => {
-  // An empty list and a failed read are different answers, and only one of
-  // them is a reason to refuse. With no masters, the template's bare
-  // references have nothing to resolve to and are dropped rather than
-  // rendering as empty bands; the page's body is still untouched.
-  const { store, rows } = makeStore({
+/**
+ * AN EMPTY MASTERS LIST THAT LEAVES THE FRAME WITH NOTHING TO BE.
+ *
+ * This test used to assert the opposite — that the run went ahead and the page
+ * came back holding its body alone — and that is exactly the 2026-09-14
+ * send-back: every page written with its header and footer removed, nothing
+ * put back, and `ok: true, verified: true` on every row.
+ *
+ * The refusal above it catches `ok: false` from listSavedSections, and that is
+ * not the only way to be handed nothing. An error matching isMissingTableError
+ * — "does not exist", "relation", "schema cache" — falls THROUGH to the local
+ * JSON store and answers `ok: true` with whatever it holds, which on Vercel is
+ * empty by definition because that filesystem is read-only (landmine 6). A
+ * failed read is then indistinguishable from a project with no saved sections.
+ *
+ * So the run asks the question it actually cares about, of the data rather
+ * than of the envelope: does this template's frame survive resolution? None of
+ * it does here, so no page is written and the refusal is tagged as one.
+ */
+test('a template whose frame resolves to NOTHING is refused before a page is written', async () => {
+  const { store, rows, calls } = makeStore({
     pages: [pageRow(1, 'Home')],
     templates: [NEW_TEMPLATE],
     savedSections: [],
   });
 
   const res = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(res.ok, false);
+  assert.equal(res.code, 'NOTHING_WRITTEN');
+  assert.match(res.error, /Blog Home Template/);
+  assert.match(res.error, /none of them could be matched to a saved section/);
+  assert.match(res.error, /no page was changed/);
+
+  // Not a word of it was written, and the page still holds its old frame.
+  assert.equal(calls.filter((c) => c.method === 'PATCH').length, 0);
+  assert.deepEqual(
+    docOf(rows[0]).sections.map((s) => s.id),
+    ['page-old-header', ...PAGE_BODY_IDS],
+  );
+});
+
+/**
+ * And the case that still has to go ahead, or the refusal above would be a
+ * guard that refuses everything: an OLD-STYLE template carrying a COPY of its
+ * frame rather than a reference. resolveFrameSection keeps a copy when it
+ * cannot find a master (only a bare reference is dropped), so the frame
+ * survives with no masters at all and the operator gets what the template
+ * shows.
+ */
+test('an old-style template carrying its frame outright still applies with no masters', async () => {
+  const OLD_STYLE = {
+    id: '48',
+    name: 'Old Copy Template',
+    template_kind: 'modular',
+    layout_sections: JSON.stringify({
+      sections: [
+        {
+          id: 'tpl-copy-header',
+          title: 'Public Header',
+          canonical: true,
+          savedSectionId: 'ss-header',
+          modules: [{ id: 'm-copy', type: 'text', settings: { text: 'HEADER v1 (stale copy)' } }],
+        },
+        { id: 'tpl-body-marker', type: 'text' },
+      ],
+    }),
+  };
+  const { store, rows } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [OLD_STYLE],
+    savedSections: [],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '48');
   assert.equal(res.ok, true);
   assert.equal(res.data[0].verified, true);
-  assert.deepEqual(docOf(rows[0]).sections.map((s) => s.id), PAGE_BODY_IDS);
+  assert.deepEqual(
+    docOf(rows[0]).sections.map((s) => s.id),
+    ['tpl-copy-header', ...PAGE_BODY_IDS],
+  );
+});
+
+/**
+ * ONE missing master is not the same event as all of them, and the difference
+ * is deliberate: a saved section the operator genuinely deleted should not
+ * refuse every bulk template change afterwards. It is dropped, as it always
+ * was, and the rest of the frame still arrives.
+ */
+test('one missing master is dropped, not treated as a failed read', async () => {
+  const { store, rows } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+    savedSections: [HEADER_MASTER],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(res.ok, true);
+  assert.equal(res.data[0].verified, true);
+  // The header arrives; the footer, whose master is gone, does not.
+  const ids = docOf(rows[0]).sections.map((s) => s.id);
+  assert.equal(ids.length, PAGE_BODY_IDS.length + 1);
+  assert.deepEqual(ids.slice(1), PAGE_BODY_IDS);
 });
 
 test('the page keeps its OWN background and theme — landmine 13', async () => {

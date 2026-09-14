@@ -30,6 +30,29 @@ is saved it is read back and its content counted, not just its total number of
 blocks — swapping content for furniture keeps the total identical, which is
 precisely the kind of loss that would otherwise slip past.
 
+The review pass on this found the same accident waiting on the other side of
+the page, and it is fixed here too. Not every template carries a shared header
+and footer — in a copy of the live database, 36 of the 43 page templates carry
+none at all — and moving pages onto one of those took the header and footer
+*off* every page, put nothing back, and reported all of them confirmed. The
+same loss, from the opposite end. A template with no shared sections of its own
+is now refused before anything is written, the dialog says so and keeps the
+button off rather than letting you walk into it, and each saved page is checked
+for its shared sections as well as its content. A run is also stopped if the
+project's saved sections come back empty when the template needs them — on the
+live server an unreadable list and an empty one look identical, and the
+difference is whether 57 pages keep their header.
+
+The warning before the button now also tells you what *goes*, not only what
+arrives. Pick a template and it names any shared section your pages carry that
+the new one does not — "Old Footer will be removed from 1 of the 2 selected
+pages" — or says outright that nothing is lost, and it re-reads the moment you
+pick a different template. And it no longer states a number when it has not
+actually looked at every page you ticked: asked about five pages it was given no
+layouts for, the old wording answered "these pages have no content sections of
+their own, so there is nothing to lose here", which is the most reassuring
+sentence in the dialog and, in that case, the least supported.
+
 ## 2026-09-13 — Six blog settings panels line up as one block instead of a stack of loose rows (#688)
 
 Six panels in the Builder — the Category Filter, Tag Cloud, Search, Search
