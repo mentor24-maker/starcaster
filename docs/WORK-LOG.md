@@ -1,3 +1,33 @@
+## 2026-09-14 — Saving a Builder page no longer quietly unlinks the shared blocks on it (#695)
+
+A shared block is one you build once and reuse on many pages: change the
+original and every page carrying it follows along. Until now, opening a page in
+the Builder and clicking **Save Page** — changing nothing at all — silently cut
+that link on every shared block on the page. The header flipped from *Following*
+to *Independent*, nothing was said, and the page looked exactly the same. The
+next time the original was updated, that page just did not get it. Which turns
+up much later as "the footer will not update on that page", with no way to guess
+which save did it.
+
+The cause was a piece of machinery for importing pages from the old Normie
+system. It recognises an old-style page by looking for a couple of settings
+objects — and the current page editor happens to attach those same two objects to
+every section it saves. So every ordinary save was being treated as an import,
+rebuilt from a fixed list of fields, and the list did not include the link back
+to the original. There was already a safety net downstream whose whole job is to
+put that link back; it was being handed a page the link had already been stripped
+from, so it had nothing to work with.
+
+The fix carries the link through the rebuild, for blocks and for the individual
+modules inside them, and leaves everything else exactly as it was. The ticket
+suggested a different repair — teaching the importer to recognise old pages more
+narrowly — and that was checked and set aside: the signal it proposed is one
+modern pages also carry, so it would not have fixed this, and tightening it
+further risks a real old page quietly failing to import, which is worse.
+
+Verified in a real browser against a local copy of the live data, both ways: on
+the old code the click wipes the links, on the new code they survive.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
