@@ -4991,7 +4991,7 @@ if (cmd === 'whoami') {
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
-        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr).target;
+        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr, c.comment_text).target;
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: simTarget,
@@ -5175,7 +5175,7 @@ if (cmd === 'whoami') {
       const authorized = answered.state === 'no-question'
         ? fresh
         : (answered.state === 'answered' && answered.delivered);
-      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr);
+      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr, answered.answer?.comment_text);
       // A reading that failed is reported, never rounded down to "carry on".
       // Moving on a guess here is the whole of the bug this fix removes.
       if (plan.act === 'cannot-tell') {

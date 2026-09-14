@@ -126,7 +126,17 @@ export function assertManagerRoom(panel, width) {
   for (const [bi, fields] of buckets.entries()) {
     if (!fields.length) continue;
 
+    // Beside-pairs only. A STACKED pair — control below its label, same left
+    // edge — has no horizontal gap between the two, so `labelW` is the column
+    // rather than a label track and this subtraction is not a measure of
+    // anything the ceiling is about. Skipping it is not a weakening: the
+    // ceiling's own message says the fix is `max-content` instead of `1fr`,
+    // and a stacked column cannot take a max-content label track without
+    // pulling its FIELD off the block edge too, which is the L8 notch one
+    // level along. Declared 2026-09-14, panel sweep 14/15 (86bbjt1be), when
+    // the Blog Card designer became the first stacked shape to opt in.
     const measured = fields
+      .filter((f) => !f.stacked)
       .map((f) => ({ field: f, room: f.labelW - f.labelTextW }))
       .filter((m) => Number.isFinite(m.room));
     if (!measured.length) continue;

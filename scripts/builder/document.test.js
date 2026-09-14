@@ -594,3 +594,180 @@ test('a genuine legacy Normie section still migrates, and legacy values still wi
   assert.equal(saved.background.mode, 'color', 'row background still rebuilt from rowSettings');
   assert.equal(saved.widthMode, 'contained', 'an import with no widthMode still defaults');
 });
+
+test('an ordinary save keeps a row background\'s own settings', () => {
+  // Round-1 review of task 86bc0bb73: the first measurement compared TOP-LEVEL
+  // section keys, so it could not see inside `background` -- which the
+  // section-level carry deliberately hands to the legacy normalizer. Six
+  // settings were still reverting on every save with no message.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      ...EDITOR_TRIGGER,
+      background: {
+        mode: 'gradient',
+        color: '#112233',
+        color2: '#445566',
+        gradientAngle: 120,
+        opacity: 55,
+        imageAssetId: 'asset_123',
+        parallax: true,
+        parallaxSpeed: 0.7,
+      },
+      overlayScreen: {
+        background: { mode: 'color', color: '#010203' },
+        opacity: 40,
+        blendMode: 'multiply',
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const { background, overlayScreen } = serialized.sections[0];
+  assert.equal(background.gradientAngle, 120, 'gradient angle reverted to 135');
+  assert.equal(background.opacity, 55, 'background opacity reverted to 100');
+  assert.equal(background.imageAssetId, 'asset_123', 'image asset id was blanked');
+  assert.equal(background.parallax, true, 'parallax reverted to off');
+  assert.equal(background.parallaxSpeed, 0.7, 'parallax speed reverted to the default');
+  assert.equal(overlayScreen.blendMode, 'multiply', 'overlay blend mode reverted to normal');
+  assert.equal(overlayScreen.opacity, 40);
+});
+
+test('a row with no background keeps the colour the operator picked', () => {
+  // The Builder's background panel holds the colour, gradient angle and image
+  // it last had while the mode sits at "none", so blanking them here meant the
+  // chosen colour was gone the moment the operator switched the mode back on.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      ...EDITOR_TRIGGER,
+      background: {
+        mode: 'none',
+        color: '#123456',
+        color2: '#654321',
+        gradientAngle: 120,
+        imageUrl: 'https://example.com/a.png',
+        imageAssetId: 'asset_9',
+        opacity: 55,
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const { background } = serialized.sections[0];
+  assert.equal(background.mode, 'none', 'the row still shows no background');
+  assert.equal(background.color, '#123456');
+  assert.equal(background.color2, '#654321');
+  assert.equal(background.gradientAngle, 120);
+  assert.equal(background.imageUrl, 'https://example.com/a.png');
+  assert.equal(background.imageAssetId, 'asset_9');
+  assert.equal(background.opacity, 55);
+});
+
+test('a scalar cellPadding does not clobber the map built from containerSettings', () => {
+  // mergeNormieCellFields shape-guards the twelve per-column maps on purpose: a
+  // scalar means the sender is not speaking the per-column shape, and taking it
+  // replaces a real map with one the normalizer reads as "no columns set".
+  // The round-1 carry-through copied anything non-null and undid that guard --
+  // a measured step backwards from main in the PR meant to stop settings being
+  // lost.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      rowSettings: { margin: '0', padding: '20' },
+      containerSettings: { col1: { padding: '40' }, col2: { padding: '40' } },
+      cellPadding: '14',
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].cellPadding.left, '40', 'containerSettings padding was clobbered by a scalar');
+  assert.equal(serialized.sections[0].cellPadding.right, '40');
+});
+
+test('an object cellPadding still wins over containerSettings', () => {
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      rowSettings: { margin: '0', padding: '20' },
+      containerSettings: { col1: { padding: '40' }, col2: { padding: '40' } },
+      cellPadding: { left: '7', right: '7' },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].cellPadding.left, '7', 'the modern per-column map must still win');
+  assert.equal(serialized.sections[0].cellPadding.right, '7');
+});
+
+test('an ordinary save changes NOTHING a save without the legacy trigger would not', () => {
+  // The whole-loss guard, and the instrument the ticket asked for turned into a
+  // permanent one. A section carrying rowSettings/containerSettings is routed
+  // through the legacy migrator; the same section without them goes straight to
+  // the normalizer. Comparing the two OUTPUTS -- rather than input against
+  // output -- is what separates a real loss from the normalizer's own clamping,
+  // which is what made parallaxSpeed 1.5 -> 1 read as a loss when 1 is simply
+  // the maximum.
+  //
+  // It is a deepEqual rather than a field list on purpose: a list has to be
+  // extended by hand every time builder-template.ts grows a section setting,
+  // and the day somebody forgets is the day a setting starts silently
+  // reverting again -- which is exactly how this bug reached a client.
+  const modules = [{ id: 'module_1', type: 'text', column: 'left', text: '<p>x</p>', settings: {} }];
+  const bare = { id: 'section_1', layout: 'two-column', title: 'Hero', modules };
+
+  // Start from the serializer's own output, so the payload stays in step with
+  // the section shape instead of freezing today's field list into the test.
+  const populated = {
+    ...serializeBuilderDocument({ layoutSections: [bare] }).sections[0],
+    modules,
+    widthMode: 'full-width',
+    alignment: 'center',
+    marginTop: '40',
+    marginBottom: '60',
+    mobileLayout: 'reverse-stack',
+    minHeight: '480',
+    background: {
+      mode: 'gradient',
+      color: '#112233',
+      color2: '#445566',
+      gradientAngle: 120,
+      opacity: 55,
+      imageAssetId: 'asset_123',
+      parallax: true,
+      parallaxSpeed: 0.7,
+    },
+    overlayScreen: {
+      background: { mode: 'color', color: '#010203' },
+      opacity: 40,
+      blendMode: 'multiply',
+    },
+    // A near-white cell fill is discarded whole by
+    // sanitizeCellBackgroundForDrillDown, so this has to be dark to be a test
+    // of anything at all.
+    cellBackgrounds: {
+      left: { mode: 'color', color: '#123456', opacity: 55, gradientAngle: 77 },
+      right: { mode: 'color', color: '#654321' },
+    },
+    cellPadding: { left: '31', right: '32' },
+    cellBorderWidth: { left: '3', right: '4' },
+  };
+
+  const withoutTrigger = serializeBuilderDocument({ layoutSections: [populated] }).sections[0];
+  const withTrigger = serializeBuilderDocument({
+    layoutSections: [{ ...populated, ...EDITOR_TRIGGER }],
+  }).sections[0];
+
+  // rowSettings/containerSettings are the legacy input itself; the migrator is
+  // the authority on what they become, so they are the one thing the two runs
+  // are entitled to disagree about.
+  assert.deepEqual(
+    { ...withTrigger, cellPadding: null, marginTop: null },
+    { ...withoutTrigger, cellPadding: null, marginTop: null },
+    'an ordinary save lost or changed a setting that a save without the legacy trigger kept'
+  );
+});

@@ -5613,7 +5613,16 @@ export function BlogCardManagerPreview() {
     return <div className="builder-blog-card-manager-module"><div className="builder-blog-post-manager-stub">Loading card template…</div></div>;
   }
 
-  const sel: CSSProperties = { padding: "4px 8px", border: "1px solid #cbd5e0", borderRadius: 5, fontSize: "0.8rem", background: "#fff", width: "100%" };
+  /*
+   * W0 — the field styling is a CLASS now, not an inline object.
+   *
+   * This was `const sel: CSSProperties = { ..., width: "100%" }`, spread into
+   * every control, and three call sites overrode the width with a hard number
+   * (110px, 64px, 56px). An inline width beats every stylesheet rule there is,
+   * so those controls could never take a shared track — which is precisely
+   * "never a width on an individual field" (W0), and is why the groups below
+   * rendered as loose rows rather than columns. Panel sweep 14/15, 86bbjt1be.
+   */
   // The image-position and image-width controls only do anything in
   // Side-by-side. They are disabled rather than hidden, so the operator can see
   // the setting exists and why it is not available (the title says which layout).
@@ -5634,10 +5643,20 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Content</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               <span className="bcm-label">Read More</span>
-              <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
+              <input type="text" className="bcm-input" value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
             </div>
             <label className="bcm-control">
               <span className="bcm-label">Link Image</span>
@@ -5654,7 +5673,17 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Structure</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               <span className="bcm-label">Layout</span>
               <div className="bcm-btn-group">
@@ -5667,7 +5696,7 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Position</span>
-              <select style={sel} value={tpl.imageSide} onChange={(e) => setField("imageSide", e.target.value)} disabled={!isSideBySide}
+              <select className="bcm-input" value={tpl.imageSide} onChange={(e) => setField("imageSide", e.target.value)} disabled={!isSideBySide}
                 title={isSideBySide ? undefined : "Side-by-side layout only"}>
                 <option value="left">Left of text</option>
                 <option value="right">Right of text</option>
@@ -5677,7 +5706,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Width</span>
               <div className="bcm-num-row">
-                <input type="number" min={80} max={600} step={10} style={{ ...sel, width: 64 }}
+                <input type="number" min={80} max={600} step={10} className="bcm-input"
                   value={tpl.imageSideWidth} disabled={!isSideBySide || tpl.imageSide === "top"}
                   title={isSideBySide && tpl.imageSide !== "top" ? undefined : "Side-by-side layout, image left or right"}
                   onChange={(e) => setField("imageSideWidth", parseInt(e.target.value, 10) || 220)} />
@@ -5686,14 +5715,14 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Edge</span>
-              <select style={sel} value={tpl.imageBleed} onChange={(e) => setField("imageBleed", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageBleed} onChange={(e) => setField("imageBleed", e.target.value)}>
                 <option value="full">Full bleed</option>
                 <option value="inset">Inset</option>
               </select>
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Aspect</span>
-              <select style={sel} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}
+              <select className="bcm-input" value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}
                 disabled={tpl.imageHeight > 0} title={tpl.imageHeight > 0 ? "A fixed height is set, which overrides the aspect ratio" : undefined}>
                 <option value="16:9">16:9</option>
                 <option value="4:3">4:3</option>
@@ -5704,7 +5733,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Fixed Height</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={800} step={10} style={{ ...sel, width: 64 }}
+                <input type="number" min={0} max={800} step={10} className="bcm-input"
                   value={tpl.imageHeight} title="0 keeps the aspect ratio above"
                   onChange={(e) => setField("imageHeight", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">{tpl.imageHeight > 0 ? "px" : "auto"}</span>
@@ -5712,7 +5741,7 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Crop</span>
-              <select style={sel} value={tpl.imageCrop} onChange={(e) => setField("imageCrop", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageCrop} onChange={(e) => setField("imageCrop", e.target.value)}>
                 <option value="cover">Fill frame</option>
                 <option value="contain">Fit whole photo</option>
               </select>
@@ -5722,7 +5751,17 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Frame</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               {/*
                 Was "Card Style" (Default / Bordered / Shadow), which decided the
@@ -5732,7 +5771,7 @@ export function BlogCardManagerPreview() {
                 a legacy "bordered" row reads as None, which is what it drew.
               */}
               <span className="bcm-label">Card Shadow</span>
-              <select style={sel} value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
+              <select className="bcm-input" value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
                 onChange={(e) => setField("cardStyle", e.target.value)}>
                 <option value="default">None</option>
                 <option value="shadow">Shadow</option>
@@ -5741,7 +5780,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Card Border</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={16} step={1} className="bcm-input"
                   value={tpl.cardBorderWidth} title="0 removes the card's border"
                   onChange={(e) => setField("cardBorderWidth", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
@@ -5756,7 +5795,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Card Radius</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={32} step={2} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={32} step={2} className="bcm-input"
                   value={tpl.cardBorderRadius} onChange={(e) => setField("cardBorderRadius", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
@@ -5764,7 +5803,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Border</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={16} step={1} className="bcm-input"
                   value={tpl.imageBorderWidth} onChange={(e) => setField("imageBorderWidth", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
@@ -5777,14 +5816,14 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Radius</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={48} step={2} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={48} step={2} className="bcm-input"
                   value={tpl.imageBorderRadius} onChange={(e) => setField("imageBorderRadius", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Shadow</span>
-              <select style={sel} value={tpl.imageShadow} onChange={(e) => setField("imageShadow", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageShadow} onChange={(e) => setField("imageShadow", e.target.value)}>
                 <option value="none">None</option>
                 <option value="soft">Soft</option>
                 <option value="medium">Medium</option>
