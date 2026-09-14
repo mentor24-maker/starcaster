@@ -8,6 +8,7 @@
 import type { AdminMediaItem } from '../admin-media-shared';
 import { starcasterScopedHeaders } from './starcaster-app';
 import { assetToAdminMediaItem } from './use-gallery-media-library';
+import { isVideoFile, uploadFileToBlob } from '../media-blob-upload';
 
 type JsonObject = Record<string, unknown>;
 
@@ -116,10 +117,12 @@ async function uploadMedia(init: RequestInit): Promise<Response> {
     return jsonResponse({ error: 'A media file is required.' }, 400);
   }
 
-  const fileBase64 = await readFileAsBase64(file);
   const category = String(formData.get('media_category') ?? '');
   const aspect = String(formData.get('aspect') ?? '');
 
+  if (isVideoFile(file)) return uploadVideoMedia(file, category);
+
+  const fileBase64 = await readFileAsBase64(file);
   const response = await fetch('/api/assets/import-image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...starcasterScopedHeaders() },
@@ -144,6 +147,38 @@ async function uploadMedia(init: RequestInit): Promise<Response> {
   const media = asset ? assetToAdminMediaItem(asset) : null;
   if (!media) {
     return jsonResponse({ error: 'Upload succeeded but the asset could not be read back.' }, 500);
+  }
+  return jsonResponse({ media }, 201);
+}
+
+/**
+ * A video cannot take import-image (images only, ~7MB), so it goes to Blob and
+ * is then recorded as an asset — the route the tenant Media Manager already
+ * used. Without this, every Builder "Upload Video" failed with "import-image
+ * only accepts image files" (task 86bbwe98a). The size is recorded so the
+ * background-video size warning applies to an uploaded clip too.
+ */
+async function uploadVideoMedia(file: File, category: string): Promise<Response> {
+  let location = '';
+  try {
+    location = await uploadFileToBlob(file, 'Video');
+  } catch (error) {
+    return jsonResponse({ error: `Could not upload ${file.name}: ${error instanceof Error ? error.message : 'storage refused it'}` }, 502);
+  }
+  const response = await fetch('/api/assets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...starcasterScopedHeaders() },
+    credentials: 'include',
+    body: JSON.stringify({ assetName: file.name, assetType: 'Video', category, location, size: Number(file.size || 0) })
+  });
+  const body = (await response.json().catch(() => ({}))) as JsonObject;
+  if (!response.ok) {
+    return jsonResponse(flattenError(body), response.status);
+  }
+  const asset = (body.asset ?? body.data ?? null) as Record<string, unknown> | null;
+  const media = asset ? assetToAdminMediaItem(asset) : null;
+  if (!media) {
+    return jsonResponse({ error: `${file.name} was stored but could not be read back as a video.` }, 500);
   }
   return jsonResponse({ media }, 201);
 }

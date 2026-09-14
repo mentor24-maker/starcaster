@@ -42,11 +42,23 @@ function mediaExtension(extension: string | undefined, path: string): string {
   return raw.startsWith(".") ? raw : `.${raw}`;
 }
 
+/**
+ * What an upload button is FOR, when the file alone cannot say. Only the
+ * Video panel's "Upload Poster" needs it: a poster is an image, so the kind
+ * rule below would answer "image" and flip a video background to Image mode —
+ * the very defect this file exists to prevent, arriving by a second button
+ * (task 86bbwe98a, second half). Absent means "the background itself".
+ */
+export type BackgroundUploadTarget = "poster";
+
 export function applyUploadedBackgroundMedia(
   current: BackgroundSettings,
-  media: { path: string; kind?: AdminMediaKind | null; extension?: string; size?: number }
+  media: { path: string; kind?: AdminMediaKind | null; extension?: string; size?: number },
+  target?: BackgroundUploadTarget
 ): BackgroundSettings {
   const url = normalizeBuilderAssetUrl(media.path);
+  // The poster only ever fills the poster: mode, clip and image stay as they are.
+  if (target === "poster") return { ...current, posterUrl: url };
   const kind =
     media.kind ??
     getMediaKind(mediaExtension(media.extension, media.path)) ??

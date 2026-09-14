@@ -368,6 +368,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
 }
 
+/* Stands where "Make default" would, on the theme that already is. */
+.builder-react-root .builder-themes-default-note {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
 /* Status bar — success/error notice beneath the header */
 .builder-react-root .builder-themes-status {
   padding: 0.45rem 0.75rem;

@@ -348,9 +348,13 @@ PASS / FAIL / **CANNOT TELL** — never a pass for a check that could not run.
 The two are separate programs on purpose — a provisioner that graded its own
 work would grade it by the assumptions it acted on — but they read ONE inventory
 (`lib/nodeProvision.js`), because two definitions of "provisioned" disagree
-quietly. **Installing the pulse schedules reports CANNOT DO YET on every run**
-until Slice B (`86bbh9kh2`) exists: a green check on a machine that runs no jobs
-is the exact failure the NODES plan was written against.
+quietly. **Installing the pulse schedules still reports CANNOT DO YET on every
+run**, and the reason changed on 2026-09-12: Slice B (`86bbh9kh2`) exists now —
+pulse's `bin/install-launchd.sh` generates each plist from the machine it runs
+on — but it lives in the *pulse* repo, and this provisioner resolves an installer
+path inside the starcaster checkout. So it cannot call it, and says so rather
+than claiming it could: a green check on a machine that runs no jobs is the exact
+failure the NODES plan was written against.
 
 **A schedule can be installed, loaded, and never have started at all.** macOS
 scheduled jobs are USER jobs: they do not run until somebody logs in. With
@@ -385,6 +389,7 @@ machine nobody is looking at, and only one of them used to make a noise:
 npm run heartbeat                        the roll call — when did each job last succeed?
 npm run heartbeat -- --check             the same, and post to the bus if one has gone quiet
 npm run heartbeat -- --beat --role X     record a successful run (jobs call this; you never do)
+npm run heartbeat -- --push-owned        carry this machine's local beats onto the shared row
 ```
 
 A job that **fails** writes a log line and posts to the bus
@@ -425,22 +430,47 @@ It runs on the relay's ten-minute wake, considers only roles this machine owns
 (the stamps exist nowhere else), and needs no ClickUp — deliberately, so a
 ClickUp outage cannot silence an alarm that never needed it. **The threshold is
 per role and derived, six missed runs with a three-hour floor**: 3h for the
-relay, 6h for the loops and the pulse. One hour was the original proposal and
-the measurements killed it — over 14 days of the Mini's real logs the p90
+relay and for `channel-steward`, 6h for the loops and the pulse, and 6 days for
+`librarian-sweep` — which runs daily, so six missed runs really is six days.
+(That one is the first role whose SHARED window, 48h, is tighter than its local
+one. Not a bug: the two read different surfaces.) One hour was the original
+proposal and the measurements killed it — over 14 days of the Mini's real logs the p90
 beat-to-beat gap is already 1.0h for two roles, and the loops legitimately sleep
 for hours waiting out a stated usage limit. The arithmetic, the measured table
 and each incident are in `lib/nodeHeartbeat.js`. It clears itself on the next
 beat and says so — and that is the only "good news" it ever posts, because the
 message is only sent when an alarm actually went out.
 
-**Two jobs beat today: `bus-relay` and `pipeline-pulse`.** The two loop lanes
-run inside long-lived agent sessions with no committed runner to hang an emitter
-on, `db-refresh` has no schedule on purpose, `pulse-pipelines` lives in another
-repo, and `weekly-report` runs once a week against a 25-hour overdue window, so
-an honest beat from it would read as overdue six days in seven. Those report
-**NOT REPORTING with the reason**, every run — never as healthy, because a
-system that is part-instrumented must not read as a green board. Adding a role
-to `lib/nodeRoles.js` without deciding either way fails a test.
+**Six jobs beat today**, and the list has grown twice by the same route — a
+stated reason turning out to be a missing runner rather than an impossibility.
+`bus-relay` and `pipeline-pulse` from the start; the two loop lanes on
+2026-09-02, when their runner joined this repo; and the two Pulse pipelines,
+`channel-steward` and `librarian-sweep`, on 2026-09-12. Three still report
+**NOT REPORTING with the reason**: `db-refresh` has no schedule on purpose,
+`youtube-media` is a service rather than a scheduled pass (nothing asks it on a
+timer yet), and `weekly-report` has a runner that could emit but no schedule
+installed. Never as healthy, because a system that is part-instrumented must not
+read as a green board — and adding a role to `lib/nodeRoles.js` without deciding
+either way fails a test.
+
+**The Pulse pair beats from another repo, which is why there is a relay.** Their
+runner lives in `pulse`, and it writes only the LOCAL stamp — deliberately, so a
+beat needs no Doppler, no ClickUp token and no network call inside an unattended
+pipeline runner. Nothing would then reach the shared row that `npm run heartbeat`
+actually reads, so the relay's wake carries it: **push the local stamp of any
+role this machine owns whose stamp is newer than its last push**, stated as one
+general rule rather than a special case, because a role whose own push could not
+reach ClickUp is in the same position. The instant pushed is the **stamp's, never
+the clock** — that is what makes it safe, and it is the difference between a
+watchdog and a thing that silences one. It runs *before* `--check` on the same
+wake: the other way round, the first wake would announce two healthy jobs as
+quiet and only then push the rows that would have prevented it.
+
+Before this, both were one `pulse-pipelines` row excused as "lives in another
+repo". On 2026-09-04 Pulse ran out of Anthropic credit and both jobs were dead
+for 33 hours — 127 skipped runs — and nothing said so; it was found by accident
+the next day. The time before that was 820 failed runs over twelve days, also
+found by accident.
 
 Each machine says who it is in `~/.alphire-node` (one short line:
 `macbook-pro` or `mac-mini`). Without that file it falls back to the hostname,
