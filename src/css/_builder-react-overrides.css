@@ -3442,7 +3442,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 .builder-react-root .builder-image-info-size.is-error {
-  color: var(--error);
+  color: white;
+  font-style: italic;
 }
 .builder-react-root .builder-image-info-dialog {
   display: flex;
