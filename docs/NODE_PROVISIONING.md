@@ -149,7 +149,10 @@ it only asks how to install a job once you know it belongs here.
 - `db-refresh` → **no schedule, on purpose.** It spends production disk IO and
   wants a person nearby; six unattended runs in one day took every client site
   down on 2026-08-17.
-- `loop-build` / `loop-review` / `pulse-pipelines` → **CANNOT DO YET** (below).
+- `loop-build` / `loop-review` / `channel-steward` / `librarian-sweep` /
+  `youtube-media` → **CANNOT DO YET** (below). The two Pulse pipelines are
+  blocked for a reason worth reading rather than skipping: their installer
+  exists, and it is in the **pulse** repo, so this script cannot reach it.
 
 It also checks the mirror image, which nobody thinks to look for: a schedule
 still installed on a machine that no longer owns the job. Harmless — every job
@@ -233,11 +236,15 @@ three ways to reach a verdict nobody earned survived a round:
 *   A **permanent FAIL naming a role the machine does not run**, because FAIL
     still filtered the record's own rows. A row left behind by a job that moved
     machines could only be cleared by deleting the file.
-*   A **CANNOT TELL on `macbook-pro` that could never be cleared**: it owns
-    `db-refresh` (deliberately no schedule) and `pulse-pipelines` (installer is
-    Slice B), so it has nothing probeable at all, and the fix line it was given
-    was `npm run node:verify` — which refuses that machine (exit 2). A fix line
-    that refuses is worse than none: it reads as a step somebody skipped.
+*   A **CANNOT TELL on `macbook-pro` that could never be cleared**: at the time
+    it owned `db-refresh` (deliberately no schedule) and `pulse-pipelines`
+    (installer in another repo), so it had nothing probeable at all, and the fix
+    line it was given was `npm run node:verify` — which refuses that machine
+    (exit 2). A fix line that refuses is worse than none: it reads as a step
+    somebody skipped. It owns only `db-refresh` now — the Pulse pipelines moved
+    to the Mini on 2026-09-07 and became two roles on 2026-09-12 — and the
+    verdict is unchanged, because the branch keys off the count of probeable
+    roles rather than off a machine name.
 
 So the record's rows are intersected **once** with the probeable inventory, and
 PASS, FAIL and the drift case all read off that one list. A row outside it is
