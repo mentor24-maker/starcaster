@@ -1,5 +1,6 @@
 "use client";
 
+import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import type { CSSProperties } from "react";
 import type {
   BackgroundSettings,
@@ -30,7 +31,7 @@ type BuilderSectionControlsProps = {
   canJoinPrevious?: boolean;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onOpenSectionBackgroundGallery?: () => void;
-  onUploadSectionBackgroundMedia?: (file: File | null) => void;
+  onUploadSectionBackgroundMedia?: (file: File | null, target?: BackgroundUploadTarget) => void;
   themeBackgroundColor?: string;
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;
