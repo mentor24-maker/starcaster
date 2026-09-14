@@ -97,6 +97,41 @@ as a rule first, then gets a checker where one is possible.
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
 
+  **A FOURTH markup shape wears `data-lattice-pairs`: a STACKED pair —
+  label above its control, both on one left edge** (panel sweep 14/15,
+  ticket 86bbjt1be, 2026-09-14). The Blog Card Template designer, which
+  renders *inside* the Card Manager's settings panel, is built from
+  `.bcm-control`: a bare `<span class="bcm-label">` over a select or a
+  number box. It matched none of the three pair selectors `check_panels`
+  reads, so **the entire content of that panel was absent from a 684-panel
+  green run** — and what the run was green over was a wrapping flex bar
+  whose seven Structure controls sat at seven different left edges across
+  three lines. That is the operator's opening sentence of this whole sweep
+  ("the column width varies arbitrarily"), still live in the one panel
+  nothing had ever measured. Carousel's lesson for the third time.
+
+  It is READ, not converted. The obvious retrofit is `label.field`, which
+  is the same stacked shape — but W0 says that one is being *retired*
+  rather than styled, because it breaks the moment a control grows a third
+  child, and half these controls already hold a number box and a unit.
+
+  **What the stacked shape changes about the room rule, and why that is a
+  correction rather than a weakening.** `room = labelW - labelTextW`
+  measures the horizontal gap between a label and its field: its floor
+  (30px) says a beside-pair must not be cramped, and its ceiling (140px, on
+  declared managers only) says a label track must not be a `1fr` notch
+  pushing every control sideways. **A stacked pair has no horizontal gap at
+  all** — its label box IS the column, which the field fills too — so on it
+  that subtraction measures the unused tail of a word and nothing else. At
+  1920 the designer's honest, correct two-track grid reported a 187px
+  "notch" that does not exist. Both bounds are therefore skipped where the
+  geometry says stacked (control below its label, same left edge, read from
+  the render and never from a class). Nothing else is relaxed: the four
+  comparative assertions and the cropped-word check still run, and those are
+  the ones that caught the real defect — reverting the grid to the old flex
+  bar fails with 21 problems naming the exact stagger, and cropping a label
+  still fails as L4. Both were watched to fail.
+
   **A THIRD markup shape wears `data-lattice-columns`: one flat grid**
   (panel sweep 10/15, ticket 86bbjt1b6, 2026-09-13). `.builder-item-grid`
   — the breadcrumb trail manager — puts its header titles and every row's

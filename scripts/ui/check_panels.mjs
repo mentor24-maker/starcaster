@@ -366,10 +366,29 @@ function measure(page, nonStretch) {
       // whole modal of stacked full-width boxes while this reported a clean
       // pass (operator 8/12). A control the check cannot see is a control the
       // rule does not cover — the same lesson as the heading offsets.
+      /*
+       * A FOURTH PAIR SHAPE: `.bcm-control` (panel sweep 14/15, 86bbjt1be).
+       *
+       * The Blog Card Template designer renders inside the Card Manager's
+       * settings panel and is built from none of the three shapes above — its
+       * label is a bare `<span class="bcm-label">` stacked over the control.
+       * So the panel's own content matched no selector here and was measured
+       * by nothing: `check:panels` reported a clean green over a bar whose
+       * seven Structure controls sat at seven different left edges across
+       * three wrapped lines. Carousel's lesson word for word — a surface that
+       * opts into neither attribute is not passing, it is absent.
+       *
+       * Read rather than converted. The obvious retrofit is `label.field`,
+       * which is this same stacked shape — but W0 says that one is being
+       * RETIRED, not styled, because it breaks the moment a control grows a
+       * third child, and half these controls already have a number box and a
+       * unit inside them.
+       */
       const pairs = unit.els.flatMap((el) => [
         ...el.querySelectorAll('.builder-module-field'),
         ...el.querySelectorAll('.builder-setting-row, .builder-setting-row-full'),
         ...el.querySelectorAll('label.field'),
+        ...el.querySelectorAll('.bcm-control'),
       ]).filter((el) => !el.closest('.builder-slider-item-grid, .builder-item-grid'))
       /*
        * A DECLARED MANAGER RUNS ITS OWN LATTICE, so its fields do not belong
@@ -405,9 +424,11 @@ function measure(page, nonStretch) {
       // in the fixture, so without this line the pass would be luck.
       const fields = pairs.map((f) => {
         const label = f.querySelector('.builder-module-field-label, .builder-setting-label')
-          || (f.matches('label.field') ? f.querySelector(':scope > span') : null);
+          || (f.matches('label.field') ? f.querySelector(':scope > span') : null)
+          || (f.matches('.bcm-control') ? f.querySelector(':scope > .bcm-label') : null);
         let control = f.querySelector('.builder-module-field-control, .builder-setting-value')
-          || (f.matches('label.field') ? f.querySelector(':scope > *:not(span)') : null);
+          || (f.matches('label.field') ? f.querySelector(':scope > *:not(span)') : null)
+          || (f.matches('.bcm-control') ? f.querySelector(':scope > *:not(.bcm-label)') : null);
         if (!label || !control) return null;
 
         // A `full`-width field spans both tracks by design — it is long text
@@ -475,6 +496,20 @@ function measure(page, nonStretch) {
           name: (label.textContent || '').trim() || '(unlabelled)',
           kind,
           full,
+          /*
+           * STACKED: the control sits BELOW its label rather than beside it,
+           * on the same left edge. Read from geometry, never from a class, so
+           * it describes what rendered rather than what the markup intended.
+           *
+           * It exists because `room` (labelW - labelTextW) measures the
+           * horizontal gap between a label and its field, and a stacked pair
+           * HAS no horizontal gap — its label box is the whole column, which
+           * the field fills too. So the number that means "a notch pushing
+           * every control sideways" in a beside-pair means nothing at all
+           * here: it is just however much of the column the label's own word
+           * happens not to cover. See the two guards that consume this.
+           */
+          stacked: Math.abs(cr.left - lr.left) <= 1 && cr.top >= lr.bottom - 1,
           entryW,
           labelW: Math.round(lr.width),
           // The TEXT width, not the box. scrollWidth counts padding, and the
@@ -499,7 +534,19 @@ function measure(page, nonStretch) {
           // stretchable and reported as "2 different widths" for doing
           // exactly what W0's exception tells them to do: keep their natural
           // size at the start of the slot.
+          /*
+           * The control may BE the fixed-size input rather than wrap one.
+           * Every `:scope >` test below asks whether the control CONTAINS a
+           * checkbox / radio / swatch, which is true of a
+           * `.builder-module-field-control` box and false of a bare
+           * `<input type="checkbox">` — and the fourth pair shape above hands
+           * us exactly that bare input. Without this line the designer's
+           * Link Image checkbox and its three colour swatches would be held
+           * to the stretchable field width and fail for keeping the natural
+           * size W0's own exception tells them to keep.
+           */
           stretchable: !exempt.includes(kind)
+            && !control.matches('input[type="checkbox"], input[type="radio"], input[type="color"]')
             && !control.querySelector(':scope > input[type="checkbox"], :scope > input[type="radio"]')
             && !control.querySelector(':scope > .builder-radio-group')
             && !control.querySelector(':scope > .builder-theme-color-field, :scope > .builder-color-swatch')
@@ -1108,7 +1155,14 @@ function assertLattice(panels, width) {
     // The room the operator asked for: "40px more than the longest string".
     // Without this the check would pass on tracks that fit the text exactly,
     // which is the cramped look the rule was written against.
-    const room = fields.map((f) => f.labelW - f.labelTextW).filter((n) => Number.isFinite(n));
+    // Beside-pairs only — see `stacked` above. A stacked pair's label box IS
+    // the column, so this subtraction measures the unused tail of a word, not
+    // the room between a label and a field, and both bounds are meaningless on
+    // it. What still governs a stacked column is every assertion above this
+    // one: same label x, same field x, one stretchable field width, no cropped
+    // label. Those are the four that caught the real defect on this panel.
+    const room = fields.filter((f) => !f.stacked)
+      .map((f) => f.labelW - f.labelTextW).filter((n) => Number.isFinite(n));
     const tight = room.filter((r) => r < 30);
     if (tight.length) {
       failures.push(
@@ -2033,8 +2087,13 @@ function uncomparableNote() {
   return `[check:panels] NOTE — ${uncomparableManagers.size} declared pair-column(s) rendered a single\n`
     + '  label/field pair, so the four comparative assertions (label widths, label-text\n'
     + '  offsets, field offsets, field widths) had nothing to compare and could not fail on\n'
-    + '  them. The per-field assertions — the label-room floor and ceiling, the cropped-word\n'
-    + '  check, and control-right-of-label — did run. Seed a second row in\n'
+    + '  them. The per-field assertions — the cropped-word check and control-right-of-label —\n'
+    + '  did run, and so did the label-room floor and ceiling EXCEPT on a stacked pair\n'
+    + '  (control below its label, same left edge), where the two have nothing to measure:\n'
+    + '  the label box there is the whole column rather than a track beside the field. Saying\n'
+    + '  which assertions were live is the whole point of this note; listing two that were\n'
+    + '  not would make it the confident-count-as-verdict it exists to prevent.\n'
+    + '  Seed a second row in\n'
     + '  scripts/ui/seed_fixture.mjs if these should be compared too:\n'
     + rows;
 }
