@@ -1,3 +1,76 @@
+## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
+
+The video catalog is the part of the Studio that keeps track of recording
+sessions and the media files in them. Some of its fields only accept a short
+list of words — a file has to be one of "background", "subject", "plate" or
+"reference", nothing else.
+
+Those checks worked for every wrong answer but one. If a caller sent the value
+`false`, the catalog decided that meant "nothing was sent at all", filled in the
+default, saved the row, and reported success. So the caller said one thing, the
+database recorded another, and nothing anywhere mentioned the difference. It was
+inconsistent as well as wrong: sending zero, or an empty box, or a made-up word
+was correctly turned away — only `false` got through — and the matching *edit*
+calls turned it away properly the whole time. Only the *create* calls did this.
+
+That is worth fixing rather than writing down, because a wrong value that
+announces itself is a bug you find in minutes, and a wrong value that reports
+success is one you find in a month.
+
+Four smaller things in the same files were fixed with it. The most visible: a
+date carrying an impossible time-zone offset was correctly refused, but the
+refusal said "has second 61, which does not exist" — about a date that had no
+seconds in it. It named the wrong field, which sends whoever reads it looking in
+the wrong place. Also fixed: a date written in a slightly unusual but perfectly
+legal style was being handed to a part of the language that is allowed to
+interpret it differently on different computers, so the same date could have
+been stored as two different moments depending on which Mac did the work; a
+"this file is already in the catalog" message that would have been given for
+collisions that had nothing to do with duplicate files; and one place that
+ignored an error result it should have been reading.
+
+Every one of these fixes was undone on purpose afterwards, to watch the test
+written for it fail — seven of them, seven failures, then put back. A test that
+cannot fail is not a test, and this part of the code has been sent back for that
+before.
+
+The review pass sent this back once, and it was right to. One of the fixes above
+— the one about dates being handed to a part of the language that reads them
+differently on different computers — came with a note promising it now *always*
+hands over a date written the one agreed way. It did not, in two cases, and both
+of them were introduced by that very fix: a date ending in a lowercase `z`
+instead of a capital one, and a date whose fraction-of-a-second was not exactly
+three digits long. Both are perfectly ordinary — the second is what the video
+tools and the database themselves emit — and both went straight to the part of
+the language the note said they never would.
+
+Worse, the test written to guard that promise was checking something looser than
+the promise, so it stayed green on both. It has been tightened to spell the
+agreed format exactly, the two cases are in its list, and both were undone on
+purpose and watched to fail. Nothing a person can see changes; the value stored
+is the same either way on the Macs here. What changes is that the sentence in
+the code is now true, which is the only reason anyone would trust it later.
+
+The review pass sent it back a second time, and again it was right to — same
+family of problem, one step further in. One of the checks above works out
+whether a rejected save was rejected because the file is already in the catalog,
+as opposed to some other clash. It looked for the answer in two places. Only
+one of those places exists: the database was asked, for real, what it actually
+sends back when it turns a duplicate away, and the answer has four pieces of
+information in it, none of which is the second place the code was looking. So
+that second half of the check could never run, and the test written for it
+described a reply the database has never sent, with a comment stating that as
+fact. That is a trap rather than a harmless spare part — the next person to
+delete the unreachable code, which is the right thing to do, would have watched
+that test go red and put the dead code back, because the comment told them the
+database works that way.
+
+The unreachable half is gone, and the test now uses the reply that was actually
+measured, written down field by field with the date it was taken. The check
+behaves exactly as it did before — the real duplicate is still recognised, still
+with the right message — and that was confirmed by driving a genuine duplicate
+through the real database rather than reasoned about. Three ways of breaking the
+new test on purpose were tried, and each one turned it red.
 ## 2026-09-07 — Admin buttons are one flat colour now, and a disabled one is actually grey (#648)
 
 Every button in the admin app used to be painted with a gradient — a colour
