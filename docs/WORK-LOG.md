@@ -1,3 +1,49 @@
+## 2026-09-13 — Seven blog settings panels now read as one block instead of loose rows (#687)
+
+When you open a module's gear icon in the Builder you get a panel of settings.
+On 2026-08-13 you pointed at one and said the column width varies arbitrarily
+between the Settings fields and the Layout fields. This is the twelfth of
+fifteen passes fixing that, and it covers the seven blog panels: Blog Post,
+Post Card, Post List, Related Posts, Table of Contents, Author Bio and Post
+Tags.
+
+Nothing about what any setting *does* has changed — no new settings, nothing
+renamed, nothing saved differently. Only where each row sits.
+
+Three of the seven held a repeating editor — the list of related posts, the
+list of headings, the list of social links — built out of an old markup shape
+whose fields the automatic checker **skips by name**. So every panel sweep
+since that checker was written had reported these seven as fine without ever
+having looked inside three of them. Measured in a real browser before the
+change: each panel's own fields started 125 pixels in, and every field in its
+list editor started at zero. The headings list had a third position of its
+own, because each sub-heading card was nudged 16 pixels right to show its
+nesting. Three different left edges in one panel.
+
+Blog Post had the plainest version of the problem. It is one of the few panels
+written by hand rather than generated, so each row of fields was its own little
+grid and the strip below it — Label, Background, Alignment, the margins — was
+another one. One panel, three label widths and three field positions. It is one
+grid now, and the strip is inside it.
+
+Post Tags and Post List share a page-picker that turns into a dropdown plus a
+text box when you type a custom address. That one wide row was setting the
+width of the whole column, so the six rows beside it stopped nearly 300 pixels
+short of it. Bounded now.
+
+Two smaller things went with it. The list editors sit one field per row rather
+than two: two-across is right when the editor owns half the panel, but these
+live in a narrow column, and two-across left the Anchor ID box 52 pixels wide —
+too narrow to read a web address in. And Blog Post's five tabs (Content, Meta,
+Categories & Tags, SEO, Display) were coloured back when panels had a white
+background; against today's blue, four of the five were nearly invisible.
+
+Each fix was broken on purpose and watched to fail before the pass was
+believed — including one break that did **not** fail, which is written into
+`docs/UI_RULES.md` rather than left for someone to trip over later: the checker
+compares fields against their neighbours, so a change that moves a whole column
+at once slips past it. That is a limit of the check, not of the rule.
+
 ## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
 
 The video catalog is the part of the Studio that keeps track of recording
