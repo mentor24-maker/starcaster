@@ -33,6 +33,140 @@ styling declares identical drawn 19 pixels apart. That is the operator's
 original complaint — "the column width varies arbitrarily" — arriving one level
 up from where it was first fixed. It measures at exactly 40 now.
 
+## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
+
+Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
+On 4 September Pulse ran out of Anthropic credit and both of them stopped for 33
+hours — 127 runs that should have happened and did not — and nothing anywhere
+said a word. It was noticed the next day by chance. The time before that, 820
+runs failed over twelve days, also noticed by chance.
+
+This system already has the right instrument. Every scheduled job leaves a short
+note saying "I ran, and it worked", and something reads those notes and speaks up
+when they stop arriving. These two jobs were excused from it because the code
+that runs them lives in a different project folder — which was true, and was
+never a reason they could not report in. Now they do, so a Pulse outage gets
+named within hours.
+
+Three things had to be fixed before a line of it was written, and none of them
+was in the ticket. The ticket said these jobs belong to the laptop; they moved to
+the Mini five days earlier, and the report matches a job to its home machine by
+exact name, so the wrong name would have reported a perfectly healthy job as one
+that had never run at all. The ticket said the hands-on test could not be done on
+the Mini; it can, which followed from the same error. And one of the two things
+this was supposed to wait for had merged but was **not actually running** — the
+Mini's copy of the Pulse project was one commit behind, so the piece that writes
+the note did not exist on the machine and nothing had been reporting at all.
+Building on top of that would have produced exactly the false alarm the ticket
+warned about. That copy was brought up to date, and a real note appeared five
+minutes later.
+
+The interesting part of the build is a small refusal. Pulse writes its note to
+the machine's own disk and stops there, deliberately, so that leaving a note
+never needs a password or a working internet connection inside a job nobody is
+watching. Something had to carry that note to the shared page the report reads,
+and the obvious shortcut — stamp it with the current time on arrival — would have
+been a disaster nobody would ever have seen: it would refresh the page every ten
+minutes over a job that died on Tuesday, and permanently silence the alarm it was
+built to feed. It carries the note's own timestamp instead, and there is a test
+named after that property. The carrying step also runs *before* the watchdog
+rather than after, because the other order would have had the very first run
+announce two healthy jobs as dead and only then write the records that would have
+prevented it.
+
+One thing turned up by running the report on the machine rather than by reading
+the code. The daily job had a perfectly healthy schedule and simply had not run
+yet since gaining the ability to leave notes, and the report said "a job that
+stops firing writes nothing anywhere — this is that". It had not stopped
+anything. "Never reported" and "stopped reporting" now read as the two different
+problems they are; the alarm still fires, it just no longer sends anybody hunting
+a broken schedule that is fine. Every future job added to this system had that
+same first-day trap waiting for it.
+
+Review caught something the first pass missed, and it was the other half of the
+whole idea. An alarm that goes off and never goes quiet again is worse than no
+alarm at all — after a week of it nobody looks. Every other job in this system
+switches its own alarm off the moment it works again, and announces that it is
+back, but it does that from a line of code the two Pulse jobs never reach: they
+leave their note from another project folder entirely. So these two — the only
+two this whole piece of work exists for — could go dark, raise the alarm,
+recover, and stay flagged as dead for ever, with nobody told they had come back.
+Pulse's own history is nothing but recovery events: 33 hours dark, 820 failed
+runs over twelve days. Switching off is now done in one place that both routes
+reach, and only when the job's most recent note is genuinely recent — carrying a
+note from Tuesday must not switch off Tuesday's alarm on Friday.
+
+Two smaller ones from the same review, both in the same file, both the same
+mistake in different clothes: the carrying step said "everything is on the shared
+page" when it had in fact failed to read one of the records, and said the same
+thing on a machine that has no records to carry at all. Neither is a lie anybody
+told on purpose; both are a check that could not take a reading reporting itself
+as a clean one, which is the failure this project keeps writing rules against.
+Both now say plainly that nothing was measured.
+
+Then review caught the fix itself going wrong, which is the part worth reading.
+Switching an alarm off "only when the job's most recent note is genuinely recent"
+is the right rule for one of the three switches and the wrong rule for the other
+two, and the difference is easy to miss. "Recent" here means a note from within
+the last three to six hours, depending on the job — a deliberately generous
+window, so that a job which runs every ten minutes is not called dead the first
+time it is a little late. But one of those three switches is not asking "has this
+job been heard from lately". It is the one that stops a *failure* being shouted
+about more than once every six hours, and it is supposed to come off only when
+the job actually succeeds again. Taking it off because there is a note from two
+hours ago, while the job is failing right now, removes the very thing that keeps
+one failure from becoming a stream of identical messages.
+
+And the two steps sit in the same ten-minute cycle, a hundred and forty lines
+apart: the first would have switched the muzzle off, the second would have
+reported the same failure as though it were new. A job failing steadily for three
+hours would have sent about eighteen messages instead of one. That is precisely
+the alarm fatigue this whole piece of work was written against, arriving through
+the fix for it — and it would have started the moment the message channel came
+back to life, which makes it the kind of thing that goes wrong on the day
+everything else is already going wrong.
+
+The rule is now one sentence applied to all three switches alike: an alarm comes
+off only when the job succeeded *after* the alarm went on. For the silence alarm
+that is the same thing as before, so nothing about it changes; for the other two
+it is the fix. One rule rather than three special cases, because a special case
+is something the next reader has to work out for themselves, and working it out
+wrong is what produced this. Where the job has genuinely not succeeded since, the
+report now says so in as many words, so a line reading "last succeeded ten
+minutes ago" is not mistaken for an all-clear over a job that is failing.
+
+Two more from the same review, both older than this work and both fixed while the
+file was open. The shared page that holds every machine's records is read, added
+to, and written back — and if the *reading* failed for a moment, the writing went
+ahead anyway and rebuilt the page from this machine's records alone, quietly
+deleting every other machine's. A failed reading is now simply a failed reading:
+nothing is written, and the next cycle tries again. The other: the carrying step
+composed its whole report and printed it in one go at the end, so a dropped
+connection threw the report away along with the lines saying what it had been
+about to write. It now prints what it knows either way.
+
+A third review pass found one wrong sentence, in the report the operator reads
+to answer "is this machine set up?". That report lists every job the machine
+should be running, and for the ones it cannot set up itself it printed a fixed
+headline — "no installer exists" — above the row's own explanation. That headline
+had been true of every such job until this work added these two, whose
+explanation opens "The installer exists, but it lives in the Pulse project". So
+the report gave two consecutive, contradictory lines about the same job. Worse
+than untidy: these two schedules are installed and running right now — that is
+how the rest of this ticket passes — so the machine's own set-up report was
+telling him that two live, working jobs had nothing installed at all.
+
+The fix is not the two new sentences but the headline, because the headline was
+answering the wrong question. Whether an installer exists is the explanation's
+job, and it is printed directly underneath. What the field actually means is
+narrower and always true: *this* set-up script cannot install this one. It now
+says that, in all three places that report it — two of which print it to him and
+one of which files it away in the machine's records. The third was not named in
+the review and would have been left saying the old thing. Three tests hold the
+line: one that no such headline may claim an installer is missing, one that all
+three places still say the same thing (it caught two real differences between
+them while being written), and one that the definition this mistake was copied
+from does not quietly come back. Each was broken on purpose and watched to fail.
 ## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
 
 The video catalog is the part of the Studio that keeps track of recording
