@@ -185,8 +185,25 @@ export function ReminderCriteriaEditor({
         measure them as a group in their own right. Without the declaration
         this block matched none of the check's selectors and was skipped in
         silence, which reads identically to passing.
+
+        AND `data-lattice-group` is what keeps that from being a per-card
+        promise. This editor renders once inside EVERY reminder record card,
+        so the declaration alone would make one group per card, each measured
+        against itself — criteria in card 1 and card 2 could drift apart by
+        any amount and both report clean, which is the group-of-one blind spot
+        this whole sweep is about. `docs/UI_RULES.md` records these very
+        tracks once measuring 124px and 118px, so the drift is not
+        hypothetical. There is no single element to hang one declaration on
+        (the blocks are siblings under different cards, and their only common
+        ancestor is the records list, which declares a different pair count),
+        so instead every block NAMES the lattice it shares and `check_panels`
+        measures all of them as one group against the panel.
       */}
-      <div className="admin-game-reminder-criteria-panel" data-lattice-pairs="1">
+      <div
+        className="admin-game-reminder-criteria-panel"
+        data-lattice-group="reminder-criteria"
+        data-lattice-pairs="1"
+      >
         <div className="admin-game-reminder-criteria-header">
           <span className="builder-setting-label">Criteria</span>
           <button className="secondary-button" disabled={disabled} onClick={addCriterion} type="button">

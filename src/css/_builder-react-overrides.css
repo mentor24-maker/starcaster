@@ -9864,6 +9864,39 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
     max-content minmax(0, 1fr)
     var(--builder-field-room, 40px)
     max-content minmax(0, 1fr);
+  /*
+   * ...and THE GUTTER IS THE TRACK, not the track plus a gap.
+   *
+   * The base sheet gives this list `gap: 12px` (_builder-react.css), which is
+   * the shorthand — it sets column-gap as well as row-gap. So the space
+   * between the two columns rendered as 52px (the declared 40px room track
+   * PLUS the inherited 12px), against an acceptance criterion that asks for
+   * "a real 40px gap between columns". Worse, the 12px is spent on all four
+   * gutters and the subgrid chain below sets `column-gap: 0`, so the cards
+   * absorbed the list's gutters unevenly: two control tracks the CSS resolves
+   * as equal (181.438px and 181.453px at 1440) rendered 193px and 174px —
+   * nineteen pixels apart, which is Dane's founding complaint for this whole
+   * sweep arriving one level up ("the column width varies arbitrarily").
+   *
+   * `.builder-cards-panel-fields` — the panel these rules were settled on —
+   * has carried `column-gap: 0` from the start for exactly this reason: the
+   * 40px of room between a label and its field is padding the `.is-lattice`
+   * rules add to the label, and the 40px between the two COLUMNS is the
+   * `--builder-field-room` track above. Neither is a grid gap, so a grid gap
+   * can only ever be added on top of them.
+   *
+   * Row-gap keeps the 12px the shorthand was really there for: the vertical
+   * separation between one bordered record card and the next.
+   *
+   * Measured at 1440 with this in place: gutter exactly 40px, control tracks
+   * 196.438px / 196.453px. The two RENDERED control widths come to 196 and
+   * 183 rather than dead equal, because a nested box's padding is absorbed
+   * out of the first and last track — that residue is documented with the
+   * card's own spacing rule below. Closing 19px to 13px is the honest claim;
+   * the 40px the ticket asks for is exact.
+   */
+  column-gap: 0;
+  row-gap: 12px;
   max-width: calc(var(--builder-field-long-max, 560px) + 10rem);
 }
 
@@ -9979,11 +10012,6 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * both halves of that: exclude these rows from the card's group, AND measure
  * them as a group of their own, so the block is checked rather than skipped.
  */
-.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .admin-game-reminder-criteria-panel {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-
 /*
  * One label track for every criterion, in every card, measured from content.
  *

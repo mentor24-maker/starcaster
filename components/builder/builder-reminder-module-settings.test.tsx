@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
@@ -71,6 +73,19 @@ function recordHtml(index: number) {
   );
 }
 
+const overridesCss = readFileSync(
+  path.resolve(__dirname, "../../src/css/_builder-react-overrides.css"),
+  "utf8"
+);
+
+/** The body of the one rule with this exact selector, so an assertion about it
+    cannot be satisfied by some other rule elsewhere in the sheet. */
+function ruleBody(selector: string) {
+  const at = overridesCss.indexOf(selector + " {");
+  if (at < 0) return null;
+  return overridesCss.slice(at, overridesCss.indexOf("}", at));
+}
+
 /**
  * Asserted on rendered markup rather than on the source, because both defects
  * below read perfectly well in TSX. `check:panels` is the real gate for this
@@ -94,7 +109,52 @@ describe("Reminder settings panel", () => {
   /** The criteria block is a nested lattice; without its own declaration it
       matched none of the check's selectors and was skipped in silence. */
   it("declares the criteria block as a lattice of its own", () => {
-    expect(recordHtml(0)).toContain('class="admin-game-reminder-criteria-panel" data-lattice-pairs="1"');
+    expect(recordHtml(0)).toContain('data-lattice-pairs="1"');
+    expect(recordHtml(0)).toContain('class="admin-game-reminder-criteria-panel"');
+  });
+
+  /**
+   * ...and NAMES it, which is what stops the declaration above from being a
+   * per-card promise. This editor renders once inside every record card, so
+   * `data-lattice-pairs` alone gives one group per card and a group always
+   * agrees with itself — card 1 and card 2 could drift apart by any amount and
+   * both report clean. `data-lattice-group` is what `check_panels` reads to
+   * measure every block wearing the name as ONE lattice.
+   */
+  it("names the criteria lattice so every card's criteria are measured together", () => {
+    expect(recordHtml(0)).toContain('data-lattice-group="reminder-criteria"');
+    expect(recordHtml(1)).toContain('data-lattice-group="reminder-criteria"');
+  });
+
+  /**
+   * THE GUTTER IS THE TRACK, NOT THE TRACK PLUS A GAP.
+   *
+   * The base sheet gives the record list `gap: 12px`, which is the shorthand
+   * and so sets column-gap too — the space between the two columns rendered as
+   * 52px against an acceptance criterion asking for a real 40px, and the 12px
+   * was absorbed unevenly by the subgrid chain below (two control tracks the
+   * CSS resolves as equal rendered 19px apart). No browser check catches it:
+   * `check_panels` buckets fields by pair-column and compares only within a
+   * bucket, so a left-vs-right asymmetry is invisible to it by construction.
+   * This assertion is the only automated thing standing on it.
+   */
+  it("puts no column gap on the record list, so the 40px room track is the whole gutter", () => {
+    const body = ruleBody(".builder-react-root .builder-reminder-module-records");
+    expect(body).not.toBeNull();
+    expect(body).toMatch(/column-gap:\s*0/);
+    // and the vertical separation the shorthand was really for survives
+    expect(body).toMatch(/row-gap:\s*12px/);
+  });
+
+  /** One rule, not two. The sheet carried this selector twice at identical
+      specificity, so the first block never applied and the long comment
+      explaining the declaration introduced the dead copy. */
+  it("declares the criteria panel's placement exactly once", () => {
+    const selector =
+      ".builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields"
+      + " > .admin-game-reminder-criteria-panel";
+    const hits = overridesCss.split(selector + " {").length - 1;
+    expect(hits).toBe(1);
   });
 
   /**

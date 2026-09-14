@@ -1,3 +1,38 @@
+## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
+
+Open a module's gear icon in the Builder and you get a form. On most panels
+that form reads as one tidy rectangle: every label starts on the same line down
+the left, every box ends on the same line down the right. On the Reminders
+panel it did not. Each reminder card was built as its own little form, so the
+labels in card 1 sat in a different place from the labels in card 2, and inside
+a single card no two rows agreed either — seven different label widths in one
+box. Nothing was broken; it just looked assembled rather than built, which is
+the difference this whole sweep is about.
+
+All four panels in this batch now share one set of columns. Reminders was the
+real work; Current Poll, Messaging Topic List and Messaging Tag List were
+measured and were already correct, and that measurement is written down so a
+later reader can tell "somebody checked" from "nobody looked".
+
+Two things worth knowing about how this was caught, because both were cases of
+a check quietly seeing nothing:
+
+The automatic layout checker had **never once looked at the Reminders panel.**
+Reminder cards stay folded up until you click them, and the checker never
+clicked, so for as long as that check has existed it measured this panel as a
+single field and reported a clean pass. It opens the cards now.
+
+And the checker could not see two kinds of problem it now can. It measured each
+card's criteria block on its own, so criteria in card 1 and card 2 could drift
+any distance apart and both report fine — the blocks now say they belong to one
+shared set of columns, and a deliberate 37px nudge to the second card fails six
+ways where before it passed across 693 panels. Separately, the gap between the
+form's two columns was rendering at 52 pixels where the rule asks for 40, and
+the leftover 12 was being shared out unevenly, leaving two boxes that the
+styling declares identical drawn 19 pixels apart. That is the operator's
+original complaint — "the column width varies arbitrarily" — arriving one level
+up from where it was first fixed. It measures at exactly 40 now.
+
 ## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
 
 The video catalog is the part of the Studio that keeps track of recording

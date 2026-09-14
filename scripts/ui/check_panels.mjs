@@ -230,6 +230,36 @@ function measure(page, nonStretch) {
       const managers = [...panel.querySelectorAll('[data-lattice-pairs]')];
 
       /*
+       * A MANAGER THAT REPEATS IS STILL ONE LATTICE (ticket 86bbjt1b9, round 2).
+       *
+       * `data-lattice-pairs` is read off the element that carries it, so a
+       * manager rendered once per item in a list above it becomes N groups,
+       * each measured against itself. That is the group-of-one blind spot the
+       * `shared` unit below already exists to close, arriving by a different
+       * route: the Reminders panel renders one criteria block inside every
+       * record card, so criteria in card 1 and card 2 could drift apart by any
+       * amount and both report clean. The CSS makes them one track on purpose
+       * (list -> card -> settings -> criteria panel, subgrid all the way down)
+       * and `docs/UI_RULES.md` records these very tracks once measuring 124px
+       * and 118px, six pixels apart — so the drift is real and this check was
+       * blind to it.
+       *
+       * There is no element to hang one declaration on: the blocks are
+       * siblings under different cards, and their only common ancestor is the
+       * list, which is already a manager declaring a different pair count. So
+       * the repeated blocks NAME the lattice they share, and every box wearing
+       * one name is measured as a single group against the PANEL — the same
+       * "boxes plus an origin" shape, and the same reason for it.
+       */
+      const named = new Map();
+      for (const el of managers) {
+        const name = el.getAttribute('data-lattice-group');
+        if (!name) continue;
+        if (!named.has(name)) named.set(name, []);
+        named.get(name).push(el);
+      }
+
+      /*
        * A GROUP CAN BE MORE THAN ONE BOX (ticket 86bbmafd6, 2026-08-26).
        *
        * Everything above measures each box against ITSELF, which is why this
@@ -261,7 +291,10 @@ function measure(page, nonStretch) {
       const units = [
         ...groups.map((el) => ({ els: [el], origin: el })),
         ...loose.map((el) => ({ els: [el], origin: el })),
-        ...managers.map((el) => ({ els: [el], origin: el })),
+        ...managers
+          .filter((el) => !el.hasAttribute('data-lattice-group'))
+          .map((el) => ({ els: [el], origin: el })),
+        ...[...named].map(([name, els]) => ({ els, origin: panel, merged: true, mergedName: name })),
         ...(shared.length > 1 ? [{ els: shared, origin: panel, shared: true }] : []),
       ];
 
@@ -302,6 +335,8 @@ function measure(page, nonStretch) {
         ? group.previousElementSibling.textContent : '') || '').trim();
       const groupName = unit.shared
         ? `shared lattice — chrome + settings, ${unit.els.length} boxes`
+        : unit.merged
+        ? `item manager ${unit.mergedName} — ${unit.els.length} box(es)`
         : ownTitle
         || siblingTitle
         || (group.hasAttribute('data-lattice-pairs') ? `item manager ${gi}` : `chrome strip ${gi}`);
@@ -342,7 +377,10 @@ function measure(page, nonStretch) {
        */
       .filter((el) => {
         const manager = el.closest('[data-lattice-pairs]');
-        return !manager || manager === group;
+        // `unit.els` rather than `group`, so a manager named into a merged
+        // lattice keeps the fields of every box in it. For every other unit
+        // `els` is `[group]` and this reads exactly as it did before.
+        return !manager || unit.els.includes(manager);
       });
       // ITEM MANAGERS ARE OUT OF SCOPE, deliberately and not by accident.
       // A repeating card editor (social links, TOC entries, tag rows) is a

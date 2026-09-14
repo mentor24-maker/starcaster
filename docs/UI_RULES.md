@@ -238,6 +238,49 @@ as a rule first, then gets a checker where one is possible.
   the measured count drops from 693 groups to 690. Absent and passing, one more
   time.
 
+  **A manager that REPEATS needs a third thing: a name** (2026-09-13, review
+  round 2 of the same ticket). "On the list, never on the card" has no element
+  to land on when the manager is rendered once per item: the criteria block
+  lives inside every reminder record card, so the blocks are siblings under
+  different cards and their only common ancestor is the list, which already
+  declares a different pair count. Left as one declaration per block, it is the
+  group-of-one blind spot again one level down — criteria in card 1 and card 2
+  could drift apart by any amount and both report clean, and the tracks in this
+  very panel have already been measured 124px and 118px apart once.
+
+  So a repeated block NAMES the lattice it shares —
+  `data-lattice-group="reminder-criteria"` beside its `data-lattice-pairs` —
+  and `check_panels` measures every box wearing one name as a single group
+  against the PANEL. That is the same "boxes plus an origin" shape the
+  chrome/settings seam already uses (86bbq065f), for the same reason: two
+  groups that each agree with themselves is one blind spot, not two checks.
+  Verified by breaking it — indenting the SECOND card's criteria labels by 37px
+  fails six times at 1440/1600/1920 as `item manager reminder-criteria — 2
+  box(es): labels are 2 different widths (155/118px)`, and **the same break with
+  the name removed reports OK across 693 panels.** That pair is the evidence;
+  one half of it on its own would only have shown that something fails.
+
+  **The gutter is the TRACK, not the track plus a gap** (same round). The base
+  sheet gives the record list `gap: 12px`, and `gap` is the shorthand — it sets
+  `column-gap` as well. So the space between the two columns rendered as 52px
+  (the declared 40px `--builder-field-room` track PLUS the inherited 12px)
+  against an acceptance criterion asking for a real 40px, and because every
+  subgrid below sets `column-gap: 0` the cards absorbed the list's gutters
+  unevenly: two control tracks the CSS resolves as equal — 181.438px and
+  181.453px — rendered **193px and 174px**, nineteen pixels apart. That is the
+  sweep's own founding complaint arriving one level up, and `check_panels`
+  cannot see it: it buckets fields by pair-column and compares only within a
+  bucket, so a left-vs-right asymmetry is invisible to it by construction.
+  `column-gap: 0; row-gap: 12px` on the override — what
+  `.builder-cards-panel-fields` has carried from the start — measures at 1440
+  as a gutter of exactly **40px** with tracks 196.438 / 196.453. The two
+  rendered control widths come to **196 and 183** even then, because a nested
+  box's padding is absorbed out of the first and last track; closing 19px to
+  13px is the honest claim, and the 40px the rule asks for is exact. The
+  automated guard is a source assertion in
+  `builder-reminder-module-settings.test.tsx`, not a browser check, because no
+  browser check here can fail on it.
+
   **A collapsed card is an unmeasured card**, and that was the older half of
   this. The record cards start collapsed (`isRecordCollapsed` returns true
   until clicked) and `check_panels.openPanels` did not click them, so from the
