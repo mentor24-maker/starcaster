@@ -92,7 +92,6 @@ describe("the lattice inventory", () => {
      * purpose, so the doc cannot go stale without a test going red.
      */
     expect(unmeasuredManagers()).toEqual([
-      "builder-blog-category-filter-module-settings.tsx builder-slider-item-grid",
       "builder-module-card.tsx builder-slider-item-grid",
       "builder-program-list-module-settings.tsx builder-item-grid builder-item-grid--prices",
       "builder-program-list-module-settings.tsx builder-item-grid builder-item-grid--sessions"

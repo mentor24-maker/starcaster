@@ -125,6 +125,22 @@ describe("the block header's state chip", () => {
     expect(lineageLine()?.textContent).toBe("Used on 35 pages");
   });
 
+  it("a copy the last push did not reach stays Following, and the tooltip says why", () => {
+    // Same chip, honest sentence — the round-1 note on task 86bbwe530. The
+    // tooltip is the whole finding, so it is asserted on the rendered element
+    // rather than on the helper that produced it.
+    renderCard({
+      section: { ...SECTION, savedSectionId: "menu", canonical: true },
+      canonicalSourceName: "2 - Menu Banner",
+      canonicalUsage: usage({ pages: 35, following: 35 }),
+      awaitingPush: true,
+    });
+    expect(chip().textContent).toBe("Following");
+    expect(chip().dataset.blockState).toBe("following");
+    expect(chip().title).toContain("the last push did not reach this copy");
+    expect(chip().title).not.toContain("Matches the original");
+  });
+
   it("titles a following copy by its MASTER, over a stale stamped title", () => {
     // The Delray header bug, at the surface it reached the operator through:
     // the row was renamed "2a - Header" three times and every page card kept

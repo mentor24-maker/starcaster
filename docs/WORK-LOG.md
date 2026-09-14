@@ -28,6 +28,172 @@ three tests that fail if the option you did not choose ever gets built by
 mistake. Each of those tests was deliberately broken first and watched to fail,
 so we know they can.
 
+## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
+
+A settings panel should read as one neat rectangle: every label starting on the
+same line down the left, every box finishing on the same line down the right.
+Three blog panels were on the list to be brought onto that layout. I measured
+all three in a real browser first, at three screen widths, before changing a
+line — and the ticket was wrong about which ones needed it.
+
+The Category Manager was already correct, so it was left alone and that was
+said plainly rather than given a tidy-looking edit. The Post Manager had one
+real gap: its two "page URL" rows are a dropdown with a text box beside it, and
+the rule that stops any single control getting too wide had never reached that
+pairing, so those two rows ran 286 pixels further right than every row beneath
+them. One column, two right edges. They all finish on the same line now.
+
+The Card Manager is the interesting one, and its problem was not in the file
+the ticket named. That panel's entire contents is the Card Template designer,
+which lives about four hundred lines away in another file. Its controls were
+placed by "put the next one wherever the last one ended", so a group of seven
+settings sat at seven different left edges across three wrapped lines, every
+box a different width. That is precisely the thing Dane pointed at when he
+opened this whole sweep a month ago, still sitting there untouched.
+
+The reason it survived a month is the part worth remembering. The automatic
+layout checker recognises three kinds of form row, and this designer is built
+from a fourth kind it had never been taught. So a run announcing "684 panels,
+all correct" had never once looked at it. It was not passing; it was absent.
+The checker knows that fourth shape now, the panel is measured along with the
+rest, and four separate things were broken on purpose and watched to fail
+before any of the green was believed.
+
+Review sent this back once, and the send-back found something worth having.
+The new guard that stops a fixed width creeping back onto one of these boxes
+only recognised one way of writing it. The other spelling — the commoner one,
+as it happens — walked straight past it. A guard that only catches the spelling
+you already removed is not a guard, so it was widened and then broken on
+purpose in five different spellings, each one watched to fail. Three smaller
+things went the same way: two checks that would have gone quiet instead of
+failing if the code around them were renamed, and a skip in the measuring tool
+that nothing had ever exercised for the case it was added for.
+
+One hole is left open deliberately and is written down rather than quietly
+carried: the checker still cannot see the Post Manager's kind of defect at all,
+and nine other panels have it live today. Closing it would flag all nine at
+once, which belongs to the sweeps that own those panels, not to this one.
+## 2026-09-14 — Saving a Builder page no longer quietly unlinks the shared blocks on it (#695)
+
+A shared block is one you build once and reuse on many pages: change the
+original and every page carrying it follows along. Until now, opening a page in
+the Builder and clicking **Save Page** — changing nothing at all — silently cut
+that link on every shared block on the page. The header flipped from *Following*
+to *Independent*, nothing was said, and the page looked exactly the same. The
+next time the original was updated, that page just did not get it. Which turns
+up much later as "the footer will not update on that page", with no way to guess
+which save did it.
+
+The cause was a piece of machinery for importing pages from the old Normie
+system. It recognises an old-style page by looking for a couple of settings
+objects — and the current page editor happens to attach those same two objects to
+every section it saves. So every ordinary save was being treated as an import,
+rebuilt from a fixed list of fields, and the list did not include the link back
+to the original. There was already a safety net downstream whose whole job is to
+put that link back; it was being handed a page the link had already been stripped
+from, so it had nothing to work with.
+
+The fix carries the link through the rebuild, for blocks and for the individual
+modules inside them, and leaves everything else exactly as it was. The ticket
+suggested a different repair — teaching the importer to recognise old pages more
+narrowly — and that was checked and set aside: the signal it proposed is one
+modern pages also carry, so it would not have fixed this, and tightening it
+further risks a real old page quietly failing to import, which is worse.
+
+Verified in a real browser against a local copy of the live data, both ways: on
+the old code the click wipes the links, on the new code they survive.
+
+A review sent this back once, and the second pass found something worth keeping.
+The safety net mentioned above had in fact been broken since the day it was
+written — it was meant to fall back on the page the browser sent whenever the
+rebuild lost the link, but it always reported an answer even when it had none,
+and that empty answer overwrote the real one every time. So the net had never
+once caught anything. It is repaired here, which means the link now survives in
+two independent ways rather than one. Each half of the fix also now has a test
+that goes red when that half is deleted, checked by deleting it and watching the
+named test fail, so a future tidy-up cannot quietly remove either one.
+
+## 2026-09-13 — Six blog settings panels line up as one block instead of a stack of loose rows (#688)
+
+Six panels in the Builder — the Category Filter, Tag Cloud, Search, Search
+Results, Newsletter Subscribe and New Post Form — had fields that ended at
+different places down the same column, so the form read as a stack of rows
+rather than one tidy rectangle.
+
+Almost all of it came from one control. The "Target Page" box is really two
+controls in one — a dropdown, plus a text box that appears when you choose
+"Custom…" — and because of the way it is built, the rule that keeps every other
+box a sensible width never reached it. Left alone it rendered about 850 pixels
+wide, the column sized itself to that one row, and every other field in the
+column then stopped nearly 300 pixels short of it. Twenty-seven rows across four
+of the six panels were doing that.
+
+The same control was also failing in the opposite direction, which is why only
+capping it would have been half a fix: on the Newsletter panel it has no text
+box, so it was just a short dropdown that nothing stretched, sitting 147 pixels
+short of the edge the fields above and below it reach. It is now bounded *and*
+filled, so it ends where they do whichever mode it is in.
+
+The Category Filter's list of categories was on a private layout of its own —
+each label stacked above a full-width box, lining up with nothing else in the
+panel — and, worse, the automatic layout checker skips that particular shape by
+name, so no sweep had ever measured it. It now uses the same shape the Tag Cloud
+beside it already uses, and the checker sees one more panel than it did before.
+
+Nothing here changes what any setting does or what gets saved.
+## 2026-09-14 — Re-linking a block to its original now actually pulls the original's content in (#693)
+
+A follow-up to the fix directly below this one, from its review.
+
+That fix gave every copy of a shared block a small memory of what the last push
+put into it, so a copy a failed push never reached stops being mistaken for one
+you edited by hand. The right answer — for the push. But the same question was
+being asked in a second place, by the button that re-links a block to its
+original, and there it is a different question: not "is this your edit?" but
+"does this block already show what the original shows?".
+
+Asking the first question in the second place meant a copy the failed push had
+missed was treated as already up to date. Tick "Following" back on and the
+button quietly did nothing at all: the old content stayed on the page, with the
+header saying it was following the original.
+
+The two questions are now named separately. Re-linking compares the content
+itself, and gets one of three answers: it already matches (nothing to do), it is
+stale because a push never reached it (take the original's content, no
+questions — there is nothing of yours to rescue), or you edited it here (ask
+first, exactly as before). The header chip picks up the same reading: a copy the
+last push missed still says "Following", because it is, but the tooltip no
+longer claims it "matches the original" during the one window where it does not.
+
+## 2026-09-14 — A shared-section save that half fails no longer talks you into wiping your own edit (#693)
+
+A shared section is a block you build once — a menu banner, a footer — and drop
+onto many pages. Saving the original pushes the change out to every copy. If one
+page fails to take that push, you used to be told "1 page could not be updated.
+Reload and save again to finish", and nothing more.
+
+What it did not tell you is that the page it failed on was also carrying an edit
+you had made by hand, right there on that page, which the push had deliberately
+left alone. And doing what the message told you to do made it worse: by the time
+you retry, the original has already been saved, so the app compares each copy
+against the new content. The copy on the failed page still held the old content
+— only because nothing was ever written to it — and that looks exactly like
+somebody having edited it. So the page got skipped, and you were offered
+"1 page has local changes and was skipped. Overwrite anyway?" Saying yes
+flattened the hand edit the first push had gone out of its way to protect.
+
+Two fixes. The page that failed is now named in the message, along with whatever
+hand edits are still sitting on it. And each copy now quietly remembers what the
+last push put into it, so a copy that was simply never written is recognised for
+what it is instead of being mistaken for an edit — on the retry it catches up,
+your edit survives, and the overwrite offer never appears for it.
+
+Worth recording how nearly this shipped doing nothing. The first version of that
+memory compared a fingerprint taken before saving with one taken after loading,
+and the database hands things back with their fields in a different order, so
+the two never matched. It failed silently and in the safe direction, which is
+the hardest kind to notice: every test passed, and the whole feature was inert.
+It took running the real thing against a real database to see it.
 ## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
 
 Open a module's gear icon in the Builder and you get a form. On most panels

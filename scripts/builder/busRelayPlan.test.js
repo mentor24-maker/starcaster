@@ -889,7 +889,7 @@ test('the relay reads the durable marker as delivery, which is the whole of the 
     'an already-relayed comment must be recorded as DELIVERED, not merely skipped');
 
   const authorizedAt = RELAY_SRC.indexOf('const authorized = answered.state ===');
-  const targetAt = RELAY_SRC.indexOf("const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr)");
+  const targetAt = RELAY_SRC.indexOf("const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr, answered.answer?.comment_text)");
   assert.ok(authorizedAt > -1 && targetAt > authorizedAt,
     'the hand-back must be decided from the durable verdict, never from this pass\'s `fresh` count');
 
@@ -1109,6 +1109,88 @@ test('the relay decides the hand-back from the ticket, and reports a reading it 
   assert.match(RELAY_SRC, /unchecked\.push\(`\$\{t\.id\}: his answer was delivered, but \$\{plan\.why\}`\)/,
     'and it must be reported, or "could not check" reads as a clean pass');
   // The receipt names the status the move will ask for, not a hard-coded one.
-  assert.match(RELAY_SRC, /const simTarget = handbackDestination\(watch, t\.status\?\.status, 1, handbackPr\)\.target;/,
+  assert.match(RELAY_SRC, /const simTarget = handbackDestination\(watch, t\.status\?\.status, 1, handbackPr, c\.comment_text\)\.target;/,
     'the fallback receipt must name the destination this ticket is actually going to');
 });
+
+// ── An answer that says "close it" closes the ticket (task 86bc08xx5) ───────
+//
+// 2026-09-14: 86bbwmumk was already fixed on main; a build pass asked Dane to
+// close it, he answered "close it", and the relay returned it to Queued — the
+// top of the claim line — so the next build pass claimed it and spent a whole
+// pass re-verifying a fix. The watch never read the answer.
+{
+  const { isCloseCommand, handbackDoneText: doneText, receiptText: receipt } = require('./busRelayPlan.js');
+  const needsInput = loopQueue;
+
+  test('his answer "close it" moves an answered ticket to Live, not back to Queued', () => {
+    const plan = handbackDestination(needsInput, 'needs your input', 1, null, 'close it');
+    assert.equal(plan.act, 'move');
+    assert.equal(plan.target, 'Live');
+    assert.match(plan.why, /close it/);
+  });
+
+  test('the recognised phrasings, in the shapes the editor actually stores', () => {
+    for (const text of ['close it', 'Close it.', 'CLOSE IT!', '`close it`', '**close it**', '```\nclose it\n```',
+      'close', 'close this', 'close this ticket', 'close the ticket', 'please close it', 'close it please',
+      'yes, close it', 'ok close it', 'closed', 'close it\n']) {
+      assert.equal(isCloseCommand(text), true, `should close on ${JSON.stringify(text)}`);
+    }
+  });
+
+  test('near-misses do NOT close — narrow on purpose, because a wrong close loses his ticket', () => {
+    for (const text of [
+      'can you close the gap in the header?',
+      'close the PR but keep the ticket open',
+      'do not close it',
+      "don't close it",
+      'close it after you fix the footer',
+      'this is close to done',
+      'done',
+      'nothing to do',
+      'ran the SQL, done',
+      'merge',
+      '',
+      undefined,
+      null,
+    ]) {
+      assert.equal(isCloseCommand(text), false, `must NOT close on ${JSON.stringify(text)}`);
+      const plan = handbackDestination(needsInput, 'needs your input', 1, null, text);
+      assert.equal(plan.target, 'Queued', `and must fall through to today's Queued on ${JSON.stringify(text)}`);
+    }
+  });
+
+  test('any other answer still releases to Queued exactly as before, trail rules unchanged', () => {
+    assert.equal(handbackDestination(needsInput, 'needs your input', 1, null, 'yes, go ahead').target, 'Queued');
+    assert.equal(handbackDestination(needsInput, 'needs your input', 1, { number: 7, state: 'OPEN' }, 'looks good').target, 'Rework');
+    assert.equal(handbackDestination(needsInput, 'needs your input', 1, { number: 7, state: 'MERGED' }, 'ok').target, 'Live');
+    // Omitting the answer entirely is the old four-argument call: unchanged.
+    assert.equal(handbackDestination(needsInput, 'needs your input', 1, null).target, 'Queued');
+  });
+
+  test('"close it" is still gated by the doctrine checkpoint — no delivered answer, no move', () => {
+    assert.equal(handbackDestination(needsInput, 'needs your input', 0, null, 'close it').act, 'skip');
+    assert.equal(handbackDestination(needsInput, 'ready to launch', 1, null, 'close it').act, 'skip');
+  });
+
+  test('closing with an OPEN pull request says the PR was left alone', () => {
+    const plan = handbackDestination(needsInput, 'needs your input', 1, { number: 692, state: 'OPEN' }, 'close it');
+    assert.equal(plan.target, 'Live');
+    assert.match(plan.why, /PR #692 is still open/);
+  });
+
+  test('both notes on the ticket say CLOSED, never "returned to Queued"', () => {
+    const done = doneText({ target: 'Live', at: '2026-09-14T21:00:00Z' });
+    assert.match(done, /this ticket was closed/);
+    assert.doesNotMatch(done, /back with the machines/);
+    assert.match(doneText({ target: 'Queued' }), /returned to "Queued", so it is back with the machines/);
+
+    assert.match(receipt({ why: 'HTTP 400', target: 'Live', at: 'x' }), /being closed, as you asked/);
+    assert.match(receipt({ why: 'HTTP 400', target: 'Queued', at: 'x' }), /being returned to Queued/);
+  });
+
+  test('the relay hands his answer text to both decisions — the receipt and the move', () => {
+    assert.match(RELAY_SRC, /handbackDestination\(watch, t\.status\?\.status, 1, handbackPr, c\.comment_text\)/);
+    assert.match(RELAY_SRC, /handbackDestination\(watch, t\.status\?\.status, authorized, handbackPr, answered\.answer\?\.comment_text\)/);
+  });
+}

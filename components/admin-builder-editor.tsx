@@ -90,7 +90,7 @@ import {
   resolveSharedSectionTitle,
   savedSectionNameAfterPush
 } from "@/lib/saved-section-name";
-import { getSectionContent, hasSectionDrifted } from "@/lib/section-drift";
+import { getSectionContent, relinkReading } from "@/lib/section-drift";
 import { BuilderBulkCreate, type BulkCreateResult, type AcquireRunSummary, type ExtractionPreviewItem } from "./builder/builder-bulk-create";
 import {
   BuilderModuleRepositoryList,
@@ -1099,12 +1099,22 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       return;
     }
 
-    if (!hasSectionDrifted(section, master.section)) {
+    // Three states, not two. `hasSectionDrifted` answers "may a push overwrite
+    // this copy?", and asking it here read a copy a failed push never reached
+    // as "already matches" — so the flag went on and the old content stayed on
+    // the page under a Following label (task 86bbwe530, round 1). This asks
+    // the question the toggle is actually about; see @/lib/section-drift.
+    const reading = relinkReading(section, master.section);
+
+    if (reading === "matches") {
       updateSection(sectionId, (s) => ({ ...s, canonical: true }));
       return;
     }
 
-    const saveAsNew = window.confirm(
+    // `awaiting-push` falls straight through to the revert below with no
+    // prompt: the copy differs only because a push did not reach it, so there
+    // are no local changes to rescue and nothing to ask about.
+    const saveAsNew = reading === "hand-edited" && window.confirm(
       `This section has local changes.\n\nClick OK to save your local changes as a new saved section, then revert to canonical.\nClick Cancel to discard local changes and revert to canonical.`
     );
 
@@ -1141,7 +1151,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       modules: master.section.modules.map((m) => ({ ...m, settings: { ...m.settings } }))
     };
     updateSection(sectionId, () => reverted);
-    setMessage(saveAsNew ? `Saved local changes and relinked to canonical.` : `Local changes discarded. Relinked to canonical.`);
+    setMessage(
+      saveAsNew
+        ? `Saved local changes and relinked to canonical.`
+        : reading === "hand-edited"
+          ? `Local changes discarded. Relinked to canonical.`
+          : `Relinked to canonical — this copy now has the original's latest content.`
+    );
   }
 
   function moveSection(sectionId: string, direction: -1 | 1) {
@@ -1680,6 +1696,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           propagation?: {
             ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
             skipped?: Array<{ pageId?: string; name?: string }>;
+            // Named pages, not just a count — the toast says whether a hand
+            // edit is still sitting on one of them (task 86bbwe530).
+            failedPages?: Array<{ pageId?: string; name?: string; preservedCopies?: number }>;
             writtenWithPreservedEdits?: Array<{ pageId?: string; name?: string; copies?: number }>;
           };
         };
@@ -3289,8 +3308,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                             : undefined;
                           const canonicalSourceName = canonicalMaster?.name;
-                          const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
-                            && hasSectionDrifted(section, canonicalMaster!.section);
+                          const lineageReading = sectionAny.canonical === true && canonicalMaster
+                            ? relinkReading(section, canonicalMaster.section)
+                            : null;
+                          const hasDrifted = lineageReading === "hand-edited";
+                          const awaitingPush = lineageReading === "awaiting-push";
                           const canonicalUsage = sectionAny.savedSectionId
                             ? savedSectionUsage.get(sectionAny.savedSectionId)
                             : undefined;
@@ -3310,6 +3332,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             expandedModuleIds={expandedModuleIds}
                             canonicalSourceName={canonicalSourceName}
                             hasDrifted={hasDrifted}
+                            awaitingPush={awaitingPush}
                             canonicalUsage={canonicalUsage}
                             themeColors={rteThemeColors}
                             themeStyle={getThemeRootVars(canvasTheme)}
@@ -3377,8 +3400,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         ? savedSections.find((ss) => ss.id === sectionAny.savedSectionId)
                         : undefined;
                       const canonicalSourceName = canonicalMaster?.name;
-                      const hasDrifted = sectionAny.canonical === true && Boolean(canonicalMaster)
-                        && hasSectionDrifted(section, canonicalMaster!.section);
+                      const lineageReading = sectionAny.canonical === true && canonicalMaster
+                        ? relinkReading(section, canonicalMaster.section)
+                        : null;
+                      const hasDrifted = lineageReading === "hand-edited";
+                      const awaitingPush = lineageReading === "awaiting-push";
                       const canonicalUsage = sectionAny.savedSectionId
                         ? savedSectionUsage.get(sectionAny.savedSectionId)
                         : undefined;
@@ -3398,6 +3424,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         expandedModuleIds={expandedModuleIds}
                         canonicalSourceName={canonicalSourceName}
                         hasDrifted={hasDrifted}
+                        awaitingPush={awaitingPush}
                         canonicalUsage={canonicalUsage}
                         themeColors={rteThemeColors}
                         themeStyle={getThemeRootVars(canvasTheme)}
