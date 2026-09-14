@@ -851,8 +851,10 @@ export function BuilderPageList({
             </button>
           </div>
           <div className="builder-pages-crud-heading-actions">
+            {/* Blue: Preview saves nothing — see the note in
+                builder-publish-panel.tsx (task 86bbq5jvz). */}
             <button
-              className="submit-button admin-blog-add-button builder-panel-heading-button"
+              className="submit-button builder-panel-heading-button"
               onClick={onPreviewDraft}
               type="button"
             >
