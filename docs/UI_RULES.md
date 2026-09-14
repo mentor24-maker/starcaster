@@ -247,6 +247,47 @@ as a rule first, then gets a checker where one is possible.
   said in the fixture itself that seeding did not make them measurable. Opening
   them is a fourth expand step in `openPanels`, scoped to the card class rather
   than to every `Expand *` button on the page.
+
+  **The other three panels of sweep 11/15 needed no change, and that is a
+  measurement rather than a glance** (2026-09-13, ticket 86bbjt1b9). Current
+  Poll, Messaging Topic List and Messaging Tag List are schema-driven, so the
+  generator already lays each axis column out on W0's mechanism; every one of
+  their axis columns sits BESIDE its neighbours, and a side-by-side column is
+  its own lattice by rule. Measured at 1440: Current Poll's three columns start
+  at x=93/578/1107, Tag List's four at x=93/529/834/1144, each flush left with
+  its own fields ending on one line, and the last column's right edge landing on
+  the panel's own (1347px) — L8's one rectangle. The shared chrome joins the
+  first column's tracks in both (Tag List's chrome controls start at x=218 and
+  its Content controls at x=218), which is ticket 86bbq065f's slot doing its
+  job. All four panels were then broken on purpose and watched to fail by name
+  before the pass was believed; what was broken is recorded in the ticket's PR.
+
+  **Two things this sweep measured and deliberately did NOT fix, because both
+  are wider than the four panels it is allowed to touch:**
+
+  *   **A `width: "full"` field is invisible to `check_panels`.** Messaging
+      Topic List declares three (`URL param`, `'All' label`, `Post feed URL`);
+      the check measured its Content group as **6 fields** while the panel
+      rendered **9**. A `full` field makes its strip a full-width block, and a
+      full-width block matches none of the check's group selectors, so the
+      field is neither held to the lattice nor reported as skipped — absent and
+      passing, one more time. Narrowing the three to `text-md` makes all nine
+      measurable, which is how this was found; it is not the fix, because it
+      also took the Content column from 699px to 985px and started the panel
+      wrapping at 1600 as well as 1440. The real fix is to teach the check the
+      full-width-block shape, which touches every panel that uses `full`.
+
+  *   **A wrapped axis column lands under a column with a different field
+      track.** `.is-lattice .builder-schema-panel-columns` is a wrapping flex
+      row (deliberately — content-sized columns with the slack in the gaps), so
+      on a narrow panel a column drops to a second row. Measured at 1440:
+      **22 panels** wrap, Messaging Topic List among them, whose Frame column
+      lands directly under Content with its controls at x=175 against Content's
+      x=232. Two label tracks, 57px apart, one under the other — which is the
+      operator's own 2026-08-13 sentence, arriving through the one route the
+      chrome-seam fix (86bbq065f) does not cover. It is not fixable inside one
+      panel: which column lands under which depends on the width, and holding
+      wrapped columns to a shared lattice is a generator change across all 22.
   **How it is built, and how it is checked (rewritten 8/13).** The first
   cut got the shape right and the mechanism wrong — a fixed `11ch` label
   track, `1fr` fields, an `11rem` button — which is the per-field width W0
