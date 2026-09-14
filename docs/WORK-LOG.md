@@ -33,6 +33,26 @@ styling declares identical drawn 19 pixels apart. That is the operator's
 original complaint — "the column width varies arbitrarily" — arriving one level
 up from where it was first fixed. It measures at exactly 40 now.
 
+A second review round found something worth writing down on its own: **the test
+written to protect that 40-pixel gap could not fail.** The styling rule carries
+a long note beside it explaining why the gap is set to zero, and that note
+repeats the setting word for word while explaining it. The test was reading the
+rule and its note together, so it found the words in the explanation and
+reported everything fine — delete the actual setting and the 52-pixel gap comes
+straight back with every check still green. The test now reads the rule with the
+explanation taken out, and the two lines it protects are checked separately,
+because the original break test deleted both at once and the failure it produced
+came from the half that was working.
+
+The same round finished a job that had been done one level too high. The setting
+that closes the gap had been applied to the outer list but not to the three
+boxes nested inside it, which kept the old value from the base styling — so the
+criteria rows inside a reminder card sat five pixels off the column every other
+control in that panel uses, while the styling file said in writing that they
+shared it. They share it now: both start on exactly the same line. The one
+difference that remains is the criteria box's own border and padding, fifteen
+real pixels of box, and that is said plainly rather than left to read as drift.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
