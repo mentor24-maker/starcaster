@@ -217,6 +217,57 @@ test('the write\'s try holds the request and nothing else', () => {
   assert.ok(block.includes('bulk-set-template'), 'the request itself should still be in there');
 });
 
+/**
+ * The DIALOG's warning goes through the wording module too (2026-09-14).
+ *
+ * It is the third call site, and it is the one the operator reads BEFORE
+ * pressing the button — the sentence he acted on when 57 Delray pages lost
+ * their content on 2026-09-13. Worded inline here it could only be checked by
+ * eye, which is how the old one stayed accurate to a behaviour that had
+ * changed underneath it.
+ */
+test('the dialog warning is worded in /shared/, through the same guard', () => {
+  const body = functionBody(source, 'openBulkChangeTemplateDialog');
+  assert.match(
+    body,
+    /sayBulkTemplate\(\s*'describeBulkTemplateChangePlan'/,
+    'the dialog words its own warning again, where nothing can assert on it',
+  );
+
+  // The sentence that shipped the incident, in either apostrophe.
+  const code = body.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(
+    code,
+    /will be REPLACED/,
+    'the dialog still tells the operator his sections will be replaced; since 2026-09-14 they are kept',
+  );
+});
+
+test('the dialog\'s fallback states no count it did not take', () => {
+  // The fallback runs when /shared/bulkTemplateOutcome.js did not load — which
+  // is exactly when nothing counted anything. A number in this sentence would
+  // be invented.
+  const code = functionBody(source, 'openBulkChangeTemplateDialog')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  const fallbacks = code.match(/'[^']*content sections[^']*'/g) || [];
+  assert.ok(fallbacks.length, 'the dialog fallback sentence is gone');
+  for (const sentence of fallbacks) {
+    assert.doesNotMatch(sentence, /\d/, `the fallback quotes a number it never counted: ${sentence}`);
+  }
+});
+
+test('a page the screen has no row for is passed as unreadable, not as empty', () => {
+  // The counter can only tell "could not read it" from "it has none" if this
+  // function hands it undefined rather than []. Collapsed to [], a page whose
+  // row is missing silently reduces the number the operator is asked to trust.
+  const body = functionBody(source, 'selectedPageLayoutSections');
+  assert.match(body, /Array\.isArray\(item\.layoutSections\)/, 'the section list is no longer type-checked');
+  assert.match(body, /: undefined/, 'a missing page is collapsed to something the counter reads as empty');
+  assert.doesNotMatch(body, /:\s*\[\]/, 'a missing page is passed as an empty list, which counts as zero content');
+});
+
 // ── The weakest link in the evidence chain ──────────────────────────────────
 
 /**

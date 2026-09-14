@@ -4311,6 +4311,20 @@ App.builder = (function () {
     return live;
   }
 
+  // Each selected page's section list, in selection order — one entry per
+  // page, and deliberately `undefined` rather than `[]` for a page whose row
+  // this screen does not have. An empty array is a page with no sections of
+  // its own; the two must not arrive at the counter looking the same, or
+  // "could not read it" silently becomes "it has none".
+  function selectedPageLayoutSections() {
+    const lists = [];
+    selectedPageIds.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      lists.push(item && Array.isArray(item.layoutSections) ? item.layoutSections : undefined);
+    });
+    return lists;
+  }
+
   function openBulkChangeTemplateDialog() {
     const dialog = byId('builderPagesChangeTemplateDialog');
     const select = byId('builderPagesChangeTemplateSelect');
@@ -4336,16 +4350,37 @@ App.builder = (function () {
         : 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
       if (confirmBtn) confirmBtn.disabled = true;
     } else {
-      // WHERE the pages are, named with the count rather than implied. A page
-      // with no published snapshot is served straight from its draft
-      // (routes/publicSite.js), so on a project that has never published the
-      // re-pour is on the tenant's public domain the moment this finishes —
-      // there is no publish step between here and the visitor.
-      const live = countLiveSelectedPages();
-      const liveNote = live
-        ? ` ${live} of these ${live === 1 ? 'pages is' : 'pages are'} live on the public site, so a visitor sees the new layout as soon as this finishes — there is no separate publish step.`
-        : '';
-      warningEl.textContent = `The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme.${liveNote} An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.`;
+      // LEAD WITH WHAT IS KEPT. Until 2026-09-14 this said the sections "will
+      // be REPLACED with the chosen template's layout", which was true — the
+      // operation re-poured — and it is what the operator read before moving
+      // 57 Delray pages onto one template on 2026-09-13 and losing the content
+      // of every one of them (ticket 86bc09db9). The write path keeps the body
+      // now and swaps only the shared header/footer sections, so the warning
+      // says that, with the number.
+      //
+      // WHERE the pages are is still named with a count rather than implied: a
+      // page with no published snapshot is served straight from its draft
+      // (routes/publicSite.js), so on a project that has never published there
+      // is no publish step between here and the visitor.
+      //
+      // The counting happens in /shared/, off the section lists the browser is
+      // already holding for the rows on screen, because a count worded here
+      // could only ever be checked by eye (landmine 9). A page whose layout is
+      // not in hand would make the count an undercount, and the module refuses
+      // to state one at all in that case — it says how many it could not read.
+      warningEl.textContent = sayBulkTemplate(
+        'describeBulkTemplateChangePlan',
+        {
+          pageCount: n,
+          liveCount: countLiveSelectedPages(),
+          pageSections: selectedPageLayoutSections(),
+        },
+        // Dull on purpose: no count, because the file that does the counting is
+        // the one that did not load.
+        'Each page keeps its own content sections; the shared header and footer sections are replaced with '
+          + 'the ones the chosen template carries. An archive of all your pages is saved first, and Restore '
+          + 'All on that archive undoes this — along with any other page edits made after it was taken.',
+      ).message;
       if (confirmBtn) confirmBtn.disabled = false;
     }
     if (confirmBtn) confirmBtn.textContent = 'Change Template';

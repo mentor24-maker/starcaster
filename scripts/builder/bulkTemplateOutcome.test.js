@@ -5,6 +5,9 @@ const assert = require('node:assert/strict');
 
 const {
   tallyBulkTemplateRows,
+  isFrameSectionLike,
+  countBulkTemplateBody,
+  describeBulkTemplateChangePlan,
   describeBulkTemplateOutcome,
   describeBulkTemplateInterruption,
   describeBulkTemplateFailure,
@@ -547,4 +550,197 @@ test('a failed reload is stated as a failed reload, not glossed over', () => {
   assert.match(out.message, /The list could not be reloaded/);
   assert.match(out.message, /may still show the values from before this run/);
   assert.doesNotMatch(out.message, /The list has been reloaded/);
+});
+
+
+// ── The sentence BEFORE the button is pressed (2026-09-14, 86bc09db9) ───────
+
+/**
+ * On 2026-09-13 the dialog said the sections on the selected pages "will be
+ * REPLACED with the chosen template's layout". It was true. The operator read
+ * it, pressed the button on 57 Delray Beach Tennis Center pages, and every one
+ * lost its content; 51 of them served "Replace this section with real
+ * content." to visitors for about eighteen hours.
+ *
+ * The write path keeps the body now, so the warning has to say so — and name
+ * the number, because the reassurance without a figure is the one this control
+ * has already disproved twice.
+ */
+
+test('the browser and the server classify frame sections identically', () => {
+  // Two copies of one rule, for the same reason NOTHING_WRITTEN has two:
+  // nothing under public/ can require out of lib/. This is the join. If they
+  // ever drift, the dialog counts a different thing from the code that writes,
+  // and the number the operator is asked to trust is about something else.
+  const { isFrameSection } = require('../../lib/builder/template-frame');
+
+  const CASES = [
+    null,
+    undefined,
+    'not an object',
+    7,
+    {},
+    { id: 'a', type: 'text' },
+    { canonical: true },
+    { savedSectionId: 'ss-1' },
+    { canonical: true, savedSectionId: 'ss-1' },
+    { canonical: true, savedSectionId: '' },
+    { canonical: 'true', savedSectionId: 'ss-1' },
+    { canonical: false, savedSectionId: 'ss-1' },
+    { canonical: true, savedSectionId: 'ss-1', modules: [] },
+    { canonical: true, savedSectionId: 'ss-1', modules: [{ id: 'm' }] },
+  ];
+
+  for (const value of CASES) {
+    assert.equal(
+      isFrameSectionLike(value),
+      isFrameSection(value),
+      `the two copies disagree about ${JSON.stringify(value)} — the dialog would count `
+        + 'a different thing from the code that writes the page',
+    );
+  }
+});
+
+test('a page whose layout is missing is UNREADABLE, never a page with none', () => {
+  // The distinction the whole count rests on. Folded together, "this screen
+  // does not have that page's rows" reads as "that page has no content", and
+  // the number the operator is about to trust is quietly short.
+  const empty = countBulkTemplateBody([[]]);
+  assert.equal(empty.unreadable, 0);
+  assert.equal(empty.bodyCount, 0);
+
+  const missing = countBulkTemplateBody([undefined]);
+  assert.equal(missing.unreadable, 1);
+  assert.equal(missing.bodyCount, 0);
+
+  for (const value of [null, 'x', 7, {}]) {
+    assert.equal(countBulkTemplateBody([value]).unreadable, 1, `${JSON.stringify(value)} is not a section list`);
+  }
+});
+
+test('only the page\'s own sections are counted — the frame is not the operator\'s work', () => {
+  const counted = countBulkTemplateBody([
+    [
+      { id: 'hdr', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'a', type: 'text' },
+      { id: 'b', type: 'image' },
+      { id: 'ftr', canonical: true, savedSectionId: 'ss-footer' },
+    ],
+    [{ id: 'c', type: 'text' }],
+  ]);
+  assert.equal(counted.bodyCount, 3);
+  assert.equal(counted.pages, 2);
+  assert.equal(counted.unreadable, 0);
+});
+
+test('the dialog names how many content sections are kept, before anything runs', () => {
+  // The acceptance criterion, in the wording layer. Delray "Managers & Staff"
+  // had 31; the number is what turns "your content is safe" into something the
+  // operator can check against the page in front of him.
+  const body = Array.from({ length: 31 }, (_, i) => ({ id: `s${i}`, type: 'text' }));
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    liveCount: 0,
+    pageSections: [[{ id: 'hdr', canonical: true, savedSectionId: 'ss-old' }, ...body]],
+  });
+
+  assert.match(plan.message, /All 31 content sections on this page are kept exactly as they are/);
+  assert.match(plan.message, /Only the shared header and footer sections are replaced/);
+  assert.equal(plan.counts.bodyCount, 31);
+  assert.equal(plan.isError, false);
+  // The sentence that shipped the incident must not be there any more.
+  assert.doesNotMatch(plan.message, /will be REPLACED/);
+});
+
+test('the dialog still says the archive is taken first', () => {
+  // The archive is the only undo this operation has, and leading with
+  // reassurance must not quietly drop the one instruction that matters when
+  // something goes wrong anyway.
+  const plan = describeBulkTemplateChangePlan({ pageCount: 2, pageSections: [[], []] });
+  assert.match(plan.message, /An archive of all your pages is saved first/);
+  assert.match(plan.message, /Restore All on that archive undoes this/);
+});
+
+test('a page this screen cannot read means NO number is stated', () => {
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 3,
+    liveCount: 0,
+    pageSections: [[{ id: 'a' }], undefined, [{ id: 'b' }]],
+  });
+
+  assert.doesNotMatch(plan.message, /kept exactly as/, 'the counted phrasing is a claim and is not licensed here');
+  assert.match(plan.message, /could not read the layout of 1 of the 3 selected pages/);
+  assert.equal(plan.counts.bodyCount, null, 'null, not 2 — an undercount is worse than no count');
+  assert.equal(plan.counts.unreadable, 1);
+});
+
+test('the live sentence in the dialog is grammatical at every count', () => {
+  // The subject and the verb both come from the LIVE count. Taking one from
+  // each is round 3's "they is live on the public site", and the first draft of
+  // this sentence had it back as "1 of these pages are live".
+  const sections = (n) => Array.from({ length: n }, () => [{ id: 'a' }]);
+  const say = (pageCount, liveCount) =>
+    describeBulkTemplateChangePlan({ pageCount, liveCount, pageSections: sections(pageCount) }).message;
+
+  assert.match(say(1, 1), /This page is live on the public site/);
+  assert.match(say(2, 1), /1 of the 2 selected pages is live on the public site/);
+  assert.match(say(2, 2), /All 2 of these pages are live on the public site/);
+  assert.match(say(5, 3), /3 of the 5 selected pages are live on the public site/);
+
+  // The two shapes that were actually wrong, rather than a blanket string ban:
+  // "1 of the 2 selected pages is live" is correct English and would trip one.
+  // What must never happen is the VERB following the selection instead of the
+  // live count, or a single-page phrasing on a multi-page selection.
+  for (const [pages, live] of [[1, 1], [2, 1], [2, 2], [5, 3], [3, 3], [4, 1]]) {
+    const said = say(pages, live);
+    if (live === 1) {
+      assert.doesNotMatch(said, /(pages|page) are live/, `plural verb for a single live page at ${live}/${pages}`);
+    } else {
+      assert.doesNotMatch(said, /(pages|page) is live/, `singular verb for ${live} live pages at ${live}/${pages}`);
+    }
+    if (pages > 1) {
+      assert.doesNotMatch(said, /This page is live/, `single-page wording on a ${pages}-page selection`);
+    }
+  }
+
+  // No live pages, no sentence about live pages.
+  assert.doesNotMatch(say(3, 0), /live on the public site/);
+});
+
+test('the plan makes no claim its input did not license', () => {
+  // The same rule the failure sentences are held to, over this function's own
+  // matrix. A count phrase may only appear when every selected page was
+  // readable; a live-pages phrase only when the live count is above zero.
+  const READABLE = [{ id: 'a', type: 'text' }];
+  const SECTION_SETS = [
+    [],
+    [READABLE],
+    [READABLE, READABLE],
+    [READABLE, undefined],
+    [undefined, undefined],
+    [[]],
+    'not a list',
+    undefined,
+  ];
+
+  let checked = 0;
+  for (const pageSections of SECTION_SETS) {
+    for (const pageCount of [undefined, 0, 1, 2, 3]) {
+      for (const liveCount of [undefined, 0, 1, 2]) {
+        const opts = { pageCount, liveCount, pageSections };
+        const said = describeBulkTemplateChangePlan(opts).message;
+        checked += 1;
+        for (const rule of CLAIMS) {
+          if (!said.includes(rule.phrase)) continue;
+          assert.ok(
+            rule.licensed(opts),
+            `describeBulkTemplateChangePlan claimed "${rule.name}" with no fact licensing it.\n`
+              + `  input:   ${JSON.stringify(opts)}\n`
+              + `  message: ${said}`,
+          );
+        }
+      }
+    }
+  }
+  assert.ok(checked > 100, 'the sweep should be a real one');
 });

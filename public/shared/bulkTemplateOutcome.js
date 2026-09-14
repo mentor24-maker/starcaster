@@ -1,5 +1,5 @@
 /**
- * What the bulk template change TELLS the operator once it has run.
+ * What the bulk template change TELLS the operator — before it runs, and after.
  *
  * The write path lives in lib/builderPagesStore.js and is covered by
  * scripts/builder/bulkSetPageTemplateWrite.test.js. This file is the other
@@ -68,6 +68,28 @@
  *     call that can fail, on a path where the API is unhealthy by hypothesis,
  *     and refreshPagesTableAfterBulkChange swallows the failure by design. The
  *     caller now reports whether it worked.
+ *
+ * THE SENTENCE BEFORE THE BUTTON IS PRESSED (2026-09-14, ticket 86bc09db9).
+ *
+ * describeBulkTemplateChangePlan is the newest thing here and the only one
+ * that runs before anything happens. Until that date the dialog said the
+ * sections on these pages "will be REPLACED with the chosen template's
+ * layout", which was true — the operation re-poured — and it is what the
+ * operator read on 2026-09-13 before moving 57 Delray Beach Tennis Center
+ * pages onto the "Public Website" template. Every one lost its content. He
+ * published twenty minutes later, so 51 pages read "Replace this section with
+ * real content." to visitors for about eighteen hours.
+ *
+ * The write path keeps the body now. So the warning leads with what is KEPT,
+ * the way describeTemplateFrameChange already does for the single-page control
+ * in the editor — and it names the number, because "your content is safe" with
+ * no figure attached is exactly the reassurance this control has spent two
+ * incidents disproving.
+ *
+ * The count comes from the rows the browser is holding, and it is a CLAIM
+ * under the rule above: a page whose layout this screen could not read
+ * contributes nothing to the number, so the number is not stated at all. The
+ * sentence says how many pages it could not read instead.
  *
  * AND WHERE THE PAGES ARE. A page with no published snapshot is served
  * straight from its draft (routes/publicSite.js -> getPublishedPage falls back
@@ -146,6 +168,49 @@
   }
 
   /**
+   * FRAME OR BODY — the browser's copy of the one rule that matters here.
+   *
+   * A section is frame when it is a live link to a saved section; everything
+   * else is the page's own work. The authority is isFrameSection in
+   * lib/builder-client/builder-template-frame.ts, which the server reaches
+   * through the generated lib/builder/template-frame.js. This is a second
+   * copy, deliberately and for the same reason NOTHING_WRITTEN is: nothing
+   * under public/ can require out of lib/, because these files load as plain
+   * <script> tags. bulkTemplateOutcome.test.js drives BOTH over the same
+   * matrix and fails if they ever classify one section differently, so the
+   * dialog cannot start counting a different thing from the code that writes.
+   */
+  function isFrameSectionLike(section) {
+    if (!section || typeof section !== 'object') return false;
+    return section.canonical === true && Boolean(section.savedSectionId);
+  }
+
+  /**
+   * How much of the operator's own work is in this selection.
+   *
+   * `pageSections` is one entry per selected page: that page's section list,
+   * or anything at all if the browser does not have it. An entry that is not
+   * an array is counted as UNREADABLE and contributes nothing to the total —
+   * never zero, which would quietly shrink the number the operator is about to
+   * trust.
+   */
+  function countBulkTemplateBody(pageSections) {
+    const list = Array.isArray(pageSections) ? pageSections : [];
+    let bodyCount = 0;
+    let unreadable = 0;
+    for (const sections of list) {
+      if (!Array.isArray(sections)) {
+        unreadable += 1;
+        continue;
+      }
+      for (const section of sections) {
+        if (!isFrameSectionLike(section)) bodyCount += 1;
+      }
+    }
+    return { pages: list.length, readable: list.length - unreadable, unreadable, bodyCount };
+  }
+
+  /**
    * EVERY claim this file can make, with the fact that licenses it.
    *
    * The test walks this table across a matrix of inputs and fails if a phrase
@@ -178,6 +243,22 @@
       name: 'pages may already have been changed',
       phrase: 'may already have been changed',
       licensed: (opts) => !serverWroteNothing(opts),
+    },
+    // ── The sentence shown BEFORE the button is pressed ──────────────────
+    {
+      // The count of content sections that survive the change. Licensed only
+      // when the browser could read EVERY selected page's layout: one page it
+      // could not read makes the total an undercount, and an undercount of
+      // "how much of your work is safe" is the same defect as the one this
+      // whole dialog was reworded for.
+      name: 'a content-section count',
+      phrase: 'kept exactly as',
+      licensed: (opts) => countBulkTemplateBody(opts.pageSections).unreadable === 0,
+    },
+    {
+      name: 'pages are live on the public site',
+      phrase: 'live on the public site',
+      licensed: (opts) => Number(opts.liveCount) > 0,
     },
   ];
 
@@ -424,8 +505,113 @@
     };
   }
 
+  /**
+   * WHAT IS ABOUT TO HAPPEN — the dialog's warning, before anything is written.
+   *
+   * Leads with what is KEPT, because the fear this control has earned is "will
+   * it eat my page again" and the first line has to answer that. Same order
+   * describeTemplateFrameChange uses for the single-page control in the
+   * editor, and now the same underlying behaviour.
+   *
+   *   pageCount    how many pages are selected
+   *   pageSections one entry per selected page: that page's section list
+   *   liveCount    how many of them a visitor can already see
+   *   archived     whether an archive is taken first (the caller knows; it is)
+   *
+   * The COUNT is the claim. A page this screen could not read contributes
+   * nothing to it, and the sentence then says how many it could not read
+   * rather than quoting a total that is quietly short.
+   */
+  function describeBulkTemplateChangePlan(options) {
+    const opts = options && typeof options === 'object' ? options : {};
+    const counted = countBulkTemplateBody(opts.pageSections);
+    const pageCount = Number.isFinite(Number(opts.pageCount))
+      ? Math.max(0, Math.trunc(Number(opts.pageCount)))
+      : counted.pages;
+    const liveCount = Number.isFinite(Number(opts.liveCount))
+      ? Math.max(0, Math.trunc(Number(opts.liveCount)))
+      : 0;
+
+    const parts = [];
+
+    if (counted.unreadable > 0) {
+      // No number. The claims table refuses the counted phrasing here, and the
+      // reason is said out loud rather than left as a vaguer sentence — an
+      // operator who cannot see why a count is missing reads the omission as
+      // the count being zero.
+      parts.push(
+        'Each page keeps its own content sections; only the shared header and footer sections are '
+          + `replaced with the ones the chosen template carries. This screen could not read the layout of `
+          + `${counted.unreadable} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}, `
+          + 'so it cannot tell you the exact number it is keeping.',
+      );
+    } else if (counted.bodyCount === 0) {
+      parts.push(
+        plural(
+          pageCount,
+          'This page has no content sections of its own',
+          'These pages have no content sections of their own',
+        ) + ', so there is nothing to lose here — only the shared header and footer sections change.',
+      );
+    } else {
+      // "on these pages" is wrong for a selection of one, and a warning whose
+      // grammar does not match what the operator ticked reads as a warning
+      // about somebody else's pages.
+      const where = plural(pageCount, 'on this page', 'on these pages');
+      parts.push(
+        counted.bodyCount === 1
+          ? `The 1 content section ${where} is kept exactly as it is.`
+          : `All ${counted.bodyCount} content sections ${where} are kept exactly as they are.`,
+        'Only the shared header and footer sections are replaced with the ones the chosen template carries.',
+      );
+    }
+
+    parts.push('Each page also keeps its own background and theme.');
+
+    if (liveCount) {
+      // WHERE THE PAGES ARE. A page with no published snapshot is served
+      // straight from its draft, so on a project that has never published
+      // there is no publish step between this button and a visitor.
+      //
+      // THE SUBJECT IS THE LIVE COUNT AND SO IS THE VERB. Taking one from the
+      // live count and the other from the selection is the defect round 3
+      // found in describeBulkTemplateOutcome — "they is live on the public
+      // site" — and the first draft of this sentence had it back again as
+      // "1 of these pages are live". `${liveCount} of the ${pageCount}` is
+      // also wrong when the two are equal ("1 of the 1 selected page"), so
+      // that case gets its own phrasing rather than a shared template.
+      const subject = liveCount === pageCount
+        ? plural(pageCount, 'This page', `All ${pageCount} of these pages`)
+        : `${liveCount} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}`;
+      parts.push(
+        `${subject} ${plural(liveCount, 'is', 'are')} live on the public site, `
+          + 'so a visitor sees the new header and footer as soon as this finishes — there is no separate '
+          + 'publish step.',
+      );
+    }
+
+    parts.push(
+      'An archive of all your pages is saved first, and Restore All on that archive undoes this — along '
+        + 'with any other page edits made after it was taken.',
+    );
+
+    return {
+      message: parts.join(' '),
+      isError: false,
+      counts: {
+        pages: pageCount,
+        bodyCount: counted.unreadable ? null : counted.bodyCount,
+        unreadable: counted.unreadable,
+        liveCount,
+      },
+    };
+  }
+
   return {
     tallyBulkTemplateRows,
+    isFrameSectionLike,
+    countBulkTemplateBody,
+    describeBulkTemplateChangePlan,
     describeBulkTemplateOutcome,
     describeBulkTemplateInterruption,
     describeBulkTemplateFailure,

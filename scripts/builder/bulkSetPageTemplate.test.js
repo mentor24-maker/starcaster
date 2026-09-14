@@ -66,7 +66,11 @@ test('an EMPTY layout is refused — this is the 2026-08-14 incident', () => {
   assert.match(target.error, /Standard Right-Form/);
   // The refusal has to say what applying it would DO, or it reads as a bug in
   // the feature rather than as the feature protecting the pages.
-  assert.match(target.error, /empty every selected page/);
+  // Since 2026-09-14 the change keeps each page's body and swaps the frame, so
+  // an empty template no longer empties a page — it strips the shared header
+  // and footer and puts nothing back. Still refused; the sentence now says the
+  // true reason (ticket 86bc09db9).
+  assert.match(target.error, /no shared header or footer to apply/);
 });
 
 test('a missing layoutSections array is treated as empty, not as unknown', () => {
