@@ -1059,7 +1059,18 @@ async function deliverToBus(channel, content, { taskId, target, receipted, simul
   // forever while still losing the bus message.
   const handsBack = Boolean(taskId && target);
   if (!handsBack) {
-    return answer(deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false }));
+    // Not a receipt on this ticket (nothing reads it) — the message itself,
+    // kept whole on the standing "Undelivered alarms" ticket, which is read.
+    // busRelayPlan.deliveryVerdict carries the reasoning (task 86bc0mxv0).
+    if (simulate) {
+      console.error('  SIMULATION — would save this on the "Undelivered alarms" ticket (not sent)');
+      return answer(deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: true }));
+    }
+    const saved = await saveUndeliveredAlarm({ text: content, channel, why: chat.why });
+    return answer(deliveryVerdict({
+      chatOk: false, handsBack: false, alarmTicketAttempted: true,
+      alarmTicketOk: Boolean(saved.ok), alarmTicketWhy: saved.why || (saved.stopped ? 'stopped at the ClickUp reserve' : ''),
+    }));
   }
 
   // One receipt per TICKET per pass, not per comment. Three of Dane's
@@ -5023,6 +5034,9 @@ if (cmd === 'whoami') {
         }
         if (delivery.via === 'ticket') {
           reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — receipted on the ticket instead` });
+        }
+        if (delivery.via === 'alarm-ticket') {
+          reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — saved on the "Undelivered alarms" ticket instead` });
         }
 
         // Mark relayed by replying on Dane's own comment. Deliberately AFTER

@@ -1437,8 +1437,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-preview-carousel-card-copy p {
   margin: 2px 0 0;
-  font-size: var(--text-xs);
-  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  color: inherit;
 }
 
 /* --- Carousel: alignment and narrow screens ---
@@ -3408,6 +3408,75 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-cards-panel-fields .builder-image-picker-field-button {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+/* The image's file name and pixel size, under its Image field (task
+   86bc0n59x). It sits in the FIELD track, not a column of its own, so it
+   lines up under the address it describes; the name opens the picture. */
+.builder-react-root .builder-cards-panel-fields .builder-card-image-info {
+  grid-column: 2 / -1;
+  margin-top: -4px;
+}
+.builder-react-root .builder-image-info-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  /* White and a step up: the carousel editor panel is medium-dark blue, and
+     the secondary ink colour all but disappeared on it (Dane, 2026-09-14). */
+  font-size: var(--text-md);
+  color: white;
+}
+.builder-react-root .builder-image-info-name {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.builder-react-root .builder-image-info-size {
+  white-space: nowrap;
+}
+.builder-react-root .builder-image-info-size.is-error {
+  color: white;
+  font-style: italic;
+}
+.builder-react-root .builder-image-info-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: max-content;
+  min-width: min(48px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-page);
+  box-shadow: 0 24px 60px rgba(9, 16, 24, 0.3);
+}
+.builder-react-root .builder-image-info-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.builder-react-root .builder-image-info-dialog-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.builder-react-root .builder-image-info-dialog-image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
+  margin: 0 auto;
 }
 
 /* Narrow panel: one pair per row. Still one label track and one field track,
