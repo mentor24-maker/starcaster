@@ -1,3 +1,33 @@
+## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
+
+When you publish a page, the system saves a complete copy of it — that copy is
+what visitors are actually served, so the site stays fast and stable while you
+keep editing. When you *delete* a page, that saved copy is thrown away too.
+
+But when you merely untick Published, or mark a page private, or rename its
+web address, the saved copy stays where it is. Nobody can reach it: your site
+will not serve a page you have hidden. It is simply still on file.
+
+You were asked which of three things that should mean, and you chose: keep the
+copy, and write down plainly that unpublishing **hides** a page rather than
+erasing it — with erasing being what deleting the page is for. This change is
+that decision being recorded.
+
+**Nothing works differently than it did yesterday.** What was missing was the
+reasoning. Read the code as it stood, "deleting a page throws away its saved
+copy" looks like half a job, and the obvious way to finish it would be to throw
+the copy away on unpublish as well. That would quietly change what the Publish
+button promises: a page you hid and later put back would show your unsaved
+draft edits the moment it went live again, before you had pressed Publish. It
+would also buy very little — checked against the live database, hidden pages
+were holding a single page and 26 kB between them.
+
+So the decision now sits in three places: in the code exactly where someone
+would go to make that change, in the documentation for the table itself, and in
+three tests that fail if the option you did not choose ever gets built by
+mistake. Each of those tests was deliberately broken first and watched to fail,
+so we know they can.
+
 ## 2026-09-13 — Seven blog settings panels now read as one block instead of loose rows (#687)
 
 When you open a module's gear icon in the Builder you get a panel of settings.
