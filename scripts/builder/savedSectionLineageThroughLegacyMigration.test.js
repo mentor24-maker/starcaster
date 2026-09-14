@@ -121,3 +121,78 @@ test('a genuine legacy section still migrates', () => {
   assert.equal(section.canonical, undefined);
   assert.equal(section.modules[0].savedModuleId, undefined);
 });
+
+// Round 1 of this task shipped the module passthrough with no test that went
+// red when it was removed, and said otherwise. The reason is worth keeping:
+// serializeBuilderDocument falls back to the RAW REQUEST BODY when the
+// document lost a module's lineage (`{...moduleMetaFromInput,
+// ...moduleMetaFromDocument}`, and moduleMetaFromSections omits keys it has no
+// answer for, so the fallback survives the spread). So the WRITE path already
+// worked on main without the passthrough -- the test above can only ever pass.
+//
+// The READ path has no such fallback. normalizeBuilderDocument restores meta
+// from `coerced`, which is the POST-migration input, so once the migrator has
+// dropped the lineage there is nothing left to read it back from: the page
+// loads with the module already unlinked. That is what this test holds, and it
+// is the half that goes red when carryRescuableModuleMeta is removed.
+test('reading a stored page back keeps each module linked to the saved module it came from', () => {
+  const stored = {
+    theme: null,
+    pageBackground: null,
+    sections: [editorSection({
+      savedSectionId: 'saved-section-fixture-menu-banner',
+      canonical: true,
+      modules: [{
+        id: 'module-a',
+        type: 'text',
+        column: 'col1',
+        text: '<p>Lunch served 11-3</p>',
+        settings: {},
+        savedModuleId: 'saved-module-hours',
+        canonical: false,
+        canonicalLocked: true,
+      }],
+    })],
+  };
+
+  const readBack = normalizeBuilderDocument(stored);
+  const module = readBack.layoutSections[0].modules[0];
+
+  assert.equal(module.savedModuleId, 'saved-module-hours');
+  // Tri-state, as on the write path: `false` is an explicit break and must
+  // read back as false, not as absent (absent means following).
+  assert.equal(module.canonical, false);
+  assert.equal(module.canonicalLocked, true);
+});
+
+// The section half needs its own read-path test for the same reason, and the
+// reason only became visible once sectionMetaFromSections was repaired in this
+// PR. Test 1 above (the write path) used to go red when
+// carryRescuableSectionMeta was removed -- but only because the input fallback
+// it should have fallen back to was itself broken, so the passthrough was the
+// single brace. With the fallback working, the write path survives without the
+// passthrough and test 1 can no longer fail.
+//
+// normalizeBuilderDocument has no such fallback: it restores meta from
+// `coerced`, the POST-migration input. So a legacy-shaped section carrying
+// section lineage loses it on the way in, with nothing downstream to put it
+// back. This is the test that goes red when carryRescuableSectionMeta is
+// removed.
+test('reading a legacy-shaped page back keeps each section following its saved section', () => {
+  const stored = {
+    theme: null,
+    pageBackground: null,
+    sections: [editorSection({
+      savedSectionId: 'saved-section-fixture-menu-banner',
+      canonical: true,
+      locked: true,
+    })],
+  };
+
+  const readBack = normalizeBuilderDocument(stored);
+  const section = readBack.layoutSections[0];
+
+  assert.equal(section.savedSectionId, 'saved-section-fixture-menu-banner');
+  assert.equal(section.canonical, true);
+  assert.equal(section.locked, true);
+});
