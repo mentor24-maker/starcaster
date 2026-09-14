@@ -59,6 +59,8 @@ type DevelopThemeRecord = {
   treatments?: BuilderThemeTreatments | null;
   heroBanner?: BuilderThemeHeroBanner | null;
   heroBanners?: string[] | null;
+  /** The theme every page with no theme of its own uses (task 86bbzybx6). */
+  isDefault?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -400,6 +402,41 @@ export function BuilderThemesPage() {
     }
   }
 
+  /**
+   * Make this the project's default — the theme every page WITHOUT a theme of
+   * its own uses. It used to be whichever theme was saved last, so saving any
+   * theme could recolour all of those pages (task 86bbzybx6); now it moves
+   * only here. Published pages are snapshots, so the ones that change are
+   * named as pending rather than silently left showing the old theme.
+   */
+  async function handleMakeDefault() {
+    if (!draft.id) return;
+    const name = draft.name || draft.id;
+    if (!window.confirm(`Make "${name}" the default theme? Every page that has no theme of its own will use it.`)) return;
+    setIsSaving(true);
+    setStatus(null);
+    try {
+      await appApi(`/api/builder/themes/${encodeURIComponent(draft.id)}/default`, { method: "POST" });
+      await loadThemes();
+      setDraft((prev) => ({ ...prev, isDefault: true }));
+      const usage = await loadThemeUsage(draft.id);
+      const count = usage?.length ?? 0;
+      setStatus({
+        message:
+          usage === null
+            ? `"${name}" is now the default theme. Open Publish to put the pages that use it live.`
+            : count > 0
+              ? `"${name}" is now the default theme. ${count} ${count === 1 ? "page uses" : "pages use"} it and now ${count === 1 ? "has" : "have"} changes to publish — open Publish to put ${count === 1 ? "it" : "them"} live.`
+              : `"${name}" is now the default theme. No published page uses it yet.`,
+        isError: false,
+      });
+    } catch (err: unknown) {
+      setStatus({ message: (err as Error).message || "Could not make this the default theme", isError: true });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleDelete() {
     if (!draft.id) {
       handleNew();
@@ -483,7 +520,7 @@ export function BuilderThemesPage() {
           <option value="">— Select theme —</option>
           {themes.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name || t.id}
+              {t.name || t.id}{t.isDefault ? " (default)" : ""}
             </option>
           ))}
         </select>
@@ -505,6 +542,22 @@ export function BuilderThemesPage() {
         >
           {isSaving ? "Saving…" : isEditing ? "Save" : "Create"}
         </button>
+        {isEditing && !draft.isDefault && (
+          <button
+            type="button"
+            className="secondary-button builder-themes-btn"
+            onClick={handleMakeDefault}
+            disabled={isSaving}
+            title="Pages with no theme of their own use the default theme"
+          >
+            Make default
+          </button>
+        )}
+        {isEditing && draft.isDefault && (
+          <span className="builder-themes-default-note" title="Pages with no theme of their own use this theme">
+            Default theme
+          </span>
+        )}
         {isEditing && (
           <button
             type="button"
