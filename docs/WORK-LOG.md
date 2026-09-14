@@ -28,6 +28,60 @@ three tests that fail if the option you did not choose ever gets built by
 mistake. Each of those tests was deliberately broken first and watched to fail,
 so we know they can.
 
+## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
+
+Open a module's gear icon in the Builder and you get a form. On most panels
+that form reads as one tidy rectangle: every label starts on the same line down
+the left, every box ends on the same line down the right. On the Reminders
+panel it did not. Each reminder card was built as its own little form, so the
+labels in card 1 sat in a different place from the labels in card 2, and inside
+a single card no two rows agreed either — seven different label widths in one
+box. Nothing was broken; it just looked assembled rather than built, which is
+the difference this whole sweep is about.
+
+All four panels in this batch now share one set of columns. Reminders was the
+real work; Current Poll, Messaging Topic List and Messaging Tag List were
+measured and were already correct, and that measurement is written down so a
+later reader can tell "somebody checked" from "nobody looked".
+
+Two things worth knowing about how this was caught, because both were cases of
+a check quietly seeing nothing:
+
+The automatic layout checker had **never once looked at the Reminders panel.**
+Reminder cards stay folded up until you click them, and the checker never
+clicked, so for as long as that check has existed it measured this panel as a
+single field and reported a clean pass. It opens the cards now.
+
+And the checker could not see two kinds of problem it now can. It measured each
+card's criteria block on its own, so criteria in card 1 and card 2 could drift
+any distance apart and both report fine — the blocks now say they belong to one
+shared set of columns, and a deliberate 37px nudge to the second card fails six
+ways where before it passed across 693 panels. Separately, the gap between the
+form's two columns was rendering at 52 pixels where the rule asks for 40, and
+the leftover 12 was being shared out unevenly, leaving two boxes that the
+styling declares identical drawn 19 pixels apart. That is the operator's
+original complaint — "the column width varies arbitrarily" — arriving one level
+up from where it was first fixed. It measures at exactly 40 now.
+
+A second review round found something worth writing down on its own: **the test
+written to protect that 40-pixel gap could not fail.** The styling rule carries
+a long note beside it explaining why the gap is set to zero, and that note
+repeats the setting word for word while explaining it. The test was reading the
+rule and its note together, so it found the words in the explanation and
+reported everything fine — delete the actual setting and the 52-pixel gap comes
+straight back with every check still green. The test now reads the rule with the
+explanation taken out, and the two lines it protects are checked separately,
+because the original break test deleted both at once and the failure it produced
+came from the half that was working.
+
+The same round finished a job that had been done one level too high. The setting
+that closes the gap had been applied to the outer list but not to the three
+boxes nested inside it, which kept the old value from the base styling — so the
+criteria rows inside a reminder card sat five pixels off the column every other
+control in that panel uses, while the styling file said in writing that they
+shared it. They share it now: both start on exactly the same line. The one
+difference that remains is the criteria box's own border and padding, fifteen
+real pixels of box, and that is said plainly rather than left to read as drift.
 ## 2026-09-13 — Seven blog settings panels now read as one block instead of loose rows (#687)
 
 When you open a module's gear icon in the Builder you get a panel of settings.
