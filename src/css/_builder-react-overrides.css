@@ -3422,8 +3422,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: baseline;
   gap: 12px;
   min-width: 0;
-  font-size: var(--text-xs);
-  color: var(--ink-secondary);
+  /* White and a step up: the carousel editor panel is medium-dark blue, and
+     the secondary ink colour all but disappeared on it (Dane, 2026-09-14). */
+  font-size: var(--text-md);
+  color: white;
 }
 .builder-react-root .builder-image-info-name {
   appearance: none;
@@ -3442,7 +3444,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 .builder-react-root .builder-image-info-size.is-error {
-  color: var(--error);
+  color: white;
+  font-style: italic;
 }
 .builder-react-root .builder-image-info-dialog {
   display: flex;
