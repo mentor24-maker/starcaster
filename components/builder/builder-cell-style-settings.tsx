@@ -1,5 +1,6 @@
 "use client";
 
+import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import type { CSSProperties } from "react";
 import type { BackgroundSettings, BuilderTemplateSection } from "@/lib/builder-template";
 import { createDefaultBackgroundSettings, normalizeRowOverlayScreenSettings } from "@/lib/builder-template";
@@ -41,7 +42,7 @@ type BuilderCellStyleSettingsProps = {
    * is honest — the alternative is a no-op handler drawing an Upload button
    * that silently does nothing.
    */
-  onUploadCellBackgroundMedia?: (column: string, file: File | null) => void;
+  onUploadCellBackgroundMedia?: (column: string, file: File | null, target?: BackgroundUploadTarget) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -240,7 +241,7 @@ export function BuilderCellStyleSettings({
             onModeChange={(mode) => onChangeCellBackgroundMode?.(column, mode)}
             onUploadImage={
               onUploadCellBackgroundMedia
-                ? (file) => onUploadCellBackgroundMedia(column, file)
+                ? (file, target) => onUploadCellBackgroundMedia(column, file, target)
                 : undefined
             }
             themeBackgroundColor={themeBackgroundColor}

@@ -37,7 +37,7 @@ import {
   type BuilderTheme,
   type BuilderThemeSummary
 } from "@/lib/builder-template";
-import { applyUploadedBackgroundMedia } from "@/lib/background-uploaded-media";
+import { applyUploadedBackgroundMedia, type BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import { getDefaultEmailTemplateName, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { inferModuleClassFromBuilderModules, resolveModuleClassForBuilderModule } from "@/lib/module-class-triggers";
 
@@ -2298,15 +2298,21 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
    * 86bbwe98a and is deliberately not fixed here; the helper is shared so that
    * ticket can adopt it in one line.
    */
-  function uploadMediaForCellBackground(sectionId: string, column: string, file: File | null) {
+  function uploadMediaForCellBackground(sectionId: string, column: string, file: File | null, target?: BackgroundUploadTarget) {
     void uploadMedia((m) => {
-      updateCellBackground(sectionId, column, (current) => applyUploadedBackgroundMedia(current, m));
+      updateCellBackground(sectionId, column, (current) => applyUploadedBackgroundMedia(current, m, target));
     }, file);
   }
 
-  function uploadMediaForSectionBackground(sectionId: string, file: File | null) {
+  /**
+   * The row's twin of the cell handler above, through the same helper (task
+   * 86bbwe98a). It hard-coded `mode: "image"` until 2026-09-14, so Upload
+   * Video in Row Background switched the row to Image and put the clip in the
+   * image url. `target` is "poster" from Upload Poster.
+   */
+  function uploadMediaForSectionBackground(sectionId: string, file: File | null, target?: BackgroundUploadTarget) {
     void uploadMedia((m) => {
-      updateSection(sectionId, (c) => ({ ...c, background: { ...c.background, mode: "image", imageUrl: normalizeBuilderAssetUrl(m.path) } }));
+      updateSection(sectionId, (c) => ({ ...c, background: applyUploadedBackgroundMedia(c.background, m, target) }));
     }, file);
   }
 
@@ -3318,7 +3324,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             onCloneSection={() => cloneSection(section.id)}
                             onSaveSection={() => void saveSection(section.id)}
                             onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                            onUploadCellBackgroundMedia={(col, file) => uploadMediaForCellBackground(section.id, col, file)}
+                            onUploadCellBackgroundMedia={(col, file, target) => uploadMediaForCellBackground(section.id, col, file, target)}
                             onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                             onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                             onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
@@ -3348,7 +3354,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                               uploadButtonBackgroundMedia(section.id, moduleId, file)
                             }
                             onOpenSectionBackgroundGallery={() => openSectionBackgroundGallery(section.id)}
-                            onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
+                            onUploadSectionBackgroundMedia={(file, target) => uploadMediaForSectionBackground(section.id, file, target)}
                             onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                           />
                           </Fragment>
@@ -3406,7 +3412,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         onCloneSection={() => cloneSection(section.id)}
                         onSaveSection={() => void saveSection(section.id)}
                         onUpdateCellBackground={(col, updater) => updateCellBackground(section.id, col, updater)}
-                        onUploadCellBackgroundMedia={(col, file) => uploadMediaForCellBackground(section.id, col, file)}
+                        onUploadCellBackgroundMedia={(col, file, target) => uploadMediaForCellBackground(section.id, col, file, target)}
                         onUpdateCellBorderWidth={(col, value) => updateCellBorderWidth(section.id, col, value)}
                         onUpdateCellBorderColor={(col, value) => updateCellBorderColor(section.id, col, value)}
                         onUpdateCellBorderRadius={(col, value) => updateCellBorderRadius(section.id, col, value)}
@@ -3436,7 +3442,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                           uploadButtonBackgroundMedia(section.id, moduleId, file)
                         }
                         onOpenSectionBackgroundGallery={() => openSectionBackgroundGallery(section.id)}
-                        onUploadSectionBackgroundMedia={(file) => uploadMediaForSectionBackground(section.id, file)}
+                        onUploadSectionBackgroundMedia={(file, target) => uploadMediaForSectionBackground(section.id, file, target)}
                         onOpenModulePalette={(col, anchor) => openModulePalette(section.id, col, anchor)}
                       />
                       </Fragment>

@@ -104,8 +104,11 @@ export function BuilderBlogPostTagsModuleSettings({
               width: "full",
               control: "custom",
               bare: true,
+              /* Was an inline 11px pale grey — chosen for a white panel, all but
+                 invisible on this one (R9). Same shared class as the Blog Post
+                 panel's notes. */
               render: () => (
-                <p style={{ fontSize: 11, color: "#8ba9be", margin: "2px 0 12px", lineHeight: 1.4 }}>
+                <p className="panel-copy builder-panel-field-note">
                   Comma-separated. On a post template these come from the Blog Post module&apos;s Taxonomy tab.
                 </p>
               )
