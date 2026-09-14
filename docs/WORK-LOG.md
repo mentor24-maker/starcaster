@@ -1,3 +1,27 @@
+## 2026-09-14 — Re-linking a block to its original now actually pulls the original's content in (#693)
+
+A follow-up to the fix directly below this one, from its review.
+
+That fix gave every copy of a shared block a small memory of what the last push
+put into it, so a copy a failed push never reached stops being mistaken for one
+you edited by hand. The right answer — for the push. But the same question was
+being asked in a second place, by the button that re-links a block to its
+original, and there it is a different question: not "is this your edit?" but
+"does this block already show what the original shows?".
+
+Asking the first question in the second place meant a copy the failed push had
+missed was treated as already up to date. Tick "Following" back on and the
+button quietly did nothing at all: the old content stayed on the page, with the
+header saying it was following the original.
+
+The two questions are now named separately. Re-linking compares the content
+itself, and gets one of three answers: it already matches (nothing to do), it is
+stale because a push never reached it (take the original's content, no
+questions — there is nothing of yours to rescue), or you edited it here (ask
+first, exactly as before). The header chip picks up the same reading: a copy the
+last push missed still says "Following", because it is, but the tooltip no
+longer claims it "matches the original" during the one window where it does not.
+
 ## 2026-09-14 — A shared-section save that half fails no longer talks you into wiping your own edit (#693)
 
 A shared section is a block you build once — a menu banner, a footer — and drop

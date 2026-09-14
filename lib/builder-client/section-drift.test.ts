@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { getSectionContent, hasSectionDrifted, sectionContentHash, stampSectionLineage } from "./section-drift";
+import { readFileSync } from "node:fs";
+import {
+  getSectionContent,
+  hasSectionDrifted,
+  relinkReading,
+  sectionContentHash,
+  sectionMatchesMaster,
+  stampSectionLineage,
+} from "./section-drift";
 
 // NOTE: the server hand-ports these two functions in lib/builder/document.js.
 // That twin is checked in scripts/builder/sectionDriftServerTwin.test.js (the
@@ -154,5 +162,100 @@ describe("the lineage stamp", () => {
       modules: [{ id: "m1", type: "text", column: "main", name: "", text: "the new copy", settings: {} }],
     };
     expect(hasSectionDrifted(instance(), masterMovedOn)).toBe(true);
+  });
+});
+
+/**
+ * The relink toggle's reading — the round-1 send-back of task 86bbwe530.
+ *
+ * `hasSectionDrifted` answers "may a push overwrite this copy?". Ticking
+ * "Following" back on asks a DIFFERENT question, "does this copy already match
+ * the original?", and it was answered with the first one — so a stale copy
+ * whose stamp cleared its drift took the fast path, got the flag and kept the
+ * old content, with the screen saying it was Following.
+ */
+describe("relinkReading", () => {
+  const masterMovedOn = {
+    ...master,
+    modules: [{ id: "m1", type: "text", column: "main", name: "", text: "the new copy", settings: {} }],
+  };
+
+  it("a copy a failed push never reached reads as awaiting-push, NOT as a match", () => {
+    // The regression itself. `hasSectionDrifted` says false here — correctly,
+    // it is not a hand edit — and the toggle must still pull the master's
+    // content in rather than flipping the flag over stale content.
+    const stale = stampSectionLineage(instance());
+    expect(hasSectionDrifted(stale, masterMovedOn)).toBe(false);
+    expect(relinkReading(stale, masterMovedOn)).toBe("awaiting-push");
+  });
+
+  it("an identical copy reads as a match, so relinking changes nothing on screen", () => {
+    expect(relinkReading(instance(), master)).toBe("matches");
+    expect(relinkReading(stampSectionLineage(instance()), master)).toBe("matches");
+  });
+
+  it("a copy edited after it was stamped reads as hand-edited, so the operator is still asked", () => {
+    const edited = {
+      ...stampSectionLineage(instance()),
+      modules: [{ id: "m1", type: "text", column: "main", name: "", text: "HAND-EDITED HERE", settings: {} }],
+    };
+    expect(relinkReading(edited, master)).toBe("hand-edited");
+  });
+
+  it("an unstamped stale copy reads as hand-edited — unchanged from before the stamp existed", () => {
+    // Fails towards asking. Every copy on every live page is unstamped the day
+    // this ships, and being asked about content that turns out to be stale is
+    // recoverable; silently replacing a hand edit is not.
+    expect(relinkReading(instance(), masterMovedOn)).toBe("hand-edited");
+  });
+
+  it("nothing to compare reads as a match — the same fail-open hasSectionDrifted has", () => {
+    expect(relinkReading(null, master)).toBe("matches");
+    expect(relinkReading(instance(), null)).toBe("matches");
+  });
+});
+
+describe("sectionMatchesMaster", () => {
+  it("ignores provenance, exactly as the drift comparison does", () => {
+    expect(sectionMatchesMaster(instance({ canonicalSourceHash: "abc" }), master)).toBe(true);
+  });
+
+  it("is not fooled by a stamp — this is the reading with no lineage in it", () => {
+    const stale = stampSectionLineage(instance());
+    const masterMovedOn = {
+      ...master,
+      modules: [{ id: "m1", type: "text", column: "main", name: "", text: "the new copy", settings: {} }],
+    };
+    expect(sectionMatchesMaster(stale, masterMovedOn)).toBe(false);
+  });
+});
+
+/**
+ * The rule, not the instance.
+ *
+ * Round 1 of this task was not a wrong function — it was the RIGHT function
+ * asked the wrong question, at one of five call sites, and reading the code
+ * cannot tell the two apart. So the guard is the rule: the editor decides
+ * about a copy's content with `relinkReading`, and does not reach for the
+ * propagation reading at all. Reintroducing `hasSectionDrifted` there is what
+ * this fails on, whatever the new call site happens to be doing.
+ */
+describe("the editor asks the relink question, not the propagation one", () => {
+  const source = readFileSync(
+    new URL("../../components/admin-builder-editor.tsx", import.meta.url),
+    "utf8"
+  );
+
+  it("does not import or call hasSectionDrifted anywhere", () => {
+    // Comment lines are allowed to name it — the two readings have to be
+    // explained somewhere, and the explanation lives at the call site.
+    const code = source
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line));
+    expect(code.filter((line) => line.includes("hasSectionDrifted"))).toEqual([]);
+  });
+
+  it("uses relinkReading instead", () => {
+    expect(source).toContain("relinkReading");
   });
 });

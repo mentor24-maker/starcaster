@@ -41,6 +41,17 @@
  * normalization moved a field, report every copy on every page as
  * hand-edited and arm a force-overwrite banner across the whole site.
  *
+ * THE STAMP IS THE PROPAGATION READING, AND ONLY THAT. `hasSectionDrifted`
+ * answers one question — "may a push overwrite this copy?" — and five callers
+ * ask it. A caller deciding whether to REPLACE a copy's content is asking a
+ * different question, "does this copy already match the master?", and the
+ * stamp is the wrong answer to it: a copy a failed push never reached is not
+ * a hand edit, so this returns false, while the copy is plainly stale.
+ * `handleToggleSectionCanonical` (components/admin-builder-editor.tsx) shared
+ * the first answer and, from round 1 of this task, marked a stale copy as
+ * Following with the old content still on the page. That call site now asks
+ * `relinkReading` below. Anything else that replaces content must too.
+ *
  * A copy is stamped by the push that writes it, so copies converge as blocks
  * get saved — exactly the "read both, write one" discipline the `canonical`
  * flag itself uses (lib/canonicalPropagation.js). Until a copy has been
@@ -154,10 +165,60 @@ export function hasSectionDrifted(
   master: DriftableSection | null | undefined
 ): boolean {
   if (!instance || !master) return false;
-  if (JSON.stringify(getSectionContent(instance)) === JSON.stringify(getSectionContent(master))) return false;
+  if (sectionMatchesMaster(instance, master)) return false;
   // It differs from the master. The only thing that can clear it now is the
   // copy's own record of what the last push put here.
   const stamp = typeof instance[SECTION_LINEAGE_FIELD] === "string" ? String(instance[SECTION_LINEAGE_FIELD]) : "";
   if (stamp && sectionContentHash(instance) === stamp) return false;
   return true;
+}
+
+/**
+ * True when this copy's content is already identical to the master's, once
+ * provenance is stripped. No lineage stamp involved.
+ *
+ * THIS IS THE OTHER QUESTION, and it is the one a caller that REPLACES content
+ * has to ask. `hasSectionDrifted` answers "may a push overwrite this copy?" —
+ * and a copy a failed push never reached answers *no* to that while being a
+ * perfectly stale copy. Ask it "does this already match?" and it says false
+ * when the truth is "it does not match, but it is not your edit either".
+ * Sharing the first answer with the relink toggle marked a stale copy as
+ * Following while it still showed the old content (task 86bbwe530, round 1).
+ */
+export function sectionMatchesMaster(
+  instance: DriftableSection | null | undefined,
+  master: DriftableSection | null | undefined
+): boolean {
+  return JSON.stringify(getSectionContent(instance)) === JSON.stringify(getSectionContent(master));
+}
+
+/**
+ * The three states a copy can be in relative to its master, for any caller
+ * deciding whether to pull the original's content back in.
+ *
+ *   matches       — identical already. Flip the flag and change nothing.
+ *   awaiting-push — differs, but the copy's own stamp says the difference is a
+ *                   push that never reached it. Nothing of the operator's is
+ *                   in here, so take the master's content WITHOUT asking.
+ *   hand-edited   — differs and the stamp does not explain it. This is the
+ *                   operator's work; ask before replacing it.
+ *
+ * The middle state is the whole point. Collapsing it into either neighbour is
+ * a bug in opposite directions: fold it into `matches` and the relink leaves
+ * stale content on the page under a "Following" label, fold it into
+ * `hand-edited` and the operator is asked to rescue local changes that do not
+ * exist.
+ *
+ * Fails OPEN, like `hasSectionDrifted`: nothing to compare reads as `matches`,
+ * so a caller proceeds exactly as it did before any of this existed.
+ */
+export type RelinkReading = "matches" | "awaiting-push" | "hand-edited";
+
+export function relinkReading(
+  instance: DriftableSection | null | undefined,
+  master: DriftableSection | null | undefined
+): RelinkReading {
+  if (!instance || !master) return "matches";
+  if (sectionMatchesMaster(instance, master)) return "matches";
+  return hasSectionDrifted(instance, master) ? "hand-edited" : "awaiting-push";
 }
