@@ -173,7 +173,20 @@ export function ReminderCriteriaEditor({
           ))}
         </select>
       </BuilderSettingRow>
-      <div className="admin-game-reminder-criteria-panel">
+      {/*
+        A NESTED LATTICE, DECLARED (L6a, panel sweep 11/15).
+
+        These rows sit inside `.admin-game-reminder-criterion-card`, a bordered
+        box with its own padding, so their labels legitimately start further in
+        than the reminder card's own — they are a lattice of their own rather
+        than a third column of the one above. `data-lattice-pairs` tells
+        `check_panels` both halves of that: exclude these rows from the outer
+        group (a manager runs its own lattice — the Tag Cloud lesson), and
+        measure them as a group in their own right. Without the declaration
+        this block matched none of the check's selectors and was skipped in
+        silence, which reads identically to passing.
+      */}
+      <div className="admin-game-reminder-criteria-panel" data-lattice-pairs="1">
         <div className="admin-game-reminder-criteria-header">
           <span className="builder-setting-label">Criteria</span>
           <button className="secondary-button" disabled={disabled} onClick={addCriterion} type="button">

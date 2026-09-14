@@ -118,6 +118,53 @@ as a rule first, then gets a checker where one is possible.
   at here and reported OK. Declaring it took the run from 558 measured panel
   groups to 564. A manager that opts into neither attribute is not passing —
   it is absent, and the two are indistinguishable from the summary line.
+
+  **Reminders is the third adopter, and it needed one thing the other two did
+  not: a way for a BOXED card to join the list's grid** (2026-09-13, panel
+  sweep 11/15, ticket 86bbjt1b9). A feature card and a carousel slide are rows
+  of one grid with no box of their own, so the list can simply BE the grid. A
+  reminder record is a collapsible bordered panel with its own header, and a
+  box cannot be `display: contents`. Built as a grid per card, the two records
+  in the fixture came out with right-hand label tracks of 130px and 115px
+  eight pixels apart — a speech-bubble record carries "Border Color" and a
+  strip record carries "Placement", so `max-content` measured each card
+  separately and they disagreed. That is the exact failure L6a's "the whole
+  list is one grid" sentence exists to prevent, arriving through the one shape
+  that sentence does not cover.
+
+  `subgrid` is the answer and it is already the house mechanism — it is how
+  `feature-cards` and `program-list` share the editor's `lattice-start` tracks.
+  The list declares the five tracks; the card, the settings block, the criteria
+  panel, the criteria list and each criterion box all carry
+  `grid-template-columns: subgrid`, so one chain of boxes reads one set of
+  tracks. It works here and not on the schema panels for the reason
+  `components/builder/builder-module-chrome-slot.tsx` records: the chain is
+  direct children the whole way down, with no wrapping flex container in the
+  middle. A nested box's own padding is absorbed out of the first and last
+  track, which is what indents the criteria block — a real box, not a number
+  somebody chose.
+
+  **And the declaration goes on the LIST, never on the card.** `check_panels`
+  measures each `[data-lattice-pairs]` element as one group, and a group always
+  agrees with itself: declared per card, the two records could drift apart by
+  any amount and both would report clean. Declared on the list, every field in
+  every card is bucketed by its label's x, and a card that stops lining up with
+  its neighbour shows up as a third and fourth bucket against a declaration of
+  two. Verified by breaking it — dropping the shared tracks fails with
+  "declares 2 pair-column(s) but its labels start at 3 different x-positions",
+  and removing the declaration does not fail at all: the run stays green and
+  the measured count drops from 693 groups to 690. Absent and passing, one more
+  time.
+
+  **A collapsed card is an unmeasured card**, and that was the older half of
+  this. The record cards start collapsed (`isRecordCollapsed` returns true
+  until clicked) and `check_panels.openPanels` did not click them, so from the
+  day the check was written the entire Reminders editor was measured as ONE
+  field — the module's Label — while it rendered seven label widths and five
+  field positions underneath. Panel sweep 2/15 seeded two real records here and
+  said in the fixture itself that seeding did not make them measurable. Opening
+  them is a fourth expand step in `openPanels`, scoped to the card class rather
+  than to every `Expand *` button on the page.
   **How it is built, and how it is checked (rewritten 8/13).** The first
   cut got the shape right and the mechanism wrong — a fixed `11ch` label
   track, `1fr` fields, an `11rem` button — which is the per-field width W0

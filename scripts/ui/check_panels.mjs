@@ -156,6 +156,35 @@ async function openPanels(page) {
     });
   });
   await page.waitForTimeout(3000);
+
+  // A FOURTH collapsed panel: the Reminders module's record cards, one per
+  // reminder, each collapsed until clicked (`isRecordCollapsed` returns true
+  // by default). Panel sweep 2/15 seeded two real records here and said in the
+  // fixture itself that seeding them did NOT make them measurable, because
+  // nothing opened them — so for as long as this check has existed the whole
+  // reminder editor was one field, the module's Label, and everything the
+  // panel actually contains was measured by nothing. That is the same blind
+  // spot as the cell editor above and the table headings before it, and it is
+  // ticket 86bbjt1b9's to close.
+  //
+  // Their expand button is named after the record (`Expand Signup Nudge`), so
+  // there is no fixed label to match on — the card class is what identifies
+  // them. Scoped to that class rather than to every `Expand *` button on the
+  // page, because a blanket click would also open surfaces no rule has been
+  // applied to yet and fail this ticket on other people's panels.
+  const openedRecords = await page.evaluate(() => {
+    let clicked = 0;
+    document.querySelectorAll('.builder-reminder-record-card').forEach((card) => {
+      const button = [...card.querySelectorAll('button[aria-label]')]
+        .find((el) => /^expand /i.test(el.getAttribute('aria-label') || ''));
+      if (button) {
+        button.click();
+        clicked += 1;
+      }
+    });
+    return clicked;
+  });
+  if (openedRecords) await page.waitForTimeout(3000);
   return null;
 }
 
