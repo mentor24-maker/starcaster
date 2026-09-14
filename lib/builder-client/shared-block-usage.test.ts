@@ -165,6 +165,39 @@ describe('what the operator reads', () => {
       .toBe('Saved "Menu" and updated 4 pages. 1 page has local changes and was skipped.');
   });
 
+  it('says a hand edit is still sitting on the page the push could NOT write', () => {
+    // Task 86bbwe530. Before this, `failed` was a bare counter: the toast said
+    // "1 page could not be updated. Reload and save again to finish." and said
+    // nothing about the hand edit on that page — which is the edit the retry's
+    // "Overwrite anyway?" banner then offered to flatten.
+    expect(describePropagationOutcome('Menu', {
+      updated: 3,
+      failed: 1,
+      failedPages: [{ pageId: '2', name: 'Block States', preservedCopies: 1 }],
+    })).toBe(
+      'Saved "Menu" and updated 3 pages, but 1 page could not be updated. Reload and save again to finish.'
+      + ' A hand-edited copy on 1 of the pages that could not be updated is still there — nothing was written to it.'
+    );
+
+    // Counted in COPIES, like every other preserved-edit clause here: one page
+    // can hold several copies of one master.
+    expect(describePropagationOutcome('Menu', {
+      updated: 3,
+      failed: 1,
+      failedPages: [{ pageId: '2', name: 'Block States', preservedCopies: 2 }],
+    })).toContain('2 hand-edited copies on 1 of the pages that could not be updated are still there');
+
+    // A failure with nothing preserved on it must not grow a clause, and an
+    // older caller that sends no `failedPages` at all reads exactly as before.
+    expect(describePropagationOutcome('Menu', {
+      updated: 3,
+      failed: 1,
+      failedPages: [{ pageId: '2', name: 'Block States', preservedCopies: 0 }],
+    })).toBe('Saved "Menu" and updated 3 pages, but 1 page could not be updated. Reload and save again to finish.');
+    expect(describePropagationOutcome('Menu', { updated: 3, failed: 1 }))
+      .toBe('Saved "Menu" and updated 3 pages, but 1 page could not be updated. Reload and save again to finish.');
+  });
+
   it('a preserved hand edit on a page that WAS written is counted in copies, and never added to the page count', () => {
     // The arithmetic that sent the first attempt back. There is ONE page here:
     // it was written for a clean copy's sake, and the hand-edited copy on it

@@ -1680,6 +1680,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           propagation?: {
             ok?: boolean; total?: number; updated?: number; failed?: number; runId?: string;
             skipped?: Array<{ pageId?: string; name?: string }>;
+            // Named pages, not just a count — the toast says whether a hand
+            // edit is still sitting on one of them (task 86bbwe530).
+            failedPages?: Array<{ pageId?: string; name?: string; preservedCopies?: number }>;
             writtenWithPreservedEdits?: Array<{ pageId?: string; name?: string; copies?: number }>;
           };
         };
