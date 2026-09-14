@@ -9291,12 +9291,29 @@ table {
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/*
+ * Flat blue primary, and a disabled state that is a COLOUR rather than a
+ * fade (operator, 2026-08-30, task 86bbq5jvz). `--c-primary` is left alone
+ * on purpose: it also paints the info toast, focus borders and links, and
+ * this ticket is about buttons only.
+ *
+ * `opacity: 1` on the disabled rule is load-bearing — the `.btn:disabled`
+ * rule directly above fades every disabled button to 0.5, and a
+ * half-transparent bright blue still reads as a live button. That
+ * "is it clickable or not?" ambiguity is what kept getting Publish missed.
+ */
 .btn-primary {
-  background: var(--c-primary);
-  color: #fff;
-  border-color: var(--c-primary);
+  background: var(--btn-blue);
+  color: var(--btn-flat-ink);
+  border-color: var(--btn-blue);
 }
-.btn-primary:hover:not(:disabled) { background: var(--c-primary-dark); border-color: var(--c-primary-dark); }
+.btn-primary:hover:not(:disabled) { background: var(--btn-blue-hover); border-color: var(--btn-blue-hover); }
+.btn-primary:disabled {
+  background: var(--btn-blue-disabled);
+  border-color: var(--btn-blue-disabled);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
 
 .btn-ghost {
   background: transparent;

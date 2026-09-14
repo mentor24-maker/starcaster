@@ -100,19 +100,19 @@ export function BuilderBlogPostListModuleSettings({ module, onUpdateModule }: Pr
             { value: "3", label: "3" }
           ]
         },
+        // Any whole number, not a preset list: the five choices this used to
+        // offer (3/6/9/12/18) could not express "the latest 14", which is what
+        // the operator asked for on a client blog (task 86bbzy7g0). The
+        // renderer already accepted any count; only the panel was in the way.
         {
           key: "postsPerPage",
           label: "Posts Per Page",
-          width: "select-sm",
-          control: "select",
-          fallback: "9",
-          options: [
-            { value: "3", label: "3" },
-            { value: "6", label: "6" },
-            { value: "9", label: "9" },
-            { value: "12", label: "12" },
-            { value: "18", label: "18" }
-          ]
+          width: "num",
+          control: "number",
+          min: 1,
+          max: 50,
+          step: 1,
+          fallback: "9"
         }
       ],
       // The five filter toggles split across two strips so this column
