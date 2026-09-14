@@ -27,6 +27,17 @@ further risks a real old page quietly failing to import, which is worse.
 
 Verified in a real browser against a local copy of the live data, both ways: on
 the old code the click wipes the links, on the new code they survive.
+
+A review sent this back once, and the second pass found something worth keeping.
+The safety net mentioned above had in fact been broken since the day it was
+written — it was meant to fall back on the page the browser sent whenever the
+rebuild lost the link, but it always reported an answer even when it had none,
+and that empty answer overwrote the real one every time. So the net had never
+once caught anything. It is repaired here, which means the link now survives in
+two independent ways rather than one. Each half of the fix also now has a test
+that goes red when that half is deleted, checked by deleting it and watching the
+named test fail, so a future tidy-up cannot quietly remove either one.
+
 ## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
 
 Open a module's gear icon in the Builder and you get a form. On most panels
