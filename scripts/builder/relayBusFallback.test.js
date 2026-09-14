@@ -35,3 +35,23 @@ test('a message saved on the fallback ticket counts as delivered; a double refus
   assert.match(body, /if \(saved\.ok\) return \{ ok: true, via: 'ticket'/);
   assert.match(body, /return \{ ok: false,/);
 });
+
+/**
+ * The relay alarms whose ONLY copy is the party line (task 86bbztcza). Each of
+ * these writes nothing durable anywhere else, so while chat refused posts
+ * (from 2026-09-07) they reached nobody — and the stalled hand-off also left
+ * its marker unstamped, so it retried, failed and exited 1 on every pass.
+ * The courtesy copies (MERGED, Lane armed, refusal explained on the ticket)
+ * deliberately stay on postToBus: their record is already on the ticket.
+ */
+test('the alarms that exist only on the party line fall back to the ticket', () => {
+  assert.match(SRC, /const bus = await postOrSaveToBus\(channel, `\[CC-starcaster bus-relay\] Merge NOT performed on /,
+    'an unclassified merge refusal writes nothing on the ticket — the bus is its only copy');
+  assert.match(SRC, /const busStall = await postOrSaveToBus\(channel,/,
+    'a stalled hand-off retries every pass until announced, so a chat-only post makes the relay exit 1 forever');
+  assert.match(SRC, /\(filed \|\| selfHealing\)\s*\?\s*await postToBus\(channel, busBody\)\s*:\s*await postOrSaveToBus\(channel, busBody\)/,
+    'an UNFILED conflict hand-off has no other actor and must fall back');
+  assert.match(SRC, /AUTO-MERGE DISABLED ITSELF[\s\S]{0,900}?const posted = await postOrSaveToBus\(channel, line\);\s*\n\s*if \(!posted\.ok\) unchecked\.push\(/,
+    'the first latch announcement must fall back AND report a double refusal');
+  assert.doesNotMatch(SRC, /else await postToBus\(channel, line\);/, 'the latch announcement must not go back to an unchecked chat-only post');
+});
