@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
+import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import {
   BACKGROUND_STYLE_PRESETS,
   BUILDER_GRADIENT_ANGLE_DEFAULT,
@@ -69,7 +70,14 @@ type BuilderBackgroundControlsProps = {
    */
   onModeChange?: (mode: BackgroundSettings["mode"]) => void;
   onChooseImage?: () => void;
-  onUploadImage?: (file: File | null) => void;
+  /**
+   * One upload callback for every upload button in this component. `target`
+   * is "poster" only from the Video panel's Upload Poster, so the handler can
+   * fill the poster instead of reading an image as "switch to Image mode"
+   * (applyUploadedBackgroundMedia). Callers that never show the Video panel
+   * can ignore it.
+   */
+  onUploadImage?: (file: File | null, target?: BackgroundUploadTarget) => void;
   compact?: boolean;
   horizontal?: boolean;
   hideModeRow?: boolean;
@@ -320,13 +328,32 @@ export function BuilderBackgroundControls({
         </BuilderSettingRow>
 
         <BuilderSettingRow label="Poster File" fullWidth>
-          <button
-            className="secondary-button builder-gallery-button"
-            onClick={() => setOpenVideoPicker("poster")}
-            type="button"
-          >
-            Choose Poster
-          </button>
+          <div className="builder-media-actions">
+            <button
+              className="secondary-button builder-gallery-button"
+              onClick={() => setOpenVideoPicker("poster")}
+              type="button"
+            >
+              Choose Poster
+            </button>
+            {/* Beside Upload Video's twin: a library with no stills otherwise
+                leaves the operator able to add the clip and not the poster the
+                warning below tells him he needs (review note on 86bbwe98a). */}
+            {onUploadImage ? (
+              <label className="secondary-button builder-gallery-button builder-upload-button">
+                <span>Upload Poster</span>
+                <input
+                  className="builder-upload-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    onUploadImage(event.target.files?.[0] ?? null, "poster");
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            ) : null}
+          </div>
         </BuilderSettingRow>
 
         {needsPoster ? (

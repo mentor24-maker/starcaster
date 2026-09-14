@@ -1,3 +1,4 @@
+import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type {
   BackgroundSettings,
@@ -65,7 +66,7 @@ type BuilderSectionCardProps = {
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
   /** Cell-scoped upload — see `BuilderCellStyleSettings`. Optional: no handler, no Upload button. */
-  onUploadCellBackgroundMedia?: (column: string, file: File | null) => void;
+  onUploadCellBackgroundMedia?: (column: string, file: File | null, target?: BackgroundUploadTarget) => void;
   onUpdateCellBorderWidth: (column: string, value: string) => void;
   onUpdateCellBorderColor: (column: string, value: string) => void;
   onUpdateCellBorderRadius: (column: string, value: string) => void;
@@ -97,7 +98,7 @@ type BuilderSectionCardProps = {
   onUploadMediaForModule: (moduleId: string, file: File | null) => void;
   onUploadButtonBackgroundMedia: (moduleId: string, file: File | null) => void;
   onOpenSectionBackgroundGallery: () => void;
-  onUploadSectionBackgroundMedia: (file: File | null) => void;
+  onUploadSectionBackgroundMedia: (file: File | null, target?: BackgroundUploadTarget) => void;
   onOpenModulePalette: (column: string, anchor?: { x: number; y: number }) => void;
   themeColors?: Array<{ label: string; hex: string }>;
   themeStyle?: CSSProperties;

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { isVideoFile, MEDIA_DIRECT_UPLOAD_MAX_BYTES, uploadFileToBlob } from "@/lib/media-blob-upload";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -6786,11 +6787,6 @@ const CLIENT_ADMIN_TAG_SOURCE = "client-admin";
 const MEDIA_IMAGE_ACCEPT = ".png,.jpg,.jpeg,.webp,.gif,.svg";
 const MEDIA_VIDEO_ACCEPT = ".mp4,.mov,.m4v,.webm,.ogg";
 
-/**
- * The base64 upload path tops out around 7MB. Anything larger goes through
- * Vercel Blob, which is also the only path for video.
- */
-const MEDIA_DIRECT_UPLOAD_MAX_BYTES = 6 * 1024 * 1024;
 
 type MediaAsset = {
   id: number;
@@ -6840,22 +6836,6 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-let mediaBlobClientPromise: Promise<{ upload: (...args: unknown[]) => Promise<{ url: string }> }> | null = null;
-function getMediaBlobClient() {
-  // Loaded from a CDN at runtime rather than bundled — the same technique
-  // public/js/assets.js uses, and what lets a tenant page upload video without
-  // the builder bundle carrying the SDK.
-  if (!mediaBlobClientPromise) {
-    // The specifier is built at runtime so TypeScript does not try to resolve
-    // a URL import at compile time, and esbuild leaves it as a dynamic import
-    // for the browser to fetch.
-    const cdn = "https://esm.sh/@vercel/blob/client?bundle";
-    mediaBlobClientPromise = (new Function("u", "return import(u)")(cdn)) as Promise<{
-      upload: (...args: unknown[]) => Promise<{ url: string }>;
-    }>;
-  }
-  return mediaBlobClientPromise;
-}
 
 function MediaManagerPreview({
   settings,
@@ -7053,20 +7033,14 @@ function MediaManagerPreview({
     : inScope.filter((asset) => mediaAssetMatchesFilters(asset, filters));
 
   async function uploadOne(file: File) {
-    const isVideo = /^video\//i.test(file.type) || /\.(mp4|mov|m4v|webm|ogg)$/i.test(file.name);
+    const isVideo = isVideoFile(file);
     const assetType = isVideo ? "Video" : "Image";
 
     // Video, and anything past the base64 ceiling, goes through Blob. An
     // image small enough takes the direct path because it also generates a
     // thumbnail on the way in.
     if (isVideo || file.size > MEDIA_DIRECT_UPLOAD_MAX_BYTES) {
-      const { upload } = await getMediaBlobClient();
-      const blob = await upload(file.name, file, {
-        access: "public",
-        handleUploadUrl: "/api/assets/blob-upload",
-        multipart: true,
-        clientPayload: JSON.stringify({ fileName: file.name, assetType, assetName: file.name })
-      });
+      const location = await uploadFileToBlob(file, assetType);
       const res = await fetch("/api/assets", {
         method: "POST",
         credentials: "include",
@@ -7074,7 +7048,7 @@ function MediaManagerPreview({
         body: JSON.stringify({
           assetName: file.name,
           assetType,
-          location: String(blob?.url || ""),
+          location,
           size: Number(file.size || 0),
           source: MEDIA_MANAGER_SOURCE
         })
