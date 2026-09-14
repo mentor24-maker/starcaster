@@ -9646,12 +9646,18 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * renders byte-identically before and after.
  *
  * Scoped to this ticket's six panels ON PURPOSE. The identical defect is live
- * on ten other panels (blog-tag-cloud, blog-category-filter, blog-post-tags,
- * blog-post-manager, blog-search, blog-search-results, site-search,
+ * on six other panels (blog-post-tags, blog-post-manager, site-search,
  * event-manager, event-calendar, event-detail — each an 846px track at 1440),
- * and those belong to panel sweeps 10/15 and 12–14/15, which are still queued.
- * One panel family per PR is the whole point of the sweep; widening this
- * selector is the one-line fix each of those tickets can reach for.
+ * which belong to panel sweeps still to come. One panel family per PR is the
+ * whole point of the sweep; widening this selector is the one-line fix each of
+ * those tickets can reach for.
+ *
+ * This list named ten panels when 15/15 shipped. Panel sweep 13/15 (ticket
+ * 86bbjt1bd) has since bounded four of them — blog-tag-cloud,
+ * blog-category-filter, blog-search and blog-search-results — in its own block
+ * further down this file. Keep this list and the one in docs/UI_RULES.md (rule
+ * L8) saying the same thing: two counts of the same fact that disagree is
+ * CLAUDE.md landmine 17.
  *
  * Panel sweep 15/15, ticket 86bbjt1bg.
  */
@@ -9902,8 +9908,11 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * editor already puts `--builder-field-room` between the same two parts for
  * the same reason ("without it the two touch and read as one control"); this
  * is that treatment where the composite sits in a lattice column instead.
- * The pair still finishes flush on the block edge (L8 rule 3) — the button
- * keeps its natural width at the end of the slot, the input gives up the 40px.
+ * The pair still finishes flush on the block edge (L8 rule 3), which is what
+ * L8 is actually protecting. Where the 40px comes FROM depends on the row:
+ * when this row is the one sizing the column's `max-content` control track —
+ * which it usually is — the track grows by 40px and every field in the axis
+ * widens with it, rather than the input giving the space up.
  */
 .builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control:has(> .builder-image-picker-field-button) {
   gap: var(--builder-field-room, 40px);
