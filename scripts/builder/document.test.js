@@ -445,3 +445,152 @@ test('migrateLegacyLayoutSections preserves video background mode and videoUrl',
   assert.equal(document.layoutSections[0].background.posterUrl, '/assets/poster.jpg');
 });
 
+
+// ---------------------------------------------------------------------------
+// Task 86bc0bb73 — saving a page must not revert a row's modern settings.
+//
+// public/js/builder.js adds `rowSettings` and `containerSettings` to every
+// section it sends on a save (line 5446), which makes isLegacySectionArray
+// call an ORDINARY SAVE legacy and route it through the Normie import
+// migrator. That migrator rebuilt each section from a fixed field list, so
+// every modern row setting came back at its default: a full-width row boxed
+// itself back in on every save, with no message to the operator.
+//
+// The payloads below are the editor's own shape — the legacy trigger fields
+// sitting alongside the modern ones, which is exactly what a save sends.
+// ---------------------------------------------------------------------------
+
+const EDITOR_TRIGGER = {
+  rowSettings: { margin: '0', padding: '20' },
+  containerSettings: { col1: { padding: '18' } },
+};
+
+test('serializeBuilderDocument keeps a full-width row full width on an ordinary save', () => {
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      title: 'Hero',
+      widthMode: 'full-width',
+      ...EDITOR_TRIGGER,
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].widthMode, 'full-width');
+});
+
+test('a full-width row survives saving the page twice with no edits', () => {
+  // The operator's actual report: it is the SECOND save that was reported,
+  // because the first one is the edit itself. Feed the serializer its own
+  // output, which is what re-opening the page and pressing Save again does.
+  const first = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      widthMode: 'full-width',
+      ...EDITOR_TRIGGER,
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+  const second = serializeBuilderDocument({
+    layoutSections: first.sections.map((section) => ({ ...section, ...EDITOR_TRIGGER })),
+  });
+
+  assert.equal(first.sections[0].widthMode, 'full-width');
+  assert.equal(second.sections[0].widthMode, 'full-width');
+});
+
+test('an ordinary save keeps every modern row setting, not just widthMode', () => {
+  // widthMode is the one a person notices; it was lost with 34 other fields.
+  // Measured 2026-09-14 by diffing one editor-shaped section through
+  // serializeBuilderDocument with and without the legacy trigger.
+  const section = {
+    id: 'section_1',
+    layout: '3-3',
+    title: 'Hero',
+    widthMode: 'full-width',
+    widthPercent: '80',
+    isPrivate: true,
+    alignment: 'center',
+    marginTop: '11',
+    marginBottom: '12',
+    paddingTop: '13',
+    paddingBottom: '14',
+    paddingLeft: '15',
+    paddingRight: '16',
+    marginLeft: '17',
+    marginRight: '18',
+    columnGap: '19',
+    minHeight: '400',
+    columnWidths: { left: '30', right: '70' },
+    equalColumnHeights: 'true',
+    horizontalOffset: '5',
+    verticalOffset: '6',
+    mobileHidden: 'true',
+    desktopHidden: 'true',
+    mobileLayout: 'reverse-stack',
+    cellPaddingTop: { left: '22', right: '22' },
+    cellMarginBottom: { left: '27', right: '27' },
+    cellIsPrivate: { left: 'true', right: 'true' },
+    ...EDITOR_TRIGGER,
+    modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+  };
+
+  const saved = serializeBuilderDocument({ layoutSections: [section] }).sections[0];
+
+  assert.equal(saved.widthMode, 'full-width');
+  assert.equal(saved.widthPercent, '80');
+  assert.equal(saved.isPrivate, true);
+  assert.equal(saved.alignment, 'center');
+  assert.equal(saved.marginTop, '11');
+  assert.equal(saved.marginBottom, '12');
+  assert.equal(saved.paddingTop, '13');
+  assert.equal(saved.paddingBottom, '14');
+  assert.equal(saved.paddingLeft, '15');
+  assert.equal(saved.paddingRight, '16');
+  assert.equal(saved.marginLeft, '17');
+  assert.equal(saved.marginRight, '18');
+  assert.equal(saved.columnGap, '19');
+  assert.equal(saved.minHeight, '400');
+  assert.deepEqual(saved.columnWidths, { left: '30', right: '70' });
+  assert.equal(saved.equalColumnHeights, 'true');
+  assert.equal(saved.horizontalOffset, '5');
+  assert.equal(saved.verticalOffset, '6');
+  assert.equal(saved.mobileHidden, 'true');
+  assert.equal(saved.desktopHidden, 'true');
+  assert.equal(saved.mobileLayout, 'reverse-stack');
+  assert.equal(saved.cellPaddingTop.left, '22');
+  assert.equal(saved.cellMarginBottom.left, '27');
+  assert.equal(saved.cellIsPrivate.left, 'true');
+});
+
+test('a genuine legacy Normie section still migrates, and legacy values still win', () => {
+  // The carry-through must not turn the migrator off. A real import carries
+  // none of the modern fields, so every value below is still derived from
+  // rowSettings/containerSettings and the legacy layout code.
+  const saved = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '2-2-2',
+      title: 'Imported',
+      rowSettings: { margin: '8', padding: '20', backgroundColor: '#eef6ff' },
+      containerSettings: {
+        col1: { padding: '12', borderColor: '#000000', borderThickness: '2', borderRadius: '8' },
+        col2: { padding: '16' },
+        col3: { padding: '16' },
+      },
+      modules: [{ id: 'module_1', type: 'headline', column: 'col1', name: 'Hero', text: 'Hello', settings: {} }],
+    }],
+  }).sections[0];
+
+  assert.equal(normalizeLayout(saved.layout), 'three-column');
+  assert.equal(saved.modules[0].type, 'heading');
+  assert.equal(saved.modules[0].column, 'left');
+  assert.equal(saved.marginTop, '8', 'marginTop still comes from rowSettings.margin');
+  assert.equal(saved.cellPadding.left, '12', 'cell padding still comes from containerSettings');
+  assert.equal(saved.cellBorderWidth.left, '2');
+  assert.equal(saved.cellBorderColor.left, '#000000');
+  assert.equal(saved.background.mode, 'color', 'row background still rebuilt from rowSettings');
+  assert.equal(saved.widthMode, 'contained', 'an import with no widthMode still defaults');
+});
