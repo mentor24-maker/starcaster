@@ -46,6 +46,8 @@ type BuilderSectionCardProps = {
   /** True when this canonical instance's content no longer matches its
    *  master — hand-edited here directly rather than through a push. */
   hasDrifted?: boolean;
+  /** See `awaitingPush` on `describeBlockLineage` (@/lib/block-lineage). */
+  awaitingPush?: boolean;
   /** Usage for the master this block belongs to, from
    *  `buildSavedSectionUsageIndex`. Drives the "used on N pages" half of the
    *  lineage line; omit it and the line names the master without a count. */
@@ -129,6 +131,7 @@ export function BuilderSectionCard({
   expandedModuleIds,
   canonicalSourceName,
   hasDrifted = false,
+  awaitingPush = false,
   canonicalUsage,
   isCanonicalMaster = false,
   onToggleCanonical,
@@ -190,6 +193,7 @@ export function BuilderSectionCard({
     isMaster: isCanonicalMaster,
     isFollowing: isCanonical,
     hasDrifted,
+    awaitingPush,
     hasMasterSource: hasCanonicalSource,
     masterName: canonicalSourceName,
     usage: canonicalUsage,

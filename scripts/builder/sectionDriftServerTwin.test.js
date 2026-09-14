@@ -34,12 +34,65 @@ function instance(overrides = {}) {
   };
 }
 
-test('server twin: getSectionContent strips id, savedSectionId, canonical — what a push overwrites', () => {
-  const content = serverTwin.getSectionContent(instance());
+/**
+ * The one fixture both suites hash, and the value both pin. See the client
+ * file's copy of this constant: nothing imports across the TS/CJS line, so a
+ * hash changed on one side and not the other shows up here as a red test
+ * rather than as two surfaces quietly disagreeing about what "drifted" means.
+ */
+const PINNED_FIXTURE_HASH = 'e81b0a4fd564cd2b';
+
+test('server twin: getSectionContent strips id, savedSectionId, canonical and the lineage stamp — what a push overwrites', () => {
+  const content = serverTwin.getSectionContent(instance({ canonicalSourceHash: 'abc' }));
   assert.equal('id' in content, false);
   assert.equal('savedSectionId' in content, false);
   assert.equal('canonical' in content, false);
+  assert.equal('canonicalSourceHash' in content, false);
   assert.equal(content.title, 'Footer');
+});
+
+test('server twin: sectionContentHash agrees with the client on the shared fixture', () => {
+  assert.equal(serverTwin.sectionContentHash(instance()), PINNED_FIXTURE_HASH);
+});
+
+test('server twin: the hash does not depend on key ORDER — jsonb rearranges them on the way back', () => {
+  const reordered = {
+    modules: [{ settings: {}, text: 'Call us today', name: '', column: 'main', type: 'text', id: 'm1' }],
+    layout: 'main',
+    title: 'Footer',
+    canonical: true,
+    savedSectionId: 'saved_section_footer',
+    id: 'inst-1',
+  };
+  assert.equal(serverTwin.sectionContentHash(reordered), serverTwin.sectionContentHash(instance()));
+});
+
+test('server twin: the hash ignores provenance, and moves when content moves', () => {
+  assert.equal(
+    serverTwin.sectionContentHash(instance({ id: 'inst-2', canonical: false, canonicalSourceHash: 'stale' })),
+    serverTwin.sectionContentHash(instance())
+  );
+  const edited = instance({ modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'CHANGED', settings: {} }] });
+  assert.notEqual(serverTwin.sectionContentHash(edited), serverTwin.sectionContentHash(instance()));
+});
+
+test('server twin: a stamped copy a failed push never wrote is NOT drifted, though the master has moved on', () => {
+  const stale = serverTwin.stampSectionLineage(instance());
+  const masterMovedOn = {
+    ...master,
+    modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'the new copy', settings: {} }],
+  };
+  assert.equal(serverTwin.hasSectionDrifted(stale, masterMovedOn), false);
+});
+
+test('server twin: a copy edited after it was stamped IS drifted — the stamp does not launder a hand edit', () => {
+  const stamped = serverTwin.stampSectionLineage(instance());
+  const edited = { ...stamped, modules: [{ id: 'm1', type: 'text', column: 'main', name: '', text: 'HAND-EDITED', settings: {} }] };
+  assert.equal(serverTwin.hasSectionDrifted(edited, master), true);
+});
+
+test('server twin: a garbage stamp can only ever clear drift, never assert it', () => {
+  assert.equal(serverTwin.hasSectionDrifted(instance({ canonicalSourceHash: 'not-a-real-hash' }), master), false);
 });
 
 test('server twin: an untouched copy has NOT drifted (provenance differs, content matches)', () => {
