@@ -1,10 +1,12 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
+import { BuilderModuleField } from "./builder-module-field";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
 
 export type FilterCategory = { id: string; label: string; slug: string };
@@ -155,43 +157,93 @@ export function BuilderBlogCategoryFilterModuleSettings({
               width: "full",
               control: "custom",
               bare: true,
+              /* L6a item manager on its own lattice, and the shape panel
+                 sweep 12/15 named as belonging to this ticket. It was
+                 `.builder-slider-item-card` holding `label.field` boxes — the
+                 shape W0 says to RETIRE rather than style, because it stacks a
+                 label ABOVE a full-width box and so runs a second label
+                 geometry inside a panel whose other columns are on the
+                 lattice. Measured at 1440 before this change: the panel's own
+                 fields sat at label-width 125 / control-x 125, and every field
+                 in here sat at x=0 in two hardcoded 478px tracks.
+
+                 The declaration is what makes it CHECKABLE, and that is the
+                 larger half of the fix: check_panels selects item managers on
+                 `[data-lattice-pairs]` and `[data-lattice-columns]`, and it
+                 separately EXCLUDES `.builder-slider-item-grid` by name — so
+                 every pair in here was filtered out of every sweep since the
+                 check was written, and each one reported a clean pass over a
+                 manager nobody had measured. Carousel's lesson word for word:
+                 a manager that opts into neither attribute is not passing, it
+                 is absent.
+
+                 `data-lattice-pairs="2"` rather than sweep 12's one-pair-per-
+                 row, because this manager's twin is Blog Tag Cloud's, one
+                 module along in the same ticket and already on this shape: the
+                 same Label + Slug fields, in the same-width axis column,
+                 measured at 239px each holding the fixture's
+                 `junior-high-performance-academy`. Sweep 12 reached for the
+                 stacked variant where the same arithmetic gave 52-94px fields.
+                 Two sibling discovery panels with identical managers should
+                 not read as two different shapes. */
               render: () => (
                 <>
-                  <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>
-                    Categories
-                  </div>
-                  <div className="builder-slider-items">
+                  <div className="builder-schema-group-title">Categories</div>
+                  <div className="builder-cards-panel-fields" data-lattice-pairs="2">
                     {categories.map((cat, index) => (
-                      <div key={cat.id} className="builder-slider-item-card">
-                        <div className="builder-slider-item-header">
-                          <strong>{cat.label || `Category ${index + 1}`}</strong>
-                          <div className="builder-section-actions">
-                            <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, -1)} title="Move left">↑</button>
-                            <button type="button" className="builder-icon-button" onClick={() => moveCat(cat.id, 1)} title="Move right">↓</button>
-                            <button type="button" className="builder-icon-button builder-icon-button-danger" onClick={() => removeCat(cat.id)} title="Remove">✕</button>
+                      <Fragment key={cat.id}>
+                        <div className="builder-card-editor-head">
+                          <span className="builder-card-editor-name">{cat.label || `Category ${index + 1}`}</span>
+                          <div className="builder-item-grid-actions">
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => moveCat(cat.id, -1)}
+                              aria-label={`Move category ${index + 1} up`}
+                              title="Move up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button"
+                              onClick={() => moveCat(cat.id, 1)}
+                              aria-label={`Move category ${index + 1} down`}
+                              title="Move down"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              className="builder-icon-button builder-icon-button-danger"
+                              onClick={() => removeCat(cat.id)}
+                              aria-label={`Delete category ${index + 1}`}
+                              title="Delete category"
+                            >
+                              ✕
+                            </button>
                           </div>
                         </div>
-                        <div className="builder-slider-item-grid">
-                          <label className="field">
-                            <span>Label</span>
-                            <input
-                              type="text"
-                              value={cat.label}
-                              onChange={(e) => updateCat(cat.id, "label", e.target.value)}
-                              placeholder="Technology"
-                            />
-                          </label>
-                          <label className="field">
-                            <span>Slug</span>
-                            <input
-                              type="text"
-                              value={cat.slug}
-                              onChange={(e) => updateCat(cat.id, "slug", e.target.value)}
-                              placeholder="technology"
-                            />
-                          </label>
-                        </div>
-                      </div>
+
+                        <BuilderModuleField label="Label" width="text-md" className="builder-card-field--a">
+                          <input
+                            type="text"
+                            value={cat.label}
+                            onChange={(e) => updateCat(cat.id, "label", e.target.value)}
+                            placeholder="Technology"
+                            aria-label={`Category ${index + 1} label`}
+                          />
+                        </BuilderModuleField>
+                        <BuilderModuleField label="Slug" width="text-md" className="builder-card-field--b">
+                          <input
+                            type="text"
+                            value={cat.slug}
+                            onChange={(e) => updateCat(cat.id, "slug", e.target.value)}
+                            placeholder="technology"
+                            aria-label={`Category ${index + 1} slug`}
+                          />
+                        </BuilderModuleField>
+                      </Fragment>
                     ))}
                   </div>
                   <button type="button" className="secondary-button" onClick={addCat}>
