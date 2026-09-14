@@ -118,6 +118,7 @@ export const BUILDER_MODULE_TYPES = [
   "blog-toc",
   "blog-newsletter-subscribe",
   "blog-related-posts",
+  "blog-latest-posts",
   "blog-category-filter",
   "blog-post",
   "blog-tag-cloud",
@@ -2316,6 +2317,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "blog-toc" ||
     type === "blog-newsletter-subscribe" ||
     type === "blog-related-posts" ||
+    type === "blog-latest-posts" ||
     type === "blog-category-filter" ||
     type === "blog-post" ||
     type === "blog-tag-cloud" ||
@@ -3830,6 +3832,24 @@ export function createEmptyModule(
                             cardBorderRadius: "12",
                             cardGap: "20",
                             manualPosts: JSON.stringify([])
+                          }
+                      : type === "blog-latest-posts"
+                        ? {
+                            /*
+                             * "Latest posts" ticked = the newest published
+                             * posts, no filter. Unticked, the row narrows to
+                             * posts carrying ANY of filterTags / filterCategories
+                             * (still newest first). Both lists are JSON arrays:
+                             * tag names as written, category ids.
+                             */
+                            title: "",
+                            latestPosts: "true",
+                            filterTags: JSON.stringify([]),
+                            filterCategories: JSON.stringify([]),
+                            count: "3",
+                            columns: "3",
+                            cardGap: "24",
+                            postSlug: ""
                           }
                       : type === "blog-category-filter"
                         ? {
