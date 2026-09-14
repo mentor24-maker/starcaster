@@ -85,10 +85,15 @@ test('what gets photographed is what the public endpoint would have served', () 
   assert.match(store, /listPublishedPagesForProject/);
 });
 
-test('staleness is decided by comparing the draft against what was built', () => {
+test('staleness is decided by comparing the source against what was built', () => {
   const store = read('lib/builderPublishStore.js');
-  assert.match(store, /source_updated_at/, 'the build records the draft time it came from');
-  assert.match(store, /draftAt > builtAt/, 'newer draft means pending');
+  assert.match(store, /source_updated_at/, 'the build records the source time it came from');
+  // "Source" is the later of the page's own clock and its THEME's clock since
+  // 2026-09-13 (task 86bbzy9ym): a theme save writes no page row, so the page
+  // clock alone read every theme change as "nothing to publish". The rule and
+  // its round trip are tested directly in themeSavePublish.test.js.
+  assert.match(store, /sourceAt > builtAt/, 'newer source means pending');
+  assert.doesNotMatch(store, /draftAt > builtAt/, 'the page clock alone is the old bug');
 });
 
 test('one build per page — publishing twice replaces rather than accumulates', () => {

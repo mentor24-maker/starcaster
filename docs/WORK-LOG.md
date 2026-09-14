@@ -132,6 +132,136 @@ line: one that no such headline may claim an installer is missing, one that all
 three places still say the same thing (it caught two real differences between
 them while being written), and one that the definition this mistake was copied
 from does not quietly come back. Each was broken on purpose and watched to fail.
+## 2026-09-13 — Two settings panels were already right; the third had a hidden defect nothing could see (#675)
+
+The Builder's settings panels are being brought onto one set of rules, a few
+panels at a time — so every label starts on the same vertical line and every
+field ends on the same one, instead of each row being its own width. This batch
+was the three search-and-breadcrumb panels.
+
+Measured in a real browser first, and two of the three were already correct.
+Site Search and Site Search Results line up exactly as they should at every
+screen width. That is worth saying out loud rather than quietly finding nothing
+to change: the ticket assumed all three were wrong.
+
+The Breadcrumb panel had two problems, and the interesting thing about both is
+that no automatic check could have found them.
+
+The first was the Separator box — the field where you set the little arrow
+between trail items. Someone had typed a fixed width into it, 48 pixels, so it
+sat as a stub two-thirds of the way back from the edge while every field around
+it ran to the edge. The checker that measures these panels looks at the SLOT a
+field sits in, and the slot was the correct full width the whole time; the 48
+was on the box inside it. So the panel had been passing honestly and the defect
+was simply outside what the instrument looks at. It now uses the same shared
+width as the field above it, and there is a test that fails if anyone types a
+width into this panel again.
+
+The second was bigger. The Label / URL / Action grid where you actually edit the
+trail — the largest thing in the panel — was invisible to the checker
+altogether. It is built in a shape the checker had never been taught, so every
+sweep for months had looked at this panel, found nothing to measure there, and
+reported a clean pass. Not a pass: an absence, and from the summary line the two
+look identical. The checker has been taught the shape, the grid now announces
+itself, and the count of measured item-editors went from 4 to 5. (The run's own
+summary line says that went 12 to 15, and the summary line is wrong: it counts
+everything three times, once per screen width it measures at. The real numbers
+are a third of what it prints.)
+
+It also now says what its own green is worth here. In this kind of grid the
+titles and the rows physically cannot disagree — they are one grid — so four of
+the checks it runs could never fail on it whatever the code said. Rather than
+let that count as "checked", the run prints a note saying so, and checks the two
+things that genuinely can go wrong instead. All four of those were broken on
+purpose and watched to go red before any of this was believed.
+
+Review sent this back once, and it was right to. The panel work was fine; the
+changes to the checker itself had two faults, both of the kind that only show
+up later. The first: the checker keeps a tally of these grids, and it was
+filing them under the wrong name — a name three different grids share — so the
+moment a second one was added the tally would have quietly reported one where
+there were two, thrown the second one's measurements away, and printed a
+nonsense list of screen widths. Proved by adding a second grid and watching it
+collapse, then fixed and watched to come out right. The second: if anyone ever
+mistyped the number of columns — wrote "three" instead of 3 — the checker did
+not fail, it hung, ran out of memory, and died having said nothing at all. Run
+for six minutes to confirm that, against a normal run of about one. It now
+stops and names the bad value in plain words. Two smaller things went with
+them: a note whose explanatory comment described the opposite of what the code
+did, and a track count that could have been fooled by a perfectly legal bit of
+CSS into reporting a fault that was not there.
+
+Review sent it back a second time, and again it was right. This one is the most
+useful thing in the whole ticket, so it is worth explaining properly.
+
+The checker had a rule that read, in effect, "every row of this grid must have
+three cells in it". That is the rule that catches the panel going scrambled —
+one trail item quietly rendering two boxes instead of three, which shunts every
+box after it one place to the left, so an item's Label ends up sitting under the
+"Action" title. The rule was written down, it was described in the rules
+document, and it could not fail. It was cutting the boxes into groups of three
+by counting — take three, take three, take three — so of course every group had
+three in it. The only thing that could ever have set it off was a total that did
+not divide by three.
+
+The review suggested grouping the boxes by which row of the grid they physically
+landed in. That sounded right and it does not work, and rather than argue about
+it the panel was deliberately broken in exactly the way described — one item
+rendering two boxes, another rendering four — and then measured in a real
+browser. Every way of grouping by position gives three, three, three, three,
+while the panel is visibly wrong on screen. The reason is that the browser
+simply pours the boxes into three columns in order; a missing box does not leave
+a gap, it pulls everything else along. So there is nothing in the finished
+layout that records which boxes were meant to belong together.
+
+The fix is to have the panel say so. Each box now carries a small invisible mark
+naming the trail item it belongs to, and the checker groups by that. Break the
+panel the same way now and it fails at all three screen widths and names the
+culprit — "item 1 renders 2, item 2 renders 4". The old version was run against
+the same broken panel to confirm it passes green, which it does. A grid that
+forgets to carry those marks is reported as unreadable rather than waved
+through.
+
+Two smaller repairs went with it. A test meant to catch a fixed width being
+typed into a field was also matching "maximum width", which is a legitimate and
+common thing to write — so an unrelated change elsewhere in the panel could have
+failed it with a confident complaint about a field that was perfectly fine. And
+if one of these grids is ever hidden on screen, the checker used to announce a
+fault that did not exist; it now reports that it could not take a reading, which
+is the honest answer. Both were broken on purpose and watched, in both
+directions.
+
+Review sent it back a third time, and it found the same shape of fault one
+level up. The checker now had a rule saying "this grid must have a row of
+titles across the top" — the whole point of a panel opting in. But it worked
+out which row was the titles by taking whichever row came first. When the
+titles are there, that is them. When they are NOT there, the first row is the
+first trail item, and the checker silently treated that item as the titles. So
+the one rule it exists to enforce could never fire: there was always a title
+row, even when there wasn't. Deleting the three titles from the panel and
+running it proved it — a clean pass, and a count quietly reporting two rows
+where three items were on screen. It now finds the title row by the mark the
+panel puts on it rather than by position, so a panel with no titles fails and
+says so. Confirmed both ways: the old version passes that broken panel green,
+the new one fails it at all three screen widths, and with the titles back the
+count reads three rows instead of two.
+
+Two smaller repairs went with that one. A grid hidden on screen was already
+handled when something above it was doing the hiding, but not when the grid was
+hidden directly — in that case the checker fell through to a different branch
+and told you to go and add test content, which is a confident instruction based
+on a measurement it never took. It now reports that it could not take a reading
+either way. And the message that names the culprit row could print "item NaN" —
+literally the word NaN, computer for "not a number" — for any panel that labels
+its rows with something other than a plain count, losing the single detail that
+message exists to give. It now quotes the label back. Both broken on purpose
+and watched, each against the old version to confirm the fault was real.
+
+One thing found along the way is deliberately NOT fixed here: eleven panels
+leave a wide empty strip down their right-hand side, always the same 286 pixels.
+It is caused by the shared frame every panel sits in rather than by any one
+panel, so fixing it here would have quietly changed eleven other screens. It is
+filed on its own, with the measurements.
 
 ## 2026-09-08 — Alarms stopped being thrown away when the chat room refuses them (#666)
 

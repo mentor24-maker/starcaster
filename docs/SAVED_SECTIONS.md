@@ -202,6 +202,24 @@ React saved-sections manager, the standalone `SavedSectionEditorModal`, the
 saved-**modules** manager, and (as a checkbox rather than a fourth button, since
 that dialog is already asking which of two saves you meant) `BuilderSectionSaveModal`.
 
+**Themes ask the same question since 2026-09-13** (task 86bbzy9ym), and they
+needed one more piece first. A theme is a reference — saving one writes the
+theme row and no page row — and a published page is a snapshot that read as
+stale only when the page's own clock was newer than its build. Nothing
+connected the two: a headline colour change reached the draft site and never
+the live one, and the Publish panel said there was nothing to publish. So
+`lib/builderPublishStore.js` now stamps a page's source as the **later of the
+page's clock and its theme's clock** (`publishSourceStamp`, one function for
+both the pending check and the write, or a published page would be pending
+again forever), the theme shell attached to public pages carries the theme's
+`id` and `updatedAt`, and `GET /api/builder/themes/:id/usage`
+(`routes/themeUsage.js`) names the pages a theme reaches by the same rule the
+public site picks a theme with (`pickThemeForPage`). The Themes page asks
+through `BuilderSharedBlockSaveModal`, lists those pages, and publishes them
+by id. A theme no page uses saves without the question; a usage read that
+fails still asks. Nothing writes a page row — `themeIsAReference.test.js`
+still holds.
+
 **The browser must reach the publish route through `builderAdminFetch`.** An
 unmapped path falls through to a plain `fetch` carrying neither the
 `/api/builder` prefix nor the project-scope headers, and the 404 that produces
