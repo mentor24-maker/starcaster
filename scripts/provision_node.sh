@@ -423,7 +423,10 @@ else
         # kept this ticket honest: the launchd step is not a trimmable corner
         # of "provision a node", it is the step that makes the machine
         # actually RUN anything.
-        printf '  %sWAIT%s   %s: %sCANNOT DO YET%s — no installer exists.\n' "$YELLOW" "$OFF" "$role" "$BOLD" "$OFF"
+        # Same headline as doctor_node.mjs, and it says what `blocked` MEANS
+        # rather than why — the reason is printed beneath it. See the comment at
+        # the matching site in scripts/doctor_node.mjs (task 86bbw9nbj, round 3).
+        printf '  %sWAIT%s   %s: %sCANNOT DO YET%s — this provisioner cannot install it.\n' "$YELLOW" "$OFF" "$role" "$BOLD" "$OFF"
         detail "$reason"
         n_wait=$((n_wait+1))
         ;;

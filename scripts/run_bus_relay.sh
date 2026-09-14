@@ -71,6 +71,28 @@ REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 # one vantage point in the system that survives the owning machine being dead,
 # so it is where the check belongs.
 #
+# THE RELAY OF THE BEATS THEMSELVES, AND IT RUNS BEFORE THE WATCHDOG THAT READS
+# THEM — the order is load-bearing, not tidiness (task 86bbw9nbj).
+#
+# Most jobs push their own shared row inside `--beat`. The two Pulse pipelines
+# cannot: their runner lives in the pulse repo and writes only the LOCAL stamp,
+# on purpose, so that a beat needs no credential and no network call inside an
+# unattended pipeline runner. Something on this side has to carry the stamp the
+# rest of the way, and this is it — stated generally (any owned role whose stamp
+# is newer than its last push) rather than as a special case, because a role
+# whose own push could not reach ClickUp is in exactly the same position.
+#
+# WHY BEFORE `--check` AND NOT AFTER. `--check` reads the SHARED row and posts to
+# the bus when it finds nothing. Run the other way round, the very first wake
+# after this ships would read a roll call with no Pulse rows in it, announce two
+# perfectly healthy jobs as having gone quiet, and only then push the rows that
+# would have prevented it. A false alarm is this feature's own failure mode, and
+# that would have been one on day one.
+#
+# Never allowed to fail the relay, like its neighbours. It answers 0 or 2 and
+# never 1: it moves a fact from one surface to another and judges nothing.
+npm run --silent heartbeat -- --push-owned || true
+
 # Reads the shared roll call and posts to the bus only when a job has gone
 # quiet; it is silent otherwise. Never allowed to fail the relay.
 npm run --silent heartbeat -- --check || true
