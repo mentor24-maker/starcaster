@@ -156,6 +156,35 @@ async function openPanels(page) {
     });
   });
   await page.waitForTimeout(3000);
+
+  // A FOURTH collapsed panel: the Reminders module's record cards, one per
+  // reminder, each collapsed until clicked (`isRecordCollapsed` returns true
+  // by default). Panel sweep 2/15 seeded two real records here and said in the
+  // fixture itself that seeding them did NOT make them measurable, because
+  // nothing opened them — so for as long as this check has existed the whole
+  // reminder editor was one field, the module's Label, and everything the
+  // panel actually contains was measured by nothing. That is the same blind
+  // spot as the cell editor above and the table headings before it, and it is
+  // ticket 86bbjt1b9's to close.
+  //
+  // Their expand button is named after the record (`Expand Signup Nudge`), so
+  // there is no fixed label to match on — the card class is what identifies
+  // them. Scoped to that class rather than to every `Expand *` button on the
+  // page, because a blanket click would also open surfaces no rule has been
+  // applied to yet and fail this ticket on other people's panels.
+  const openedRecords = await page.evaluate(() => {
+    let clicked = 0;
+    document.querySelectorAll('.builder-reminder-record-card').forEach((card) => {
+      const button = [...card.querySelectorAll('button[aria-label]')]
+        .find((el) => /^expand /i.test(el.getAttribute('aria-label') || ''));
+      if (button) {
+        button.click();
+        clicked += 1;
+      }
+    });
+    return clicked;
+  });
+  if (openedRecords) await page.waitForTimeout(3000);
   return null;
 }
 
@@ -201,6 +230,50 @@ function measure(page, nonStretch) {
       const managers = [...panel.querySelectorAll('[data-lattice-pairs]')];
 
       /*
+       * A MANAGER THAT REPEATS IS STILL ONE LATTICE (ticket 86bbjt1b9, round 2).
+       *
+       * `data-lattice-pairs` is read off the element that carries it, so a
+       * manager rendered once per item in a list above it becomes N groups,
+       * each measured against itself. That is the group-of-one blind spot the
+       * `shared` unit below already exists to close, arriving by a different
+       * route: the Reminders panel renders one criteria block inside every
+       * record card, so criteria in card 1 and card 2 could drift apart by any
+       * amount and both report clean. The CSS makes them one track on purpose
+       * (list -> card -> settings -> criteria panel, subgrid all the way down)
+       * and `docs/UI_RULES.md` records these very tracks once measuring 124px
+       * and 118px, six pixels apart — so the drift is real and this check was
+       * blind to it.
+       *
+       * There is no element to hang one declaration on: the blocks are
+       * siblings under different cards, and their only common ancestor is the
+       * list, which is already a manager declaring a different pair count. So
+       * the repeated blocks NAME the lattice they share, and every box wearing
+       * one name is measured as a single group against the PANEL — the same
+       * "boxes plus an origin" shape, and the same reason for it.
+       */
+      /*
+       * ONE TEST FOR "IS THIS BOX NAMED", NOT TWO (round 3 of the same ticket).
+       *
+       * The map below skipped a falsy name while the `units` list below
+       * excluded a manager with `hasAttribute` — so a box carrying
+       * `data-lattice-group=""` was in neither list: not measured as a group of
+       * its own, not merged into a named one, and not reported as a manager
+       * that declared pairs and rendered nothing. It would simply vanish from a
+       * 690-panel sweep with the sweep still saying OK. Nothing writes an empty
+       * value today; the point is that the two conditions have to BE one
+       * condition, or they drift apart again the next time either is edited.
+       */
+      const latticeGroupName = (el) => el.getAttribute('data-lattice-group') || '';
+
+      const named = new Map();
+      for (const el of managers) {
+        const name = latticeGroupName(el);
+        if (!name) continue;
+        if (!named.has(name)) named.set(name, []);
+        named.get(name).push(el);
+      }
+
+      /*
        * A GROUP CAN BE MORE THAN ONE BOX (ticket 86bbmafd6, 2026-08-26).
        *
        * Everything above measures each box against ITSELF, which is why this
@@ -232,7 +305,10 @@ function measure(page, nonStretch) {
       const units = [
         ...groups.map((el) => ({ els: [el], origin: el })),
         ...loose.map((el) => ({ els: [el], origin: el })),
-        ...managers.map((el) => ({ els: [el], origin: el })),
+        ...managers
+          .filter((el) => !latticeGroupName(el))
+          .map((el) => ({ els: [el], origin: el })),
+        ...[...named].map(([name, els]) => ({ els, origin: panel, merged: true, mergedName: name })),
         ...(shared.length > 1 ? [{ els: shared, origin: panel, shared: true }] : []),
       ];
 
@@ -273,6 +349,8 @@ function measure(page, nonStretch) {
         ? group.previousElementSibling.textContent : '') || '').trim();
       const groupName = unit.shared
         ? `shared lattice — chrome + settings, ${unit.els.length} boxes`
+        : unit.merged
+        ? `item manager ${unit.mergedName} — ${unit.els.length} box(es)`
         : ownTitle
         || siblingTitle
         || (group.hasAttribute('data-lattice-pairs') ? `item manager ${gi}` : `chrome strip ${gi}`);
@@ -332,7 +410,10 @@ function measure(page, nonStretch) {
        */
       .filter((el) => {
         const manager = el.closest('[data-lattice-pairs]');
-        return !manager || manager === group;
+        // `unit.els` rather than `group`, so a manager named into a merged
+        // lattice keeps the fields of every box in it. For every other unit
+        // `els` is `[group]` and this reads exactly as it did before.
+        return !manager || unit.els.includes(manager);
       });
       // ITEM MANAGERS ARE OUT OF SCOPE, deliberately and not by accident.
       // A repeating card editor (social links, TOC entries, tag rows) is a
@@ -381,6 +462,36 @@ function measure(page, nonStretch) {
         const lr = label.getBoundingClientRect();
         const cr = control.getBoundingClientRect();
 
+        /*
+         * A COMPOSITE CONTROL — an entry box sharing its slot with a button.
+         *
+         * Everything else here measures the SLOT, which for a picker is the
+         * grid cell holding an input and a "Choose Image" button side by side.
+         * A slot can be exactly the right width while the input inside it is a
+         * third of its neighbours, and nothing above can tell: a `full` field
+         * is dropped from the width comparisons by design (it is meant to be
+         * wider), so the one field in the manager with something competing for
+         * its room is the one field nobody measures.
+         *
+         * That shipped. Related Posts' Image row had a correct 312px slot
+         * reaching the block's right edge, a 176px button, and a **96px**
+         * input showing `/images/l` where the whole path had been visible
+         * before — beside four 312px siblings, exit 0 (review round 2,
+         * 2026-09-13). It is the slot-versus-control gap that also let the
+         * breadcrumb Separator ship 165px short in sweep 10/15.
+         *
+         * So when a control holds a button AND an entry box, the entry box is
+         * measured too. Only then: an alignment group is all buttons and no
+         * entry, and a lone input is already the slot.
+         */
+        const entryW = (() => {
+          if (!control.querySelector(':scope > button')) return null;
+          const box = control.querySelector(
+            ':scope > input[type="text"], :scope > select, :scope > textarea'
+          );
+          return box ? Math.round(box.getBoundingClientRect().width) : null;
+        })();
+
         return {
           name: (label.textContent || '').trim() || '(unlabelled)',
           kind,
@@ -399,6 +510,7 @@ function measure(page, nonStretch) {
            * happens not to cover. See the two guards that consume this.
            */
           stacked: Math.abs(cr.left - lr.left) <= 1 && cr.top >= lr.bottom - 1,
+          entryW,
           labelW: Math.round(lr.width),
           // The TEXT width, not the box. scrollWidth counts padding, and the
           // 40px of room IS padding — using it here would compare the box to
@@ -969,6 +1081,75 @@ function assertLattice(panels, width) {
         `${where}: stretchable fields are ${fieldWidths.length} different widths (${fieldWidths.join('/')}px) — ` +
         stretch.map((f) => `${f.name}=${f.fieldW}`).join(', ')
       );
+    }
+
+    /*
+     * A WIDE FIELD MAY BE WIDER THAN ITS NEIGHBOURS, NEVER NARROWER.
+     *
+     * The assertion that goes with the composite measurement above. A picker
+     * earns its wide row because it needs MORE room than an ordinary field;
+     * ending up with less is the defect, whatever the slot around it measures.
+     *
+     * The baseline is the narrowest ordinary stretchable field in this same
+     * group, so it is derived rather than a number somebody chose: on the
+     * five-track grid the picker's input came to 198px beside 141px fields and
+     * passes, and on the one-pair-per-row grid it came to 96px beside 312px
+     * fields and does not.
+     */
+    const narrowest = fieldWidths.length ? Math.min(...stretch.map((f) => f.fieldW)) : null;
+    if (narrowest !== null) {
+      /*
+       * ONLY the fields the comparison above DROPS — the `full` ones.
+       *
+       * The first version of this ran over every field and was wrong in a way
+       * worth keeping: it failed 14 panels on "V Margin" and "H Margin", whose
+       * control is an input with a 28px stepper beside it (532px inside a
+       * 560px slot). The reason that was wrong is ONE reason, not two: those
+       * fields are in `stretch`, so `narrowest` is drawn from their own slots,
+       * and the rule was comparing a field against itself and calling the
+       * stepper a defect.
+       *
+       * REVIEW ROUND 3 (2026-09-14) corrected this comment, and the sentence
+       * it removed is worth naming because it is the kind a later sweep reads
+       * to decide it need not look. It said a non-`full` composite is
+       * "already covered — they are in `stretch`, so the width assertion
+       * measures them". IT DOES NOT. The width assertion above compares
+       * `fieldW`, which is the SLOT; no assertion anywhere reads `entryW`
+       * except this one. A non-`full` composite's entry box is measured by
+       * nothing — it is merely not FALSELY failed, which is a different thing
+       * from being checked.
+       *
+       * WHAT THIS STILL DOES NOT SEE, stated plainly so nobody has to
+       * rediscover it. Line ~343 drops a `full` field from the field list
+       * ENTIRELY unless its group declares `data-lattice-pairs`, and that drop
+       * happens before any of this runs. So this assertion reaches a picker
+       * inside a DECLARED manager and no other picker in the app. Measured at
+       * 1440 while reviewing this PR: 4 of the app's 14 composite picker
+       * fields are in undeclared ordinary columns and unmeasured, and 3 of
+       * those show a 207px entry box inside a correct 373px slot beside 373px
+       * siblings — `blog-post-card` Featured Image, `blog-author-bio` Photo,
+       * `blog-newsletter-subscribe` Image URL. Identical on `main`, so
+       * pre-existing rather than introduced here. The exemption and its reason
+       * are written down in `docs/UI_RULES.md` ("What the panel checker cannot
+       * see"), and `builder-lattice-inventory.test.tsx` pins that table to this
+       * code so it cannot rot quietly.
+       *
+       * A `full` field inside a declared manager is the one shape nothing else
+       * checks, which is the whole reason this exists. Narrowing to it is not
+       * a tolerance; it is the scope this assertion actually has.
+       */
+      for (const f of fields.filter((x) => x.full)) {
+        // Two pixels of rounding, not a tolerance for being short: a control
+        // that is genuinely squeezed is short by a third, never by one.
+        if (f.entryW !== null && f.entryW !== undefined && f.entryW + 2 < narrowest) {
+          failures.push(
+            `${where}: "${f.name}" has a ${f.fieldW}px slot but its entry box is only ` +
+            `${f.entryW}px — a button is taking the room. The narrowest ordinary field ` +
+            `here is ${narrowest}px, and a wide field may be wider than its neighbours, ` +
+            'never narrower (the slot reaches the right edge, so nothing else can see this)'
+          );
+        }
+      }
     }
 
     // The room the operator asked for: "40px more than the longest string".

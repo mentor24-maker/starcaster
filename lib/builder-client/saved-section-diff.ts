@@ -116,8 +116,15 @@ export const PAGE_LIST_LIMIT = 1000;
 const EXCERPT_LENGTH = 64;
 const VALUE_LENGTH = 48;
 
-/** Fields the transformation forces, so a difference in them is not news. */
-const IGNORED_SECTION_FIELDS = new Set(["id", "savedSectionId", "canonical", "modules"]);
+/**
+ * Fields the transformation forces, so a difference in them is not news.
+ *
+ * `canonicalSourceHash` is a copy's record of what the last push wrote into it
+ * (lib/builder-client/section-drift.ts), rewritten by every push — showing it
+ * here would put an unreadable hex line at the top of a preview whose whole
+ * job is to be readable.
+ */
+const IGNORED_SECTION_FIELDS = new Set(["id", "savedSectionId", "canonical", "canonicalSourceHash", "modules"]);
 
 /**
  * Keys whose camel-case reading is wrong or clumsy. Everything else is
