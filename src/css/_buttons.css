@@ -17,13 +17,29 @@ button, .btn {
 button:hover, .btn:hover {
   opacity: 0.8;
 }
+/*
+ * Primary action = flat blue, one colour, no white flash on hover
+ * (operator, 2026-08-30, task 86bbq5jvz). The old hover repainted the button
+ * near-white and swapped the text to black, which reads as the button
+ * vanishing rather than responding.
+ *
+ * Disabled is a COLOUR, not an opacity: `button, .btn` above fades every
+ * button to 0.8 on hover and legacy.css fades a disabled one to 0.5, and a
+ * half-transparent bright blue still reads as a live button. That is the
+ * confusion behind Publish being missed.
+ */
 .btn-primary {
-  background: var(--btn-bg);
-  color: var(--btn-text);
+  background: var(--btn-blue);
+  color: var(--btn-flat-ink);
 }
-.btn-primary:hover {
-  background: #eaf4ff;
-  color: var(--ink-primary);
+.btn-primary:hover:not(:disabled) {
+  background: var(--btn-blue-hover);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
+.btn-primary:disabled {
+  background: var(--btn-blue-disabled);
+  color: var(--btn-flat-ink);
   opacity: 1;
 }
 .btn-ghost {
