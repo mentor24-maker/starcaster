@@ -1,3 +1,35 @@
+## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
+
+The Builder has two buttons that both say "change template", and until now they
+did opposite things. Open one page in the editor and change its template, and
+the page keeps everything you wrote — only the shared furniture around it, the
+header strip and the footer, gets swapped for the new template's. Tick a batch
+of pages in the list and use Change Template there, and every one of them was
+wiped and refilled with the template's blank starter layout.
+
+That is what happened to the Delray Beach Tennis Center site on 13 September.
+Fifty-seven pages were moved onto the Public Website template in one go, all
+fifty-seven lost their content, and because publishing followed twenty minutes
+later, fifty-one of them sat on the live site reading "Replace this section
+with real content." for about eighteen hours. (The pages were put back the next
+morning from the copies the change itself had banked.)
+
+The batch button now does what the single-page one does: it swaps the shared
+header and footer, pulls them from the current masters so you never get a
+six-week-old menu, and leaves your own content exactly where it was. The
+warning you read before pressing it leads with that, and with the number — "All
+31 content sections on this page are kept exactly as they are" — instead of
+telling you your sections are about to be replaced.
+
+Three things were added underneath, all of them about the same worry: this
+operation has twice done damage while reporting success. If the shared sections
+cannot be read at all, the whole run now stops rather than quietly writing every
+page with its header and footer removed. A page that would come out with less
+content than it went in with is refused instead of written. And after each page
+is saved it is read back and its content counted, not just its total number of
+blocks — swapping content for furniture keeps the total identical, which is
+precisely the kind of loss that would otherwise slip past.
+
 ## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
 
 Open a module's gear icon in the Builder and you get a form. On most panels
