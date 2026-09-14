@@ -360,10 +360,41 @@ function measure(page, nonStretch) {
         const lr = label.getBoundingClientRect();
         const cr = control.getBoundingClientRect();
 
+        /*
+         * A COMPOSITE CONTROL — an entry box sharing its slot with a button.
+         *
+         * Everything else here measures the SLOT, which for a picker is the
+         * grid cell holding an input and a "Choose Image" button side by side.
+         * A slot can be exactly the right width while the input inside it is a
+         * third of its neighbours, and nothing above can tell: a `full` field
+         * is dropped from the width comparisons by design (it is meant to be
+         * wider), so the one field in the manager with something competing for
+         * its room is the one field nobody measures.
+         *
+         * That shipped. Related Posts' Image row had a correct 312px slot
+         * reaching the block's right edge, a 176px button, and a **96px**
+         * input showing `/images/l` where the whole path had been visible
+         * before — beside four 312px siblings, exit 0 (review round 2,
+         * 2026-09-13). It is the slot-versus-control gap that also let the
+         * breadcrumb Separator ship 165px short in sweep 10/15.
+         *
+         * So when a control holds a button AND an entry box, the entry box is
+         * measured too. Only then: an alignment group is all buttons and no
+         * entry, and a lone input is already the slot.
+         */
+        const entryW = (() => {
+          if (!control.querySelector(':scope > button')) return null;
+          const box = control.querySelector(
+            ':scope > input[type="text"], :scope > select, :scope > textarea'
+          );
+          return box ? Math.round(box.getBoundingClientRect().width) : null;
+        })();
+
         return {
           name: (label.textContent || '').trim() || '(unlabelled)',
           kind,
           full,
+          entryW,
           labelW: Math.round(lr.width),
           // The TEXT width, not the box. scrollWidth counts padding, and the
           // 40px of room IS padding — using it here would compare the box to
@@ -922,6 +953,50 @@ function assertLattice(panels, width) {
         `${where}: stretchable fields are ${fieldWidths.length} different widths (${fieldWidths.join('/')}px) — ` +
         stretch.map((f) => `${f.name}=${f.fieldW}`).join(', ')
       );
+    }
+
+    /*
+     * A WIDE FIELD MAY BE WIDER THAN ITS NEIGHBOURS, NEVER NARROWER.
+     *
+     * The assertion that goes with the composite measurement above. A picker
+     * earns its wide row because it needs MORE room than an ordinary field;
+     * ending up with less is the defect, whatever the slot around it measures.
+     *
+     * The baseline is the narrowest ordinary stretchable field in this same
+     * group, so it is derived rather than a number somebody chose: on the
+     * five-track grid the picker's input came to 198px beside 141px fields and
+     * passes, and on the one-pair-per-row grid it came to 96px beside 312px
+     * fields and does not.
+     */
+    const narrowest = fieldWidths.length ? Math.min(...stretch.map((f) => f.fieldW)) : null;
+    if (narrowest !== null) {
+      /*
+       * ONLY the fields the comparison above DROPS — the `full` ones.
+       *
+       * The first version of this ran over every field and was wrong in a way
+       * worth keeping: it failed 14 panels on "V Margin" and "H Margin", whose
+       * control is an input with a 28px stepper beside it (532px inside a
+       * 560px slot). Those are already covered — they are in `stretch`, so the
+       * width assertion measures them — and the group's own minimum IS their
+       * own slot, so the rule was comparing a field against itself and calling
+       * the stepper a defect.
+       *
+       * A `full` field is the one shape nothing else checks, which is the
+       * whole reason this exists. Narrowing to it is not a tolerance; it is
+       * the scope the blind spot actually has.
+       */
+      for (const f of fields.filter((x) => x.full)) {
+        // Two pixels of rounding, not a tolerance for being short: a control
+        // that is genuinely squeezed is short by a third, never by one.
+        if (f.entryW !== null && f.entryW !== undefined && f.entryW + 2 < narrowest) {
+          failures.push(
+            `${where}: "${f.name}" has a ${f.fieldW}px slot but its entry box is only ` +
+            `${f.entryW}px — a button is taking the room. The narrowest ordinary field ` +
+            `here is ${narrowest}px, and a wide field may be wider than its neighbours, ` +
+            'never narrower (the slot reaches the right edge, so nothing else can see this)'
+          );
+        }
+      }
     }
 
     // The room the operator asked for: "40px more than the longest string".

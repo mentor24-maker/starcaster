@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BuilderBlogRelatedPostsModuleSettings } from "./builder-blog-related-posts-module-settings";
@@ -135,14 +136,37 @@ describe("Table of Contents settings panel", () => {
    * sweep shortened it to "Headings", which dropped the only sentence saying
    * what an H3 does on the RENDERED page (review round 1, 2026-09-13). It is
    * prose now rather than a longer heading, so pin the sentence itself — and
-   * it names the `Indent H3s` setting, because the nesting only shows on the
-   * page when that is on (landmine 17: a note that overstates is its own bug).
+   * it names the `Indent H3s` setting, because the nesting only shows when that
+   * is on (landmine 17: a note that overstates is its own bug).
+   *
+   * It overstated in a second way, caught in review round 2: it said "the PAGE
+   * shows that nesting", and `blog-toc` routes to `BlogModulePlaceholder`,
+   * which returns null when `liveSite` is true — a published page renders no
+   * table of contents at all. So the limit is pinned here too, against the
+   * renderer rather than against a remembered fact: while that placeholder
+   * still returns null, the note must say the module is builder-only. When the
+   * module learns to render, this test is what asks for the sentence back.
    */
-  it("still says what an H3 does on the page", () => {
+  it("still says what an H3 does, without promising a page that does not render it", () => {
     const m = html("blog-toc", BuilderBlogTocModuleSettings as never, { items: TOC_ITEMS });
     expect(m).toContain("An H3 belongs to the nearest H2 above it");
     expect(m).toContain("Indent H3s decides whether");
     expect(m).toContain("builder-panel-field-note");
+
+    const renderer = readFileSync(
+      path.resolve(__dirname, "..", "builder-template-preview.tsx"),
+      "utf8"
+    );
+    const stillAPlaceholder = /"blog-toc": "Table of Contents"/.test(renderer)
+      && /function BlogModulePlaceholder[\s\S]*?if \(liveSite\) return null;/.test(renderer);
+    if (stillAPlaceholder) {
+      expect(m).toContain("builder-only");
+      expect(m).not.toContain("the page shows that nesting");
+    } else {
+      expect(m, "blog-toc renders live now — the builder-only caveat is stale").not.toContain(
+        "builder-only"
+      );
+    }
   });
 });
 

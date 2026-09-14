@@ -9660,9 +9660,14 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  *
  * Three of the seven panels carried a hand-rolled item manager built from
  * `.builder-slider-item-card` and `label.field` — the shape W0 says to RETIRE
- * rather than style. Those conversions needed no CSS at all: they reuse
- * `.builder-cards-panel-fields` / `data-lattice-pairs="2"`, which Feature
- * Cards, Carousel and the Tag Cloud already share. What is below is the rest.
+ * rather than style. Those conversions reuse `.builder-cards-panel-fields`,
+ * which Feature Cards, Carousel and the Tag Cloud already share, but they
+ * declare `data-lattice-pairs="1"` rather than `"2"` and so they DO need CSS
+ * of their own: the `--stacked` block below, and the picker rule under it.
+ * (An earlier version of this header said they "needed no CSS at all" and
+ * named `"2"` — wrong on both counts, and dangerous rather than merely untidy:
+ * a later sweep reading it as the inventory would have copied the 2x2 shape
+ * back over this work. Review round 2, 2026-09-13.) What is below is the rest.
  * ------------------------------------------------------------------------ */
 
 /*
@@ -9772,6 +9777,55 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 .builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-control {
   grid-column: 2;
+}
+
+/*
+ * A PICKER IN A ONE-PAIR-PER-ROW MANAGER PUTS ITS BUTTON ON ITS OWN ROW.
+ *
+ * `--wide` asks for the row: label in the label track, control running to the
+ * END of the grid (`grid-column: 2 / -1`). On the five-track grid that is four
+ * tracks of control, so a picker's input still had ~630px after its button
+ * took 176. On THIS grid `2 / -1` **is** column 2 — the same single track every
+ * ordinary field gets — so `--wide` has nothing left to give horizontally and
+ * the button ate the slot from the inside.
+ *
+ * Measured at 1440 before this rule (review round 2, 2026-09-13, reproduced
+ * here): the Related Posts Image row's slot was a correct 312px reaching the
+ * block's right edge at 429, and the input inside it was **96px** — showing
+ * `/images/l` where the before-shot showed the whole
+ * `/images/Gemini_Generated_starcaster_banner.png`. Title, URL, Date and
+ * Categories were 312px each, so the panel had one field a third the width of
+ * its neighbours while every gate went green: `check_panels` drops a `full`
+ * field from the width comparisons by design, and the slot it would have
+ * measured was right.
+ *
+ * The room the input needs is a ROW, not a column, and that is the shape the
+ * panel had before this sweep — the button full width underneath. So the
+ * control becomes a column here: the input takes the whole 312px track, the
+ * button sits under it on the same two edges (L8), and the block still has one
+ * left edge and one right edge. The 40px that separates the input from its
+ * button on a wide row is horizontal room between two controls; stacked, they
+ * are two rows of one block and take the manager's own row-gap.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2, 6px);
+}
+/*
+ * The button takes the row it is now on, both edges.
+ *
+ * `margin-left: auto` is what pushes it to the block's right edge on a wide
+ * row; in a column that is the cross axis, and an auto cross margin turns
+ * `stretch` off. `width: fit-content` (line ~2685) is the other half and the
+ * one that is easy to miss — `align-items: stretch` only stretches an item
+ * whose cross size is `auto`, so a button declaring `fit-content` sat at its
+ * 176px minimum under a 312px input, leaving exactly the notch L8 is about.
+ * Both are undone here rather than left to resolve by accident.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control > .builder-image-picker-field-button {
+  margin-left: 0;
+  width: auto;
 }
 
 /*

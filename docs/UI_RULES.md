@@ -403,8 +403,28 @@ as a rule first, then gets a checker where one is possible.
   before the conversion: each panel's own fields at label-width 125 /
   control-x 125, and every field in its manager at 0. The TOC carried a third
   x of its own, 16px, from an inline `marginLeft` indenting each H3 card.
-  One panel still wears the shape — `blog-category-filter`, which belongs to
-  panel sweep 13/15.
+  **Four manager shapes are still unmeasured, not one.** An earlier version of
+  this line said "one panel still wears the shape — `blog-category-filter`",
+  and that inventory being wrong is the whole mechanism: a later sweep reads
+  this paragraph to find out what is left, and anything missing from it is
+  left behind (review round 2, 2026-09-13). Counted from the sources rather
+  than remembered, a manager is unmeasured when it carries one of the two
+  EXCLUDED classes and declares neither opt-in attribute:
+
+  | Panel | File | Shape |
+  |---|---|---|
+  | `blog-category-filter` | `builder-blog-category-filter-module-settings.tsx` | `.builder-slider-item-grid` |
+  | `social-share` (platform list) | `builder-module-card.tsx` | `.builder-slider-item-grid` |
+  | `program-list` Sessions | `builder-program-list-module-settings.tsx` | `.builder-item-grid--sessions` |
+  | `program-list` Prices | `builder-program-list-module-settings.tsx` | `.builder-item-grid--prices` |
+
+  The first belongs to panel sweep 13/15. The other three belong to no ticket
+  yet. `builder-lattice-inventory.test.tsx` pins this table against the
+  sources, so converting one of them, or adding a fifth, fails a test until
+  this list is updated — the doc cannot silently drift out of date again.
+  (Program List's own item cards ARE measured: they declare
+  `data-lattice-pairs="2"`. It is the two nested session/price grids inside
+  them that are not.)
 
   **A THIRD variant of the labelled block: `--stacked`, one pair per row.**
   The 2x2 shape assumes the manager has a wide block to sit in, which is true

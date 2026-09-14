@@ -60,6 +60,31 @@ passed with the original problem put straight back. They read the panel's own
 source now, which is the only way to see all five tabs at once in a test, and
 all four of the breaks were re-run and watched to fail.
 
+The review caught a second thing on the next pass, and this one you would have
+seen. In the Related Posts editor, the box holding each post's image path had
+shrunk to 96 pixels — about nine characters, `/images/l` — sitting beside four
+312-pixel boxes. The Choose Image button had been sharing that row, and on the
+new one-per-row layout there was no longer room for both. The button moves to
+its own line underneath now, full width, and the path box is 312 pixels like
+everything around it: the whole filename is readable again.
+
+Worth saying why no check caught that, because the answer is now fixed too. A
+field is measured by the space it is *given*, and that space was correct — it
+reached the right edge like every other row. Nothing was looking at how much of
+it the actual typing box got once a button had taken its share. The panel
+checker measures that now, for the one kind of field it had been skipping, and
+it was proved by putting the 96-pixel box back and watching the check fail at
+all three screen widths.
+
+Three smaller corrections came with it. A note listing which editors still need
+this treatment named one when there are four, which is how these get missed —
+that list is now checked by a test, so it cannot quietly go out of date again. A
+comment above the new styling said the opposite of what the code below it did,
+which would have led the next pass to undo this work. And the sentence under the
+headings list promised something the published page does not do: a table of
+contents does not render on a live site yet, so the note now says so instead of
+implying otherwise.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.

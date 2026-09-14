@@ -154,12 +154,23 @@ export function BuilderBlogTocModuleSettings({
                 <>
                   <div className="builder-schema-group-title">Headings</div>
                   {/* The group title used to carry this sentence. It says what an
-                      H3 DOES on the rendered page, which the per-item "H3 · …" head
+                      H3 DOES in the contents list, which the per-item "H3 · …" head
                       row does not (L7), so it comes back as prose rather than as a
-                      longer heading. */}
+                      longer heading.
+
+                      The second sentence is not decoration. The first version said
+                      "the page shows that nesting", and `blog-toc` routes to
+                      `BlogModulePlaceholder`, which returns null when `liveSite` is
+                      true — a published page renders no table of contents at all
+                      today. So the note promised a rendered behaviour that does not
+                      exist, which is landmine 17 (a note that overstates is its own
+                      bug) and exactly the trap the same sentence was rewritten once
+                      already to avoid. Say the limit instead of implying the
+                      opposite. Delete that sentence when the module renders live. */}
                   <p className="panel-copy builder-panel-field-note">
                     An H3 belongs to the nearest H2 above it. Indent H3s decides whether
-                    the page shows that nesting.
+                    the contents list shows that nesting. This module is builder-only for
+                    now — a published page does not render a table of contents yet.
                   </p>
                   <div className="builder-cards-panel-fields builder-cards-panel-fields--stacked" data-lattice-pairs="1">
                     {items.map((item, index) => (
