@@ -568,7 +568,7 @@ as a rule first, then gets a checker where one is possible.
   before the conversion: each panel's own fields at label-width 125 /
   control-x 125, and every field in its manager at 0. The TOC carried a third
   x of its own, 16px, from an inline `marginLeft` indenting each H3 card.
-  **Four manager shapes are still unmeasured, not one.** An earlier version of
+  **Three manager shapes are still unmeasured, not one.** An earlier version of
   this line said "one panel still wears the shape — `blog-category-filter`",
   and that inventory being wrong is the whole mechanism: a later sweep reads
   this paragraph to find out what is left, and anything missing from it is
@@ -586,14 +586,13 @@ as a rule first, then gets a checker where one is possible.
 
   | Panel | File | Shape |
   |---|---|---|
-  | `blog-category-filter` | `builder-blog-category-filter-module-settings.tsx` | `.builder-slider-item-grid` |
   | `social-share` (platform list) | `builder-module-card.tsx` | `.builder-slider-item-grid` |
   | `program-list` Sessions | `builder-program-list-module-settings.tsx` | `.builder-item-grid--sessions` |
   | `program-list` Prices | `builder-program-list-module-settings.tsx` | `.builder-item-grid--prices` |
 
-  The first belongs to panel sweep 13/15. The other three belong to no ticket
-  yet. `builder-lattice-inventory.test.tsx` pins this table against the
-  sources, so converting one of them, or adding a fifth, fails a test until
+  `blog-category-filter` was a fourth until panel sweep 13/15 (ticket
+  86bbjt1bd) converted it. These three belong to no ticket yet. `builder-lattice-inventory.test.tsx` pins this table against the
+  sources, so converting one of them, or adding a fourth, fails a test until
   this list is updated — the doc cannot silently drift out of date again.
   (Program List's own item cards ARE measured: they declare
   `data-lattice-pairs="2"`. It is the two nested session/price grids inside
@@ -1275,6 +1274,37 @@ Advanced — is the follow-on pass the operator sequenced after this.
   them satisfies W9. What is forbidden is `max-width: none` on something
   that can grow, which is exactly what the lattice control rule and the
   `label.field` rule both declared before this.
+
+  **A COMPOSITE control escapes the ceiling AND the stretch, and the two
+  failures look nothing alike** (panel sweep 13/15, ticket 86bbjt1bd,
+  2026-09-13). The lattice's control rule matches only DIRECT children of
+  `.builder-module-field-control`, so anything that wraps its parts in an
+  element of its own — `.builder-project-data-picker` is a select plus an
+  optional "Custom…" input inside a `<span>` — is neither capped nor
+  stretched. Panel sweep 15/15 found and bounded the first half of that:
+  in Custom mode the span is 846px at 1440, it SETS the column's
+  `max-content` control track, and every 560px-capped control beside it
+  stops 286px short.
+
+  **Capping it is only half the fix.** With no Custom input the same span
+  is just the select at its own content width, and nothing stretches it —
+  measured on blog-newsletter-subscribe's CRM Form: **226px in a 373px
+  slot**, 147px short of the edge its Headline and Description reach. Same
+  control, same row, opposite direction, and a cap cannot touch it. The
+  fix is both together — `width: 100%` puts the block's right edge on the
+  column's, `max-width` holds it to the ceiling — plus `flex: 1 1 auto` on
+  the select, or filling the span only moves the notch inside it, which
+  reads identically to the eye.
+
+  **Neither half fails `check:panels`, and that is not a gap in the
+  check.** Both were live on four and one panel respectively while the run
+  came back green at all three widths, because the assertions compare
+  controls WITHIN a column and the whole column moved together — W0
+  holding perfectly while L8 was broken, exactly as L8's own `[eye]` tag
+  says. Measure a composite control by hand; do not read a green sweep as
+  covering it. Six panels still carry this live: blog-post-tags,
+  blog-post-manager, site-search, event-manager, event-calendar,
+  event-detail.
 
 ## C — Controls: pick the right one
 

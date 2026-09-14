@@ -196,3 +196,26 @@ test('reading a legacy-shaped page back keeps each section following its saved s
   assert.equal(section.canonical, true);
   assert.equal(section.locked, true);
 });
+
+// The lineage stamp from task 86bbwe530 landed on main while this passthrough
+// was in review, so the two met only at the merge. It rides the same path as
+// savedSectionId: a vanilla save goes through the migrator, and a stamp dropped
+// there means the shared-section retry fix silently does nothing on that page.
+test('the canonicalSourceHash lineage stamp survives a vanilla save, in the migrator and through the serializer', () => {
+  const section = editorSection({
+    savedSectionId: 'saved-section-fixture-menu-banner',
+    canonical: true,
+    canonicalSourceHash: 'h1a2b3c4',
+  });
+
+  const migrated = migrateLegacyLayoutSections([section]).sections[0];
+  assert.equal(migrated.canonicalSourceHash, 'h1a2b3c4', 'the migrator itself must carry it — it is the brace, not the belt');
+
+  const serialized = serializeBuilderDocument({ layoutSections: [section] });
+  const stored = serialized.sections.find((s) => s.id === 'section-following-copy');
+  assert.equal(stored.canonicalSourceHash, 'h1a2b3c4');
+
+  const unstamped = serializeBuilderDocument({ layoutSections: [editorSection()] })
+    .sections.find((s) => s.id === 'section-following-copy');
+  assert.equal(unstamped.canonicalSourceHash, undefined, 'a section never pushed to must not gain a stamp');
+});
