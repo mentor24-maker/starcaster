@@ -9170,11 +9170,129 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: var(--ink-secondary);
 }
 
+/*
+ * W0 / L8 — a group's controls are a GRID, not a wrapping flex bar.
+ *
+ * Panel sweep 14/15, ticket 86bbjt1be. This was `flex-wrap: wrap` with every
+ * control sized to its own content, which meant a group that wrapped onto
+ * three lines started each line wherever the previous one happened to run
+ * out. Measured at 1440 before the fix, the Structure group's controls began
+ * at x=441, 611 / 441, 539, 649 / 441, 547 — three lines, seven different
+ * left edges, not one column among them. That IS the sentence that opened
+ * this whole sweep ("the column width varies arbitrarily"), still live in
+ * the one panel nobody had measured.
+ *
+ * TWO tracks, fixed, not `auto-fit`. A responsive track count would change
+ * the number of columns between 1440 and 1920, and the acceptance criterion
+ * is that the form reads as one rectangle at all three — a panel that
+ * reflows is a panel whose alignment has to be re-argued at every width.
+ * Two also holds the longest label here ("Card Border Color", 134px) without
+ * cropping it at the narrowest group width the bar produces.
+ *
+ * `align-items: start`, not `flex-end`, and the reason is about ROW HEIGHT,
+ * not about labels wrapping. A grid row is as tall as its tallest cell, and
+ * `flex-end` was left over from the flex bar this replaced. With every field
+ * now filling its track, the two cells on a row are routinely different
+ * heights — a two-line segmented control beside a single-line select — and
+ * bottom-alignment pushes the shorter pair's LABEL down the row instead of
+ * leaving it on the row's top edge, so two labels on one line sit at two
+ * different heights. `start` puts every label on the row's top edge.
+ *
+ * An earlier version of this comment blamed a two-line LABEL shoving its own
+ * field out of line. Round 1 of this ticket's review measured that and it is
+ * not happening: no `.bcm-label` in this panel wraps at 1440, 1600 or 1920.
+ * The CSS was right and the explanation was wrong, which is the more expensive
+ * of the two to leave in place — the next person reads the comment, not the
+ * measurement.
+ */
 .builder-react-root .bcm-group-controls {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
-  align-items: flex-end;
+  align-items: start;
+}
+
+/*
+ * A grid item defaults to `min-width: auto`, which refuses to shrink below
+ * its content — so a long select would push its track wider than its sibling
+ * and put the two columns out of step, which is the defect one level along.
+ */
+.builder-react-root .bcm-group-controls .bcm-control {
+  min-width: 0;
+}
+
+/*
+ * ONE field width per column: every stretchy control fills its track.
+ *
+ * Listed by type rather than as `> *`, because the two NON-STRETCH shapes
+ * the panel lattice already recognises are here too — a colour swatch and a
+ * checkbox are fixed-size controls, and stretching them across a 180px track
+ * would leave a 28px box floating at one end of an empty row. That is the
+ * same exception `check_panels` makes for `check`, `align` and `color`.
+ */
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-input,
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-num-row,
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-btn-group {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/*
+ * The number box takes the track and its unit sits at the end of it, so
+ * "Card Border" and "Card Radius" end on the same line as the selects beside
+ * them instead of stopping at their own 56px.
+ */
+.builder-react-root .bcm-group-controls .bcm-num-row > .bcm-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+/*
+ * A segmented control fills its track, and its buttons share the spare room
+ * in proportion to their own words rather than being forced to equal halves.
+ *
+ * `flex: 1 1 0` was the first attempt and it broke "Side-by-side" onto two
+ * lines: equal halves gave each button ~89px of a 179px track, which is less
+ * than that word needs. `auto` grows each button FROM its natural width, so
+ * the pair still ends exactly on the block edge (L8) and neither wraps —
+ * L6a's button-track rule is that both edges line up, not that the buttons
+ * are the same size. `nowrap` is the guard: if a longer label is ever added
+ * here the control overflows visibly instead of silently going two-line.
+ */
+.builder-react-root .bcm-group-controls .bcm-btn-group > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/*
+ * The field face itself, lifted out of an inline style object (W0). The
+ * declarations are the ones `sel` carried in
+ * `components/builder-template-preview.tsx`; the WIDTH it also carried is
+ * deliberately not among them — width belongs to the track, never to the
+ * field.
+ *
+ * TOKENS, not the raw values `sel` held, because `check_conventions` [R3]/[R8]
+ * blocks a colour literal or a one-off type size in a stylesheet — and it is
+ * right to: those three values were invisible while they sat inline, and
+ * copying them across unchanged would have smuggled them past the gate that
+ * exists to make the count of one-off values go down.
+ *
+ * Two of the three move by a hair, which is worth stating rather than
+ * glossing. The white is an exact match for `--bg-surface`. The border colour
+ * lands on `--border-strong`, one unit of blue away from what was inline. The
+ * size lands on `--text-sm`, 0.32px larger than the 0.8rem that was. Neither
+ * is visible at any width, and both are now values the theme owns rather than
+ * values this file does.
+ */
+.builder-react-root .bcm-input {
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: var(--text-sm);
+  background: var(--bg-surface);
 }
 
 /* A number and its unit read as one control, so they stay on one line. */
@@ -9667,6 +9785,34 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .is-lattice.builder-module-editor--admin-site-settings .builder-module-field-control > .builder-project-data-picker,
 .builder-react-root .is-lattice.builder-module-editor--admin-support-form .builder-module-field-control > .builder-project-data-picker,
 .builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/*
+ * The same composite-picker escape, on the Blog Post Manager panel.
+ *
+ * Panel sweep 14/15, ticket 86bbjt1be. The block above names this panel in
+ * its own list of ten still carrying the defect, and says the one-line fix
+ * belongs to whichever sweep reaches the panel. This is that sweep.
+ *
+ * Measured here at 1440/1600/1920 before the fix: Edit Page URL and View Page
+ * URL each rendered an 846px picker (select 560 + gap + input 280) and, because
+ * the column's control track is `max-content`, THEY sized the track. Label,
+ * Background, V Margin and H Margin all stopped correctly at the 560px ceiling
+ * and so ended 286px short of the two rows that set the width — one column, six
+ * rows, two right edges. That is the notch L8 names.
+ *
+ * Bounding the BLOCK, not widening the other controls (W9 over L8 where they
+ * disagree). `max-width` can only ever lower a used width, so a panel whose
+ * track was already under the ceiling is untouched.
+ *
+ * The remaining panels on 15/15's list (blog-tag-cloud, blog-category-filter,
+ * blog-post-tags, blog-search, blog-search-results, site-search, event-manager,
+ * event-calendar, event-detail) are NOT in this ticket's scope — one panel
+ * family per PR — and are left for sweeps 11-13/15. Naming them is the point:
+ * an undocumented omission is indistinguishable from an oversight.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-post-manager .builder-module-field-control > .builder-project-data-picker {
   max-width: var(--builder-field-long-max, 560px);
 }
 

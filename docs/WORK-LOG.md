@@ -52,6 +52,90 @@ actually looked at every page you ticked: asked about five pages it was given no
 layouts for, the old wording answered "these pages have no content sections of
 their own, so there is nothing to lose here", which is the most reassuring
 sentence in the dialog and, in that case, the least supported.
+## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
+
+A settings panel should read as one neat rectangle: every label starting on the
+same line down the left, every box finishing on the same line down the right.
+Three blog panels were on the list to be brought onto that layout. I measured
+all three in a real browser first, at three screen widths, before changing a
+line — and the ticket was wrong about which ones needed it.
+
+The Category Manager was already correct, so it was left alone and that was
+said plainly rather than given a tidy-looking edit. The Post Manager had one
+real gap: its two "page URL" rows are a dropdown with a text box beside it, and
+the rule that stops any single control getting too wide had never reached that
+pairing, so those two rows ran 286 pixels further right than every row beneath
+them. One column, two right edges. They all finish on the same line now.
+
+The Card Manager is the interesting one, and its problem was not in the file
+the ticket named. That panel's entire contents is the Card Template designer,
+which lives about four hundred lines away in another file. Its controls were
+placed by "put the next one wherever the last one ended", so a group of seven
+settings sat at seven different left edges across three wrapped lines, every
+box a different width. That is precisely the thing Dane pointed at when he
+opened this whole sweep a month ago, still sitting there untouched.
+
+The reason it survived a month is the part worth remembering. The automatic
+layout checker recognises three kinds of form row, and this designer is built
+from a fourth kind it had never been taught. So a run announcing "684 panels,
+all correct" had never once looked at it. It was not passing; it was absent.
+The checker knows that fourth shape now, the panel is measured along with the
+rest, and four separate things were broken on purpose and watched to fail
+before any of the green was believed.
+
+Review sent this back once, and the send-back found something worth having.
+The new guard that stops a fixed width creeping back onto one of these boxes
+only recognised one way of writing it. The other spelling — the commoner one,
+as it happens — walked straight past it. A guard that only catches the spelling
+you already removed is not a guard, so it was widened and then broken on
+purpose in five different spellings, each one watched to fail. Three smaller
+things went the same way: two checks that would have gone quiet instead of
+failing if the code around them were renamed, and a skip in the measuring tool
+that nothing had ever exercised for the case it was added for.
+
+One hole is left open deliberately and is written down rather than quietly
+carried: the checker still cannot see the Post Manager's kind of defect at all,
+and nine other panels have it live today. Closing it would flag all nine at
+once, which belongs to the sweeps that own those panels, not to this one.
+## 2026-09-14 — Saving a Builder page no longer quietly unlinks the shared blocks on it (#695)
+
+A shared block is one you build once and reuse on many pages: change the
+original and every page carrying it follows along. Until now, opening a page in
+the Builder and clicking **Save Page** — changing nothing at all — silently cut
+that link on every shared block on the page. The header flipped from *Following*
+to *Independent*, nothing was said, and the page looked exactly the same. The
+next time the original was updated, that page just did not get it. Which turns
+up much later as "the footer will not update on that page", with no way to guess
+which save did it.
+
+The cause was a piece of machinery for importing pages from the old Normie
+system. It recognises an old-style page by looking for a couple of settings
+objects — and the current page editor happens to attach those same two objects to
+every section it saves. So every ordinary save was being treated as an import,
+rebuilt from a fixed list of fields, and the list did not include the link back
+to the original. There was already a safety net downstream whose whole job is to
+put that link back; it was being handed a page the link had already been stripped
+from, so it had nothing to work with.
+
+The fix carries the link through the rebuild, for blocks and for the individual
+modules inside them, and leaves everything else exactly as it was. The ticket
+suggested a different repair — teaching the importer to recognise old pages more
+narrowly — and that was checked and set aside: the signal it proposed is one
+modern pages also carry, so it would not have fixed this, and tightening it
+further risks a real old page quietly failing to import, which is worse.
+
+Verified in a real browser against a local copy of the live data, both ways: on
+the old code the click wipes the links, on the new code they survive.
+
+A review sent this back once, and the second pass found something worth keeping.
+The safety net mentioned above had in fact been broken since the day it was
+written — it was meant to fall back on the page the browser sent whenever the
+rebuild lost the link, but it always reported an answer even when it had none,
+and that empty answer overwrote the real one every time. So the net had never
+once caught anything. It is repaired here, which means the link now survives in
+two independent ways rather than one. Each half of the fix also now has a test
+that goes red when that half is deleted, checked by deleting it and watching the
+named test fail, so a future tidy-up cannot quietly remove either one.
 
 ## 2026-09-13 — Six blog settings panels line up as one block instead of a stack of loose rows (#688)
 
