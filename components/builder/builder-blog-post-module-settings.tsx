@@ -75,14 +75,23 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
           panel; the editor's background is blue, and an unselected tab was
           rendering a mid grey-blue on it — "Meta", "SEO" and "Display" were
           close to invisible in the before screenshot. They take the editor's own
-          heading token now, in `_builder-react-overrides.css`. */}
-      <div className="builder-settings-section-tabs" role="tablist">
+          heading token now, in `_builder-react-overrides.css`.
+
+          These are deliberately PLAIN BUTTONS, and the ARIA tab roles that
+          were here briefly have been taken back out. `role="tablist"` /
+          `role="tab"` is a promise: a screen reader announces a tab list and
+          tells the user to move through it with the arrow keys, and each tab
+          is expected to point at a `role="tabpanel"` via `aria-controls`.
+          None of that exists here — there is no panel element to point at and
+          no roving-tabindex handling — so the roles announced a pattern the
+          keyboard did not implement, which is worse than no roles at all. As
+          five ordinary buttons, Tab and Enter do exactly what is announced.
+          Adding the roles back means building the whole pattern with them. */}
+      <div className="builder-settings-section-tabs">
         {(Object.keys(SECTION_LABELS) as Section[]).map((key) => (
           <button
             key={key}
             type="button"
-            role="tab"
-            aria-selected={section === key}
             className={`builder-settings-section-tab${section === key ? " is-active" : ""}`}
             onClick={() => setSection(key)}
           >

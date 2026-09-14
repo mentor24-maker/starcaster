@@ -279,4 +279,50 @@ describe("Blog Post settings panel", () => {
     // The rendered Content tab as well, kept as the cheap direct check.
     expect(markup()).not.toMatch(/style="[^"]*\bwidth:/);
   });
+
+  /**
+   * REVIEW ROUND 3 (2026-09-14) — this round added `role="tablist"`,
+   * `role="tab"` and `aria-selected` to the tab bar, and nothing else. Those
+   * roles are a promise to a screen-reader user: they announce a tab list,
+   * say the arrow keys move through it, and say each tab owns a
+   * `role="tabpanel"` named by `aria-controls`. None of the three existed, so
+   * the arrow keys did nothing and there was no panel to point at — a worse
+   * state than the plain buttons on `main`, which announced five buttons and
+   * did exactly that.
+   *
+   * It also crossed this ticket's own Non-goal: "do not change what any
+   * setting does, only how its row is laid out." How a control is ANNOUNCED
+   * and NAVIGATED is behaviour.
+   *
+   * So the rule is all-or-nothing, and it is asserted that way rather than as
+   * "never use role=tab": a later sweep is free to build the real pattern,
+   * and this test asks only that the panel element exist before the roles
+   * claiming it do. Written against the SOURCE for the same reason as the two
+   * tests above — the roles live on four of the five tabs the renderer never
+   * opens.
+   */
+  it("does not announce a tab pattern it has not implemented", () => {
+    /*
+     * Comments STRIPPED, and the first run of this test is why: the paragraph
+     * in the panel explaining WHY the roles were removed names `role="tab"`
+     * and `role="tablist"` in prose, so reading the raw source took the
+     * "claims the pattern" branch and demanded a tabpanel from a file whose
+     * only mention of one is a sentence saying there isn't one. A test that
+     * cannot tell code from a comment about code is not measuring the code.
+     * Block comments only — every prose block in these panels is one, and
+     * stripping `//` would have to reason about `https://` inside strings.
+     */
+    const src = source().replace(/\/\*[\s\S]*?\*\//g, "");
+
+    if (/role="tab"/.test(src)) {
+      // Claiming the roles means owing the rest of the pattern.
+      expect(src).toMatch(/role="tabpanel"/);
+      expect(src).toMatch(/aria-controls=/);
+      expect(src).toMatch(/onKeyDown=/);
+    } else {
+      // The status quo, and the honest one: plain buttons, no orphan roles.
+      expect(src).not.toMatch(/role="tablist"/);
+      expect(src).not.toMatch(/aria-selected/);
+    }
+  });
 });

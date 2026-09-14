@@ -411,6 +411,14 @@ as a rule first, then gets a checker where one is possible.
   than remembered, a manager is unmeasured when it carries one of the two
   EXCLUDED classes and declares neither opt-in attribute:
 
+  <!-- LATTICE-INVENTORY-TABLE — `builder-lattice-inventory.test.tsx` finds the
+       table by this marker and fails if the marker is missing. Anchoring on a
+       sentence meant that rewording it (and the next sweep WILL reword it, since
+       converting one makes it three) silently matched nothing, and the test then
+       blamed the table for omitting every file instead of saying the anchor had
+       moved. Review round 3, 2026-09-14. Keep this comment directly above the
+       table. -->
+
   | Panel | File | Shape |
   |---|---|---|
   | `blog-category-filter` | `builder-blog-category-filter-module-settings.tsx` | `.builder-slider-item-grid` |
@@ -455,6 +463,69 @@ as a rule first, then gets a checker where one is possible.
   manager. So this check catches a field that disagrees with its neighbours,
   which is W0; it does not catch a block that disagrees with its own outline,
   which is L8 and still **[eye]** exactly as L8 says.
+
+  <!-- CHECKER-BLIND-SPOTS -->
+  **What the panel checker cannot see — a `full` field outside a declared
+  manager.** Recorded here because this ticket's own rule says an undocumented
+  exemption is indistinguishable from an oversight (review round 3,
+  2026-09-14). `check_panels` drops a `full`-width field from its field list
+  ENTIRELY unless the group around it declares `data-lattice-pairs`
+  (`scripts/ui/check_panels.mjs`, the `full && !group.hasAttribute(...)` line).
+  The drop happens before any comparison runs, so such a field is not merely
+  excluded from the width comparison — it is never measured at all.
+
+  The consequence is a composite control: an image picker is one slot holding
+  an entry box plus a **Choose Image** button. The slot can reach the block's
+  right edge correctly while the entry box inside it is squeezed to a third of
+  its neighbours, and no browser gate reports it. Sweep 12/15 added an
+  entry-box assertion that catches exactly this, but only inside a DECLARED
+  manager — which is where its own defect was.
+
+  Measured at 1440 on 2026-09-14 across the app's 14 composite picker fields:
+  four are in undeclared ordinary columns and unmeasured, and three of those
+  are visibly squeezed —
+
+  | Panel | Field | Slot | Entry box | Ordinary sibling |
+  |---|---|---|---|---|
+  | `blog-post-card` | Featured Image | 373 | **207** | 373 |
+  | `blog-author-bio` | Photo | 373 | **207** | 373 |
+  | `blog-newsletter-subscribe` | Image URL | 373 | **207** | 373 |
+
+  29 characters of a 45-character path, beside siblings showing the whole
+  thing. **Measured identically on `main`, so this is pre-existing and belongs
+  to no ticket yet** — it was found while reviewing sweep 12/15 and is written
+  down rather than fixed there, because two of these panels would have been
+  fixed outside that ticket's scope and the third is outside it entirely. The
+  cheap fix is to extend the entry-box assertion to ordinary columns; the cost
+  is that it fails three panels on day one, which is a decision for whoever
+  takes it, not a thing to slip into a layout sweep.
+
+  `builder-lattice-inventory.test.tsx` pins this section to the code, so the
+  day the drop stops happening the doc is forced to stop claiming it does.
+
+  **A fourth instance, and this one is NOT pre-existing — Blog Post's Meta tab.**
+  Measured at 1440 on 2026-09-14, `blog-post` → **Meta** → *Image*: entry box
+  **207px** inside a 373px slot, beside Slug / Author / Publish Date / Excerpt
+  at 373px each. On `main` the same box is **395px** — the widest control on
+  that tab. Bringing the tab onto one lattice (this sweep) did what the ticket
+  asked, every slot now ending on 595, and in doing so took 188px off the one
+  control whose room a button competes for. It sits on the **Meta** tab rather
+  than the Content tab the panel opens on, which is why three review rounds and
+  the reviewer's own 14-picker sweep walked past it: the panel renders one tab
+  at a time, so a browser sweep sees Content and nothing else.
+
+  **The obvious fix was tried, measured, and rejected.** Stacking the button
+  under the input — the rule that fixed the identical defect inside the
+  `--stacked` item managers — gives the picker its whole track, and costs more
+  than it buys: the picker's one-row `max-content` was the only thing holding
+  that column at 373, so stacking collapses the **whole tab** to 218px and the
+  Slug (`junior-high-performance-academy`, 282px of text) starts truncating.
+  That trades one squeezed field for five narrower ones and a truncated name —
+  the operator's own complaint about this family of panels, arrived at from the
+  other direction. The real question is what width a lattice column should take
+  when its content is a file path and an `<input>`'s intrinsic width (~216px)
+  does not know what it holds; that is a W0/W9 decision, not a layout tidy-up,
+  and it is left open here deliberately rather than settled inside a sweep.
 
   **Named exemption — the Post List panel's Card Manager note.** Its Frame axis
   holds one `num` field, so W0 keeps that column about 180px wide and the

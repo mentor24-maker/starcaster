@@ -976,14 +976,39 @@ function assertLattice(panels, width) {
        * The first version of this ran over every field and was wrong in a way
        * worth keeping: it failed 14 panels on "V Margin" and "H Margin", whose
        * control is an input with a 28px stepper beside it (532px inside a
-       * 560px slot). Those are already covered — they are in `stretch`, so the
-       * width assertion measures them — and the group's own minimum IS their
-       * own slot, so the rule was comparing a field against itself and calling
-       * the stepper a defect.
+       * 560px slot). The reason that was wrong is ONE reason, not two: those
+       * fields are in `stretch`, so `narrowest` is drawn from their own slots,
+       * and the rule was comparing a field against itself and calling the
+       * stepper a defect.
        *
-       * A `full` field is the one shape nothing else checks, which is the
-       * whole reason this exists. Narrowing to it is not a tolerance; it is
-       * the scope the blind spot actually has.
+       * REVIEW ROUND 3 (2026-09-14) corrected this comment, and the sentence
+       * it removed is worth naming because it is the kind a later sweep reads
+       * to decide it need not look. It said a non-`full` composite is
+       * "already covered — they are in `stretch`, so the width assertion
+       * measures them". IT DOES NOT. The width assertion above compares
+       * `fieldW`, which is the SLOT; no assertion anywhere reads `entryW`
+       * except this one. A non-`full` composite's entry box is measured by
+       * nothing — it is merely not FALSELY failed, which is a different thing
+       * from being checked.
+       *
+       * WHAT THIS STILL DOES NOT SEE, stated plainly so nobody has to
+       * rediscover it. Line ~343 drops a `full` field from the field list
+       * ENTIRELY unless its group declares `data-lattice-pairs`, and that drop
+       * happens before any of this runs. So this assertion reaches a picker
+       * inside a DECLARED manager and no other picker in the app. Measured at
+       * 1440 while reviewing this PR: 4 of the app's 14 composite picker
+       * fields are in undeclared ordinary columns and unmeasured, and 3 of
+       * those show a 207px entry box inside a correct 373px slot beside 373px
+       * siblings — `blog-post-card` Featured Image, `blog-author-bio` Photo,
+       * `blog-newsletter-subscribe` Image URL. Identical on `main`, so
+       * pre-existing rather than introduced here. The exemption and its reason
+       * are written down in `docs/UI_RULES.md` ("What the panel checker cannot
+       * see"), and `builder-lattice-inventory.test.tsx` pins that table to this
+       * code so it cannot rot quietly.
+       *
+       * A `full` field inside a declared manager is the one shape nothing else
+       * checks, which is the whole reason this exists. Narrowing to it is not
+       * a tolerance; it is the scope this assertion actually has.
        */
       for (const f of fields.filter((x) => x.full)) {
         // Two pixels of rounding, not a tolerance for being short: a control

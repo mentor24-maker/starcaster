@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 const COMPONENTS = path.resolve(__dirname);
 const UI_RULES = path.resolve(__dirname, "..", "..", "docs", "UI_RULES.md");
+const CHECK_PANELS = path.resolve(__dirname, "..", "..", "scripts", "ui", "check_panels.mjs");
 
 /** The two classes `check_panels` drops from its field measurement, by name. */
 const EXCLUDED = ["builder-slider-item-grid", "builder-item-grid"];
@@ -106,11 +107,70 @@ describe("the lattice inventory", () => {
      * is pinned is that every unmeasured FILE appears in the doc's table, so a
      * manager cannot be in the code inventory and missing from the one a human
      * reads.
+     *
+     * REVIEW ROUND 3 (2026-09-14) — this used to find the table with
+     * `indexOf("Four manager shapes are still unmeasured")` and slice from it.
+     * That sentence counts the rows, so the next sweep to convert one WILL
+     * reword it; `indexOf` would then return -1, `slice(-1)` would yield the
+     * document's last character, and every assertion below would fail saying
+     * the table omits every file — blaming the table for an anchor that had
+     * moved. The anchor is now a marker comment that carries no facts, and
+     * the test proves it FOUND it before concluding anything from what
+     * follows.
      */
-    const table = doc.slice(doc.indexOf("Four manager shapes are still unmeasured"));
+    const MARKER = "<!-- LATTICE-INVENTORY-TABLE";
+    const at = doc.indexOf(MARKER);
+    expect(
+      at,
+      `docs/UI_RULES.md no longer carries the ${MARKER} marker — put it back ` +
+        "directly above the inventory table. Until it is there this test cannot " +
+        "tell a missing panel from a moved anchor."
+    ).toBeGreaterThan(-1);
+
+    const table = doc.slice(at);
     for (const entry of unmeasuredManagers()) {
       const file = entry.split(" ")[0];
       expect(table, `docs/UI_RULES.md does not name ${file}`).toContain(file);
     }
+  });
+
+  /*
+   * THE OTHER BLIND SPOT, pinned the same way and for the same reason.
+   *
+   * A manager can be unmeasured (above). So can a single FIELD: `check_panels`
+   * drops a `full`-width field from its field list entirely unless the group
+   * around it declares `data-lattice-pairs`, and that drop runs before any
+   * comparison. An image picker in an ordinary column is therefore measured by
+   * nothing — its slot can reach the block edge correctly while the entry box
+   * inside it is a third of its neighbours.
+   *
+   * Sweep 12/15's round-3 review found three panels in exactly that state and
+   * asked for the exemption to be written down rather than fixed outside its
+   * scope. A written exemption nothing checks is how the manager inventory
+   * above went stale, so this pins the doc section to the line of code that
+   * makes the claim true: the day that drop stops happening, this test fails
+   * and the doc is forced to stop describing it.
+   */
+  it("does not let the doc keep describing a blind spot the code has closed", () => {
+    const doc = readFileSync(UI_RULES, "utf8");
+    const checker = readFileSync(CHECK_PANELS, "utf8");
+
+    const documented = doc.includes("<!-- CHECKER-BLIND-SPOTS -->");
+    // The drop itself, matched on its shape rather than on a line number.
+    const drops = /full\s*&&\s*!group\.hasAttribute\(\s*['"]data-lattice-pairs['"]\s*\)/.test(
+      checker
+    );
+
+    expect(
+      documented,
+      drops
+        ? "check_panels still drops a `full` field outside a declared manager, " +
+            "but docs/UI_RULES.md no longer carries the <!-- CHECKER-BLIND-SPOTS --> " +
+            "section describing it. An undocumented exemption is indistinguishable " +
+            "from an oversight (ticket 86bbjt1bc)."
+        : "check_panels no longer drops a `full` field outside a declared manager — " +
+            "good. Now delete the <!-- CHECKER-BLIND-SPOTS --> section from " +
+            "docs/UI_RULES.md, which still tells the next sweep that it does."
+    ).toBe(drops);
   });
 });

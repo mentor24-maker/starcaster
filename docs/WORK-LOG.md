@@ -85,6 +85,40 @@ headings list promised something the published page does not do: a table of
 contents does not render on a live site yet, so the note now says so instead of
 implying otherwise.
 
+A third review pass sent it back once more, for three things, all now done. The
+tab bar across the top of the Blog Post panel had been quietly told to announce
+itself to screen-reader software as a "tab list" — which promises that the arrow
+keys move between the tabs and that each one opens a named panel. Neither was
+built, so the announcement was a promise the keyboard did not keep, and it was a
+change in behaviour in a job that was only meant to move rows around. They are
+plain buttons again, as they were before this work, and a test now says that if
+anyone adds those announcements back they have to build the rest of the pattern
+with them.
+
+The second was a comment in the checker that claimed a kind of field was
+"already covered" when nothing was measuring it. That sentence is the sort the
+next pass reads before deciding it need not look, so it has been replaced with
+what is actually true, plus a written list of what the checker still cannot see.
+The third was a test that found a paragraph in the rules document by quoting a
+sentence from it — and that sentence counts something, so the next pass to change
+the count would have broken the test in a way that blamed the wrong thing. It
+looks for a fixed marker now and says so plainly if the marker is missing.
+
+One thing is recorded rather than fixed, deliberately. On the Blog Post panel's
+**Meta** tab, the box holding the featured image path is 207 pixels wide beside
+four 373-pixel boxes — the same complaint as the Related Posts one above, in a
+second place. It was found by measuring this branch and `main` side by side,
+which is also what showed it is new: `main` renders that box at 395 pixels. It
+had been missed three times because it is on a tab the panel does not open on.
+The obvious repair — moving the button to its own line, exactly as was done for
+Related Posts — was tried and measured and taken back out: that button was the
+only thing holding the column open, so the fix shrank every field on the tab
+from 373 to 218 pixels and started cutting off the web address underneath. That
+trades one short field for five, which is the thing you originally complained
+about. What width a column should take when it holds a file path is a genuine
+design question rather than a tidy-up, so it is written down in the rules
+document with both sets of measurements and left for a decision.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.
