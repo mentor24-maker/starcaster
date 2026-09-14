@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BuilderBlogRelatedPostsModuleSettings } from "./builder-blog-related-posts-module-settings";
@@ -128,6 +129,21 @@ describe("Table of Contents settings panel", () => {
     expect(m).toContain("H3 · Court fees");
     expect(m).not.toMatch(/margin-left/);
   });
+
+  /**
+   * The group title was "Headings — H3s indent under the nearest H2" and this
+   * sweep shortened it to "Headings", which dropped the only sentence saying
+   * what an H3 does on the RENDERED page (review round 1, 2026-09-13). It is
+   * prose now rather than a longer heading, so pin the sentence itself — and
+   * it names the `Indent H3s` setting, because the nesting only shows on the
+   * page when that is on (landmine 17: a note that overstates is its own bug).
+   */
+  it("still says what an H3 does on the page", () => {
+    const m = html("blog-toc", BuilderBlogTocModuleSettings as never, { items: TOC_ITEMS });
+    expect(m).toContain("An H3 belongs to the nearest H2 above it");
+    expect(m).toContain("Indent H3s decides whether");
+    expect(m).toContain("builder-panel-field-note");
+  });
 });
 
 describe("Blog Post settings panel", () => {
@@ -186,18 +202,57 @@ describe("Blog Post settings panel", () => {
    * Prose in a lattice column must span both tracks, or it takes a label cell
    * and every pair below it runs half a cell out of phase — the blog-search
    * defect (`_builder-react-overrides.css`, the `.builder-schema-bare` note).
+   * W0's absolute rides along with it: never a width on an individual field.
+   *
+   * REVIEW ROUND 1 (2026-09-13) — the two assertions below used to render the
+   * panel and read the markup, and the panel opens on its Content tab, which
+   * holds no prose at all. The reviewer put the original defect back (the
+   * Taxonomy note as `<p style={{ fontSize: 11, color: "#8ba9be" }}>`) and all
+   * 17 tests still passed. Four of the five tabs — Meta, Categories & Tags,
+   * SEO, Display — were covered by nothing: `check_panels` never clicks a tab
+   * bar either.
+   *
+   * There is no @testing-library here, so a tab cannot be clicked in vitest.
+   * These read the SOURCE instead, which is the one thing that sees all five
+   * tabs at once, and is a pattern several component tests already use
+   * (`saved-section-usage-fetch.test.tsx`, `builder-template-preview-carousel.test.tsx`).
    */
-  it("wraps its field prose so the lattice spans it", () => {
-    const m = html("blog-post", BuilderBlogPostModuleSettings as never, {
-      title: "A post",
-      tags: "a, b"
-    });
-    // The notes live on the Taxonomy and SEO tabs, which are not the open one,
-    // so what this asserts is the class pairing wherever a note renders.
-    expect(m).not.toMatch(/<p style="font-size:11px/);
+  const source = () =>
+    readFileSync(new URL("./builder-blog-post-module-settings.tsx", import.meta.url), "utf8");
+
+  it("wraps its field prose so the lattice spans it, on every tab", () => {
+    const src = source();
+
+    // The defect itself: prose styled inline instead of taking the shared
+    // note class. This is the exact shape the reviewer restored.
+    expect(src).not.toMatch(/<p\s[^>]*style=\{\{/);
+
+    const paragraphs = [...src.matchAll(/<p[\s>]/g)];
+    expect(paragraphs.length).toBeGreaterThan(0);
+    for (const p of paragraphs) {
+      const before = src.slice(0, p.index);
+      // The nearest wrapper still open above this <p> has to be the bare one.
+      // A note dropped straight into a field strip would have closed it
+      // first — and that is the half-a-cell phase error the wrapper prevents.
+      expect(before.lastIndexOf('className="builder-schema-bare"')).toBeGreaterThan(
+        before.lastIndexOf("</div>")
+      );
+    }
   });
 
-  it("sets no width on any individual field", () => {
+  /**
+   * W0's absolute — "never a width on an individual field" — asserted over the
+   * whole panel rather than over whichever tab happens to be open. `resize` is
+   * the one inline declaration this panel is allowed: it is the textarea's
+   * drag handle, not a layout width.
+   */
+  it("sets no width on any individual field, on any of its five tabs", () => {
+    const declarations = [...source().matchAll(/style=\{\{([^}]*)\}\}/g)].map((m) => m[1]);
+    expect(declarations.length).toBeGreaterThan(0);
+    for (const decl of declarations) {
+      expect(decl).not.toMatch(/\b(width|maxWidth|minWidth|flex|margin|padding|fontSize)\b/);
+    }
+    // The rendered Content tab as well, kept as the cheap direct check.
     expect(markup()).not.toMatch(/style="[^"]*\bwidth:/);
   });
 });

@@ -153,6 +153,14 @@ export function BuilderBlogTocModuleSettings({
               render: () => (
                 <>
                   <div className="builder-schema-group-title">Headings</div>
+                  {/* The group title used to carry this sentence. It says what an
+                      H3 DOES on the rendered page, which the per-item "H3 · …" head
+                      row does not (L7), so it comes back as prose rather than as a
+                      longer heading. */}
+                  <p className="panel-copy builder-panel-field-note">
+                    An H3 belongs to the nearest H2 above it. Indent H3s decides whether
+                    the page shows that nesting.
+                  </p>
                   <div className="builder-cards-panel-fields builder-cards-panel-fields--stacked" data-lattice-pairs="1">
                     {items.map((item, index) => (
                       <Fragment key={item.id}>

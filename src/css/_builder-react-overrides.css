@@ -9722,6 +9722,16 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-weight: 600;
 }
 
+/* The SEO counter's other half. Before this sweep the count was an inline
+   green under 160 and an inline red over it; the class pair replaced both, and
+   only `.is-over` got a rule — so "you are within budget" rendered in the
+   ordinary heading colour and the counter lost the signal it existed for
+   (review round 1, 2026-09-13). */
+.builder-react-root .builder-panel-field-note.is-within {
+  color: var(--success, #1f7a4b);
+  font-weight: 600;
+}
+
 /* The TOC manager's two add buttons, which were an inline flex row. */
 .builder-react-root .builder-blog-toc-add-actions {
   display: flex;

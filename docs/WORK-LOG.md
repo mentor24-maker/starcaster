@@ -38,11 +38,27 @@ too narrow to read a web address in. And Blog Post's five tabs (Content, Meta,
 Categories & Tags, SEO, Display) were coloured back when panels had a white
 background; against today's blue, four of the five were nearly invisible.
 
+Two signals that had gone missing on the way came back. The SEO description
+counter used to turn green while you were inside the 160-character budget and
+red once you went over; the rewrite kept the red and lost the green, so "you
+are fine" looked like ordinary text. And the headings list used to say, in its
+title, that a sub-heading sits under the nearest heading above it — the one
+sentence explaining what the setting does to the published page. It is back as
+a line under the title, and it now names the Indent H3s switch, because that
+nesting only shows on the page when the switch is on.
+
 Each fix was broken on purpose and watched to fail before the pass was
 believed — including one break that did **not** fail, which is written into
 `docs/UI_RULES.md` rather than left for someone to trip over later: the checker
 compares fields against their neighbours, so a change that moves a whole column
 at once slips past it. That is a limit of the check, not of the rule.
+
+That claim was too broad the first time, and the review caught it. Two of the
+new automatic tests were checking the Blog Post panel while it sat on its first
+tab, and the things they were checking live on the other four — so the tests
+passed with the original problem put straight back. They read the panel's own
+source now, which is the only way to see all five tabs at once in a test, and
+all four of the breaks were re-run and watched to fail.
 
 ## 2026-09-13 — A part of the video catalog accepted junk and quietly stored something else (#646)
 
