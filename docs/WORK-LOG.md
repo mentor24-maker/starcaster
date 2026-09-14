@@ -1,3 +1,124 @@
+## 2026-09-13 — Seven blog settings panels now read as one block instead of loose rows (#687)
+
+When you open a module's gear icon in the Builder you get a panel of settings.
+On 2026-08-13 you pointed at one and said the column width varies arbitrarily
+between the Settings fields and the Layout fields. This is the twelfth of
+fifteen passes fixing that, and it covers the seven blog panels: Blog Post,
+Post Card, Post List, Related Posts, Table of Contents, Author Bio and Post
+Tags.
+
+Nothing about what any setting *does* has changed — no new settings, nothing
+renamed, nothing saved differently. Only where each row sits.
+
+Three of the seven held a repeating editor — the list of related posts, the
+list of headings, the list of social links — built out of an old markup shape
+whose fields the automatic checker **skips by name**. So every panel sweep
+since that checker was written had reported these seven as fine without ever
+having looked inside three of them. Measured in a real browser before the
+change: each panel's own fields started 125 pixels in, and every field in its
+list editor started at zero. The headings list had a third position of its
+own, because each sub-heading card was nudged 16 pixels right to show its
+nesting. Three different left edges in one panel.
+
+Blog Post had the plainest version of the problem. It is one of the few panels
+written by hand rather than generated, so each row of fields was its own little
+grid and the strip below it — Label, Background, Alignment, the margins — was
+another one. One panel, three label widths and three field positions. It is one
+grid now, and the strip is inside it.
+
+Post Tags and Post List share a page-picker that turns into a dropdown plus a
+text box when you type a custom address. That one wide row was setting the
+width of the whole column, so the six rows beside it stopped nearly 300 pixels
+short of it. Bounded now.
+
+Two smaller things went with it. The list editors sit one field per row rather
+than two: two-across is right when the editor owns half the panel, but these
+live in a narrow column, and two-across left the Anchor ID box 52 pixels wide —
+too narrow to read a web address in. And Blog Post's five tabs (Content, Meta,
+Categories & Tags, SEO, Display) were coloured back when panels had a white
+background; against today's blue, four of the five were nearly invisible.
+
+Two signals that had gone missing on the way came back. The SEO description
+counter used to turn green while you were inside the 160-character budget and
+red once you went over; the rewrite kept the red and lost the green, so "you
+are fine" looked like ordinary text. And the headings list used to say, in its
+title, that a sub-heading sits under the nearest heading above it — the one
+sentence explaining what the setting does to the published page. It is back as
+a line under the title, and it now names the Indent H3s switch, because that
+nesting only shows on the page when the switch is on.
+
+Each fix was broken on purpose and watched to fail before the pass was
+believed — including one break that did **not** fail, which is written into
+`docs/UI_RULES.md` rather than left for someone to trip over later: the checker
+compares fields against their neighbours, so a change that moves a whole column
+at once slips past it. That is a limit of the check, not of the rule.
+
+That claim was too broad the first time, and the review caught it. Two of the
+new automatic tests were checking the Blog Post panel while it sat on its first
+tab, and the things they were checking live on the other four — so the tests
+passed with the original problem put straight back. They read the panel's own
+source now, which is the only way to see all five tabs at once in a test, and
+all four of the breaks were re-run and watched to fail.
+
+The review caught a second thing on the next pass, and this one you would have
+seen. In the Related Posts editor, the box holding each post's image path had
+shrunk to 96 pixels — about nine characters, `/images/l` — sitting beside four
+312-pixel boxes. The Choose Image button had been sharing that row, and on the
+new one-per-row layout there was no longer room for both. The button moves to
+its own line underneath now, full width, and the path box is 312 pixels like
+everything around it: the whole filename is readable again.
+
+Worth saying why no check caught that, because the answer is now fixed too. A
+field is measured by the space it is *given*, and that space was correct — it
+reached the right edge like every other row. Nothing was looking at how much of
+it the actual typing box got once a button had taken its share. The panel
+checker measures that now, for the one kind of field it had been skipping, and
+it was proved by putting the 96-pixel box back and watching the check fail at
+all three screen widths.
+
+Three smaller corrections came with it. A note listing which editors still need
+this treatment named one when there are four, which is how these get missed —
+that list is now checked by a test, so it cannot quietly go out of date again. A
+comment above the new styling said the opposite of what the code below it did,
+which would have led the next pass to undo this work. And the sentence under the
+headings list promised something the published page does not do: a table of
+contents does not render on a live site yet, so the note now says so instead of
+implying otherwise.
+
+A third review pass sent it back once more, for three things, all now done. The
+tab bar across the top of the Blog Post panel had been quietly told to announce
+itself to screen-reader software as a "tab list" — which promises that the arrow
+keys move between the tabs and that each one opens a named panel. Neither was
+built, so the announcement was a promise the keyboard did not keep, and it was a
+change in behaviour in a job that was only meant to move rows around. They are
+plain buttons again, as they were before this work, and a test now says that if
+anyone adds those announcements back they have to build the rest of the pattern
+with them.
+
+The second was a comment in the checker that claimed a kind of field was
+"already covered" when nothing was measuring it. That sentence is the sort the
+next pass reads before deciding it need not look, so it has been replaced with
+what is actually true, plus a written list of what the checker still cannot see.
+The third was a test that found a paragraph in the rules document by quoting a
+sentence from it — and that sentence counts something, so the next pass to change
+the count would have broken the test in a way that blamed the wrong thing. It
+looks for a fixed marker now and says so plainly if the marker is missing.
+
+One thing is recorded rather than fixed, deliberately. On the Blog Post panel's
+**Meta** tab, the box holding the featured image path is 207 pixels wide beside
+four 373-pixel boxes — the same complaint as the Related Posts one above, in a
+second place. It was found by measuring this branch and `main` side by side,
+which is also what showed it is new: `main` renders that box at 395 pixels. It
+had been missed three times because it is on a tab the panel does not open on.
+The obvious repair — moving the button to its own line, exactly as was done for
+Related Posts — was tried and measured and taken back out: that button was the
+only thing holding the column open, so the fix shrank every field on the tab
+from 373 to 218 pixels and started cutting off the web address underneath. That
+trades one short field for five, which is the thing you originally complained
+about. What width a column should take when it holds a file path is a genuine
+design question rather than a tidy-up, so it is written down in the rules
+document with both sets of measurements and left for a decision.
+
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 
 Pulse runs two jobs on the Mac Mini: one every fifteen minutes, one once a day.

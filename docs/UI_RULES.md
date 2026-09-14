@@ -385,6 +385,157 @@ as a rule first, then gets a checker where one is possible.
   indented row is not failed for obeying this, and checks the row's own
   width instead — a child row that ever started *shrinking* rather than
   sliding is the regression that would catch.
+
+  **`.builder-slider-item-grid` is EXCLUDED from measurement by name**, and
+  that is the third way a manager can be absent rather than passing (panel
+  sweep 12/15, ticket 86bbjt1bc, 2026-09-13). The first two are "declares
+  neither attribute" (Carousel) and "is a shape the check has no selector for"
+  (the breadcrumb flat grid). This one is worse, because the fields ARE a shape
+  the check reads — `label.field`, one of its three pair shapes — and it walks
+  past them anyway: `check_panels` filters every pair through
+  `.closest('.builder-slider-item-grid, .builder-item-grid')` and drops it. The
+  exclusion is correct in itself (an item manager runs its own lattice, so it
+  must not be measured against the axis column containing it), but it was
+  written before any of these managers declared themselves, so the effect was
+  a clean pass over a manager nobody had looked at.
+  Three blog panels — Related Posts, the TOC and Author Bio — were built from
+  it and reported OK on every sweep since the check existed. Measured at 1440
+  before the conversion: each panel's own fields at label-width 125 /
+  control-x 125, and every field in its manager at 0. The TOC carried a third
+  x of its own, 16px, from an inline `marginLeft` indenting each H3 card.
+  **Four manager shapes are still unmeasured, not one.** An earlier version of
+  this line said "one panel still wears the shape — `blog-category-filter`",
+  and that inventory being wrong is the whole mechanism: a later sweep reads
+  this paragraph to find out what is left, and anything missing from it is
+  left behind (review round 2, 2026-09-13). Counted from the sources rather
+  than remembered, a manager is unmeasured when it carries one of the two
+  EXCLUDED classes and declares neither opt-in attribute:
+
+  <!-- LATTICE-INVENTORY-TABLE — `builder-lattice-inventory.test.tsx` finds the
+       table by this marker and fails if the marker is missing. Anchoring on a
+       sentence meant that rewording it (and the next sweep WILL reword it, since
+       converting one makes it three) silently matched nothing, and the test then
+       blamed the table for omitting every file instead of saying the anchor had
+       moved. Review round 3, 2026-09-14. Keep this comment directly above the
+       table. -->
+
+  | Panel | File | Shape |
+  |---|---|---|
+  | `blog-category-filter` | `builder-blog-category-filter-module-settings.tsx` | `.builder-slider-item-grid` |
+  | `social-share` (platform list) | `builder-module-card.tsx` | `.builder-slider-item-grid` |
+  | `program-list` Sessions | `builder-program-list-module-settings.tsx` | `.builder-item-grid--sessions` |
+  | `program-list` Prices | `builder-program-list-module-settings.tsx` | `.builder-item-grid--prices` |
+
+  The first belongs to panel sweep 13/15. The other three belong to no ticket
+  yet. `builder-lattice-inventory.test.tsx` pins this table against the
+  sources, so converting one of them, or adding a fifth, fails a test until
+  this list is updated — the doc cannot silently drift out of date again.
+  (Program List's own item cards ARE measured: they declare
+  `data-lattice-pairs="2"`. It is the two nested session/price grids inside
+  them that are not.)
+
+  **A THIRD variant of the labelled block: `--stacked`, one pair per row.**
+  The 2x2 shape assumes the manager has a wide block to sit in, which is true
+  of Feature Cards, Carousel and Program List — each is one half of a 50/50
+  editor. A manager that lives inside an AXIS COLUMN does not have it, and W0
+  makes that permanent rather than transient: an axis column stays compact and
+  the leftover width goes to the gaps, so the column does **not** grow with the
+  screen. Measured at BOTH 1440 and 1920, the five tracks split a 429px column
+  into 94px text fields in Related Posts, 144px in Author Bio and **52px** in
+  the TOC — where the field holds `junior-high-performance-academy` and a
+  select reading "H3 (sub)". That is the operator's own words about this family
+  of panels: *"You always either shorten fields to the minimum length or just
+  assign a random width."*
+  So a manager inside an axis column declares `data-lattice-pairs="1"` and adds
+  `.builder-cards-panel-fields--stacked`, which is the same grid with two
+  tracks instead of five — the shape the existing `max-width: 1200px` media
+  query already switches to. L6a permits both by name; two pairs sharing a row
+  is a relaxation the operator asked for on a wide block, never a requirement.
+
+  **What a green run on a declared pair-column is evidence of, and is not.**
+  The four comparative assertions compare fields WITHIN a pair-column, so a
+  change that moves a whole pair-column together cannot fail them. Measured
+  2026-09-13: a CSS rule setting `width: 40px` on every `--b` control in the
+  Related Posts manager took that column's controls from 94px to 40px and its
+  rows' right edge from 429 to 375 — a visible notch beside the `--wide` rows
+  still reaching 429 — and `check_panels` exited **0**. The same rule narrowed
+  to a single field failed at all three widths, naming the panel and the
+  manager. So this check catches a field that disagrees with its neighbours,
+  which is W0; it does not catch a block that disagrees with its own outline,
+  which is L8 and still **[eye]** exactly as L8 says.
+
+  <!-- CHECKER-BLIND-SPOTS -->
+  **What the panel checker cannot see — a `full` field outside a declared
+  manager.** Recorded here because this ticket's own rule says an undocumented
+  exemption is indistinguishable from an oversight (review round 3,
+  2026-09-14). `check_panels` drops a `full`-width field from its field list
+  ENTIRELY unless the group around it declares `data-lattice-pairs`
+  (`scripts/ui/check_panels.mjs`, the `full && !group.hasAttribute(...)` line).
+  The drop happens before any comparison runs, so such a field is not merely
+  excluded from the width comparison — it is never measured at all.
+
+  The consequence is a composite control: an image picker is one slot holding
+  an entry box plus a **Choose Image** button. The slot can reach the block's
+  right edge correctly while the entry box inside it is squeezed to a third of
+  its neighbours, and no browser gate reports it. Sweep 12/15 added an
+  entry-box assertion that catches exactly this, but only inside a DECLARED
+  manager — which is where its own defect was.
+
+  Measured at 1440 on 2026-09-14 across the app's 14 composite picker fields:
+  four are in undeclared ordinary columns and unmeasured, and three of those
+  are visibly squeezed —
+
+  | Panel | Field | Slot | Entry box | Ordinary sibling |
+  |---|---|---|---|---|
+  | `blog-post-card` | Featured Image | 373 | **207** | 373 |
+  | `blog-author-bio` | Photo | 373 | **207** | 373 |
+  | `blog-newsletter-subscribe` | Image URL | 373 | **207** | 373 |
+
+  29 characters of a 45-character path, beside siblings showing the whole
+  thing. **Measured identically on `main`, so this is pre-existing and belongs
+  to no ticket yet** — it was found while reviewing sweep 12/15 and is written
+  down rather than fixed there, because two of these panels would have been
+  fixed outside that ticket's scope and the third is outside it entirely. The
+  cheap fix is to extend the entry-box assertion to ordinary columns; the cost
+  is that it fails three panels on day one, which is a decision for whoever
+  takes it, not a thing to slip into a layout sweep.
+
+  `builder-lattice-inventory.test.tsx` pins this section to the code, so the
+  day the drop stops happening the doc is forced to stop claiming it does.
+
+  **A fourth instance, and this one is NOT pre-existing — Blog Post's Meta tab.**
+  Measured at 1440 on 2026-09-14, `blog-post` → **Meta** → *Image*: entry box
+  **207px** inside a 373px slot, beside Slug / Author / Publish Date / Excerpt
+  at 373px each. On `main` the same box is **395px** — the widest control on
+  that tab. Bringing the tab onto one lattice (this sweep) did what the ticket
+  asked, every slot now ending on 595, and in doing so took 188px off the one
+  control whose room a button competes for. It sits on the **Meta** tab rather
+  than the Content tab the panel opens on, which is why three review rounds and
+  the reviewer's own 14-picker sweep walked past it: the panel renders one tab
+  at a time, so a browser sweep sees Content and nothing else.
+
+  **The obvious fix was tried, measured, and rejected.** Stacking the button
+  under the input — the rule that fixed the identical defect inside the
+  `--stacked` item managers — gives the picker its whole track, and costs more
+  than it buys: the picker's one-row `max-content` was the only thing holding
+  that column at 373, so stacking collapses the **whole tab** to 218px and the
+  Slug (`junior-high-performance-academy`, 282px of text) starts truncating.
+  That trades one squeezed field for five narrower ones and a truncated name —
+  the operator's own complaint about this family of panels, arrived at from the
+  other direction. The real question is what width a lattice column should take
+  when its content is a file path and an `<input>`'s intrinsic width (~216px)
+  does not know what it holds; that is a W0/W9 decision, not a layout tidy-up,
+  and it is left open here deliberately rather than settled inside a sweep.
+
+  **Named exemption — the Post List panel's Card Manager note.** Its Frame axis
+  holds one `num` field, so W0 keeps that column about 180px wide and the
+  note ("Card content, layout, and style are set in the Card Manager module")
+  wraps to six lines. Widening the column to fit a sentence is the opposite of
+  W0's "columns stay compact, the gaps take the slack", and moving the note to
+  another axis is a D8 decision about where the setting belongs, not a layout
+  fix. Left as it is, deliberately, and recorded here rather than left to be
+  rediscovered (panel sweep 12/15).
+
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
