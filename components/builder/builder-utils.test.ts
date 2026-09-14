@@ -7,6 +7,7 @@ import {
 import {
   buildClonedPageCreatePayload,
   columnHasOnlyOverlayImageModules,
+  getCellContentAlignmentStyle,
   getHeadingModuleStyle,
   getImageOverlayStyle,
   getImageModuleShellStyle,
@@ -1199,5 +1200,18 @@ describe("container blur of zero", () => {
   it("still emits a real filter when somebody actually wants blur", () => {
     const vars = getBuilderThemeStyleVars({ containerBlur: 9 } as never) as Record<string, string>;
     expect(vars["--lp-backdrop"]).toBe("blur(9px)");
+  });
+});
+
+describe("getCellContentAlignmentStyle", () => {
+  it("publishes the cell's horizontal alignment as a variable a stretched module can read (86bbzxx09)", () => {
+    const right = getCellContentAlignmentStyle("right", "top") as Record<string, string>;
+    expect(right.alignItems).toBe("flex-end");
+    expect(right["--cell-h-align"]).toBe("flex-end");
+    expect((getCellContentAlignmentStyle("center", "middle") as Record<string, string>)["--cell-h-align"]).toBe("center");
+  });
+
+  it("stays empty at the left/top default, so an untouched cell is not turned into a flex column", () => {
+    expect(getCellContentAlignmentStyle("left", "top")).toEqual({});
   });
 });

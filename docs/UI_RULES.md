@@ -97,6 +97,88 @@ as a rule first, then gets a checker where one is possible.
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
 
+  **A THIRD markup shape wears `data-lattice-columns`: one flat grid**
+  (panel sweep 10/15, ticket 86bbjt1b6, 2026-09-13). `.builder-item-grid`
+  — the breadcrumb trail manager — puts its header titles and every row's
+  cells in a single grid as direct children. It is neither the Navigation
+  list's header-band-plus-rows nor the Table editor's real `<table>`, so it
+  matched no selector `check_panels` had and could not opt in at all; and
+  `check_panels` separately excludes `.builder-item-grid` from the ordinary
+  lattice measurement, so **the largest control in the breadcrumb panel had
+  never been measured by any sweep.** Declaring it took the run from 4
+  titled-column managers to 5. Carousel's lesson word for word: a manager
+  that opts into neither attribute is not passing, it is absent.
+
+  (The run's own summary line says 15, not 5. That line multiplies its
+  headline counts by the three widths it measures at — `columnGridsSeen`
+  and `panelsSeen` are both incremented inside the width loop — so
+  "684 panel(s) and 15 titled-column manager(s)" means 228 panels and 5
+  managers. Quote the real count here, never the summary line's.)
+
+  **What a green run on a flat grid is evidence of, and is not.** Measured
+  in the browser, this shape's header spans and row cells sit at *exactly*
+  the same offsets and widths (0/121, 129/121, 258/86) — one grid, one set
+  of tracks, every child stretched to the track it lands in. So the four
+  comparative assertions (row widths, per-column offsets, per-column
+  widths, title containment) are satisfied before any CSS is written and
+  **cannot fail here**, and the run says so on every pass rather than
+  counting them as checked. What it does assert on this shape, and what
+  both break-tested red: the resolved `grid-template-columns` track count
+  against the declared one, and every **declared** row — the cells sharing
+  a `data-lattice-row` — rendering the declared number of cells. That is
+  the same discipline the single-pair count uses, for the same reason — a
+  count must not read as a verdict.
+
+  **The second of those reads a stamp, not the geometry, and that is the
+  whole point** (review round 2, 2026-09-13). It first shipped chunking the
+  cell list with a fixed stride (`i += declared`), which made every chunk
+  hold `declared` cells by arithmetic: the assertion could only fire when
+  the TOTAL was not a multiple of `declared`, so the one thing it was
+  documented as catching — a row rendering a different number of children
+  from the header — was the one thing it could not see. Grouping by grid
+  row instead does not fix it, and that was **measured** rather than
+  reasoned about: auto-placed cells fill `declared` tracks per row whatever
+  the markup did, so on a panel deliberately broken into a 2-cell item and
+  a 4-cell item, grouping by resolved grid row, by wrap in x and by y all
+  returned 3/3/3/3 while the panel was visibly scrambled. (`gridRowStart`
+  computes to `auto` here in any case — Chromium does not resolve
+  auto-placement into computed style.) A missing cell does not SHORTEN a
+  row; it shifts every later cell up one slot.
+
+  So a flat grid must stamp **every** cell with the row it belongs to —
+  `data-lattice-row={index}`, and `"header"` on the title band — because
+  the trail items render as Fragments and an item has no element of its
+  own to count cells in. A flat grid whose cells carry no stamp is
+  reported as unreadable and fails saying so; it is not measured around.
+
+  **And a declared manager with no layout box is a CANNOT TELL, not a
+  failure.** `grid-template-columns` resolves to used pixel values only for
+  an element that generates a box; inside a `display: none` ancestor it
+  computes back to the specified value, which the track parser counts as 5
+  against a declared 3 and reports as a drift that has not happened. **On
+  the flat shape** the check confirms the manager has a box before counting,
+  and records a blind spot (exit 2) when it does not — whether the manager is
+  hidden by an ancestor or on itself. That cover does **not** extend to the
+  nav and table shapes: a boxless manager of either reads every rect as 0,
+  passes all four comparative assertions trivially, and is reported as
+  measured. Confirmed by hiding the Navigation manager — exit 0, still
+  counted. Said here rather than left to be rediscovered, because a green run
+  over a nav or table manager nobody could see is worth nothing. Not
+  reachable through today's declarers —
+  a collapsed module card unmounts its editor rather than hiding it — so
+  this is a guard against a future hidden surface, said out loud so a green
+  run over it is never counted as evidence.
+
+  **A per-field width can be invisible to `check_panels` by construction**,
+  and the breadcrumb Separator was, for as long as it existed. The check
+  measures a field's SLOT — the grid cell — and that slot was always the
+  column's full 213px and always correct; the `style={{ width: 48 }}` was
+  on the `<input>` inside it, so the control stopped 165px short of the
+  block edge while every field around it reached it. No browser run could
+  have caught it and none did. The guard is a unit test on the rendered
+  markup (`builder-breadcrumb-module-settings.test.tsx`), which is where
+  "never a width on an individual field" is actually enforceable.
+
   **Carousel is the second adopter, converted in the panel sweep
   (2026-08-26, task 86bbjt1az).** It is the test case for the sentence
   above rather than a new decision: an image picker, a description

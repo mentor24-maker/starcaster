@@ -3363,10 +3363,18 @@ function BlogPostListPreview({
                     </div>
                   ) : null;
                 case "headline":
+                  // The headline always opens the post, at the same address
+                  // "Read More" does. It used to be plain text while the image
+                  // (opt-in) and "Read More" both linked; a headline that does
+                  // nothing when clicked reads as a broken site (task 86bbzy3kb).
+                  // Only a card with no usable address keeps plain text — a dead
+                  // "#" anchor would be the same defect with a pointer cursor.
                   return (
                     <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
                       display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {post.title}
+                      {href && href !== "#"
+                        ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{post.title}</a>
+                        : post.title}
                     </h3>
                   );
                 case "featured_image": {
