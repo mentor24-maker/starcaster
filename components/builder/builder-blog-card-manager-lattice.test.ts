@@ -42,19 +42,52 @@ function designerSource() {
   return src.slice(start, end === -1 ? undefined : end);
 }
 
+/** The comment that closes the controls bar. Asserted, not assumed — see below. */
+const END_OF_CONTROLS_BAR = "{/* ── Two-column";
+
+/**
+ * An inline width, in every spelling React accepts.
+ *
+ * Round 1 of this ticket's review broke the previous pattern on purpose. It was
+ * `/\bwidth:\s*\d/`, which needs a digit IMMEDIATELY after the colon: it caught
+ * `width: 110` — the unquoted form that happened to be in the code this change
+ * replaced — and sailed straight past `width: "110px"`, which is the commoner
+ * React spelling of exactly the same defect. A guard that only catches the
+ * spelling already removed guards nothing.
+ *
+ * `maxWidth` is here because a ceiling on an individual field takes it out of
+ * its track just as surely as a width does (W9 says bound the BLOCK, not the
+ * control). `minWidth` is deliberately NOT here: `minWidth: 0` is the standard
+ * grid-shrink idiom and appears in this panel's own CSS.
+ *
+ * Case-sensitive on purpose — `tpl.imageSideWidth` and
+ * `setField("cardBorderWidth", ...)` are legitimate and must not read as
+ * offenders.
+ */
+const INLINE_WIDTH = /\b(?:width|maxWidth)\s*(?::|=)\s*\{?\s*["'`]?[\d.]/;
+
 /** The controls bar only — the row editor and live preview below it are not on this lattice. */
 function controlsBarSource() {
   const src = designerSource();
   const start = src.indexOf('className="bcm-controls-bar"');
   expect(start, "the controls bar has been renamed or removed").toBeGreaterThan(-1);
-  return src.slice(start, src.indexOf("{/* ── Two-column", start));
+  // Both ends are asserted. An unguarded end marker does not fail when it goes
+  // missing — `indexOf` returns -1, `slice` widens to the whole rest of the
+  // file, and the test quietly starts measuring the row editor and the live
+  // preview instead of the controls bar. Measuring the wrong thing and passing
+  // is worse than failing (round 1 of this ticket's review).
+  const end = src.indexOf(END_OF_CONTROLS_BAR, start);
+  expect(end, `the controls bar's end marker (${END_OF_CONTROLS_BAR}) has been renamed or removed`).toBeGreaterThan(
+    start
+  );
+  return src.slice(start, end);
 }
 
 describe("the Card Template designer sits on a lattice", () => {
   it("puts no width on an individual field (W0)", () => {
     const offenders = controlsBarSource()
       .split("\n")
-      .filter((line) => /\bwidth:\s*\d/.test(line) || /\bwidth=\{\d/.test(line));
+      .filter((line) => INLINE_WIDTH.test(line));
     expect(
       offenders,
       "a hard-coded width on a field overrides its grid track — width belongs to the track (W0)"
@@ -78,7 +111,14 @@ describe("the Card Template designer sits on a lattice", () => {
     // at 3 different x-positions" — loud, but only for whoever runs a browser.
     // Here it is loud in CI.
     const css = fs.readFileSync(OVERRIDES, "utf8");
-    const rule = css.slice(css.indexOf(".bcm-group-controls {"));
+    const at = css.indexOf(".bcm-group-controls {");
+    expect(at, "the designer's group-grid rule has been renamed or removed").toBeGreaterThan(-1);
+    // To the rule's OWN closing brace, not to the end of the stylesheet. Slicing
+    // to the end binds to the first `repeat()` that happens to sit below this
+    // rule — correct today only because no other one does (round 1 review).
+    const close = css.indexOf("}", at);
+    expect(close, "the group-grid rule is unclosed").toBeGreaterThan(at);
+    const rule = css.slice(at, close);
     const tracks = rule.match(/grid-template-columns:\s*repeat\((\d+),/);
     expect(tracks?.[1], "the designer's group grid is no longer a fixed repeat()").toBe("2");
   });

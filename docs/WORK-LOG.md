@@ -29,6 +29,16 @@ The checker knows that fourth shape now, the panel is measured along with the
 rest, and four separate things were broken on purpose and watched to fail
 before any of the green was believed.
 
+Review sent this back once, and the send-back found something worth having.
+The new guard that stops a fixed width creeping back onto one of these boxes
+only recognised one way of writing it. The other spelling — the commoner one,
+as it happens — walked straight past it. A guard that only catches the spelling
+you already removed is not a guard, so it was widened and then broken on
+purpose in five different spellings, each one watched to fail. Three smaller
+things went the same way: two checks that would have gone quiet instead of
+failing if the code around them were renamed, and a skip in the measuring tool
+that nothing had ever exercised for the case it was added for.
+
 One hole is left open deliberately and is written down rather than quietly
 carried: the checker still cannot see the Post Manager's kind of defect at all,
 and nine other panels have it live today. Closing it would flag all nine at

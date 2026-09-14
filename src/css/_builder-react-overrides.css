@@ -9189,9 +9189,21 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * Two also holds the longest label here ("Card Border Color", 134px) without
  * cropping it at the narrowest group width the bar produces.
  *
- * `align-items: start`, not `flex-end`: with every field now filling its
- * track, bottom-alignment was doing nothing except letting a two-line label
- * shove its own field down out of line with its neighbour.
+ * `align-items: start`, not `flex-end`, and the reason is about ROW HEIGHT,
+ * not about labels wrapping. A grid row is as tall as its tallest cell, and
+ * `flex-end` was left over from the flex bar this replaced. With every field
+ * now filling its track, the two cells on a row are routinely different
+ * heights — a two-line segmented control beside a single-line select — and
+ * bottom-alignment pushes the shorter pair's LABEL down the row instead of
+ * leaving it on the row's top edge, so two labels on one line sit at two
+ * different heights. `start` puts every label on the row's top edge.
+ *
+ * An earlier version of this comment blamed a two-line LABEL shoving its own
+ * field out of line. Round 1 of this ticket's review measured that and it is
+ * not happening: no `.bcm-label` in this panel wraps at 1440, 1600 or 1920.
+ * The CSS was right and the explanation was wrong, which is the more expensive
+ * of the two to leave in place — the next person reads the comment, not the
+ * measurement.
  */
 .builder-react-root .bcm-group-controls {
   display: grid;
