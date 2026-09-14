@@ -200,6 +200,171 @@ as a rule first, then gets a checker where one is possible.
   at here and reported OK. Declaring it took the run from 558 measured panel
   groups to 564. A manager that opts into neither attribute is not passing —
   it is absent, and the two are indistinguishable from the summary line.
+
+  **Reminders is the third adopter, and it needed one thing the other two did
+  not: a way for a BOXED card to join the list's grid** (2026-09-13, panel
+  sweep 11/15, ticket 86bbjt1b9). A feature card and a carousel slide are rows
+  of one grid with no box of their own, so the list can simply BE the grid. A
+  reminder record is a collapsible bordered panel with its own header, and a
+  box cannot be `display: contents`. Built as a grid per card, the two records
+  in the fixture came out with right-hand label tracks of 130px and 115px
+  eight pixels apart — a speech-bubble record carries "Border Color" and a
+  strip record carries "Placement", so `max-content` measured each card
+  separately and they disagreed. That is the exact failure L6a's "the whole
+  list is one grid" sentence exists to prevent, arriving through the one shape
+  that sentence does not cover.
+
+  `subgrid` is the answer and it is already the house mechanism — it is how
+  `feature-cards` and `program-list` share the editor's `lattice-start` tracks.
+  The list declares the five tracks; the card, the settings block, the criteria
+  panel, the criteria list and each criterion box all carry
+  `grid-template-columns: subgrid`, so one chain of boxes reads one set of
+  tracks. It works here and not on the schema panels for the reason
+  `components/builder/builder-module-chrome-slot.tsx` records: the chain is
+  direct children the whole way down, with no wrapping flex container in the
+  middle. A nested box's own padding is absorbed out of the first and last
+  track, which is what indents the criteria block — a real box, not a number
+  somebody chose.
+
+  **And the declaration goes on the LIST, never on the card.** `check_panels`
+  measures each `[data-lattice-pairs]` element as one group, and a group always
+  agrees with itself: declared per card, the two records could drift apart by
+  any amount and both would report clean. Declared on the list, every field in
+  every card is bucketed by its label's x, and a card that stops lining up with
+  its neighbour shows up as a third and fourth bucket against a declaration of
+  two. Verified by breaking it — dropping the shared tracks fails with
+  "declares 2 pair-column(s) but its labels start at 3 different x-positions",
+  and removing the declaration does not fail at all: the run stays green and
+  the measured count drops from 693 groups to 690. Absent and passing, one more
+  time.
+
+  **A manager that REPEATS needs a third thing: a name** (2026-09-13, review
+  round 2 of the same ticket). "On the list, never on the card" has no element
+  to land on when the manager is rendered once per item: the criteria block
+  lives inside every reminder record card, so the blocks are siblings under
+  different cards and their only common ancestor is the list, which already
+  declares a different pair count. Left as one declaration per block, it is the
+  group-of-one blind spot again one level down — criteria in card 1 and card 2
+  could drift apart by any amount and both report clean, and the tracks in this
+  very panel have already been measured 124px and 118px apart once.
+
+  So a repeated block NAMES the lattice it shares —
+  `data-lattice-group="reminder-criteria"` beside its `data-lattice-pairs` —
+  and `check_panels` measures every box wearing one name as a single group
+  against the PANEL. That is the same "boxes plus an origin" shape the
+  chrome/settings seam already uses (86bbq065f), for the same reason: two
+  groups that each agree with themselves is one blind spot, not two checks.
+  Verified by breaking it — indenting the SECOND card's criteria labels by 37px
+  fails six times at 1440/1600/1920 as `item manager reminder-criteria — 2
+  box(es): labels are 2 different widths (155/118px)`, and **the same break with
+  the name removed reports OK across 693 panels.** That pair is the evidence;
+  one half of it on its own would only have shown that something fails.
+
+  **The gutter is the TRACK, not the track plus a gap** (same round). The base
+  sheet gives the record list `gap: 12px`, and `gap` is the shorthand — it sets
+  `column-gap` as well. So the space between the two columns rendered as 52px
+  (the declared 40px `--builder-field-room` track PLUS the inherited 12px)
+  against an acceptance criterion asking for a real 40px, and because every
+  subgrid below sets `column-gap: 0` the cards absorbed the list's gutters
+  unevenly: two control tracks the CSS resolves as equal — 181.438px and
+  181.453px — rendered **193px and 174px**, nineteen pixels apart. That is the
+  sweep's own founding complaint arriving one level up, and `check_panels`
+  cannot see it: it buckets fields by pair-column and compares only within a
+  bucket, so a left-vs-right asymmetry is invisible to it by construction.
+  `column-gap: 0; row-gap: 12px` on the override — what
+  `.builder-cards-panel-fields` has carried from the start — measures at 1440
+  as a gutter of exactly **40px** with tracks 198.938 / 198.953. The two
+  rendered control widths come to **198.94 and 185.95** even then, because a
+  nested box's padding is absorbed out of the first and last track; closing
+  19px to 13px is the honest claim, and the 40px the rule asks for is exact.
+  The automated guard is a source assertion in
+  `builder-reminder-module-settings.test.tsx`, not a browser check, because no
+  browser check here can fail on it.
+
+  **Take the shorthand off EVERY box in the chain, not just the top one**
+  (2026-09-14, round 3 of the same ticket). The paragraph above was done one
+  level too high: the three boxes that round newly made subgrids — the criteria
+  panel, the criteria list and the criterion card — kept `gap`'s column half
+  from the base sheet at 10px / 12px / 10px. A subgrid whose own `column-gap`
+  is wider than its parent's takes the extra out of its own tracks, so each box
+  shrank the one inside it, and the sheet's written claim that a criterion
+  control "takes the ordinary field track, the same one every other control in
+  the module takes" was false: measured at 1440, the module's field track began
+  at x=250.25 and every criterion control began at x=255.25. With all three
+  zeroed both begin at **x=245.25**, and the whole lattice gains 2.5px per
+  control track — which is where 196.438 above became 198.938. The record
+  list's gutter is unmoved at exactly **40.00px**, checked at 1440, 1600 and
+  1920. The criterion control still ends **15px** short of the module's
+  (429.19 against 444.19) and that residue does not come off: it is the
+  criterion card's `padding: 12px 14px` plus its 1px border, absorbed out of
+  the last track — the same 15px of real box that makes the nested indent.
+
+  **A guard that quotes the declaration it guards is a guard that reads its own
+  documentation** (same round, and the reason for the send-back). The source
+  assertion above matched `/column-gap:\s*0/` against a rule body that still
+  contained its own explanatory comment — and that comment says `column-gap: 0`
+  twice, while explaining why the declaration is there. Deleting the
+  declaration left the test green. A comment is the one thing in a stylesheet
+  guaranteed to restate the declaration beside it, so a rule body is stripped
+  of comments before any assertion sees it. Two further rules fell out of
+  fixing it: break each line **separately** (round 2 deleted both at once and
+  read the failure of the half that worked as proof of the half that did not),
+  and give each declaration its own named test so the failure says which line
+  went. A selector that names two rules is the same hazard one step over — the
+  criteria list shared its `grid-column` rule with the header, so "the body of
+  the rule with this selector" found the placement rule and reported a missing
+  declaration that sat four lines below. One selector, one rule.
+
+  **A collapsed card is an unmeasured card**, and that was the older half of
+  this. The record cards start collapsed (`isRecordCollapsed` returns true
+  until clicked) and `check_panels.openPanels` did not click them, so from the
+  day the check was written the entire Reminders editor was measured as ONE
+  field — the module's Label — while it rendered seven label widths and five
+  field positions underneath. Panel sweep 2/15 seeded two real records here and
+  said in the fixture itself that seeding did not make them measurable. Opening
+  them is a fourth expand step in `openPanels`, scoped to the card class rather
+  than to every `Expand *` button on the page.
+
+  **The other three panels of sweep 11/15 needed no change, and that is a
+  measurement rather than a glance** (2026-09-13, ticket 86bbjt1b9). Current
+  Poll, Messaging Topic List and Messaging Tag List are schema-driven, so the
+  generator already lays each axis column out on W0's mechanism; every one of
+  their axis columns sits BESIDE its neighbours, and a side-by-side column is
+  its own lattice by rule. Measured at 1440: Current Poll's three columns start
+  at x=93/578/1107, Tag List's four at x=93/529/834/1144, each flush left with
+  its own fields ending on one line, and the last column's right edge landing on
+  the panel's own (1347px) — L8's one rectangle. The shared chrome joins the
+  first column's tracks in both (Tag List's chrome controls start at x=218 and
+  its Content controls at x=218), which is ticket 86bbq065f's slot doing its
+  job. All four panels were then broken on purpose and watched to fail by name
+  before the pass was believed; what was broken is recorded in the ticket's PR.
+
+  **Two things this sweep measured and deliberately did NOT fix, because both
+  are wider than the four panels it is allowed to touch:**
+
+  *   **A `width: "full"` field is invisible to `check_panels`.** Messaging
+      Topic List declares three (`URL param`, `'All' label`, `Post feed URL`);
+      the check measured its Content group as **6 fields** while the panel
+      rendered **9**. A `full` field makes its strip a full-width block, and a
+      full-width block matches none of the check's group selectors, so the
+      field is neither held to the lattice nor reported as skipped — absent and
+      passing, one more time. Narrowing the three to `text-md` makes all nine
+      measurable, which is how this was found; it is not the fix, because it
+      also took the Content column from 699px to 985px and started the panel
+      wrapping at 1600 as well as 1440. The real fix is to teach the check the
+      full-width-block shape, which touches every panel that uses `full`.
+
+  *   **A wrapped axis column lands under a column with a different field
+      track.** `.is-lattice .builder-schema-panel-columns` is a wrapping flex
+      row (deliberately — content-sized columns with the slack in the gaps), so
+      on a narrow panel a column drops to a second row. Measured at 1440:
+      **22 panels** wrap, Messaging Topic List among them, whose Frame column
+      lands directly under Content with its controls at x=175 against Content's
+      x=232. Two label tracks, 57px apart, one under the other — which is the
+      operator's own 2026-08-13 sentence, arriving through the one route the
+      chrome-seam fix (86bbq065f) does not cover. It is not fixable inside one
+      panel: which column lands under which depends on the width, and holding
+      wrapped columns to a shared lattice is a generator change across all 22.
   **How it is built, and how it is checked (rewritten 8/13).** The first
   cut got the shape right and the mechanism wrong — a fixed `11ch` label
   track, `1fr` fields, an `11rem` button — which is the per-field width W0
