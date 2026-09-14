@@ -960,6 +960,37 @@ Advanced — is the follow-on pass the operator sequenced after this.
   that can grow, which is exactly what the lattice control rule and the
   `label.field` rule both declared before this.
 
+  **A COMPOSITE control escapes the ceiling AND the stretch, and the two
+  failures look nothing alike** (panel sweep 13/15, ticket 86bbjt1bd,
+  2026-09-13). The lattice's control rule matches only DIRECT children of
+  `.builder-module-field-control`, so anything that wraps its parts in an
+  element of its own — `.builder-project-data-picker` is a select plus an
+  optional "Custom…" input inside a `<span>` — is neither capped nor
+  stretched. Panel sweep 15/15 found and bounded the first half of that:
+  in Custom mode the span is 846px at 1440, it SETS the column's
+  `max-content` control track, and every 560px-capped control beside it
+  stops 286px short.
+
+  **Capping it is only half the fix.** With no Custom input the same span
+  is just the select at its own content width, and nothing stretches it —
+  measured on blog-newsletter-subscribe's CRM Form: **226px in a 373px
+  slot**, 147px short of the edge its Headline and Description reach. Same
+  control, same row, opposite direction, and a cap cannot touch it. The
+  fix is both together — `width: 100%` puts the block's right edge on the
+  column's, `max-width` holds it to the ceiling — plus `flex: 1 1 auto` on
+  the select, or filling the span only moves the notch inside it, which
+  reads identically to the eye.
+
+  **Neither half fails `check:panels`, and that is not a gap in the
+  check.** Both were live on four and one panel respectively while the run
+  came back green at all three widths, because the assertions compare
+  controls WITHIN a column and the whole column moved together — W0
+  holding perfectly while L8 was broken, exactly as L8's own `[eye]` tag
+  says. Measure a composite control by hand; do not read a green sweep as
+  covering it. Six panels still carry this live: blog-post-tags,
+  blog-post-manager, site-search, event-manager, event-calendar,
+  event-detail.
+
 ## C — Controls: pick the right one
 
 *Umbrella: the control does the thinking, not the operator.*
