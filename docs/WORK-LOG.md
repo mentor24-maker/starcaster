@@ -1,3 +1,31 @@
+## 2026-09-13 — Six blog settings panels line up as one block instead of a stack of loose rows (#688)
+
+Six panels in the Builder — the Category Filter, Tag Cloud, Search, Search
+Results, Newsletter Subscribe and New Post Form — had fields that ended at
+different places down the same column, so the form read as a stack of rows
+rather than one tidy rectangle.
+
+Almost all of it came from one control. The "Target Page" box is really two
+controls in one — a dropdown, plus a text box that appears when you choose
+"Custom…" — and because of the way it is built, the rule that keeps every other
+box a sensible width never reached it. Left alone it rendered about 850 pixels
+wide, the column sized itself to that one row, and every other field in the
+column then stopped nearly 300 pixels short of it. Twenty-seven rows across four
+of the six panels were doing that.
+
+The same control was also failing in the opposite direction, which is why only
+capping it would have been half a fix: on the Newsletter panel it has no text
+box, so it was just a short dropdown that nothing stretched, sitting 147 pixels
+short of the edge the fields above and below it reach. It is now bounded *and*
+filled, so it ends where they do whichever mode it is in.
+
+The Category Filter's list of categories was on a private layout of its own —
+each label stacked above a full-width box, lining up with nothing else in the
+panel — and, worse, the automatic layout checker skips that particular shape by
+name, so no sweep had ever measured it. It now uses the same shape the Tag Cloud
+beside it already uses, and the checker sees one more panel than it did before.
+
+Nothing here changes what any setting does or what gets saved.
 ## 2026-09-14 — Re-linking a block to its original now actually pulls the original's content in (#693)
 
 A follow-up to the fix directly below this one, from its review.
