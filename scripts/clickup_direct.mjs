@@ -1439,7 +1439,9 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       notice = refusalNotice({ commentId: decision.commentId, why, plainEnglish, refusalCode });
     } catch (err) {
       unchecked.push(`${task.id}: merge refused (${why}) but the reason could not be classified (${err.message}) — nothing was posted to the ticket, and this is a defect in the merge step, not in the PR`);
-      const bus = await postToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This step could not CLASSIFY that reason (code ${JSON.stringify(refusalCode)}), so it said nothing on the ticket rather than guess whether the approval still stands. That is a defect in the merge step itself — it needs an agent session. The ticket is still Ready to launch and the approval is unspent.`);
+      // Fallback (task 86bbztcza): nothing was written on the ticket, so the
+      // bus is this alarm's ONLY copy — a chat refusal must not lose it.
+      const bus = await postOrSaveToBus(channel, `[CC-starcaster bus-relay] Merge NOT performed on ${label} (${task.url}): ${why}. This step could not CLASSIFY that reason (code ${JSON.stringify(refusalCode)}), so it said nothing on the ticket rather than guess whether the approval still stands. That is a defect in the merge step itself — it needs an agent session. The ticket is still Ready to launch and the approval is unspent.`);
       if (!bus.ok) reportBusFailure({ cosmetic: false, unchecked, busSkipped, line: `${task.id}: merge refusal could not be classified AND the bus post failed (${bus.why})` });
       return { outcome: 'refused-unclassified', reason: why };
     }
@@ -2015,7 +2017,10 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       console.error(`  MERGE HAND-OFF STALLED on ${label}: ${stalled.why}`);
       stalledHandOffs.push({ line, kind: notice.kind });
       if (dryRun) return { outcome: 'would-report-stalled', reason: stalled.why };
-      const busStall = await postToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ localVerdict })} — ${line}\n\n${pr.url}`);
+      // Fallback (task 86bbztcza): a refused stall announcement left the
+      // marker unstamped, so every pass retried, failed and exited 1 — the
+      // relay's five-day silence again, triggered by any one stalled PR.
+      const busStall = await postOrSaveToBus(channel, `[CC-starcaster bus-relay] ${stalledHandOffHeadline({ localVerdict })} — ${line}\n\n${pr.url}`);
       // "One pass of noise per day is the price" (conflictWork.js) — and the
       // clock that meters it is the marker's timestamp, so a stall that has
       // been ANNOUNCED re-stamps the marker and the next nag is a day away.
@@ -2067,7 +2072,12 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       : filed
         ? `[CC-starcaster bus-relay] MERGE BLOCKED — ${label} (${task.url}): ${blockedWhy}. Picking it up is filed as ${filed.url} in the Loop Queue, which the build loop drains — no session needs to claim this from here. Dane's approval still stands: once the branch is clean and CI is green, a later pass merges it with no second "merge" from him. Ticket left in Ready to launch.\n\n${pr.url}`
         : `[CC-starcaster bus-relay] MERGE BLOCKED AND UNFILED — ${label} (${task.url}): ${blockedWhy}, and the Loop Queue ticket could NOT be filed. Nothing is going to pick this up on its own. An agent session must be pointed at branch ${branch}. Ticket left in Ready to launch.\n\n${pr.url}`;
-    const bus = await postToBus(channel, busBody);
+    // Only the UNFILED hand-off falls back (task 86bbztcza): nothing else will
+    // pick it up, so the bus is its only actor. A filed or self-healing one is
+    // already on the Loop Queue, and a fallback copy would be noise.
+    const bus = (filed || selfHealing)
+      ? await postToBus(channel, busBody)
+      : await postOrSaveToBus(channel, busBody);
     // An unfiled hand-off is NOT cosmetic: the ticket comment says nothing is
     // working on it, and if the bus post fails too, nobody has been told.
     if (!bus.ok) reportBusFailure({ cosmetic: Boolean(filed) || selfHealing, unchecked, busSkipped, line: `${task.id}: conflict hand-off posted to the ticket but the bus post failed (${bus.why})` });
@@ -5474,7 +5484,13 @@ if (cmd === 'whoami') {
       // Lane A write with no guard — and because the ledger write IS guarded,
       // the flag never persisted and it re-posted on every dry run.
       if (dryRun) console.error(`  DRY RUN — would post to the bus: ${line}`);
-      else await postToBus(channel, line);
+      else {
+        // The first announcement of a latch went unchecked, so a refused post
+        // meant auto-merge switched itself off in silence (task 86bbztcza) —
+        // the daily nag below is a day late by design.
+        const posted = await postOrSaveToBus(channel, line);
+        if (!posted.ok) unchecked.push(`auto-merge disabled itself and NEITHER the party line nor the "${busFallback.FALLBACK_TASK_NAME}" ticket took the announcement (${posted.why})`);
+      }
     }
 
     // A latch that has been in force for a day says so again. The FIRST
