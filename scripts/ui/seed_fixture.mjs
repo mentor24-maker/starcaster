@@ -492,10 +492,17 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // `postSlug` is deliberately a value no fixture page carries, which puts
+  // the shared Post Page picker into its CUSTOM mode — a select AND a text
+  // input side by side, ~846px wide. That is the one state in which the
+  // picker sizes the column's `max-content` control track and notches every
+  // 560px-capped row beside it (L8), and left resolving to a real page the
+  // check could never see it. Panel sweep 12/15, ticket 86bbjt1bc.
   'blog-post-list': {
     name: LONG,
     settings: {
       postTitle: LONG, postsPerPage: '9', layout: 'grid', columns: '3', cardGap: '16',
+      postSlug: 'a-post-page-that-is-not-in-this-project',
       showSearch: 'true', showCategoryFilter: 'true', showTagFilter: 'true',
       showAuthorFilter: 'true', showDateFilter: 'true',
     },

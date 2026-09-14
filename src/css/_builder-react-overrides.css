@@ -9654,3 +9654,141 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
   max-width: var(--builder-field-long-max, 560px);
 }
+
+/* --------------------------------------------------------------------------
+ * PANEL SWEEP 12/15 — the blog reading panels (ticket 86bbjt1bc)
+ *
+ * Three of the seven panels carried a hand-rolled item manager built from
+ * `.builder-slider-item-card` and `label.field` — the shape W0 says to RETIRE
+ * rather than style. Those conversions needed no CSS at all: they reuse
+ * `.builder-cards-panel-fields` / `data-lattice-pairs="2"`, which Feature
+ * Cards, Carousel and the Tag Cloud already share. What is below is the rest.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The Blog Post panel's tab bar. It was eleven inline hex values per button,
+ * chosen when a settings panel had a white background; the editor's ground is
+ * blue now, and an unselected tab rendered a mid grey-blue on it — "Meta",
+ * "Categories & Tags", "SEO" and "Display" were all but invisible in the
+ * before screenshot, which is R9 (never a low-contrast pairing) as much as it
+ * is L8.
+ *
+ * It sits ABOVE the lattice column rather than inside it: a button dropped
+ * into that two-track grid takes a label cell and puts every pair below it out
+ * of phase. It starts on the block's left edge, which is L8 rule 5 — chrome
+ * sits on the same edges as the rows.
+ */
+.builder-react-root .builder-settings-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+  margin: 0 0 var(--space-4, 12px);
+}
+
+.builder-react-root .builder-settings-section-tab {
+  font-size: var(--text-sm, 0.8rem);
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
+  background: transparent;
+  color: var(--builder-editor-heading, #0b2a4a);
+  cursor: pointer;
+  /* L2: a tab is a label. It never wraps. */
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-settings-section-tab.is-active {
+  border-color: var(--builder-editor-heading, #0b2a4a);
+  background: var(--surface, #ffffff);
+  font-weight: 600;
+}
+
+/*
+ * Field prose — "Comma-separated tags", the SEO character count, the note
+ * under Post Tags' Tags field. Same story as the tabs: an inline 11px pale
+ * grey, chosen for a white panel and close to invisible against this one
+ * (R9). They span both tracks through `.builder-schema-bare`, which the
+ * lattice already handles; this is colour and size only.
+ */
+.builder-react-root .builder-panel-field-note {
+  font-size: var(--text-sm, 0.8rem);
+  line-height: 1.4;
+  margin: 2px 0 var(--space-3, 8px);
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+.builder-react-root .builder-panel-field-note.is-over {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+/* The TOC manager's two add buttons, which were an inline flex row. */
+.builder-react-root .builder-blog-toc-add-actions {
+  display: flex;
+  gap: var(--space-3, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/*
+ * ONE PAIR PER ROW — `.builder-cards-panel-fields--stacked`.
+ *
+ * The 2x2 shape is right where Feature Cards, Carousel and Program List use
+ * it: each of those managers IS one half of a 50/50 editor, so it has the
+ * room for two label tracks, two field tracks and the 40px between them. The
+ * three managers converted in this sweep do not — they live inside an AXIS
+ * COLUMN of a three-axis panel, and W0 keeps an axis column compact and gives
+ * the slack to the gaps, so the column does not grow with the screen.
+ *
+ * Measured: at BOTH 1440 and 1920 the two tracks split what is left of a
+ * 429px column, giving 94px text fields in Related Posts, 144px in Author Bio
+ * and **52px** in the TOC — where the field holds "junior-high-performance-
+ * academy" and a select reading "H3 (sub)". That is the operator's own
+ * complaint about this exact family of panels, verbatim: "You always either
+ * shorten fields to the minimum length or just assign a random width."
+ *
+ * So these declare `data-lattice-pairs="1"` and take two tracks instead of
+ * five. It is the same grid, the same flattening, the same head row, the same
+ * picker treatment and the same bounded block — only the track count and the
+ * `--b` placement change, which is exactly what the 1200px media query below
+ * already does for a narrow viewport. L6a permits both shapes by name; two
+ * pairs sharing a row is a relaxation the operator asked for on a wide block,
+ * never a requirement.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-label {
+  grid-column: 1;
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-control {
+  grid-column: 2;
+}
+
+/*
+ * THE PICKER SIZES THE TRACK — the defect panel sweep 15/15 bounded for its
+ * own six panels, and whose note names blog-post-tags as one of the ten
+ * panels carrying it live, with "widening this selector is the one-line fix
+ * each of those tickets can reach for". This ticket owns two of them.
+ *
+ * `.builder-project-data-picker` in Custom mode is a select and a text input
+ * side by side, ~846px at 1440 (560 + gap + 280). The column's shared control
+ * track is `max-content`, so that one row SET the track: measured here before
+ * this change, blog-post-tags held a 846px control track while every control
+ * in it that respects the 560px ceiling stopped 286px short of the row that
+ * set it — six rows notched by one (L8: "a control that stops short leaves a
+ * notch").
+ *
+ * Bounding the BLOCK rather than widening the controls is what W9 and L8 both
+ * ask for where they disagree. `max-width` can only ever lower a used width,
+ * so a panel whose track was already under the ceiling is untouched.
+ *
+ * blog-post-list carries the same picker and was NOT showing it, because its
+ * fixture value resolved to a real page and the custom input never rendered —
+ * a latent bump, not an absent one. `scripts/ui/seed_fixture.mjs` now gives it
+ * a custom value so the check can see it, which is the only reason this line
+ * is here rather than being asserted from reading the code.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-post-tags .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-post-list .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}

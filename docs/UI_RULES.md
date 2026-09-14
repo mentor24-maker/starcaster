@@ -385,6 +385,66 @@ as a rule first, then gets a checker where one is possible.
   indented row is not failed for obeying this, and checks the row's own
   width instead — a child row that ever started *shrinking* rather than
   sliding is the regression that would catch.
+
+  **`.builder-slider-item-grid` is EXCLUDED from measurement by name**, and
+  that is the third way a manager can be absent rather than passing (panel
+  sweep 12/15, ticket 86bbjt1bc, 2026-09-13). The first two are "declares
+  neither attribute" (Carousel) and "is a shape the check has no selector for"
+  (the breadcrumb flat grid). This one is worse, because the fields ARE a shape
+  the check reads — `label.field`, one of its three pair shapes — and it walks
+  past them anyway: `check_panels` filters every pair through
+  `.closest('.builder-slider-item-grid, .builder-item-grid')` and drops it. The
+  exclusion is correct in itself (an item manager runs its own lattice, so it
+  must not be measured against the axis column containing it), but it was
+  written before any of these managers declared themselves, so the effect was
+  a clean pass over a manager nobody had looked at.
+  Three blog panels — Related Posts, the TOC and Author Bio — were built from
+  it and reported OK on every sweep since the check existed. Measured at 1440
+  before the conversion: each panel's own fields at label-width 125 /
+  control-x 125, and every field in its manager at 0. The TOC carried a third
+  x of its own, 16px, from an inline `marginLeft` indenting each H3 card.
+  One panel still wears the shape — `blog-category-filter`, which belongs to
+  panel sweep 13/15.
+
+  **A THIRD variant of the labelled block: `--stacked`, one pair per row.**
+  The 2x2 shape assumes the manager has a wide block to sit in, which is true
+  of Feature Cards, Carousel and Program List — each is one half of a 50/50
+  editor. A manager that lives inside an AXIS COLUMN does not have it, and W0
+  makes that permanent rather than transient: an axis column stays compact and
+  the leftover width goes to the gaps, so the column does **not** grow with the
+  screen. Measured at BOTH 1440 and 1920, the five tracks split a 429px column
+  into 94px text fields in Related Posts, 144px in Author Bio and **52px** in
+  the TOC — where the field holds `junior-high-performance-academy` and a
+  select reading "H3 (sub)". That is the operator's own words about this family
+  of panels: *"You always either shorten fields to the minimum length or just
+  assign a random width."*
+  So a manager inside an axis column declares `data-lattice-pairs="1"` and adds
+  `.builder-cards-panel-fields--stacked`, which is the same grid with two
+  tracks instead of five — the shape the existing `max-width: 1200px` media
+  query already switches to. L6a permits both by name; two pairs sharing a row
+  is a relaxation the operator asked for on a wide block, never a requirement.
+
+  **What a green run on a declared pair-column is evidence of, and is not.**
+  The four comparative assertions compare fields WITHIN a pair-column, so a
+  change that moves a whole pair-column together cannot fail them. Measured
+  2026-09-13: a CSS rule setting `width: 40px` on every `--b` control in the
+  Related Posts manager took that column's controls from 94px to 40px and its
+  rows' right edge from 429 to 375 — a visible notch beside the `--wide` rows
+  still reaching 429 — and `check_panels` exited **0**. The same rule narrowed
+  to a single field failed at all three widths, naming the panel and the
+  manager. So this check catches a field that disagrees with its neighbours,
+  which is W0; it does not catch a block that disagrees with its own outline,
+  which is L8 and still **[eye]** exactly as L8 says.
+
+  **Named exemption — the Post List panel's Card Manager note.** Its Frame axis
+  holds one `num` field, so W0 keeps that column about 180px wide and the
+  note ("Card content, layout, and style are set in the Card Manager module")
+  wraps to six lines. Widening the column to fit a sentence is the opposite of
+  W0's "columns stay compact, the gaps take the slack", and moving the note to
+  another axis is a D8 decision about where the setting belongs, not a layout
+  fix. Left as it is, deliberately, and recorded here rather than left to be
+  rediscovered (panel sweep 12/15).
+
 - **L7.** Unclear wording is a bug: if the operator has to ask what a
   label or help text means, reword it. *(7/24 "come up with a clearer
   description. I'm not quite sure what that even means")* — **[eye]**
