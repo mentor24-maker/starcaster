@@ -129,6 +129,12 @@ function documentForSection({
   // (device styles, task 86bc13a6v).
   paddingTop,
   deviceOverrides,
+  // The same, one level down: a column's own tablet/phone settings, the
+  // desktop padding they differ from, and the legacy per-cell "Hide on
+  // Mobile" they had to keep working (device styles 2 of 4, task 86bc14pey).
+  cellPaddingTop,
+  cellDeviceOverrides,
+  cellMobileHidden,
 } = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
@@ -175,6 +181,9 @@ function documentForSection({
     ...(cellOverlayScreens ? { cellOverlayScreens } : {}),
     ...(paddingTop ? { paddingTop } : {}),
     ...(deviceOverrides ? { deviceOverrides } : {}),
+    ...(cellPaddingTop ? { cellPaddingTop } : {}),
+    ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
+    ...(cellMobileHidden ? { cellMobileHidden } : {}),
     modules: modules.map(moduleFrom),
   };
 

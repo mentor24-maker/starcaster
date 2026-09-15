@@ -33,7 +33,11 @@ import {
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
-import { BUILDER_DEVICE_SCOPE_ATTRIBUTE, buildSectionDeviceCss } from "@/components/builder/builder-device-css";
+import {
+  BUILDER_DEVICE_SCOPE_ATTRIBUTE,
+  buildCellDeviceCss,
+  buildSectionDeviceCss
+} from "@/components/builder/builder-device-css";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
 import {
   latestPostsEmptyReason,
@@ -1916,6 +1920,37 @@ function BuilderSectionPreview({
   // no operator text reaches it — so writing it as a style element is safe.
   const deviceCss =
     emailPreview || isOverlayLayoutCollapsed ? "" : buildSectionDeviceCss(section, deviceScopeId, buildGridStyle);
+  /*
+   * THE SAME, PER COLUMN (device styles 2 of 4, task 86bc14pey).
+   *
+   * Computed here rather than inside the column map because all of it has to
+   * reach ONE style element, and that element goes LAST inside the row: the
+   * phone reverse-stack rules count the row's children with `:nth-child`, so
+   * a style element between two columns renumbers every column after it and
+   * shows the sixth one fourth. A per-column element cannot be placed safely
+   * at all; one element carrying every column's rules can.
+   *
+   * Each column gets its own scope id, so the rules land on that column and
+   * not on its neighbours.
+   */
+  const cellDeviceScopeId = (columnKey: string) => `${deviceScopeId}-${columnKey}`;
+  const cellDeviceCss =
+    emailPreview || isOverlayLayoutCollapsed || !section.cellDeviceOverrides
+      ? new Map<string, string>()
+      : new Map(
+          columnKeys
+            .map(
+              (columnKey) =>
+                [
+                  columnKey,
+                  buildCellDeviceCss(section, columnKey, cellDeviceScopeId(columnKey), (resolved) =>
+                    buildBuilderColumnStyle(resolved, columnKey)
+                  )
+                ] as const
+            )
+            .filter(([, css]) => Boolean(css))
+        );
+  const rowAndCellDeviceCss = [deviceCss, ...cellDeviceCss.values()].filter(Boolean).join("\n");
 
   return (
     <section
@@ -1963,37 +1998,6 @@ function BuilderSectionPreview({
         const columnWidthPercent = getSectionColumnPercent(section, columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
-        /*
-         * Cell spacing, four sides, with both older generations read as
-         * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
-         * the single all-sides `cellPadding` before it. Reading them here as
-         * well as in the normalizer is what lets a page that has not been
-         * re-saved render exactly as it did.
-         *
-         * The cast is because those older keys are off the type now — they
-         * exist only in stored data, which is precisely why this reads them.
-         */
-        const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
-        const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
-        const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
-          record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
-        const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
-        const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
-        const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
-        const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
-        // `--builder-cell-padding` feeds one rule only, and that rule is
-        // `margin-inline` — a full-bleed overlay slot reaching back out
-        // sideways (_builder-react.css). So it takes a HORIZONTAL side;
-        // handing it a vertical one would pull the slot out by the wrong
-        // number the moment the sides differ.
-        const padding = paddingLeft;
-        const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
-        const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
-        const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
-        const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
-        const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
-        const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
-        const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
         const isPageOverlayFlowColumn =
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
@@ -2061,96 +2065,7 @@ function BuilderSectionPreview({
           Boolean(columnBackground?.videoUrl)
             ? columnBackground
             : null;
-        /*
-         * The cell's own numbers, as one answer each, used BOTH by the inline
-         * properties below and by the variables the narrow-screen rules read.
-         *
-         * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
-         * because the generated stylesheet compacts every cell there with
-         * `padding: 12px !important` — and an `!important` in a stylesheet
-         * outranks an ordinary inline style, so the setting was never in the
-         * argument. Publishing the values lets those rules honour them
-         * instead of replacing them (see _builder-react-overrides.css).
-         *
-         * Deliberately NOT reusing `--builder-cell-padding`: that one carries
-         * the LEFT side alone, for a `margin-inline` rule that reaches an
-         * overlay slot back out sideways. It would be the wrong number here.
-         */
-        const effectiveCellPadding =
-          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? "0px"
-            : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
-        const effectiveCellRadius =
-          isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
-
-        // Custom properties are not in the CSSProperties type, so they are
-        // built once and cast rather than sprinkling casts through the block.
-        const cellVariables = {
-          "--builder-cell-padding-box": effectiveCellPadding,
-          "--builder-cell-radius": effectiveCellRadius,
-        } as CSSProperties;
-
-        const columnStyle: CSSProperties = {
-          // The cell's own fill, honoured on menu cells too — see the row
-          // background above. `columnBackground` is falsy until the operator
-          // sets one, so an untouched menu cell is unchanged.
-          ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? {}
-            : {
-                marginTop: `${marginTop}px`,
-                marginBottom: `${marginBottom}px`,
-                marginLeft: `${marginLeft}px`,
-                marginRight: `${marginRight}px`
-              }),
-          ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
-          ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
-          ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
-            ? { "--builder-cell-padding": `${padding}px` }
-            : {}),
-          ...cellVariables,
-          // Cell padding stays off for menu cells, and this one is deliberate:
-          // it used to default to 18px, so honouring it would have pushed
-          // every live header down without anybody asking. The menu module
-          // carries its own four padding sides now (Placement axis), which is
-          // the control that should move a menu inside its cell.
-          padding: effectiveCellPadding,
-          border:
-            isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
-              ? undefined
-              : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: effectiveCellRadius,
-          // {} at the left/top default, so only a cell he aligned moves.
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? {}
-            : getCellContentAlignmentStyle(
-                section.cellHAlign?.[columnKey] ?? "left",
-                section.cellVAlign?.[columnKey] ?? "top"
-              )),
-          position: "relative"
-          /*
-           * NO `overflow: hidden` HERE — this is where 86bbwmp2y lived.
-           *
-           * The footage still has to be contained: the layer is scaled to
-           * cover, so left loose it spills sideways over the column beside it,
-           * which is the one thing a per-cell background must never do. But
-           * clipping the CELL clips everything in it, and a navigation
-           * module's dropdown is supposed to hang out of its column — with a
-           * video behind it the menu was cut off at the column's edge and read
-           * to a visitor as one that would not open.
-           *
-           * So the layer wraps ITSELF in a clip box (`background-clip.ts`) at
-           * exactly these bounds. The footage is contained; the column stays
-           * `overflow: visible`, which is what it is on every cell that has no
-           * video.
-           *
-           * The box is mounted by `BuilderBackgroundLayer` rather than from
-           * here, and that is load-bearing rather than tidiness: the layer
-           * renders nothing at phone width and under reduce motion, and a box
-           * around nothing is still an extra child — in the row's case it
-           * reordered the columns on a phone (86bbwmp2y, review round 2).
-           */
-        };
+        const columnStyle = buildBuilderColumnStyle(section, columnKey);
 
         return (
           <div
@@ -2163,6 +2078,9 @@ function BuilderSectionPreview({
               cellOverlayScreenStyle || columnVideoBackground ? " builder-preview-column-layered" : ""
             }`}
             style={columnStyle}
+            {...(cellDeviceCss.has(columnKey)
+              ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: cellDeviceScopeId(columnKey) }
+              : {})}
           >
             {/*
               The video sits UNDER the tint screen and under the modules. Order
@@ -2284,9 +2202,158 @@ function BuilderSectionPreview({
         of the columns would renumber them. And inside the row, not beside it:
         `.full-width + .full-width` joins adjacent rows.
       */}
-      {deviceCss ? <style dangerouslySetInnerHTML={{ __html: deviceCss }} /> : null}
+      {rowAndCellDeviceCss ? <style dangerouslySetInnerHTML={{ __html: rowAndCellDeviceCss }} /> : null}
     </section>
   );
+}
+
+/**
+ * ONE COLUMN'S inline style, as a function of the row.
+ *
+ * A function rather than a block inside the render, and for exactly the
+ * reason `buildGridStyle` is one: the tablet and phone rules for this cell
+ * are computed by running THIS code on the row as each device sees its
+ * cells (`builder-device-css.ts`), so a device rule can never disagree with
+ * how desktop computes the same value.
+ *
+ * It re-derives the three column facts the caller also computes — menu-only,
+ * overlay-flow, section-scoped overlay — rather than taking them as
+ * arguments. They are read off the row's modules, which no device changes,
+ * and a style builder the CSS generator can call with nothing but a row is
+ * what keeps that generator from having to learn what a column is.
+ */
+function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: string): CSSProperties {
+  const columnModules = section.modules.filter((module) => module.column === columnKey);
+  const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
+  const columnBackground = section.cellBackgrounds?.[columnKey];
+  const isPageOverlayFlowColumn =
+    columnModules.length > 0 &&
+    columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
+  const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
+  /*
+   * Cell spacing, four sides, with both older generations read as
+   * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
+   * the single all-sides `cellPadding` before it. Reading them here as
+   * well as in the normalizer is what lets a page that has not been
+   * re-saved render exactly as it did.
+   *
+   * The cast is because those older keys are off the type now — they
+   * exist only in stored data, which is precisely why this reads them.
+   */
+  const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
+  const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
+  const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
+    record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
+  const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
+  const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
+  const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
+  const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
+  // `--builder-cell-padding` feeds one rule only, and that rule is
+  // `margin-inline` — a full-bleed overlay slot reaching back out
+  // sideways (_builder-react.css). So it takes a HORIZONTAL side;
+  // handing it a vertical one would pull the slot out by the wrong
+  // number the moment the sides differ.
+  const padding = paddingLeft;
+  const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
+  const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
+  const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
+  const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
+  const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
+  const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
+  const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
+
+  /*
+   * The cell's own numbers, as one answer each, used BOTH by the inline
+   * properties below and by the variables the narrow-screen rules read.
+   *
+   * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
+   * because the generated stylesheet compacts every cell there with
+   * `padding: 12px !important` — and an `!important` in a stylesheet
+   * outranks an ordinary inline style, so the setting was never in the
+   * argument. Publishing the values lets those rules honour them
+   * instead of replacing them (see _builder-react-overrides.css).
+   *
+   * Deliberately NOT reusing `--builder-cell-padding`: that one carries
+   * the LEFT side alone, for a `margin-inline` rule that reaches an
+   * overlay slot back out sideways. It would be the wrong number here.
+   */
+  const effectiveCellPadding =
+    isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? "0px"
+      : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
+  const effectiveCellRadius =
+    isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
+
+  // Custom properties are not in the CSSProperties type, so they are
+  // built once and cast rather than sprinkling casts through the block.
+  const cellVariables = {
+    "--builder-cell-padding-box": effectiveCellPadding,
+    "--builder-cell-radius": effectiveCellRadius,
+  } as CSSProperties;
+
+  const columnStyle: CSSProperties = {
+    // The cell's own fill, honoured on menu cells too — see the row
+    // background above. `columnBackground` is falsy until the operator
+    // sets one, so an untouched menu cell is unchanged.
+    ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
+    ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? {}
+      : {
+          marginTop: `${marginTop}px`,
+          marginBottom: `${marginBottom}px`,
+          marginLeft: `${marginLeft}px`,
+          marginRight: `${marginRight}px`
+        }),
+    ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
+    ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
+    ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
+      ? { "--builder-cell-padding": `${padding}px` }
+      : {}),
+    ...cellVariables,
+    // Cell padding stays off for menu cells, and this one is deliberate:
+    // it used to default to 18px, so honouring it would have pushed
+    // every live header down without anybody asking. The menu module
+    // carries its own four padding sides now (Placement axis), which is
+    // the control that should move a menu inside its cell.
+    padding: effectiveCellPadding,
+    border:
+      isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
+        ? undefined
+        : `${borderWidth}px solid ${borderColor}`,
+    borderRadius: effectiveCellRadius,
+    // {} at the left/top default, so only a cell he aligned moves.
+    ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? {}
+      : getCellContentAlignmentStyle(
+          section.cellHAlign?.[columnKey] ?? "left",
+          section.cellVAlign?.[columnKey] ?? "top"
+        )),
+    position: "relative"
+    /*
+     * NO `overflow: hidden` HERE — this is where 86bbwmp2y lived.
+     *
+     * The footage still has to be contained: the layer is scaled to
+     * cover, so left loose it spills sideways over the column beside it,
+     * which is the one thing a per-cell background must never do. But
+     * clipping the CELL clips everything in it, and a navigation
+     * module's dropdown is supposed to hang out of its column — with a
+     * video behind it the menu was cut off at the column's edge and read
+     * to a visitor as one that would not open.
+     *
+     * So the layer wraps ITSELF in a clip box (`background-clip.ts`) at
+     * exactly these bounds. The footage is contained; the column stays
+     * `overflow: visible`, which is what it is on every cell that has no
+     * video.
+     *
+     * The box is mounted by `BuilderBackgroundLayer` rather than from
+     * here, and that is load-bearing rather than tidiness: the layer
+     * renders nothing at phone width and under reduce motion, and a box
+     * around nothing is still an extra child — in the row's case it
+     * reordered the columns on a phone (86bbwmp2y, review round 2).
+     */
+  };
+
+  return columnStyle;
 }
 
 function BuilderModulePreview({
