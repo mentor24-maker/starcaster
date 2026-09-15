@@ -4325,14 +4325,71 @@ App.builder = (function () {
     return lists;
   }
 
-  // The chosen destination's OWN sections, or undefined while nothing is
-  // chosen. Undefined and [] are different answers here — one is "I have not
-  // been told", the other is "this template has no sections" — and the wording
+  // THE FRAME THE SERVER WILL ACTUALLY APPLY, not the one the template stores.
+  //
+  // 2026-09-14 round-3 review, ticket 86bc09db9. This used to read
+  // `template.layoutSections` straight off the row the dropdown was filled
+  // from — the template's RAW sections — while the server resolves every frame
+  // reference against the live saved sections first and DROPS any whose master
+  // has been deleted. Two frames, and the dialog was describing the wrong one:
+  // with one master deleted it told the operator "No shared section is
+  // removed" and the server then removed one, reporting `verified: true`
+  // afterwards because every number agreed with what it had computed.
+  //
+  // So the resolved frame is asked for. The check endpoint already computes it
+  // (it has to — it refuses a template whose frame resolves to nothing) and
+  // writes nothing whatever it is sent, which is what makes it safe to call
+  // from a dropdown's change event.
+  //
+  // Keyed by template id and emptied when the dialog opens: the masters can be
+  // edited between two openings, and a frame cached across that is the same
+  // staleness bug in a new place.
+  let bulkTemplateFrames = {};
+  // Newest-wins. Two changes in quick succession race, and the answer to the
+  // FIRST arriving second would otherwise overwrite the one the operator is
+  // looking at.
+  let bulkTemplateFrameRequest = 0;
+
+  // The resolved frame for the chosen template: an array once the server has
+  // answered, `undefined` while nothing is chosen or the answer is not in yet.
+  // Undefined and [] are different answers here — one is "I have not been
+  // told", the other is "this frame resolves to nothing" — and the wording
   // module treats them as such, so this must not flatten them to an array.
   function selectedBulkTemplateSections() {
     const select = byId('builderPagesChangeTemplateSelect');
-    const template = getSavedPageTemplateById(select && select.value);
-    return template && Array.isArray(template.layoutSections) ? template.layoutSections : undefined;
+    const id = safeText(select && select.value);
+    const entry = id ? bulkTemplateFrames[id] : null;
+    return entry && Array.isArray(entry.frame) ? entry.frame : undefined;
+  }
+
+  // Ask the server what this template's frame resolves to, then re-word the
+  // warning. A failure is recorded rather than thrown away: a refusal here is
+  // the refusal the operator would hit on pressing the button, so it is worth
+  // more said now — and the fallback while it is unknown is the RULE ("any
+  // shared section the template does not carry is taken off"), which is true
+  // of the operation whatever this call did.
+  async function loadBulkTemplateFrame(templateId) {
+    const id = safeText(templateId);
+    if (!id || bulkTemplateFrames[id]) return;
+    const ids = Array.from(selectedPageIds);
+    if (!ids.length) return;
+    const token = (bulkTemplateFrameRequest += 1);
+    let entry;
+    try {
+      const res = await api('/api/builder/landing-pages/bulk-set-template/check', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId: id }),
+      });
+      entry = { frame: Array.isArray(res && res.frame) ? res.frame : [] };
+    } catch (err) {
+      // The server's own sentence, kept verbatim — it names the template and
+      // what is wrong with it, which nothing in the browser can reconstruct.
+      entry = { error: (err && err.message) || 'The template could not be checked' };
+    }
+    bulkTemplateFrames[id] = entry;
+    // A newer request has started since; that one owns the screen.
+    if (token !== bulkTemplateFrameRequest) return;
+    renderBulkChangeTemplateWarning();
   }
 
   // THE WARNING IS RECOMPUTED WHEN THE DESTINATION CHANGES, because half of
@@ -4346,6 +4403,22 @@ App.builder = (function () {
     const warningEl = byId('builderPagesChangeTemplateWarning');
     const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
     if (!warningEl) return;
+
+    // THE SERVER'S OWN REFUSAL, SAID BEFORE THE BUTTON IS PRESSED. The check
+    // endpoint has already decided this template cannot be applied — its frame
+    // resolves to no saved section, it is an email template, it has been
+    // deleted since the dropdown was filled — and its sentence names which.
+    // Reworded here it would be a second, drifting copy; walked into, it is a
+    // refusal after the operator has committed to the operation.
+    const select = byId('builderPagesChangeTemplateSelect');
+    const chosen = safeText(select && select.value);
+    const entry = chosen ? bulkTemplateFrames[chosen] : null;
+    if (entry && entry.error) {
+      warningEl.textContent = entry.error;
+      if (confirmBtn) confirmBtn.disabled = true;
+      return;
+    }
+
     const plan = sayBulkTemplate(
       'describeBulkTemplateChangePlan',
       {
@@ -4366,6 +4439,11 @@ App.builder = (function () {
     // button as it was rather than disabling a control for a reason it cannot
     // state.
     if (confirmBtn) confirmBtn.disabled = plan.blocked === true;
+    // Asked AFTER the sentence is on screen, never before it: the operator
+    // reads the conservative wording immediately and it sharpens when the
+    // answer lands, rather than the dialog sitting blank on a network call.
+    // Returns at once when the answer is already cached.
+    if (chosen && !entry) loadBulkTemplateFrame(chosen);
   }
 
   function openBulkChangeTemplateDialog() {
@@ -4412,6 +4490,10 @@ App.builder = (function () {
       // not in hand would make the count an undercount, and the module refuses
       // to state one at all in that case — it says how many it could not read.
       if (confirmBtn) confirmBtn.disabled = false;
+      // Emptied per opening: a saved section can be edited or deleted between
+      // two openings of this dialog, and the whole point of asking the server
+      // is that the frame is resolved against the masters as they are NOW.
+      bulkTemplateFrames = {};
       renderBulkChangeTemplateWarning();
       // Rebound rather than added, because this dialog is opened many times in
       // one session and addEventListener would stack a listener per opening.

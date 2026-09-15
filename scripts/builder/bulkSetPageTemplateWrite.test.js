@@ -834,3 +834,279 @@ test('no signed-in user is recorded as no author — never as a wrong one', asyn
   assert.equal(revisions[0].reason, 'template');
   assert.equal(revisions[0].saved_by, null);
 });
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * A PAGE THAT KEEPS ITS OWN COPY OF THE HEADER — 2026-09-14 round-3 review.
+ *
+ * The frame rule counts a section as shared furniture only when it is a live
+ * LINK to a saved section. A page carrying a plain, UNLINKED copy of the same
+ * header is body, so it is kept — correctly — and the template's live header is
+ * then added around it. The page comes out with both.
+ *
+ * Measured on a copy of the real Delray page 1384 "Lesson Prices": five
+ * sections, all unlinked, four of them the site furniture. Applying template 47
+ * produced NINE sections — contact strip twice, menu banner twice, footer menu
+ * twice, copyright twice — and every page reported ok and verified, because the
+ * read-back asks about the template id, the total, the body count and the frame
+ * count and all four were correct. Two pages in the real project are in this
+ * shape today and one of them is the site's home page.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Delray 1384's shape: the furniture as the page's OWN unlinked sections. */
+function pageWithItsOwnFurniture(id, name) {
+  return {
+    id,
+    name,
+    page_template_id: '27',
+    layout_sections: JSON.stringify({
+      sections: [
+        { id: 'own-header', title: 'Public Header', type: 'text' },
+        { id: 'own-content', title: 'LESSON PRICS', type: 'text' },
+        { id: 'own-footer', title: 'Footer Menu', type: 'text' },
+      ],
+      pageBackground: { mode: 'color', color: '#123456' },
+    }),
+  };
+}
+
+test('a page carrying its own copy of the template\'s header is REFUSED, not written twice', async () => {
+  const { store, rows } = makeStore({
+    pages: [pageWithItsOwnFurniture(1, 'Lesson Prices')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '47');
+  // The RUN succeeds — one refused page out of one is still a refusal the
+  // report can name, and the point of the per-page shape is that a 57-page
+  // selection is not stopped by two pages in this state.
+  assert.equal(res.ok, false, 'every page failed, so the run reports a failure');
+  assert.match(res.error, /already carries/);
+  assert.match(res.error, /Public Header/);
+  assert.match(res.error, /Footer Menu/);
+  assert.match(res.error, /twice/);
+
+  // NOTHING WRITTEN. This is the half that matters: the page still holds
+  // exactly what it held, and it is still on its old template.
+  const after = docOf(rows[0]);
+  assert.deepEqual(after.sections.map((s) => s.id), ['own-header', 'own-content', 'own-footer']);
+  assert.equal(rows[0].page_template_id, '27');
+});
+
+test('one page in that shape does not stop the others — it is refused and named, the rest go through', async () => {
+  const { store, rows } = makeStore({
+    pages: [pageRow(1, 'Home'), pageWithItsOwnFurniture(2, 'Lesson Prices'), pageRow(3, 'About')],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1, 2, 3], '47');
+  assert.equal(res.ok, true);
+  const byId = Object.fromEntries(res.data.map((row) => [String(row.id), row]));
+  assert.equal(byId['1'].ok, true);
+  assert.equal(byId['3'].ok, true);
+  assert.equal(byId['2'].ok, false);
+  assert.match(byId['2'].error, /"Lesson Prices" already carries/);
+  // And the refused page is untouched while the other two moved.
+  assert.equal(rows.find((r) => r.id === 2).page_template_id, '27');
+  assert.equal(rows.find((r) => r.id === 1).page_template_id, '47');
+});
+
+test('a page whose own sections merely SHARE A TITLE with nothing incoming is written normally', async () => {
+  // The guard is a resemblance test and it is allowed to be — but it must not
+  // fire on a page whose content happens to have titles at all, or every page
+  // with a named section would be refused.
+  const { store, rows } = makeStore({
+    pages: [{
+      id: 1,
+      name: 'Rates',
+      page_template_id: '27',
+      layout_sections: JSON.stringify({
+        sections: [
+          { id: 'own-a', title: 'Our Rates', type: 'text' },
+          { id: 'own-b', title: 'Book a court', type: 'text' },
+        ],
+      }),
+    }],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(res.ok, true);
+  assert.equal(res.data[0].ok, true);
+  assert.equal(res.data[0].verified, true);
+  assert.deepEqual(docOf(rows[0]).sections.map((s) => s.title), ['Public Header', 'Our Rates', 'Book a court', 'Footer Menu']);
+});
+
+test('the duplication refusal never loses its closing instruction to the length cap', () => {
+  // The refusal is trimmed to 500 characters on the way out, and the clause
+  // that gets cut is the LAST one — the one telling the operator what to do.
+  // Delray page 1384's four real section names ran the first draft past the cap
+  // and lost "then run this again" off the end. The list is fitted to what is
+  // left over now, so this holds at every shape.
+  const store = makeStore({ pages: [], templates: [] }).store;
+  const shapes = [
+    [1, 8, 'Home'],
+    [4, 18, 'Lesson Prices'],
+    [4, 42, 'A page with an extremely long name that goes on and on and on past eighty characters easily'],
+    [12, 60, 'Home'],
+    [30, 5, 'Home'],
+  ];
+  for (const [count, width, pageName] of shapes) {
+    const frame = Array.from({ length: count }, (_, i) => frameRef(`t${i}`, `ss${i}`, `Name ${i}`.padEnd(width, 'x')));
+    const page = frame.map((f, i) => ({ id: `own${i}`, title: f.title }));
+    const said = store.describeFrameDuplication(page, frame, pageName);
+    assert.ok(said.length <= 500, `${count}x${width} produced ${said.length} characters`);
+    assert.ok(said.endsWith('run this again.'), `${count}x${width} lost its closing instruction: ${said}`);
+    // The COUNT is always right, whatever the list had room for.
+    assert.match(said, new RegExp(count === 1 ? 'a section of its own' : `${count} sections of its own`));
+  }
+});
+
+test('describeFrameDuplication: the predicate itself, both answers', () => {
+  const store = makeStore({ pages: [], templates: [] }).store;
+  const incoming = [
+    frameRef('tpl-header', 'ss-header', 'Public Header'),
+    frameRef('tpl-footer', 'ss-footer', 'Footer Menu'),
+  ];
+
+  // Nothing to refuse: the page's own work shares no name and no id.
+  assert.equal(
+    store.describeFrameDuplication([{ id: 'a', title: 'Prices' }], incoming, 'Rates'),
+    null,
+  );
+  // No incoming frame at all, and no body at all, are both "nothing to refuse".
+  assert.equal(store.describeFrameDuplication([{ id: 'a', title: 'Public Header' }], [], 'Rates'), null);
+  assert.equal(store.describeFrameDuplication([], incoming, 'Rates'), null);
+
+  // A NAME match, case- and whitespace-insensitive, because the operator typed
+  // both of them.
+  const byName = store.describeFrameDuplication(
+    [{ id: 'own-1', title: '  public header  ' }],
+    incoming,
+    'Lesson Prices',
+  );
+  assert.match(byName, /"Lesson Prices" already carries/);
+  assert.match(byName, /public header/);
+
+  // An ID match, which is what a template made FROM this page looks like.
+  const byId = store.describeFrameDuplication(
+    [{ id: 'tpl-footer', title: 'Something else entirely' }],
+    incoming,
+    'Home',
+  );
+  assert.match(byId, /"Home" already carries/);
+
+  // An EMPTY title is not a name and matches nothing, or every untitled
+  // section on the page would read as a duplicate of every untitled one
+  // arriving.
+  assert.equal(
+    store.describeFrameDuplication([{ id: 'own-x', title: '' }], [frameRef('t', 'ss', '')], 'Home'),
+    null,
+  );
+
+  // A frame section on the page is not body and is never counted: it is
+  // swapped, not doubled.
+  assert.equal(
+    store.describeFrameDuplication([frameRef('own-h', 'ss-header', 'Public Header')], incoming, 'Home'),
+    null,
+  );
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * THE RESOLVED FRAME, HANDED BACK — 2026-09-14 round-3 review, item 2.
+ *
+ * The dialog used to compare each page against the template's RAW sections,
+ * while the server resolves every frame reference against the live masters and
+ * DROPS any whose master has been deleted. Two answers about two different
+ * frames: with one master deleted the dialog promised "No shared section is
+ * removed" and the server removed one, reporting verified afterwards because
+ * every number agreed with what it had computed.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+test('the check endpoint reports the frame the write will apply, not the one the template stores', async () => {
+  // The header master is gone. The template still references it, so its RAW
+  // sections name two frame sections; the resolved frame has one.
+  const { store } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+    savedSections: [FOOTER_MASTER],
+  });
+
+  const check = await store.checkBulkSetPageTemplate([1], '47');
+  assert.equal(check.ok, true);
+  assert.deepEqual(
+    check.data.frame.map((s) => s.savedSectionId),
+    ['ss-footer'],
+    'the deleted master\'s reference is dropped, exactly as the write drops it',
+  );
+  assert.equal(check.data.frame[0].title, 'Footer Menu');
+  assert.equal(check.data.frame[0].canonical, true);
+  // And the raw count is still reported separately, so the two are not confused.
+  assert.equal(check.data.sectionCount, 3);
+});
+
+test('the check\'s frame and the write\'s frame are the same list', async () => {
+  const { store, rows } = makeStore({
+    pages: [pageRow(1, 'Home')],
+    templates: [NEW_TEMPLATE],
+    savedSections: [FOOTER_MASTER],
+  });
+
+  const check = await store.checkBulkSetPageTemplate([1], '47');
+  const write = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(write.ok, true);
+
+  const framedAfter = docOf(rows[0]).sections.filter((s) => s.canonical === true);
+  assert.deepEqual(
+    framedAfter.map((s) => s.savedSectionId),
+    check.data.frame.map((s) => s.savedSectionId),
+    'what the operator was told would arrive is what arrived',
+  );
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * TWO SECTIONS ON ONE PAGE MAY NOT SHARE AN id — 2026-09-14 round-3 review.
+ *
+ * A template carries its frame sections with the ids they had on the page the
+ * template was made from. Apply it back to that page and an incoming frame
+ * section arrives holding the same id as one of the page's OWN sections. The
+ * serializer keys its lineage map on `id`, so the frame's canonical flag and
+ * savedSectionId are stamped onto the page's own section too — the operator's
+ * content quietly enrolled as a copy of a saved section, to be overwritten by
+ * the next canonical propagation of that master.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+test('a page section sharing an incoming frame section\'s id is refused too — names are not the only match', async () => {
+  // The page's own body section carries the id the template's HEADER reference
+  // carries, and shares no title with it. That is what a template made FROM
+  // this page looks like after somebody renamed the section: the id is the
+  // stronger evidence of the two that this is the same piece of furniture.
+  //
+  // It is also the shape that reaches the serializer's id-keyed lineage map
+  // and stamps the frame's canonical flag and savedSectionId onto the page's
+  // own section. applyTemplateFrame gives the incoming section a fresh id so
+  // that can never happen (builder-template-frame.test.ts covers that, and it
+  // is what protects the single-page control in the editor, which has no
+  // guard of its own) — but here the page is refused before it is written at
+  // all, which is the stronger answer.
+  const { store, rows } = makeStore({
+    pages: [{
+      id: 1,
+      name: 'Home',
+      page_template_id: '27',
+      layout_sections: JSON.stringify({
+        sections: [
+          { id: 'tpl-header', title: 'Welcome to the club', type: 'text' },
+          { id: 'own-b', title: 'Our courts', type: 'text' },
+        ],
+      }),
+    }],
+    templates: [NEW_TEMPLATE],
+  });
+
+  const res = await store.bulkSetPageTemplate([1], '47');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /"Home" already carries/);
+  // Untouched: still two sections, still on the old template.
+  assert.deepEqual(docOf(rows[0]).sections.map((s) => s.id), ['tpl-header', 'own-b']);
+  assert.equal(rows[0].page_template_id, '27');
+});

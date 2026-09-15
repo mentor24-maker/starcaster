@@ -66,6 +66,42 @@ the sentence naming the shared sections that will be removed used to count them
 by name, so two different untitled ones read as one — it counts the sections
 now, and says "2 shared sections with no title" rather than inventing a single
 name for both.
+
+Three more, from the third review pass — and the first is the one that was live
+on your own site. Some pages carry their own copy of the header and footer
+rather than the shared version: the strip and the menu are sitting on the page
+as ordinary content, not linked to the master. The system counts those as your
+content, so it keeps them — correctly — and then adds the template's real header
+and footer around them. The page ends up showing the contact strip twice, the
+menu twice, the footer twice. Two Delray pages are in exactly that state today
+and one of them is the home page, and the run reported every page confirmed,
+because the totals all added up. Those pages are now refused rather than
+written — the rest of the batch goes through as normal — and the warning names
+them before you press the button, so it is not a surprise afterwards: "All 2 of
+these pages carry their own copies of sections the chosen template also brings…
+open them in the page editor, delete each page's own copies, then run this
+again."
+
+The second: the warning was comparing your pages against the template as it is
+stored, while the server compares them against the shared sections as they are
+now. Those differ whenever a shared section has been deleted since the template
+was made — and in that case the warning promised "no shared section is removed"
+and the server removed one. It now asks the server what the template actually
+resolves to and describes that, so the sentence you read and the change you get
+are the same thing. While proving it, one more small untruth turned up in the
+same sentence: a removed shared section was described as something you "can put
+back at any time", which is not true when its master is the one that was
+deleted. It now says you can add it back as long as it is still on your Saved
+Sections list.
+
+The third is invisible but was quietly corrupting pages. A template remembers
+its header and footer under the same internal names they had on the page it was
+made from — so applying it back to that page handed the page two different
+sections with one name, and the part of the system that saves pages stamped your
+own content as a copy of the shared header. The next time that header was
+edited, your content would have been overwritten with it. Sections are now
+guaranteed distinct names on the way in.
+
 ## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
 
 When you publish a page, the system saves a complete copy of it — that copy is

@@ -10,6 +10,7 @@ const {
   readBulkTemplateBody,
   countBulkTemplateFrame,
   countBulkTemplateFrameLoss,
+  countBulkTemplateFrameDuplicates,
   describeBulkTemplateChangePlan,
   describeBulkTemplateOutcome,
   describeBulkTemplateInterruption,
@@ -746,7 +747,12 @@ test('the shared sections that will be removed are named, once a template is cho
   });
 
   assert.match(plan.message, /will be removed from 1 of the 2 selected pages: Old Footer/);
-  assert.match(plan.message, /can be put back at any time/);
+  // CONDITIONALLY, because "can be put back" has a case where it is false: a
+  // template referencing a master that has since been deleted resolves without
+  // it, the page's copy is removed, and there is nothing left in Saved Sections
+  // to add back. Measured on the local database while closing this ticket.
+  assert.match(plan.message, /can be added back from Saved Sections as long as it is still on that list/);
+  assert.doesNotMatch(plan.message, /can be put back at any time/);
   assert.equal(plan.counts.frameRemoved, 1);
 });
 
@@ -873,9 +879,24 @@ test('the body reading says whether it covered the whole selection', () => {
   assert.equal(readBulkTemplateBody({ pageCount: 2, pageSections: [page, undefined] }).complete, false);
   assert.equal(readBulkTemplateBody({ pageCount: 2 }).complete, false);
   assert.equal(readBulkTemplateBody({ pageCount: 2 }).missing, 2);
-  // With no pageCount at all the entries themselves are the selection, which
-  // is what every pre-existing caller relies on.
-  assert.equal(readBulkTemplateBody({ pageSections: [page, page] }).complete, true);
+
+  // A pageCount THAT WAS NEVER GIVEN IS A COULD-NOT-TELL (2026-09-14 round-3
+  // review). This assertion used to read the other way — "with no pageCount at
+  // all the entries themselves are the selection" — and that is the whole
+  // defect: reading the size of the selection off the layouts you happen to
+  // hold makes the two agree by construction, so `complete` comes out true and
+  // every counted sentence is licensed about a selection nobody stated the
+  // size of. It is the hole this function's own comment says it closed,
+  // surviving in the one shape the comment does not cover.
+  assert.equal(readBulkTemplateBody({ pageSections: [page, page] }).complete, false);
+  assert.equal(readBulkTemplateBody({ pageSections: [page, page] }).pageCountKnown, false);
+  // ...and it does not invent a number of missing pages either: there is no
+  // total to subtract from.
+  assert.equal(readBulkTemplateBody({ pageSections: [page, page] }).missing, 0);
+  // The sentence says which of the three it is, rather than quoting a figure.
+  const unstated = describeBulkTemplateChangePlan({ pageSections: [page, page] });
+  assert.match(unstated.message, /was not told how many pages are selected/);
+  assert.equal(unstated.counts.bodyCount, null);
 });
 
 test('the live sentence in the dialog is grammatical at every count', () => {
@@ -956,4 +977,244 @@ test('the plan makes no claim its input did not license', () => {
    }
   }
   assert.ok(checked > 500, 'the sweep should be a real one');
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * THE PAGE THAT WOULD SHOW ITS HEADER TWICE — 2026-09-14 round-3 review.
+ *
+ * A section counts as shared furniture only when it is a live LINK to a saved
+ * section, so a page carrying a plain, UNLINKED copy of the same header is
+ * body — kept, correctly — and the template's live header is added around it.
+ * The page comes out with both, and this dialog's own sentence is what stops
+ * the operator looking: "All 5 content sections on this page are kept exactly
+ * as they are" is literally true, and four of those five ARE his header and
+ * footer.
+ *
+ * The server refuses such a page. This half says so before the button is
+ * pressed, so the refusal is not walked into blind.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const INCOMING_HEADER = { id: 't-h', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' };
+const INCOMING_FOOTER = { id: 't-f', title: 'Footer Menu', canonical: true, savedSectionId: 'ss-footer' };
+
+test('the duplicate counter answers "not told" rather than "none"', () => {
+  assert.equal(countBulkTemplateFrameDuplicates([[{ id: 'a' }]], undefined).known, false);
+  assert.equal(countBulkTemplateFrameDuplicates([[{ id: 'a' }]], []).known, true);
+  assert.equal(countBulkTemplateFrameDuplicates([[{ id: 'a' }]], []).pages, 0);
+});
+
+test('a page carrying its own copy of an incoming shared section is counted, by name or by id', () => {
+  const byName = countBulkTemplateFrameDuplicates(
+    [[{ id: 'own-1', title: '  PUBLIC header ' }, { id: 'own-2', title: 'Prices' }]],
+    [INCOMING_HEADER, INCOMING_FOOTER],
+  );
+  assert.equal(byName.pages, 1);
+  assert.equal(byName.sections, 1);
+  assert.deepEqual(byName.names, ['PUBLIC header']);
+
+  const byId = countBulkTemplateFrameDuplicates(
+    [[{ id: 't-f', title: 'Something else' }]],
+    [INCOMING_HEADER, INCOMING_FOOTER],
+  );
+  assert.equal(byId.pages, 1);
+  assert.deepEqual(byId.names, ['Something else']);
+
+  // An untitled section matches on id only, and is COUNTED rather than named —
+  // printing 'Untitled section' reads as a rendering fault, the same reasoning
+  // countBulkTemplateFrameLoss uses.
+  const untitled = countBulkTemplateFrameDuplicates(
+    [[{ id: 't-h' }]],
+    [INCOMING_HEADER],
+  );
+  assert.equal(untitled.sections, 1);
+  assert.equal(untitled.untitled, 1);
+  assert.deepEqual(untitled.names, []);
+});
+
+test('an empty title matches nothing — or every untitled section would be a duplicate', () => {
+  const nothing = countBulkTemplateFrameDuplicates(
+    [[{ id: 'own-1', title: '   ' }, { id: 'own-2' }]],
+    [{ id: 't-x', title: '', canonical: true, savedSectionId: 'ss-x' }],
+  );
+  assert.equal(nothing.pages, 0);
+  assert.equal(nothing.sections, 0);
+});
+
+test('a page\'s own SHARED sections are never counted as duplicates — they are swapped, not doubled', () => {
+  const shared = countBulkTemplateFrameDuplicates(
+    [[{ id: 'p-h', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' }]],
+    [INCOMING_HEADER],
+  );
+  assert.equal(shared.pages, 0);
+});
+
+test('pages and sections are counted separately — one page can double four sections', () => {
+  // Landmine 17 in miniature: a verdict evaluated per SECTION reported per
+  // PAGE. Delray page 1384 is one page and four doubled sections.
+  const both = countBulkTemplateFrameDuplicates(
+    [
+      [{ id: 'a', title: 'Public Header' }, { id: 'b', title: 'Footer Menu' }, { id: 'c', title: 'Prices' }],
+      [{ id: 'd', title: 'Prices' }],
+    ],
+    [INCOMING_HEADER, INCOMING_FOOTER],
+  );
+  assert.equal(both.pages, 1);
+  assert.equal(both.sections, 2);
+  assert.equal(both.distinct, 2);
+
+  // And the three genuinely come apart: two pages, one distinct name, two
+  // occurrences. Only `distinct` matches the list the sentence prints.
+  const shared = countBulkTemplateFrameDuplicates(
+    [[{ id: 'a', title: 'Footer Menu' }], [{ id: 'b', title: 'Footer Menu' }]],
+    [INCOMING_HEADER, INCOMING_FOOTER],
+  );
+  assert.equal(shared.pages, 2);
+  assert.equal(shared.sections, 2);
+  assert.equal(shared.distinct, 1);
+  assert.deepEqual(shared.names, ['Footer Menu']);
+});
+
+test('an unreadable page contributes nothing rather than counting as clean', () => {
+  const partial = countBulkTemplateFrameDuplicates(
+    [undefined, [{ id: 'a', title: 'Public Header' }]],
+    [INCOMING_HEADER],
+  );
+  assert.equal(partial.pages, 1);
+  // ...and the plan refuses to say anything at all about it, because the
+  // reading is incomplete.
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 2,
+    pageSections: [undefined, [{ id: 'a', title: 'Public Header' }]],
+    templateSections: [INCOMING_HEADER],
+  });
+  assert.doesNotMatch(plan.message, /would show/);
+  assert.doesNotMatch(plan.message, /No page ends up showing/);
+  assert.equal(plan.counts.frameDuplicated, null);
+});
+
+test('the dialog names the pages the server will refuse, and says so before the button is pressed', () => {
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 2,
+    liveCount: 0,
+    pageSections: [
+      [{ id: 'a', title: 'Public Header' }, { id: 'b', title: 'LESSON PRICS' }],
+      [{ id: 'c', title: 'About us' }],
+    ],
+    templateSections: [INCOMING_HEADER, INCOMING_FOOTER],
+  });
+  assert.match(plan.message, /1 of the 2 selected pages carries its own copy of a section/);
+  assert.match(plan.message, /Public Header/);
+  assert.match(plan.message, /would show both/);
+  assert.match(plan.message, /left unchanged and named in the report/);
+  assert.equal(plan.counts.frameDuplicated, 1);
+  // It does NOT block the button: the other page in the selection is fine and
+  // goes through. Only a template the server refuses outright blocks.
+  assert.equal(plan.blocked, false);
+});
+
+test('and says the reassuring thing when there is nothing to say', () => {
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[{ id: 'a', title: 'Our courts' }]],
+    templateSections: [INCOMING_HEADER],
+  });
+  assert.match(plan.message, /No page ends up showing a section twice/);
+  assert.equal(plan.counts.frameDuplicated, 0);
+});
+
+test('the duplicate sentence agrees with the count that governs each word', () => {
+  // TWO counts in one clause and they are not the same count: the verb and the
+  // possessive follow how many PAGES are affected, the noun follows how many
+  // DISTINCT sections are named — because that is what the list after the dash
+  // holds. Keying both off the page count produced "This page carries its own
+  // copy of a section … — Contact Strip, Footer Menu", which reads as a
+  // rendering fault. It is landmine 17's shape: a verdict evaluated per one
+  // thing and reported per another.
+  const say = (selected, pages) => describeBulkTemplateChangePlan({
+    pageCount: selected,
+    pageSections: pages,
+    templateSections: [INCOMING_HEADER, INCOMING_FOOTER],
+  }).message;
+
+  const H = { id: 'a', title: 'Public Header' };
+  const F = { id: 'b', title: 'Footer Menu' };
+
+  assert.match(say(1, [[H]]), /This page carries its own copy of a section .* as a shared header or footer — Public Header\./);
+  assert.match(say(1, [[H]]), /delete the page's own copy, then run this again/);
+
+  assert.match(say(1, [[H, F]]), /This page carries its own copies of sections .* as shared headers or footers — Public Header, Footer Menu\./);
+  assert.match(say(1, [[H, F]]), /delete the page's own copies,/);
+
+  assert.match(say(2, [[H], [H]]), /All 2 of these pages carry their own copy of a section/);
+  assert.match(say(2, [[H], [H]]), /delete each page's own copy,/);
+
+  assert.match(say(2, [[H, F], [F]]), /All 2 of these pages carry their own copies of sections/);
+  assert.match(say(3, [[H], [{ id: 'z', title: 'Prices' }], [{ id: 'y', title: 'News' }]]),
+    /1 of the 3 selected pages carries its own copy of a section/);
+
+  // An untitled one is counted, not named — printing 'Untitled section' reads
+  // as a fault rather than as a section, the same reasoning the removal
+  // sentence uses.
+  assert.match(say(1, [[{ id: 't-h' }]]), /— 1 section with no title\./);
+
+  // The verb never follows the wrong count, at any shape.
+  for (const [selected, pages] of [
+    [1, [[H]]], [1, [[H, F]]], [2, [[H], [H]]], [2, [[H, F], [F]]], [3, [[H], [F], [H, F]]],
+  ]) {
+    const said = say(selected, pages);
+    assert.doesNotMatch(said, /pages carries its own/);
+    assert.doesNotMatch(said, /page carry their own/);
+    assert.doesNotMatch(said, /copy of a section .* as shared headers/);
+    assert.doesNotMatch(said, /copies of sections .* as a shared header/);
+  }
+});
+
+/**
+ * THE TWO PLACES THAT ASK THIS QUESTION MUST NOT DISAGREE.
+ *
+ * The rule lives twice on purpose: the server refuses a page
+ * (describeFrameDuplication in lib/builderPagesStore.js), and the browser
+ * names it before the button is pressed (countBulkTemplateFrameDuplicates,
+ * above). They cannot share an implementation — one runs in Node against a
+ * page's sections, the other in a plain <script> in public/shared/ against
+ * whatever the rows are holding — so this walks a matrix across both and fails
+ * if they ever answer differently about a page. A dialog that promises what
+ * the write does not deliver is this ticket's whole history.
+ */
+test('the dialog and the server agree, page by page, about which pages are refused', () => {
+  const { describeFrameDuplication } = require('../../lib/builderPagesStore');
+
+  const INCOMING = [INCOMING_HEADER, INCOMING_FOOTER];
+  const PAGES = [
+    [],
+    [{ id: 'a', title: 'Prices' }],
+    [{ id: 'a', title: 'Public Header' }],
+    [{ id: 'a', title: '  public HEADER  ' }],
+    [{ id: 't-f', title: 'Renamed since' }],
+    [{ id: 'a', title: 'Public Header' }, { id: 'b', title: 'Footer Menu' }],
+    [{ id: 'a', title: '' }],
+    [{ id: 'a' }],
+    [{ id: 't-h' }],
+    [{ id: 'p-h', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' }],
+    [{ id: 'p-x', title: 'Public Header', canonical: true, savedSectionId: 'ss-other' }],
+  ];
+  const FRAMES = [[], [INCOMING_HEADER], INCOMING, [{ id: 't-z', title: '', canonical: true, savedSectionId: 'ss-z' }]];
+
+  let checked = 0;
+  for (const page of PAGES) {
+    for (const frame of FRAMES) {
+      const browserSaysDoubled = countBulkTemplateFrameDuplicates([page], frame).pages > 0;
+      const serverRefuses = describeFrameDuplication(page, frame, 'Some page') !== null;
+      assert.equal(
+        browserSaysDoubled,
+        serverRefuses,
+        'the dialog and the write path disagree about this page.\n'
+          + `  page:  ${JSON.stringify(page)}\n`
+          + `  frame: ${JSON.stringify(frame)}\n`
+          + `  dialog says doubled: ${browserSaysDoubled}, server refuses: ${serverRefuses}`,
+      );
+      checked += 1;
+    }
+  }
+  assert.ok(checked >= 40, `the sweep should be a real one, got ${checked}`);
 });

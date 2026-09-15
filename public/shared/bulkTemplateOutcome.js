@@ -230,17 +230,27 @@
   function readBulkTemplateBody(options) {
     const opts = options && typeof options === 'object' ? options : {};
     const counted = countBulkTemplateBody(opts.pageSections);
-    const pageCount = Number.isFinite(Number(opts.pageCount))
+    // A `pageCount` THAT WAS NEVER GIVEN IS A COULD-NOT-TELL, not a zero and
+    // not "however many layouts I happen to hold" (2026-09-14 round-3 review).
+    // It used to fall back to `counted.pages`, which makes the selection size
+    // agree with the layouts by construction — so `complete` came out true and
+    // the whole family of counted sentences was licensed about a selection
+    // nobody had stated the size of. That is the exact hole this function's own
+    // comment says it closed, surviving in the one shape the comment does not
+    // cover: the function was reading the selection off its own input.
+    const pageCountKnown = Number.isFinite(Number(opts.pageCount));
+    const pageCount = pageCountKnown
       ? Math.max(0, Math.trunc(Number(opts.pageCount)))
       : counted.pages;
     return {
       counted,
       pageCount,
+      pageCountKnown,
       // Both directions. More layouts than pages is a caller bug rather than a
       // reachable state, and it would make the count an OVERstate — the same
       // defect with the sign flipped, so it is not licensed either.
-      complete: counted.unreadable === 0 && counted.pages === pageCount,
-      missing: Math.max(0, pageCount - counted.readable),
+      complete: pageCountKnown && counted.unreadable === 0 && counted.pages === pageCount,
+      missing: pageCountKnown ? Math.max(0, pageCount - counted.readable) : 0,
     };
   }
 
@@ -329,6 +339,84 @@
   }
 
   /**
+   * WHICH PAGES WOULD END UP SHOWING THEIR HEADER TWICE.
+   *
+   * 2026-09-14 round-3 review, ticket 86bc09db9. A section counts as shared
+   * furniture only when it is a live LINK to a saved section, so a page
+   * carrying a plain, UNLINKED copy of the same header is body — kept,
+   * correctly — and the template's live header is then added around it. The
+   * page comes out with both, and the dialog's own sentence is what stops the
+   * operator looking: "All 5 content sections on this page are kept exactly as
+   * they are" is literally true, and four of those five ARE his header and
+   * footer.
+   *
+   * The server refuses such a page rather than writing it
+   * (describeFrameDuplication in lib/builderPagesStore.js). This is the half
+   * that says so BEFORE the button is pressed, so the refusal is not walked
+   * into blind — the same reason the frameless-template block is stated here
+   * rather than left as an error afterwards.
+   *
+   * `templateSections` must be the RESOLVED frame the server will apply, not
+   * the template's stored references; the two differ whenever a master has
+   * been deleted. The dialog gets it from the check endpoint, which computes
+   * it from the live masters.
+   *
+   * Matched by NAME or by section id, which is the same resemblance test the
+   * server refuses on — stated once in each place rather than shared, because
+   * one runs in Node against sections and the other in the browser against
+   * whatever the rows are holding; scripts/builder/bulkTemplateOutcome.test.js
+   * walks a matrix across both and fails if they ever disagree about a page.
+   */
+  function countBulkTemplateFrameDuplicates(pageSections, templateSections) {
+    if (!Array.isArray(templateSections)) return { known: false, names: [], untitled: 0, sections: 0, pages: 0 };
+    const incomingTitles = new Set();
+    const incomingIds = new Set();
+    for (const section of templateSections) {
+      if (!isFrameSectionLike(section)) continue;
+      const title = section && typeof section.title === 'string' ? section.title.trim().toLowerCase() : '';
+      if (title) incomingTitles.add(title);
+      const id = String(section?.id ?? '');
+      if (id) incomingIds.add(id);
+    }
+    const list = Array.isArray(pageSections) ? pageSections : [];
+    const names = [];
+    const seen = new Set();
+    let untitled = 0;
+    let sections = 0;
+    let pages = 0;
+    for (const page of list) {
+      if (!Array.isArray(page)) continue;
+      let doubled = 0;
+      for (const section of page) {
+        if (isFrameSectionLike(section)) continue;
+        const raw = section && typeof section.title === 'string' ? section.title.trim() : '';
+        const title = raw ? raw.toLowerCase() : '';
+        const id = String(section?.id ?? '');
+        // An empty title is not a name and matches nothing, or every untitled
+        // section on the page would read as a duplicate of every untitled
+        // shared section.
+        if (!((title && incomingTitles.has(title)) || (id && incomingIds.has(id)))) continue;
+        doubled += 1;
+        const key = title || `id:${id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (raw) names.push(raw);
+        else untitled += 1;
+      }
+      if (doubled) { pages += 1; sections += doubled; }
+    }
+    // THREE counts, and they are three different questions: how many PAGES are
+    // affected, how many DISTINCT sections are named, and how many occurrences
+    // there are in total. A page carrying four of them is one page and four
+    // sections; two pages both carrying the footer is two pages, one distinct
+    // name and two occurrences. `distinct` is the one the printed list matches,
+    // so it is the one the sentence's nouns agree with — quoting `sections`
+    // beside a list of `names` invites the operator to count them and find they
+    // do not add up.
+    return { known: true, names, untitled, distinct: seen.size, sections, pages };
+  }
+
+  /**
    * EVERY claim this file can make, with the fact that licenses it.
    *
    * The test walks this table across a matrix of inputs and fails if a phrase
@@ -402,6 +490,24 @@
       phrase: 'No shared section is removed',
       licensed: (opts) => readBulkTemplateBody(opts).complete
         && countBulkTemplateFrameLoss(opts.pageSections, opts.templateSections).known,
+    },
+    {
+      // Naming the pages the server will refuse needs BOTH the resolved frame
+      // to compare against and every page's layout to look in — the same two
+      // facts the removal sentence needs, and for the same reason: a page this
+      // screen could not read is a page whose doubling it cannot see.
+      name: 'which pages would show a section twice',
+      phrase: 'would show',
+      licensed: (opts) => readBulkTemplateBody(opts).complete
+        && countBulkTemplateFrameDuplicates(opts.pageSections, opts.templateSections).known,
+    },
+    {
+      // And the reassuring direction, which is the stronger claim: it has to
+      // hold for every page in the selection, so an unread page forbids it.
+      name: 'no page would show a section twice',
+      phrase: 'No page ends up showing',
+      licensed: (opts) => readBulkTemplateBody(opts).complete
+        && countBulkTemplateFrameDuplicates(opts.pageSections, opts.templateSections).known,
     },
     {
       name: 'pages are live on the public site',
@@ -700,6 +806,7 @@
           unreadable: counted.unreadable,
           unread: reading.missing,
           frameRemoved: null,
+          frameDuplicated: null,
           liveCount,
         },
       };
@@ -719,17 +826,28 @@
       // sentence; being given MORE layouts than pages is a caller bug and
       // cannot be phrased as "could not read N of M" without inventing a
       // number, so it says what it actually has.
+      const keepsRule = 'Each page keeps its own content sections; only the shared header and footer '
+        + 'sections are replaced with the ones the chosen template carries. ';
+      // THREE ways to be incomplete, and the sentence has to fit the one that
+      // happened. A layout that could not be read and a page whose layout was
+      // never handed over are the same fact to the operator, so they share a
+      // sentence; being given MORE layouts than pages is a caller bug and
+      // cannot be phrased as "could not read N of M" without inventing a
+      // number; and not being told the size of the selection at all is neither
+      // of those — there is no M to count against, so saying "N of M" would be
+      // quoting a total this screen made up out of its own input.
       parts.push(
-        reading.missing > 0
-          ? 'Each page keeps its own content sections; only the shared header and footer sections are '
-            + 'replaced with the ones the chosen template carries. This screen could not read the layout of '
-            + `${reading.missing} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}, `
-            + 'so it cannot tell you the exact number it is keeping.'
-          : 'Each page keeps its own content sections; only the shared header and footer sections are '
-            + 'replaced with the ones the chosen template carries. This screen was handed '
-            + `${counted.pages} page ${plural(counted.pages, 'layout', 'layouts')} for `
-            + `${pageCount} selected ${plural(pageCount, 'page', 'pages')}, so it cannot tell you the exact `
-            + 'number it is keeping.',
+        !reading.pageCountKnown
+          ? `${keepsRule}This screen was not told how many pages are selected, so it cannot tell you the `
+            + 'exact number it is keeping.'
+          : reading.missing > 0
+            ? `${keepsRule}This screen could not read the layout of `
+              + `${reading.missing} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}, `
+              + 'so it cannot tell you the exact number it is keeping.'
+            : `${keepsRule}This screen was handed `
+              + `${counted.pages} page ${plural(counted.pages, 'layout', 'layouts')} for `
+              + `${pageCount} selected ${plural(pageCount, 'page', 'pages')}, so it cannot tell you the exact `
+              + 'number it is keeping.',
       );
     } else if (counted.bodyCount === 0) {
       parts.push(
@@ -766,7 +884,9 @@
     if (!frameLoss.known || !reading.complete) {
       parts.push(
         'Any shared section a page carries that the chosen template does not is taken off that page — it '
-          + 'stays in Saved Sections, so it can be put back.',
+          // Same claim, stated as the rule rather than about this selection —
+          // and with the same condition on it, for the same reason.
+          + 'stays in Saved Sections and can be added back from there, as long as it is still on that list.',
       );
     } else if (!frameLoss.removed) {
       parts.push(
@@ -787,9 +907,66 @@
         `${plural(frameLoss.removed, 'This shared section is', 'These shared sections are')} not in the `
           + `chosen template and will be removed from ${wherePages}: `
           + `${frameLoss.names.join(', ')}${untitledPart}. `
+          // "can be put back" IS A CLAIM, and it has a case where it is false.
+          // Measured on the local database while closing this ticket: a
+          // template referencing a master that has since been DELETED resolves
+          // without it, so the page's copy is removed — and there is nothing
+          // left in Saved Sections to add back. The archive, which the last
+          // line of this dialog already names, is the undo that always exists.
           + `${plural(frameLoss.removed, 'It is a saved section', 'They are saved sections')}, so `
-          + `${plural(frameLoss.removed, 'it', 'they')} can be put back at any time.`,
+          + `${plural(frameLoss.removed, 'it', 'they')} can be added back from Saved Sections as long as `
+          + `${plural(frameLoss.removed, 'it is', 'they are')} still on that list.`,
       );
+    }
+
+    // AND WHAT THE SERVER WILL REFUSE. A page carrying its own unlinked copy of
+    // a section the template also brings would come out showing it twice, so
+    // that page is not written at all — and the operator has to know which
+    // pages those are BEFORE he presses the button, or a 57-page run comes
+    // back with two refusals he cannot account for.
+    //
+    // This does not block the button: the other pages in the selection are
+    // fine and go through. It is the one sentence in this dialog that is about
+    // a subset rather than about all of them, so it names them.
+    const doubled = countBulkTemplateFrameDuplicates(opts.pageSections, opts.templateSections);
+    if (doubled.known && reading.complete) {
+      if (doubled.pages) {
+        const untitledPart = doubled.untitled
+          ? `${doubled.names.length ? ', and ' : ''}${doubled.untitled} `
+            + `${plural(doubled.untitled, 'section with no title', 'sections with no title')}`
+          : '';
+        const listed = doubled.names.length || doubled.untitled
+          ? ` — ${doubled.names.join(', ')}${untitledPart}`
+          : '';
+        const who = doubled.pages === pageCount
+          ? plural(pageCount, 'This page', `All ${pageCount} of these pages`)
+          : `${doubled.pages} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}`;
+        // TWO counts govern two different words in the same clause, and it is
+        // exactly the slip landmine 17 names. The VERB and the possessive
+        // follow how many PAGES are affected; the noun — "copy of a section"
+        // against "copies of sections" — follows how many DISTINCT sections are
+        // named, because that is what the list after the dash holds. Keying
+        // both off the page count produced "This page carries its own copy of a
+        // section … — Contact Strip, Footer Menu", which reads as a rendering
+        // fault.
+        const verb = plural(doubled.pages, 'carries', 'carry');
+        const possessive = plural(doubled.pages, 'its own', 'their own');
+        const object = plural(doubled.distinct, 'copy of a section', 'copies of sections');
+        parts.push(
+          `${who} ${verb} ${possessive} ${object} the chosen template also brings as `
+            + `${plural(doubled.distinct, 'a shared header or footer', 'shared headers or footers')}`
+            + `${listed}. ${plural(doubled.pages, 'It', 'They')} would show both, so `
+            + `${plural(doubled.pages, 'this page is', 'those pages are')} left unchanged and named in the `
+            + `report; open ${plural(doubled.pages, 'it', 'them')} in the page editor, delete `
+            + `${plural(doubled.pages, "the page's", "each page's")} own `
+            + `${plural(doubled.distinct, 'copy', 'copies')}, then run this again.`,
+        );
+      } else {
+        parts.push(
+          'No page ends up showing a section twice: none of these pages carries its own copy of a section '
+            + 'the chosen template brings.',
+        );
+      }
     }
 
     parts.push('Each page also keeps its own background and theme.');
@@ -833,6 +1010,9 @@
         unreadable: counted.unreadable,
         unread: reading.missing,
         frameRemoved: frameLoss.known && reading.complete ? frameLoss.removed : null,
+        // How many pages the server will refuse, and null — never 0 — when
+        // this screen could not work it out.
+        frameDuplicated: doubled.known && reading.complete ? doubled.pages : null,
         liveCount,
       },
     };
@@ -845,6 +1025,7 @@
     readBulkTemplateBody,
     countBulkTemplateFrame,
     countBulkTemplateFrameLoss,
+    countBulkTemplateFrameDuplicates,
     describeBulkTemplateChangePlan,
     describeBulkTemplateOutcome,
     describeBulkTemplateInterruption,
