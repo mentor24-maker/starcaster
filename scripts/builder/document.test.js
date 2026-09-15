@@ -910,3 +910,31 @@ test('migrateLegacyLayoutSections leaves one section list, not two', () => {
   assert.equal(migrated.layoutSections, undefined);
   assert.deepEqual(migrated.theme, PAGE_THEME);
 });
+
+// Tablet/phone row styles (device styles 1 of 6, task 86bc13a6v). Saving a
+// page, saving a shared section and pushing a shared section to its copies all
+// run through this serializer, and a field the normalizer does not list is
+// silently dropped — which would lose every phone setting on the next save.
+test('serializeBuilderDocument keeps a row\'s tablet and phone settings, and adds nothing to a row without them', () => {
+  const { normalizeBuilderSection } = require('../../lib/builder/template');
+  const { sectionContentHash } = require('../../lib/builder/document');
+  const base = { id: 'section-1', layout: 'single', title: '', modules: [] };
+  const withDevices = {
+    ...base,
+    deviceOverrides: { tablet: { paddingTop: '30' }, phone: { hidden: 'true', columnGap: '4' } },
+  };
+
+  const serialized = serializeBuilderDocument({ layoutSections: [withDevices, { ...base, id: 'section-2' }] });
+  assert.deepEqual(serialized.sections[0].deviceOverrides, withDevices.deviceOverrides);
+  assert.equal('deviceOverrides' in serialized.sections[1], false);
+
+  const restored = normalizeBuilderDocument(serialized).layoutSections[0];
+  assert.deepEqual(restored.deviceOverrides, withDevices.deviceOverrides);
+
+  // The saved-sections store normalizes through this function.
+  assert.deepEqual(normalizeBuilderSection(withDevices).deviceOverrides, withDevices.deviceOverrides);
+
+  // A phone-only change is a content change, so a shared section's copies
+  // are seen as different from a master that lacks it.
+  assert.notEqual(sectionContentHash(restored), sectionContentHash(normalizeBuilderDocument(serialized).layoutSections[1]));
+});

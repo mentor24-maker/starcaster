@@ -24,6 +24,8 @@ import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-do
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderCellStyleSettings } from "./builder-cell-style-settings";
+import { BuilderDeviceSwitch } from "./builder-device-switch";
+import { listSectionDeviceOverrideKeys, type BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import { cancelBuilderDragIfFormField } from "./builder-drag-utils";
 import { BuilderModuleCard } from "./builder-module-card";
 import { BuilderSectionControls } from "./builder-section-controls";
@@ -217,6 +219,9 @@ export function BuilderSectionCard({
   // row to reach its content meant scrolling past every one of them. Now the
   // bar is all you see until you want them.
   const [isSectionSettingsCollapsed, setIsSectionSettingsCollapsed] = useState(true);
+  // Which screen the row's style panel is editing. Not saved: every panel
+  // opens on Desktop, which is what the operator expects to be editing.
+  const [sectionStyleDevice, setSectionStyleDevice] = useState<BuilderEditorStyleDevice>("desktop");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -645,6 +650,22 @@ export function BuilderSectionCard({
               onToggle={() => setIsSectionSettingsCollapsed((current) => !current)}
               panelName="Section Settings and Styles"
               title="Section Settings and Styles"
+              trailingActions={
+                // The old page-list Mobile mode has its own panel; the switch
+                // would only confuse it, so it is shown in the normal mode.
+                editorDevice === "browser" ? (
+                  <BuilderDeviceSwitch
+                    value={sectionStyleDevice}
+                    changedDevices={(["tablet", "phone"] as const).filter(
+                      (device) => listSectionDeviceOverrideKeys(section, device).length > 0
+                    )}
+                    onChange={(device) => {
+                      setSectionStyleDevice(device);
+                      setIsSectionSettingsCollapsed(false);
+                    }}
+                  />
+                ) : null
+              }
             />
 
             {!isSectionSettingsCollapsed ? (
@@ -652,6 +673,7 @@ export function BuilderSectionCard({
                 section={section}
                 canJoinPrevious={sectionIndex > 0}
                 editorDevice={editorDevice}
+                styleDevice={sectionStyleDevice}
                 onUpdateSection={onUpdateSection}
                 onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
                 onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}

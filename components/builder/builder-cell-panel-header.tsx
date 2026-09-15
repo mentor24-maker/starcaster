@@ -8,6 +8,8 @@ type BuilderCellPanelHeaderProps = {
   panelName?: string;
   leadingActions?: ReactNode;
   headingActions?: ReactNode;
+  /** Sits on the right of the bar, just left of the collapse arrow (the device switch). */
+  trailingActions?: ReactNode;
   headerRef?: Ref<HTMLDivElement>;
 };
 
@@ -18,6 +20,7 @@ export function BuilderCellPanelHeader({
   panelName,
   leadingActions,
   headingActions,
+  trailingActions,
   headerRef
 }: BuilderCellPanelHeaderProps) {
   const label = panelName ?? title;
@@ -33,6 +36,7 @@ export function BuilderCellPanelHeader({
         </button>
       </div>
       <div className="builder-section-actions">
+        {trailingActions}
         <button
           aria-label={isCollapsed ? `Expand ${label}` : `Collapse ${label}`}
           className="builder-icon-button"
