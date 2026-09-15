@@ -1903,7 +1903,6 @@ function BuilderSectionPreview({
       {sectionBackgroundLayer ? (
         <div
           aria-hidden
-          className="builder-preview-background-clip"
           {...builderBackgroundClipAttrs("section")}
           style={builderBackgroundClipStyle()}
         >
@@ -2122,7 +2121,6 @@ function BuilderSectionPreview({
             {columnVideoBackground ? (
               <div
                 aria-hidden
-                className="builder-preview-background-clip"
                 {...builderBackgroundClipAttrs("cell")}
                 style={builderBackgroundClipStyle()}
               >
