@@ -1,3 +1,60 @@
+## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
+
+Third of eight pieces in the Studio work. The first two built the filing
+cabinet and the to-do list; this is the part that notices you have put
+something new in the folder.
+
+Two folders are watched, and they mean different things. `/Studio/Inbox/` is
+footage, which goes through the whole pipeline. `/Studio/Plates/` is
+backgrounds and screen recordings, which are looked at but never sent for
+transcription — a screen capture has nobody talking in it, and transcribing
+them all would spend real money on silence.
+
+The interesting choice is the question it asks Google. The obvious one is
+"what is in this folder?", and it works beautifully until the folder has a few
+thousand files in it, at which point it gets slower every single week and
+eventually stops answering. So it asks the other question instead: "what has
+changed since the last time I asked?" That costs the same whether the folder
+holds ten files or ten thousand. It writes down where it got to, so turning the
+machine off and on again picks up from there rather than re-filing every video
+you have ever shot.
+
+Two things were worth building carefully, because both have bitten this project
+before.
+
+The first is the account muddle. The footage lives on one Google account and
+the login belongs to a different one. When that arrangement breaks, Google's
+answer is "file not found" — which is exactly what it says when a folder has
+genuinely been deleted, and it sends you looking in completely the wrong place.
+So every run now says out loud which account the login belongs to, whether or
+not anything went wrong, and a folder it cannot see raises an alarm that names
+both accounts and the two ways to fix it.
+
+The second is not pestering. An expired login does not start working again
+because you asked it a second time ninety seconds later; it starts working
+when somebody re-mints it. So a broken login raises exactly **one** flagged
+item that keeps its reason, and refreshes it rather than filing another on
+every pass — ten broken hours leave one alarm, not ten. When it starts working
+again the alarm clears itself and says that it has, because an alarm that
+cannot stand down is one everybody learns to ignore.
+
+There is a related trap underneath that. Google reports "your login is dead"
+and "you are asking too fast" with the same error number, and those want
+opposite reactions — one needs a person, the other fixes itself in a minute.
+They are now told apart properly, so nobody gets sent to replace a login that
+was fine.
+
+One more thing, found while looking at what a real run would print rather than
+what the tests print: Google's "what has changed" feed covers the whole
+account, not just the two watched folders. On the real account that is a very
+large archive ticking over, so the first draft's run report would have listed
+a few thousand unrelated holiday videos by name and buried the three lines that
+mattered. Files that have nothing to do with the Studio are now counted by
+category with a few examples kept, and only files genuinely in a watched folder
+are named one by one.
+
+Nothing downloads yet — that is the next piece.
+
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 
 **Read this bit first, because the original report was wrong about one thing.**
