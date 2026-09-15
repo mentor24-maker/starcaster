@@ -1,3 +1,25 @@
+## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
+
+A heading that looks right on a laptop is often far too big on a phone, and
+until now the only way out was to accept it. Expand a module in the Builder and
+its header carries three small icons — phone, tablet, desktop — the same ones
+rows got a few days ago. Click the phone and the settings panel swaps to that
+screen: spacing, alignment, width, font size, and a box to leave the module out
+altogether. Change one and only that one is remembered for phones; everything
+else keeps following the desktop version, so tidying the page later still
+reaches every screen that never asked to be different.
+
+Nothing on an existing page moves. The three older settings — Hide Module on
+Mobile, Mobile Alignment, Mobile Font Size — still work exactly as they did, and
+the new panel shows their values so what you see is what the page is doing.
+
+One thing turned up while building it that is worth knowing: *Mobile Font Size*
+has never actually reached a real phone. Another rule in the same stylesheet
+sizes every heading and beats it, so the setting only ever worked inside the
+Builder's own phone preview. That is a real fault, it is not changed here, and
+it belongs with the next slice of this work, which is about those old phone
+rules.
+
 ## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
 
 Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
