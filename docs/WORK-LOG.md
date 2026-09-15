@@ -24,6 +24,16 @@ Four automatic checks were added that drive a real browser, open the menu, and
 ask what the visitor could actually see and click. Each one was deliberately
 broken first and watched to fail, so a future change cannot quietly bring this
 back.
+
+A second round caught something before it ever reached anyone: on a phone a
+background video is not played at all — it would cost the visitor megabytes of
+their own data — and the holding box was still being put on the page around
+nothing. An empty box is still something the page has to lay out, and in a row
+of six columns set to stack in reverse on phones it pushed the last column into
+the middle of the pile. The box is now put up by the video itself, so when
+there is no video there is nothing at all, and the columns come out in the order
+the operator asked for. Five more browser checks cover that, including one that
+simply reads what order a phone actually put the columns in.
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 
 **Read this bit first, because the original report was wrong about one thing.**

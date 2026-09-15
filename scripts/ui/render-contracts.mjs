@@ -1243,6 +1243,138 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * ── A LAYER THAT RENDERS NOTHING MUST ADD NOTHING ─────────────────────
+   *
+   * The clip box was mounted by the row and the cell at first, from the
+   * SETTINGS. The layer itself renders nothing at phone width and nothing
+   * under reduce motion, so a phone visitor got an EMPTY box as the row's
+   * first child — and the row is a grid whose mobile reverse-stack rules count
+   * children: `:nth-child(1..6)`, stopping at six. One extra child pushed the
+   * sixth column out of the last rule, it fell back to `order: 0`, and the
+   * columns came out 5,4,3,6,2,1 on a live page with nothing to see wrong
+   * (86bbwmp2y, review round 2).
+   *
+   * Every contract above this sweeps at 1440px, where the video always mounts,
+   * so not one of them could see the state where the box was empty. These
+   * three ask at the two widths and settings where the layer bows out.
+   */
+  {
+    id: 'video-background-puts-the-columns-in-order-on-a-phone',
+    why:
+      'THE VISIBLE HALF OF THE REGRESSION, measured as a visitor would meet it rather than as an ' +
+      'element count. A six-column row set to Reverse stack must come out 6,5,4,3,2,1 on a phone, ' +
+      'and the rules that do that are `:nth-child(1..6)` — they stop at six, so ANY extra child in ' +
+      'the row silently drops the last column to `order: 0` and shows it fourth. The empty clip box ' +
+      'did exactly that. This reads the order the browser actually resolved on the last column, so ' +
+      'it fails for any cause — a second layer, a stray marker, a wrapper somebody adds next year — ' +
+      'rather than only for the one that happened.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      background: { ...VIDEO_SECTION.background },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section-layered > .builder-preview-column:last-child',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      const order = Number(sample.styles.order);
+      if (order === 0) {
+        return 'the last column of a six-column Reverse stack row resolved `order: 0`, which is the ' +
+          'initial value and not any of the six rules — so the row has an extra child and every ' +
+          'column is one rule out of step. The sixth column is shown FOURTH. This is what an empty ' +
+          'clip box did on a phone; whatever added a child here, it reaches visitors.';
+      }
+      if (order !== -2) {
+        return `the last column of a six-column Reverse stack row resolved \`order: ${sample.styles.order}\`, ` +
+          'not -2 — the reverse-stack rules are not landing on the columns they were written for.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The mechanism behind the contract above, asked directly so a failure says WHICH extra child. ' +
+      'A row video does not play on a phone (the megabytes are somebody else\'s cell data) and the ' +
+      'layer returns null — so the clip box must not go up either. A box around nothing is still a ' +
+      'child, and the row counts its children.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-under-reduce-motion',
+    why:
+      'The same rule at the other place the layer bows out. A visitor who asked for reduced motion ' +
+      'gets the poster and no <video> at all, so an empty clip box would be an extra child in their ' +
+      'row and nobody else\'s — a layout that differs by an accessibility setting, which is the ' +
+      'hardest kind of bug to be told about.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The cell half. A column\'s children are read too — `_builder-react.css` keys a rule off ' +
+      '`> .builder-preview-module:nth-child(2)` to mean "this column has a second module" — so an ' +
+      'empty box in front of a single module satisfies a rule written about two. That one is scoped ' +
+      'to an embed and harms nothing today, which makes it evidence rather than a bug: the shift ' +
+      'has more than one reader, and the way to be safe is to add no element at all.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'row-overlay-screen-only-leaves-the-row-uncontained',
+    why:
+      'A row carrying ONLY a tint screen — no video, no parallax — used to be clipped by the same ' +
+      '`overflow: hidden` the video rows had, and 86bbwmp2y removed it from both. Nothing took over ' +
+      'for the tint row and nothing needs to: `.builder-preview-row-overlay-screen` is `inset: 0` ' +
+      'with `border-radius: inherit`, so it is already exactly the row\'s shape and has nothing to ' +
+      'overflow with. Letting the row\'s CONTENT out is the fix rather than a side effect — a ' +
+      'dropdown in a tinted row was cut off for the same reason it was in a video one. This is the ' +
+      'contract that was missing when that behaviour changed, so it changed silently (review round 2).',
+    section: {
+      layout: 'two-column',
+      overlayScreen: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      modules: [
+        { type: 'heading', text: 'Text under a tint', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Plain neighbour', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'a row carrying only a tint screen is `overflow: hidden` — a navigation dropdown in ' +
+          'it is cut off at the row\'s edge, which is 86bbwmp2y arriving through the overlay ' +
+          'setting instead of through a video.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so its tint screen sizes itself against the page ' +
+          'rather than against the row and the tint lands over the whole document.';
+      }
+      return null;
+    },
+  },
+
   {
     id: 'cell-video-background-lets-a-dropdown-menu-out-of-the-cell',
     why:

@@ -25,6 +25,20 @@ import type { CSSProperties } from "react";
  * box are two things to keep in step and only one of them would ever get
  * fixed — which is the same argument that put both surfaces on one
  * `BuilderBackgroundLayer`.
+ *
+ * WHERE THE BOX IS MOUNTED, AND WHY IT IS NOT THE SURFACE'S JOB.
+ * `BuilderBackgroundLayer` wraps its own output in this box. The first version
+ * had the row and the cell wrap the layer instead, and that box went up
+ * whenever the SETTINGS said "video" — while the layer itself renders nothing
+ * at all at phone width and under reduce motion (`if (!videoUrl ||
+ * !playbackAllowed) return null`). A phone visitor therefore got an EMPTY box
+ * as the row's first child, which is an extra element in a CSS grid: the
+ * mobile reverse-stack rules run `> .builder-preview-column:nth-child(1..6)`
+ * and stop at six, so the sixth column of a six-column row fell through to
+ * `order: 0` and landed fourth. The columns were silently in the wrong order
+ * on a live page (86bbwmp2y, review round 2). Only the layer knows whether it
+ * mounted anything, so only the layer may mount the box — and the rule to hold
+ * is the general one: A BACKGROUND THAT RENDERS NOTHING MUST ADD NO ELEMENT.
  */
 
 /**
@@ -72,6 +86,28 @@ export function builderBackgroundClipStyle(): CSSProperties {
  * and the cell's box apart, which is the difference between "the footage is
  * contained somewhere" and "it is contained by the surface that mounted it".
  */
+/**
+ * Which surfaces are clipped, as a question rather than as an `if` repeated in
+ * two places.
+ *
+ * The PAGE layer is not, and that is deliberate rather than an omission. It is
+ * `position: fixed` to the window — a box with `overflow: hidden` around it
+ * would contain nothing (overflow does not clip a fixed descendant) while
+ * breaking the rule that makes it fixed at all:
+ * `.has-shell-background-video > .builder-preview-video-background-page` is a
+ * DIRECT-child selector, and a wrapper is one element too many. The page layer
+ * has nothing beside it to spill onto either, which is the whole reason the
+ * containment exists on the other two.
+ *
+ * A type predicate, so `builderBackgroundClipAttrs` can keep refusing "page"
+ * rather than taking a cast on trust.
+ */
+export function builderBackgroundClipsSurface(
+  surface: "section" | "page" | "cell"
+): surface is "section" | "cell" {
+  return surface !== "page";
+}
+
 export function builderBackgroundClipAttrs(
   surface: "section" | "cell"
 ): Record<string, string> {

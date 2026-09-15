@@ -4,6 +4,7 @@ import {
   BUILDER_BACKGROUND_CLIP_ATTR,
   builderBackgroundClipAttrs,
   builderBackgroundClipStyle,
+  builderBackgroundClipsSurface,
   builderBackgroundLayerSurface
 } from "./background-clip";
 
@@ -41,6 +42,19 @@ describe("builderBackgroundClipAttrs", () => {
     expect(builderBackgroundClipAttrs("section")).toEqual({
       [BUILDER_BACKGROUND_CLIP_ATTR]: "section"
     });
+  });
+});
+
+describe("builderBackgroundClipsSurface", () => {
+  it("clips a row and a cell, and never the page", () => {
+    expect(builderBackgroundClipsSurface("section")).toBe(true);
+    expect(builderBackgroundClipsSurface("cell")).toBe(true);
+    // The page layer is `position: fixed` to the window, so a box with
+    // `overflow: hidden` around it would contain nothing — overflow does not
+    // clip a fixed descendant — while breaking the DIRECT-child selector
+    // `.has-shell-background-video > .builder-preview-video-background-page`
+    // that makes it fixed in the first place.
+    expect(builderBackgroundClipsSurface("page")).toBe(false);
   });
 });
 

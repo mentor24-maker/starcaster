@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   builderBackgroundParallaxActive,
@@ -10,7 +10,12 @@ import {
 } from "@/lib/builder-template";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
 import { backgroundParallaxGeometry } from "@/lib/background-parallax";
-import { builderBackgroundLayerSurface } from "@/lib/background-clip";
+import {
+  builderBackgroundClipAttrs,
+  builderBackgroundClipStyle,
+  builderBackgroundClipsSurface,
+  builderBackgroundLayerSurface
+} from "@/lib/background-clip";
 
 /**
  * THE ONE BACKGROUND LAYER. Section rows use it today; the page background and
@@ -537,11 +542,39 @@ export function BuilderBackgroundLayer({
    * be stripped from the surface, so there is no second code path to keep in
    * step.
    */
+  /*
+   * THE CLIP BOX, mounted HERE rather than by the row or the cell.
+   *
+   * Everything below either renders a layer or returns null, and only this
+   * component knows which — the surfaces know what the operator SET, which is
+   * a different question at phone width and under reduce motion. When the
+   * surfaces wrapped the layer, a phone got an empty box as the row's first
+   * child and the mobile reverse-stack rules (`:nth-child(1..6)`, stopping at
+   * six) put the sixth column fourth (86bbwmp2y, review round 2). So the box
+   * goes around what actually rendered, and a layer that renders nothing adds
+   * no element at all.
+   *
+   * `builderBackgroundLayerSurface` is unaffected: the layer's parent is still
+   * the box wherever there is one, and the box's parent is still the surface.
+   */
+  const inClipBox = (layer: ReactElement): ReactElement =>
+    builderBackgroundClipsSurface(surface) ? (
+      <div
+        aria-hidden
+        {...builderBackgroundClipAttrs(surface)}
+        style={builderBackgroundClipStyle()}
+      >
+        {layer}
+      </div>
+    ) : (
+      layer
+    );
+
   if (background.mode === "image") {
     if (!parallaxLive || !background.imageUrl) {
       return null;
     }
-    return (
+    return inClipBox(
       <div
         aria-hidden
         className={`builder-preview-image-background builder-preview-image-background-${surface}`}
@@ -614,7 +647,7 @@ export function BuilderBackgroundLayer({
     tabIndex: -1
   };
 
-  return (
+  return inClipBox(
     <>
       <video
         {...shared}
