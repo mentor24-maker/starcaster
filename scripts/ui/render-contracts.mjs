@@ -1195,21 +1195,49 @@ export const RENDER_CONTRACTS = [
   },
 
   {
-    id: 'cell-video-background-does-not-clip-a-cell-that-has-no-video',
+    id: 'cell-video-background-clip-box-takes-no-clicks-and-stays-at-rung-zero',
     why:
-      'The containment that keeps footage inside its own cell is deliberately conditional, and this ' +
-      'is what holds it that way. Clipping every column unconditionally would pass every other ' +
-      'contract here and silently start cutting off the floating images and overhanging decor that ' +
-      'are SUPPOSED to reach out of their cell — a regression with no error, in a feature nobody was ' +
-      'touching.',
+      'THE TWO PROPERTIES THE CLIP BOX TOOK OVER FROM THE LAYER, and nothing else here holds them. ' +
+      'Until 86bbwmp2y the video was a direct child of the cell and `.builder-preview-video-background` ' +
+      'gave it `pointer-events: none` and `z-index: 0`. The box is now the element the cell\'s siblings ' +
+      'actually see, and it gets both from `builderBackgroundClipStyle()` inline instead — so a rung ' +
+      'or a hit-test that used to be the stylesheet\'s business is now a function\'s. ' +
+      'Both fail silently and expensively. Lose `pointer-events: none` and this full-size element ' +
+      'laid over the column swallows every click in it — the operator\'s links and buttons stop ' +
+      'working in any column with a video behind it, while the page still looks perfect. Move the ' +
+      'rung off 0 and the box paints OVER the modules: `cell-video-background-stays-behind-the-words` ' +
+      'only checks that a module is at 1 or more, so a box at 2 passes that contract with the footage ' +
+      'covering the text. ' +
+      'This contract replaces `cell-video-background-does-not-clip-a-cell-that-has-no-video`, which ' +
+      'read `overflow` on the neighbouring column: that PR deleted the only code that could ever set ' +
+      'it, so nothing in its scene could make it fail, and its own reason described a conditional ' +
+      'mount that no longer exists. The half worth keeping — the cell is not clipped — is asserted ' +
+      'directly by `cell-video-background-leaves-the-cell-itself-uncontained`, on the cell that ' +
+      'actually carries the video rather than on its neighbour. ' +
+      'It reads computed style rather than probing, and that is forced rather than lazy: ' +
+      '`elementFromPoint` skips anything with `pointer-events: none`, so a probe can never see this ' +
+      'box at all while the property is correct. One contract covers the row\'s box too — both ' +
+      'surfaces spread the SAME function, so there is one set of values to be wrong.',
     section: { ...CELL_VIDEO_SECTION },
-    selector: '.builder-preview-column + .builder-preview-column',
-    read: ['overflow'],
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['pointerEvents', 'zIndex'],
     expect(sample) {
-      if (sample.styles.overflow === 'hidden') {
-        return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
-          'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
-          'on the page is now being clipped.';
+      if (sample.styles.pointerEvents !== 'none') {
+        return `the clip box is \`pointer-events: ${sample.styles.pointerEvents}\`, not \`none\` — it is a ` +
+          'full-size element laid over the whole column, so it takes every click meant for the links, ' +
+          'buttons and modules inside that column and the page reads as dead while looking correct.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex)) {
+        return `the clip box sits at z-index \`${sample.styles.zIndex || 'auto'}\` rather than an explicit ` +
+          '0 — with no rung of its own it stacks in document order against the cell\'s tint screen and ' +
+          "the cell's modules, both of which were measured against the box being at 0.";
+      }
+      if (zIndex !== 0) {
+        return `the clip box sits at z-index ${zIndex}, not 0 — the modules in that cell are only lifted to ` +
+          '1, so the footage inside this box now paints over the operator\'s words. ' +
+          '`cell-video-background-stays-behind-the-words` cannot catch this: it checks the module is at ' +
+          '1 or more and never reads the box.';
       }
       return null;
     },
