@@ -520,11 +520,16 @@ export function BuilderCarouselModuleSettings({
             // the rest. Placed any earlier, the first field's label would drop
             // to the next row. Its span is the number of fields in the column,
             // which keeps the Image row below from being pushed apart.
-            const thumb = (
+            //
+            // A narrow panel has no right column, and there the same element
+            // would land between the first field and the second. So a second
+            // copy follows the last field, and CSS shows exactly one of the
+            // two for the width — a hidden grid item takes no cell.
+            const thumbFor = (where: "beside" | "below") => (
               <BuilderImageInfoLine
                 url={item.imageUrl}
                 thumbnail
-                className="builder-card-thumb"
+                className={`builder-card-thumb builder-card-thumb--${where}`}
                 style={{ "--builder-card-thumb-rows": leftFieldCount } as CSSProperties}
               />
             );
@@ -591,7 +596,7 @@ export function BuilderCarouselModuleSettings({
                     />
                   </BuilderModuleField>
                 ) : null}
-                {showItemCopy ? thumb : null}
+                {showItemCopy ? thumbFor("beside") : null}
                 <BuilderModuleField label="Link" width="text-md" className="builder-card-field--a">
                   <input
                     type="text"
@@ -601,7 +606,7 @@ export function BuilderCarouselModuleSettings({
                     aria-label={`${Noun} ${index + 1} link`}
                   />
                 </BuilderModuleField>
-                {showItemCopy ? null : thumb}
+                {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
                   <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
                     <input
@@ -622,6 +627,7 @@ export function BuilderCarouselModuleSettings({
                     aria-label={`${Noun} ${index + 1} alt text`}
                   />
                 </BuilderModuleField>
+                {thumbFor("below")}
 
                 {/* Too wide for half a row, so it spans to the block's right
                     edge (L8). `--picker` is what pushes the Gallery button

@@ -3416,10 +3416,17 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    editor sets --builder-card-thumb-rows — so the Image row below starts on
    the row after the last field instead of being split around the picture.
    The file name (opens the pop-up) and pixel size sit directly under it. */
-.builder-react-root .builder-cards-panel-fields .builder-card-thumb {
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
   grid-column: 4 / -1;
   grid-row: span var(--builder-card-thumb-rows, 2);
   align-self: start;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+  display: none;
+}
+/* Below the fields there is no column to fit, so the picture takes full size. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below .builder-image-thumb-image {
+  max-height: 140px;
 }
 .builder-react-root .builder-image-thumb {
   display: flex;
@@ -3442,7 +3449,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-image-thumb-image {
   display: block;
   max-width: 100%;
-  max-height: 140px;
+  /* Shorter when the column beside it is: two fields' worth of rows cannot
+     hold a 140px picture plus its name without spreading those two apart. */
+  max-height: min(140px, calc(var(--builder-card-thumb-rows, 4) * 45px - 40px));
   object-fit: contain;
 }
 .builder-react-root .builder-image-thumb.is-empty {
@@ -3459,9 +3468,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 /* Narrow panel: one pair per row, so the thumbnail takes its own row under
    the fields, in the field track, rather than a column that no longer exists. */
 @media (max-width: 1200px) {
-  .builder-react-root .builder-cards-panel-fields .builder-card-thumb {
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
+    display: none;
+  }
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+    display: flex;
     grid-column: 2 / -1;
-    grid-row: auto;
   }
 }
 .builder-react-root .builder-image-info-line {
