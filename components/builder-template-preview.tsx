@@ -1766,8 +1766,13 @@ function BuilderSectionPreview({
    * not to play at all (reduce motion, phone width). The <video> simply covers
    * the still when it is allowed to run.
    *
-   * Overlay slots are excluded on purpose: they are not really rows, and the
-   * containment below would clip the very thing they exist to let overflow.
+   * Overlay slots are excluded on purpose: they are not really rows. The
+   * reason is no longer containment — since 86bbwmp2y the layer wraps itself
+   * in a clip box and the row is never clipped — but the guard is still right,
+   * because the layer and that box are both full-size absolutely-positioned
+   * elements sitting at a stacking rung. An overlay slot is a decor mount with
+   * its box thrown away, so dropping one in would lay a full-size element over
+   * the very thing the slot exists to place.
    */
   const sectionVideoBackground =
     !isOverlayLayoutCollapsed &&
@@ -1780,10 +1785,21 @@ function BuilderSectionPreview({
    *
    * Everywhere else an image is a CSS background on this very element, which
    * is why the check is `builderBackgroundParallaxActive` and not "is this an
-   * image": mounting a layer for every image section would give all of them
-   * the containment below (`overflow: hidden`), and a row with an overlay
-   * module deliberately spilling out of it would start being clipped. Off by
-   * default means off, all the way down to the element count.
+   * image": a layer mounted for every image section would be a React component
+   * with refs, effects and a scroll loop, running on every image row on the
+   * page to decide it has nothing to do. Off by default means off.
+   *
+   * It would not put an ELEMENT on those rows — the image branch returns null
+   * unless parallax is live, and since 86bbwmp2y the clip box goes up with the
+   * layer rather than around the decision to mount one, so nothing renders and
+   * nothing is wrapped. That used to be the argument here and it no longer is;
+   * the cost is the component, not the markup.
+   *
+   * Until 86bbwmp2y the reason was stronger and different: the containment was
+   * `overflow: hidden` on the ROW, so a layer here would have clipped an
+   * overlay module deliberately spilling out of it. The row is no longer
+   * clipped, so that consequence is gone; the element-count one is what keeps
+   * the check as it is.
    */
   const sectionParallaxImageBackground =
     !isOverlayLayoutCollapsed &&
@@ -1858,12 +1874,30 @@ function BuilderSectionPreview({
           borderRadius: `${section.rowBorderRadius ?? "0"}px`
         }
       : {}),
-    // Containment for the video layer and the tint screen, both of which are
-    // absolutely positioned children. Without `overflow: hidden` a blurred
-    // video — which is scaled up so its soft rim falls outside — would spill
-    // over the rows above and below it.
+    // The containing block for the video layer and the tint screen, both of
+    // which are absolutely positioned children.
+    //
+    // NO `overflow: hidden` HERE, and that is the fix for 86bbwmp2y. A blurred
+    // video is scaled up so its soft rim falls outside, and a parallaxing
+    // image layer is taller than the row by the whole travel distance, so both
+    // genuinely have to be contained — but containing them on the ROW clips
+    // everything else inside it too, and `overflow: hidden` cannot tell
+    // footage escaping from a navigation dropdown that is SUPPOSED to escape.
+    // The layer wraps ITSELF in a clip box instead (`background-clip.ts`, and
+    // the box is mounted by `BuilderBackgroundLayer` rather than from here, so
+    // a layer that renders nothing adds no element), which puts the
+    // containment on exactly the element that needs it — a menu in a video row
+    // opens over the row beneath, as it does with no video at all.
+    //
+    // A ROW CARRYING ONLY A TINT SCREEN IS NOW UNCLIPPED TOO, and it needs no
+    // replacement containment: `.builder-preview-row-overlay-screen` is
+    // `inset: 0` with `border-radius: inherit`, so it is already exactly the
+    // row's shape and has nothing to escape with. Letting the row's CONTENT
+    // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
+    // a tinted row was cut off for the same reason it was in a video one.
+    // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
     ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-      ? { position: "relative", overflow: "hidden" }
+      ? { position: "relative" }
       : {}),
     display: "grid",
     gridTemplateColumns: sectionGridTemplate,
@@ -1890,6 +1924,15 @@ function BuilderSectionPreview({
       }`}
       style={gridStyle}
     >
+      {/*
+        NO WRAPPER HERE. The layer mounts its own clip box
+        (`background-clip.ts`) around whatever it actually renders — and it
+        renders NOTHING at phone width and under reduce motion. Wrapping it
+        from out here put an empty box in front of the columns on a phone, and
+        the mobile reverse-stack rules count children: the sixth column of a
+        six-column row fell out of `:nth-child(1..6)` and landed fourth
+        (86bbwmp2y, review round 2).
+      */}
       {sectionBackgroundLayer ? (
         <BuilderBackgroundLayer
           background={sectionBackgroundLayer}
@@ -1975,17 +2018,28 @@ function BuilderSectionPreview({
          * The two collapsed-slot guards mirror the overlay screen's directly
          * above, and they mirror the ROW's `isOverlayLayoutCollapsed` guard for
          * the same reason: an overlay-flow column and a section-scoped overlay
-         * slot are decor mounts with their box thrown away, and the containment
-         * this layer needs (`overflow: hidden`) would clip the very thing they
-         * exist to let overflow.
+         * slot are decor mounts with their box thrown away, and this layer
+         * arrives wrapped in a clip box (`background-clip.ts`) that is itself
+         * full-size, absolutely positioned and on a stacking rung — so
+         * mounting one into a slot like that lays a full-size element over the
+         * decor the slot exists to place.
+         *
+         * NOT because it would be clipped. Since 86bbwmp2y the containment is
+         * the box rather than `overflow: hidden` on this column, so nothing
+         * inside a cell is clipped by a background any more — which is also
+         * what retired the two cases raised on that ticket, a column holding
+         * decor AND ordinary content being clipped along with it, and the clip
+         * being applied at phone width and under reduce-motion where the layer
+         * mounts no footage at all.
          *
          * There is no parallax twin here. An image background parallaxes by
-         * mounting this same layer, but the driver measures `parentElement` as
-         * the surface and translates against the SCROLL — a row-height effect.
+         * mounting this same layer, but the driver measures its surface with
+         * `builderBackgroundLayerSurface()` — one step up past the clip box —
+         * and translates against the SCROLL, which is a row-height effect.
          * Cells are not offered it (no `allowParallax` on the cell panel), so
          * mounting a layer for a plain cell image would give every one of them
-         * the containment above and start clipping overhanging decor for no
-         * gain. Video only, which is exactly what the panel can produce.
+         * a clip box for no gain. Video only, which is exactly what the panel
+         * can produce.
          */
         const columnVideoBackground =
           !isPageOverlayFlowColumn &&
@@ -2060,21 +2114,29 @@ function BuilderSectionPreview({
                 section.cellHAlign?.[columnKey] ?? "left",
                 section.cellVAlign?.[columnKey] ?? "top"
               )),
-          position: "relative",
+          position: "relative"
           /*
-           * Containment for the video layer, and the reason this ticket is
-           * about cells rather than rows: the layer is scaled to cover, so
-           * without `overflow: hidden` a cell's footage spills sideways over
-           * the column beside it — the one thing a per-cell background must
-           * never do. The row clips its own layer for the same reason.
+           * NO `overflow: hidden` HERE — this is where 86bbwmp2y lived.
            *
-           * Applied ONLY when a video layer is actually mounted. Clipping
-           * every cell unconditionally would silently start cutting off the
-           * floating images and overhanging decor that deliberately reach out
-           * of their column, which is why the collapsed-slot guards sit on
-           * `columnVideoBackground` itself.
+           * The footage still has to be contained: the layer is scaled to
+           * cover, so left loose it spills sideways over the column beside it,
+           * which is the one thing a per-cell background must never do. But
+           * clipping the CELL clips everything in it, and a navigation
+           * module's dropdown is supposed to hang out of its column — with a
+           * video behind it the menu was cut off at the column's edge and read
+           * to a visitor as one that would not open.
+           *
+           * So the layer wraps ITSELF in a clip box (`background-clip.ts`) at
+           * exactly these bounds. The footage is contained; the column stays
+           * `overflow: visible`, which is what it is on every cell that has no
+           * video.
+           *
+           * The box is mounted by `BuilderBackgroundLayer` rather than from
+           * here, and that is load-bearing rather than tidiness: the layer
+           * renders nothing at phone width and under reduce motion, and a box
+           * around nothing is still an extra child — in the row's case it
+           * reordered the columns on a phone (86bbwmp2y, review round 2).
            */
-          ...(columnVideoBackground ? { overflow: "hidden" } : {})
         };
 
         return (
@@ -2097,8 +2159,15 @@ function BuilderSectionPreview({
 
               `builder-preview-column-layered` is on the column above whenever
               EITHER is mounted, which is what lifts the modules to the content
-              rung; this element stays at 0 with the screen, from the shared
-              `.builder-preview-video-background` rule.
+              rung; the clip box the layer mounts around itself stays at 0 with
+              the screen, from `builderBackgroundClipStyle()` inline. The shared
+              `.builder-preview-video-background` rule still sizes and covers
+              the <video> INSIDE that box — it is the box that carries the rung
+              now, because the box is what the stylesheet's siblings see.
+
+              Nothing is rendered here at all on a phone or under reduce
+              motion: the layer returns null, so the box does not go up either
+              and the column's children are exactly its modules.
             */}
             {columnVideoBackground ? (
               <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />

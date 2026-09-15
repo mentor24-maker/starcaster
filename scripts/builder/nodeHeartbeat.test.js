@@ -990,7 +990,89 @@ test('a failure alarm older than the newest beat IS closed — a success since t
   const plan = closeout('bus-relay', agoHours(1), { failed: agoHours(2), quiet: agoHours(2) });
   assert.deepEqual(kinds(plan.clear), ['bus-relay:quiet', 'bus-relay:failed']);
   assert.deepEqual(plan.keep, []);
-  assert.deepEqual(plan.announce, [], 'a failure alert is not a silence report — nothing to announce');
+  // The `quiet-` clear announces (task 86bbzzyxb); the `failed-` clear alongside
+  // it does not, and the assertion that matters here is that ONE post comes out
+  // of two clears. This test asserted `announce` was empty until 86bbzzyxb, on
+  // the reasoning "a failure alert is not a silence report" — true of `failed-`
+  // and false of the `quiet-` sitting next to it in the same fixture.
+  assert.deepEqual(plan.announce, [{ role: 'bus-relay', quietSince: agoHours(2) }]);
+});
+
+// --- task 86bbzzyxb: the shared-row channel could be reported dead and never
+// --- reported alive.
+//
+// Two silence alarms, two independently-derived windows, and only one of them
+// announced its recovery. For every role beating hourly or oftener the local
+// window is the tighter one, so `stale-` always fires too and the bug is
+// invisible. `librarian-sweep` runs DAILY and inverts the pair — 48h shared
+// against 6 days local — so an outage landing between those two numbers was
+// posted to the bus as quiet, recovered, had its stamp cleared in silence, and
+// nobody was told. The Pulse outage this whole feature was built for was 33
+// hours; the one before it was twelve days. Both land in that window.
+
+test('A SHARED-ROW SILENCE THAT CLEARS IS ANNOUNCED — not only the local one', () => {
+  // librarian-sweep, 60 hours after the shared watchdog reported it quiet:
+  // past the 48h shared window, inside the 6-day local one, so `stale-` was
+  // never raised and `quiet-` is the only stamp there is.
+  const plan = closeout('librarian-sweep', agoHours(1), { quiet: agoHours(60) });
+  assert.deepEqual(kinds(plan.clear), ['librarian-sweep:quiet']);
+  assert.equal(plan.announce.length, 1, 'reported dead and never reported alive');
+  assert.equal(plan.announce[0].role, 'librarian-sweep');
+  assert.equal(plan.announce[0].quietSince, agoHours(60));
+});
+
+test('a role whose two silence alarms both clear is announced ONCE, from the EARLIER instant', () => {
+  // It recovered once. Two posts would be the "all is well" noise the non-goals
+  // forbid, and the later instant would understate how long it was dark.
+  const plan = closeout('channel-steward', agoHours(1), { quiet: agoHours(9), stale: agoHours(4) });
+  assert.deepEqual(kinds(plan.clear), ['channel-steward:quiet', 'channel-steward:stale']);
+  assert.equal(plan.announce.length, 1);
+  assert.equal(plan.announce[0].quietSince, agoHours(9), 'the moment its silence first reached the bus');
+});
+
+test('a failure alarm on its own still announces nothing — `failed-` is not a silence report', () => {
+  // The other half of the rule, and the reason `failed-` was left out: it is
+  // raised for a job that RAN and exited non-zero, and renderRecoveredPost says
+  // "it was reported quiet" in as many words.
+  const plan = closeout('bus-relay', agoHours(1), { failed: agoHours(2) });
+  assert.deepEqual(kinds(plan.clear), ['bus-relay:failed']);
+  assert.deepEqual(plan.announce, []);
+});
+
+test('a shared-row alarm deliberately left standing announces nothing either', () => {
+  // The same guard the stale channel already had: the announce rides on the
+  // CLEAR, never on the stamp merely existing.
+  const plan = closeout('librarian-sweep', agoHours(70), { quiet: agoHours(60) });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.keep), ['librarian-sweep:quiet']);
+  assert.deepEqual(plan.announce, [], 'announced a recovery it had just refused to close');
+});
+
+test('an unreadable quiet stamp is CANNOT TELL, and nothing is announced off it', () => {
+  const plan = closeout('librarian-sweep', agoHours(1), { quiet: 'some time last week' });
+  assert.deepEqual(plan.clear, []);
+  assert.deepEqual(kinds(plan.cannotTell), ['librarian-sweep:quiet']);
+  assert.deepEqual(plan.announce, []);
+});
+
+test('the inversion this bug hid in is real — librarian-sweep alone has a LOOSER local window', () => {
+  // The two windows are two functions: `quietAfterFor` is the local stale check
+  // (six missed runs, three-hour floor) and `overdueAfterFor` is the shared-row
+  // watchdog (a day plus the cadence). For every other role the local one is
+  // tighter, so `stale-` is always raised alongside `quiet-` and announcing off
+  // `stale-` alone looked correct. If this inversion ever disappears the hole
+  // closes on its own — and a future reader deleting the fix above should have
+  // to delete this first, with the arithmetic in front of them.
+  const local = hb.quietAfterFor('librarian-sweep');
+  const shared = hb.overdueAfterFor('librarian-sweep');
+  assert.ok(local > shared, `local ${hb.ageText(local)} is not looser than shared ${hb.ageText(shared)}`);
+  for (const role of ['bus-relay', 'channel-steward', 'pipeline-pulse', 'loop-build', 'loop-review']) {
+    assert.ok(
+      hb.quietAfterFor(role) < hb.overdueAfterFor(role),
+      `${role}'s local window (${hb.ageText(hb.quietAfterFor(role))}) is no longer tighter than its shared one `
+      + `(${hb.ageText(hb.overdueAfterFor(role))}), so it now has the librarian-sweep hole too`,
+    );
+  }
 });
 
 test('the three stamps are judged SEPARATELY — one can go while another stands', () => {
@@ -1205,4 +1287,82 @@ test('the relay report survives a transport failure — it is buffered, so a thr
   assert.match(body, /try \{/, 'the buffered relay pass is no longer wrapped, so a network blip loses the whole report');
   assert.match(body, /console\.log\(out\.join/, 'the catch no longer prints the buffer it was written to rescue');
   assert.match(body, /return 2;/, 'a transport failure is not reported as a cannot-tell');
+});
+
+// --- task 86bbzzyxb: `blocked` says nothing about whether a job is RUNNING ---
+//
+// `blocked` in lib/nodeProvision.js means THIS PROVISIONER cannot install the
+// schedule. Every reader used to slide from there to "so there is nothing to
+// report about this job", which held only while the two coincided. PR #673
+// ended that: channel-steward and librarian-sweep are blocked because their
+// installer lives in the pulse repo, and are simultaneously the two roles with
+// live local stamps here. loop-build and loop-review were already like that.
+
+test('A BLOCKED JOB THAT IS BEATING SAYS SO — the install step is what is blocked, not the job', () => {
+  const note = hb.blockedScheduleBeatNote({
+    role: 'channel-steward',
+    beat: { readable: true, found: true, beat: { at: agoHours(1) } },
+    now: NOW,
+  });
+  assert.match(note, /IT IS RUNNING ANYWAY/);
+  assert.match(note, /last succeeded here/);
+});
+
+test('a blocked job whose beat is stale is not reported as running', () => {
+  const note = hb.blockedScheduleBeatNote({
+    role: 'channel-steward',
+    beat: { readable: true, found: true, beat: { at: agoHours(200) } },
+    now: NOW,
+  });
+  assert.doesNotMatch(note, /IT IS RUNNING ANYWAY/);
+  assert.match(note, /nothing appears to be running it now/);
+});
+
+test('a blocked job that has never beaten says that, rather than nothing', () => {
+  const note = hb.blockedScheduleBeatNote({
+    role: 'channel-steward', beat: { readable: true, found: false }, now: NOW,
+  });
+  assert.match(note, /never recorded a beat/);
+});
+
+test('an unreadable stamp on a blocked job is a CANNOT TELL, never a silence', () => {
+  const note = hb.blockedScheduleBeatNote({
+    role: 'channel-steward', beat: { readable: false, why: 'permission denied' }, now: NOW,
+  });
+  assert.match(note, /cannot be told from here/);
+  assert.match(note, /permission denied/);
+});
+
+test('a blocked job with no emitter registered adds nothing — silence beats "no information"', () => {
+  // youtube-media: blocked, and genuinely nothing beats for it. A line per
+  // blocked row saying "no information" trains the eye to skip the section.
+  assert.equal(hb.blockedScheduleBeatNote({ role: 'youtube-media', beat: { readable: true, found: false }, now: NOW }), '');
+});
+
+test('doctor:node no longer skips a blocked job in its last-succeeded-here section', () => {
+  // The gap itself, asserted against the source rather than the output, because
+  // the output needs a real machine with real stamps. `blocked` appearing in
+  // that loop's skip line is the whole of the defect.
+  const src = fs.readFileSync(path.join(__dirname, '../../scripts/doctor_node.mjs'), 'utf8');
+  const marker = 'WHEN DID EACH OWNED JOB LAST ACTUALLY WORK?';
+  const at = src.indexOf(marker);
+  assert.ok(at > 0, 'the last-succeeded-here section has been renamed — re-point this test');
+  const loopAt = src.indexOf('for (const job of owned) {', at);
+  assert.ok(loopAt > 0);
+  const skip = src.slice(loopAt, src.indexOf('\n', src.indexOf('continue;', loopAt)));
+  assert.doesNotMatch(skip, /job\.blocked/, 'a blocked job is skipped again — it will appear as neither PASS, FAIL nor CANNOT TELL');
+  assert.match(skip, /job\.manual/, 'a manual job has no schedule on purpose and still has nothing to report');
+});
+
+test('the four blocked-but-beating roles really are blocked AND registered emitters', () => {
+  // The join that makes the fix necessary. If a future change gives any of
+  // these an installer, this test says so rather than leaving dead code behind.
+  const provision = require('../../lib/nodeProvision.js');
+  const nodeRoles = require('../../lib/nodeRoles.js');
+  for (const role of ['channel-steward', 'librarian-sweep', 'loop-build', 'loop-review']) {
+    const spec = provision.schedulesForNode(nodeRoles.roleOwner(role)).find((s) => s.role === role);
+    assert.ok(spec, `${role} is owned by nobody`);
+    assert.ok(spec.blocked, `${role} is no longer blocked — the skip this fixes may be removable`);
+    assert.ok(hb.BEAT_EMITTERS[role], `${role} is no longer a beat emitter`);
+  }
 });
