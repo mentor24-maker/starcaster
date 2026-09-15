@@ -68,6 +68,11 @@ function runWipCheck({ fetchStub, prsJson, cap = '5' }) {
         PATH: `${dir}:${process.env.PATH}`,
         CLICKUP_API_TOKEN: 'test-token-not-a-real-one',
         CLAUDE_LOOP_WIP_CAP: cap,
+        // A ledger of its own — see reworkClaim.test.js. This spawns the real
+        // CLI with a replaced global `fetch`, so the door has no way to know
+        // the traffic is invented, and it was writing to the operator's
+        // shared ledger (task 86bc0wrxg).
+        CLICKUP_LEDGER_PATH: path.join(dir, 'ledger.jsonl'),
       },
     });
   } finally {

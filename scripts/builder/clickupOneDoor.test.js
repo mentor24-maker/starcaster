@@ -190,7 +190,12 @@ test('the door itself really is the fetch call', () => {
   // clock or a real environment), and an exact-shape assertion would fail on
   // every future option while the thing it actually guards — that the DEFAULT
   // transport is the real `fetch` — stayed perfectly true.
-  assert.match(door, /fetchImpl = fetch[,\s}]/,
+  //
+  // It stopped being a destructuring default on 2026-09-15 (task 86bc0wrxg):
+  // whether the caller BROUGHT a transport is now a fact the accounting turns
+  // on, so it is read explicitly rather than hidden in a default. The thing
+  // guarded is unchanged — no caller means the real `fetch`.
+  assert.match(door, /injectedTransport \? opts\.fetchImpl : fetch[;,\s]/,
     'the default transport must still be the real fetch');
 });
 
