@@ -1,3 +1,66 @@
+## 2026-09-15 — The Monday report could not have reached Google Drive at all (#709)
+
+The change above moved the weekly report out of the Mini's code folder and into
+Google Drive. A review pass then went and ran it the way the Monday schedule
+actually runs it, and found it could never have worked.
+
+When the Mac runs a job on a timer, it hands that job almost nothing — no
+settings, no passwords, just enough to find the programs it needs. The report
+was asking for Google straight out, without the step that fetches our stored
+Google sign-in first. Run by hand it worked perfectly, because a person's
+terminal already has all that loaded; run on the timer, it would have failed to
+sign in every single Monday, reported the failure, and left the report sitting
+on the Mini and nowhere else — the exact thing this whole piece of work was
+meant to stop. It now goes through that step, and a test fails if anyone takes
+it back out.
+
+Four smaller things from the same review. **A re-run will no longer wipe out the
+narrative you wrote.** The report puts the figures in Drive and asks Dane to
+write the story on top of them, on the same page, under the same name — and a
+Monday that fails halfway does get run again. The second run would have replaced
+his writing with the bare numbers and called it a success. Now it finds the page
+already there, leaves it exactly as it is, and says so. **The contents page lists
+every edition again**, because it is now built from what is really in the Drive
+folder rather than from whatever the machine that ran it happened to have on
+disk — the old way would have dropped older editions the moment the job moved to
+a different Mac. **And its links work**, which they did not: they were written as
+if the pages sat in a folder, and Google Drive does not work that way, so every
+link on that page was dead. Finally, a duplicate of an internal command was
+removed, and the one path where the report refuses to run at all now speaks up
+instead of exiting in silence.
+
+## 2026-09-14 — The weekly report now goes to Google Drive, and stops jamming the Mac Mini (#709)
+
+The weekly figures report runs on the Mac Mini every Monday at 7am. It was
+saving its three files straight into the Mini's own copy of the Starcaster
+code — and the Mini refuses to pull down new code while there are stray files
+sitting in that copy, in case they are somebody's unfinished work. So every
+report run quietly switched off the Mini's updates, and the machine carried on
+running whatever version of the pipeline it had last Monday.
+
+That is what happened on 14 September: the Mini was seven changes behind,
+including two fixes to the pipeline shipped the day before, and nothing said so.
+An agent session had to move the files out and put the copy back by hand before
+it would update again. There were already two clean-up steps written to stop
+exactly this, and they did not.
+
+The report now writes to a folder that is nowhere near the code — by default
+`Documents/Starcaster/Weekly Reports` — and uploads each edition to Google
+Drive, in Projects → Starcaster → Weekly Reports on the mentor24 account, which
+is where Dane asked for it. It refuses to run at all if anyone ever points it
+back at a code folder. After each upload it asks Drive for the file it just
+wrote and checks the size matches, because "the upload worked" and "the file is
+actually there" are not the same claim. If the upload fails, that is a failed
+run: it posts to the team chat and the Monday job raises it as a job failure,
+rather than the report quietly existing on one machine and nowhere else.
+
+The editions already saved in the repo stay where they are as history. Nothing
+is committed or published as a pull request any more.
+
+**One step is Dane's:** the saved Google sign-in for Drive has expired, and only
+a browser login on the mentor24 account can renew it. Until that happens the
+Monday upload will fail — loudly, with a message saying exactly that.
+
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 
 **Read this bit first, because the original report was wrong about one thing.**
