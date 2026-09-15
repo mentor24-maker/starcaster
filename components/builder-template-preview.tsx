@@ -3606,7 +3606,18 @@ function BlogLatestPostsPreview({
   }
 
   const shown = selectLatestPosts(posts, s);
-  const heading = s.title ? <h2 className="builder-blog-latest-posts-title" style={{ margin: "0 0 1rem" }}>{s.title}</h2> : null;
+  const heading = s.title
+    ? createElement(
+        s.headingLevel,
+        {
+          className: "builder-blog-latest-posts-title",
+          // No colour chosen leaves `color` unset, so the site theme's heading
+          // colour still applies — the look every row had before this setting.
+          style: { margin: "0 0 1rem", ...(s.headingColor ? { color: s.headingColor } : {}) }
+        },
+        s.title
+      )
+    : null;
 
   if (shown.length === 0) {
     // A visitor gets no module at all rather than a heading over empty space.
