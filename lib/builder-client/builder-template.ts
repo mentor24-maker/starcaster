@@ -3843,6 +3843,9 @@ export function createEmptyModule(
                              * tag names as written, category ids.
                              */
                             title: "",
+                            headingLevel: "h2",
+                            // Empty = the site's own heading colour.
+                            headingColor: "",
                             latestPosts: "true",
                             filterTags: JSON.stringify([]),
                             filterCategories: JSON.stringify([]),

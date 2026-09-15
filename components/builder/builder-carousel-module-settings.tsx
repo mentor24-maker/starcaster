@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type CSSProperties } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
@@ -513,6 +513,26 @@ export function BuilderCarouselModuleSettings({
             // format already showed first — falling back to the position when
             // the item is still blank.
             const itemName = (isCards ? item.title : item.imageAlt) || `${Noun} ${index + 1}`;
+            // Link and Alt text always; Title and Link label with the copy.
+            const leftFieldCount = showItemCopy ? 4 : 2;
+            // The thumbnail goes right after the FIRST field in the column, so
+            // the grid puts it on that field's row and it spans down beside
+            // the rest. Placed any earlier, the first field's label would drop
+            // to the next row. Its span is the number of fields in the column,
+            // which keeps the Image row below from being pushed apart.
+            //
+            // A narrow panel has no right column, and there the same element
+            // would land between the first field and the second. So a second
+            // copy follows the last field, and CSS shows exactly one of the
+            // two for the width — a hidden grid item takes no cell.
+            const thumbFor = (where: "beside" | "below") => (
+              <BuilderImageInfoLine
+                url={item.imageUrl}
+                thumbnail
+                className={`builder-card-thumb builder-card-thumb--${where}`}
+                style={{ "--builder-card-thumb-rows": leftFieldCount } as CSSProperties}
+              />
+            );
 
             return (
               <Fragment key={item.id}>
@@ -549,32 +569,35 @@ export function BuilderCarouselModuleSettings({
                   </div>
                 </div>
 
-                {/* The 2x2. Which fields an item shows is unchanged by this
-                    rewrite — only where they sit. The first pair is the field
-                    that identifies the item and its link, both of which every
-                    item has in both formats. */}
-                {isCards ? (
-                  <BuilderModuleField label="Title" width="text-md" className="builder-card-field--a">
+                {/* Left column: Title, Link, Link label, Alt text, stacked.
+                    Right column: a thumbnail of the item's image with its file
+                    name and pixel size under it (Dane, 2026-09-14, task
+                    86bc0p5f9). Which fields an item shows is unchanged — only
+                    where they sit.
+
+                    A slideshow shows its title and link label only when
+                    captions are on, because with captions off there is nowhere
+                    on the slide for them to appear — an editor that collects
+                    copy nothing renders is the defect the merge was cleaning
+                    up. The link is the exception: a slide can be clickable
+                    with no visible text at all. */}
+                {showItemCopy ? (
+                  <BuilderModuleField
+                    label={isCards ? "Title" : "Caption title"}
+                    width="text-md"
+                    className="builder-card-field--a"
+                  >
                     <input
                       type="text"
                       value={item.title}
                       onChange={(event) => updateItem(item.id, { title: event.target.value })}
-                      placeholder={`${Noun} title`}
-                      aria-label={`${Noun} ${index + 1} title`}
+                      placeholder={isCards ? `${Noun} title` : "Headline over the image"}
+                      aria-label={`${Noun} ${index + 1} ${isCards ? "title" : "caption title"}`}
                     />
                   </BuilderModuleField>
-                ) : (
-                  <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--a">
-                    <input
-                      type="text"
-                      value={item.imageAlt}
-                      onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
-                      placeholder="Describe the image"
-                      aria-label={`${Noun} ${index + 1} alt text`}
-                    />
-                  </BuilderModuleField>
-                )}
-                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
+                ) : null}
+                {showItemCopy ? thumbFor("beside") : null}
+                <BuilderModuleField label="Link" width="text-md" className="builder-card-field--a">
                   <input
                     type="text"
                     value={item.linkUrl}
@@ -583,47 +606,28 @@ export function BuilderCarouselModuleSettings({
                     aria-label={`${Noun} ${index + 1} link`}
                   />
                 </BuilderModuleField>
-
-                {/* A slideshow shows these only when captions are on, because
-                    with captions off there is nowhere on the slide for them to
-                    appear — an editor that collects copy nothing renders is
-                    the defect the merge was cleaning up, not one to
-                    reintroduce. The link above is the exception: a slide can
-                    be clickable with no visible text at all. */}
+                {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
-                  <>
-                    <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
-                      <input
-                        type="text"
-                        value={item.linkLabel}
-                        onChange={(event) => updateItem(item.id, { linkLabel: event.target.value })}
-                        placeholder="Read more"
-                        aria-label={`${Noun} ${index + 1} link label`}
-                      />
-                    </BuilderModuleField>
-                    {isCards ? (
-                      <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--b">
-                        <input
-                          type="text"
-                          value={item.imageAlt}
-                          onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
-                          placeholder="Describe the image"
-                          aria-label={`${Noun} ${index + 1} alt text`}
-                        />
-                      </BuilderModuleField>
-                    ) : (
-                      <BuilderModuleField label="Caption title" width="text-md" className="builder-card-field--b">
-                        <input
-                          type="text"
-                          value={item.title}
-                          onChange={(event) => updateItem(item.id, { title: event.target.value })}
-                          placeholder="Headline over the image"
-                          aria-label={`${Noun} ${index + 1} caption title`}
-                        />
-                      </BuilderModuleField>
-                    )}
-                  </>
+                  <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
+                    <input
+                      type="text"
+                      value={item.linkLabel}
+                      onChange={(event) => updateItem(item.id, { linkLabel: event.target.value })}
+                      placeholder="Read more"
+                      aria-label={`${Noun} ${index + 1} link label`}
+                    />
+                  </BuilderModuleField>
                 ) : null}
+                <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--a">
+                  <input
+                    type="text"
+                    value={item.imageAlt}
+                    onChange={(event) => updateItem(item.id, { imageAlt: event.target.value })}
+                    placeholder="Describe the image"
+                    aria-label={`${Noun} ${index + 1} alt text`}
+                  />
+                </BuilderModuleField>
+                {thumbFor("below")}
 
                 {/* Too wide for half a row, so it spans to the block's right
                     edge (L8). `--picker` is what pushes the Gallery button
@@ -639,9 +643,6 @@ export function BuilderCarouselModuleSettings({
                     onChange={(imageUrl) => updateItem(item.id, { imageUrl })}
                   />
                 </BuilderModuleField>
-                {/* Name + pixel size under the address, so a slide can be
-                    told apart without opening the page (task 86bc0n59x). */}
-                <BuilderImageInfoLine url={item.imageUrl} className="builder-card-image-info" />
 
                 {showItemCopy ? (
                   <BuilderModuleField label="Description" width="full" className="builder-card-field--wide">
