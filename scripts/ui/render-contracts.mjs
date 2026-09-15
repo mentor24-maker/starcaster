@@ -72,6 +72,17 @@ const PARALLAX_THEMED_SECTION = {
   themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
 };
 
+/** A row with its own Tablet (30) and Phone (60) top padding over a desktop 18. */
+const DEVICE_STYLED_SECTION = {
+  layout: 'single',
+  paddingTop: '18',
+  // A background of its own, so the theme's band spacing (which replaces a
+  // backgroundless row's padding) stays out of the measurement.
+  background: { mode: 'color', color: '#eeeeee' },
+  deviceOverrides: { tablet: { paddingTop: '30' }, phone: { paddingTop: '60' } },
+  modules: [{ type: 'heading', text: 'A row styled per device', settings: {} }],
+};
+
 /** How the parallax contracts watch: scroll a fixed step, read, repeat. */
 const PARALLAX_SERIES = {
   count: 14,
@@ -384,6 +395,98 @@ export const RENDER_DIFFERENTIALS = [
 ];
 
 export const RENDER_CONTRACTS = [
+
+  /*
+   * TABLET AND PHONE ROW STYLES (device styles 1 of 6, task 86bc13a6v).
+   *
+   * A row's styles are inline, and an inline style cannot say "on phones
+   * only" — so a row with device settings carries its own <style> of media
+   * rules marked !important. Every one of these asks a real browser at a real
+   * width, because the failure modes are all invisible in the markup: a rule
+   * that loses to the inline style, a query at the wrong width, or a style
+   * element that renumbers the row's columns.
+   */
+  {
+    id: 'device-styles-phone-padding-applies-on-a-phone',
+    why:
+      'The feature itself. A row set to 60px of top padding on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 18px wins and the Phone panel silently does nothing.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `a row with Phone padding-top 60 rendered padding-top ${sample.styles.paddingTop} at 420px — the phone rule is not reaching the row.`;
+    },
+  },
+  {
+    id: 'device-styles-tablet-padding-applies-on-a-tablet-and-not-phone-value',
+    why:
+      'Tablet has its own value (30) and Phone its own (60). At 900px only the tablet rule may match; ' +
+      'getting 60 means the phone query is too wide, getting 18 means the tablet rule is missing.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `a row with Tablet padding-top 30 rendered padding-top ${sample.styles.paddingTop} at 900px.`;
+    },
+  },
+  {
+    id: 'device-styles-leave-desktop-alone',
+    why:
+      'The other direction, so the two contracts above cannot pass by breaking every width: on a ' +
+      'desktop screen the same row keeps its own 18px.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '18px'
+        ? null
+        : `a row whose desktop padding-top is 18 rendered ${sample.styles.paddingTop} on a desktop screen — a device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'device-styles-hide-on-phone-hides-the-row',
+    why: '"Hide on Phone" must take the row out at phone width — and only there (the desktop contract above reads the same row visible).',
+    section: { ...DEVICE_STYLED_SECTION, deviceOverrides: { phone: { hidden: 'true' } } },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'device-styles-keep-reverse-stack-column-order',
+    why:
+      'The rules element lives INSIDE the row, and the phone Reverse stack rules count the row\'s ' +
+      'children with :nth-child(1..6). Placed first it would renumber every column and show the ' +
+      'sixth one fourth. It is placed last; this holds that.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      deviceOverrides: { phone: { columnGap: '4' } },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section[data-builder-device-scope] > .builder-preview-column:nth-of-type(6)',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return Number(sample.styles.order) === -2
+        ? null
+        : `the sixth column of a Reverse stack row with phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
+    },
+  },
   {
     id: 'tag-cloud-sizes-its-tags-by-count',
     why:

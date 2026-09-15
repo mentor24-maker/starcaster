@@ -113,6 +113,66 @@ test('FAIL-SAFE: an unreadable switch is treated as PAUSED', () => {
   assert.match(v.message, /HTTP 500/, 'the reason it could not read must reach the operator');
 });
 
+test('a RESERVE stand-down still stops the pass, but is never described as a pause', () => {
+  // 2026-09-15, task 86bc0w6my. Both loop lanes on the Mini stood down for
+  // hours reporting "the pipeline is being treated as PAUSED" while
+  // `npm run pipeline -- status`, same machine, same token, printed RUNNING.
+  // The cause was a scheduled job declining to spend the last of the minute's
+  // ClickUp budget — routine, self-clearing, and indistinguishable from the
+  // operator taking the deck once it is worded that way.
+  const v = pause.pauseVerdict({
+    readable: false,
+    yielded: true,
+    why: 'reading the Loop Queue: YIELDED (the ClickUp reserve)',
+  });
+
+  // THE BEHAVIOUR IS UNCHANGED, and that half matters most: the switch was not
+  // read, so failing open here would merge under the operator.
+  assert.equal(v.paused, true, 'the switch was not read, so nothing may be claimed or merged');
+  assert.equal(v.code, 3, 'and it must keep the exit code every caller already acts on');
+  assert.equal(v.certain, false, 'it still did not read the switch');
+  assert.equal(v.yielded, true, 'a caller that must REPORT differently needs to be able to tell');
+
+  // THE WORDS ARE THE FIX — and the fix is to say what is KNOWN and stop.
+  // Known: the reserve caused this stand-down, not the operator. Unknown: whether
+  // he has the deck, because the switch was never read. Round 1 of this ticket
+  // asserted "the operator does NOT have the deck", which is this same defect
+  // facing the other way — if he HAS paused the line while a scheduled pass hits
+  // the reserve in the same minute, that sentence is simply false, and a hand
+  // session reading it could reasonably go to work on his deck.
+  assert.match(v.message, /not caused by the operator taking the deck/,
+    'the reader must be told what DID cause it, or they hunt for a pause that is not there');
+  assert.match(v.message, /[Ww]hether he has the deck is UNKNOWN/,
+    'and told, out loud, that the question is still open');
+  for (const claimsHisState of [
+    /does NOT have the deck/,
+    /has not taken the deck/,
+    /the deck is (free|clear)/,
+    /the pipeline is RUNNING/,
+    /is not paused/,
+  ]) {
+    assert.doesNotMatch(v.message, claimsHisState,
+      `"${claimsHisState}" claims the operator's state, which is exactly what an unread switch cannot know`);
+  }
+  assert.match(v.message, /NOT a network fault and NOT a token problem/,
+    'the message it replaces sent the next reader hunting for an outage that was never there');
+  assert.match(v.message, /clears itself/, 'and there is nothing to fix');
+  assert.doesNotMatch(v.message, /Could not read the pipeline pause switch/,
+    'the old wording must not survive beside the new one');
+  assert.doesNotMatch(v.message, /treated as PAUSED/,
+    'and it must still not read as a pause — that is the whole reason this branch exists');
+});
+
+test('an ordinary unreadable switch is NOT dressed up as a reserve stand-down', () => {
+  // The control for the test above. A dead token and a yield both arrive as
+  // `readable: false`, and reporting a real outage as "nothing is broken, it
+  // clears itself" is the same defect pointed the other way.
+  const v = pause.pauseVerdict({ readable: false, why: 'HTTP 401' });
+  assert.equal(Boolean(v.yielded), false);
+  assert.match(v.message, /Could not read the pipeline pause switch/);
+  assert.doesNotMatch(v.message, /clears itself/);
+});
+
 test('FAIL-SAFE, the other direction: a readable switch that says running does NOT pause', () => {
   // The guard is only worth anything if it can say yes. A check that returned
   // "paused" whatever it read would be indistinguishable from a broken
@@ -1496,6 +1556,63 @@ test('a non-numeric status is printed as the reason it is, not as "HTTP ?"', () 
   // And an ordinary HTTP failure still reads the way it always did.
   assert.equal(store.whyOf({ res: { ok: false, status: 503 } }), 'HTTP 503');
   assert.equal(store.whyOf({ res: { ok: false, status: 0 } }), 'HTTP ?');
+});
+
+/*
+ * ...AND THE REASON HAS TO SURVIVE THE WHOLE WAY UP (2026-09-15, task
+ * 86bc0w6my). `whyOf` printing the reserve's words, tested directly above, was
+ * already right a year before the incident — and the incident happened anyway,
+ * because nothing carried the FACT of a yield from the store to the verdict.
+ * A message that is correct at one layer and dropped at the next is not a
+ * message.
+ */
+const YIELD_OUT = {
+  res: { ok: false, status: 'YIELDED (the ClickUp reserve)', headers: { get: () => null } },
+  json: null,
+  text: 'the reserve is 25',
+  yielded: { yield: true, why: 'the reserve is 25' },
+};
+
+test('a yielded LIST read reaches the verdict as a stand-down, not as a pause', () => {
+  const call = fakeCall([['/list/', YIELD_OUT]]);
+  return store.fetchQueue({ call, list: '1' }).then((q) => {
+    assert.equal(q.readable, false, 'the queue genuinely was not read');
+    assert.equal(q.yielded, true, 'and the store must say WHY, not just that it failed');
+    const v = pause.pauseVerdict({ readable: q.readable, why: q.why, yielded: q.yielded });
+    assert.equal(v.code, 3, 'behaviour unchanged: claim nothing');
+    assert.match(v.message, /not caused by the operator taking the deck/,
+      'the reserve reached the verdict, so the verdict names the reserve');
+    assert.doesNotMatch(v.message, /does NOT have the deck/,
+      'without claiming the operator state this read never established');
+  });
+});
+
+test('a yielded COMMENT read does too — the layer where the words were being lost', () => {
+  // The trail is paged through `pageComments`, whose adapter ran every status
+  // through `Number()`. `Number('YIELDED (…)')` is NaN, so the reserve's own
+  // words became `HTTP ?` one level below the code written to print them.
+  const call = fakeCall([
+    ['/comment', YIELD_OUT],
+    ['/list/', OK({ tasks: [{ id: 'sw', name: 'Pipeline pause switch' }], last_page: true })],
+  ]);
+  return store.readSwitch({ call, list: '1' }).then((sw) => {
+    assert.equal(sw.readable, false);
+    assert.equal(sw.yielded, true);
+    assert.match(sw.why, /YIELDED \(the ClickUp reserve\)/,
+      'not "HTTP ?" — that is the message that sends the next reader to the network');
+  });
+});
+
+test('an ordinary failed read still arrives with no stand-down claim on it', () => {
+  // The control. Marking a real outage as self-clearing is the same defect
+  // pointed the other way, and it would silence the alarm that matters.
+  const call = fakeCall([['/list/', { res: { ok: false, status: 500 }, json: null }]]);
+  return store.fetchQueue({ call, list: '1' }).then((q) => {
+    assert.equal(q.readable, false);
+    assert.equal(Boolean(q.yielded), false);
+    assert.match(pause.pauseVerdict({ readable: false, why: q.why, yielded: q.yielded }).message,
+      /Could not read the pipeline pause switch/);
+  });
 });
 
 // ── a ticket the sweep deliberately did NOT move (task 86bbur9tk) ──────────

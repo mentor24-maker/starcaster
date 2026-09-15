@@ -33,6 +33,7 @@ import {
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
+import { BUILDER_DEVICE_SCOPE_ATTRIBUTE, buildSectionDeviceCss } from "@/components/builder/builder-device-css";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
 import {
   latestPostsEmptyReason,
@@ -1679,6 +1680,9 @@ function BuilderSectionPreview({
   /** Treatment: this section pulls up over the previous image section. */
   overlapsHero?: boolean;
 }) {
+  // Names this row in its own tablet/phone CSS. useId rather than section.id:
+  // copies of one saved section share an id, and must not share rules.
+  const deviceScopeId = useId();
   const sectionStyle = getBuilderBackgroundStyle(section.background);
   // `transparent` and `inherit` are the no-palette answers, so a theme without
   // one leaves this section exactly as it renders today.
@@ -1830,80 +1834,88 @@ function BuilderSectionPreview({
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
 
-  const gridStyle: CSSProperties = {
-    // Band first: a section carrying its own background never gets one, so
-    // this cannot overwrite an operator's choice.
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
-    // A menu-only row used to throw its own background away, which is half of
-    // the operator's "the style controls of the container have no effect"
-    // (2026-08-11) — he set a header strip's color and nothing happened.
-    // Honoured now: it is `undefined` until he picks one, so a row he never
-    // touched still renders flush. The automatic treatments above and below
-    // (band, hero tint, overlap) stay off — those are not his controls.
-    ...(isOverlayLayoutCollapsed ? {} : sectionStyle),
-    // Hero tint and overlap layer on top of the section's own background.
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
-    ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
-    ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(section)),
-    // Navigation-only rows already render flush by design; overlay slots are
-    // not really rows at all. Everything else honours the operator's number.
-    ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(section)),
-    // A row with content sizes to that content. The 56px floor exists so an
-    // EMPTY row is still big enough to drop a module onto, and keeping it on
-    // filled rows was padding every contact strip out to nearly triple height.
-    ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
-    // ...unless the operator has asked for a taller band, which overrides both
-    // the floor and the release above it.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(section)),
-    // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
-    // The operator's own nudge, after the layout styles it is nudging away
-    // from. {} until he sets one, and it deliberately sits BEFORE the overlay
-    // and navigation z-index rules below so those still win their stack.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(section)),
-    ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
-    ...(isSectionOverlaySlot
-      ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
-      : hasNavigationModule
-      ? { position: "relative", zIndex: 10 }
-      : {}),
-    ...(rowBorderWidth > 0 && !isOverlayLayoutCollapsed
-      ? {
-          border: `${rowBorderWidth}px ${section.rowBorderStyle ?? "solid"} ${section.rowBorderColor ?? "#000000"}`,
-          borderRadius: `${section.rowBorderRadius ?? "0"}px`
-        }
-      : {}),
-    // The containing block for the video layer and the tint screen, both of
-    // which are absolutely positioned children.
-    //
-    // NO `overflow: hidden` HERE, and that is the fix for 86bbwmp2y. A blurred
-    // video is scaled up so its soft rim falls outside, and a parallaxing
-    // image layer is taller than the row by the whole travel distance, so both
-    // genuinely have to be contained — but containing them on the ROW clips
-    // everything else inside it too, and `overflow: hidden` cannot tell
-    // footage escaping from a navigation dropdown that is SUPPOSED to escape.
-    // The layer wraps ITSELF in a clip box instead (`background-clip.ts`, and
-    // the box is mounted by `BuilderBackgroundLayer` rather than from here, so
-    // a layer that renders nothing adds no element), which puts the
-    // containment on exactly the element that needs it — a menu in a video row
-    // opens over the row beneath, as it does with no video at all.
-    //
-    // A ROW CARRYING ONLY A TINT SCREEN IS NOW UNCLIPPED TOO, and it needs no
-    // replacement containment: `.builder-preview-row-overlay-screen` is
-    // `inset: 0` with `border-radius: inherit`, so it is already exactly the
-    // row's shape and has nothing to escape with. Letting the row's CONTENT
-    // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
-    // a tinted row was cut off for the same reason it was in a video one.
-    // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
-    ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-      ? { position: "relative" }
-      : {}),
-    display: "grid",
-    gridTemplateColumns: sectionGridTemplate,
-    ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(section)),
-    "--builder-layout-grid": sectionGridTemplate
-  } as CSSProperties;
+  // A function of the row, not a constant, so the tablet and phone rules below
+  // are computed by exactly this code on the row as each device sees it.
+  const buildGridStyle = (s: BuilderTemplateSection): CSSProperties =>
+    ({
+      // Band first: a section carrying its own background never gets one, so
+      // this cannot overwrite an operator's choice.
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
+      // A menu-only row used to throw its own background away, which is half of
+      // the operator's "the style controls of the container have no effect"
+      // (2026-08-11) — he set a header strip's color and nothing happened.
+      // Honoured now: it is `undefined` until he picks one, so a row he never
+      // touched still renders flush. The automatic treatments above and below
+      // (band, hero tint, overlap) stay off — those are not his controls.
+      ...(isOverlayLayoutCollapsed ? {} : sectionStyle),
+      // Hero tint and overlap layer on top of the section's own background.
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
+      ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(s)),
+      ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(s)),
+      // Navigation-only rows already render flush by design; overlay slots are
+      // not really rows at all. Everything else honours the operator's number.
+      ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(s)),
+      // A row with content sizes to that content. The 56px floor exists so an
+      // EMPTY row is still big enough to drop a module onto, and keeping it on
+      // filled rows was padding every contact strip out to nearly triple height.
+      ...(s.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
+      // ...unless the operator has asked for a taller band, which overrides both
+      // the floor and the release above it.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(s)),
+      // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(s)),
+      // The operator's own nudge, after the layout styles it is nudging away
+      // from. {} until he sets one, and it deliberately sits BEFORE the overlay
+      // and navigation z-index rules below so those still win their stack.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(s)),
+      ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
+      ...(isSectionOverlaySlot
+        ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(s) }
+        : hasNavigationModule
+        ? { position: "relative", zIndex: 10 }
+        : {}),
+      ...(Number(s.rowBorderWidth ?? "0") > 0 && !isOverlayLayoutCollapsed
+        ? {
+            border: `${Number(s.rowBorderWidth ?? "0")}px ${s.rowBorderStyle ?? "solid"} ${s.rowBorderColor ?? "#000000"}`,
+            borderRadius: `${s.rowBorderRadius ?? "0"}px`
+          }
+        : {}),
+      // The containing block for the video layer and the tint screen, both of
+      // which are absolutely positioned children.
+      //
+      // NO `overflow: hidden` HERE, and that is the fix for 86bbwmp2y. A blurred
+      // video is scaled up so its soft rim falls outside, and a parallaxing
+      // image layer is taller than the row by the whole travel distance, so both
+      // genuinely have to be contained — but containing them on the ROW clips
+      // everything else inside it too, and `overflow: hidden` cannot tell
+      // footage escaping from a navigation dropdown that is SUPPOSED to escape.
+      // The layer wraps ITSELF in a clip box instead (`background-clip.ts`, and
+      // the box is mounted by `BuilderBackgroundLayer` rather than from here, so
+      // a layer that renders nothing adds no element), which puts the
+      // containment on exactly the element that needs it — a menu in a video row
+      // opens over the row beneath, as it does with no video at all.
+      //
+      // A ROW CARRYING ONLY A TINT SCREEN IS NOW UNCLIPPED TOO, and it needs no
+      // replacement containment: `.builder-preview-row-overlay-screen` is
+      // `inset: 0` with `border-radius: inherit`, so it is already exactly the
+      // row's shape and has nothing to escape with. Letting the row's CONTENT
+      // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
+      // a tinted row was cut off for the same reason it was in a video one.
+      // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
+      ...(sectionBackgroundLayer || sectionOverlayScreenStyle
+        ? { position: "relative" }
+        : {}),
+      display: "grid",
+      gridTemplateColumns: sectionGridTemplate,
+      ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(s)),
+      "--builder-layout-grid": sectionGridTemplate
+    }) as CSSProperties;
+  const gridStyle = buildGridStyle(section);
+  // Generated from normalized numbers, hex colours and fixed keywords only —
+  // no operator text reaches it — so writing it as a style element is safe.
+  const deviceCss =
+    emailPreview || isOverlayLayoutCollapsed ? "" : buildSectionDeviceCss(section, deviceScopeId, buildGridStyle);
 
   return (
     <section
@@ -1923,6 +1935,7 @@ function BuilderSectionPreview({
           : ""
       }`}
       style={gridStyle}
+      {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
     >
       {/*
         NO WRAPPER HERE. The layer mounts its own clip box
@@ -2265,6 +2278,13 @@ function BuilderSectionPreview({
           </div>
         );
       })}
+      {/*
+        LAST child, never first: the phone reverse-stack rules count the row's
+        children from the front (nth-child), and a style element placed ahead
+        of the columns would renumber them. And inside the row, not beside it:
+        `.full-width + .full-width` joins adjacent rows.
+      */}
+      {deviceCss ? <style dangerouslySetInnerHTML={{ __html: deviceCss }} /> : null}
     </section>
   );
 }

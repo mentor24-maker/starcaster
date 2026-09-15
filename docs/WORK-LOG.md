@@ -66,6 +66,176 @@ instead of finding out from the Mini.
 
 Nothing downloads yet — that is the next piece.
 
+## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
+
+Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
+loop lanes — shares one per-minute allowance of requests to ClickUp, and they
+keep a shared tally file so each can see how much of the minute is left and
+stand down politely when a live session needs it. It turned out that simply
+running the test suite filled that tally with requests that never happened.
+
+The tests do not really call ClickUp; they hand the code a stand-in. But they
+keep the real ClickUp web address in the request, and the tally was decided by
+the address alone — so a few hundred imaginary requests piled up in a few
+seconds. Two things came off that. The tests started refusing their own
+requests partway through a run and reported about 22 failures that were not
+real, which matters because that command is a gate every automated build pass
+has to run and believe. And anyone running the tests made the relay, the pulse
+and both loops stand down for the next minute for no reason at all.
+
+A request now counts against the budget only if it is going to ClickUp *and*
+going out over the real network, rather than through a stand-in the caller
+brought with it. Nothing in the live site ever brings one, so real traffic is
+counted exactly as before. The tests for the budget code itself still have to
+drive that path with a stand-in — that is how we prove a background job really
+does stop when it should — so those may still be counted, but only against a
+throwaway tally file of their own. That is what makes it impossible, rather
+than merely unlikely, for invented traffic to reach the shared one.
+
+Two other test files stub the network deeper down, inside a separate process
+the budget code has no way to inspect. Those now hand that process its own
+throwaway tally, and a new guard fails the build if a future test forgets.
+Measured afterwards: the suite gives 4039 passes and no failures whether it is
+run by a background job or by hand, and neither run adds a single line to the
+shared tally.
+
+A check of this work found three loose ends, all now closed. Two were comments
+left saying the opposite of what the code does — one of them in the single
+live file that uses this seam, which is precisely where somebody would later
+have trusted it. The third was a real, if sleeping, hazard: if a caller handed
+the code something that was not a working stand-in at all, it used to fail on
+the spot without contacting anyone, and after the first round of this work it
+would instead have quietly sent a genuine request to ClickUp. Nothing in the
+code does that today, but it is the wrong way round for the one piece of code
+whose whole job is that nothing slips out uncounted, so it now refuses out
+loud and explains what it was handed. The guard that stops a future test
+forgetting its throwaway tally was also tightened: it used to look at a whole
+file at once and only knew one way of starting a second process, so a third
+one added to a file that already looked fine would have slipped through.
+
+A second check then found one more, and it was a good catch: a test added by
+separate work a few hours earlier, on purpose, does the one thing neither of
+the protections above can see. It keeps the real ClickUp address, does *not*
+hand in a stand-in, and replaces the network call inside its own process — so
+to the budget code it looks exactly like a genuine request, and five lines per
+test run were still landing in the shared tally. The two protections were each
+right on their own and quietly cancelled each other out.
+
+So there is now a third condition, and it is about the *process* rather than
+about what the caller handed in: a test run may write to a throwaway tally it
+named for itself, and may never write to the shared one. That closes the whole
+family rather than this one case — a test nobody has written yet, in whatever
+style, cannot reach the shared tally through this door at all. Measured on the
+finished code, with the tally pointed somewhere only this run could touch so
+another job on the machine could not be mistaken for it: the suite gives 4083
+passes and no failures, whether run by a background job or by hand, and the
+shared tally moves by zero lines either way. With the new condition taken back
+out again it moves by five, which is how we know the measurement can see it.
+
+A third check found the two halves had drifted apart again, this time by
+nothing either of them did: the separate work mentioned above went live on the
+main copy of the code while this was waiting to be checked, so the two no
+longer fitted together. Two lines had each gained a different thing and had to
+be joined into one, and then the test that separate work added stopped
+proving what it was written to prove. It forces the budget code to stand down
+on purpose, and standing down is only ever decided for a request that counts
+against the budget at all — which, under the new third condition, a test run's
+request does only when it has named a throwaway tally for itself. It had not,
+so the request sailed through, the stand-in answered as if all were well, and
+the test failed on a success. Naming a throwaway tally inside that one test
+restores it: 18 of 18 pass, and the shared tally still moves by zero. With the
+third condition taken back out, that same file puts five lines into the shared
+tally again, so the zero is a reading rather than an assumption.
+
+## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
+
+A page template is the starting point you build new pages from, and it carries
+its own look — heading sizes, line heights, how bold the headings are. Open one
+in the Builder, save or delete a single module on it, and all of that reverted
+to the plain defaults. No warning, no error; the save reported success. Worse,
+every page you then built from that template started life with the defaults
+too, so the damage spread outward from the template.
+
+The ticket described the headings. Before writing anything I ran the Builder's
+exact save against a copy of the real data to watch what it did, and it was
+doing considerably more than that: the same click also blanked the template's
+summary, blanked its internal id, and changed its *kind* — the field that says
+what sort of template it is — from "starcaster landing" to "modular". Across
+the 44 templates on the live system that is 4 with a custom look, 31 with a
+summary, 44 with an id, and 31 whose kind was being changed out from under
+them. I posted that correction on the ticket before building, because it
+changes what the fix has to be.
+
+The cause is two separate things that each look harmless. All the template's
+sections, its background and its look are stored together in one single field,
+so anything that rewrites part of it rewrites all of it — and the Builder's
+save only ever mentions the sections, so the look was being replaced with a
+blank one. Separately, the code that handles the save filled in a value for
+all 32 fields whether the Builder had sent one or not, which is how the other
+31 got blanked. Fixing either one on its own still leaves the bug, so both are
+fixed here: anything the save does not actually mention is now left exactly as
+it was.
+
+Deliberately changing the look still works, including clearing it back to the
+defaults on purpose — the code now asks "did the save mention this?" rather
+than "does this have a value in it?", which are different questions and only
+the first one is safe.
+
+Checked end to end against a real database rather than from reading the code:
+the Builder's real payload now leaves the look, the kind, the id and all five
+sections untouched, and the old code reproduces the loss in the same harness.
+Each of the six fixes was deliberately broken to watch the matching test fail
+first — which caught one test that could not fail at all, and got replaced with
+one that can.
+## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
+
+For a few hours on the 15th the build and review loops on the Mac Mini refused
+to do anything, and the reason each one printed was **"the pipeline is being
+treated as PAUSED"** — which is the machine's way of saying *Dane has taken the
+deck, so I should keep my hands off.* You had not. The pipeline was running the
+whole time; a different command on the same machine, asked a second later, said
+so plainly.
+
+That is the worst shape a bug can take here, because nothing looked wrong. A
+pass standing down because you are working is completely normal, so the
+messages did not read as trouble — they read as the system behaving itself.
+
+Underneath it was one missed case. Every job that talks to ClickUp goes through
+a single piece of code, and that code can answer in three ways: *here is your
+answer*, *I could not reach them*, or — the third one — *I am a background job,
+the minute's ClickUp allowance is nearly gone, and I am not spending the last of
+it in case you are using it.* That third answer was added deliberately so a
+background job can never slow down a session you are actually sitting in front
+of. It is routine, it fixes itself within a minute, and it happens whenever two
+jobs wake up together.
+
+Five different places in the code ask that question. **Four of them had never
+been taught the third answer exists**, so they crashed on it — and the crash was
+then tidied up, one layer at a time, into "could not reach ClickUp", and then
+into "the pipeline is paused". A one-minute budget hiccup reached the operator
+as a claim about where you were.
+
+All four are fixed, including one nobody had spotted: it sits on the path a
+visitor takes when they report a bug on one of the sites, where the same crash
+would have shown up as an error page.
+
+The message itself now says only what is actually known, which turned out to be
+the fiddly part. The first attempt at this fix swung too far the other way: it
+replaced *"the pipeline is paused"* with *"the operator does not have the
+deck"* — and that is a claim the code is in no position to make, because the
+whole problem is that it never managed to look. If you genuinely had paused the
+line in the same minute a background job ran out of allowance, the new sentence
+would have been flatly false, and the next reader could reasonably have gone to
+work on your deck. So it now names the **cause** (the one-minute allowance, not
+you) and says out loud that whether you have the deck is still unknown and the
+next pass will find out. It also keeps the parts that were already right: that
+nothing is broken, that it clears itself, and that this is specifically not a
+network or password problem, so whoever reads it next does not go hunting for
+one. The pass still stands down for that minute, which is correct: it genuinely
+could not check.
+
+And because four separate authors had each missed the same case, there is now a
+check that fails the build if a fifth one does.
 ## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
 
 If you put a video behind one column of a row and a menu in that same column,
