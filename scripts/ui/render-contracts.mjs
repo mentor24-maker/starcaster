@@ -83,6 +83,19 @@ const DEVICE_STYLED_SECTION = {
   modules: [{ type: 'heading', text: 'A row styled per device', settings: {} }],
 };
 
+/**
+ * THE SAME ROW WITHOUT A BACKGROUND OF ITS OWN — which is the ordinary case.
+ *
+ * `DEVICE_STYLED_SECTION` above gives itself a grey fill on purpose, and the
+ * comment says why: the theme band's spacing "replaces a backgroundless row's
+ * padding". That was true, and it was the bug (86bc14qwy) — the band wrote an
+ * inline `padding-top`, which outranks the stylesheet rule reading the
+ * operator's own number, so Top and Bottom Padding did nothing at all on any
+ * row he had not given a background. A contract that works around a defect
+ * keeps the defect invisible, so this one takes the fill away.
+ */
+const PLAIN_DEVICE_SECTION = { ...DEVICE_STYLED_SECTION, background: undefined };
+
 /** How the parallax contracts watch: scroll a fixed step, read, repeat. */
 const PARALLAX_SERIES = {
   count: 14,
@@ -458,6 +471,38 @@ export const RENDER_CONTRACTS = [
     read: ['display'],
     emulate: { viewport: { width: 420, height: 900 } },
     hidden: true,
+  },
+  {
+    id: 'row-padding-applies-on-a-row-with-no-background',
+    why:
+      'Task 86bc14qwy: a row with no background of its own took the theme band\'s spacing as an ' +
+      'INLINE padding, and an inline padding beats the stylesheet rule that reads the operator\'s ' +
+      'Top/Bottom Padding — so his setting did nothing on those rows, on every site. Measured ' +
+      '2026-09-15 at 1440px: --builder-section-padding-top 18px, computed padding-top 0px.',
+    section: { ...PLAIN_DEVICE_SECTION, paddingTop: '40', deviceOverrides: undefined },
+    selector: '.builder-preview-section:not([data-builder-device-scope])',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `a row with no background and Top Padding 40 rendered padding-top ${sample.styles.paddingTop} — the band's spacing is still overriding it.`;
+    },
+  },
+  {
+    id: 'device-styles-phone-padding-applies-on-a-row-with-no-background',
+    why:
+      'The same row at phone width. The device rules write the row\'s padding CUSTOM PROPERTY, so ' +
+      'while the band held an inline padding they could not reach a backgroundless row either — ' +
+      'the Phone panel was dead on exactly the rows most pages are made of.',
+    section: { ...PLAIN_DEVICE_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `a backgroundless row with Phone padding-top 60 rendered padding-top ${sample.styles.paddingTop} at 420px.`;
+    },
   },
   {
     id: 'device-styles-keep-reverse-stack-column-order',
