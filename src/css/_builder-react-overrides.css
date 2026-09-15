@@ -3410,20 +3410,71 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
-/* The image's file name and pixel size, under its Image field (task
-   86bc0n59x). It sits in the FIELD track, not a column of its own, so it
-   lines up under the address it describes; the name opens the picture. */
-.builder-react-root .builder-cards-panel-fields .builder-card-image-info {
-  grid-column: 2 / -1;
-  margin-top: -4px;
+/* Each item's image thumbnail, in the RIGHT pair's tracks (4 to the end),
+   beside the stacked Title / Link / Link label / Alt text column (task
+   86bc0p5f9). It spans exactly as many rows as that column has fields — the
+   editor sets --builder-card-thumb-rows — so the Image row below starts on
+   the row after the last field instead of being split around the picture.
+   The file name (opens the pop-up) and pixel size sit directly under it. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb {
+  grid-column: 4 / -1;
+  grid-row: span var(--builder-card-thumb-rows, 2);
+  align-self: start;
+}
+.builder-react-root .builder-image-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-image-thumb-button {
+  appearance: none;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  cursor: zoom-in;
+  overflow: hidden;
+  max-width: 100%;
+}
+.builder-react-root .builder-image-thumb-image {
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  object-fit: contain;
+}
+.builder-react-root .builder-image-thumb.is-empty {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  color: white;
+  font-size: var(--text-sm);
+  opacity: 0.8;
+}
+/* Narrow panel: one pair per row, so the thumbnail takes its own row under
+   the fields, in the field track, rather than a column that no longer exists. */
+@media (max-width: 1200px) {
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb {
+    grid-column: 2 / -1;
+    grid-row: auto;
+  }
 }
 .builder-react-root .builder-image-info-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  column-gap: 12px;
   min-width: 0;
-  font-size: var(--text-xs);
-  color: var(--ink-secondary);
+  /* White and a step up: the carousel editor panel is medium-dark blue, and
+     the secondary ink colour all but disappeared on it (Dane, 2026-09-14).
+     Restored here after pull request 705 overwrote it. */
+  font-size: var(--text-md);
+  color: white;
 }
 .builder-react-root .builder-image-info-name {
   appearance: none;
@@ -3442,7 +3493,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 .builder-react-root .builder-image-info-size.is-error {
-  color: var(--error);
+  color: white;
+  font-style: italic;
 }
 .builder-react-root .builder-image-info-dialog {
   display: flex;
