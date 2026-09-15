@@ -1,3 +1,41 @@
+## 2026-09-15 — The build robots' own test gate was failing on code nobody had touched (#715)
+
+Before any automated pass reports a job done, it runs the full test suite. That
+suite had started **failing on a clean copy of the live code, with no changes at
+all** — but only when a robot ran it. If Dane ran the exact same command himself,
+it passed, every time. That is the worst kind of broken gate: the next pass either
+sends perfectly good work back as faulty, or quietly learns that red means
+nothing. One pass burned four full test runs just proving the failures were not
+its own doing.
+
+Nothing was actually broken. Two sensible things were colliding.
+
+ClickUp only lets us make about a hundred requests a minute, for the whole
+company. So background jobs are built to stop early and leave the last quarter of
+each minute alone — that way a background job can never be the reason Dane's own
+session is refused. To do that, every request gets written down in a tally on the
+machine.
+
+Meanwhile, the tests need a pretend ClickUp to talk to. They do that by swapping
+out the *delivery van* while leaving the *address on the envelope* alone. So the
+tally saw hundreds of letters addressed to ClickUp, wrote them all down as real
+spending, decided the minute's budget was gone — and started refusing the test
+suite's own requests. The tests read that refusal as a failure. Which tests fell
+over moved around from run to run depending on timing, which is why the count kept
+changing.
+
+The fix is one sentence, applied in the three places that each needed it: a test
+run spends nothing, so it is not written down and not counted against anybody.
+There was also a fourth place worth mentioning — the definition of "is this a
+test?" existed in two files, and two copies of a rule like that drift apart
+quietly. There is one now.
+
+The protection itself is untouched, which mattered more than the fix: a real
+background job at the limit still stands down exactly as before, and two of the
+new tests exist purely to prove that. Every part of the change was checked by
+deliberately undoing it and watching the right test fail — five times — and the
+suite now passes three runs in a row as a robot, and once as Dane.
+
 ## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
 
 A page template is the starting point you build new pages from, and it carries
