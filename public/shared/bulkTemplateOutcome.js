@@ -289,22 +289,43 @@
       if (isFrameSectionLike(section)) incoming.add(String(section.savedSectionId));
     }
     const list = Array.isArray(pageSections) ? pageSections : [];
+    // DEDUPED ON THE SAVED SECTION, NOT ON WHAT IT IS CALLED.
+    //
+    // `seen` used to key on the display label, and the label for a section with
+    // no title is the constant 'Untitled section' — so two genuinely different
+    // untitled shared sections collapsed into one entry and the operator
+    // approved the removal of one while two went (2026-09-14 round-2 review).
+    // savedSectionId is what identifies a shared section, and
+    // isFrameSectionLike has already guaranteed it is there.
+    //
+    // An untitled one is COUNTED but not named, because it has no name to give:
+    // listing 'Untitled section' twice reads as a rendering fault rather than
+    // as two sections. The sentence says how many there are instead.
     const names = [];
     const seen = new Set();
+    let untitled = 0;
     let pages = 0;
     for (const sections of list) {
       if (!Array.isArray(sections)) continue;
       let lost = 0;
       for (const section of sections) {
         if (!isFrameSectionLike(section)) continue;
-        if (incoming.has(String(section.savedSectionId))) continue;
+        const id = String(section.savedSectionId);
+        if (incoming.has(id)) continue;
         lost += 1;
-        const label = sectionLabelLike(section);
-        if (!seen.has(label)) { seen.add(label); names.push(label); }
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const title = section && typeof section.title === 'string' ? section.title.trim() : '';
+        if (title) names.push(title);
+        else untitled += 1;
       }
       if (lost) pages += 1;
     }
-    return { known: true, names, pages };
+    // `removed` is the number the operator is approving; `names` is only what
+    // can be said out loud about it. They differ exactly when a removed shared
+    // section has no title, which is why the count is reported separately
+    // rather than derived from the list's length.
+    return { known: true, names, untitled, removed: seen.size, pages };
   }
 
   /**
@@ -747,7 +768,7 @@
         'Any shared section a page carries that the chosen template does not is taken off that page — it '
           + 'stays in Saved Sections, so it can be put back.',
       );
-    } else if (!frameLoss.names.length) {
+    } else if (!frameLoss.removed) {
       parts.push(
         'No shared section is removed: every shared section these pages carry is in the chosen template too.',
       );
@@ -755,11 +776,19 @@
       const wherePages = frameLoss.pages === pageCount
         ? plural(pageCount, 'this page', 'every selected page')
         : `${frameLoss.pages} of the ${pageCount} selected ${plural(pageCount, 'page', 'pages')}`;
+      // The count comes from `removed`, never from the list's length: an
+      // untitled shared section is removed just the same and has no name to
+      // print, so a sentence counting the names would understate what goes.
+      const untitledPart = frameLoss.untitled
+        ? `${frameLoss.names.length ? ' and ' : ''}${frameLoss.untitled} `
+          + `${plural(frameLoss.untitled, 'shared section with no title', 'shared sections with no title')}`
+        : '';
       parts.push(
-        `${plural(frameLoss.names.length, 'This shared section is', 'These shared sections are')} not in the `
-          + `chosen template and will be removed from ${wherePages}: ${frameLoss.names.join(', ')}. `
-          + `${plural(frameLoss.names.length, 'It is a saved section', 'They are saved sections')}, so `
-          + `${plural(frameLoss.names.length, 'it', 'they')} can be put back at any time.`,
+        `${plural(frameLoss.removed, 'This shared section is', 'These shared sections are')} not in the `
+          + `chosen template and will be removed from ${wherePages}: `
+          + `${frameLoss.names.join(', ')}${untitledPart}. `
+          + `${plural(frameLoss.removed, 'It is a saved section', 'They are saved sections')}, so `
+          + `${plural(frameLoss.removed, 'it', 'they')} can be put back at any time.`,
       );
     }
 
@@ -803,7 +832,7 @@
         bodyCount: reading.complete ? counted.bodyCount : null,
         unreadable: counted.unreadable,
         unread: reading.missing,
-        frameRemoved: frameLoss.known && reading.complete ? frameLoss.names.length : null,
+        frameRemoved: frameLoss.known && reading.complete ? frameLoss.removed : null,
         liveCount,
       },
     };

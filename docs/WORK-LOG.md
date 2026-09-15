@@ -52,6 +52,21 @@ actually looked at every page you ticked: asked about five pages it was given no
 layouts for, the old wording answered "these pages have no content sections of
 their own, so there is nothing to lose here", which is the most reassuring
 sentence in the dialog and, in that case, the least supported.
+
+Two last things, from the second review pass. Pressing the button archives every
+page in the project first, because that archive is the only undo this operation
+has — so the browser asks the server "will you accept this?" before paying for
+one. Two of the new refusals above were being made only at the moment of
+writing, after the archive had already been taken: you were told the change was
+fine, a full copy of every page was filed, and then nothing happened. No page
+was ever at risk, but you were left holding a useless archive at the top of the
+list you are told to restore from, which pushes the real ones down it. Both
+questions are now asked before the archive, so a refusal costs you nothing. And
+the sentence naming the shared sections that will be removed used to count them
+by name, so two different untitled ones read as one — it counts the sections
+now, and says "2 shared sections with no title" rather than inventing a single
+name for both.
+
 ## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
 
 A settings panel should read as one neat rectangle: every label starting on the

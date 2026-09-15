@@ -750,6 +750,59 @@ test('the shared sections that will be removed are named, once a template is cho
   assert.equal(plan.counts.frameRemoved, 1);
 });
 
+/**
+ * TWO UNTITLED SHARED SECTIONS ARE TWO, NOT ONE.
+ *
+ * The 2026-09-14 round-2 review: `seen` keyed on the display label, and the
+ * label for a section with no title is the constant 'Untitled section' — so two
+ * genuinely different untitled shared sections collapsed into one entry and the
+ * operator approved the removal of one while two went. Deduping on
+ * savedSectionId is what makes the count the number of sections rather than the
+ * number of distinct names.
+ *
+ * They are counted and not listed, because 'Untitled section, Untitled section'
+ * reads as a rendering fault rather than as two sections.
+ */
+test('two untitled shared sections are counted as two, not collapsed into one', () => {
+  const untitled = (savedSectionId) => ({ id: `p-${savedSectionId}`, canonical: true, savedSectionId });
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[untitled('ss-1'), { id: 'a', type: 'text' }, untitled('ss-2')]],
+    templateSections: [
+      { id: 't-keep', title: 'Copyright', canonical: true, savedSectionId: 'ss-new' },
+      { id: 'body' },
+    ],
+  });
+
+  assert.equal(plan.counts.frameRemoved, 2, 'two shared sections go, so the operator is told two');
+  assert.match(plan.message, /2 shared sections with no title/);
+  assert.doesNotMatch(plan.message, /Untitled section/, 'a placeholder name must not stand in for a count');
+  // Plural throughout, because two are removed.
+  assert.match(plan.message, /These shared sections are not in the chosen template/);
+  assert.equal(countBulkTemplateFrameLoss(
+    [[untitled('ss-1'), untitled('ss-2')]],
+    [],
+  ).removed, 2);
+});
+
+test('a titled and an untitled removal are both reported, in one sentence', () => {
+  const plan = describeBulkTemplateChangePlan({
+    pageCount: 1,
+    pageSections: [[
+      { id: 'p-1', title: 'Public Header', canonical: true, savedSectionId: 'ss-1' },
+      { id: 'a', type: 'text' },
+      { id: 'p-2', canonical: true, savedSectionId: 'ss-2' },
+    ]],
+    templateSections: [
+      { id: 't-keep', title: 'Copyright', canonical: true, savedSectionId: 'ss-new' },
+      { id: 'body' },
+    ],
+  });
+
+  assert.equal(plan.counts.frameRemoved, 2);
+  assert.match(plan.message, /Public Header and 1 shared section with no title/);
+});
+
 test('nothing lost is SAID, rather than left to be inferred from silence', () => {
   const frame = (savedSectionId, title) => ({ id: `p-${savedSectionId}`, title, canonical: true, savedSectionId });
   const plan = describeBulkTemplateChangePlan({

@@ -686,6 +686,22 @@ test('the check says yes without touching a single page', async () => {
   assert.ok(rows.every((r) => r.page_template_id === '27'));
 });
 
+/**
+ * THE NAME OF THIS TEST IS THE PROPERTY, AND IT HAS BEEN FALSE ONCE.
+ *
+ * The 2026-09-14 round-2 send-back: two refusals were added to the write path
+ * — the saved-sections read failing, and a frame that resolves to nothing —
+ * and to neither the check path nor this list. So the check said yes, the
+ * browser archived every page in the project, and the write refused. Nothing
+ * was lost (the refusals are fail-safe), but the operator was handed a
+ * full-project archive that undid nothing, on the list he is told to restore
+ * from, after being told the change was fine. Meanwhile this test went on
+ * passing, asserting a property that had stopped holding — which is worse than
+ * not having it, because the next reader believes the two paths are in step.
+ *
+ * A refusal added to `bulkSetPageTemplate` and not to `resolveBulkTemplateTarget`
+ * fails here now. Adding one to the resolver costs a line in this list.
+ */
 test('every refusal the write path can raise, the check raises first', async () => {
   const cases = [
     { ids: [1], templateId: '999', match: /No saved page template with id/ },
@@ -693,12 +709,27 @@ test('every refusal the write path can raise, the check raises first', async () 
     { ids: [1], templateId: '62', match: /has no sections/ },
     { ids: [], templateId: '47', match: /pageIds is required/ },
     { ids: [1], templateId: '', match: /pageTemplateId is required/ },
+    // The two the send-back was about. Both are READS, which is what makes them
+    // safe to ask on the check path — it still writes nothing.
+    {
+      ids: [1],
+      templateId: '47',
+      store: { failSavedSections: true },
+      match: /Could not read this project's saved sections/,
+    },
+    {
+      ids: [1],
+      templateId: '47',
+      store: { savedSections: [] },
+      match: /none of them could be matched to a saved section/,
+    },
   ];
   for (const c of cases) {
     // eslint-disable-next-line no-await-in-loop
     const { store, rows, calls } = makeStore({
       pages: [pageRow(1, 'Home')],
       templates: [NEW_TEMPLATE, EMAIL_TEMPLATE, EMPTY_TEMPLATE],
+      ...(c.store || {}),
     });
     // eslint-disable-next-line no-await-in-loop
     const checked = await store.checkBulkSetPageTemplate(c.ids, c.templateId);
