@@ -33,6 +33,7 @@ import {
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
+import { builderBackgroundClipAttrs, builderBackgroundClipStyle } from "@/lib/background-clip";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
 import {
   latestPostsEmptyReason,
@@ -1858,12 +1859,21 @@ function BuilderSectionPreview({
           borderRadius: `${section.rowBorderRadius ?? "0"}px`
         }
       : {}),
-    // Containment for the video layer and the tint screen, both of which are
-    // absolutely positioned children. Without `overflow: hidden` a blurred
-    // video — which is scaled up so its soft rim falls outside — would spill
-    // over the rows above and below it.
+    // The containing block for the video layer and the tint screen, both of
+    // which are absolutely positioned children.
+    //
+    // NO `overflow: hidden` HERE, and that is the fix for 86bbwmp2y. A blurred
+    // video is scaled up so its soft rim falls outside, and a parallaxing
+    // image layer is taller than the row by the whole travel distance, so both
+    // genuinely have to be contained — but containing them on the ROW clips
+    // everything else inside it too, and `overflow: hidden` cannot tell
+    // footage escaping from a navigation dropdown that is SUPPOSED to escape.
+    // The layer is wrapped in a clip box of its own below instead
+    // (`builderBackgroundClipStyle`), so the containment reaches exactly the
+    // element that needs it and a menu in a video row opens over the row
+    // beneath, as it does with no video at all.
     ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-      ? { position: "relative", overflow: "hidden" }
+      ? { position: "relative" }
       : {}),
     display: "grid",
     gridTemplateColumns: sectionGridTemplate,
@@ -1891,11 +1901,18 @@ function BuilderSectionPreview({
       style={gridStyle}
     >
       {sectionBackgroundLayer ? (
-        <BuilderBackgroundLayer
-          background={sectionBackgroundLayer}
-          surface="section"
-          tint={sectionBackgroundLayerTint}
-        />
+        <div
+          aria-hidden
+          className="builder-preview-background-clip"
+          {...builderBackgroundClipAttrs("section")}
+          style={builderBackgroundClipStyle()}
+        >
+          <BuilderBackgroundLayer
+            background={sectionBackgroundLayer}
+            surface="section"
+            tint={sectionBackgroundLayerTint}
+          />
+        </div>
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />
@@ -2060,21 +2077,23 @@ function BuilderSectionPreview({
                 section.cellHAlign?.[columnKey] ?? "left",
                 section.cellVAlign?.[columnKey] ?? "top"
               )),
-          position: "relative",
+          position: "relative"
           /*
-           * Containment for the video layer, and the reason this ticket is
-           * about cells rather than rows: the layer is scaled to cover, so
-           * without `overflow: hidden` a cell's footage spills sideways over
-           * the column beside it — the one thing a per-cell background must
-           * never do. The row clips its own layer for the same reason.
+           * NO `overflow: hidden` HERE — this is where 86bbwmp2y lived.
            *
-           * Applied ONLY when a video layer is actually mounted. Clipping
-           * every cell unconditionally would silently start cutting off the
-           * floating images and overhanging decor that deliberately reach out
-           * of their column, which is why the collapsed-slot guards sit on
-           * `columnVideoBackground` itself.
+           * The footage still has to be contained: the layer is scaled to
+           * cover, so left loose it spills sideways over the column beside it,
+           * which is the one thing a per-cell background must never do. But
+           * clipping the CELL clips everything in it, and a navigation
+           * module's dropdown is supposed to hang out of its column — with a
+           * video behind it the menu was cut off at the column's edge and read
+           * to a visitor as one that would not open.
+           *
+           * So the layer is wrapped in a clip box of its own below
+           * (`builderBackgroundClipStyle`), at exactly these bounds. The
+           * footage is contained; the column stays `overflow: visible`, which
+           * is what it is on every cell that has no video.
            */
-          ...(columnVideoBackground ? { overflow: "hidden" } : {})
         };
 
         return (
@@ -2101,7 +2120,14 @@ function BuilderSectionPreview({
               `.builder-preview-video-background` rule.
             */}
             {columnVideoBackground ? (
-              <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />
+              <div
+                aria-hidden
+                className="builder-preview-background-clip"
+                {...builderBackgroundClipAttrs("cell")}
+                style={builderBackgroundClipStyle()}
+              >
+                <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />
+              </div>
             ) : null}
             {/*
               Above the cell's own fill, below its modules. The stacking is not

@@ -919,6 +919,56 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'video-background-is-clipped-without-clipping-the-row',
+    why:
+      'A blurred video is scaled up so its soft rim falls outside the row, and a parallaxing image ' +
+      'layer is taller than the row by the whole travel distance, so both have to be contained or ' +
+      'they spill onto the rows above and below. The row carried that containment itself until ' +
+      '2026-09-14 — and clipped everything else inside it in the same stroke, which is the row half ' +
+      'of 86bbwmp2y: a navigation dropdown in a video row was cut off at the row\'s edge. Two ' +
+      'readings in one contract on purpose, because each alone passes on the other\'s bug: a row ' +
+      'left `overflow: visible` with no clip box leaks the footage, and a row clipped by itself ' +
+      'holds the footage while cutting the menu.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the row's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — a blurred ` +
+          'or drifting layer inside it is free to spill over the rows above and below.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "row's flow rather than laid over it, so it no longer matches the row's bounds.";
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-leaves-the-row-itself-uncontained',
+    why:
+      'The other half of the pair above, and the row half of 86bbwmp2y. `overflow: hidden` on the ' +
+      'ROW cannot tell footage escaping from a dropdown menu that is supposed to escape, so it cut ' +
+      'both. This is the reading that fails if the containment ever moves back onto the row — which ' +
+      'would look completely correct in every other video contract here.',
+    section: { ...VIDEO_SECTION },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'the row carrying the video is `overflow: hidden` — anything inside it that is meant ' +
+          'to reach out of the row, a navigation dropdown above all, is cut off at its edge.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so the clip box and the layer inside it size ' +
+          'themselves against the page rather than against the row.';
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-background-sits-behind-the-content',
     why:
       'The columns are grid children and the video is absolutely positioned, so without a stacking ' +
@@ -975,21 +1025,134 @@ export const RENDER_CONTRACTS = [
     id: 'cell-video-background-is-clipped-to-its-own-cell',
     why:
       'THE reason this is a per-cell feature and not a per-row one. The layer is scaled to cover, so ' +
-      'without `overflow: hidden` on the column the footage spills sideways over the column beside ' +
-      'it — one cell\'s background silently painting over its neighbour\'s words. It is invisible to ' +
-      'every other check here: the video renders, the poster is right, the z-index is right, and the ' +
-      'row still looks like a row.',
+      'left uncontained the footage spills sideways over the column beside it — one cell\'s ' +
+      'background silently painting over its neighbour\'s words. It is invisible to every other ' +
+      'check here: the video renders, the poster is right, the z-index is right, and the row still ' +
+      'looks like a row. ' +
+      'The containment moved on 2026-09-14 (86bbwmp2y): it used to be `overflow: hidden` on the ' +
+      'COLUMN, which clipped everything else in the column too — a navigation dropdown was cut off ' +
+      'at the column edge and read as a menu that would not open. So it is now a clip box around ' +
+      'the layer alone, and this contract follows it there rather than being deleted with it.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the cell's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — the ` +
+          'footage inside it is free to bleed across the gap into the next column.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "column's flow rather than laid over it, so it pushes the operator's content down and no " +
+          'longer matches the cell\'s bounds.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-leaves-the-cell-itself-uncontained',
+    why:
+      'THE BUG THIS PAIR WAS SPLIT FOR (86bbwmp2y). Containing the footage by clipping the CELL ' +
+      'contains everything else in the cell as well, and `overflow: hidden` cannot tell footage ' +
+      'escaping from a navigation dropdown that is SUPPOSED to escape. To a visitor the menu reads ' +
+      'as one that will not open: they tap it and nothing appears. The contract above proves the ' +
+      'footage is still held; this one proves it is held by the box and not by the column.',
     section: { ...CELL_VIDEO_SECTION },
     selector: '.builder-preview-column-layered',
     read: ['overflow', 'position'],
     expect(sample) {
-      if (sample.styles.overflow !== 'hidden') {
-        return `the cell carrying the video is \`overflow: ${sample.styles.overflow || 'visible'}\` — its ` +
-          'footage is free to bleed across the gap into the next column.';
+      if (sample.styles.overflow === 'hidden') {
+        return 'the cell carrying the video is `overflow: hidden` — the containment is back on the ' +
+          'column, so a dropdown menu, a floating image or any other thing meant to reach out of ' +
+          'that column is cut off at its edge.';
       }
       if (sample.styles.position === 'static') {
-        return 'the cell is `position: static`, so the absolutely positioned video escapes it entirely ' +
-          'and sizes itself against the row (or the page) instead.';
+        return 'the cell is `position: static`, so the clip box and the video inside it escape the ' +
+          'column entirely and size themselves against the row (or the page) instead.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-overhanging-decor-out-of-the-cell',
+    why:
+      'THE CONTRACT NO STYLE READING COULD HAVE REPLACED, and the one that actually reproduces ' +
+      '86bbwmp2y. `overflow: hidden` on an ancestor does not change a descendant\'s rect at all — ' +
+      'the clipped element still measures exactly where it always was — so every box reading in ' +
+      'this scene is identical whether the dropdown is visible or cut in half. What changes is ' +
+      'whether the browser can HIT it out there. So this hangs a floating image out of a ' +
+      'video-backed cell and asks what is on top where it crosses into the next column: the image ' +
+      'when the containment sits on the layer, the next column when it sits on the cell. ' +
+      'A floating image rather than a navigation dropdown because it overhangs on load with no ' +
+      'interaction — the clipping is identical, and a scene that needs a hover is a scene that can ' +
+      'quietly stop opening.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+        // Something solid for the probe to hit when the decor loses, so the
+        // failure is visible to a person in a screenshot and not only here.
+        right: { mode: 'color', color: '#cc0000' },
+      },
+      modules: [
+        // `horizontalOffset: 200` is what carries the image across the gutter
+        // at this harness's viewport; `trigger: on-load` keeps it out of the
+        // inline-z-index path. Both match the overlay contract this is modelled
+        // on, so the two scenes stay comparable.
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, size: '60', trigger: 'on-load', horizontalOffset: '200' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.builder-preview-module-overlay-flow .builder-preview-image-shell',
+        against: '.builder-preview-column:not(.builder-preview-column-layered)',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page, so the elements this ` +
+          'contract compares were never both rendered, and it can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. Clipping does not
+       * move the image's rect, so the overlap is positive in BOTH the working
+       * and the broken scene — but if the image ever stops crossing the gutter
+       * at all, the probe point lands where neither element is and a green run
+       * here would mean nothing.
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the floating image does not overhang into the next column at all in this scene ' +
+          `(image ${probe.subjectBox.left}-${probe.subjectBox.right}, next column starts at ` +
+          `${probe.againstBox.left}), so there is no overlap to probe. Push \`horizontalOffset\` ` +
+          'until it crosses the gutter again — a scene that does not overlap passes forever while ' +
+          'testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the floating image hangs out of the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the image — the ` +
+          'part of it outside the column is not there to be hit. That is the cell clipping its own ' +
+          'contents to contain the footage, which is 86bbwmp2y: on a real page the same clip takes ' +
+          "the bottom off a navigation module's dropdown and a visitor reads the menu as broken.";
       }
       return null;
     },
@@ -1047,6 +1210,91 @@ export const RENDER_CONTRACTS = [
         return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
           'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
           'on the page is now being clipped.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-a-dropdown-menu-out-of-the-cell',
+    why:
+      'THE SCENE 86bbwmp2y WAS REPORTED AS, measured rather than reasoned about. A navigation ' +
+      "module's dropdown is supposed to hang below its column; with a video behind that column it " +
+      'was cut off at the column edge, and what a visitor saw was a menu that would not open — they ' +
+      'tap it and a few pixels of white appear. Measured by hand in a browser before the fix: the ' +
+      'menu ran from y=89 to y=255 and the cell ended at y=98, so all three items were inside the ' +
+      'clip. THE RECT NEVER MOVED — clipping does not change a clipped element\'s geometry — which ' +
+      'is why this asks what the browser reports on top over the section below rather than reading ' +
+      'a box or a style. The sibling contract on floating decor covers the same mechanism without a ' +
+      'hover; this one covers the module the operator actually reported.',
+    section: {
+      layout: 'two-column',
+      // A section below for the menu to hang over, and the thing the probe
+      // compares against. Without it the overhang has nothing underneath it and
+      // there is no intersection to ask about.
+      spacers: 1,
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+      },
+      modules: [
+        {
+          type: 'navigation',
+          column: 'left',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'play', label: 'Programs', href: '/programs' },
+              { id: 'p1', label: 'Junior tennis', href: '/junior', parentId: 'play' },
+              { id: 'p2', label: 'Adult clinics', href: '/adult', parentId: 'play' },
+              { id: 'p3', label: 'Private lessons', href: '/private', parentId: 'play' },
+            ]),
+          },
+        },
+        { type: 'text', column: 'right', text: '<p>Next column</p>', settings: {} },
+      ],
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.site-nav-dropdown-menu',
+        against: '.builder-preview-section:has(.builder-preview-column-layered) ~ .builder-preview-section',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page. Either the dropdown never ` +
+          'opened on hover, or there is no section below the row for it to hang over — and with ' +
+          'neither of those on the page this contract can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. The menu's rect is
+       * identical whether it is clipped or not, so this is the only thing that
+       * distinguishes "the menu hangs past the row and we are asking about the
+       * overhang" from "the menu now fits inside the row and the probe point
+       * landed nowhere in particular".
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the open dropdown does not hang past the bottom of its row at all in this scene, so ' +
+          'there is no overhang to probe and this contract cannot say anything. Give the menu more ' +
+          'items, or a shorter row — a scene with no overhang passes forever while testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the open dropdown hangs below the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the menu — the ` +
+          'part of the menu outside its column is not there to be hit. That is the cell clipping ' +
+          'its own contents in order to contain the footage (86bbwmp2y). To a visitor the menu ' +
+          'opens as a sliver of white and then nothing: it reads as broken.';
       }
       return null;
     },
@@ -1357,9 +1605,9 @@ export const RENDER_CONTRACTS = [
       'THE CONTRACT ABOVE PASSES ON THIS BUG, measured rather than feared: make the section mount a ' +
       'layer for EVERY image background and it still reports clean, because the layer component ' +
       'itself renders null when parallax is off. What actually changes is the ROW — deciding to ' +
-      'mount a layer is also deciding to make the row `position: relative; overflow: hidden`, and ' +
-      'that would start clipping any overlay module deliberately spilling out of it, on pages ' +
-      'nobody touched. The absence that matters is the containment, not the element.',
+      'mount a layer is also deciding to make the row `position: relative` and to lay a full-size ' +
+      'clip box over it, and that box takes hit-testing decisions and stacking rungs with it, on ' +
+      'pages nobody touched. The absence that matters is the containment, not the element.',
     section: {
       ...PARALLAX_IMAGE_SECTION,
       background: { ...PARALLAX_IMAGE_SECTION.background, parallax: false },

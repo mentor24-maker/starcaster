@@ -10,6 +10,7 @@ import {
 } from "@/lib/builder-template";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
 import { backgroundParallaxGeometry } from "@/lib/background-parallax";
+import { builderBackgroundLayerSurface } from "@/lib/background-clip";
 
 /**
  * THE ONE BACKGROUND LAYER. Section rows use it today; the page background and
@@ -111,9 +112,14 @@ function useBackgroundParallax(
     if (!enabled || !node || typeof window === "undefined") return;
 
     // The layer is absolutely positioned against its section, so the section
-    // is its offset parent — but `parentElement` is the honest question here:
-    // this layer is always a direct child of the surface that mounted it.
-    const section = node.parentElement;
+    // is its offset parent. It is NOT always the layer's parent element: the
+    // surface mounts it inside a clip box (`background-clip.ts`) so that the
+    // layer can be contained without the row itself being clipped, and that
+    // box is `inset: 0` against the padding box rather than the border box.
+    // `builderBackgroundLayerSurface` steps over it; asking for
+    // `parentElement` here would measure the box and shift every bordered
+    // row's parallax by its border width.
+    const section = builderBackgroundLayerSurface(node);
     if (!section) return;
 
     let frame: number | null = null;
