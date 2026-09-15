@@ -150,6 +150,71 @@ test('deleting a page deletes its published snapshot', () => {
   assert.match(body, /catch \(_\)/, 'best-effort: the page is already gone');
 });
 
+/**
+ * RETENTION: deleting clears a snapshot, hiding a page does not.
+ *
+ * The other half of the test above, and it has to sit beside it -- reading
+ * "deleting a page deletes its published snapshot" on its own makes tidying up
+ * the unpublish path look like finishing the job, and it is the opposite.
+ *
+ * Put to the operator on 2026-09-14 as a three-way choice (drop the snapshot
+ * on unpublish / shelve it somewhere unservable / keep it and document it) and
+ * answered: keep it and document it. Measured the same day against production,
+ * the three events this covers accounted for ONE row and 26 kB -- and dropping
+ * the snapshot would have charged for that by changing what Publish promises
+ * on every future republish, since a page put back would serve its draft.
+ *
+ * These tests fail if somebody implements the option that was NOT chosen.
+ */
+
+test('unpublishing, privating or renaming a page leaves its snapshot alone', () => {
+  // The regression, and the natural-looking change that would cause it:
+  // a `removeBuildForPage` call added to the save path, mirroring deletePage.
+  const store = read('lib/builderPagesStore.js');
+  const fn = store.slice(store.indexOf('async function updatePage'));
+  const body = codeOnly(fn.slice(0, fn.indexOf('\n}\n')));
+
+  assert.ok(body.length > 0, 'updatePage body was actually extracted');
+  assert.match(body, /is_published|scopedPatchRow/, 'and it is the save path');
+  assert.doesNotMatch(
+    body,
+    /removeBuildForPage/,
+    'a save must not remove the published snapshot -- unpublish HIDES a page, '
+      + 'it does not erase what was published of it (operator, 2026-09-14)'
+  );
+});
+
+test('deletePage is the ONLY thing in the store that removes a snapshot', () => {
+  // Stated as a whole-file property rather than per-function, so a removal
+  // added to a helper the save path calls is caught too.
+  const store = codeOnly(read('lib/builderPagesStore.js'));
+  const calls = store.match(/removeBuildForPage\(/g) || [];
+  assert.equal(
+    calls.length,
+    1,
+    `exactly one snapshot removal in the store, found ${calls.length}`
+  );
+
+  const del = store.indexOf('async function deletePage');
+  const call = store.indexOf('removeBuildForPage(');
+  assert.ok(del > -1, 'deletePage is present');
+  assert.ok(call > del, 'and the one removal is inside it, not in the save path');
+});
+
+test('the retention decision is written down on the table itself', () => {
+  // Option 3 IS the documentation -- "keep it AND say so" -- so the saying so
+  // is part of the deliverable and this is what stops a later cleanup dropping
+  // it and leaving behaviour nobody can explain.
+  //
+  // Deliberately loose: it checks that the three events are named and that the
+  // rule is stated, not the wording. Reword it freely; just keep saying it.
+  const sql = read('docs/SQL/develop_builder_published_pages_setup.sql');
+  assert.match(sql, /keeps its snapshot/, 'the rule is stated');
+  for (const event of [/is_published -> false/, /is_private -> true/, /slug/]) {
+    assert.match(sql, event, `names the ${event} case`);
+  }
+});
+
 test('the snapshot delete is project-scoped', () => {
   // A DELETE on page_id alone would reach across tenants.
   const publish = read('lib/builderPublishStore.js');
