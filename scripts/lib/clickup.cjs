@@ -166,17 +166,17 @@ async function clickupFetch(url, init = {}, opts = {}) {
   // caller can never reach this branch.
   //
   // ONLY REAL CLICKUP TRAFFIC touches the machine's ledger, and "real" means
-  // BOTH the host and the transport — `spendsClickUpBudget` below, which has
-  // the incident behind each half. Until 2026-09-15 it meant the host alone,
-  // and the half that was missing is the one the whole test suite uses, so
-  // `npm run test:builder` on the Mini wrote into the same ledger the live
+  // the host, the transport AND the process — `spendsClickUpBudget` below,
+  // which has the incident behind each. Until 2026-09-15 it meant the host
+  // alone, and the part that was missing is the one the whole test suite uses,
+  // so `npm run test:builder` on the Mini wrote into the same ledger the live
   // relay reads a second later: the suite yielded against its own traffic and
   // reported failures that were not real, and real scheduled jobs stood down
   // alongside it. The door's OWN counter still counts every attempt: it
   // answers "what did this pass cost", which is a different question from
   // "what has been taken from the token".
   const who = callerKind({ env });
-  const spends = spendsClickUpBudget(url, { injectedTransport, env });
+  const spends = spendsClickUpBudget(url, { injectedTransport, env, realEnv: process.env });
   const verdict = spends
     ? ledger.shouldYield({ kind: who.kind, now: now(), env })
     : { yield: false, why: whyNothingIsSpent(url, injectedTransport) };
@@ -233,8 +233,8 @@ function describeTransport(value) {
 /**
  * Does this request actually spend the company's one ClickUp token?
  *
- * TWO conditions, and the second one is the one that cost a morning
- * (2026-09-15, task 86bc0wrxg).
+ * THREE conditions, and the two after the host are the ones that cost a
+ * morning each (2026-09-15, task 86bc0wrxg).
  *
  * 1. THE HOST. `api.clickup.com` is the only host that spends the token, so a
  *    request to a stand-in server or a deliberately-invalid host has spent
@@ -260,22 +260,72 @@ function describeTransport(value) {
  *    rather than merely unlikely — for a faked request to reach the shared
  *    ledger at ~/.starcaster/clickup-ledger.jsonl: it is structural, not a
  *    hostname a future test could happen to choose differently.
+ *
+ * 3. THE RUNNER. Conditions 1 and 2 both turn on something the CALLER chose,
+ *    so a test that chooses neither is invisible to them — it keeps the real
+ *    URL and stubs `globalThis.fetch` in its own process, injecting nothing.
+ *    From the door's point of view that is live traffic in every respect, and
+ *    `bugReportForward.test.js` does it deliberately (proving that the refusal
+ *    in `lib/clickupForward.js` reads the runner, not the token, so it hands
+ *    in `env: {}` to defeat that refusal on purpose). Both halves are correct
+ *    on their own and they cancelled out: five phantom requests per suite run
+ *    landed on the operator's shared ledger, which is the one thing this
+ *    ticket's acceptance criterion forbids (review round 2, 2026-09-15).
+ *
+ *    So the last condition is not about the caller at all — it is about the
+ *    PROCESS. A test run may write to a ledger of its own
+ *    (`CLICKUP_LEDGER_PATH`, exactly as in condition 2) and may never write to
+ *    the shared one. That closes the class rather than this one shape: a test
+ *    nobody has written yet, in whatever style, cannot reach the operator's
+ *    ledger through this door at all.
+ *
+ *    IT UNDER-COUNTS, AND THAT IS THE RIGHT DIRECTION HERE. The door's standing
+ *    rule is to over-count rather than under-count, because an uncounted real
+ *    request makes every other process on the machine read a number that is too
+ *    small. The exception is bounded to a process that (a) is a test runner and
+ *    (b) declared no ledger of its own: a real request from there is already a
+ *    defect — `lib/clickupForward.js` refuses one outright — its process exits
+ *    in seconds, and the alternative is writing invented traffic into the file
+ *    the live relay reads a second later. The door's OWN counter
+ *    (`budget.requests`) is untouched by all three conditions, so "what did this
+ *    pass cost" still counts every attempt.
  */
-function spendsClickUpBudget(url, { injectedTransport = false, env = process.env } = {}) {
+function spendsClickUpBudget(url, { injectedTransport = false, env = process.env, realEnv = process.env } = {}) {
   let host;
   try { host = new URL(String(url)).host; } catch { return false; }
   if (host !== 'api.clickup.com') return false;
-  if (!injectedTransport) return true;
+  const faked = injectedTransport || underTestRunner(realEnv);
+  if (!faked) return true;
   return Boolean(env.CLICKUP_LEDGER_PATH);
 }
 
-/** Say WHICH of the two conditions spared the budget, so a yield verdict that
- *  never fired still explains itself to whoever is reading the log. */
+/**
+ * Is THIS PROCESS a test run?
+ *
+ * `node --test` sets `NODE_TEST_CONTEXT` and vitest sets `VITEST`, each in the
+ * process it actually runs. The answer is read from the REAL `process.env` and
+ * never from an env a caller handed in, because a test is entitled to hand in
+ * `{}` on purpose: `bugReportForward.test.js` does exactly that, to prove that
+ * `lib/clickupForward.js`'s own refusal reads the runner rather than the
+ * token. Reading the handed-in env would let that deliberate choice reach
+ * through and switch this off as well — which is how the two guards cancelled
+ * each other out (review round 2, 2026-09-15).
+ *
+ * ONE definition, exported, because `lib/clickupForward.js` asks the same
+ * question at its own door and two copies of a predicate drift apart.
+ */
+function underTestRunner(env = process.env) {
+  return Boolean(env.NODE_TEST_CONTEXT || env.VITEST);
+}
+
+/** Say WHICH of the three conditions spared the budget, so a yield verdict
+ *  that never fired still explains itself to whoever is reading the log. */
 function whyNothingIsSpent(url, injectedTransport) {
   let host = null;
   try { host = new URL(String(url)).host; } catch { /* an unparseable URL reaches nothing */ }
   if (host !== 'api.clickup.com') return 'not a request to api.clickup.com — nothing of the token is spent';
-  return 'the caller supplied its own transport, so nothing left this machine for ClickUp — nothing of the token is spent';
+  if (injectedTransport) return 'the caller supplied its own transport, so nothing left this machine for ClickUp — nothing of the token is spent';
+  return 'this process is a test run, which may not spend the company token onto the shared ledger — nothing of the token is spent';
 }
 
 /** Keep the live rate-limit state instead of printing it and throwing it away.
@@ -702,6 +752,10 @@ module.exports = {
   // scheduled job gets when it stops.
   ledger,
   callerKind,
+  // "Is this process a test run?" — one definition, because
+  // `lib/clickupForward.js` refuses a real request on the same question and a
+  // second copy of it would drift (task 86bc0wrxg, review round 2).
+  underTestRunner,
   ClickUpReserveYield,
   COMMENT_PAGE_SIZE,
   HTTP_TIMEOUT_MS,

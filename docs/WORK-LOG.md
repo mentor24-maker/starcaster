@@ -44,6 +44,26 @@ loud and explains what it was handed. The guard that stops a future test
 forgetting its throwaway tally was also tightened: it used to look at a whole
 file at once and only knew one way of starting a second process, so a third
 one added to a file that already looked fine would have slipped through.
+
+A second check then found one more, and it was a good catch: a test added by
+separate work a few hours earlier, on purpose, does the one thing neither of
+the protections above can see. It keeps the real ClickUp address, does *not*
+hand in a stand-in, and replaces the network call inside its own process — so
+to the budget code it looks exactly like a genuine request, and five lines per
+test run were still landing in the shared tally. The two protections were each
+right on their own and quietly cancelled each other out.
+
+So there is now a third condition, and it is about the *process* rather than
+about what the caller handed in: a test run may write to a throwaway tally it
+named for itself, and may never write to the shared one. That closes the whole
+family rather than this one case — a test nobody has written yet, in whatever
+style, cannot reach the shared tally through this door at all. Measured on the
+finished code, with the tally pointed somewhere only this run could touch so
+another job on the machine could not be mistaken for it: the suite gives 4083
+passes and no failures, whether run by a background job or by hand, and the
+shared tally moves by zero lines either way. With the new condition taken back
+out again it moves by five, which is how we know the measurement can see it.
+
 ## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
 
 If you put a video behind one column of a row and a menu in that same column,

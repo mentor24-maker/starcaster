@@ -15,7 +15,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { clickupFetch, ledger, _resetBudgetForTests } = require('../lib/clickup.cjs');
+const { clickupFetch, ledger, underTestRunner, _resetBudgetForTests } = require('../lib/clickup.cjs');
 
 const URL_REAL = 'https://api.clickup.com/api/v2/task/abc';
 const NOW = 1_757_000_000_000;
@@ -214,9 +214,11 @@ test('scheduled and interactive callers get the same answer for faked traffic', 
 });
 
 /*
- * The other direction, which is what makes the rule structural rather than a
- * blanket "tests do not count": the REAL transport is still counted, and no
- * caller can opt out of the ledger except by not sending the request.
+ * The other direction: a caller cannot opt out of the ledger by bringing its
+ * own transport or by failing to connect. The ledger here is a FIXTURE one —
+ * which is the whole of the rule, not a detail of the test. The door's answer
+ * is never "a test does not count"; it is "a test counts onto the ledger it
+ * declared, and onto no other".
  */
 test('the real transport is still counted — a caller cannot opt out of the ledger', async () => {
   const { env } = fixture({ STARCASTER_CALLER: 'scheduled' });
@@ -231,6 +233,104 @@ test('the real transport is still counted — a caller cannot opt out of the led
   assert.equal(out.res, null, 'the aborted attempt produced no response');
   assert.ok(out.transportError, 'and it failed at the transport');
   assert.equal(ledger.headroom({ now: NOW + 1, env }).spent, 1, 'a real attempt is recorded even when it never arrived');
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * THE SHAPE THAT INJECTS NOTHING (review round 2, 2026-09-15).
+ *
+ * The rule above turns on what the CALLER brought, so a test that brings
+ * nothing is invisible to it: keep the real `api.clickup.com` URL, stub
+ * `globalThis.fetch` in this very process, and the door sees live traffic in
+ * every respect. `scripts/builder/bugReportForward.test.js` does exactly that
+ * on purpose — it is proving that `lib/clickupForward.js` refuses a real
+ * request because of the RUNNER and not because of the token, so it hands in
+ * `env: {}` to defeat that refusal deliberately. Both guards were right on
+ * their own and they cancelled out: five phantom requests per full suite run
+ * landed on ~/.starcaster/clickup-ledger.jsonl, which is the one thing this
+ * ticket's second acceptance criterion forbids.
+ *
+ * The fix is the third condition in `spendsClickUpBudget`, and it is about the
+ * PROCESS rather than the caller: a test run may write to a ledger it declared
+ * and may never write to the shared one. That is why these tests assert on the
+ * shared file itself under a throwaway HOME — a headroom reading alone would
+ * pass for the wrong reason if the write merely went somewhere else.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+test('a test run that injects NOTHING and stubs the global fetch leaves the shared ledger alone', async () => {
+  ledger._resetForTests();
+  _resetBudgetForTests();
+  assert.ok(process.env.NODE_TEST_CONTEXT, 'node --test must mark this process, or the rule has nothing to read');
+  await withThrowawayHome(async (sharedLedger) => {
+    // `env: {}` is the bugReportForward shape verbatim: no CLICKUP_LEDGER_PATH,
+    // no caller kind, and nothing that could switch the rule off from outside.
+    const env = {};
+    await withStubbedGlobalFetch(async (calls) => {
+      for (let i = 0; i < 5; i += 1) {
+        const out = await clickupFetch(URL_REAL, { method: 'POST' }, { env, now: () => NOW + i });
+        assert.equal(out.res.status, 200, 'the stubbed global is still reached — the request is not blocked');
+        assert.equal(out.yielded, null);
+      }
+      assert.equal(calls.length, 5, 'all five went through the stub');
+    });
+    assert.equal(fs.existsSync(sharedLedger), false, "not one line may reach the operator's shared ledger");
+  });
+});
+
+test('a test run that DID declare a ledger still records onto that one', async () => {
+  const { env } = fixture({ STARCASTER_CALLER: 'scheduled' });
+  _resetBudgetForTests();
+  await withThrowawayHome(async (sharedLedger) => {
+    await withStubbedGlobalFetch(async (calls) => {
+      await clickupFetch(URL_REAL, { method: 'GET' }, { env, now: () => NOW });
+      assert.equal(calls.length, 1);
+    });
+    assert.equal(
+      ledger.headroom({ now: NOW + 1, env }).spent, 1,
+      'the door still accounts for it — a test run is not exempt from its OWN ledger',
+    );
+    assert.equal(fs.existsSync(sharedLedger), false, 'and the shared one is untouched either way');
+  });
+});
+
+/*
+ * THE PROCESS HALF IS READ FROM THE REAL ENVIRONMENT, NOT THE HANDED-IN ONE.
+ *
+ * This is the whole reason the two guards cancelled out, so it is pinned
+ * rather than left to the reader: an env handed to the door is the caller's to
+ * choose, and `bugReportForward.test.js` chooses `{}` on purpose. If the rule
+ * read the runner out of that env it would be off for exactly the test it has
+ * to catch. `underTestRunner` is exported, so the predicate can be asked both
+ * ways here without reaching into the door's internals.
+ */
+test('the runner is read from the real process env, which a handed-in env cannot switch off', () => {
+  assert.equal(underTestRunner(process.env), true, 'this process IS a test run');
+  assert.equal(underTestRunner({}), false, 'and an empty env would say otherwise — which is why it is not asked');
+  assert.equal(underTestRunner({ VITEST: '1' }), true, 'vitest counts too');
+});
+
+/*
+ * ONE DEFINITION, TWO DOORS. `lib/clickupForward.js` refuses a real request on
+ * the same question, and until this round it kept its own copy of the
+ * predicate. Two copies of a rule this quiet drift, and the drift is invisible
+ * — each file goes on passing its own tests while the system stops agreeing
+ * with itself. Asserting the identity is cheap and it cannot rot.
+ */
+test('both doors ask the SAME question object, so the two cannot drift apart', () => {
+  const forwardSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'clickupForward.js'), 'utf8');
+  assert.match(
+    forwardSrc,
+    /require\('\.\.\/scripts\/lib\/clickup\.cjs'\)/,
+    'clickupForward must come through the door module',
+  );
+  assert.ok(
+    /const \{[^}]*\bunderTestRunner\b[^}]*\} = require\('\.\.\/scripts\/lib\/clickup\.cjs'\)/.test(forwardSrc),
+    'clickupForward must IMPORT underTestRunner rather than keep a second copy',
+  );
+  assert.doesNotMatch(
+    forwardSrc,
+    /function underTestRunner\b/,
+    'a local redefinition is the drift this test exists to prevent',
+  );
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
