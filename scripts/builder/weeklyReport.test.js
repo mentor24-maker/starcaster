@@ -356,7 +356,7 @@ test('a failed Drive upload is a failed run, not a quiet one', () => {
     'and returns the failure, which publishExitCode turns into exit 1');
   // The wrapper is the other half: a non-zero exit has to reach a person.
   const wrapper = fs.readFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), 'utf8');
-  assert.match(wrapper, /report:job-failure/, 'the wrapper reports a failed run to the bus');
+  assert.match(wrapper, /npm run --silent report:failure/, 'the wrapper reports a failed run to the bus');
   assert.match(wrapper, /\$status" -ne 3/, 'but exit 3 — another machine owns it — is not a failure');
 });
 
@@ -722,15 +722,30 @@ test('the bus warning is reachable: bus() checks the result it gets back', () =>
 
 test('a publish that was asked for and did not happen exits non-zero', () => {
   assert.equal(R.publishExitCode({ published: true }), 0, 'a report that shipped is a success');
-  assert.equal(R.publishExitCode({ published: false, reason: 'no changes' }), 0,
-    'a week identical to the last edition is a quiet week, not a failure');
   assert.equal(R.publishExitCode({ published: false, reason: 'other-node' }), 3,
     'another machine owning the job is a designed decline — the code node:owns uses');
+
+  // 'no changes' USED to be a third exemption and is deliberately not one any
+  // more (round 1 of 86bc0nbwq). It meant "identical to the edition already on
+  // main", a judgement only the pull-request mechanism could make, and that
+  // mechanism was removed when publishing became an upload to Drive. An upload
+  // is never a no-op: the edition reached the folder or it did not.
+  assert.equal(R.publishExitCode({ published: false, reason: 'no changes' }), 1,
+    'nothing can produce that reason now, and an unreachable exemption reads as a considered one');
 
   for (const reason of ['gh exited 1', 'push rejected', 'unknown-role']) {
     assert.equal(R.publishExitCode({ published: false, reason }), 1,
       `launchd must not record a clean Monday for a week that produced no report (${reason})`);
   }
+});
+
+test('nothing in the report can still produce the retired "no changes" reason', () => {
+  // The other half: publishExitCode is only right about that reason because the
+  // code path that produced it is gone. If one comes back, the exemption has to
+  // come back with it — deliberately, not by the exit code quietly being wrong.
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+  assert.ok(!/'no changes'/.test(code), 'no publish path returns it');
 });
 
 test("'unidentified' exits 1, not 3 — it is ignorance, not a decline", () => {
@@ -805,10 +820,21 @@ test('the schedule reports on a week that has finished, not the one we are stand
   // `--window 7` alone means "the 7 days ending TODAY". Fired Monday 07:00 it
   // stops at 07:00 and the next edition starts Tuesday, so Monday daytime falls
   // into no edition at all — 70 of 107 Monday merges since 1 July, silently.
-  const invocation = src.split('\n').find((l) => l.includes('weekly_report.mjs') && !l.trimStart().startsWith('#'));
-  assert.ok(invocation, 'the wrapper must actually run the report, or this proves nothing');
-  assert.match(invocation, /--as-of/, 'the scheduled run must pin the window to a finished day');
-  assert.ok(!/--as-of\s+"?\$\(date \+%F\)/.test(invocation), 'ending the window today is the defect itself');
+  // EVERY line that runs the report, not the first one found. Since round 1 of
+  // 86bc0nbwq there are two: the real invocation through `npm run report:weekly`
+  // (which is what gives it Doppler and therefore the Google credential) and the
+  // WEEKLY_REPORT_NODE test seam. Reading only the first would have pinned the
+  // seam and let the scheduled line drift — a test that reads a line nothing
+  // schedules is the same defect one level up.
+  const invocations = src.split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .filter((l) => l.includes('weekly_report.mjs') || l.includes('report:weekly'));
+  assert.ok(invocations.length >= 2,
+    'the wrapper must actually run the report — through npm, plus the test seam — or this proves nothing');
+  for (const invocation of invocations) {
+    assert.match(invocation, /--as-of/, 'the scheduled run must pin the window to a finished day');
+    assert.ok(!/--as-of\s+"?\$\(date \+%F\)/.test(invocation), 'ending the window today is the defect itself');
+  }
   // And the day it pins to has to be worked out, not assumed present.
   assert.match(src, /date -v-1d \+%F/, 'yesterday is computed from the clock');
   assert.match(src, /refusing to report on a partial week/, 'and a clock it cannot read stops the run rather than silently reporting a short week');
@@ -1058,4 +1084,25 @@ test('a publish that FAILED keeps its output, and the failure is not masked', ()
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('the index links to Drive, because Drive is the only place this page is opened', () => {
+  // THE DEFECT (round 1 of 86bc0nbwq). The index shipped with relative links —
+  // href="2026-09-14.html" — which resolve to nothing in Google Drive: Drive
+  // serves every file from its own id, not from a folder path. So every link on
+  // the published index was dead, on a page whose entire job is to be links.
+  const html = R.renderIndexHtml([
+    { date: '2026-09-07', file: '2026-09-07.html', link: 'https://drive.google.com/file/d/AAA/view' },
+    { date: '2026-09-14', file: '2026-09-14.html', link: 'https://drive.google.com/file/d/BBB/view' },
+  ]);
+  assert.match(html, /href="https:\/\/drive\.google\.com\/file\/d\/BBB\/view"/,
+    'the Drive link is what a reader can actually follow');
+  assert.ok(!/href="2026-09-14\.html"/.test(html),
+    'a relative href resolves to nothing in Drive — that is the whole defect');
+  assert.ok(html.indexOf('2026-09-14') < html.indexOf('2026-09-07'), 'newest first');
+
+  // The fallback stays: a local look at the staging folder has no Drive links,
+  // and relative links DO work there.
+  const local = R.renderIndexHtml([{ date: '2026-09-14', file: '2026-09-14.html' }]);
+  assert.match(local, /href="2026-09-14\.html"/, 'no link means the filename, not an empty href');
 });

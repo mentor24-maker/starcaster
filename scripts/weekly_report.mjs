@@ -47,6 +47,17 @@
  * Starcaster › Weekly Reports — reading each file back before calling it done
  * (lib/weeklyReportDrive.js). Nothing is committed and nothing is pushed.
  *
+ * TWO RULES ABOUT THAT FOLDER, both from round 1 of this ticket:
+ *   - the edition PAGE is never overwritten once it is in Drive. It is where
+ *     the narrative is written, and a re-run would otherwise replace a person's
+ *     writing with the bare figures and call that a success. The .data.json and
+ *     the index beside it are machine files and are always rewritten.
+ *   - index.html is built from what is IN THE DRIVE FOLDER, not from this
+ *     machine's staging folder, and its links are Drive's own file links. A
+ *     local listing would drop every edition made on another machine (moving
+ *     the role is a one-line edit in lib/nodeRoles.js), and relative links do
+ *     not resolve in Drive at all.
+ *
  * Dane, 2026-09-14: "It shouldn't be saved to the Mini. It should either be
  * saved to the MacBook and/or Google Drive in the Projects/Starcaster folder in
  * a dedicated sub-folder."
@@ -495,7 +506,7 @@ function gatherLoopPasses() {
  * job-failure post. The one outcome that must never happen is this returning
  * quietly while the report sits on one machine's disk and nowhere else.
  */
-async function publish(reportPath, jsonPath, indexPath) {
+async function publish(reportPath, jsonPath) {
   const verdict = checkRole('weekly-report');
   if (!verdict.owned) {
     console.error(`\nNot publishing: ${verdict.message}`);
@@ -506,10 +517,26 @@ async function publish(reportPath, jsonPath, indexPath) {
   const cfg = driveConfig();
   console.error(`\nUploading to Google Drive: folder ${cfg.parentFolderId} › "${cfg.subfolder}"`);
 
-  const files = [reportPath, jsonPath, indexPath].filter(Boolean);
+  // THE INDEX IS NOT UPLOADED FROM DISK. It is rendered from what the Drive
+  // folder actually holds, after the edition files have landed — see
+  // lib/weeklyReportDrive.js. The local index is still written (it makes the
+  // staging folder browsable) and is deliberately not published.
+  //
+  // The window span is only printed for the edition THIS run made, because that
+  // is the only one whose window this process knows. `--window` is a flag, so
+  // deriving "seven days ending on its date" for every older edition would be
+  // an assumption printed as a fact — the page's own provenance line says it
+  // instead, which is true of every edition the schedule has ever made.
+  const files = [reportPath, jsonPath].filter(Boolean);
   let result;
   try {
-    result = await uploadEdition({ files });
+    result = await uploadEdition({
+      files,
+      preserveExisting: [reportPath],
+      indexFrom: (editions) => R.renderIndexHtml(editions.map((e) => (
+        e.date === AS_OF ? { ...e, window: `${WINDOW.from} to ${WINDOW.to}` } : e
+      ))),
+    });
   } catch (err) {
     result = { ok: false, error: `the upload threw: ${err && err.message ? err.message : err}`, uploaded: [] };
   }
@@ -529,13 +556,26 @@ async function publish(reportPath, jsonPath, indexPath) {
   for (const f of result.uploaded) {
     console.error(`  uploaded ${f.name} (${f.bytes} bytes, read back from Drive)`);
   }
+  for (const f of result.preserved || []) {
+    // SAY IT, and say what to do about it. A file quietly not uploaded is the
+    // same defect as a file quietly overwritten, one direction along.
+    console.error(`  LEFT ALONE — ${f.name} is already in Drive and was not overwritten.`);
+    console.error('    That is the file the narrative gets written on, so a re-run does not replace it');
+    console.error('    with the bare figures. Every figure this run gathered is in the .data.json beside');
+    console.error(`    it, which WAS updated. To publish this run's page instead, delete or rename`);
+    console.error(`    ${f.name} in Drive and run again.`);
+  }
   if (result.skipped.length) {
     console.error(`  not uploaded — not on disk: ${result.skipped.join(', ')}`);
   }
+  if (result.index) {
+    console.error(`  index.html rebuilt from the Drive folder — ${result.index.editions} edition(s) listed`);
+  }
   console.error(`\nDrive folder: ${result.folderLink}`);
 
-  const pageLink = (result.uploaded.find((f) => f.name.endsWith('.html') && f.name !== 'index.html') || {}).link
-    || result.folderLink;
+  const editionPage = [...result.uploaded, ...(result.preserved || [])]
+    .find((f) => f.name.endsWith('.html') && f.name !== 'index.html');
+  const pageLink = (editionPage || {}).link || result.folderLink;
   fileNarrativeTicket(pageLink, result.folderLink);
   return { published: true, folder: result.folderLink };
 }
@@ -558,7 +598,10 @@ in Projects › Starcaster › ${driveConfig().subfolder}:
 
 Every number on the page is also in \`${AS_OF}.data.json\` beside it, so this pass needs
 no re-gathering at all. Download the page, write on it, and put it back in the same
-folder under the same name.
+folder under the same name — **your writing is safe there.** If this week's report is
+ever run a second time (a Monday that failed halfway does get run again), it will find
+\`${AS_OF}.html\` already in Drive and leave it exactly as you left it, saying so in its
+log; only the figures file and the index are rewritten.
 
 ## What to do
 
@@ -710,7 +753,7 @@ if (unread.length) {
 // against. "Nothing to publish" is not a failure — an edition identical to the
 // one already on main is the correct outcome of a quiet week.
 if (flag('publish')) {
-  const result = await publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
+  const result = await publish(OUT_HTML, OUT_JSON);
   // The three-way decision lives in the pure module, where a test can reach it
   // without a network, a git remote or a faked machine identity — see
   // publishExitCode() there for which outcomes are failures and which are not.

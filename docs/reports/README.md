@@ -31,6 +31,26 @@ before calling it done. An upload that fails is a failed run: it posts to the
 bus and exits non-zero, which `scripts/report_job_failure.mjs` turns into an
 alert. There is no quiet path where the report exists on one machine only.
 
+## Two rules about the Drive folder
+
+Both were added on 2026-09-15 after the first review pass of this work.
+
+**Your writing is safe there.** Once `<date>.html` is in Drive it is never
+overwritten. Download it, write the narrative on it, put it back under the same
+name — if that week's report is ever run again (a Monday that failed halfway
+does get run again), it finds the page already there, leaves it exactly as you
+left it and says so in its log. Only the figures file and the index are
+rewritten. To publish a fresh figures page over yours on purpose, delete or
+rename the page in Drive and run again.
+
+**`index.html` is built from what is in the Drive folder**, not from the folder
+on whichever machine ran the report, and its links are Drive's own file links.
+Two reasons: moving `weekly-report` to another machine is a one-line edit in
+`lib/nodeRoles.js`, and that machine's local folder holds one edition — an index
+built from it would list one edition while every earlier one sat in Drive
+unlisted. And a relative link (`href="2026-09-14.html"`) resolves to nothing
+when the page is opened from Drive, which is the only place it is ever opened.
+
 ## Who writes what
 
 | | Who | How long |

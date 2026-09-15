@@ -140,6 +140,13 @@ function fakeDrive(overrides = {}) {
       f.bytes = fileBuffer.length;
       return { ok: true, data: { id: fileId } };
     },
+    async listFilesInFolder(token, folderId) {
+      state.calls.push(`list:${folderId}`);
+      const files = [...state.files.entries()]
+        .filter(([, f]) => f.parent === folderId)
+        .map(([id, f]) => ({ id, name: f.name, webViewLink: `https://drive/${id}`, size: f.bytes }));
+      return { ok: true, data: files };
+    },
   };
   return Object.assign(base, overrides);
 }
@@ -286,4 +293,161 @@ test('a failed Google sign-in keeps the error CODE, not just the description', (
   assert.match(fn, /\[code, detail\]/, 'both halves are reported');
   assert.ok(!/payload\.error_description \|\| payload\.error/.test(fn),
     'the description must not be preferred over the code — that is what hid invalid_grant');
+});
+
+
+// ── Round 1 of 86bc0nbwq: three things the uploader will not do ────────────
+//
+// Each of these is a defect the first version shipped with, and each one
+// reported perfect success while doing the wrong thing — which is why they are
+// worth tests rather than care.
+
+/** Two dated pages and a data file, on disk. */
+function editionFiles(tmp, dates) {
+  fs.mkdirSync(tmp, { recursive: true });
+  const out = [];
+  for (const d of dates) {
+    const html = path.join(tmp, `${d}.html`);
+    fs.writeFileSync(html, `<p>the figures for ${d}</p>\n`);
+    out.push(html);
+  }
+  const json = path.join(tmp, `${dates[dates.length - 1]}.data.json`);
+  fs.writeFileSync(json, '{"window":{}}\n');
+  out.push(json);
+  return out;
+}
+
+const listIndex = (editions) => `<ul>${editions.map((e) => `<li><a href="${e.link}">${e.date}</a></li>`).join('')}</ul>`;
+
+test('a page somebody has written on is NOT overwritten by a re-run', async () => {
+  // THE DEFECT. The narrative ticket tells Dane to download the edition page,
+  // write on it and put it back under the same name. A Monday that failed
+  // halfway gets run again — and the second run used to upload the bare figures
+  // over his writing and report success. Unrecoverable, and silent.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-preserve-'));
+  try {
+    const [page, json] = editionFiles(tmp, ['2026-09-14']);
+    const d = fakeDrive();
+
+    const first = await drive.uploadEdition({ files: [page, json], preserveExisting: [page], env: ENV }, d);
+    assert.equal(first.ok, true, first.error);
+    assert.deepEqual(first.uploaded.map((f) => f.name).sort(), ['2026-09-14.data.json', '2026-09-14.html'],
+      'the first run has nothing to preserve — the page is not there yet');
+    assert.deepEqual(first.preserved, [], 'and it says so');
+
+    const pageId = [...d.state.files.entries()].find(([, f]) => f.name === '2026-09-14.html')[0];
+    d.state.files.get(pageId).bytes = 4242;          // stand-in for "Dane wrote on it"
+
+    const second = await drive.uploadEdition({ files: [page, json], preserveExisting: [page], env: ENV }, d);
+    assert.equal(second.ok, true, second.error);
+    assert.equal(d.state.files.get(pageId).bytes, 4242,
+      'the re-run replaced a page somebody had written on with the bare figures');
+    assert.deepEqual(second.preserved.map((f) => f.name), ['2026-09-14.html'],
+      'and a file quietly not uploaded is the same defect the other way round — it has to be named');
+    assert.deepEqual(second.uploaded.map((f) => f.name), ['2026-09-14.data.json'],
+      'the machine-owned file beside it is still refreshed, which is what a half-failed re-run needs');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('the index lists what is IN DRIVE, not what this machine happens to have', async () => {
+  // THE DEFECT. The index was rebuilt from the local staging folder and uploaded
+  // over the Drive copy. Moving `weekly-report` to another machine is a one-line
+  // edit in lib/nodeRoles.js and explicitly supported — and on that machine the
+  // staging folder holds one edition, so the published index would list one
+  // while every earlier edition sat in Drive unlisted. Any tidy of the local
+  // folder does the same.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-index-'));
+  try {
+    const d = fakeDrive();
+
+    const older = editionFiles(path.join(tmp, 'machine-1'), ['2026-09-07']);
+    const a = await drive.uploadEdition({ files: older, indexFrom: listIndex, env: ENV }, d);
+    assert.equal(a.ok, true, a.error);
+    assert.equal(a.index.editions, 1);
+
+    // A DIFFERENT machine. Its folder has never seen 2026-09-07.
+    const newer = editionFiles(path.join(tmp, 'machine-2'), ['2026-09-14']);
+    const b = await drive.uploadEdition({ files: newer, indexFrom: listIndex, env: ENV }, d);
+    assert.equal(b.ok, true, b.error);
+    assert.equal(b.index.editions, 2,
+      'an index built from the local folder would list one edition and orphan every earlier one');
+
+    const indexId = [...d.state.files.entries()].find(([, f]) => f.name === 'index.html')[0];
+    assert.ok(d.state.files.get(indexId).bytes > 0, 'and the index really was written');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('the editions an index lists are dated pages, newest first, with Drive links', () => {
+  const editions = drive.editionsFromListing([
+    { id: 'a', name: '2026-09-07.html', webViewLink: 'https://drive/a' },
+    { id: 'b', name: '2026-09-14.html', webViewLink: 'https://drive/b' },
+    { id: 'c', name: '2026-09-14.data.json', webViewLink: 'https://drive/c' },
+    { id: 'd', name: 'index.html', webViewLink: 'https://drive/d' },
+    { id: 'e', name: 'notes from Dane.html', webViewLink: 'https://drive/e' },
+    { id: 'f', name: '2026-08-31.html' },
+  ]);
+  assert.deepEqual(editions.map((e) => e.date), ['2026-09-14', '2026-09-07', '2026-08-31'],
+    'newest first, and only dated pages — the data files, the index and anything a person drops in are not editions');
+  assert.equal(editions[0].link, 'https://drive/b', 'the link is the one that opens it in Drive');
+  assert.equal(editions[2].link, 'https://drive.google.com/file/d/f/view',
+    'and a listing with no webViewLink still gets a link that works, rather than a blank href');
+});
+
+test('an index that could not be built from Drive is a FAILURE, not a short index', async () => {
+  // The read this depends on can fail, and the tempting fallback — "use what is
+  // on disk" — is the defect above, arriving through the error path. A folder
+  // that cannot be listed means the index would silently drop every edition it
+  // could not see, so the run stops and says exactly that.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-index-fail-'));
+  try {
+    const files = editionFiles(tmp, ['2026-09-14']);
+    const d = fakeDrive({
+      async listFilesInFolder() { return { ok: false, error: 'Drive said 503' }; },
+    });
+    const res = await drive.uploadEdition({ files, indexFrom: listIndex, env: ENV }, d);
+    assert.equal(res.ok, false, 'a listing that failed cannot produce an honest index');
+    assert.match(res.error, /dropped every edition it could not see/);
+    assert.match(res.error, /Drive said 503/, 'and it keeps the reason Drive gave');
+    assert.equal(res.uploaded.length, 2, 'the edition files that DID land are still named');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('an index that did not land whole is a failure too — same read-back as every other file', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-index-short-'));
+  try {
+    const files = editionFiles(tmp, ['2026-09-14']);
+    const d = fakeDrive();
+    const honest = d.uploadFile;
+    d.uploadFile = async (args) => {
+      const res = await honest(args);
+      if (args.fileName === 'index.html') d.state.files.get(res.data.id).bytes = 0;
+      return res;
+    };
+    const res = await drive.uploadEdition({ files, indexFrom: listIndex, env: ENV }, d);
+    assert.equal(res.ok, false, 'an index that "uploaded" empty is a folder of editions nothing lists');
+    assert.match(res.error, /index\.html is \d+ bytes here and Drive reports 0 bytes/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('no index is written at all when none was asked for', async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-no-index-'));
+  try {
+    const files = editionFiles(tmp, ['2026-09-14']);
+    const d = fakeDrive();
+    const res = await drive.uploadEdition({ files, env: ENV }, d);
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.index, null);
+    assert.ok(!d.state.calls.some((c) => c.startsWith('list:')),
+      'and it did not spend a Drive call working out an index nobody wanted');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });

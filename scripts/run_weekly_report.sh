@@ -84,6 +84,44 @@ export STARCASTER_CALLER=scheduled
 
 echo "=== weekly-report $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 
+# ── A FAILED RUN HAS TO MAKE A NOISE ─────────────────────────────────────────
+#
+# This wrapper had no failure path at all. A Monday run that gathered its
+# figures and then could not publish them exited non-zero into a log file in
+# ~/Library/Logs that nobody opens, and the week simply had no report — the
+# same silence the whole report was built against.
+#
+# It matters more now than it did (task 86bc0nbwq): publishing used to mean
+# opening a pull request, which is visible on GitHub whether or not anything
+# announced it. It now means uploading to a Google Drive folder, and a failed
+# upload leaves the report on ONE machine's disk with nothing on any shared
+# surface to say it exists. Dane's own requirement: "A Drive upload that fails
+# must report through the job-failure path, never 'succeed' with the report
+# written nowhere."
+#
+# report_job_failure.mjs always exits 0 itself and throttles to one post per job
+# per 6h, cleared by the next success, so this cannot turn one bad Monday into a
+# stream of messages.
+#
+# IT IS A FUNCTION because there are two ways this run can fail and only one of
+# them used to be heard: the publish exiting non-zero, and the refusal above it
+# when yesterday's date cannot be worked out. Two call sites, one reporter.
+#
+# Through npm, not `node` directly: the reporter posts to ClickUp and reads
+# CLICKUP_API_TOKEN from the environment, which Doppler supplies via the package
+# script. launchd sets no environment at all, so a bare `node` here would fail on
+# the one call whose entire job is not to fail quietly. `report:failure` is the
+# name — there used to be a second, byte-identical `report:job-failure`, and two
+# names for one command drift apart. Worse than untidy here: the scheduled-caller
+# detector in scripts/builder/clickupCaller.test.js matches on the string
+# `report:failure`, so a wrapper reaching ClickUp only under the other name would
+# be invisible to it.
+report_failure() {
+  echo "failure: reporting to the bus (exit $1)"
+  npm run --silent report:failure -- \
+    --job weekly-report --status "$1" --log "$HOME/Library/Logs/weekly-report.log" || true
+}
+
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
 
 clean_report_residue() {
@@ -155,21 +193,45 @@ fi
 as_of="$(date -v-1d +%F 2>/dev/null || date -d 'yesterday' +%F)"
 if [ -z "$as_of" ]; then
   echo "could not work out yesterday's date — refusing to report on a partial week"
+  # AND IT SAYS SO OUT LOUD. This early return used to sit above the failure
+  # block at the bottom of the file, so the one path that refuses to run at all
+  # was the one path nobody heard about — the same silence that block was added
+  # for. Refusing is correct; refusing quietly is not.
+  report_failure 1
   echo "=== exit 1"
   exit 1
 fi
 echo "window: the 7 days ending $as_of (the week that has finished)"
 
 # --publish is what makes this a scheduled job rather than a local command: it
-# commits the report to a branch, opens the pull request and files the ticket
-# for the narrative pass. It refuses on any machine that does not own the role,
-# which is why the schedule is harmless if it is ever installed in two places.
+# uploads the edition to Google Drive — Projects > Starcaster > Weekly Reports —
+# and files the ticket for the narrative pass. Nothing is committed and nothing
+# is pushed; that mechanism was removed in task 86bc0nbwq and is the reason this
+# job stopped dirtying the checkout. It refuses on any machine that does not own
+# the role, which is why the schedule is harmless if it is ever installed in two
+# places.
+#
+# THROUGH `npm run`, NOT A BARE `node` — THIS IS THE WHOLE JOB (round 1 of
+# 86bc0nbwq). launchd hands this script a PATH and a HOME and nothing else, so a
+# bare `node scripts/weekly_report.mjs` runs with no Doppler and therefore no
+# GOOGLE_* credential in its environment: signing in to Drive fails, the upload
+# never even tries, and every Monday reports a failure while the report sits on
+# one machine's disk and nowhere else. Running it by hand hides this perfectly,
+# because a person types `doppler run` or has a shell that already has it.
+# `report:weekly` in package.json is Doppler-wrapped, which is the same move the
+# failure reporter below already makes and for the same stated reason.
+# `weeklyReportDopplerGuard.test.js` fails if either half is undone.
+#
 # WEEKLY_REPORT_NODE is the second test seam, and it exists for the same reason
-# as the first: the report itself wants doppler, npm and the network, so the
-# only honest way to test the cleanup BELOW is to stand in a fake report that
-# leaves the same files behind. launchd sets no environment, so the real Monday
-# run always uses plain `node`.
-"${WEEKLY_REPORT_NODE:-node}" scripts/weekly_report.mjs --as-of "$as_of" --window 7 --publish
+# as the first: the real report wants doppler, npm and the network, so the only
+# honest way to test the cleanup BELOW is to stand in a fake report that leaves
+# the same files behind. launchd sets no environment, so the real Monday run
+# never takes that branch — it always goes through npm.
+if [ -n "${WEEKLY_REPORT_NODE:-}" ]; then
+  "$WEEKLY_REPORT_NODE" scripts/weekly_report.mjs --as-of "$as_of" --window 7 --publish
+else
+  npm run --silent report:weekly -- --as-of "$as_of" --window 7 --publish
+fi
 status=$?
 
 # AND IT CLEANS UP AGAIN HERE, WHICH IS THE CALL THAT ACTUALLY MATTERS.
@@ -196,37 +258,14 @@ else
   echo "cleanup: skipped — the publish exited $status, so its output stays put for a person to look at."
 fi
 
-# ── A FAILED RUN HAS TO MAKE A NOISE ─────────────────────────────────────────
-#
-# This wrapper had no failure path at all. A Monday run that gathered its
-# figures and then could not publish them exited non-zero into a log file in
-# ~/Library/Logs that nobody opens, and the week simply had no report — the
-# same silence the whole report was built against.
-#
-# It matters more now than it did (task 86bc0nbwq): publishing used to mean
-# opening a pull request, which is visible on GitHub whether or not anything
-# announced it. It now means uploading to a Google Drive folder, and a failed
-# upload leaves the report on ONE machine's disk with nothing on any shared
-# surface to say it exists. Dane's own requirement: "A Drive upload that fails
-# must report through the job-failure path, never 'succeed' with the report
-# written nowhere."
-#
-# Exit 3 is not a failure. It is this machine correctly declining a job that
-# belongs to another one (lib/nodeRoles.js) — the schedule is deliberately
-# harmless to install anywhere, and an alert on every wake of every non-owning
-# machine is how an alert becomes noise.
-#
-# report_job_failure.mjs always exits 0 itself and throttles to one post per job
-# per 6h, cleared by the next success, so this cannot turn one bad Monday into a
-# stream of messages.
+# EXIT 3 IS NOT A FAILURE, which is the whole of what this condition decides.
+# It is this machine correctly declining a job that belongs to another one
+# (lib/nodeRoles.js) — the schedule is deliberately harmless to install
+# anywhere, and an alert on every wake of every non-owning machine is how an
+# alert becomes noise. What reporting a failure involves is up in
+# report_failure(), with the reasoning.
 if [ "$status" -ne 0 ] && [ "$status" -ne 3 ]; then
-  echo "failure: reporting to the bus (exit $status)"
-  # Through npm, not `node` directly: the reporter posts to ClickUp and reads
-  # CLICKUP_API_TOKEN from the environment, which Doppler supplies via the
-  # package script. launchd sets no environment at all, so a bare `node` here
-  # would fail on the one call whose entire job is not to fail quietly.
-  npm run --silent report:job-failure -- \
-    --job weekly-report --status "$status" --log "$HOME/Library/Logs/weekly-report.log" || true
+  report_failure "$status"
 fi
 
 echo "=== exit $status"
