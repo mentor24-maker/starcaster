@@ -1,3 +1,36 @@
+## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
+
+Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
+loop lanes — shares one per-minute allowance of requests to ClickUp, and they
+keep a shared tally file so each can see how much of the minute is left and
+stand down politely when a live session needs it. It turned out that simply
+running the test suite filled that tally with requests that never happened.
+
+The tests do not really call ClickUp; they hand the code a stand-in. But they
+keep the real ClickUp web address in the request, and the tally was decided by
+the address alone — so a few hundred imaginary requests piled up in a few
+seconds. Two things came off that. The tests started refusing their own
+requests partway through a run and reported about 22 failures that were not
+real, which matters because that command is a gate every automated build pass
+has to run and believe. And anyone running the tests made the relay, the pulse
+and both loops stand down for the next minute for no reason at all.
+
+A request now counts against the budget only if it is going to ClickUp *and*
+going out over the real network, rather than through a stand-in the caller
+brought with it. Nothing in the live site ever brings one, so real traffic is
+counted exactly as before. The tests for the budget code itself still have to
+drive that path with a stand-in — that is how we prove a background job really
+does stop when it should — so those may still be counted, but only against a
+throwaway tally file of their own. That is what makes it impossible, rather
+than merely unlikely, for invented traffic to reach the shared one.
+
+Two other test files stub the network deeper down, inside a separate process
+the budget code has no way to inspect. Those now hand that process its own
+throwaway tally, and a new guard fails the build if a future test forgets.
+Measured afterwards: the suite gives 4036 passes and no failures whether it is
+run by a background job or by hand, and neither run adds a single line to the
+shared tally.
+
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 
 **Read this bit first, because the original report was wrong about one thing.**
