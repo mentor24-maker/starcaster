@@ -64,6 +64,21 @@ passes and no failures, whether run by a background job or by hand, and the
 shared tally moves by zero lines either way. With the new condition taken back
 out again it moves by five, which is how we know the measurement can see it.
 
+A third check found the two halves had drifted apart again, this time by
+nothing either of them did: the separate work mentioned above went live on the
+main copy of the code while this was waiting to be checked, so the two no
+longer fitted together. Two lines had each gained a different thing and had to
+be joined into one, and then the test that separate work added stopped
+proving what it was written to prove. It forces the budget code to stand down
+on purpose, and standing down is only ever decided for a request that counts
+against the budget at all — which, under the new third condition, a test run's
+request does only when it has named a throwaway tally for itself. It had not,
+so the request sailed through, the stand-in answered as if all were well, and
+the test failed on a success. Naming a throwaway tally inside that one test
+restores it: 18 of 18 pass, and the shared tally still moves by zero. With the
+third condition taken back out, that same file puts five lines into the shared
+tally again, so the zero is a reading rather than an assumption.
+
 ## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
 
 For a few hours on the 15th the build and review loops on the Mac Mini refused
