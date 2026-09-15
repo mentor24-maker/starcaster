@@ -1,3 +1,35 @@
+## 2026-09-14 — The weekly report now goes to Google Drive, and stops jamming the Mac Mini (#709)
+
+The weekly figures report runs on the Mac Mini every Monday at 7am. It was
+saving its three files straight into the Mini's own copy of the Starcaster
+code — and the Mini refuses to pull down new code while there are stray files
+sitting in that copy, in case they are somebody's unfinished work. So every
+report run quietly switched off the Mini's updates, and the machine carried on
+running whatever version of the pipeline it had last Monday.
+
+That is what happened on 14 September: the Mini was seven changes behind,
+including two fixes to the pipeline shipped the day before, and nothing said so.
+An agent session had to move the files out and put the copy back by hand before
+it would update again. There were already two clean-up steps written to stop
+exactly this, and they did not.
+
+The report now writes to a folder that is nowhere near the code — by default
+`Documents/Starcaster/Weekly Reports` — and uploads each edition to Google
+Drive, in Projects → Starcaster → Weekly Reports on the mentor24 account, which
+is where Dane asked for it. It refuses to run at all if anyone ever points it
+back at a code folder. After each upload it asks Drive for the file it just
+wrote and checks the size matches, because "the upload worked" and "the file is
+actually there" are not the same claim. If the upload fails, that is a failed
+run: it posts to the team chat and the Monday job raises it as a job failure,
+rather than the report quietly existing on one machine and nowhere else.
+
+The editions already saved in the repo stay where they are as history. Nothing
+is committed or published as a pull request any more.
+
+**One step is Dane's:** the saved Google sign-in for Drive has expired, and only
+a browser login on the mentor24 account can renew it. Until that happens the
+Monday upload will fail — loudly, with a message saying exactly that.
+
 ## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
 
 The Builder has two buttons that both say "change template", and until now they
