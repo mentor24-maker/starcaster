@@ -1,9 +1,21 @@
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 
-If you set a row on a Builder page to full width and pressed Save Page, the
-row quietly went back to being boxed in at the normal page width. Nothing said
-so. You could set it to full width again, and the next save would undo it
-again. There was no way to keep it.
+**Read this bit first, because the original report was wrong about one thing.**
+This was filed as "set a row to full width, press Save Page, and it goes back
+to being boxed in at the normal page width." That is a real trap in the code
+and it is now closed — but a review pass went looking for a page it actually
+happens on and could not find one, and neither could we. Checked against live
+production: not one of the 133 pages that have rows on them is arranged the way
+it takes to trigger it, and the 359 full-width rows sitting in the database
+today have all stayed full width. So **please do not go looking for this on your
+sites — you will not see it, and you would not have seen it before either.**
+
+What is true is that the trap is *armed*. It fires on a page whose very first
+row has its first item sitting in the fourth, fifth or sixth column of a wide
+layout. No page is arranged that way right now, but 79 pages already use those
+wide columns, so it is one drag of one item away — and from that moment every
+save of that page would quietly reset 35 of its settings. That is worth closing
+before somebody trips it, which is what this change does.
 
 The cause is one line, and it turned out to be much bigger than the full-width
 setting. The older Builder tags every row it saves with two fields that used to
@@ -52,6 +64,28 @@ Checked against a real page in the database, saved twice with no edits in
 between, and confirmed every setting survived both times — then deliberately
 removed each fix and watched the settings revert again, which is how we know
 the tests would catch this coming back.
+
+A third review pass found one more thing, and it is the mirror image of the
+colour problem above. In teaching the importer that "none" is a real choice
+rather than a missing one, the fix accidentally broke a much older rule: a
+genuinely old Normie page could say "no background" in its new-style field
+while still carrying a colour in its old-style one, and the importer used to
+show that old colour. After the fix it showed nothing at all. Nobody would
+have noticed, because no part of this app sends that combination — but
+importing old pages is the only job that code has, so it is exactly the wrong
+place to be quietly wrong. It now honours the old colour again, which is also
+what the Builder itself does before it saves, so the two ends agree instead of
+disagreeing. Everything the second pass rescued still comes through untouched.
+
+Two of the tests were also tightened. One of them had been quietly excusing two
+settings from the check meant to catch any setting going missing — so we made
+one of those two go missing on purpose and watched the test pass anyway, which
+proved the excuse was hiding real failures rather than preventing false ones.
+It compares everything now. And the note left in the code for the next reader
+had the mechanism wrong: it blamed the older editor, which does trip the trap
+but has nothing to lose by it. The note now names the arrangement that actually
+causes the loss, with the production numbers beside it.
+
 ## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
 
 When you publish a page, the system saves a complete copy of it — that copy is
