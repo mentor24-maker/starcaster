@@ -27,9 +27,23 @@ than merely unlikely, for invented traffic to reach the shared one.
 Two other test files stub the network deeper down, inside a separate process
 the budget code has no way to inspect. Those now hand that process its own
 throwaway tally, and a new guard fails the build if a future test forgets.
-Measured afterwards: the suite gives 4036 passes and no failures whether it is
+Measured afterwards: the suite gives 4039 passes and no failures whether it is
 run by a background job or by hand, and neither run adds a single line to the
 shared tally.
+
+A check of this work found three loose ends, all now closed. Two were comments
+left saying the opposite of what the code does — one of them in the single
+live file that uses this seam, which is precisely where somebody would later
+have trusted it. The third was a real, if sleeping, hazard: if a caller handed
+the code something that was not a working stand-in at all, it used to fail on
+the spot without contacting anyone, and after the first round of this work it
+would instead have quietly sent a genuine request to ClickUp. Nothing in the
+code does that today, but it is the wrong way round for the one piece of code
+whose whole job is that nothing slips out uncounted, so it now refuses out
+loud and explains what it was handed. The guard that stops a future test
+forgetting its throwaway tally was also tightened: it used to look at a whole
+file at once and only knew one way of starting a second process, so a third
+one added to a file that already looked fine would have slipped through.
 
 ## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
 

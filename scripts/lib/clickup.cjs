@@ -123,6 +123,33 @@ async function clickupFetch(url, init = {}, opts = {}) {
   const { env = process.env, now = Date.now } = opts;
   // Whether the caller BROUGHT its own transport is the fact the accounting
   // turns on (task 86bc0wrxg), so read it as a fact rather than as a default.
+  //
+  // A PRESENT BUT NON-CALLABLE `fetchImpl` FAILS CLOSED, LOUDLY. Reading the
+  // fact with `typeof === 'function'` quietly turned one into the real `fetch`
+  // below — so `{ fetchImpl: null }`, which used to reach a TypeError inside
+  // the try and never leave the machine, would instead have sent a real
+  // authenticated request to api.clickup.com. Nothing in the tree passes a
+  // non-function today, so this is latent; it is guarded anyway because this
+  // is the one function whose job is that nothing escapes accounting, and
+  // fail-open is the wrong direction for it (review round 1, 2026-09-15).
+  //
+  // This does NOT weaken the never-throws contract three paragraphs down.
+  // That contract is about RUNTIME conditions — a network blip that threw here
+  // once uncapped the build loop (task 86bbm4zwd) — and those still come back
+  // as `transportError`. A transport that is not callable is a CALLER BUG: it
+  // fires deterministically on every call, before any network, so it can only
+  // ever be found the moment the broken code first runs.
+  //
+  // The test is `!== undefined`, never `'fetchImpl' in opts`: an explicit
+  // `fetchImpl: undefined` is the one value that legitimately means "use the
+  // real fetch", and `reviewGateClickup.test.js` passes exactly that.
+  if (opts.fetchImpl !== undefined && typeof opts.fetchImpl !== 'function') {
+    throw new TypeError(
+      `clickupFetch: fetchImpl was given as ${describeTransport(opts.fetchImpl)}, which is not callable. `
+      + 'Pass a function, or omit it (or pass undefined) to use the real fetch. '
+      + 'Refusing rather than quietly sending a real request to ClickUp.',
+    );
+  }
   const injectedTransport = typeof opts.fetchImpl === 'function';
   const fetchImpl = injectedTransport ? opts.fetchImpl : fetch;
   // THE RESERVE, ENFORCED AT THE DOOR (2026-09-04, task 86bbugd8j).
@@ -194,6 +221,13 @@ async function clickupFetch(url, init = {}, opts = {}) {
   let json = null;
   try { json = JSON.parse(text); } catch { /* provider returned a non-JSON error page */ }
   return { res, json, text, transportError: null, yielded: null };
+}
+
+/** Name what was handed in, so the refusal above says `null` or `an object`
+ *  rather than making whoever hit it go and print the value themselves. */
+function describeTransport(value) {
+  if (value === null) return 'null';
+  return `a ${typeof value}`;
 }
 
 /**

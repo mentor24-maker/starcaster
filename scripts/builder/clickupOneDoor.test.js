@@ -296,7 +296,9 @@ test('no ClickUp caller resolves its own transport behind the door\'s back', () 
   }
   assert.deepEqual(offenders, [],
     'falling back to globalThis.fetch is a second door the uniqueness check cannot see — '
-    + 'pass your fetch to clickupFetch as { fetchImpl } instead, so the request is still counted');
+    + 'pass your fetch to clickupFetch as { fetchImpl } instead, so the attempt is still counted '
+    + "by the door's own per-pass counter. It does NOT put a faked request on the machine-wide "
+    + 'ledger the live jobs read, and it is not meant to (task 86bc0wrxg).');
 });
 
 /*

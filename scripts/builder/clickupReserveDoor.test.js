@@ -234,6 +234,86 @@ test('the real transport is still counted — a caller cannot opt out of the led
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
+ * A TRANSPORT THAT IS NOT CALLABLE FAILS CLOSED (review round 1, 2026-09-15).
+ *
+ * Reading "did the caller bring a transport" as `typeof === 'function'` gives
+ * the right answer for every value but one: a present-but-non-callable
+ * `fetchImpl` reads as "not injected" and quietly becomes the REAL `fetch`.
+ * Measured on both branches with the global stubbed and the ledger pointed at
+ * a fixture, so nothing was sent: before the change `{ fetchImpl: null }`
+ * reached a TypeError inside the try and never left the machine; after it,
+ * the global was reached once, status 200 — a real authenticated request to
+ * api.clickup.com. Nothing in the tree passes a non-function today, which is
+ * why it was latent rather than loud, and it is exactly the wrong direction
+ * for the one function whose job is that nothing escapes accounting.
+ *
+ * Both halves are asserted here, because the fix has an obvious wrong shape:
+ * `'fetchImpl' in opts` would also catch an explicit `fetchImpl: undefined`,
+ * and undefined is the one value that legitimately means "use the real fetch"
+ * (`reviewGateClickup.test.js` passes precisely that).
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** Stand in for the global `fetch` and count whether it was reached at all —
+ *  the only way to prove a refusal happened INSTEAD of a real request rather
+ *  than after one. Restores the real global whatever the body does. */
+async function withStubbedGlobalFetch(body) {
+  const real = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => '{"ok":true}',
+    };
+  };
+  try {
+    return await body(calls);
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+test('a present but non-callable fetchImpl is refused at the door, not sent as real traffic', async () => {
+  const { env } = fixture({ STARCASTER_CALLER: 'interactive' });
+  _resetBudgetForTests();
+  await withStubbedGlobalFetch(async (calls) => {
+    for (const bad of [null, 'https://example.test', 42, {}]) {
+      await assert.rejects(
+        () => clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: bad, env, now: () => NOW }),
+        (err) => {
+          assert.ok(err instanceof TypeError, `${JSON.stringify(bad)} must be refused as a TypeError`);
+          assert.match(err.message, /not callable/);
+          assert.match(err.message, /Refusing rather than quietly sending a real request/);
+          return true;
+        },
+        `fetchImpl: ${JSON.stringify(bad)} must not be treated as "no transport given"`,
+      );
+    }
+    assert.deepEqual(calls, [], 'the real fetch must not have been reached even once');
+    assert.equal(
+      ledger.headroom({ now: NOW + 1, env }).spent, 0,
+      'and nothing was recorded — the refusal happens before any accounting',
+    );
+  });
+});
+
+test('an explicit fetchImpl: undefined still means "use the real fetch"', async () => {
+  const { env } = fixture({ STARCASTER_CALLER: 'interactive' });
+  _resetBudgetForTests();
+  await withStubbedGlobalFetch(async (calls) => {
+    const out = await clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: undefined, env, now: () => NOW });
+    assert.equal(out.res.status, 200, 'undefined is not a broken transport — it is the default');
+    assert.equal(calls.length, 1, 'and it goes through the real fetch');
+    assert.equal(
+      ledger.headroom({ now: NOW + 1, env }).spent, 1,
+      'counted as real traffic, because that is what it is',
+    );
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════
  * THE OTHER SHAPE, WHICH THE DOOR CANNOT SEE FROM THE INSIDE.
  *
  * The rule above turns on "did the caller bring its own transport", and that
@@ -249,6 +329,54 @@ test('the real transport is still counted — a caller cannot opt out of the led
  * spawned child's env — and this guard is what stops the next one forgetting.
  * A convention nothing checks is how the first one happened.
  * ══════════════════════════════════════════════════════════════════════════ */
+
+/** Every spelling of "launch a child process" — the guard used to match the
+ *  literal `spawnSync` alone, so a test written with `execFileSync` or `fork`
+ *  was never collected at all (review round 1, 2026-09-15). */
+const SPAWNERS = ['spawnSync', 'spawn', 'execFileSync', 'execFile', 'execSync', 'exec', 'fork'];
+
+/** Pull out the text between a call's parentheses, quotes and nesting
+ *  respected. Needed because the question is per CALL SITE — "does THIS spawn
+ *  declare a ledger" — and a whole-file search cannot answer it: a third spawn
+ *  site in a file that already mentions `CLICKUP_LEDGER_PATH` twice passed the
+ *  old guard for free, which is the exact shape it exists to catch. */
+function callArgsAt(src, openParen) {
+  let depth = 0;
+  let quote = null;
+  for (let i = openParen; i < src.length; i += 1) {
+    const ch = src[i];
+    if (quote) {
+      if (ch === '\\') { i += 1; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; continue; }
+    if (ch === '(') depth += 1;
+    else if (ch === ')') {
+      depth -= 1;
+      if (depth === 0) return src.slice(openParen + 1, i);
+    }
+  }
+  return null; // unbalanced — the file would not parse; let the syntax gate say so
+}
+
+/** The spawn call sites in `src` that carry a PRELOAD into a node child —
+ *  `-r`/`--require`, which is the one mechanism by which a stubbed
+ *  `globalThis.fetch` actually reaches the child. A spawn of `git` from the
+ *  same file has no preload and is deliberately not flagged: a guard that
+ *  cries wolf gets edited until it is quiet, which is worse than no guard. */
+function preloadingSpawnCalls(src) {
+  const out = [];
+  const re = new RegExp(`\\b(${SPAWNERS.join('|')})\\s*\\(`, 'g');
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const args = callArgsAt(src, re.lastIndex - 1);
+    if (args === null) continue;
+    if (!/'-r'|"-r"|`-r`|--require/.test(args)) continue;
+    out.push({ spawner: m[1], args });
+  }
+  return out;
+}
 
 test('a test that stubs fetch in a spawned child gives that child its own ledger', () => {
   const dir = __dirname;
@@ -266,7 +394,8 @@ test('a test that stubs fetch in a spawned child gives that child its own ledger
   const spawners = fs.readdirSync(dir)
     .filter((f) => f.endsWith('.test.js') && f !== SELF)
     .map((f) => ({ file: f, src: fs.readFileSync(path.join(dir, f), 'utf8') }))
-    .filter(({ src }) => src.includes('globalThis.fetch') && src.includes('spawnSync'));
+    .filter(({ src }) => src.includes('globalThis.fetch'))
+    .flatMap(({ file, src }) => preloadingSpawnCalls(src).map((call) => ({ file, ...call })));
 
   // The detector must be able to find something, or it passes for the wrong
   // reason forever — the same self-check `clickupOneDoor.test.js` carries.
@@ -277,10 +406,60 @@ test('a test that stubs fetch in a spawned child gives that child its own ledger
   );
 
   const missing = spawners
-    .filter(({ src }) => !src.includes('CLICKUP_LEDGER_PATH'))
-    .map(({ file }) => file);
+    .filter(({ args }) => !args.includes('CLICKUP_LEDGER_PATH'))
+    .map(({ file, spawner }) => `${file}: ${spawner}(...)`);
 
   assert.deepEqual(missing, [],
-    'these stub fetch in a spawned child without CLICKUP_LEDGER_PATH in its env, so '
+    'these stub fetch in a spawned child without CLICKUP_LEDGER_PATH in that call\'s env, so '
     + "their invented requests land on the operator's shared ledger and make live jobs stand down");
+});
+
+/*
+ * EVERY SPELLING GETS ITS OWN CONTROL — the same standard `clickupOneDoor`
+ * holds itself to. The guard above is only worth the line it occupies if each
+ * shape it claims to catch is PROVEN catchable, and the two things round 1
+ * found wrong with it are both here as named cases: a spawner that is not
+ * `spawnSync`, and a second call site in a file whose OTHER call site already
+ * declares a ledger.
+ */
+const SPAWN_SHAPES = [
+  {
+    why: 'spawnSync — the original, and the only one the old guard could see',
+    src: "spawnSync(process.execPath, ['-r', preload, SCRIPT], { env: { PATH } });",
+    caught: true,
+  },
+  {
+    why: 'execFileSync — never collected at all before round 1',
+    src: "execFileSync(process.execPath, ['-r', preload, SCRIPT], { env: { PATH } });",
+    caught: true,
+  },
+  {
+    why: 'fork, with the preload spelled --require',
+    src: "fork(SCRIPT, [], { execArgv: ['--require', preload], env: { PATH } });",
+    caught: true,
+  },
+  {
+    why: 'a SECOND call site in a file whose first one declares a ledger — the free pass',
+    src: "spawnSync(process.execPath, ['-r', preload, SCRIPT], { env: { CLICKUP_LEDGER_PATH: a } });\n"
+      + "spawnSync(process.execPath, ['-r', preload, SCRIPT], { env: { PATH } });",
+    caught: true,
+  },
+  {
+    why: 'a spawn with no preload — an unrelated child, deliberately NOT flagged',
+    src: "spawnSync('git', ['status'], { env: { PATH } });",
+    caught: false,
+  },
+];
+
+test('the spawn guard catches every spelling it claims to, and cries wolf at none', () => {
+  for (const shape of SPAWN_SHAPES) {
+    const src = `globalThis.fetch = stub;\n${shape.src}`;
+    const undeclared = preloadingSpawnCalls(src).filter(({ args }) => !args.includes('CLICKUP_LEDGER_PATH'));
+    assert.equal(
+      undeclared.length > 0, shape.caught,
+      shape.caught
+        ? `NOT CAUGHT: ${shape.why} — the guard would let this through`
+        : `CRIED WOLF: ${shape.why} — the guard flagged a child that carries no fetch stub`,
+    );
+  }
 });
