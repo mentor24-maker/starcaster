@@ -137,9 +137,10 @@ async function clickupFetch(url, init = {}, { fetchImpl = fetch, env = process.e
   // still counts every attempt: it answers "what did this pass cost", which is
   // a different question from "what has been taken from the token".
   const who = callerKind({ env });
-  const verdict = spendsClickUpBudget(url)
+  const spends = spendsCompanyBudget(url, env);
+  const verdict = spends
     ? ledger.shouldYield({ kind: who.kind, now: now(), env })
-    : { yield: false, why: 'not a request to api.clickup.com — nothing of the token is spent' };
+    : { yield: false, why: whyNotSpending(url, env), headroom: null };
   if (verdict.yield) {
     return { res: null, json: null, text: null, transportError: null, yielded: { ...verdict, caller: who } };
   }
@@ -151,11 +152,11 @@ async function clickupFetch(url, init = {}, { fetchImpl = fetch, env = process.e
     // Counted on this machine's ledger even though it never arrived: the
     // attempt is what the budget is spent by, and under-counting is the
     // unsafe direction.
-    if (spendsClickUpBudget(url)) ledger.record({ now: now(), env, kind: who.kind });
+    if (spends) ledger.record({ now: now(), env, kind: who.kind });
     return { res: null, json: null, text: null, transportError: err, yielded: null };
   }
   recordLimits(res);
-  if (spendsClickUpBudget(url)) {
+  if (spends) {
     ledger.record({
       now: now(),
       env,
@@ -181,6 +182,65 @@ async function clickupFetch(url, init = {}, { fetchImpl = fetch, env = process.e
 /** Is this URL the thing that actually spends the company's one ClickUp token? */
 function spendsClickUpBudget(url) {
   try { return new URL(String(url)).host === 'api.clickup.com'; } catch { return false; }
+}
+
+/*
+ * A TEST RUN SPENDS NOTHING, SO IT MUST NOT COUNT (2026-09-15, task 86bc125u6).
+ *
+ * `spendsClickUpBudget` asks the only question the door could ask for a year:
+ * is this host the one that spends the company token? It is the right question
+ * and it is not the whole one, because a test does not fake ClickUp by
+ * changing the URL — it changes the TRANSPORT and leaves the URL alone.
+ * `reworkClaim.test.js` and friends spawn the real CLI with a preload that
+ * replaces `globalThis.fetch`, so every request is fake and every URL still
+ * reads `https://api.clickup.com/...`. The door counted them all.
+ *
+ * WHAT THAT COST. `scripts/loop_runner.sh` exports STARCASTER_CALLER=scheduled,
+ * so every unattended pass is a scheduled caller, and the suite spawns these
+ * subprocesses in bulk. Within one minute the suite drove the machine's own
+ * ledger past the 75 a scheduled job may spend, and the reserve — working
+ * exactly as designed — began refusing the suite's own subprocesses. The tests
+ * read the refusal as a failed assertion. So `npm run test:builder` failed on
+ * an untouched `main` for the loops and passed for Dane, and which tests fell
+ * over moved run to run with the timing. A build pass on 86bbjv684 spent four
+ * full suite runs establishing that none of it was its own work.
+ *
+ * THE FIX IS THE HONEST STATEMENT, not a special case: the ledger records what
+ * has been taken from the company's one ClickUp token, and a test run has
+ * taken nothing. So it neither consults the ledger nor writes to it.
+ *
+ * WHY NOT A SEPARATE TEST LEDGER, which is the first thing anyone proposes:
+ * one scratch file shared by the run re-creates the same collision inside it —
+ * the suite's hundreds of subprocess requests still land in one minute and
+ * still cross the reserve. Only a per-PROCESS scratch file avoids that, and a
+ * per-process ledger is always empty, which is this branch with extra litter.
+ *
+ * THE RESERVE IS NOT WEAKENED. `underTestRunner` reads the env the door was
+ * HANDED, and the tests that exercise the reserve (`clickupReserveDoor.test.js`,
+ * `clickupLedger.test.js`) build that env from scratch — `{ CLICKUP_LEDGER_PATH,
+ * STARCASTER_CALLER }` — so NODE_TEST_CONTEXT is absent there and they still
+ * see the real decision. A test that means to prove the reserve still proves it.
+ *
+ * THE HONEST LIMIT, stated rather than discovered later: if a test ever DID
+ * reach real ClickUp, its spend is now invisible to this ledger. That is the
+ * under-counting direction, which is the unsafe one — and it is why a test run
+ * reaching real ClickUp is refused at the other door it could use
+ * (lib/clickupForward.js, task 86bc0zuvb, the 34 fake bug tickets). All three
+ * guards share ONE `underTestRunner` for exactly that reason — it is defined in
+ * `clickupLedger.cjs`, the bottom of the stack, and re-exported here — so they
+ * cannot come to disagree about what a test run is.
+ */
+const { underTestRunner } = ledger;
+
+/** Does this request spend the company's one ClickUp token, here and now? */
+function spendsCompanyBudget(url, env = process.env) {
+  return spendsClickUpBudget(url) && !underTestRunner(env);
+}
+
+/** Why a request is not being counted — said in the reader's terms, not the code's. */
+function whyNotSpending(url, env = process.env) {
+  if (!spendsClickUpBudget(url)) return 'not a request to api.clickup.com — nothing of the token is spent';
+  return 'a test run — the transport is a stand-in, so nothing of the token is spent';
 }
 
 /** Keep the live rate-limit state instead of printing it and throwing it away.
@@ -691,6 +751,11 @@ module.exports = {
   ledger,
   callerKind,
   ClickUpReserveYield,
+  // What a test run is, defined ONCE in clickupLedger.cjs (task 86bc125u6) and
+  // re-exported here for the callers that reach ClickUp through this door: the
+  // forwarder's refusal and this door's own ledger read the same function.
+  underTestRunner,
+  spendsCompanyBudget,
   // The third outcome's shared vocabulary (task 86bc0w6my). Every caller of
   // `clickupFetch` outside this file must use these rather than inventing its
   // own; `clickupReserveCallSites.test.js` holds them to it.
