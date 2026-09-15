@@ -105,6 +105,41 @@ test('no token → CLICKUP_NOT_CONFIGURED and no request', async () => {
   assert.equal(requests.length, 0);
 });
 
+// 2026-09-15 (task 86bc0zuvb): a test run with the company keys loaded filed
+// 34 fixture reports as real tasks in the operator's lane. Stub the GLOBAL
+// fetch — the transport a real server uses — and prove a test run never calls it.
+async function withGlobalFetchSpy(fn) {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'task_real', url: 'https://app.clickup.com/t/task_real' }) };
+  };
+  try { return await fn(calls); } finally { globalThis.fetch = realFetch; }
+}
+
+test('a test run holding a REAL token and no injected transport never reaches ClickUp', async () => {
+  const { createHeldTask, createSyntheticReportTask } = require('../../lib/clickupForward');
+  assert.ok(process.env.NODE_TEST_CONTEXT, 'node --test must mark this process, or the guard has nothing to read');
+  await withGlobalFetchSpy(async (calls) => {
+    const held = await createHeldTask({ name: 'Bug report: Menu overlaps logo', markdownDescription: 'y' }, { token: 'pk_real_looking' });
+    const synthetic = await createSyntheticReportTask({ name: 'Bug report: x', markdownDescription: 'y' }, { token: 'pk_real_looking' });
+    assert.deepEqual(calls, [], 'no request may leave a test run');
+    assert.equal(held.ok, false);
+    assert.match(held.error, /test run may not reach the real ClickUp/);
+    assert.equal(synthetic.ok, false);
+    assert.match(synthetic.error, /test run may not reach the real ClickUp/);
+  });
+});
+
+test('outside a test runner the same call DOES go out — the guard reads the runner, not the token', async () => {
+  const { createHeldTask } = require('../../lib/clickupForward');
+  await withGlobalFetchSpy(async (calls) => {
+    await createHeldTask({ name: 'Bug report: real visitor', markdownDescription: 'y' }, { token: 'pk_real_looking', env: {} });
+    assert.ok(calls.some((u) => u.endsWith(`/api/v2/list/${LOOP_QUEUE}/task`)), `a production server must still forward, saw: ${calls.join(', ')}`);
+  });
+});
+
 test('a broken token answers a plain failure (HTTP 401), never a throw', async () => {
   const { createHeldTask } = require('../../lib/clickupForward');
   const { fetchImpl } = fakeClickup({ createStatus: 401 });

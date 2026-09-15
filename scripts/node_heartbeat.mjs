@@ -125,9 +125,18 @@ function clearStamp(name) {
  *
  * Two acts, deliberately not one. Clearing a suppression stamp is bookkeeping.
  * Posting is the only good news this system ever sends, and it happens only
- * where `stale-<role>` was actually cleared — that stamp exists exactly when a
- * quiet report reached the bus, so a healthy job that was never reported quiet
- * posts nothing here, ever.
+ * where a SILENCE stamp was actually cleared — `stale-<role>` or `quiet-<role>`
+ * exists exactly when a report of that silence reached the bus, so a healthy job
+ * that was never reported quiet posts nothing here, ever.
+ *
+ * `quiet-` joined that set in task 86bbzzyxb. It is the shared-row watchdog's
+ * stamp, and for every role that beats hourly or oftener the local `stale-`
+ * alarm fires first, so announcing off `stale-` alone was indistinguishable from
+ * announcing off both. `librarian-sweep` runs daily and inverts the two windows
+ * — 48h shared against 6 days local — so an outage between those numbers was
+ * reported quiet and never reported fixed. Which stamps may announce is
+ * `alarmCloseoutPlan`'s rule, not this function's; this side still just does
+ * what the plan says.
  *
  * Returns one entry per role-and-stamp it has something to SAY about, each with
  * the level it should be rendered at: `clear` is good news that got out,
@@ -153,9 +162,11 @@ function closeAlarms(recovered) {
   });
 
   // `failed-` is also written by scripts/report_job_failure.mjs and `quiet-` by
-  // the shared-row watchdog above; removing them here is what lets a fault that
-  // is fixed and later returns be announced immediately rather than waiting out
-  // the previous fault's six-hour window.
+  // the shared-row watchdog in `doCheck`; removing them here is what lets a
+  // fault that is fixed and later returns be announced immediately rather than
+  // waiting out the previous fault's six-hour window. `doCheck` writes `quiet-`
+  // and has no recovery path of its own on purpose — this is that path, for
+  // both silence channels.
   for (const item of plan.clear) clearStamp(`${item.kind}-${item.role}`);
 
   for (const item of plan.keep) {
@@ -727,6 +738,12 @@ async function pushOwnedPass(out) {
 
 // --- the watchdog -----------------------------------------------------------
 
+// The RECOVERY half of this channel is not here — it is `closeAlarms`, which
+// runs on the same relay wake and clears `quiet-<role>` when a beat newer than
+// the alarm arrives. This function only ever raises. Keeping the two halves
+// apart is why `quiet-` went four days able to be reported dead and never
+// reported alive (task 86bbzzyxb): the clear happened over there and the
+// announcement was gated on the OTHER channel's stamp. Both announce now.
 async function doCheck(state) {
   if (!state.readable) return; // printReport has already said CANNOT TELL.
   const quiet = state.report.overdue;

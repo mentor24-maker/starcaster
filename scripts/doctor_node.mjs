@@ -440,6 +440,18 @@ if (!knownNode) {
       // own set-up report telling the operator that live, working jobs have
       // nothing installed (task 86bbw9nbj, round 3).
       waiting(`${job.role}: CANNOT DO YET — this provisioner cannot install it.`, job.blocked);
+      // ...and whether it is RUNNING, which is a different question and one
+      // this line does not answer (task 86bbzzyxb). Four of this machine's
+      // owned roles are blocked and beating; without this, the first word the
+      // operator reads about them is CANNOT DO YET. The same sentence the
+      // provisioner prints, from the same function, so the two surfaces cannot
+      // drift apart. Silent when there is nothing to add.
+      {
+        const beatNote = heartbeat.blockedScheduleBeatNote({
+          role: job.role, beat: heartbeat.readBeat({ role: job.role }),
+        });
+        if (beatNote) note(beatNote);
+      }
       if (job.blockedBy) note(`Blocked by ticket ${job.blockedBy}.`);
       continue;
     }
@@ -473,8 +485,37 @@ if (!knownNode) {
   // The shared, cross-machine view is `npm run heartbeat`, which is the one
   // that can see a machine being switched off. This one can only ever speak
   // for the machine it is standing on, and says so.
+  //
+  // `blocked` IS NOT A REASON TO SAY NOTHING ABOUT A JOB (task 86bbzzyxb).
+  // This loop used to skip every blocked row alongside the manual ones, and
+  // the two words look alike until you write out what each one means:
+  //
+  //   manual  — there is deliberately no schedule, so "when did it last run"
+  //             has no answer to give and asking is noise.
+  //   blocked — THIS PROVISIONER cannot install its schedule. That is a fact
+  //             about scripts/provision_node.sh, and it says nothing at all
+  //             about whether the job is running.
+  //
+  // Those two used to coincide: every blocked row was a job nothing had
+  // installed, so skipping them cost nothing. PR #673 ended that. It made
+  // `channel-steward` and `librarian-sweep` real beat emitters whose schedules
+  // ARE installed — by pulse's own installer, in the other repo, which is
+  // precisely why this provisioner cannot touch them — and they hold live local
+  // stamps on this machine. `loop-build` and `loop-review` were already in the
+  // same position. So four owned jobs with readable beats sitting right here
+  // appeared in this section as neither PASS, nor FAIL, nor CANNOT TELL.
+  //
+  // An omission is worse here than anywhere else in this file, because this
+  // section is the token-free, network-free, ClickUp-free view — the one that
+  // still answers on a machine having a bad day. A job absent from it reads as
+  // a job nobody is watching.
+  //
+  // So the only question this loop asks is the one it is named after: is there
+  // a beat to read? A blocked job WITH stamps is reported on its stamps; a
+  // blocked job WITHOUT an emitter falls to the CANNOT TELL below and states
+  // its reason, which is honest in the other direction.
   for (const job of owned) {
-    if (job.blocked || job.manual) continue;
+    if (job.manual) continue;
     if (!heartbeat.BEAT_EMITTERS[job.role]) {
       unknown(
         `${job.role}: cannot tell when it last succeeded on this machine.`,
