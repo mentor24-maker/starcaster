@@ -18,7 +18,7 @@
  *   node scripts/weekly_report.mjs                  # 7 days ending today
  *   node scripts/weekly_report.mjs --window 14
  *   node scripts/weekly_report.mjs --out /tmp/x.html
- *   node scripts/weekly_report.mjs --publish        # + branch, commit, PR, ticket
+ *   node scripts/weekly_report.mjs --publish        # + upload to Drive, + ticket
  *
  * THE HONESTY RULE. A source that fails produces "not available" WITH ITS
  * REASON on the page, and the run still finishes and exits 0. A report that
@@ -31,11 +31,29 @@
  * open. The check is GitHub's own state, and it is the reason this script asks
  * `gh` for the merged set instead of trusting git alone.
  *
- * WHERE IT WRITES. `docs/reports/YYYY-MM-DD.html` and `.data.json`, COMMITTED.
- * These are records, the same category as docs/WORK-LOG.md — not build
- * artifacts. They are deliberately absent from .gitignore and from
- * check_conventions' generated list: a report that vanishes on the next build
- * is not a record.
+ * WHERE IT WRITES — AND WHY IT IS NOT IN THE REPO ANY MORE (task 86bc0nbwq).
+ * Until 2026-09-14 this wrote `docs/reports/YYYY-MM-DD.html` + `.data.json` +
+ * a rewritten `index.html` INTO THE CHECKOUT and published them by opening a
+ * pull request. Every run therefore left the machine's checkout dirty, and a
+ * dirty checkout stops that machine updating itself — so the Mini quietly went
+ * on running the previous week's pipeline code. On 2026-09-14 that cost 7
+ * merges, including the same day's pipeline fixes (#689, #700). The wrapper
+ * already carried two cleanup passes written against exactly that, and they did
+ * not prevent it.
+ *
+ * So now: figures are written to a folder OUTSIDE every git checkout
+ * (lib/weeklyReportHome.js, which refuses if that folder turns out to be inside
+ * one), and `--publish` uploads the edition to Google Drive — Projects ›
+ * Starcaster › Weekly Reports — reading each file back before calling it done
+ * (lib/weeklyReportDrive.js). Nothing is committed and nothing is pushed.
+ *
+ * Dane, 2026-09-14: "It shouldn't be saved to the Mini. It should either be
+ * saved to the MacBook and/or Google Drive in the Projects/Starcaster folder in
+ * a dedicated sub-folder."
+ *
+ * The editions already committed under `docs/reports/` stay there as history —
+ * they are the record of what shipped week by week, and deleting them to tidy
+ * up would throw away the thing the folder was for. Nothing writes there now.
  */
 
 import fs from 'node:fs';
@@ -49,8 +67,20 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const R = require(path.join(REPO, 'scripts/builder/weeklyReport.js'));
 const { run: runCommand } = require(path.join(REPO, 'scripts/builder/runCommand.js'));
 const { checkRole } = require(path.join(REPO, 'lib/nodeRoles.js'));
+const { checkReportHome } = require(path.join(REPO, 'lib/weeklyReportHome.js'));
+const { uploadEdition, driveConfig } = require(path.join(REPO, 'lib/weeklyReportDrive.js'));
 
-const REPORTS_DIR = path.join(REPO, 'docs', 'reports');
+// WHERE THIS RUN MAY WRITE, decided before anything else happens.
+//
+// A refusal here is fatal on purpose. The alternative — fall back to somewhere
+// "safe" — is how the report ends up in a checkout again with nothing saying
+// so, which is the whole incident this replaced.
+const HOME_CHECK = checkReportHome();
+if (!HOME_CHECK.ok) {
+  console.error(`\n${HOME_CHECK.message}\n`);
+  process.exit(1);
+}
+const REPORTS_DIR = HOME_CHECK.dir;
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const GH_REPO = 'mentor24-maker/starcaster';
@@ -74,8 +104,8 @@ if (flag('help')) {
 
   --window <n>     days in the window, ending today (default 7)
   --as-of <date>   the day the window ends (default today) — makes a run reproducible
-  --out <path>     write the HTML here instead of docs/reports/<date>.html
-  --publish        commit to a branch, open a PR, and file the narrative ticket
+  --out <path>     write the HTML here instead of <report folder>/<date>.html
+  --publish        upload the edition to Google Drive and file the narrative ticket
   --no-tests       skip the test-suite figure (it prints "not available" with that reason)
   --help
 
@@ -84,21 +114,21 @@ this run files, or write it straight onto the page.`);
   process.exit(0);
 }
 
-// --out AND --publish DO NOT COMBINE, and the reason is not tidiness.
-// Publishing copies the report into a throwaway worktree using its path
-// RELATIVE TO THE REPO. An --out inside docs/reports/ makes that a copy of the
-// file onto itself; an --out anywhere else makes it a relative path that climbs
-// out of the worktree entirely (`../../tmp/x.html`), writing who-knows-where or
-// failing with a message about a directory nobody asked for. Neither is a thing
-// to leave for a Monday morning. Use --out to look at a report, --publish to
-// ship one.
+// --out AND --publish STILL DO NOT COMBINE, for a different reason than they
+// used to (task 86bc0nbwq). Publishing now uploads the edition to a shared
+// Drive folder UNDER THE NAME ON DISK, and an --out path is by definition a
+// name somebody chose for a look — `x.html`, `notes.txt`, `look.html`. Those
+// would land in Projects › Starcaster › Weekly Reports beside the real
+// editions, permanently, with nothing marking them as scratch, and the index
+// would not list them because the index is built from dated filenames. Use
+// --out to look at a report, --publish to file one.
 if (flag('publish') && arg('out')) {
   console.error('--out and --publish do not combine.\n');
-  console.error('Publishing copies the report into docs/reports/ on a branch of its own, so it has');
-  console.error('to know where inside the repo the file belongs. An --out path is somewhere else by');
-  console.error('definition. Run one or the other:');
+  console.error('Publishing uploads the edition to Google Drive under its filename, and an --out');
+  console.error('path is a name you picked to look at something — it would sit in the shared');
+  console.error('folder forever looking like an edition. Run one or the other:');
   console.error('  node scripts/weekly_report.mjs --out /tmp/look.html     # just look at it');
-  console.error('  node scripts/weekly_report.mjs --publish                # branch, PR, ticket');
+  console.error('  node scripts/weekly_report.mjs --publish                # upload + ticket');
   process.exit(2);
 }
 
@@ -449,17 +479,23 @@ function gatherLoopPasses() {
 // ── Publishing ─────────────────────────────────────────────────────────────
 
 /**
- * Commit the report on its own branch and open a pull request.
+ * Put the edition in Google Drive.
  *
- * NEVER onto main. main auto-deploys to production, so a scheduled job with a
- * commit bit on main is a scheduled job that can deploy at 07:00 on a Monday
- * with nobody awake (CLAUDE.md landmine 4). The report goes through the same
- * gate as every other change.
+ * NOTHING IS COMMITTED AND NOTHING IS PUSHED. This used to open a pull request
+ * carrying the report, which is what put the files in the checkout in the first
+ * place and disabled the Mini's self-update for a week at a time (see the
+ * header, task 86bc0nbwq). The report is a record, not a change to the code, so
+ * it has no business in the repo's history.
  *
- * And only from the machine that owns the role: two machines running this
- * would open two pull requests for the same week, every week.
+ * Still only from the machine that owns the role: two machines uploading would
+ * race to write the same three filenames in the same shared folder every week.
+ *
+ * A FAILED UPLOAD IS A FAILED RUN. It returns { published: false, reason },
+ * which publishExitCode() turns into exit 1, which the wrapper turns into a
+ * job-failure post. The one outcome that must never happen is this returning
+ * quietly while the report sits on one machine's disk and nowhere else.
  */
-function publish(reportPath, jsonPath, indexPath) {
+async function publish(reportPath, jsonPath, indexPath) {
   const verdict = checkRole('weekly-report');
   if (!verdict.owned) {
     console.error(`\nNot publishing: ${verdict.message}`);
@@ -467,111 +503,41 @@ function publish(reportPath, jsonPath, indexPath) {
     return { published: false, reason: verdict.verdict };
   }
 
-  const branch = `weekly-report-${AS_OF}`;
-  const rel = (p) => path.relative(REPO, p);
+  const cfg = driveConfig();
+  console.error(`\nUploading to Google Drive: folder ${cfg.parentFolderId} › "${cfg.subfolder}"`);
 
-  // PUBLISH FROM A THROWAWAY WORKTREE, NEVER BY SWITCHING BRANCHES HERE.
-  //
-  // The obvious version of this — `git checkout -B <branch> origin/main`, add,
-  // commit, push — works once and then quietly breaks the machine it runs on.
-  // The scheduled job runs in the MAIN checkout, so that checkout would be left
-  // parked on `weekly-report-2026-08-25` forever. The very next bus-relay pass
-  // reads its own branch to decide whether it may update itself, sees it is not
-  // on main, and skips the update — from then on the Mini runs frozen code and
-  // says so only in a log nobody opens.
-  //
-  // A worktree costs a folder for ten seconds and leaves the checkout exactly
-  // as it found it, on whatever branch it was on, with whatever uncommitted
-  // work was in it.
-  const tmp = path.join(REPO, '.git', 'weekly-report-publish');
-  run('git', ['worktree', 'remove', '--force', tmp]); // may not exist yet; nothing to report
-
-  const fail = (reason) => {
-    bus(`Weekly report could not publish: ${reason}`);
-    console.error(`\nPublishing stopped: ${reason}`);
-    run('git', ['worktree', 'remove', '--force', tmp]); // best effort on the way out
-    return { published: false, reason };
-  };
-
-  const fetched = run('git', ['fetch', 'origin', '--quiet'], { timeout: 180000 });
-  if (!fetched.ok) return fail(fetched.reason);
-
-  const made = run('git', ['worktree', 'add', '-B', branch, tmp, 'origin/main'], { timeout: 180000 });
-  if (!made.ok) return fail(made.reason);
-
+  const files = [reportPath, jsonPath, indexPath].filter(Boolean);
+  let result;
   try {
-    // Copy the freshly generated files in. The report is a product of THIS run,
-    // not of whatever happens to be on the branch.
-    const targets = [reportPath, jsonPath, indexPath].filter((p) => p && fs.existsSync(p));
-    for (const src of targets) {
-      const dest = path.join(tmp, rel(src));
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.copyFileSync(src, dest);
-    }
-
-    const add = run('git', ['-C', tmp, 'add', ...targets.map(rel)], { timeout: 120000 });
-    if (!add.ok) return fail(add.reason);
-
-    // Nothing changed since last week's edition? Then there is nothing to open
-    // a pull request about, and an empty PR every Monday is how a useful signal
-    // becomes something people filter out of their inbox.
-    const staged = run('git', ['-C', tmp, 'diff', '--cached', '--name-only'], { timeout: 120000 });
-    if (staged.ok && !staged.stdout.trim()) {
-      console.error('\nNothing to publish — this edition is identical to what is already on main.');
-      return { published: false, reason: 'no changes' };
-    }
-
-    const message = `Weekly figures for ${WINDOW.from} to ${WINDOW.to}\n\n`
-      + 'Generated by scripts/weekly_report.mjs on a schedule. Figures only — the\n'
-      + 'narrative is written by a person on top of these numbers.\n\n'
-      + 'Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>';
-    const commit = run('git', ['-C', tmp, 'commit', '-m', message], { timeout: 120000 });
-    if (!commit.ok) return fail(commit.reason);
-
-    // An ordinary push. The branch is new every week and only ever gains
-    // commits, so a force is never needed — and a force-push inside a script is
-    // invisible to the operator's own deny rule (DOCTRINE 6.6).
-    const push = run('git', ['-C', tmp, 'push', '-u', 'origin', branch], { timeout: 300000 });
-    if (!push.ok) return fail(push.reason);
-
-    const body = `Weekly figures for **${WINDOW.from} to ${WINDOW.to}**, generated by \`scripts/weekly_report.mjs\` on a schedule.
-
-This PR carries figures only. The narrative — the ranked five, the plain-language
-summaries, "your inputs" and any incident write-ups — is a person's job and is
-queued as its own ticket in the Loop Queue.
-
-Everything on the page is also in \`${rel(jsonPath)}\`, so the narrative pass needs
-no re-gathering.
-
-A figure that could not be read says "not available" and gives its reason. Nothing
-is estimated, and only pull requests GitHub reports as MERGED are counted.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)`;
-
-    const pr = run('gh', ['pr', 'create', '--repo', GH_REPO, '--base', 'main', '--head', branch,
-      '--title', `Weekly figures: ${WINDOW.from} to ${WINDOW.to}`, '--body', body], { timeout: 180000 });
-    if (!pr.ok) {
-      bus(`Weekly report pushed its branch but could not open a PR: ${pr.reason}`);
-      return { published: false, reason: pr.reason };
-    }
-    // gh normally prints the PR url and nothing else, but `.pop()` on an empty
-    // list is `undefined`, and `undefined` interpolates into a ticket body as the
-    // WORD "undefined" — a narrative ticket pointing at nothing, filed and
-    // looking fine. A PR we cannot name is a publish that did not finish.
-    const url = pr.stdout.trim().split('\n').filter((l) => l.startsWith('http')).pop();
-    if (!url) {
-      return fail('gh reported success creating the pull request but printed no URL, '
-        + 'so there is nothing to point the narrative ticket at');
-    }
-    console.error(`\nPull request: ${url}`);
-
-    fileNarrativeTicket(url, rel(reportPath), rel(jsonPath));
-    return { published: true, pr: url, branch };
-  } finally {
-    // Always. A worktree left behind turns next Monday's run into a confusing
-    // "already exists" failure rather than a report.
-    run('git', ['worktree', 'remove', '--force', tmp]); // best effort on the way out
+    result = await uploadEdition({ files });
+  } catch (err) {
+    result = { ok: false, error: `the upload threw: ${err && err.message ? err.message : err}`, uploaded: [] };
   }
+
+  if (!result.ok) {
+    // Both, and in this order: the sentence in the log is what a person reads
+    // when they go looking, the bus post is what reaches them when nobody does.
+    console.error(`\nThe report was written to ${REPORTS_DIR} but did NOT reach Google Drive.`);
+    console.error(`Reason: ${result.error}`);
+    if (result.uploaded && result.uploaded.length) {
+      console.error(`(${result.uploaded.length} file(s) did land: ${result.uploaded.map((f) => f.name).join(', ')})`);
+    }
+    bus(`Weekly report could not reach Google Drive: ${result.error}`);
+    return { published: false, reason: result.error };
+  }
+
+  for (const f of result.uploaded) {
+    console.error(`  uploaded ${f.name} (${f.bytes} bytes, read back from Drive)`);
+  }
+  if (result.skipped.length) {
+    console.error(`  not uploaded — not on disk: ${result.skipped.join(', ')}`);
+  }
+  console.error(`\nDrive folder: ${result.folderLink}`);
+
+  const pageLink = (result.uploaded.find((f) => f.name.endsWith('.html') && f.name !== 'index.html') || {}).link
+    || result.folderLink;
+  fileNarrativeTicket(pageLink, result.folderLink);
+  return { published: true, folder: result.folderLink };
 }
 
 /**
@@ -581,14 +547,18 @@ is estimated, and only pull requests GitHub reports as MERGED are counted.
  * the second half only actually happens if something remembers it. A ticket is
  * that something; a line in a log is not.
  */
-function fileNarrativeTicket(prUrl, reportRel, jsonRel) {
+function fileNarrativeTicket(pageLink, folderLink) {
   const body = `## What this is
 
-The figures for **${WINDOW.from} to ${WINDOW.to}** are generated and in a pull request:
-${prUrl}
+The figures for **${WINDOW.from} to ${WINDOW.to}** are generated and in Google Drive,
+in Projects › Starcaster › ${driveConfig().subfolder}:
 
-The page is \`${reportRel}\`; every number on it is also in \`${jsonRel}\`, so this pass
-needs no re-gathering at all.
+*   the page: ${pageLink}
+*   the folder: ${folderLink}
+
+Every number on the page is also in \`${AS_OF}.data.json\` beside it, so this pass needs
+no re-gathering at all. Download the page, write on it, and put it back in the same
+folder under the same name.
 
 ## What to do
 
@@ -610,7 +580,7 @@ the numbers are the script's, the words are yours.`;
     '--body-file', scratch.path, '--status', 'Queued', '--priority', 'normal'], { timeout: 180000 });
   scratch.cleanup();
   if (!res.ok) {
-    bus(`Weekly report opened ${prUrl} but could not file the narrative ticket: ${res.reason}`);
+    bus(`Weekly report uploaded ${pageLink} but could not file the narrative ticket: ${res.reason}`);
     console.error(`Could not file the narrative ticket: ${res.reason}`);
     return;
   }
@@ -717,8 +687,11 @@ fs.writeFileSync(OUT_HTML, R.renderReportHtml({ ...data, groups: R.groupMergesBy
 
 const indexPath = fs.existsSync(REPORTS_DIR) && OUT_HTML.startsWith(REPORTS_DIR) ? writeIndex() : null;
 
-process.stderr.write(`\nWrote ${path.relative(REPO, OUT_HTML)}\n      ${path.relative(REPO, OUT_JSON)}\n`);
-if (indexPath) process.stderr.write(`      ${path.relative(REPO, indexPath)}\n`);
+// ABSOLUTE PATHS, not repo-relative ones. The report no longer lives inside the
+// repo, so `path.relative(REPO, …)` would print `../../../Documents/…` — a path
+// that is correct, unreadable, and looks like a bug.
+process.stderr.write(`\nWrote ${OUT_HTML}\n      ${OUT_JSON}\n`);
+if (indexPath) process.stderr.write(`      ${indexPath}\n`);
 
 const unread = Object.entries(figures).filter(([, f]) => !f.ok);
 if (unread.length) {
@@ -737,7 +710,7 @@ if (unread.length) {
 // against. "Nothing to publish" is not a failure — an edition identical to the
 // one already on main is the correct outcome of a quiet week.
 if (flag('publish')) {
-  const result = publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
+  const result = await publish(OUT_HTML, OUT_JSON, indexPath || path.join(REPORTS_DIR, 'index.html'));
   // The three-way decision lives in the pure module, where a test can reach it
   // without a network, a git remote or a faked machine identity — see
   // publishExitCode() there for which outcomes are failures and which are not.

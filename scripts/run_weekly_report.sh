@@ -15,18 +15,28 @@
 #   - any refusal is logged and the report runs on the code that is here
 # A background job may keep a checkout current; it may not rewrite anyone's work.
 #
-# AND IT HAS TO CLEAN UP AFTER ITSELF, AT BOTH ENDS, or it disables itself.
-# The cleanup runs twice: once at the top of the run (the backstop, for a run
-# that died halfway and left its output behind) and once after a SUCCESSFUL
-# publish, which is the call that keeps the checkout clean the other six days
-# of the week. The long note beside that second call says what only cleaning
-# at the top cost on 2026-09-07.
-# The report writes docs/reports/<date>.html, <date>.data.json and index.html
-# into this checkout and leaves them there — publishing copies them into a
-# throwaway worktree, so the originals stay behind. "Clean tree" then reads
-# false forever: run 1 dirties the checkout, run 2 skips the update, and it
-# stays dirty. A deadlock, and a silent one — every log line says
-# "update: skipped", which is what a HEALTHY skip says too.
+# THE CLEANUP BELOW IS NOW A BACKSTOP, NOT THE DEFENCE (task 86bc0nbwq).
+#
+# Since 2026-09-14 the report does not write into this checkout at all: it
+# writes to a folder outside every repo (lib/weeklyReportHome.js, which REFUSES
+# if that folder turns out to be inside one) and publishes by uploading to
+# Google Drive. So there is no residue to clean on a machine running current
+# code, and these two calls do nothing on one.
+#
+# They stay because a machine can be running OLD code — which is the whole point
+# of the self-update below — and old code's leftovers are exactly what stops the
+# update that would fix it. A machine that fell behind before this change needs
+# the cleanup to run once in order to catch up at all. Removing it would leave
+# any such machine permanently stuck, quietly.
+#
+# What the old arrangement cost, kept because it is the reason for the refusal
+# in weeklyReportHome.js and not only for these two calls: the report wrote
+# docs/reports/<date>.html, <date>.data.json and index.html into this checkout
+# and left them there. "Clean tree" then read false forever — run 1 dirtied the
+# checkout, run 2 skipped the update, and it stayed dirty. A deadlock, and a
+# silent one: every log line said "update: skipped", which is what a HEALTHY
+# skip says too. On 2026-09-14 it cost 7 merges, the Mini missing that day's own
+# pipeline fixes (#689, #700) until a session cleared it by hand.
 #
 # That is worse than staleness. The whole reason this update exists is so that
 # moving `weekly-report` to another machine in lib/nodeRoles.js actually reaches
@@ -184,6 +194,39 @@ if [ "$status" -eq 0 ]; then
   clean_report_residue
 else
   echo "cleanup: skipped — the publish exited $status, so its output stays put for a person to look at."
+fi
+
+# ── A FAILED RUN HAS TO MAKE A NOISE ─────────────────────────────────────────
+#
+# This wrapper had no failure path at all. A Monday run that gathered its
+# figures and then could not publish them exited non-zero into a log file in
+# ~/Library/Logs that nobody opens, and the week simply had no report — the
+# same silence the whole report was built against.
+#
+# It matters more now than it did (task 86bc0nbwq): publishing used to mean
+# opening a pull request, which is visible on GitHub whether or not anything
+# announced it. It now means uploading to a Google Drive folder, and a failed
+# upload leaves the report on ONE machine's disk with nothing on any shared
+# surface to say it exists. Dane's own requirement: "A Drive upload that fails
+# must report through the job-failure path, never 'succeed' with the report
+# written nowhere."
+#
+# Exit 3 is not a failure. It is this machine correctly declining a job that
+# belongs to another one (lib/nodeRoles.js) — the schedule is deliberately
+# harmless to install anywhere, and an alert on every wake of every non-owning
+# machine is how an alert becomes noise.
+#
+# report_job_failure.mjs always exits 0 itself and throttles to one post per job
+# per 6h, cleared by the next success, so this cannot turn one bad Monday into a
+# stream of messages.
+if [ "$status" -ne 0 ] && [ "$status" -ne 3 ]; then
+  echo "failure: reporting to the bus (exit $status)"
+  # Through npm, not `node` directly: the reporter posts to ClickUp and reads
+  # CLICKUP_API_TOKEN from the environment, which Doppler supplies via the
+  # package script. launchd sets no environment at all, so a bare `node` here
+  # would fail on the one call whose entire job is not to fail quietly.
+  npm run --silent report:job-failure -- \
+    --job weekly-report --status "$status" --log "$HOME/Library/Logs/weekly-report.log" || true
 fi
 
 echo "=== exit $status"
