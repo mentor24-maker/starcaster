@@ -9,8 +9,14 @@
  *     newest first.
  */
 
+export type HeadingLevel = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+
 export type LatestPostsSettings = {
   title: string;
+  /** The tag the heading renders as; h2 unless chosen (what it always was). */
+  headingLevel: HeadingLevel;
+  /** Empty = follow the site's own heading colour. */
+  headingColor: string;
   latest: boolean;
   /** Tag names as the operator picked them; matched case-insensitively. */
   tags: string[];
@@ -49,9 +55,15 @@ function clampInt(raw: string | undefined, fallback: number, min: number, max: n
   return Math.min(max, Math.max(min, n));
 }
 
+const HEADING_LEVELS: HeadingLevel[] = ["h1", "h2", "h3", "h4", "h5", "h6"];
+
 export function resolveLatestPostsSettings(settings: Record<string, string>): LatestPostsSettings {
   return {
     title: String(settings.title || "").trim(),
+    headingLevel: HEADING_LEVELS.includes(String(settings.headingLevel || "").toLowerCase() as HeadingLevel)
+      ? (String(settings.headingLevel).toLowerCase() as HeadingLevel)
+      : "h2",
+    headingColor: String(settings.headingColor || "").trim(),
     // Only an explicit "false" leaves latest mode: a module saved before the
     // key existed, or with it blank, keeps showing the newest posts.
     latest: settings.latestPosts !== "false",

@@ -8,10 +8,12 @@ import {
   BuilderSchemaModuleSettings,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 
 type Props = {
   module: BuilderTemplateModule;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
+  themeColors?: BuilderThemePalette;
 };
 
 type PickOption = { value: string; label: string };
@@ -99,7 +101,7 @@ function PickList({
   );
 }
 
-export function BuilderBlogLatestPostsModuleSettings({ module, onUpdateModule }: Props) {
+export function BuilderBlogLatestPostsModuleSettings({ module, onUpdateModule, themeColors = [] }: Props) {
   const { tags, categories } = useBlogPickOptions();
   const filtering = (settings: Record<string, string>) => settings.latestPosts === "false";
 
@@ -206,6 +208,40 @@ export function BuilderBlogLatestPostsModuleSettings({ module, onUpdateModule }:
         ]
       },
       {
+        // The heading above the row (Dane, 2026-09-14). Level before colour:
+        // what the heading IS, then how it looks (D9).
+        title: "Text",
+        strips: [
+          [
+            {
+              key: "headingLevel",
+              label: "Level",
+              width: "select-sm",
+              control: "select",
+              fallback: "h2",
+              options: [
+                { value: "h1", label: "H1" },
+                { value: "h2", label: "H2" },
+                { value: "h3", label: "H3" },
+                { value: "h4", label: "H4" },
+                { value: "h5", label: "H5" },
+                { value: "h6", label: "H6" }
+              ],
+              rendersVia: "BlogLatestPostsPreview heading"
+            },
+            {
+              key: "headingColor",
+              label: "Color",
+              width: "color",
+              control: "theme-color",
+              dialogLabel: "Heading color",
+              themeDefault: "#1a202c",
+              rendersVia: "BlogLatestPostsPreview heading"
+            }
+          ]
+        ]
+      },
+      {
         title: "Frame",
         strips: [
           [
@@ -232,7 +268,12 @@ export function BuilderBlogLatestPostsModuleSettings({ module, onUpdateModule }:
 
   return (
     <div className="builder-blog-latest-posts-settings">
-      <BuilderSchemaModuleSettings schema={schema} module={module} onUpdateModule={onUpdateModule} />
+      <BuilderSchemaModuleSettings
+        schema={schema}
+        module={module}
+        onUpdateModule={onUpdateModule}
+        themeColors={themeColors}
+      />
     </div>
   );
 }
