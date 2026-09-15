@@ -3590,7 +3590,7 @@ export function BuilderModuleCard({
             ) : isBlogRelatedPostsModule ? (
               <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBlogLatestPostsModule ? (
-              <BuilderBlogLatestPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+              <BuilderBlogLatestPostsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryFilterModule ? (
               <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostModule ? (
