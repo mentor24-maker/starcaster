@@ -1,3 +1,30 @@
+## 2026-09-15 — A column can now look different on a phone and on a tablet (#717)
+
+Last time, a whole ROW could be styled differently on small screens. This does
+the same one level down: each **column** inside a row now carries its own
+padding, margins, border, alignment and "hide this" setting for Tablet and for
+Phone. The controls are the same three little Phone / Tablet / Desktop icons,
+now sitting on each column's own Styles bar — click the phone, change a
+setting, and it changes only on phones.
+
+The rule you set stays the rule. A phone **follows** the desktop until you
+change something on it, and only the differences are stored. So widening a
+column on the desktop later still widens it on a phone, unless you had asked
+that phone to be different — and setting a value back to what it was
+inheriting removes it entirely rather than quietly freezing it at today's
+number. A banner above the settings says in words what this screen is
+following, lists anything you have changed, and gives each one a **reset**
+button.
+
+Tablet means 1024px and below; Phone means 767px and below. Background,
+overlay, opacity, shadow and who can see the column are deliberately the same
+on every screen, so the panel simply does not offer them on a phone — a
+control that looks like it works and silently writes the desktop value is
+worse than no control.
+
+Nothing changes on any existing page: the before/after photographs came back
+pixel-identical, and a column hidden with the old "Hide on Mobile" tickbox
+still hides exactly as it did.
 ## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
 
 Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
