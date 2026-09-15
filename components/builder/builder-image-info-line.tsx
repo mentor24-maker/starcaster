@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { BuilderBodyPortal } from "./builder-body-portal";
 
 /**
@@ -32,7 +32,21 @@ type Measurement =
  * published page. An address that will not load says so rather than showing
  * a blank, because an empty line and a broken image look the same otherwise.
  */
-export function BuilderImageInfoLine({ url, className = "" }: { url: string; className?: string }) {
+export function BuilderImageInfoLine({
+  url,
+  className = "",
+  thumbnail = false,
+  style
+}: {
+  url: string;
+  className?: string;
+  /**
+   * Show a thumbnail of the picture with the name and size directly under it
+   * (Dane, 2026-09-14, task 86bc0p5f9). The thumbnail opens the same pop-up.
+   */
+  thumbnail?: boolean;
+  style?: CSSProperties;
+}) {
   const src = String(url || "").trim();
   const [measurement, setMeasurement] = useState<Measurement>({ state: "loading" });
   const [isOpen, setIsOpen] = useState(false);
@@ -74,7 +88,13 @@ export function BuilderImageInfoLine({ url, className = "" }: { url: string; cla
   }, [isOpen]);
 
   if (!src) {
-    return null;
+    // A thumbnail slot that silently stays blank reads as a broken picture,
+    // so it says why it is empty. The plain line has nothing to describe.
+    return thumbnail ? (
+      <div className={`builder-image-thumb is-empty ${className}`.trim()} style={style}>
+        No image chosen yet
+      </div>
+    ) : null;
   }
 
   const name = imageFileNameFromUrl(src) || src;
@@ -85,8 +105,8 @@ export function BuilderImageInfoLine({ url, className = "" }: { url: string; cla
         ? "could not load this image"
         : "measuring…";
 
-  return (
-    <div className={`builder-image-info-line ${className}`.trim()}>
+  const line = (
+    <div className={thumbnail ? "builder-image-info-line" : `builder-image-info-line ${className}`.trim()}>
       <button
         type="button"
         className="builder-image-info-name"
@@ -100,6 +120,29 @@ export function BuilderImageInfoLine({ url, className = "" }: { url: string; cla
       >
         {detail}
       </span>
+    </div>
+  );
+
+  return (
+    <>
+      {thumbnail ? (
+        <div className={`builder-image-thumb ${className}`.trim()} style={style}>
+          {measurement.state === "failed" ? null : (
+            <button
+              type="button"
+              className="builder-image-thumb-button"
+              onClick={() => setIsOpen(true)}
+              title="View this image"
+              aria-label={`View ${name}`}
+            >
+              <img src={src} alt="" className="builder-image-thumb-image" />
+            </button>
+          )}
+          {line}
+        </div>
+      ) : (
+        line
+      )}
       {isOpen ? (
         <BuilderBodyPortal>
           <div
@@ -133,6 +176,6 @@ export function BuilderImageInfoLine({ url, className = "" }: { url: string; cla
           </div>
         </BuilderBodyPortal>
       ) : null}
-    </div>
+    </>
   );
 }
