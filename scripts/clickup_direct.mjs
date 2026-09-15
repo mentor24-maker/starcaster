@@ -1059,7 +1059,18 @@ async function deliverToBus(channel, content, { taskId, target, receipted, simul
   // forever while still losing the bus message.
   const handsBack = Boolean(taskId && target);
   if (!handsBack) {
-    return answer(deliveryVerdict({ chatOk: false, handsBack: false, receiptAttempted: false }));
+    // Not a receipt on this ticket (nothing reads it) — the message itself,
+    // kept whole on the standing "Undelivered alarms" ticket, which is read.
+    // busRelayPlan.deliveryVerdict carries the reasoning (task 86bc0mxv0).
+    if (simulate) {
+      console.error('  SIMULATION — would save this on the "Undelivered alarms" ticket (not sent)');
+      return answer(deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: true }));
+    }
+    const saved = await saveUndeliveredAlarm({ text: content, channel, why: chat.why });
+    return answer(deliveryVerdict({
+      chatOk: false, handsBack: false, alarmTicketAttempted: true,
+      alarmTicketOk: Boolean(saved.ok), alarmTicketWhy: saved.why || (saved.stopped ? 'stopped at the ClickUp reserve' : ''),
+    }));
   }
 
   // One receipt per TICKET per pass, not per comment. Three of Dane's
@@ -4991,7 +5002,7 @@ if (cmd === 'whoami') {
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
-        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr).target;
+        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr, c.comment_text).target;
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: simTarget,
@@ -5023,6 +5034,9 @@ if (cmd === 'whoami') {
         }
         if (delivery.via === 'ticket') {
           reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — receipted on the ticket instead` });
+        }
+        if (delivery.via === 'alarm-ticket') {
+          reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — saved on the "Undelivered alarms" ticket instead` });
         }
 
         // Mark relayed by replying on Dane's own comment. Deliberately AFTER
@@ -5175,7 +5189,7 @@ if (cmd === 'whoami') {
       const authorized = answered.state === 'no-question'
         ? fresh
         : (answered.state === 'answered' && answered.delivered);
-      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr);
+      const plan = handbackDestination(watch, t.status?.status, authorized, handbackPr, answered.answer?.comment_text);
       // A reading that failed is reported, never rounded down to "carry on".
       // Moving on a guess here is the whole of the bug this fix removes.
       if (plan.act === 'cannot-tell') {

@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderImageInfoLine } from "./builder-image-info-line";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import {
   BuilderImageShadowAngleControl,
@@ -638,6 +639,9 @@ export function BuilderCarouselModuleSettings({
                     onChange={(imageUrl) => updateItem(item.id, { imageUrl })}
                   />
                 </BuilderModuleField>
+                {/* Name + pixel size under the address, so a slide can be
+                    told apart without opening the page (task 86bc0n59x). */}
+                <BuilderImageInfoLine url={item.imageUrl} className="builder-card-image-info" />
 
                 {showItemCopy ? (
                   <BuilderModuleField label="Description" width="full" className="builder-card-field--wide">

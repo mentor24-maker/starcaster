@@ -97,6 +97,41 @@ as a rule first, then gets a checker where one is possible.
   columns) takes the labelled block, because that is the one where the
   spanning secondary row was already breaking the column alignment.
 
+  **A FOURTH markup shape wears `data-lattice-pairs`: a STACKED pair —
+  label above its control, both on one left edge** (panel sweep 14/15,
+  ticket 86bbjt1be, 2026-09-14). The Blog Card Template designer, which
+  renders *inside* the Card Manager's settings panel, is built from
+  `.bcm-control`: a bare `<span class="bcm-label">` over a select or a
+  number box. It matched none of the three pair selectors `check_panels`
+  reads, so **the entire content of that panel was absent from a 684-panel
+  green run** — and what the run was green over was a wrapping flex bar
+  whose seven Structure controls sat at seven different left edges across
+  three lines. That is the operator's opening sentence of this whole sweep
+  ("the column width varies arbitrarily"), still live in the one panel
+  nothing had ever measured. Carousel's lesson for the third time.
+
+  It is READ, not converted. The obvious retrofit is `label.field`, which
+  is the same stacked shape — but W0 says that one is being *retired*
+  rather than styled, because it breaks the moment a control grows a third
+  child, and half these controls already hold a number box and a unit.
+
+  **What the stacked shape changes about the room rule, and why that is a
+  correction rather than a weakening.** `room = labelW - labelTextW`
+  measures the horizontal gap between a label and its field: its floor
+  (30px) says a beside-pair must not be cramped, and its ceiling (140px, on
+  declared managers only) says a label track must not be a `1fr` notch
+  pushing every control sideways. **A stacked pair has no horizontal gap at
+  all** — its label box IS the column, which the field fills too — so on it
+  that subtraction measures the unused tail of a word and nothing else. At
+  1920 the designer's honest, correct two-track grid reported a 187px
+  "notch" that does not exist. Both bounds are therefore skipped where the
+  geometry says stacked (control below its label, same left edge, read from
+  the render and never from a class). Nothing else is relaxed: the four
+  comparative assertions and the cropped-word check still run, and those are
+  the ones that caught the real defect — reverting the grid to the old flex
+  bar fails with 21 problems naming the exact stagger, and cropping a label
+  still fails as L4. Both were watched to fail.
+
   **A THIRD markup shape wears `data-lattice-columns`: one flat grid**
   (panel sweep 10/15, ticket 86bbjt1b6, 2026-09-13). `.builder-item-grid`
   — the breadcrumb trail manager — puts its header titles and every row's
@@ -568,7 +603,7 @@ as a rule first, then gets a checker where one is possible.
   before the conversion: each panel's own fields at label-width 125 /
   control-x 125, and every field in its manager at 0. The TOC carried a third
   x of its own, 16px, from an inline `marginLeft` indenting each H3 card.
-  **Four manager shapes are still unmeasured, not one.** An earlier version of
+  **Three manager shapes are still unmeasured, not one.** An earlier version of
   this line said "one panel still wears the shape — `blog-category-filter`",
   and that inventory being wrong is the whole mechanism: a later sweep reads
   this paragraph to find out what is left, and anything missing from it is
@@ -586,14 +621,13 @@ as a rule first, then gets a checker where one is possible.
 
   | Panel | File | Shape |
   |---|---|---|
-  | `blog-category-filter` | `builder-blog-category-filter-module-settings.tsx` | `.builder-slider-item-grid` |
   | `social-share` (platform list) | `builder-module-card.tsx` | `.builder-slider-item-grid` |
   | `program-list` Sessions | `builder-program-list-module-settings.tsx` | `.builder-item-grid--sessions` |
   | `program-list` Prices | `builder-program-list-module-settings.tsx` | `.builder-item-grid--prices` |
 
-  The first belongs to panel sweep 13/15. The other three belong to no ticket
-  yet. `builder-lattice-inventory.test.tsx` pins this table against the
-  sources, so converting one of them, or adding a fifth, fails a test until
+  `blog-category-filter` was a fourth until panel sweep 13/15 (ticket
+  86bbjt1bd) converted it. These three belong to no ticket yet. `builder-lattice-inventory.test.tsx` pins this table against the
+  sources, so converting one of them, or adding a fourth, fails a test until
   this list is updated — the doc cannot silently drift out of date again.
   (Program List's own item cards ARE measured: they declare
   `data-lattice-pairs="2"`. It is the two nested session/price grids inside
@@ -1275,6 +1309,37 @@ Advanced — is the follow-on pass the operator sequenced after this.
   them satisfies W9. What is forbidden is `max-width: none` on something
   that can grow, which is exactly what the lattice control rule and the
   `label.field` rule both declared before this.
+
+  **A COMPOSITE control escapes the ceiling AND the stretch, and the two
+  failures look nothing alike** (panel sweep 13/15, ticket 86bbjt1bd,
+  2026-09-13). The lattice's control rule matches only DIRECT children of
+  `.builder-module-field-control`, so anything that wraps its parts in an
+  element of its own — `.builder-project-data-picker` is a select plus an
+  optional "Custom…" input inside a `<span>` — is neither capped nor
+  stretched. Panel sweep 15/15 found and bounded the first half of that:
+  in Custom mode the span is 846px at 1440, it SETS the column's
+  `max-content` control track, and every 560px-capped control beside it
+  stops 286px short.
+
+  **Capping it is only half the fix.** With no Custom input the same span
+  is just the select at its own content width, and nothing stretches it —
+  measured on blog-newsletter-subscribe's CRM Form: **226px in a 373px
+  slot**, 147px short of the edge its Headline and Description reach. Same
+  control, same row, opposite direction, and a cap cannot touch it. The
+  fix is both together — `width: 100%` puts the block's right edge on the
+  column's, `max-width` holds it to the ceiling — plus `flex: 1 1 auto` on
+  the select, or filling the span only moves the notch inside it, which
+  reads identically to the eye.
+
+  **Neither half fails `check:panels`, and that is not a gap in the
+  check.** Both were live on four and one panel respectively while the run
+  came back green at all three widths, because the assertions compare
+  controls WITHIN a column and the whole column moved together — W0
+  holding perfectly while L8 was broken, exactly as L8's own `[eye]` tag
+  says. Measure a composite control by hand; do not read a green sweep as
+  covering it. Six panels still carry this live: blog-post-tags,
+  blog-post-manager, site-search, event-manager, event-calendar,
+  event-detail.
 
 ## C — Controls: pick the right one
 
