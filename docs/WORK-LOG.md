@@ -52,6 +52,69 @@ Checked against a real page in the database, saved twice with no edits in
 between, and confirmed every setting survived both times — then deliberately
 removed each fix and watched the settings revert again, which is how we know
 the tests would catch this coming back.
+## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
+
+When you publish a page, the system saves a complete copy of it — that copy is
+what visitors are actually served, so the site stays fast and stable while you
+keep editing. When you *delete* a page, that saved copy is thrown away too.
+
+But when you merely untick Published, or mark a page private, or rename its
+web address, the saved copy stays where it is. Nobody can reach it: your site
+will not serve a page you have hidden. It is simply still on file.
+
+You were asked which of three things that should mean, and you chose: keep the
+copy, and write down plainly that unpublishing **hides** a page rather than
+erasing it — with erasing being what deleting the page is for. This change is
+that decision being recorded.
+
+**Nothing works differently than it did yesterday.** What was missing was the
+reasoning. Read the code as it stood, "deleting a page throws away its saved
+copy" looks like half a job, and the obvious way to finish it would be to throw
+the copy away on unpublish as well. That would quietly change what the Publish
+button promises: a page you hid and later put back would show your unsaved
+draft edits the moment it went live again, before you had pressed Publish. It
+would also buy very little — checked against the live database, hidden pages
+were holding a single page and 26 kB between them.
+
+So the decision now sits in three places: in the code exactly where someone
+would go to make that change, in the documentation for the table itself, and in
+three tests that fail if the option you did not choose ever gets built by
+mistake. Each of those tests was deliberately broken first and watched to fail,
+so we know they can.
+## 2026-09-14 — Saving a Builder page no longer wipes that page's own heading sizes (#699)
+
+Open any page in the Builder, press **Save Page**, change nothing — and the page
+lost its own typography. Heading sizes, line heights and heading weights all
+reverted to the defaults, with no message and nothing on screen to connect the
+change to the save. 184 pages in this machine's copy of production carry those
+settings, so 184 pages were one ordinary save away from losing them. The page's
+own background was going the same way, by the same route.
+
+Two separate faults, and fixing either one alone left the bug exactly as
+reported.
+
+The first is in the machinery that imports pages from the old Normie system. It
+recognises an old page by two settings objects that the current editor happens
+to attach to every section it saves — so every ordinary save gets treated as an
+import. The importer then rebuilt the page from a list of two things, the
+background and the sections, and the page's typography was simply not on that
+list. It now carries the page's own fields through and translates only the
+genuinely old-format parts. That is the same shape as the fixes for the two
+sibling tickets one level down, and it is written as a carry rather than a
+longer list on purpose: a list only ever protects the fields somebody
+remembered, and this is the third time the same rebuild has dropped something.
+
+The second is that the editor's save never sends the typography at all. The
+sections, the page background and the page theme share one database column, and
+the store rebuilt that whole column whenever a save named any one of them — so a
+save naming only the sections wrote "no theme", and the defaults filled in
+behind it. A save that touches that column now carries forward whatever it did
+not name. A save that *does* name a theme still wins, including one deliberately
+naming an empty theme to reset a page.
+
+Both halves were broken on purpose and measured against every real stored page:
+with either one reverted, 184 pages lose their heading sizes on a save; with
+both in place, none do.
 
 ## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
 

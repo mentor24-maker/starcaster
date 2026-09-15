@@ -458,6 +458,20 @@ test('migrateLegacyLayoutSections preserves video background mode and videoUrl',
 //
 // The payloads below are the editor's own shape — the legacy trigger fields
 // sitting alongside the modern ones, which is exactly what a save sends.
+//
+// Task 86bc0d1fg — saving a page must not wipe that page's own typography.
+//
+// public/js/builder.js puts `rowSettings` and `containerSettings` on every
+// section it sends on a save (line 5446), which makes isLegacySectionArray
+// call an ORDINARY SAVE legacy and route it through the Normie import
+// migrator. That migrator rebuilt the DOCUMENT from a two-field list --
+// pageBackground and sections -- so the page's `theme` was dropped and the
+// normalizer downstream supplied the default. Heading sizes, line heights and
+// heading weights all reverted, with nothing said. Measured 2026-09-14:
+// 183 stored pages carry a real theme scale and all 183 lost it on a save.
+//
+// EDITOR_TRIGGER below is the editor's own shape: the two legacy trigger
+// fields sitting alongside the modern ones, which is what a save sends.
 // ---------------------------------------------------------------------------
 
 const EDITOR_TRIGGER = {
@@ -770,4 +784,85 @@ test('an ordinary save changes NOTHING a save without the legacy trigger would n
     { ...withoutTrigger, cellPadding: null, marginTop: null },
     'an ordinary save lost or changed a setting that a save without the legacy trigger kept'
   );
+});
+
+const PAGE_THEME = {
+  typography: {
+    scale: {
+      baseSize: 18,
+      ratio: 1.25,
+      baseLineHeight: 1.6,
+      h1: 36,
+      h2: 30,
+      h3: 24,
+      h1Lh: 1.4,
+      h1Fw: 900,
+    },
+  },
+};
+
+function sectionFromEditor(extra = {}) {
+  return {
+    id: 'section_1',
+    layout: '3-3',
+    title: 'Hero',
+    ...EDITOR_TRIGGER,
+    modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    ...extra,
+  };
+}
+
+test('serializeBuilderDocument keeps the page theme on an ordinary save', () => {
+  const serialized = serializeBuilderDocument({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.deepEqual(serialized.theme.typography.scale, PAGE_THEME.typography.scale);
+});
+
+test('the page theme survives saving the page twice with no edits', () => {
+  // The operator sees it on a save that changed nothing, so feed the
+  // serializer its own output — which is what re-opening the page and
+  // pressing Save Page again does.
+  const first = serializeBuilderDocument({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+  const second = serializeBuilderDocument({
+    theme: first.theme,
+    layoutSections: first.sections.map((section) => ({ ...section, ...EDITOR_TRIGGER })),
+  });
+
+  assert.equal(first.theme.typography.scale.h1, 36);
+  assert.equal(second.theme.typography.scale.h1, 36);
+  assert.deepEqual(second.theme.typography.scale, PAGE_THEME.typography.scale);
+});
+
+test('a genuine legacy Normie import carries no theme and still gets the default', () => {
+  // The control for the fix: an import has no theme of its own, so the
+  // carry-through must not invent one, and the default must still arrive.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.ok(serialized.theme, 'an import still gets a theme object');
+  assert.equal(serialized.theme.typography.scale.baseSize, 0);
+  assert.equal(serialized.theme.typography.scale.ratio, 0);
+  assert.equal(serialized.theme.typography.scale.baseLineHeight, 0);
+});
+
+test('migrateLegacyLayoutSections leaves one section list, not two', () => {
+  // The carry-through spreads the document, so a payload spelled
+  // `layoutSections` would otherwise come back holding BOTH that raw list and
+  // the migrated `sections` — and the two readers of this document disagree
+  // about which alias wins.
+  const migrated = migrateLegacyLayoutSections({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.ok(Array.isArray(migrated.sections));
+  assert.equal(migrated.layoutSections, undefined);
+  assert.deepEqual(migrated.theme, PAGE_THEME);
 });
