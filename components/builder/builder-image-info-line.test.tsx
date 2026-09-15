@@ -83,4 +83,18 @@ describe("BuilderImageInfoLine", () => {
     });
     expect(document.querySelector(".builder-image-info-dialog")).toBeNull();
   });
+
+  it("thumbnail mode shows the picture with the name and size under it, and the picture opens the pop-up", () => {
+    act(() => root.render(<BuilderImageInfoLine url={BLOB} thumbnail />));
+    const thumb = host.querySelector(".builder-image-thumb") as HTMLElement;
+    expect(thumb.querySelector(".builder-image-thumb-image")?.getAttribute("src")).toBe(BLOB);
+    expect(thumb.querySelector(".builder-image-info-line .builder-image-info-name")?.textContent).toBe("court sunset-Xy12.jpg");
+    act(() => (thumb.querySelector(".builder-image-thumb-button") as HTMLButtonElement).click());
+    expect(document.querySelector(".builder-image-info-dialog img")?.getAttribute("src")).toBe(BLOB);
+  });
+
+  it("thumbnail mode says why it is empty when there is no image", () => {
+    act(() => root.render(<BuilderImageInfoLine url="" thumbnail />));
+    expect(host.querySelector(".builder-image-thumb.is-empty")?.textContent).toBe("No image chosen yet");
+  });
 });

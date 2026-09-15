@@ -74,6 +74,22 @@ describe("blog-latest-posts: which posts the row shows", () => {
   });
 });
 
+describe("blog-latest-posts: heading style", () => {
+  it("a module saved before the setting existed keeps an h2 in the site colour", () => {
+    const s = resolveLatestPostsSettings({ title: "Latest" });
+    expect(s.headingLevel).toBe("h2");
+    expect(s.headingColor).toBe("");
+  });
+
+  it("reads a chosen level and colour, and refuses a tag that is not a heading", () => {
+    expect(resolveLatestPostsSettings({ headingLevel: "H4", headingColor: "#ff0000" })).toMatchObject({
+      headingLevel: "h4",
+      headingColor: "#ff0000"
+    });
+    expect(resolveLatestPostsSettings({ headingLevel: "script" }).headingLevel).toBe("h2");
+  });
+});
+
 describe("blog-latest-posts: registration", () => {
   it("a new module from the palette starts in Latest posts mode", () => {
     const created = createEmptyModule("blog-latest-posts");
