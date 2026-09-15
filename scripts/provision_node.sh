@@ -403,10 +403,21 @@ if [ "$NODE_KNOWN" != "known" ]; then
   failed "Cannot install schedules — this machine has no recognised identity." "$0 --apply --node <name>"
   detail "Guessing which node it is would mean installing another machine's jobs here."
 else
+  # The `beat` column is why this reads lib/nodeHeartbeat.js as well: a row is
+  # `blocked` when THIS script cannot install the schedule, which says nothing
+  # about whether the job is running (task 86bbzzyxb). Four owned roles are
+  # blocked and beating. It is computed only for blocked rows, and it comes
+  # BEFORE `reason` because `read` puts the whole remainder of the line into its
+  # last variable — a field after the free-text one would never be its own field.
   SCHEDULES="$(ask_inventory 'the schedules' -e '
     const p = require(process.argv[1] + "/lib/nodeProvision.js");
+    const hb = require(process.argv[1] + "/lib/nodeHeartbeat.js");
     for (const s of p.schedulesForNode(process.argv[2])) {
+      const note = s.blocked
+        ? hb.blockedScheduleBeatNote({ role: s.role, beat: hb.readBeat({ role: s.role }) })
+        : "";
       console.log([s.role, s.installer || "-", s.blocked ? "blocked" : (s.manual ? "manual" : "auto"),
+        (note || "-").replace(/\s+/g, " "),
         (s.blocked || s.why || "-").replace(/\s+/g, " ")].join("\t"));
     }
   ' "$REPO" "$NODE_IS")" || exit 1
@@ -415,7 +426,7 @@ else
     detail "$NODE_IS owns no exclusive jobs."
   fi
 
-  while IFS=$'\t' read -r role installer kind reason; do
+  while IFS=$'\t' read -r role installer kind beatnote reason; do
     [ -n "$role" ] || continue
     case "$kind" in
       blocked)
@@ -428,6 +439,10 @@ else
         # the matching site in scripts/doctor_node.mjs (task 86bbw9nbj, round 3).
         printf '  %sWAIT%s   %s: %sCANNOT DO YET%s — this provisioner cannot install it.\n' "$YELLOW" "$OFF" "$role" "$BOLD" "$OFF"
         detail "$reason"
+        # And whether the job is RUNNING, which the line above does not answer
+        # and used to be read as answering (task 86bbzzyxb). Silent when there
+        # is nothing to add.
+        [ "$beatnote" = "-" ] || detail "$beatnote"
         n_wait=$((n_wait+1))
         ;;
       manual)
@@ -435,7 +450,18 @@ else
         detail "$reason"
         ;;
       *)
-        if bash "$MAIN_CHECKOUT/$installer" --status 2>/dev/null | grep -q 'schedule:  *INSTALLED'; then
+        # READ FIRST, THEN GREP — this line may not be a pipeline (found while
+        # checking this section for task 86bbzzyxb, and pre-existing since the
+        # script was written). `set -o pipefail` is on at the top of this file,
+        # and `grep -q` exits the instant it matches, which closes the pipe and
+        # kills the installer with SIGPIPE (141). pipefail then hands that 141
+        # to the `if`, so the branch was taken ONLY when the schedule was
+        # ABSENT: an installed schedule could never report as installed. The
+        # dry run called every live schedule missing, and `--apply` tore down
+        # and rebuilt all three of this machine's real launchd jobs on every
+        # run — including the ones this ticket is about.
+        sched_status="$(bash "$MAIN_CHECKOUT/$installer" --status 2>/dev/null || true)"
+        if printf '%s\n' "$sched_status" | grep -q 'schedule:  *INSTALLED'; then
           pass "$role: schedule already installed."
         else
           # The installer refuses to run from a worktree, for the same reason

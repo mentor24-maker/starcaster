@@ -958,17 +958,35 @@ narrative pass is queued work rather than something someone has to remember.
 
 ### What it writes, and where
 
-`docs/reports/YYYY-MM-DD.html` plus `docs/reports/YYYY-MM-DD.data.json`, both
-**committed**, with `docs/reports/index.html` listing editions newest-first.
-
-These are records, the same category as `docs/WORK-LOG.md` — **not** build
-artifacts. They are deliberately absent from `.gitignore` and from
-`check_conventions`' generated list. A report that vanishes on the next build is
-not a record, and a test pins that so a future tidy-up cannot quietly reclassify
-them.
+`YYYY-MM-DD.html` plus `YYYY-MM-DD.data.json`, with `index.html` listing editions
+newest-first — into a folder **outside every git checkout** (by default
+`~/Documents/Starcaster/Weekly Reports`), and then uploaded to **Google Drive →
+Projects → Starcaster → Weekly Reports** on `mentor24@gmail.com`.
 
 The JSON exists so the narrative pass re-gathers nothing: every number on the
 page is in it.
+
+**It used to write into the repo and publish by opening a pull request, and that
+is what broke the Mini** (2026-09-14, task 86bc0nbwq). Report output in a
+checkout makes `git status` non-empty, and a machine with uncommitted work
+refuses to update itself — so one Monday run switched off the Mini's updates and
+it went on running the previous week's pipeline code, 7 merges behind, missing
+that same day's pipeline fixes. The wrapper already carried two cleanup passes
+written against exactly this and they did not prevent it, which is the argument
+for not writing there at all. `lib/weeklyReportHome.js` now REFUSES to run if
+the output folder turns out to be inside a repo, symlinks followed; the refusal
+is fatal, because a fall-back to "somewhere safe" is how it lands back in a
+checkout with nothing saying so.
+
+**Every upload is read back from Drive and its size compared with the bytes on
+disk**, because an upload is the exact shape of a write that answers 200 and
+stores nothing (landmine 15). A failed upload is a **failed run** — it posts to
+the bus, exits non-zero, and `scripts/report_job_failure.mjs` turns that into an
+alert. There is no path where the report quietly exists on one machine's disk
+and nowhere else.
+
+The editions already committed under `docs/reports/` stay there as history. See
+`docs/reports/README.md`.
 
 ### The honesty rule
 
@@ -1027,14 +1045,19 @@ node scripts/weekly_report.mjs                 # 7 days ending today
 node scripts/weekly_report.mjs --window 14
 node scripts/weekly_report.mjs --as-of 2026-08-24   # reproduce an old edition
 node scripts/weekly_report.mjs --out /tmp/x.html    # just look at one
-node scripts/weekly_report.mjs --publish       # + branch, commit, PR, ticket
+node scripts/weekly_report.mjs --publish       # + upload to Drive, + narrative ticket
 ```
 
+`WEEKLY_REPORT_DIR` moves the output folder, `WEEKLY_REPORT_DRIVE_FOLDER_ID` and
+`WEEKLY_REPORT_DRIVE_SUBFOLDER` move the Drive destination. The folder id is
+committed rather than held in Doppler — it names a place, it does not grant
+access to one.
+
 **`--out` and `--publish` do not combine, and the script refuses the pair.**
-Publishing copies the report into a throwaway worktree by its path *relative to
-the repo*: an `--out` inside `docs/reports/` makes that a copy of the file onto
-itself, and an `--out` anywhere else makes it a relative path that climbs out of
-the worktree altogether. Use one or the other.
+Publishing uploads each file to a shared Drive folder *under its name on disk*,
+and an `--out` path is by definition a name somebody picked for a look —
+`x.html`, `notes.txt`. Those would sit in the shared folder permanently, looking
+like editions and listed in no index. Use one or the other.
 
 Running it twice for the same window produces a byte-identical file — nothing
 on the page comes from a clock except the window it was asked for, which is an
@@ -1052,9 +1075,10 @@ input. That is a property of the renderer, pinned by a test, not luck.
 | Install | `./scripts/install_weekly_report.sh` (`--status`, `--uninstall`) |
 | Log | `~/Library/Logs/weekly-report.log` |
 
-It writes into the repo and opens a pull request, so two machines holding the
-schedule would file two branches and two PRs for the same week — and the
-duplicate is only visible after both already exist. That is the same class of
+Two machines holding the schedule would upload the same three filenames into
+the same shared Drive folder every week, racing each other, and the duplicate is
+only visible after both have already written. (Before 2026-09-14 it was two
+branches and two pull requests, for the same reason.) That is the same class of
 hazard `bus-relay` and `db:refresh` are in the table for.
 
 The Mini owns it for the relay's reason: a Monday-morning job on a laptop that
@@ -1071,9 +1095,12 @@ declines to publish — so the schedule is harmless if it is ever installed in t
 places, and it can be installed on a new machine *before* ownership moves, with
 no week where neither machine reports.
 
-It never commits to `main`: `main` auto-deploys to production, and a scheduled
-job with a commit bit on `main` is a scheduled deploy at 07:00 on a Monday with
-nobody awake. A failure posts to the bus, like every other unattended job.
+It commits nothing anywhere — not to `main`, not to a branch. `main` auto-deploys
+to production, and a scheduled job with a commit bit on `main` is a scheduled
+deploy at 07:00 on a Monday with nobody awake. A failure posts to the bus, like
+every other unattended job: `scripts/run_weekly_report.sh` calls
+`report_job_failure.mjs` on any non-zero exit except 3, which is this machine
+correctly declining a job another one owns.
 
 ## Safety — why this is wired tighter than the YouTube version
 
