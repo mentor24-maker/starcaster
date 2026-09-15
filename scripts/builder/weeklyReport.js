@@ -568,12 +568,23 @@ ${renderMergeGroups(d.groups, repo)}
 }
 
 /** The index: every edition, newest first. */
+/**
+ * The list-of-editions page.
+ *
+ * `e.link` IS PREFERRED OVER `e.file`, and that is the whole of the round-1 fix
+ * (task 86bc0nbwq). This page lives in Google Drive, and a relative
+ * `href="2026-09-14.html"` resolves to nothing there — Drive serves every file
+ * from its own id, not from a folder path, so the links on the published index
+ * were all dead. `link` is the file's real Drive link, which the uploader
+ * already has in hand. `file` remains the fallback for a local look at the
+ * staging folder, where relative links do work.
+ */
 function renderIndexHtml(editions) {
   const list = [...(Array.isArray(editions) ? editions : [])].sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const items = list.length
     ? list.map((e) => [
       '        <li>',
-      `          <a href="${esc(e.file)}">${esc(e.date)}</a>`,
+      `          <a href="${esc(e.link || e.file)}">${esc(e.date)}</a>`,
       `          <span class="merge-title">${esc(e.window || '')}</span>`,
       '        </li>',
     ].join('\n')).join('\n')
@@ -611,13 +622,20 @@ ${items}
  * lines of `if` at the bottom of the script, which is exactly the shape of
  * code that gets read as obviously correct and is not.
  *
- * Three outcomes are NOT failures:
+ * Two outcomes are NOT failures:
  *   published        — the report shipped.
- *   'no changes'     — a week identical to the edition already on main. The
- *                      correct outcome of a quiet week, not a fault.
  *   'other-node'     — another machine owns `weekly-report`. A designed
  *                      decline, so it takes 3, the code `npm run node:owns`
  *                      already uses for "another machine's job".
+ *
+ * THERE USED TO BE A THIRD, and it is gone because the code that produced it
+ * is (round 1 of 86bc0nbwq). `'no changes'` meant "this week's edition is
+ * identical to the one already committed on main" — a judgement only the
+ * pull-request mechanism could make, and that mechanism was removed when
+ * publishing became an upload to Drive. An upload is never a no-op: the edition
+ * either reached the folder or it did not. Leaving the branch in place left a
+ * line that read as a considered exemption and could not run, which is the
+ * shape of code somebody later reasons from.
  *
  * 'unidentified' IS NOT THE THIRD ONE, however much it looks like it. It means
  * the machine could not tell which node it is — so it does not know whether
@@ -635,7 +653,6 @@ ${items}
  */
 function publishExitCode(result) {
   if (!result || result.published) return 0;
-  if (result.reason === 'no changes') return 0;
   if (result.reason === 'other-node') return 3;
   return 1;
 }
