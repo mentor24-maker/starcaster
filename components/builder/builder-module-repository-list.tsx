@@ -860,6 +860,7 @@ function CreatedModulesTable({
                           </div>
                           <div className="builder-saved-module-column-pod">
                             <BuilderModuleCard
+                              deviceStylesEnabled={false}
                               editorDevice="browser"
                               hideHeaderActions
                               isExpanded={editingCreatedExpanded}
@@ -1245,6 +1246,7 @@ function RepositoryTable({
                           <div className="builder-saved-module-column-pod builder-saved-module-editor-stack">
                             {editingModules.map((module) => (
                               <BuilderModuleCard
+                                deviceStylesEnabled={false}
                                 editorDevice="browser"
                                 hideHeaderActions
                                 isExpanded={editingExpandedModuleIds.includes(module.id)}

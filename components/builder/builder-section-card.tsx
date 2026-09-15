@@ -821,6 +821,9 @@ export function BuilderSectionCard({
                                 onDrop={(event) => handleModuleDrop(event, column, module.id)}
                               >
                                 <BuilderModuleCard
+                                  // A saved-section master is a template, not
+                                  // a placed module — see the prop's own note.
+                                  deviceStylesEnabled={!isCanonicalMaster}
                                   isEmailTemplate={isEmailTemplate}
                                   module={module}
                                   pages={pages}
