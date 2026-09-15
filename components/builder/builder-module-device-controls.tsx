@@ -15,7 +15,6 @@ import {
   writeModuleDeviceEdit
 } from "@/lib/builder-module-device-overrides";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
-import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 
@@ -167,13 +166,16 @@ export function BuilderModuleDeviceControls({
         ) : null}
         {keys.includes("fontSize") ? (
           <BuilderModuleField label={mark("Font Size", "fontSize")} width="num">
-            <BuilderNumberSelectControl
-              value={values.fontSize}
+            {/* The same plain number box the desktop Size field uses, rather
+                than a dropdown: a font size is typed, not picked from a list,
+                and 10–120 in a select is 111 options (W8). */}
+            <input
+              type="number"
               min={10}
               max={120}
               step={1}
-              fallback={values.fontSize}
-              onChange={(next) => writeSettings((current) => ({ ...current, fontSize: next }))}
+              value={values.fontSize}
+              onChange={(event) => writeSettings((current) => ({ ...current, fontSize: event.target.value }))}
             />
           </BuilderModuleField>
         ) : null}
