@@ -1,3 +1,34 @@
+## 2026-09-15 — The Monday report could not have reached Google Drive at all (#709)
+
+The change above moved the weekly report out of the Mini's code folder and into
+Google Drive. A review pass then went and ran it the way the Monday schedule
+actually runs it, and found it could never have worked.
+
+When the Mac runs a job on a timer, it hands that job almost nothing — no
+settings, no passwords, just enough to find the programs it needs. The report
+was asking for Google straight out, without the step that fetches our stored
+Google sign-in first. Run by hand it worked perfectly, because a person's
+terminal already has all that loaded; run on the timer, it would have failed to
+sign in every single Monday, reported the failure, and left the report sitting
+on the Mini and nowhere else — the exact thing this whole piece of work was
+meant to stop. It now goes through that step, and a test fails if anyone takes
+it back out.
+
+Four smaller things from the same review. **A re-run will no longer wipe out the
+narrative you wrote.** The report puts the figures in Drive and asks Dane to
+write the story on top of them, on the same page, under the same name — and a
+Monday that fails halfway does get run again. The second run would have replaced
+his writing with the bare numbers and called it a success. Now it finds the page
+already there, leaves it exactly as it is, and says so. **The contents page lists
+every edition again**, because it is now built from what is really in the Drive
+folder rather than from whatever the machine that ran it happened to have on
+disk — the old way would have dropped older editions the moment the job moved to
+a different Mac. **And its links work**, which they did not: they were written as
+if the pages sat in a folder, and Google Drive does not work that way, so every
+link on that page was dead. Finally, a duplicate of an internal command was
+removed, and the one path where the report refuses to run at all now speaks up
+instead of exiting in silence.
+
 ## 2026-09-14 — The weekly report now goes to Google Drive, and stops jamming the Mac Mini (#709)
 
 The weekly figures report runs on the Mac Mini every Monday at 7am. It was
