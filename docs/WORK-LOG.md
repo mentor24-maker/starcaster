@@ -25,6 +25,86 @@ worse than no control.
 Nothing changes on any existing page: the before/after photographs came back
 pixel-identical, and a column hidden with the old "Hide on Mobile" tickbox
 still hides exactly as it did.
+## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
+
+Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
+loop lanes — shares one per-minute allowance of requests to ClickUp, and they
+keep a shared tally file so each can see how much of the minute is left and
+stand down politely when a live session needs it. It turned out that simply
+running the test suite filled that tally with requests that never happened.
+
+The tests do not really call ClickUp; they hand the code a stand-in. But they
+keep the real ClickUp web address in the request, and the tally was decided by
+the address alone — so a few hundred imaginary requests piled up in a few
+seconds. Two things came off that. The tests started refusing their own
+requests partway through a run and reported about 22 failures that were not
+real, which matters because that command is a gate every automated build pass
+has to run and believe. And anyone running the tests made the relay, the pulse
+and both loops stand down for the next minute for no reason at all.
+
+A request now counts against the budget only if it is going to ClickUp *and*
+going out over the real network, rather than through a stand-in the caller
+brought with it. Nothing in the live site ever brings one, so real traffic is
+counted exactly as before. The tests for the budget code itself still have to
+drive that path with a stand-in — that is how we prove a background job really
+does stop when it should — so those may still be counted, but only against a
+throwaway tally file of their own. That is what makes it impossible, rather
+than merely unlikely, for invented traffic to reach the shared one.
+
+Two other test files stub the network deeper down, inside a separate process
+the budget code has no way to inspect. Those now hand that process its own
+throwaway tally, and a new guard fails the build if a future test forgets.
+Measured afterwards: the suite gives 4039 passes and no failures whether it is
+run by a background job or by hand, and neither run adds a single line to the
+shared tally.
+
+A check of this work found three loose ends, all now closed. Two were comments
+left saying the opposite of what the code does — one of them in the single
+live file that uses this seam, which is precisely where somebody would later
+have trusted it. The third was a real, if sleeping, hazard: if a caller handed
+the code something that was not a working stand-in at all, it used to fail on
+the spot without contacting anyone, and after the first round of this work it
+would instead have quietly sent a genuine request to ClickUp. Nothing in the
+code does that today, but it is the wrong way round for the one piece of code
+whose whole job is that nothing slips out uncounted, so it now refuses out
+loud and explains what it was handed. The guard that stops a future test
+forgetting its throwaway tally was also tightened: it used to look at a whole
+file at once and only knew one way of starting a second process, so a third
+one added to a file that already looked fine would have slipped through.
+
+A second check then found one more, and it was a good catch: a test added by
+separate work a few hours earlier, on purpose, does the one thing neither of
+the protections above can see. It keeps the real ClickUp address, does *not*
+hand in a stand-in, and replaces the network call inside its own process — so
+to the budget code it looks exactly like a genuine request, and five lines per
+test run were still landing in the shared tally. The two protections were each
+right on their own and quietly cancelled each other out.
+
+So there is now a third condition, and it is about the *process* rather than
+about what the caller handed in: a test run may write to a throwaway tally it
+named for itself, and may never write to the shared one. That closes the whole
+family rather than this one case — a test nobody has written yet, in whatever
+style, cannot reach the shared tally through this door at all. Measured on the
+finished code, with the tally pointed somewhere only this run could touch so
+another job on the machine could not be mistaken for it: the suite gives 4083
+passes and no failures, whether run by a background job or by hand, and the
+shared tally moves by zero lines either way. With the new condition taken back
+out again it moves by five, which is how we know the measurement can see it.
+
+A third check found the two halves had drifted apart again, this time by
+nothing either of them did: the separate work mentioned above went live on the
+main copy of the code while this was waiting to be checked, so the two no
+longer fitted together. Two lines had each gained a different thing and had to
+be joined into one, and then the test that separate work added stopped
+proving what it was written to prove. It forces the budget code to stand down
+on purpose, and standing down is only ever decided for a request that counts
+against the budget at all — which, under the new third condition, a test run's
+request does only when it has named a throwaway tally for itself. It had not,
+so the request sailed through, the stand-in answered as if all were well, and
+the test failed on a success. Naming a throwaway tally inside that one test
+restores it: 18 of 18 pass, and the shared tally still moves by zero. With the
+third condition taken back out, that same file puts five lines into the shared
+tally again, so the zero is a reading rather than an assumption.
 
 ## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
 
