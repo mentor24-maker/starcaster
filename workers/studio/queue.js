@@ -92,6 +92,18 @@ const SCHEMA = `
     run_after         INTEGER NOT NULL DEFAULT 0,
     last_error        TEXT    NOT NULL DEFAULT '',
     progress_pct      INTEGER NOT NULL DEFAULT 0,
+    -- What the producer knew that (stage, subject) cannot say. JSON, or ''.
+    -- The Drive watcher (Studio 3/8) is the first caller that needs it: the
+    -- lane a file came off -- /Studio/Inbox/ or /Studio/Plates/ -- is not
+    -- recoverable from a Drive file id without asking Drive again, and it is
+    -- the thing that decides whether the file is ever transcribed. The
+    -- alternative was encoding the lane in the stage name, which makes every
+    -- reader parse a stage to find out what kind of work it is holding.
+    --
+    -- It is NOT part of the identity of a job. jobs_live_subject_idx covers
+    -- (stage, subject_kind, subject_id) only, so re-emitting the same file
+    -- with a different payload is still one job, not two.
+    payload           TEXT    NOT NULL DEFAULT '',
     created_at        INTEGER NOT NULL,
     updated_at        INTEGER NOT NULL
   );
@@ -138,6 +150,62 @@ function text(value) {
 }
 
 /**
+ * A payload object -> the string the column holds. `''` for nothing.
+ *
+ * It REFUSES a value it cannot encode rather than storing `undefined` or a
+ * half-serialised string: a payload that silently arrives empty is a lane
+ * decision silently lost, and the whole reason this column exists is that the
+ * lane cannot be recovered from anywhere else.
+ */
+function encodePayload(payload) {
+  if (payload == null) return '';
+  if (typeof payload === 'string') return payload.trim();
+  let encoded;
+  try {
+    encoded = JSON.stringify(payload);
+  } catch (err) {
+    throw new Error(`payload could not be encoded as JSON: ${err.message}`);
+  }
+  if (typeof encoded !== 'string') {
+    throw new Error('payload could not be encoded as JSON (it serialised to nothing)');
+  }
+  return encoded;
+}
+
+/**
+ * The stored string -> an object, or null.
+ *
+ * Unparseable text comes back as `{ raw }` rather than throwing. A row written
+ * by an older version, or by hand, must not make `getJob` explode — a queue
+ * that cannot be read is worse than a payload that cannot be understood, and
+ * the caller can see exactly what was there.
+ */
+function decodePayload(value) {
+  const raw = String(value == null ? '' : value);
+  if (!raw.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : { raw };
+  } catch {
+    return { raw };
+  }
+}
+
+/**
+ * Add a column to an existing table, or do nothing if it is already there.
+ *
+ * `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS` in SQLite, and catching
+ * the error instead would also swallow a genuinely broken ALTER. Asking
+ * `PRAGMA table_info` first says exactly what is true.
+ */
+function addColumnIfMissing(db, table, column, declaration) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (columns.some((c) => String(c.name) === column)) return false;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  return true;
+}
+
+/**
  * Open (and create) a queue.
  *
  * `clock` is injectable so a test can move time forward without sleeping —
@@ -172,6 +240,12 @@ function openQueue(file, options = {}) {
   }
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  // A QUEUE FILE THAT ALREADY EXISTS does not get revisited by `CREATE TABLE
+  // IF NOT EXISTS`, so a column added later has to be added by hand. The Mini
+  // has been running this queue since Studio 2/8 shipped; without this, the
+  // first `enqueue` carrying a payload fails on a live machine and passes
+  // everywhere else, which is the worst shape a migration can have.
+  addColumnIfMissing(db, 'jobs', 'payload', "TEXT NOT NULL DEFAULT ''");
 
   /**
    * Add work, or return the job already queued for it.
@@ -181,8 +255,9 @@ function openQueue(file, options = {}) {
    * that wants to know whether it caused the work can read the flag; the caller
    * that just wants the work queued can ignore it.
    */
-  function enqueue({ stage, subjectKind, subjectId, runAfter = 0 }) {
+  function enqueue({ stage, subjectKind, subjectId, runAfter = 0, payload = null }) {
     const at = clock();
+    const encoded = encodePayload(payload);
     const row = {
       stage: text(stage),
       subject_kind: text(subjectKind),
@@ -195,10 +270,10 @@ function openQueue(file, options = {}) {
     try {
       const result = db
         .prepare(
-          `INSERT INTO jobs (stage, subject_kind, subject_id, state, run_after, created_at, updated_at)
-           VALUES (?, ?, ?, '${STATES.PENDING}', ?, ?, ?)`
+          `INSERT INTO jobs (stage, subject_kind, subject_id, state, run_after, payload, created_at, updated_at)
+           VALUES (?, ?, ?, '${STATES.PENDING}', ?, ?, ?, ?)`
         )
-        .run(row.stage, row.subject_kind, row.subject_id, Number(runAfter) || 0, at, at);
+        .run(row.stage, row.subject_kind, row.subject_id, Number(runAfter) || 0, encoded, at, at);
       return { job: getJob(Number(result.lastInsertRowid)), created: true };
     } catch (err) {
       // The unique index refused it, which means a live job already exists.
@@ -221,10 +296,10 @@ function openQueue(file, options = {}) {
       // all. Insert again: the window is gone, so this is the ordinary path.
       const retry = db
         .prepare(
-          `INSERT INTO jobs (stage, subject_kind, subject_id, state, run_after, created_at, updated_at)
-           VALUES (?, ?, ?, '${STATES.PENDING}', ?, ?, ?)`
+          `INSERT INTO jobs (stage, subject_kind, subject_id, state, run_after, payload, created_at, updated_at)
+           VALUES (?, ?, ?, '${STATES.PENDING}', ?, ?, ?, ?)`
         )
-        .run(row.stage, row.subject_kind, row.subject_id, Number(runAfter) || 0, at, at);
+        .run(row.stage, row.subject_kind, row.subject_id, Number(runAfter) || 0, encoded, at, at);
       return { job: getJob(Number(retry.lastInsertRowid)), created: true };
     }
   }
@@ -372,6 +447,119 @@ function openQueue(file, options = {}) {
 
 
   /**
+   * File a job that is ALREADY terminal, with the reason that made it so.
+   *
+   * `fail` is for work that was tried and did not succeed. This is for work
+   * that cannot be attempted at all — an expired Drive token, a quota refusal,
+   * a folder the credential cannot see. Retrying those is not optimism, it is
+   * a retry storm against a wall, and the answer never changes until a person
+   * fixes the credential.
+   *
+   * IDEMPOTENT ON PURPOSE, and that is the whole safety property. The watcher
+   * runs on a timer, so a broken token is re-discovered on every single pass.
+   * `jobs_live_subject_idx` covers only `pending` and `running`, so the
+   * database will happily accept a thousand identical blocked rows — the
+   * dedupe has to happen here. One blocked job per (stage, subject); a repeat
+   * refreshes the reason and the clock instead of filing another.
+   *
+   * Wrapped in `BEGIN IMMEDIATE` because it is a read-then-write: two workers
+   * both finding no blocked row before either inserts is the same double-file
+   * this function exists to prevent. `IMMEDIATE` takes the write lock at the
+   * start rather than on first write, which is what makes the read safe.
+   */
+  function block({ stage, subjectKind, subjectId, reason, payload = null }) {
+    const at = clock();
+    const row = {
+      stage: text(stage),
+      subject_kind: text(subjectKind),
+      subject_id: text(subjectId),
+    };
+    if (!row.stage || !row.subject_kind || !row.subject_id) {
+      throw new Error('block needs stage, subjectKind and subjectId');
+    }
+    const why = text(reason) || 'blocked with no reason given';
+    const encoded = encodePayload(payload);
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const existing = db
+        .prepare(
+          `SELECT * FROM jobs
+            WHERE stage = ? AND subject_kind = ? AND subject_id = ?
+              AND state IN ('${STATES.BLOCKED}', '${STATES.PENDING}', '${STATES.RUNNING}')
+            ORDER BY CASE state WHEN '${STATES.BLOCKED}' THEN 0 ELSE 1 END, id
+            LIMIT 1`
+        )
+        .get(row.stage, row.subject_kind, row.subject_id);
+
+      if (existing) {
+        // Either it is already blocked (refresh the reason) or it is live and
+        // has just been found to be impossible (take it out of the running).
+        const updated = db
+          .prepare(
+            `UPDATE jobs
+                SET state = '${STATES.BLOCKED}',
+                    last_error = ?,
+                    lease_owner = '',
+                    lease_expires_at = 0,
+                    payload = CASE WHEN ? = '' THEN payload ELSE ? END,
+                    updated_at = ?
+              WHERE id = ?
+              RETURNING *`
+          )
+          .get(why, encoded, encoded, at, existing.id);
+        db.exec('COMMIT');
+        return { job: shape(updated), created: false };
+      }
+
+      const inserted = db
+        .prepare(
+          `INSERT INTO jobs (stage, subject_kind, subject_id, state, last_error, payload, created_at, updated_at)
+           VALUES (?, ?, ?, '${STATES.BLOCKED}', ?, ?, ?, ?)
+           RETURNING *`
+        )
+        .get(row.stage, row.subject_kind, row.subject_id, why, encoded, at, at);
+      db.exec('COMMIT');
+      return { job: shape(inserted), created: true };
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+
+  /**
+   * Stand a blocked job down, because the thing that blocked it is fixed.
+   *
+   * Answers with whether there was one, so the caller can say "this has just
+   * recovered" rather than saying nothing — which is the difference between an
+   * alarm that clears itself and an alarm somebody has to remember to look at.
+   *
+   * It moves the job to `done` rather than deleting it: the row IS the record
+   * that the pipeline was broken between these two times, and deleting it
+   * throws away the only evidence that anything happened. The reason is
+   * cleared, because keeping it would leave a finished job still displaying an
+   * error it no longer has (the same bug `complete` already guards against).
+   */
+  function clearBlock({ stage, subjectKind, subjectId }) {
+    const at = clock();
+    const result = db
+      .prepare(
+        `UPDATE jobs
+            SET state = '${STATES.DONE}',
+                last_error = '',
+                lease_owner = '',
+                lease_expires_at = 0,
+                updated_at = ?
+          WHERE stage = ? AND subject_kind = ? AND subject_id = ?
+            AND state = '${STATES.BLOCKED}'`
+      )
+      .run(at, text(stage), text(subjectKind), text(subjectId));
+    return result.changes > 0;
+  }
+
+
+  /**
    * Return every job whose lease has expired to pending. Answers with how many.
    *
    * EXACTLY ONCE is the property that matters: the update is conditioned on the
@@ -487,7 +675,7 @@ function openQueue(file, options = {}) {
   }
 
   return {
-    enqueue, claim, heartbeat, complete, fail, reap,
+    enqueue, claim, heartbeat, complete, fail, block, clearBlock, reap,
     getJob, listJobs, counts,
     getCursor, setCursor, cacheGet, cacheSet,
     close, db,
@@ -509,6 +697,7 @@ function shape(row) {
     runAfter: Number(row.run_after),
     lastError: String(row.last_error),
     progressPct: Number(row.progress_pct),
+    payload: decodePayload(row.payload),
     createdAt: Number(row.created_at),
     updatedAt: Number(row.updated_at),
   };
