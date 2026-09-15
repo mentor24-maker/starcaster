@@ -46,7 +46,7 @@ const { printAndExit } = require('./lib/flushExit.cjs');
 
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-logs');
-const { clickupFetch } = require('./lib/clickup.cjs');
+const { clickupFetch, ClickUpReserveYield, reserveStopMessage } = require('./lib/clickup.cjs');
 
 const TOKEN = process.env.CLICKUP_API_TOKEN;
 /** Constant in every real run; overridable only so tests can point at a
@@ -123,6 +123,17 @@ async function clickupGet(apiPath) {
     method: 'GET',
     headers: { Authorization: TOKEN },
   });
+  // THE THIRD OUTCOME (task 86bc0w6my). Raised as its own error TYPE rather
+  // than a generic one, so `main().catch` below can tell "this hourly job
+  // stood down at the reserve" from "ClickUp broke" — two events with opposite
+  // fixes. Without this the `res.ok` on the next line dereferenced a null
+  // `res` and the pulse reported a TypeError as its reading.
+  if (out.yielded) {
+    throw new ClickUpReserveYield(
+      `ClickUp GET ${apiPath} was not sent: ${out.yielded.why}`,
+      out.yielded,
+    );
+  }
   if (out.transportError) throw out.transportError;
   const { res, json, text } = out;
   if (!res.ok) throw new Error(`HTTP ${res.status} ${json?.err || text.slice(0, 160)}`);
@@ -399,6 +410,17 @@ function argValue(flag) {
 }
 
 main().catch((err) => {
+  // A STAND-DOWN IS NOT A CRASH (task 86bc0w6my). A yield escaping to here is
+  // this job declining to spend the last of the minute's ClickUp budget, and
+  // "PULSE FAILED" would send the next reader looking for an outage that never
+  // happened. The exit code is deliberately unchanged: the pulse still took no
+  // reading, and CANNOT TELL is exit 2 whatever the reason — what changes is
+  // that the reason is now true.
+  if (err instanceof ClickUpReserveYield) {
+    console.error(`\n${reserveStopMessage('the pipeline pulse', err.message)}`);
+    printAndExit('This is not an all-clear. No check ran — but nothing is broken.', useExitCode ? 2 : 0, { stream: 'stderr' });
+    return;
+  }
   // Rule 5: even a crash says so loudly rather than producing a quiet nothing.
   // Through the same flush-then-leave door: a crash message discarded by
   // `process.exit` IS the quiet nothing this rule forbids, and stderr is a

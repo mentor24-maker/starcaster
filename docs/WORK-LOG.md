@@ -1,3 +1,52 @@
+## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
+
+For a few hours on the 15th the build and review loops on the Mac Mini refused
+to do anything, and the reason each one printed was **"the pipeline is being
+treated as PAUSED"** — which is the machine's way of saying *Dane has taken the
+deck, so I should keep my hands off.* You had not. The pipeline was running the
+whole time; a different command on the same machine, asked a second later, said
+so plainly.
+
+That is the worst shape a bug can take here, because nothing looked wrong. A
+pass standing down because you are working is completely normal, so the
+messages did not read as trouble — they read as the system behaving itself.
+
+Underneath it was one missed case. Every job that talks to ClickUp goes through
+a single piece of code, and that code can answer in three ways: *here is your
+answer*, *I could not reach them*, or — the third one — *I am a background job,
+the minute's ClickUp allowance is nearly gone, and I am not spending the last of
+it in case you are using it.* That third answer was added deliberately so a
+background job can never slow down a session you are actually sitting in front
+of. It is routine, it fixes itself within a minute, and it happens whenever two
+jobs wake up together.
+
+Five different places in the code ask that question. **Four of them had never
+been taught the third answer exists**, so they crashed on it — and the crash was
+then tidied up, one layer at a time, into "could not reach ClickUp", and then
+into "the pipeline is paused". A one-minute budget hiccup reached the operator
+as a claim about where you were.
+
+All four are fixed, including one nobody had spotted: it sits on the path a
+visitor takes when they report a bug on one of the sites, where the same crash
+would have shown up as an error page.
+
+The message itself now says only what is actually known, which turned out to be
+the fiddly part. The first attempt at this fix swung too far the other way: it
+replaced *"the pipeline is paused"* with *"the operator does not have the
+deck"* — and that is a claim the code is in no position to make, because the
+whole problem is that it never managed to look. If you genuinely had paused the
+line in the same minute a background job ran out of allowance, the new sentence
+would have been flatly false, and the next reader could reasonably have gone to
+work on your deck. So it now names the **cause** (the one-minute allowance, not
+you) and says out loud that whether you have the deck is still unknown and the
+next pass will find out. It also keeps the parts that were already right: that
+nothing is broken, that it clears itself, and that this is specifically not a
+network or password problem, so whoever reads it next does not go hunting for
+one. The pass still stands down for that minute, which is correct: it genuinely
+could not check.
+
+And because four separate authors had each missed the same case, there is now a
+check that fails the build if a fifth one does.
 ## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
 
 If you put a video behind one column of a row and a menu in that same column,

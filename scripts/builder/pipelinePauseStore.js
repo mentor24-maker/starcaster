@@ -26,7 +26,7 @@ const loopNoteComment = require('./loopNoteComment.js');
 const { SWITCH_TASK_NAME } = require('./pipelinePause.js');
 // The comment-paging RULE, borrowed rather than re-derived — one answer to
 // "have I read the whole trail" for the whole repo. See scripts/lib/clickup.cjs.
-const { pageComments } = require('../lib/clickup.cjs');
+const { pageComments, stoppedAtReserve } = require('../lib/clickup.cjs');
 
 /** How the injected caller's answer is read, whichever shape it uses. */
 function okOf(out) {
@@ -34,6 +34,23 @@ function okOf(out) {
 }
 function statusOf(out) {
   return Number(out?.res?.status ?? out?.status ?? 0);
+}
+
+/**
+ * Did this read stop at the ClickUp RESERVE rather than fail? (task 86bc0w6my)
+ *
+ * Carried all the way up to `pauseVerdict` rather than flattened into `why`,
+ * because the two need different WORDS and the words are the whole defect: a
+ * scheduled job declining to spend the last of the minute's budget is not an
+ * unreadable switch, and telling a reader the pipeline is "being treated as
+ * PAUSED" sends them to the operator, to the token and to the network, in that
+ * order, for a condition that clears itself in under a minute.
+ *
+ * It still leads to the same BEHAVIOUR — claim nothing — because the switch
+ * genuinely was not read. Only the explanation changes.
+ */
+function yieldedOf(out) {
+  return stoppedAtReserve(out);
 }
 
 /**
@@ -82,7 +99,7 @@ async function fetchQueue({ call, list, maxPages = 50 }) {
   const tasks = [];
   for (let page = 0; page < maxPages; page += 1) {
     const out = await safely(call, 'GET', `/api/v2/list/${list}/task?archived=false&include_closed=true&page=${page}`);
-    if (!okOf(out)) return { readable: false, why: `reading the Loop Queue: ${whyOf(out)}`, tasks };
+    if (!okOf(out)) return { readable: false, why: `reading the Loop Queue: ${whyOf(out)}`, yielded: yieldedOf(out), tasks };
     const batch = out.json?.tasks || [];
     tasks.push(...batch);
     // Stop on an EMPTY page or an explicit `last_page: true` — never on
@@ -141,7 +158,7 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
   }
 
   if (withQueue || !pauseTaskId) {
-    if (!(await needQueue()).readable) return { readable: false, why: queue.why };
+    if (!(await needQueue()).readable) return { readable: false, why: queue.why, yielded: queue.yielded };
   }
 
   if (pauseTaskId) {
@@ -153,7 +170,7 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
       // as "no switch" made `pause` create a SECOND one, which is two flags
       // disagreeing — the exact state the command refuses to create elsewhere.
       // So fall back to the name lookup, and only then call it absent.
-      if (!(await needQueue()).readable) return { readable: false, why: queue.why };
+      if (!(await needQueue()).readable) return { readable: false, why: queue.why, yielded: queue.yielded };
       task = findSwitchByName(queue.tasks);
       if (!task) return { readable: true, switchFound: false, queue };
     } else if (!okOf(out)) {
@@ -168,7 +185,7 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
           + 'deleted. If `npm run clickup -- whoami` works, CLICKUP_PAUSE_TASK is pointing at a task that no longer exists —\n'
           + 'unset it and the switch is found by name in the Loop Queue instead.'
         : '';
-      return { readable: false, why: `reading the switch ticket ${pauseTaskId}: ${whyOf(out)}${hint}` };
+      return { readable: false, why: `reading the switch ticket ${pauseTaskId}: ${whyOf(out)}${hint}`, yielded: yieldedOf(out) };
     } else {
       task = out.json;
     }
@@ -187,7 +204,13 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
   const trail = await pageComments({
     get: async (path) => {
       const out = await safely(call, 'GET', path);
-      return { ok: okOf(out), status: statusOf(out), json: out?.json ?? null, threw: out?.threw, text: out?.text };
+      // The RAW status, not `statusOf`'s number, when it is the reserve's
+      // non-numeric sentinel (task 86bc0w6my). `Number('YIELDED (…)')` is NaN,
+      // and `whyOf` then printed `HTTP ?` — the reserve's own words lost one
+      // layer below the place that was built to print them.
+      const raw = out?.res?.status ?? out?.status;
+      const status = (typeof raw === 'string' && !/^\d+$/.test(raw.trim())) ? raw : statusOf(out);
+      return { ok: okOf(out), status, json: out?.json ?? null, threw: out?.threw, text: out?.text, yielded: out?.yielded };
     },
     taskId: task.id,
   });
@@ -195,10 +218,10 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
     const why = trail.capped
       ? 'the trail did not end within the page budget, so the state record may be beyond it'
       : whyOf(trail.failed);
-    return { readable: false, why: `reading the switch's comments: ${why}` };
+    return { readable: false, why: `reading the switch's comments: ${why}`, yielded: !trail.capped && yieldedOf(trail.failed) };
   }
 
   return { readable: true, switchFound: true, task, comments: trail.comments, queue };
 }
 
-module.exports = { fetchQueue, readSwitch, findSwitchByName, loopNoteOf, whyOf, safely, okOf, statusOf };
+module.exports = { fetchQueue, readSwitch, findSwitchByName, loopNoteOf, whyOf, safely, okOf, statusOf, yieldedOf };
