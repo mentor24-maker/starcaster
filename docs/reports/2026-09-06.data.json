@@ -1,0 +1,2156 @@
+{
+  "repo": "mentor24-maker/starcaster",
+  "window": {
+    "from": "2026-08-31",
+    "to": "2026-09-06",
+    "days": 7
+  },
+  "dataFile": "2026-09-06.data.json",
+  "originFetch": {
+    "ok": true,
+    "reason": null
+  },
+  "figures": {
+    "merges": {
+      "ok": true,
+      "value": 168,
+      "perDay": [
+        {
+          "date": "2026-08-31",
+          "count": 15
+        },
+        {
+          "date": "2026-09-01",
+          "count": 32
+        },
+        {
+          "date": "2026-09-02",
+          "count": 35
+        },
+        {
+          "date": "2026-09-03",
+          "count": 37
+        },
+        {
+          "date": "2026-09-04",
+          "count": 15
+        },
+        {
+          "date": "2026-09-05",
+          "count": 17
+        },
+        {
+          "date": "2026-09-06",
+          "count": 17
+        }
+      ],
+      "notCountedBecauseNotMerged": 0,
+      "couldNotConfirm": 0,
+      "couldNotConfirmReasons": []
+    },
+    "diffstat": {
+      "ok": true,
+      "value": {
+        "filesChanged": 452,
+        "insertions": 110686,
+        "deletions": 2859
+      }
+    },
+    "tests": {
+      "ok": true,
+      "value": {
+        "pass": 3542,
+        "fail": 4
+      }
+    },
+    "ciMedianSeconds": {
+      "ok": true,
+      "value": 96.5,
+      "sampleSize": 964,
+      "partial": true,
+      "limit": 1000
+    },
+    "openPrs": {
+      "ok": true,
+      "value": 9
+    },
+    "stages": {
+      "ok": true,
+      "value": {
+        "needs your input": 2,
+        "queued": 28,
+        "in review": 4,
+        "live": 347,
+        "ready to launch": 6,
+        "building": 1
+      },
+      "total": 388,
+      "closedInWindow": 213
+    },
+    "loopPasses": {
+      "ok": true,
+      "value": {
+        "total": 437,
+        "byLoop": {
+          "/loop-build": 234,
+          "/loop-review": 203
+        }
+      }
+    }
+  },
+  "merges": [
+    {
+      "number": 637,
+      "title": "Hand-run cleanup can mistake a half-built ticket for never-started and misfile it",
+      "date": "2026-09-06",
+      "sha": "8fc7ab680dc1fe951368ce16ab1623002ff819d6",
+      "area": "The pipeline"
+    },
+    {
+      "number": 638,
+      "title": "Blog Manager: edit a post's author and date, and link the editor thumbnail to the post",
+      "date": "2026-09-06",
+      "sha": "60a19a3d320965c3ce200d78736c671780f9d813",
+      "area": "The Builder"
+    },
+    {
+      "number": 635,
+      "title": "Bulk Create still drops the page template — the other create path #614 did not reach",
+      "date": "2026-09-06",
+      "sha": "8e13fc3c876876a1c03f71fe53a8697d66a9fb00",
+      "area": "The Builder"
+    },
+    {
+      "number": 632,
+      "title": "Builder: text that is in the draft does not show in the editor (\"Wut?\"), and a heading's text emptied on save (\"Blog\")",
+      "date": "2026-09-06",
+      "sha": "b316018ede91361e4b570ffbe0e882611fbfab50",
+      "area": "The Builder"
+    },
+    {
+      "number": 599,
+      "title": "Pipeline fixes can't merge overnight — they all wait for Dane to wake up",
+      "date": "2026-09-06",
+      "sha": "9affa3ac47c35c8098869a14642fe36fa59bbeba",
+      "area": "The pipeline"
+    },
+    {
+      "number": 634,
+      "title": "Strip the editor's formatting off a switch command, not just its backticks",
+      "date": "2026-09-06",
+      "sha": "928b6cd2d9fb25b760c42dd6df601db3d99d3dc8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 630,
+      "title": "The /tags sidebar shows placeholder tags and an admin instruction to visitors",
+      "date": "2026-09-06",
+      "sha": "2117105b99d0ecf094747ba3714de31ebda1cab2",
+      "area": "Documentation"
+    },
+    {
+      "number": 618,
+      "title": "Lane A reads its own machine comments as Dane objecting, and cancels a merge he authorized",
+      "date": "2026-09-06",
+      "sha": "57da5ab41637d9eeaab133736e49e66b2da67122",
+      "area": "The pipeline"
+    },
+    {
+      "number": 633,
+      "title": "Restore the merge step's dedup, and escalate on attempts rather than only age",
+      "date": "2026-09-06",
+      "sha": "a51a645ba385dcb8f54ed91cc822e9643f38a9f3",
+      "area": "The pipeline"
+    },
+    {
+      "number": 628,
+      "title": "The public blog feed filters over only the first 100 published posts",
+      "date": "2026-09-06",
+      "sha": "49218192bfb7b0e48ba9f3536b4d485e7b871818",
+      "area": "The Builder"
+    },
+    {
+      "number": 627,
+      "title": "Admin wording and demo data are reaching visitors on the public blog",
+      "date": "2026-09-06",
+      "sha": "213bb447a27f5a5af43f2a8c4c7f8b6e8337076e",
+      "area": "The Builder"
+    },
+    {
+      "number": 626,
+      "title": "NODES Slice D follow-up — doctor:node has no reboot test",
+      "date": "2026-09-06",
+      "sha": "b7285aae90689d0ff405ef029b29ca9e39a0bc76",
+      "area": "The pipeline"
+    },
+    {
+      "number": 631,
+      "title": "The Mini can reach the MacBook now, so the stranded sweep sees both seats",
+      "date": "2026-09-06",
+      "sha": "ec5b52d7ad2a36497cc2b2f4175d3b0662baa6e0",
+      "area": "The pipeline"
+    },
+    {
+      "number": 602,
+      "title": "Builder Pages: bulk-change the template on every page in a filter",
+      "date": "2026-09-06",
+      "sha": "4afd75aae545ec70163bf9a1f3768142799ca5bb",
+      "area": "The pipeline"
+    },
+    {
+      "number": 629,
+      "title": "A Post Feed says \"13\" and renders 9 — the list and its own count disagree",
+      "date": "2026-09-06",
+      "sha": "c250fc07d723ea02b9d9a5d2873ab4c2028db1dd",
+      "area": "The Builder"
+    },
+    {
+      "number": 619,
+      "title": "The reconciler's closure note tells every ticket it closes that '[object Object]' did it",
+      "date": "2026-09-06",
+      "sha": "264a3cc6c22b5187438d7d2453efc356a822d627",
+      "area": "The pipeline"
+    },
+    {
+      "number": 620,
+      "title": "The SQL hook's refusal counter can freeze: read and write disagree on which state file is authoritative",
+      "date": "2026-09-06",
+      "sha": "cfe6bec8172fb7f2fa7ad250d7d082bc4d62c067",
+      "area": "The pipeline"
+    },
+    {
+      "number": 625,
+      "title": "Ship and the relay would report a QUEUED merge as a completed one, so no merge queue can be switched on yet",
+      "date": "2026-09-05",
+      "sha": "2b65682497419235617fae0b7042fa643ceb755a",
+      "area": "The pipeline"
+    },
+    {
+      "number": 624,
+      "title": "The stranded sweep calls a half-built ticket empty, because it only looks for a pull request",
+      "date": "2026-09-05",
+      "sha": "b522c79579b7a3047b6185b21d7f538bdc84d812",
+      "area": "The pipeline"
+    },
+    {
+      "number": 623,
+      "title": "The stranded-ticket sweep must work while the pipeline is running — resume's early exit skips it",
+      "date": "2026-09-05",
+      "sha": "a87837f75e39aab09c6fd14208191ac613232fa0",
+      "area": "The pipeline"
+    },
+    {
+      "number": 621,
+      "title": "A near-miss switch command must say it did not take, instead of matching nothing in silence",
+      "date": "2026-09-05",
+      "sha": "701232856800a04e9b9918dbe67980ac96f8768b",
+      "area": "The pipeline"
+    },
+    {
+      "number": 617,
+      "title": "A ticket whose merge Dane already ordered stays in Ready to launch after the PR merges, holding a build slot",
+      "date": "2026-09-05",
+      "sha": "b0336967896d648261cf0a3a1496441e3bf6a291",
+      "area": "The pipeline"
+    },
+    {
+      "number": 622,
+      "title": "loop-review is pinned at an hourly cadence with work waiting, because the step-down needs two identical readings",
+      "date": "2026-09-05",
+      "sha": "0a4860147573214e71fb131a41cd8ca65ebf1e30",
+      "area": "The pipeline"
+    },
+    {
+      "number": 616,
+      "title": "Under merge pressure a green PR keeps resetting its own CI, so the queue cannot drain",
+      "date": "2026-09-05",
+      "sha": "3d6f939fbd91599d910cc7eb63d2bb72f103a8f4",
+      "area": "The pipeline"
+    },
+    {
+      "number": 613,
+      "title": "check:panels counts the trigger panel but cannot fail on it — reverting the fix it just shipped stays green",
+      "date": "2026-09-05",
+      "sha": "9351ae6473966abbe9623dfaa7297d6114510d4b",
+      "area": "The pipeline"
+    },
+    {
+      "number": 614,
+      "title": "A new page keeps the template you chose — the create save drops it today",
+      "date": "2026-09-05",
+      "sha": "e12d88d6080e31b32826134f276b0c75c9eb1d9c",
+      "area": "Server and data"
+    },
+    {
+      "number": 615,
+      "title": "A main menu item squares its bottom corners while its dropdown is open, so the two read as one shape",
+      "date": "2026-09-05",
+      "sha": "ad6f69d98d152c6c8b52e2c54be7a44730edb790",
+      "area": "The Builder"
+    },
+    {
+      "number": 607,
+      "title": "pipeline resume records no reason, so an unauthorised resume is invisible on the switch ticket",
+      "date": "2026-09-05",
+      "sha": "c361a3f2cb8667f60481839e931ff89ece91efe2",
+      "area": "The pipeline"
+    },
+    {
+      "number": 608,
+      "title": "reconcile cannot see a Queued or Rework ticket at all, so a claimable ticket with an open PR reads as clean",
+      "date": "2026-09-05",
+      "sha": "18ee7f823e5caab53f46962b45f83f5d1cb5c262",
+      "area": "The pipeline"
+    },
+    {
+      "number": 609,
+      "title": "The SQL hand-off hook's safety brake has never worked in a worktree",
+      "date": "2026-09-05",
+      "sha": "7a684296518105c03c5021e4e445165c0f70e6ef",
+      "area": "The pipeline"
+    },
+    {
+      "number": 611,
+      "title": "Consolidate asset_tags into messaging_tags, and flag the tags the client admin creates",
+      "date": "2026-09-05",
+      "sha": "d82a90be4de4265d8b37000c29700d4b658c6fea",
+      "area": "Server and data"
+    },
+    {
+      "number": 612,
+      "title": "Connections 6b/7: the amber card, and a refused connect says why (do not start until 86bbpz1gk is Live)",
+      "date": "2026-09-05",
+      "sha": "e1684b9ea8f4e22bd2d75c2b56792a3579e7ee50",
+      "area": "Server and data"
+    },
+    {
+      "number": 605,
+      "title": "Scheduled jobs yield: reserve ClickUp headroom for the sessions Dane is talking to (do not start until 86bbugcpa is Live)",
+      "date": "2026-09-05",
+      "sha": "87b991a1a47aa9da79c935a161efccc87c143252",
+      "area": "The pipeline"
+    },
+    {
+      "number": 606,
+      "title": "The merge relay repeats CANNOT TELL forever with no bound, so a permanent block looks like a momentary one",
+      "date": "2026-09-05",
+      "sha": "66495af46260639a038ad8dc98970fae44f57c73",
+      "area": "The pipeline"
+    },
+    {
+      "number": 604,
+      "title": "Bound the CANNOT TELL loop: the decision, measured and tested",
+      "date": "2026-09-04",
+      "sha": "03340bba31ab4e055ae9829d1cc6fe9eaaa0452b",
+      "area": "The pipeline"
+    },
+    {
+      "number": 563,
+      "title": "Connections 7/7: X — per-user posting, without touching Dane's own (do not start until 86bbpz1gv is Live)",
+      "date": "2026-09-04",
+      "sha": "4d811f9ed124d3a735c21d1611505a1ce065a481",
+      "area": "Server and data"
+    },
+    {
+      "number": 597,
+      "title": "GitHub does not apply the union driver to mergeability, so a clean branch can sit CONFLICTING forever",
+      "date": "2026-09-04",
+      "sha": "2eb51819d9ed829bd22dae9bd20900a9d28f6a0f",
+      "area": "The pipeline"
+    },
+    {
+      "number": 603,
+      "title": "DOCTRINE 6.23: an ask is a status transition, not a paragraph",
+      "date": "2026-09-04",
+      "sha": "37f055db67b0ae05b7fb89d8f5ae3fafa26d1b32",
+      "area": "Documentation"
+    },
+    {
+      "number": 592,
+      "title": "Migrate pulse, pipeline, review-gate and the forwarder onto the shared ClickUp client (do not start until 86bbugcdb is Live)",
+      "date": "2026-09-04",
+      "sha": "538f14934e704c583daa63960a36b9b8583b65d8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 601,
+      "title": "CI listens for merge_group, so a merge queue can be switched on safely",
+      "date": "2026-09-04",
+      "sha": "4bc628be3cc05d5f012c06f1ef5b4d6e1c3daa64",
+      "area": "The pipeline"
+    },
+    {
+      "number": 600,
+      "title": "A ticket waiting on Dane's merge no longer holds a build slot",
+      "date": "2026-09-04",
+      "sha": "dc100b1b00626dfc363646111360bad31d82fc20",
+      "area": "The pipeline"
+    },
+    {
+      "number": 598,
+      "title": "Builder Pages: the Template column tells the truth (and the filter dropdown stops repeating itself)",
+      "date": "2026-09-04",
+      "sha": "9493ad8fa4ed82dcbbca7328f1b2a4e2f46e590f",
+      "area": "Styling"
+    },
+    {
+      "number": 596,
+      "title": "A job that has not succeeded in an hour is audible — 16 hours of a dead merge lane was nearly silent",
+      "date": "2026-09-04",
+      "sha": "2e3317d601e21faabd214f83ce0d63d6ecefd1b7",
+      "area": "The pipeline"
+    },
+    {
+      "number": 595,
+      "title": "A scheduled pass-reconcile revokes a LIVE build claim, so two loops can build one ticket",
+      "date": "2026-09-04",
+      "sha": "273c6e356e022278e5ecee8478104e25ad3ba578",
+      "area": "The pipeline"
+    },
+    {
+      "number": 586,
+      "title": "Three watchdogs saw the stuck ticket and none of them reached Dane",
+      "date": "2026-09-04",
+      "sha": "c65f9cb3ad112633ff04f3b99328d868d81a12b6",
+      "area": "The pipeline"
+    },
+    {
+      "number": 594,
+      "title": "Write down the three rules the 9/3 pipeline-repair session produced",
+      "date": "2026-09-04",
+      "sha": "0406aef77efacf5f8fef80a8388aa1ca30bc1f7d",
+      "area": "Documentation"
+    },
+    {
+      "number": 585,
+      "title": "A terminal merge refusal must stop saying the approval is still standing",
+      "date": "2026-09-04",
+      "sha": "020e28ac8a6bc7543a450dbc005f9a59515464c6",
+      "area": "The pipeline"
+    },
+    {
+      "number": 593,
+      "title": "reconcile closes a ticket on a PR that belongs to a different ticket, silently",
+      "date": "2026-09-04",
+      "sha": "b4ead5b04f2dcd383bd3fec782f6c7516982a014",
+      "area": "The pipeline"
+    },
+    {
+      "number": 591,
+      "title": "The spec skill tells Dane to start a build loop that has run unattended since 9/2",
+      "date": "2026-09-04",
+      "sha": "796dd09dca28e065217fb4f026c43ade286fd116",
+      "area": "The pipeline"
+    },
+    {
+      "number": 584,
+      "title": "A check that could not run must not exit 0",
+      "date": "2026-09-03",
+      "sha": "6c4651dd2d9fd5514b7078ed53bd19ac11148756",
+      "area": "The pipeline"
+    },
+    {
+      "number": 590,
+      "title": "One door to ClickUp: a shared client that knows the remaining budget",
+      "date": "2026-09-03",
+      "sha": "3e646ade16ee71cf6dab80b10a60ca1dafd7816c",
+      "area": "The pipeline"
+    },
+    {
+      "number": 589,
+      "title": "The merge relay believes one stale CONFLICTING reading, so a green PR stops dead with a false reason",
+      "date": "2026-09-03",
+      "sha": "c93db768509e8e5d93ecf984bcbcd1e69c1ff25c",
+      "area": "The pipeline"
+    },
+    {
+      "number": 588,
+      "title": "The auto-merge latch names what it could not verify, and says it is still latched",
+      "date": "2026-09-03",
+      "sha": "d92ed632f99c37945ab65d85393c114d6ff563a5",
+      "area": "The pipeline"
+    },
+    {
+      "number": 587,
+      "title": "bus-relay re-reads only tickets touched since its last pass",
+      "date": "2026-09-03",
+      "sha": "ad13a78213c640e80607443cda06473a2a8ae2e7",
+      "area": "The pipeline"
+    },
+    {
+      "number": 558,
+      "title": "Docs: overlay screens, and the four parts a Builder setting has to have",
+      "date": "2026-09-03",
+      "sha": "8017d0791173726969eda89cb907db7164f4e5ce",
+      "area": "Documentation"
+    },
+    {
+      "number": 583,
+      "title": "The merge relay waits 180s for CI, which is shorter than CI — under queue pressure no PR can ever merge",
+      "date": "2026-09-03",
+      "sha": "c0e4e5b752346eb55a8b2269b7199f64f7371eab",
+      "area": "The pipeline"
+    },
+    {
+      "number": 567,
+      "title": "require_sql_handoff's three-refusal stand-down never engages in a worktree",
+      "date": "2026-09-03",
+      "sha": "d64473a23b28ed42c6aee70d83b040119614cb3a",
+      "area": "The pipeline"
+    },
+    {
+      "number": 582,
+      "title": "Capture the 9/3 blog-visibility findings in doctrine and CLAUDE.md",
+      "date": "2026-09-03",
+      "sha": "7deb448924009bf2bf9ad3f68701221f7120c002",
+      "area": "Documentation"
+    },
+    {
+      "number": 581,
+      "title": "Doctrine 5.27 named the wrong default site",
+      "date": "2026-09-03",
+      "sha": "9b0056e2d1867cddd4c41d88fc9ff29f00767d6c",
+      "area": "The Builder"
+    },
+    {
+      "number": 579,
+      "title": "Write down the per-copy/per-page rule the Save & Publish work produced",
+      "date": "2026-09-03",
+      "sha": "91cac5dd6240c308006676260b60deee8d576f41",
+      "area": "Documentation"
+    },
+    {
+      "number": 580,
+      "title": "Stop printing builder instructions to visitors on published pages",
+      "date": "2026-09-03",
+      "sha": "1bef63a803e4628dece54fae9f061662773d2290",
+      "area": "The pipeline"
+    },
+    {
+      "number": 571,
+      "title": "Let a Code module's map or embed show right away instead of behind a \"Load Chart\" click",
+      "date": "2026-09-03",
+      "sha": "cf380f3cc883d43ad56aac1c02e210f66239ba9b",
+      "area": "The Builder"
+    },
+    {
+      "number": 578,
+      "title": "A Post Feed can be set to one filter — tag, category or author — and says what it matched",
+      "date": "2026-09-03",
+      "sha": "6432a8b8d998824a1457b1093465b81532fff8e4",
+      "area": "The Builder"
+    },
+    {
+      "number": 577,
+      "title": "The tag manager's post count now says how many are actually live",
+      "date": "2026-09-03",
+      "sha": "5207aba360060edc26ff8524a6bd47340de4bf55",
+      "area": "The Builder"
+    },
+    {
+      "number": 576,
+      "title": "You Might Also Like: say why it found nothing instead of vanishing",
+      "date": "2026-09-03",
+      "sha": "fa5a8ffa653c7956e368019c29820a63b3e0510f",
+      "area": "The Builder"
+    },
+    {
+      "number": 575,
+      "title": "Saving a Saved Section offers to publish the pages it rewrites",
+      "date": "2026-09-03",
+      "sha": "3c245de1dd5e48ef86ea2f879f15e22c72e7e972",
+      "area": "The Builder"
+    },
+    {
+      "number": 574,
+      "title": "DOCTRINE 5.29 cited a ticket id that does not exist",
+      "date": "2026-09-03",
+      "sha": "db1b6155a5ed9298ef72d140a048a0764f43eb17",
+      "area": "Documentation"
+    },
+    {
+      "number": 573,
+      "title": "Write down the four traps and two UI rules the blog links work produced",
+      "date": "2026-09-03",
+      "sha": "3ebe729637a9611a429b7d7a6683dba040eee001",
+      "area": "Documentation"
+    },
+    {
+      "number": 572,
+      "title": "A Post Feed opened at ?tag= shows which tag it filtered on, instead of \"All Tags\" over an empty page",
+      "date": "2026-09-03",
+      "sha": "8b6107417743b495c70ac65fce8b1a3073cd38f6",
+      "area": "The Builder"
+    },
+    {
+      "number": 570,
+      "title": "A relay pass that runs out of budget says which list it never reached, instead of listing three tickets",
+      "date": "2026-09-03",
+      "sha": "86d5da85de055ec1835510231d0902ffc01d508d",
+      "area": "The pipeline"
+    },
+    {
+      "number": 569,
+      "title": "A ClickUp 429 waits for the reset window and retries, instead of killing the pass",
+      "date": "2026-09-03",
+      "sha": "3cc8740c1a8fa2715d06bfe91178c392e7169a9d",
+      "area": "The pipeline"
+    },
+    {
+      "number": 568,
+      "title": "Relate posts from the post editor — Categories, Tags and Related Posts in one collapsible container",
+      "date": "2026-09-03",
+      "sha": "2b460efb5bac0c18eeeaaf0cb5471795c38122ba",
+      "area": "The Builder"
+    },
+    {
+      "number": 566,
+      "title": "bus-relay sweeps the Loop Queue first, so a spent budget cannot starve merging",
+      "date": "2026-09-03",
+      "sha": "0c6f096b36377445ac13c4f905e6d0c69d529177",
+      "area": "The pipeline"
+    },
+    {
+      "number": 565,
+      "title": "Tag manager: click a tag's post count to see and open those posts",
+      "date": "2026-09-03",
+      "sha": "af52980802c9517cd17dfb841d21762f91e507df",
+      "area": "The Builder"
+    },
+    {
+      "number": 564,
+      "title": "The tag cloud shows the blog's real tags, and demo tags stop reaching visitors",
+      "date": "2026-09-03",
+      "sha": "959d49e8d0608efefc943b8b02a8775e65f8a9bc",
+      "area": "The Builder"
+    },
+    {
+      "number": 562,
+      "title": "Backfill the tags onto the posts imported before the importer read them",
+      "date": "2026-09-03",
+      "sha": "95daa8cb00a665ca331ab07e157d2a82fd4f1000",
+      "area": "The pipeline"
+    },
+    {
+      "number": 449,
+      "title": "Panel sweep 8/15: the image and effect panels",
+      "date": "2026-09-03",
+      "sha": "757aa550ab82ba10149bb60ed7d909002eb04c3a",
+      "area": "Documentation"
+    },
+    {
+      "number": 561,
+      "title": "Blog import: read the WordPress tags the scrape kept, and stop leaving them in the body",
+      "date": "2026-09-03",
+      "sha": "a0700b8ee65fc6390f324f00ee6497b259ed124c",
+      "area": "Server and data"
+    },
+    {
+      "number": 557,
+      "title": "Builder: overlay screen on individual cells, not just the whole row",
+      "date": "2026-09-03",
+      "sha": "796ae8c41435dc08cbca1558d952dde4f81268da",
+      "area": "The Builder"
+    },
+    {
+      "number": 559,
+      "title": "A real Tag manager, in the Category manager's format, with nothing truncated",
+      "date": "2026-09-03",
+      "sha": "d0bfc2137c1b5dc1dbd54a99fcf61b8119904a65",
+      "area": "The Builder"
+    },
+    {
+      "number": 556,
+      "title": "Connections 6/7: staying connected — refresh, verify, the amber card, a real revoke (do not start until 86bbpz1gd is Live)",
+      "date": "2026-09-03",
+      "sha": "90165de7b227bcbed784e51b96f93c9031401650",
+      "area": "Server and data"
+    },
+    {
+      "number": 553,
+      "title": "Builder: overlay blend mode — tint a photo instead of fogging it",
+      "date": "2026-09-03",
+      "sha": "9563d9d605cee5f3c1159a23fc45efbbb18ca616",
+      "area": "The Builder"
+    },
+    {
+      "number": 447,
+      "title": "Panel sweep 6/15: Tractor Nav",
+      "date": "2026-09-03",
+      "sha": "ca09dd1616504973ad55efcd5130db81ecf1ca00",
+      "area": "The Builder"
+    },
+    {
+      "number": 555,
+      "title": "A blog links manager: categories, tags, and hand-picked related articles",
+      "date": "2026-09-03",
+      "sha": "01e7f7e86422e0dacda8bf20184758795557cd1b",
+      "area": "The Builder"
+    },
+    {
+      "number": 554,
+      "title": "Tag Cloud: a Title, a panel that matches the others, and tags that actually link",
+      "date": "2026-09-03",
+      "sha": "36fc7d616efc07b6e9768f77e7e09444aa657356",
+      "area": "The Builder"
+    },
+    {
+      "number": 535,
+      "title": "Throughput alarm: six ways the new stall detector can still fail quietly",
+      "date": "2026-09-03",
+      "sha": "1b706173b5ecf87dc6d6770da6f3064231217f43",
+      "area": "The pipeline"
+    },
+    {
+      "number": 545,
+      "title": "Connections 5/7: Instagram, and the two checks that stop an unhelpful Meta error (do not start until 86bbpz1gd is Live)",
+      "date": "2026-09-02",
+      "sha": "1ea903fac5ce7285ac424963cc9e869e4a8c5603",
+      "area": "Server and data"
+    },
+    {
+      "number": 552,
+      "title": "A merge asks the pause switch, and ship states the review gate's verdict",
+      "date": "2026-09-02",
+      "sha": "15fd2f5a86ac8403fc833af65a8678f42639312d",
+      "area": "The pipeline"
+    },
+    {
+      "number": 551,
+      "title": "Close-out docs for the blog import and the slug repair",
+      "date": "2026-09-02",
+      "sha": "c648a0d57b1b57f3874b107c8901906b9efe0520",
+      "area": "Documentation"
+    },
+    {
+      "number": 550,
+      "title": "The UI rules audit records what the Card Manager work actually found",
+      "date": "2026-09-02",
+      "sha": "c5ec14c738d5f2e7056066fee649d3f6e7b6e330",
+      "area": "Documentation"
+    },
+    {
+      "number": 549,
+      "title": "Blog import: slugs did not populate, and the Slug field needs normalizing",
+      "date": "2026-09-02",
+      "sha": "3915f1787de0cdc00ed4eab2aee0db40ab39e709",
+      "area": "The pipeline"
+    },
+    {
+      "number": 548,
+      "title": "Premise discipline: a defect cites its mechanism; a build verifies first",
+      "date": "2026-09-02",
+      "sha": "31061aa3e386e5acace3a6ac4c902fabb528fec3",
+      "area": "The pipeline"
+    },
+    {
+      "number": 546,
+      "title": "Write down the other two Card Manager lessons: a condition in the wrong terms, and splitting a preset safely",
+      "date": "2026-09-02",
+      "sha": "c3d30ae42bdfad68cbec4708e6f8db884a5f2a52",
+      "area": "Documentation"
+    },
+    {
+      "number": 547,
+      "title": "One board: the watchdogs composed into a single state-of-the-line screen",
+      "date": "2026-09-02",
+      "sha": "bd077edcba0ad4343de1802524378cfebd673a16",
+      "area": "The pipeline"
+    },
+    {
+      "number": 540,
+      "title": "Builder: gradient direction is hardcoded to 135 degrees — add an angle control",
+      "date": "2026-09-02",
+      "sha": "d3590e3d7ef8fa29578b829dfb762ed7eef66282",
+      "area": "The Builder"
+    },
+    {
+      "number": 526,
+      "title": "Connections 4/7: the Connections screen — four card states, generated from the catalogue (do not start until 86bbpz1ed is Live)",
+      "date": "2026-09-02",
+      "sha": "56fa7385396cf99d35050022c0d561cf5b67a2fa",
+      "area": "Styling"
+    },
+    {
+      "number": 544,
+      "title": "One scheduled repair: reachable, throttled, and it knows what it may not touch",
+      "date": "2026-09-02",
+      "sha": "fff7eb4ed70277d6276d422180ba253f9df67dc1",
+      "area": "The pipeline"
+    },
+    {
+      "number": 543,
+      "title": "The blog card's border is settable, and its image sits flush with the top",
+      "date": "2026-09-02",
+      "sha": "b94814163ebd26c71825f2e395d4be67d8d2fa5a",
+      "area": "The pipeline"
+    },
+    {
+      "number": 542,
+      "title": "One preflight command: the gate sequence moves from skill prose into code",
+      "date": "2026-09-02",
+      "sha": "22387bc3e8cbcf0d01855aec710c5a6bf2d2e4c3",
+      "area": "The pipeline"
+    },
+    {
+      "number": 541,
+      "title": "Blog Manager: bulk-import discarded pages into blog posts",
+      "date": "2026-09-02",
+      "sha": "5adc42f9b7f8e282db69aad7e678d7ab63b0c3a7",
+      "area": "Server and data"
+    },
+    {
+      "number": 539,
+      "title": "One status taxonomy: four private copies become views of loopStatuses",
+      "date": "2026-09-02",
+      "sha": "89a1a8f0ee6b775c498fe2488f06d63c500ae50c",
+      "area": "The pipeline"
+    },
+    {
+      "number": 538,
+      "title": "Write down what the Card Manager work taught: a fake upsert, and verifying on the wrong surface",
+      "date": "2026-09-02",
+      "sha": "4c6cf5912019d80f23fdd394bfa87a9e39ddad39",
+      "area": "Documentation"
+    },
+    {
+      "number": 537,
+      "title": "Commit the engine: the loop runner joins the repo, beats, pulls, and",
+      "date": "2026-09-02",
+      "sha": "960a9e2b4167da82b1e221c6228fbda799dac686",
+      "area": "The pipeline"
+    },
+    {
+      "number": 536,
+      "title": "Hand-off: bulk-import the discarded Delray blog posts into blog_posts",
+      "date": "2026-09-02",
+      "sha": "155eadae80330424abf857b4ced90957b406633d",
+      "area": "Documentation"
+    },
+    {
+      "number": 534,
+      "title": "Doctrine: three lessons from the stuck-ticket morning",
+      "date": "2026-09-02",
+      "sha": "366c51d243bdb0cd824a330d7cbde04da0abee98",
+      "area": "Documentation"
+    },
+    {
+      "number": 533,
+      "title": "Link the card's featured image to its post",
+      "date": "2026-09-02",
+      "sha": "67a6e06a1a1c1de0085bd731bfdca485e8d3ad58",
+      "area": "The pipeline"
+    },
+    {
+      "number": 532,
+      "title": "A published page is served by address but filed by page id — an orphan snapshot outranks the real page",
+      "date": "2026-09-02",
+      "sha": "f688110933d96dc7417215a6869332c4e66a92f0",
+      "area": "Server and data"
+    },
+    {
+      "number": 524,
+      "title": "The pulse has never run on a schedule — it was built to be scheduled and nothing ever fires it",
+      "date": "2026-09-02",
+      "sha": "a051aecd29d257117b6cce3c713bfda75232f9e6",
+      "area": "The pipeline"
+    },
+    {
+      "number": 531,
+      "title": "throughput answers the question it asks in its own headline",
+      "date": "2026-09-02",
+      "sha": "6563d17ed3bc49f45c584767d06afee9dabaf9c5",
+      "area": "The pipeline"
+    },
+    {
+      "number": 530,
+      "title": "A blocked queue is not an idle queue — the interval line said it was",
+      "date": "2026-09-02",
+      "sha": "b18316d026f5a644ed54c594bed6d56b90a9c8e8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 529,
+      "title": "A build pass may not end with its ticket still in Building — a one-shot session cannot keep a promise to come back",
+      "date": "2026-09-02",
+      "sha": "6f69857fb15dee10d73f678a606bb290bb3cefca",
+      "area": "The pipeline"
+    },
+    {
+      "number": 528,
+      "title": "A stranded build must not count against the work-in-progress cap",
+      "date": "2026-09-02",
+      "sha": "37feecd9e6bc9d0dd7bf67be6df8a16b4b9e1b33",
+      "area": "The pipeline"
+    },
+    {
+      "number": 527,
+      "title": "The stranded-build sweep is unreachable while the pipeline is running — the repair status recommends cannot run",
+      "date": "2026-09-02",
+      "sha": "24416d1d1365e4085dd30034114a990e20c3cab8",
+      "area": "The pipeline"
+    },
+    {
+      "number": 499,
+      "title": "Tripwire: a Stop hook that refuses to end a turn which hands the operator a command CC could run",
+      "date": "2026-09-02",
+      "sha": "611d0ca9bae373678aa5a7427a88f9ae4cb28ffd",
+      "area": "The pipeline"
+    },
+    {
+      "number": 525,
+      "title": "The merge refusal names the wrong reason — \"a required review or check is missing\" on a PR with green checks and a conflict",
+      "date": "2026-09-02",
+      "sha": "72c2ee70fd3429298ffedbe55dddf690a8f2fa0b",
+      "area": "The pipeline"
+    },
+    {
+      "number": 523,
+      "title": "The Card Manager's designer renders where the operator opens it",
+      "date": "2026-09-02",
+      "sha": "33bee19ed72a2ee079961df2c3db8d790295b082",
+      "area": "The Builder"
+    },
+    {
+      "number": 446,
+      "title": "Carousel items: one labelled block each, on a lattice the check can see",
+      "date": "2026-09-02",
+      "sha": "59c9461429af8e6712da98196ecf8cc010717e11",
+      "area": "The Builder"
+    },
+    {
+      "number": 522,
+      "title": "Featured-image border, shadow and placement controls, and a Card Manager grouped to the standard",
+      "date": "2026-09-02",
+      "sha": "a47e15768d381d18c666348e17943b3d22b2f25f",
+      "area": "The Builder"
+    },
+    {
+      "number": 521,
+      "title": "Write down what the Media Manager work produced, and two findings from it",
+      "date": "2026-09-02",
+      "sha": "471d578d33b7c41581bd2a83f5de26244b7575d1",
+      "area": "Documentation"
+    },
+    {
+      "number": 520,
+      "title": "\"Could not resolve host\" after enabling Funnel has two causes, not one",
+      "date": "2026-09-02",
+      "sha": "0e79ed00881c4eb76c113665cd4294be71eff311",
+      "area": "Elsewhere"
+    },
+    {
+      "number": 519,
+      "title": "Write down the claim collision, and correct two lines that had gone false",
+      "date": "2026-09-02",
+      "sha": "9f4e3775c4aafb94a8bc687bf6015576a3a41469",
+      "area": "Documentation"
+    },
+    {
+      "number": 518,
+      "title": "A reported merge conflict is a claim to verify, not an instruction to start editing",
+      "date": "2026-09-01",
+      "sha": "c73f81dafc00e92cba568b6ce7e5d0492de1400a",
+      "area": "Documentation"
+    },
+    {
+      "number": 517,
+      "title": "The worker's deploy guide describes the deployment that actually happened",
+      "date": "2026-09-01",
+      "sha": "f1b31d7d5fd00af96b78313501fcce668749a4de",
+      "area": "Elsewhere"
+    },
+    {
+      "number": 494,
+      "title": "A ticket stuck at Ready to launch says so, and never blames Dane for a red build",
+      "date": "2026-09-01",
+      "sha": "8f7a4303726d138c2f3595752c4564d9fb0a2f01",
+      "area": "The pipeline"
+    },
+    {
+      "number": 513,
+      "title": "The resume summary says what happened to each swept ticket, not one kind's story",
+      "date": "2026-09-01",
+      "sha": "750ee8330bc9e3ee3ad06c22984a8fa75c135ea0",
+      "area": "The pipeline"
+    },
+    {
+      "number": 516,
+      "title": "Write down what the code-block outage taught",
+      "date": "2026-09-01",
+      "sha": "b48fc965ff55c28583c27442eaf3737c98e07675",
+      "area": "Documentation"
+    },
+    {
+      "number": 419,
+      "title": "Acquire YouTube 3/4: the yt-dlp media worker service (code only, no deploy)",
+      "date": "2026-09-01",
+      "sha": "9960a059515918b161aef6c4722fd6b4b5e93d49",
+      "area": "Elsewhere"
+    },
+    {
+      "number": 514,
+      "title": "A pull request must carry its ticket's name, so the two lists can be read side by side",
+      "date": "2026-09-01",
+      "sha": "ca20e17b8f7565e1cea174c6d5b93f740a4ed8c5",
+      "area": "The pipeline"
+    },
+    {
+      "number": 515,
+      "title": "The editor's formatting is not part of what Dane said",
+      "date": "2026-09-01",
+      "sha": "3d821bd7e78e30143ad3f1b4f05749db157827e4",
+      "area": "The pipeline"
+    },
+    {
+      "number": 503,
+      "title": "A clean merge is not agreement — doctrine §6.11",
+      "date": "2026-09-01",
+      "sha": "4aec6ea6ee80c8dfe2b4237c03aacc273e432dc0",
+      "area": "Documentation"
+    },
+    {
+      "number": 512,
+      "title": "The copies table names the identity, not just the variable",
+      "date": "2026-09-01",
+      "sha": "40ceabdd9a261d2130d7b5161cae5cc0dbe9d835",
+      "area": "Documentation"
+    },
+    {
+      "number": 511,
+      "title": "Media Manager: filter the gallery by name, aspect, tag and category",
+      "date": "2026-09-01",
+      "sha": "cc937716dd87da644858781782e2d2df47703352",
+      "area": "The Builder"
+    },
+    {
+      "number": 508,
+      "title": "One gh argv builder, so --repo cannot be dropped quietly",
+      "date": "2026-09-01",
+      "sha": "78eaf9edf172ff008da8d59eec000b7d3b4d6118",
+      "area": "The pipeline"
+    },
+    {
+      "number": 510,
+      "title": "Media Manager: tag any file, from a project tag list you can add to",
+      "date": "2026-09-01",
+      "sha": "6ae5a58e8861ba3bcbc51db26a49378ab4faa8ec",
+      "area": "The Builder"
+    },
+    {
+      "number": 509,
+      "title": "Media Manager: the Content description never rendered, and Rename never saved",
+      "date": "2026-09-01",
+      "sha": "79b5f6867fb5aa416e43b4c9b3c9843502a6ffac",
+      "area": "The Builder"
+    },
+    {
+      "number": 507,
+      "title": "The ask card is posted as blocks, and was going out unmarked",
+      "date": "2026-09-01",
+      "sha": "e084313ab21b90765c69855ddced3a3d3840933c",
+      "area": "The pipeline"
+    },
+    {
+      "number": 506,
+      "title": "Media Manager 5/5: the Media Manager module a tenant admin uses to upload and browse media",
+      "date": "2026-09-01",
+      "sha": "95ff7989a6f93335131179ca9bbacb7c0ce7bf39",
+      "area": "The Builder"
+    },
+    {
+      "number": 505,
+      "title": "Thread discipline: a session may hold more than one topic",
+      "date": "2026-09-01",
+      "sha": "200b680fc25cd1a8bf44215588159558c772ae66",
+      "area": "Documentation"
+    },
+    {
+      "number": 504,
+      "title": "Media Manager 4/5: a tenant admin may manage their own project's media, and only their own",
+      "date": "2026-09-01",
+      "sha": "d575764df33b286936b0e02a2377c3f96c6e759e",
+      "area": "Server and data"
+    },
+    {
+      "number": 502,
+      "title": "Media Manager 3/3: mark and filter media added through the Admin Media Manager",
+      "date": "2026-09-01",
+      "sha": "fbd313ef4a24e6e4539f90fd4d492d58551ca219",
+      "area": "The Builder"
+    },
+    {
+      "number": 501,
+      "title": "Media Manager 2/3: the bulk uploader offers Video and then refuses to accept one",
+      "date": "2026-09-01",
+      "sha": "287fae0ba926488bffaf33d9003a37d018e56b25",
+      "area": "The admin app"
+    },
+    {
+      "number": 500,
+      "title": "Media Manager 1/3: mirror (flip) in the asset image editor",
+      "date": "2026-09-01",
+      "sha": "5628c80f963a5aa4965fcc5fd3968180c47b30fc",
+      "area": "The admin app"
+    },
+    {
+      "number": 498,
+      "title": "Event Calendar 3/3: the event's own page",
+      "date": "2026-09-01",
+      "sha": "58f468c73b9fe70c614724d7a9f790c40466fd29",
+      "area": "The Builder"
+    },
+    {
+      "number": 497,
+      "title": "Event Calendar 2/3: the calendar visitors see",
+      "date": "2026-09-01",
+      "sha": "84546be7d9dea7defe86f3aaa168f1a526f8bc6a",
+      "area": "The Builder"
+    },
+    {
+      "number": 496,
+      "title": "Event Calendar 1/3: the admin module that manages a project's events",
+      "date": "2026-09-01",
+      "sha": "d57ead724041e585249a15582d29cc144e225459",
+      "area": "The Builder"
+    },
+    {
+      "number": 495,
+      "title": "Doctrine 2.7: every time quoted to the operator is Mountain time, never UTC",
+      "date": "2026-09-01",
+      "sha": "0b5c07ecd09f2e6b6620ffb8aecdf7306961c1cb",
+      "area": "Documentation"
+    },
+    {
+      "number": 487,
+      "title": "A lost push race is filed as a merge conflict, while the same pass promises it will self-heal",
+      "date": "2026-09-01",
+      "sha": "333d60930a0e23172df3c1f6ec1f5ae9e95e5337",
+      "area": "The pipeline"
+    },
+    {
+      "number": 489,
+      "title": "Rework: give send-backs a status of their own, drained before Queued",
+      "date": "2026-09-01",
+      "sha": "8144e30b50f282d922925136fa981a8a0e41c96d",
+      "area": "The pipeline"
+    },
+    {
+      "number": 493,
+      "title": "A machine that cannot update itself now says so on the bus, and names the reason",
+      "date": "2026-09-01",
+      "sha": "0c7a6f87e400f3eed9d416eedcae155a7e341033",
+      "area": "The pipeline"
+    },
+    {
+      "number": 490,
+      "title": "Connections 3/7: a project's own connection wins over the global keys",
+      "date": "2026-09-01",
+      "sha": "f894529fc5aa77811bd4601ad9474ddb170595d4",
+      "area": "Server and data"
+    },
+    {
+      "number": 492,
+      "title": "The merge gate stops reading its own operator card as the review verdict",
+      "date": "2026-09-01",
+      "sha": "7c844b59d41f02c6fa5226e20a6b3fbfb4413de7",
+      "area": "The pipeline"
+    },
+    {
+      "number": 454,
+      "title": "A saved section has one name, and renaming it makes that name stick",
+      "date": "2026-09-01",
+      "sha": "63a93b72e70b0ecc991a9d7cf8c08d25aea3b3d2",
+      "area": "The Builder"
+    },
+    {
+      "number": 491,
+      "title": "A merge that fuses two statements must fail before it reaches main: parse scripts/ at pre-commit",
+      "date": "2026-09-01",
+      "sha": "802ffae678e4a671a05b8989e2df2abe3e9abe91",
+      "area": "The pipeline"
+    },
+    {
+      "number": 480,
+      "title": "Weekly figures for 2026-08-24 to 2026-08-30",
+      "date": "2026-08-31",
+      "sha": "535c85e055690f1a5dfde9972982d32e5368841d",
+      "area": "Documentation"
+    },
+    {
+      "number": 488,
+      "title": "A loop that runs but ships nothing must say so — throughput, not liveness",
+      "date": "2026-08-31",
+      "sha": "9807175756da75ce980556d06035ce35333d696f",
+      "area": "The pipeline"
+    },
+    {
+      "number": 484,
+      "title": "`ship` writes the PR trail itself, so the hand lane is not blocked by the gate",
+      "date": "2026-08-31",
+      "sha": "9195603ef5ef605408924f260dab338714a20bb7",
+      "area": "The pipeline"
+    },
+    {
+      "number": 485,
+      "title": "Doctrine 5.17: the same capture also disables background-attachment: fixed",
+      "date": "2026-08-31",
+      "sha": "7a23d61d643e802844b800d3366aeaf28099a135",
+      "area": "Documentation"
+    },
+    {
+      "number": 471,
+      "title": "Connections 2/7: the adapter contract, proven twice",
+      "date": "2026-08-31",
+      "sha": "0b41b7c6de2b1de084e50f719b795a3e135a1d0b",
+      "area": "Server and data"
+    },
+    {
+      "number": 481,
+      "title": "Builder: parallax — a background image or video that drifts slower than the page",
+      "date": "2026-08-31",
+      "sha": "fb4ee8443dfda403d9b8954c585a9664845c64e9",
+      "area": "The Builder"
+    },
+    {
+      "number": 483,
+      "title": "Loop doc: record the morning the two cap readings disagreed",
+      "date": "2026-08-31",
+      "sha": "f89fda9d175cca87cfebe5bec2c91d6ad5028184",
+      "area": "The pipeline"
+    },
+    {
+      "number": 451,
+      "title": "Put the CRM Form panel on the lattice it was never measured against",
+      "date": "2026-08-31",
+      "sha": "945bf0e90020eb18bf225926e0b4398a5d6c3fb2",
+      "area": "The Builder"
+    },
+    {
+      "number": 482,
+      "title": "Builder: put the Overlay Screen editor into the React section panel",
+      "date": "2026-08-31",
+      "sha": "c335921a02a82c6d6c534044128becfebf57ea65",
+      "area": "The Builder"
+    },
+    {
+      "number": 437,
+      "title": "Weekly report: generate the figures on a schedule, leave the writing to a person",
+      "date": "2026-08-31",
+      "sha": "84ed6f4ab1062103e9bfb43f81b4c5cfce79d7d7",
+      "area": "The pipeline"
+    },
+    {
+      "number": 479,
+      "title": "Docs: video backgrounds, and the two check gaps the work exposed",
+      "date": "2026-08-31",
+      "sha": "d9a0c5c4053b8d81b54a5c6cd33cb598902a5b8f",
+      "area": "Documentation"
+    },
+    {
+      "number": 478,
+      "title": "check:render can watch over time, because the crossfade contracts could not fail",
+      "date": "2026-08-31",
+      "sha": "3744e4d2894b135b924054ee852f1a70e97f3cb8",
+      "area": "The Builder"
+    },
+    {
+      "number": 477,
+      "title": "Builder: the video pickers asked for a category no asset has, so they emptied",
+      "date": "2026-08-31",
+      "sha": "a5531fe7a063d85513c46c251b69c1480bfab2c0",
+      "area": "The Builder"
+    },
+    {
+      "number": 476,
+      "title": "Builder: rebuild the Video panel on setting rows, and make check:panels see it",
+      "date": "2026-08-31",
+      "sha": "c7e231aaa61b4dc5d4dbccb3b327a37d69d1d8eb",
+      "area": "The Builder"
+    },
+    {
+      "number": 475,
+      "title": "Builder: the video background layer — a real video behind section rows",
+      "date": "2026-08-31",
+      "sha": "3aa62d95bea1ea3b5d8a0022438d26fe48dfabf5",
+      "area": "The Builder"
+    }
+  ],
+  "groups": [
+    {
+      "area": "The Builder",
+      "entries": [
+        {
+          "number": 638,
+          "title": "Blog Manager: edit a post's author and date, and link the editor thumbnail to the post",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 635,
+          "title": "Bulk Create still drops the page template — the other create path #614 did not reach",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 632,
+          "title": "Builder: text that is in the draft does not show in the editor (\"Wut?\"), and a heading's text emptied on save (\"Blog\")",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 628,
+          "title": "The public blog feed filters over only the first 100 published posts",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 627,
+          "title": "Admin wording and demo data are reaching visitors on the public blog",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 629,
+          "title": "A Post Feed says \"13\" and renders 9 — the list and its own count disagree",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 615,
+          "title": "A main menu item squares its bottom corners while its dropdown is open, so the two read as one shape",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 581,
+          "title": "Doctrine 5.27 named the wrong default site",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 571,
+          "title": "Let a Code module's map or embed show right away instead of behind a \"Load Chart\" click",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 578,
+          "title": "A Post Feed can be set to one filter — tag, category or author — and says what it matched",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 577,
+          "title": "The tag manager's post count now says how many are actually live",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 576,
+          "title": "You Might Also Like: say why it found nothing instead of vanishing",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 575,
+          "title": "Saving a Saved Section offers to publish the pages it rewrites",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 572,
+          "title": "A Post Feed opened at ?tag= shows which tag it filtered on, instead of \"All Tags\" over an empty page",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 568,
+          "title": "Relate posts from the post editor — Categories, Tags and Related Posts in one collapsible container",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 565,
+          "title": "Tag manager: click a tag's post count to see and open those posts",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 564,
+          "title": "The tag cloud shows the blog's real tags, and demo tags stop reaching visitors",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 557,
+          "title": "Builder: overlay screen on individual cells, not just the whole row",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 559,
+          "title": "A real Tag manager, in the Category manager's format, with nothing truncated",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 553,
+          "title": "Builder: overlay blend mode — tint a photo instead of fogging it",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 447,
+          "title": "Panel sweep 6/15: Tractor Nav",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 555,
+          "title": "A blog links manager: categories, tags, and hand-picked related articles",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 554,
+          "title": "Tag Cloud: a Title, a panel that matches the others, and tags that actually link",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 540,
+          "title": "Builder: gradient direction is hardcoded to 135 degrees — add an angle control",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 523,
+          "title": "The Card Manager's designer renders where the operator opens it",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 446,
+          "title": "Carousel items: one labelled block each, on a lattice the check can see",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 522,
+          "title": "Featured-image border, shadow and placement controls, and a Card Manager grouped to the standard",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 511,
+          "title": "Media Manager: filter the gallery by name, aspect, tag and category",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 510,
+          "title": "Media Manager: tag any file, from a project tag list you can add to",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 509,
+          "title": "Media Manager: the Content description never rendered, and Rename never saved",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 506,
+          "title": "Media Manager 5/5: the Media Manager module a tenant admin uses to upload and browse media",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 502,
+          "title": "Media Manager 3/3: mark and filter media added through the Admin Media Manager",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 498,
+          "title": "Event Calendar 3/3: the event's own page",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 497,
+          "title": "Event Calendar 2/3: the calendar visitors see",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 496,
+          "title": "Event Calendar 1/3: the admin module that manages a project's events",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 454,
+          "title": "A saved section has one name, and renaming it makes that name stick",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 481,
+          "title": "Builder: parallax — a background image or video that drifts slower than the page",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 451,
+          "title": "Put the CRM Form panel on the lattice it was never measured against",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 482,
+          "title": "Builder: put the Overlay Screen editor into the React section panel",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 478,
+          "title": "check:render can watch over time, because the crossfade contracts could not fail",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 477,
+          "title": "Builder: the video pickers asked for a category no asset has, so they emptied",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 476,
+          "title": "Builder: rebuild the Video panel on setting rows, and make check:panels see it",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 475,
+          "title": "Builder: the video background layer — a real video behind section rows",
+          "date": "2026-08-31"
+        }
+      ]
+    },
+    {
+      "area": "Styling",
+      "entries": [
+        {
+          "number": 598,
+          "title": "Builder Pages: the Template column tells the truth (and the filter dropdown stops repeating itself)",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 526,
+          "title": "Connections 4/7: the Connections screen — four card states, generated from the catalogue (do not start until 86bbpz1ed is Live)",
+          "date": "2026-09-02"
+        }
+      ]
+    },
+    {
+      "area": "The pipeline",
+      "entries": [
+        {
+          "number": 637,
+          "title": "Hand-run cleanup can mistake a half-built ticket for never-started and misfile it",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 599,
+          "title": "Pipeline fixes can't merge overnight — they all wait for Dane to wake up",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 634,
+          "title": "Strip the editor's formatting off a switch command, not just its backticks",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 618,
+          "title": "Lane A reads its own machine comments as Dane objecting, and cancels a merge he authorized",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 633,
+          "title": "Restore the merge step's dedup, and escalate on attempts rather than only age",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 626,
+          "title": "NODES Slice D follow-up — doctor:node has no reboot test",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 631,
+          "title": "The Mini can reach the MacBook now, so the stranded sweep sees both seats",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 602,
+          "title": "Builder Pages: bulk-change the template on every page in a filter",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 619,
+          "title": "The reconciler's closure note tells every ticket it closes that '[object Object]' did it",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 620,
+          "title": "The SQL hook's refusal counter can freeze: read and write disagree on which state file is authoritative",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 625,
+          "title": "Ship and the relay would report a QUEUED merge as a completed one, so no merge queue can be switched on yet",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 624,
+          "title": "The stranded sweep calls a half-built ticket empty, because it only looks for a pull request",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 623,
+          "title": "The stranded-ticket sweep must work while the pipeline is running — resume's early exit skips it",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 621,
+          "title": "A near-miss switch command must say it did not take, instead of matching nothing in silence",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 617,
+          "title": "A ticket whose merge Dane already ordered stays in Ready to launch after the PR merges, holding a build slot",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 622,
+          "title": "loop-review is pinned at an hourly cadence with work waiting, because the step-down needs two identical readings",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 616,
+          "title": "Under merge pressure a green PR keeps resetting its own CI, so the queue cannot drain",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 613,
+          "title": "check:panels counts the trigger panel but cannot fail on it — reverting the fix it just shipped stays green",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 607,
+          "title": "pipeline resume records no reason, so an unauthorised resume is invisible on the switch ticket",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 608,
+          "title": "reconcile cannot see a Queued or Rework ticket at all, so a claimable ticket with an open PR reads as clean",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 609,
+          "title": "The SQL hand-off hook's safety brake has never worked in a worktree",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 605,
+          "title": "Scheduled jobs yield: reserve ClickUp headroom for the sessions Dane is talking to (do not start until 86bbugcpa is Live)",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 606,
+          "title": "The merge relay repeats CANNOT TELL forever with no bound, so a permanent block looks like a momentary one",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 604,
+          "title": "Bound the CANNOT TELL loop: the decision, measured and tested",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 597,
+          "title": "GitHub does not apply the union driver to mergeability, so a clean branch can sit CONFLICTING forever",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 592,
+          "title": "Migrate pulse, pipeline, review-gate and the forwarder onto the shared ClickUp client (do not start until 86bbugcdb is Live)",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 601,
+          "title": "CI listens for merge_group, so a merge queue can be switched on safely",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 600,
+          "title": "A ticket waiting on Dane's merge no longer holds a build slot",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 596,
+          "title": "A job that has not succeeded in an hour is audible — 16 hours of a dead merge lane was nearly silent",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 595,
+          "title": "A scheduled pass-reconcile revokes a LIVE build claim, so two loops can build one ticket",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 586,
+          "title": "Three watchdogs saw the stuck ticket and none of them reached Dane",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 585,
+          "title": "A terminal merge refusal must stop saying the approval is still standing",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 593,
+          "title": "reconcile closes a ticket on a PR that belongs to a different ticket, silently",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 591,
+          "title": "The spec skill tells Dane to start a build loop that has run unattended since 9/2",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 584,
+          "title": "A check that could not run must not exit 0",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 590,
+          "title": "One door to ClickUp: a shared client that knows the remaining budget",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 589,
+          "title": "The merge relay believes one stale CONFLICTING reading, so a green PR stops dead with a false reason",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 588,
+          "title": "The auto-merge latch names what it could not verify, and says it is still latched",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 587,
+          "title": "bus-relay re-reads only tickets touched since its last pass",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 583,
+          "title": "The merge relay waits 180s for CI, which is shorter than CI — under queue pressure no PR can ever merge",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 567,
+          "title": "require_sql_handoff's three-refusal stand-down never engages in a worktree",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 580,
+          "title": "Stop printing builder instructions to visitors on published pages",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 570,
+          "title": "A relay pass that runs out of budget says which list it never reached, instead of listing three tickets",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 569,
+          "title": "A ClickUp 429 waits for the reset window and retries, instead of killing the pass",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 566,
+          "title": "bus-relay sweeps the Loop Queue first, so a spent budget cannot starve merging",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 562,
+          "title": "Backfill the tags onto the posts imported before the importer read them",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 535,
+          "title": "Throughput alarm: six ways the new stall detector can still fail quietly",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 552,
+          "title": "A merge asks the pause switch, and ship states the review gate's verdict",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 549,
+          "title": "Blog import: slugs did not populate, and the Slug field needs normalizing",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 548,
+          "title": "Premise discipline: a defect cites its mechanism; a build verifies first",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 547,
+          "title": "One board: the watchdogs composed into a single state-of-the-line screen",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 544,
+          "title": "One scheduled repair: reachable, throttled, and it knows what it may not touch",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 543,
+          "title": "The blog card's border is settable, and its image sits flush with the top",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 542,
+          "title": "One preflight command: the gate sequence moves from skill prose into code",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 539,
+          "title": "One status taxonomy: four private copies become views of loopStatuses",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 537,
+          "title": "Commit the engine: the loop runner joins the repo, beats, pulls, and",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 533,
+          "title": "Link the card's featured image to its post",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 524,
+          "title": "The pulse has never run on a schedule — it was built to be scheduled and nothing ever fires it",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 531,
+          "title": "throughput answers the question it asks in its own headline",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 530,
+          "title": "A blocked queue is not an idle queue — the interval line said it was",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 529,
+          "title": "A build pass may not end with its ticket still in Building — a one-shot session cannot keep a promise to come back",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 528,
+          "title": "A stranded build must not count against the work-in-progress cap",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 527,
+          "title": "The stranded-build sweep is unreachable while the pipeline is running — the repair status recommends cannot run",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 499,
+          "title": "Tripwire: a Stop hook that refuses to end a turn which hands the operator a command CC could run",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 525,
+          "title": "The merge refusal names the wrong reason — \"a required review or check is missing\" on a PR with green checks and a conflict",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 494,
+          "title": "A ticket stuck at Ready to launch says so, and never blames Dane for a red build",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 513,
+          "title": "The resume summary says what happened to each swept ticket, not one kind's story",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 514,
+          "title": "A pull request must carry its ticket's name, so the two lists can be read side by side",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 515,
+          "title": "The editor's formatting is not part of what Dane said",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 508,
+          "title": "One gh argv builder, so --repo cannot be dropped quietly",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 507,
+          "title": "The ask card is posted as blocks, and was going out unmarked",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 487,
+          "title": "A lost push race is filed as a merge conflict, while the same pass promises it will self-heal",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 489,
+          "title": "Rework: give send-backs a status of their own, drained before Queued",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 493,
+          "title": "A machine that cannot update itself now says so on the bus, and names the reason",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 492,
+          "title": "The merge gate stops reading its own operator card as the review verdict",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 491,
+          "title": "A merge that fuses two statements must fail before it reaches main: parse scripts/ at pre-commit",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 488,
+          "title": "A loop that runs but ships nothing must say so — throughput, not liveness",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 484,
+          "title": "`ship` writes the PR trail itself, so the hand lane is not blocked by the gate",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 483,
+          "title": "Loop doc: record the morning the two cap readings disagreed",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 437,
+          "title": "Weekly report: generate the figures on a schedule, leave the writing to a person",
+          "date": "2026-08-31"
+        }
+      ]
+    },
+    {
+      "area": "Server and data",
+      "entries": [
+        {
+          "number": 614,
+          "title": "A new page keeps the template you chose — the create save drops it today",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 611,
+          "title": "Consolidate asset_tags into messaging_tags, and flag the tags the client admin creates",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 612,
+          "title": "Connections 6b/7: the amber card, and a refused connect says why (do not start until 86bbpz1gk is Live)",
+          "date": "2026-09-05"
+        },
+        {
+          "number": 563,
+          "title": "Connections 7/7: X — per-user posting, without touching Dane's own (do not start until 86bbpz1gv is Live)",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 561,
+          "title": "Blog import: read the WordPress tags the scrape kept, and stop leaving them in the body",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 556,
+          "title": "Connections 6/7: staying connected — refresh, verify, the amber card, a real revoke (do not start until 86bbpz1gd is Live)",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 545,
+          "title": "Connections 5/7: Instagram, and the two checks that stop an unhelpful Meta error (do not start until 86bbpz1gd is Live)",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 541,
+          "title": "Blog Manager: bulk-import discarded pages into blog posts",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 532,
+          "title": "A published page is served by address but filed by page id — an orphan snapshot outranks the real page",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 504,
+          "title": "Media Manager 4/5: a tenant admin may manage their own project's media, and only their own",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 490,
+          "title": "Connections 3/7: a project's own connection wins over the global keys",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 471,
+          "title": "Connections 2/7: the adapter contract, proven twice",
+          "date": "2026-08-31"
+        }
+      ]
+    },
+    {
+      "area": "The admin app",
+      "entries": [
+        {
+          "number": 501,
+          "title": "Media Manager 2/3: the bulk uploader offers Video and then refuses to accept one",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 500,
+          "title": "Media Manager 1/3: mirror (flip) in the asset image editor",
+          "date": "2026-09-01"
+        }
+      ]
+    },
+    {
+      "area": "Documentation",
+      "entries": [
+        {
+          "number": 630,
+          "title": "The /tags sidebar shows placeholder tags and an admin instruction to visitors",
+          "date": "2026-09-06"
+        },
+        {
+          "number": 603,
+          "title": "DOCTRINE 6.23: an ask is a status transition, not a paragraph",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 594,
+          "title": "Write down the three rules the 9/3 pipeline-repair session produced",
+          "date": "2026-09-04"
+        },
+        {
+          "number": 558,
+          "title": "Docs: overlay screens, and the four parts a Builder setting has to have",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 582,
+          "title": "Capture the 9/3 blog-visibility findings in doctrine and CLAUDE.md",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 579,
+          "title": "Write down the per-copy/per-page rule the Save & Publish work produced",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 574,
+          "title": "DOCTRINE 5.29 cited a ticket id that does not exist",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 573,
+          "title": "Write down the four traps and two UI rules the blog links work produced",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 449,
+          "title": "Panel sweep 8/15: the image and effect panels",
+          "date": "2026-09-03"
+        },
+        {
+          "number": 551,
+          "title": "Close-out docs for the blog import and the slug repair",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 550,
+          "title": "The UI rules audit records what the Card Manager work actually found",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 546,
+          "title": "Write down the other two Card Manager lessons: a condition in the wrong terms, and splitting a preset safely",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 538,
+          "title": "Write down what the Card Manager work taught: a fake upsert, and verifying on the wrong surface",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 536,
+          "title": "Hand-off: bulk-import the discarded Delray blog posts into blog_posts",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 534,
+          "title": "Doctrine: three lessons from the stuck-ticket morning",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 521,
+          "title": "Write down what the Media Manager work produced, and two findings from it",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 519,
+          "title": "Write down the claim collision, and correct two lines that had gone false",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 518,
+          "title": "A reported merge conflict is a claim to verify, not an instruction to start editing",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 516,
+          "title": "Write down what the code-block outage taught",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 503,
+          "title": "A clean merge is not agreement — doctrine §6.11",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 512,
+          "title": "The copies table names the identity, not just the variable",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 505,
+          "title": "Thread discipline: a session may hold more than one topic",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 495,
+          "title": "Doctrine 2.7: every time quoted to the operator is Mountain time, never UTC",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 480,
+          "title": "Weekly figures for 2026-08-24 to 2026-08-30",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 485,
+          "title": "Doctrine 5.17: the same capture also disables background-attachment: fixed",
+          "date": "2026-08-31"
+        },
+        {
+          "number": 479,
+          "title": "Docs: video backgrounds, and the two check gaps the work exposed",
+          "date": "2026-08-31"
+        }
+      ]
+    },
+    {
+      "area": "Elsewhere",
+      "entries": [
+        {
+          "number": 520,
+          "title": "\"Could not resolve host\" after enabling Funnel has two causes, not one",
+          "date": "2026-09-02"
+        },
+        {
+          "number": 517,
+          "title": "The worker's deploy guide describes the deployment that actually happened",
+          "date": "2026-09-01"
+        },
+        {
+          "number": 419,
+          "title": "Acquire YouTube 3/4: the yt-dlp media worker service (code only, no deploy)",
+          "date": "2026-09-01"
+        }
+      ]
+    }
+  ]
+}
