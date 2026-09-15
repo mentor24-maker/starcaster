@@ -1,3 +1,30 @@
+## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
+
+If you put a video behind one column of a row and a menu in that same column,
+the menu's dropdown was cut off at the bottom edge of the column. A visitor
+would tap it, see a thin white sliver appear, and nothing else — a menu that
+looks like it does not work.
+
+The cause was a piece of housekeeping doing more than it was asked. A
+background video is blown up slightly so it always fills the column with no
+gaps at the edges, which means without something holding it in, it would spill
+sideways and paint over the words in the column next door. So the column was
+told to hide anything that reached outside it — and it did exactly that, to the
+video *and* to the menu, because the browser has no way to tell those two
+apart.
+
+Now the video is put in a box of its own, laid exactly over the column, and
+that box does the holding. The video is contained just as tightly as before;
+the column itself is left alone, so anything in it that is meant to reach
+outside — a dropdown, a floating image nudged over the edge — does. Rows with a
+video, and rows with a drifting photo background, had the same fault and are
+fixed in the same stroke.
+
+Four automatic checks were added that drive a real browser, open the menu, and
+ask what the visitor could actually see and click. Each one was deliberately
+broken first and watched to fail, so a future change cannot quietly bring this
+back.
+
 ## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
 
 When you publish a page, the system saves a complete copy of it — that copy is
