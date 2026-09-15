@@ -680,6 +680,46 @@ test('a row with no background keeps the colour the operator picked', () => {
   assert.equal(background.opacity, 55);
 });
 
+test('a recognised mode "none" still honours a legacy colour beside it', () => {
+  // Recognising `none` above must not cost a genuine Normie import the
+  // legacy-colour fallback it had before: {mode:'none', color:X} beside a
+  // legacy backgroundColor:Y showed Y, and would otherwise now show nothing.
+  // Measured on main 2026-09-15: mode 'color', colour '#ff0000' at both the
+  // row and the cell. The Builder's own client promotes the same pair before
+  // it sends (public/js/builder.js normalizeBackgroundSettings), so the two
+  // ends have to agree about it or the server is the only reader that renders
+  // it blank. No in-repo client emits the pair, so this guards the import
+  // path, which is the one job this migrator exists for.
+  const legacyNone = { mode: 'none', color: '#123456' };
+  const migrated = migrateLegacyLayoutSections({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      background: { ...legacyNone },
+      rowSettings: { padding: '20', background: { ...legacyNone }, backgroundColor: '#ff0000' },
+      containerSettings: {
+        col1: { padding: '18', background: { ...legacyNone }, backgroundColor: '#ff0000' },
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const section = migrated.sections[0];
+  assert.equal(section.background.mode, 'color', 'the row shows the legacy colour');
+  assert.equal(section.background.color, '#ff0000');
+
+  // The '3-3' layout's columns are left/right, and the editor's `col1` is the
+  // first of them -- mergeNormieCellFields does that mapping.
+  const cell = section.cellBackgrounds.left;
+  assert.equal(cell.mode, 'color', 'the cell shows the legacy colour too');
+  assert.equal(cell.color, '#ff0000');
+
+  // And the promotion moves only mode and colour — every other modern field
+  // the sender chose still rides along, so the save-path fix is untouched.
+  assert.equal(cell.color2, '#eaf4ff');
+  assert.equal(cell.videoFocalX, 50);
+});
+
 test('a scalar cellPadding does not clobber the map built from containerSettings', () => {
   // mergeNormieCellFields shape-guards the twelve per-column maps on purpose: a
   // scalar means the sender is not speaking the per-column shape, and taking it
@@ -776,12 +816,16 @@ test('an ordinary save changes NOTHING a save without the legacy trigger would n
     layoutSections: [{ ...populated, ...EDITOR_TRIGGER }],
   }).sections[0];
 
-  // rowSettings/containerSettings are the legacy input itself; the migrator is
-  // the authority on what they become, so they are the one thing the two runs
-  // are entitled to disagree about.
+  // Compared whole, with nothing masked out. An earlier version of this test
+  // nulled cellPadding and marginTop before the compare; removing the mask
+  // changed no result, so it was exempting two fields from the one guard
+  // written to be extension-proof and paying for nothing (round-2 review,
+  // 2026-09-15). rowSettings/containerSettings do not appear here at all --
+  // the serializer does not emit them on a section -- so there is nothing the
+  // two runs are entitled to disagree about.
   assert.deepEqual(
-    { ...withTrigger, cellPadding: null, marginTop: null },
-    { ...withoutTrigger, cellPadding: null, marginTop: null },
+    withTrigger,
+    withoutTrigger,
     'an ordinary save lost or changed a setting that a save without the legacy trigger kept'
   );
 });
