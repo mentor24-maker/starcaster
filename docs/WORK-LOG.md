@@ -24,6 +24,93 @@ Four automatic checks were added that drive a real browser, open the menu, and
 ask what the visitor could actually see and click. Each one was deliberately
 broken first and watched to fail, so a future change cannot quietly bring this
 back.
+## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
+
+**Read this bit first, because the original report was wrong about one thing.**
+This was filed as "set a row to full width, press Save Page, and it goes back
+to being boxed in at the normal page width." That is a real trap in the code
+and it is now closed — but a review pass went looking for a page it actually
+happens on and could not find one, and neither could we. Checked against live
+production: not one of the 133 pages that have rows on them is arranged the way
+it takes to trigger it, and the 359 full-width rows sitting in the database
+today have all stayed full width. So **please do not go looking for this on your
+sites — you will not see it, and you would not have seen it before either.**
+
+What is true is that the trap is *armed*. It fires on a page whose very first
+row has its first item sitting in the fourth, fifth or sixth column of a wide
+layout. No page is arranged that way right now, but 79 pages already use those
+wide columns, so it is one drag of one item away — and from that moment every
+save of that page would quietly reset 35 of its settings. That is worth closing
+before somebody trips it, which is what this change does.
+
+The cause is one line, and it turned out to be much bigger than the full-width
+setting. The older Builder tags every row it saves with two fields that used to
+belong only to pages imported from the old Normie system. The server sees those
+tags and thinks "this is an old imported page, run it through the importer" —
+so every ordinary save was being treated as an import. The importer rebuilds
+each row from a short list of the fields it knows about, and throws away
+anything not on that list. Full width was not on the list. Neither, it turned
+out, were 34 other things: the row's padding and margins, its column widths,
+its minimum height, its borders, how far it was nudged left or right, the
+padding and margins inside each column, and the switches for hiding a row on
+phones or on desktop. All of them silently reset to their defaults every time
+anybody saved the page.
+
+Rather than guess at which fields to rescue, we measured: ran a real row
+through the save and compared what went in against what came out, field by
+field. Then fixed it the other way round — the importer now keeps whatever the
+row already had and only translates the genuinely old-format parts. That means
+a new row setting added next year is protected automatically, instead of
+waiting for someone to remember to add it to a list. Pages genuinely imported
+from Normie still import exactly as before; there is a test holding that down.
+
+A review found that measurement had not gone deep enough, and it is worth
+saying how. It compared the row's own settings — which is where full width
+lives — but a row's background is a bundle of settings tucked inside it, and
+nothing looked in there. Six more were reverting on every save: the angle of a
+gradient, how see-through the background is, which picture was chosen, whether
+the background drifts as you scroll and how fast, and how an overlay tint
+blends. So the second pass measured the whole row recursively, right down into
+every nested setting, and reported its own blind spots as it went: 221 row
+settings and 9 module settings, every one of them actually exercised, none
+skipped. Nothing is lost now.
+
+One of the six is worth calling out, because it is the kind of thing that makes
+people distrust an editor. If you picked a colour for a row and then set the
+background to "none", the colour was thrown away on the next save — so
+switching the background back on later gave you white, not the colour you
+chose. The Builder keeps that colour on purpose; the save was discarding it.
+
+The review also caught the first fix going slightly too far the other way: in
+rescuing everything, it could overwrite the per-column padding the importer had
+just correctly worked out. That is now handled by the one function that has
+always known how to do it properly.
+
+Checked against a real page in the database, saved twice with no edits in
+between, and confirmed every setting survived both times — then deliberately
+removed each fix and watched the settings revert again, which is how we know
+the tests would catch this coming back.
+
+A third review pass found one more thing, and it is the mirror image of the
+colour problem above. In teaching the importer that "none" is a real choice
+rather than a missing one, the fix accidentally broke a much older rule: a
+genuinely old Normie page could say "no background" in its new-style field
+while still carrying a colour in its old-style one, and the importer used to
+show that old colour. After the fix it showed nothing at all. Nobody would
+have noticed, because no part of this app sends that combination — but
+importing old pages is the only job that code has, so it is exactly the wrong
+place to be quietly wrong. It now honours the old colour again, which is also
+what the Builder itself does before it saves, so the two ends agree instead of
+disagreeing. Everything the second pass rescued still comes through untouched.
+
+Two of the tests were also tightened. One of them had been quietly excusing two
+settings from the check meant to catch any setting going missing — so we made
+one of those two go missing on purpose and watched the test pass anyway, which
+proved the excuse was hiding real failures rather than preventing false ones.
+It compares everything now. And the note left in the code for the next reader
+had the mechanism wrong: it blamed the older editor, which does trip the trap
+but has nothing to lose by it. The note now names the arrangement that actually
+causes the loss, with the production numbers beside it.
 ## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
 
 The Builder has two buttons that both say "change template", and until now they
