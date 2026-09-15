@@ -1,3 +1,34 @@
+## 2026-09-15 — The Mini's health check now names all its jobs, and a job that comes back says so (#710)
+
+The Mac Mini has a self-check that answers one question without needing a
+password, a network connection or ClickUp: *when did each job I own last
+actually work?* That deliberate simplicity is the point — it still answers on a
+machine that is otherwise having a bad day. Four of the eight jobs it watches
+were missing from the answer entirely. Not listed as healthy, not listed as
+broken, just absent, which reads as "nobody is watching these" — and two of
+them are the Pulse pipeline jobs that went dark for 33 hours last week without
+anybody noticing. The cause was one word. A job is tagged "blocked" when the
+Mini's own setup script cannot install it, and two of these are installed by a
+different project's script instead. The report read "blocked" as "nothing to
+say about this job", which was harmless until those jobs started working. They
+are all listed now, each with a real time, and the setup script says the same
+thing in its own report so the two cannot disagree.
+
+The second half: there are two separate alarms watching for a job going quiet,
+and they measure over different lengths of time. Only one of them ever posted
+"it's back". For jobs that run every hour or so that made no difference,
+because the other alarm always fired first and did the announcing. But the
+nightly librarian job runs once a day, which flips the two windows around — so
+an outage lasting between two days and six days would be announced to the team
+chat as dead and then silently fixed, with nobody ever told. Both alarms
+announce a recovery now.
+
+One more thing turned up while checking the setup script, and it is worth
+knowing because it was quietly wrong for a long time: its "is this schedule
+already installed?" test could only ever answer *no*. Every schedule that was
+in fact installed showed up as missing, and running the script for real tore
+down and rebuilt all three of the Mini's live scheduled jobs every single time.
+Fixed in the same change.
 ## 2026-09-15 — The Monday report could not have reached Google Drive at all (#709)
 
 The change above moved the weekly report out of the Mini's code folder and into
