@@ -110,6 +110,13 @@ function documentFor(...specs) {
  *  documentFor (always `layout: 'single'`) cannot reach. */
 function documentForSection({
   layout = 'single',
+  /*
+   * What the row does at phone width — `stack` unless a contract asks. Carried
+   * for the same reason `background` is: the reverse-stack orders are the only
+   * place the renderer's CHILD COUNT is load-bearing, and a fixture that
+   * cannot ask for them cannot see an extra child at all (86bbwmp2y round 2).
+   */
+  mobileLayout,
   modules = [],
   background,
   pageBackground,
@@ -146,6 +153,7 @@ function documentForSection({
     id: 'section-render-contract',
     title: 'Render Contract Section',
     layout,
+    ...(mobileLayout ? { mobileLayout } : {}),
     locked: false,
     alignment: 'left',
     widthMode: 'contained',

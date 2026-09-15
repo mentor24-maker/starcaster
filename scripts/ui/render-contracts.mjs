@@ -919,6 +919,56 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'video-background-is-clipped-without-clipping-the-row',
+    why:
+      'A blurred video is scaled up so its soft rim falls outside the row, and a parallaxing image ' +
+      'layer is taller than the row by the whole travel distance, so both have to be contained or ' +
+      'they spill onto the rows above and below. The row carried that containment itself until ' +
+      '2026-09-14 — and clipped everything else inside it in the same stroke, which is the row half ' +
+      'of 86bbwmp2y: a navigation dropdown in a video row was cut off at the row\'s edge. Two ' +
+      'readings in one contract on purpose, because each alone passes on the other\'s bug: a row ' +
+      'left `overflow: visible` with no clip box leaks the footage, and a row clipped by itself ' +
+      'holds the footage while cutting the menu.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the row's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — a blurred ` +
+          'or drifting layer inside it is free to spill over the rows above and below.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "row's flow rather than laid over it, so it no longer matches the row's bounds.";
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-leaves-the-row-itself-uncontained',
+    why:
+      'The other half of the pair above, and the row half of 86bbwmp2y. `overflow: hidden` on the ' +
+      'ROW cannot tell footage escaping from a dropdown menu that is supposed to escape, so it cut ' +
+      'both. This is the reading that fails if the containment ever moves back onto the row — which ' +
+      'would look completely correct in every other video contract here.',
+    section: { ...VIDEO_SECTION },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'the row carrying the video is `overflow: hidden` — anything inside it that is meant ' +
+          'to reach out of the row, a navigation dropdown above all, is cut off at its edge.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so the clip box and the layer inside it size ' +
+          'themselves against the page rather than against the row.';
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-background-sits-behind-the-content',
     why:
       'The columns are grid children and the video is absolutely positioned, so without a stacking ' +
@@ -975,21 +1025,134 @@ export const RENDER_CONTRACTS = [
     id: 'cell-video-background-is-clipped-to-its-own-cell',
     why:
       'THE reason this is a per-cell feature and not a per-row one. The layer is scaled to cover, so ' +
-      'without `overflow: hidden` on the column the footage spills sideways over the column beside ' +
-      'it — one cell\'s background silently painting over its neighbour\'s words. It is invisible to ' +
-      'every other check here: the video renders, the poster is right, the z-index is right, and the ' +
-      'row still looks like a row.',
+      'left uncontained the footage spills sideways over the column beside it — one cell\'s ' +
+      'background silently painting over its neighbour\'s words. It is invisible to every other ' +
+      'check here: the video renders, the poster is right, the z-index is right, and the row still ' +
+      'looks like a row. ' +
+      'The containment moved on 2026-09-14 (86bbwmp2y): it used to be `overflow: hidden` on the ' +
+      'COLUMN, which clipped everything else in the column too — a navigation dropdown was cut off ' +
+      'at the column edge and read as a menu that would not open. So it is now a clip box around ' +
+      'the layer alone, and this contract follows it there rather than being deleted with it.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the cell's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — the ` +
+          'footage inside it is free to bleed across the gap into the next column.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "column's flow rather than laid over it, so it pushes the operator's content down and no " +
+          'longer matches the cell\'s bounds.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-leaves-the-cell-itself-uncontained',
+    why:
+      'THE BUG THIS PAIR WAS SPLIT FOR (86bbwmp2y). Containing the footage by clipping the CELL ' +
+      'contains everything else in the cell as well, and `overflow: hidden` cannot tell footage ' +
+      'escaping from a navigation dropdown that is SUPPOSED to escape. To a visitor the menu reads ' +
+      'as one that will not open: they tap it and nothing appears. The contract above proves the ' +
+      'footage is still held; this one proves it is held by the box and not by the column.',
     section: { ...CELL_VIDEO_SECTION },
     selector: '.builder-preview-column-layered',
     read: ['overflow', 'position'],
     expect(sample) {
-      if (sample.styles.overflow !== 'hidden') {
-        return `the cell carrying the video is \`overflow: ${sample.styles.overflow || 'visible'}\` — its ` +
-          'footage is free to bleed across the gap into the next column.';
+      if (sample.styles.overflow === 'hidden') {
+        return 'the cell carrying the video is `overflow: hidden` — the containment is back on the ' +
+          'column, so a dropdown menu, a floating image or any other thing meant to reach out of ' +
+          'that column is cut off at its edge.';
       }
       if (sample.styles.position === 'static') {
-        return 'the cell is `position: static`, so the absolutely positioned video escapes it entirely ' +
-          'and sizes itself against the row (or the page) instead.';
+        return 'the cell is `position: static`, so the clip box and the video inside it escape the ' +
+          'column entirely and size themselves against the row (or the page) instead.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-overhanging-decor-out-of-the-cell',
+    why:
+      'THE CONTRACT NO STYLE READING COULD HAVE REPLACED, and the one that actually reproduces ' +
+      '86bbwmp2y. `overflow: hidden` on an ancestor does not change a descendant\'s rect at all — ' +
+      'the clipped element still measures exactly where it always was — so every box reading in ' +
+      'this scene is identical whether the dropdown is visible or cut in half. What changes is ' +
+      'whether the browser can HIT it out there. So this hangs a floating image out of a ' +
+      'video-backed cell and asks what is on top where it crosses into the next column: the image ' +
+      'when the containment sits on the layer, the next column when it sits on the cell. ' +
+      'A floating image rather than a navigation dropdown because it overhangs on load with no ' +
+      'interaction — the clipping is identical, and a scene that needs a hover is a scene that can ' +
+      'quietly stop opening.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+        // Something solid for the probe to hit when the decor loses, so the
+        // failure is visible to a person in a screenshot and not only here.
+        right: { mode: 'color', color: '#cc0000' },
+      },
+      modules: [
+        // `horizontalOffset: 200` is what carries the image across the gutter
+        // at this harness's viewport; `trigger: on-load` keeps it out of the
+        // inline-z-index path. Both match the overlay contract this is modelled
+        // on, so the two scenes stay comparable.
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, size: '60', trigger: 'on-load', horizontalOffset: '200' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.builder-preview-module-overlay-flow .builder-preview-image-shell',
+        against: '.builder-preview-column:not(.builder-preview-column-layered)',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page, so the elements this ` +
+          'contract compares were never both rendered, and it can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. Clipping does not
+       * move the image's rect, so the overlap is positive in BOTH the working
+       * and the broken scene — but if the image ever stops crossing the gutter
+       * at all, the probe point lands where neither element is and a green run
+       * here would mean nothing.
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the floating image does not overhang into the next column at all in this scene ' +
+          `(image ${probe.subjectBox.left}-${probe.subjectBox.right}, next column starts at ` +
+          `${probe.againstBox.left}), so there is no overlap to probe. Push \`horizontalOffset\` ` +
+          'until it crosses the gutter again — a scene that does not overlap passes forever while ' +
+          'testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the floating image hangs out of the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the image — the ` +
+          'part of it outside the column is not there to be hit. That is the cell clipping its own ' +
+          'contents to contain the footage, which is 86bbwmp2y: on a real page the same clip takes ' +
+          "the bottom off a navigation module's dropdown and a visitor reads the menu as broken.";
       }
       return null;
     },
@@ -1032,21 +1195,266 @@ export const RENDER_CONTRACTS = [
   },
 
   {
-    id: 'cell-video-background-does-not-clip-a-cell-that-has-no-video',
+    id: 'cell-video-background-clip-box-takes-no-clicks-and-stays-at-rung-zero',
     why:
-      'The containment that keeps footage inside its own cell is deliberately conditional, and this ' +
-      'is what holds it that way. Clipping every column unconditionally would pass every other ' +
-      'contract here and silently start cutting off the floating images and overhanging decor that ' +
-      'are SUPPOSED to reach out of their cell — a regression with no error, in a feature nobody was ' +
-      'touching.',
+      'THE TWO PROPERTIES THE CLIP BOX TOOK OVER FROM THE LAYER, and nothing else here holds them. ' +
+      'Until 86bbwmp2y the video was a direct child of the cell and `.builder-preview-video-background` ' +
+      'gave it `pointer-events: none` and `z-index: 0`. The box is now the element the cell\'s siblings ' +
+      'actually see, and it gets both from `builderBackgroundClipStyle()` inline instead — so a rung ' +
+      'or a hit-test that used to be the stylesheet\'s business is now a function\'s. ' +
+      'Both fail silently and expensively. Lose `pointer-events: none` and this full-size element ' +
+      'laid over the column swallows every click in it — the operator\'s links and buttons stop ' +
+      'working in any column with a video behind it, while the page still looks perfect. Move the ' +
+      'rung off 0 and the box paints OVER the modules: `cell-video-background-stays-behind-the-words` ' +
+      'only checks that a module is at 1 or more, so a box at 2 passes that contract with the footage ' +
+      'covering the text. ' +
+      'This contract replaces `cell-video-background-does-not-clip-a-cell-that-has-no-video`, which ' +
+      'read `overflow` on the neighbouring column: that PR deleted the only code that could ever set ' +
+      'it, so nothing in its scene could make it fail, and its own reason described a conditional ' +
+      'mount that no longer exists. The half worth keeping — the cell is not clipped — is asserted ' +
+      'directly by `cell-video-background-leaves-the-cell-itself-uncontained`, on the cell that ' +
+      'actually carries the video rather than on its neighbour. ' +
+      'It reads computed style rather than probing, and that is forced rather than lazy: ' +
+      '`elementFromPoint` skips anything with `pointer-events: none`, so a probe can never see this ' +
+      'box at all while the property is correct. One contract covers the row\'s box too — both ' +
+      'surfaces spread the SAME function, so there is one set of values to be wrong.',
     section: { ...CELL_VIDEO_SECTION },
-    selector: '.builder-preview-column + .builder-preview-column',
-    read: ['overflow'],
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['pointerEvents', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.pointerEvents !== 'none') {
+        return `the clip box is \`pointer-events: ${sample.styles.pointerEvents}\`, not \`none\` — it is a ` +
+          'full-size element laid over the whole column, so it takes every click meant for the links, ' +
+          'buttons and modules inside that column and the page reads as dead while looking correct.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex)) {
+        return `the clip box sits at z-index \`${sample.styles.zIndex || 'auto'}\` rather than an explicit ` +
+          '0 — with no rung of its own it stacks in document order against the cell\'s tint screen and ' +
+          "the cell's modules, both of which were measured against the box being at 0.";
+      }
+      if (zIndex !== 0) {
+        return `the clip box sits at z-index ${zIndex}, not 0 — the modules in that cell are only lifted to ` +
+          '1, so the footage inside this box now paints over the operator\'s words. ' +
+          '`cell-video-background-stays-behind-the-words` cannot catch this: it checks the module is at ' +
+          '1 or more and never reads the box.';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * ── A LAYER THAT RENDERS NOTHING MUST ADD NOTHING ─────────────────────
+   *
+   * The clip box was mounted by the row and the cell at first, from the
+   * SETTINGS. The layer itself renders nothing at phone width and nothing
+   * under reduce motion, so a phone visitor got an EMPTY box as the row's
+   * first child — and the row is a grid whose mobile reverse-stack rules count
+   * children: `:nth-child(1..6)`, stopping at six. One extra child pushed the
+   * sixth column out of the last rule, it fell back to `order: 0`, and the
+   * columns came out 5,4,3,6,2,1 on a live page with nothing to see wrong
+   * (86bbwmp2y, review round 2).
+   *
+   * Every contract above this sweeps at 1440px, where the video always mounts,
+   * so not one of them could see the state where the box was empty. These
+   * three ask at the two widths and settings where the layer bows out.
+   */
+  {
+    id: 'video-background-puts-the-columns-in-order-on-a-phone',
+    why:
+      'THE VISIBLE HALF OF THE REGRESSION, measured as a visitor would meet it rather than as an ' +
+      'element count. A six-column row set to Reverse stack must come out 6,5,4,3,2,1 on a phone, ' +
+      'and the rules that do that are `:nth-child(1..6)` — they stop at six, so ANY extra child in ' +
+      'the row silently drops the last column to `order: 0` and shows it fourth. The empty clip box ' +
+      'did exactly that. This reads the order the browser actually resolved on the last column, so ' +
+      'it fails for any cause — a second layer, a stray marker, a wrapper somebody adds next year — ' +
+      'rather than only for the one that happened.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      background: { ...VIDEO_SECTION.background },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section-layered > .builder-preview-column:last-child',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      const order = Number(sample.styles.order);
+      if (order === 0) {
+        return 'the last column of a six-column Reverse stack row resolved `order: 0`, which is the ' +
+          'initial value and not any of the six rules — so the row has an extra child and every ' +
+          'column is one rule out of step. The sixth column is shown FOURTH. This is what an empty ' +
+          'clip box did on a phone; whatever added a child here, it reaches visitors.';
+      }
+      if (order !== -2) {
+        return `the last column of a six-column Reverse stack row resolved \`order: ${sample.styles.order}\`, ` +
+          'not -2 — the reverse-stack rules are not landing on the columns they were written for.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The mechanism behind the contract above, asked directly so a failure says WHICH extra child. ' +
+      'A row video does not play on a phone (the megabytes are somebody else\'s cell data) and the ' +
+      'layer returns null — so the clip box must not go up either. A box around nothing is still a ' +
+      'child, and the row counts its children.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-under-reduce-motion',
+    why:
+      'The same rule at the other place the layer bows out. A visitor who asked for reduced motion ' +
+      'gets the poster and no <video> at all, so an empty clip box would be an extra child in their ' +
+      'row and nobody else\'s — a layout that differs by an accessibility setting, which is the ' +
+      'hardest kind of bug to be told about.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The cell half. A column\'s children are read too — `_builder-react.css` keys a rule off ' +
+      '`> .builder-preview-module:nth-child(2)` to mean "this column has a second module" — so an ' +
+      'empty box in front of a single module satisfies a rule written about two. That one is scoped ' +
+      'to an embed and harms nothing today, which makes it evidence rather than a bug: the shift ' +
+      'has more than one reader, and the way to be safe is to add no element at all.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'row-overlay-screen-only-leaves-the-row-uncontained',
+    why:
+      'A row carrying ONLY a tint screen — no video, no parallax — used to be clipped by the same ' +
+      '`overflow: hidden` the video rows had, and 86bbwmp2y removed it from both. Nothing took over ' +
+      'for the tint row and nothing needs to: `.builder-preview-row-overlay-screen` is `inset: 0` ' +
+      'with `border-radius: inherit`, so it is already exactly the row\'s shape and has nothing to ' +
+      'overflow with. Letting the row\'s CONTENT out is the fix rather than a side effect — a ' +
+      'dropdown in a tinted row was cut off for the same reason it was in a video one. This is the ' +
+      'contract that was missing when that behaviour changed, so it changed silently (review round 2).',
+    section: {
+      layout: 'two-column',
+      overlayScreen: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      modules: [
+        { type: 'heading', text: 'Text under a tint', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Plain neighbour', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
     expect(sample) {
       if (sample.styles.overflow === 'hidden') {
-        return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
-          'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
-          'on the page is now being clipped.';
+        return 'a row carrying only a tint screen is `overflow: hidden` — a navigation dropdown in ' +
+          'it is cut off at the row\'s edge, which is 86bbwmp2y arriving through the overlay ' +
+          'setting instead of through a video.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so its tint screen sizes itself against the page ' +
+          'rather than against the row and the tint lands over the whole document.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-a-dropdown-menu-out-of-the-cell',
+    why:
+      'THE SCENE 86bbwmp2y WAS REPORTED AS, measured rather than reasoned about. A navigation ' +
+      "module's dropdown is supposed to hang below its column; with a video behind that column it " +
+      'was cut off at the column edge, and what a visitor saw was a menu that would not open — they ' +
+      'tap it and a few pixels of white appear. Measured by hand in a browser before the fix: the ' +
+      'menu ran from y=89 to y=255 and the cell ended at y=98, so all three items were inside the ' +
+      'clip. THE RECT NEVER MOVED — clipping does not change a clipped element\'s geometry — which ' +
+      'is why this asks what the browser reports on top over the section below rather than reading ' +
+      'a box or a style. The sibling contract on floating decor covers the same mechanism without a ' +
+      'hover; this one covers the module the operator actually reported.',
+    section: {
+      layout: 'two-column',
+      // A section below for the menu to hang over, and the thing the probe
+      // compares against. Without it the overhang has nothing underneath it and
+      // there is no intersection to ask about.
+      spacers: 1,
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+      },
+      modules: [
+        {
+          type: 'navigation',
+          column: 'left',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'play', label: 'Programs', href: '/programs' },
+              { id: 'p1', label: 'Junior tennis', href: '/junior', parentId: 'play' },
+              { id: 'p2', label: 'Adult clinics', href: '/adult', parentId: 'play' },
+              { id: 'p3', label: 'Private lessons', href: '/private', parentId: 'play' },
+            ]),
+          },
+        },
+        { type: 'text', column: 'right', text: '<p>Next column</p>', settings: {} },
+      ],
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.site-nav-dropdown-menu',
+        against: '.builder-preview-section:has(.builder-preview-column-layered) ~ .builder-preview-section',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page. Either the dropdown never ` +
+          'opened on hover, or there is no section below the row for it to hang over — and with ' +
+          'neither of those on the page this contract can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. The menu's rect is
+       * identical whether it is clipped or not, so this is the only thing that
+       * distinguishes "the menu hangs past the row and we are asking about the
+       * overhang" from "the menu now fits inside the row and the probe point
+       * landed nowhere in particular".
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the open dropdown does not hang past the bottom of its row at all in this scene, so ' +
+          'there is no overhang to probe and this contract cannot say anything. Give the menu more ' +
+          'items, or a shorter row — a scene with no overhang passes forever while testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the open dropdown hangs below the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the menu — the ` +
+          'part of the menu outside its column is not there to be hit. That is the cell clipping ' +
+          'its own contents in order to contain the footage (86bbwmp2y). To a visitor the menu ' +
+          'opens as a sliver of white and then nothing: it reads as broken.';
       }
       return null;
     },
@@ -1357,9 +1765,9 @@ export const RENDER_CONTRACTS = [
       'THE CONTRACT ABOVE PASSES ON THIS BUG, measured rather than feared: make the section mount a ' +
       'layer for EVERY image background and it still reports clean, because the layer component ' +
       'itself renders null when parallax is off. What actually changes is the ROW — deciding to ' +
-      'mount a layer is also deciding to make the row `position: relative; overflow: hidden`, and ' +
-      'that would start clipping any overlay module deliberately spilling out of it, on pages ' +
-      'nobody touched. The absence that matters is the containment, not the element.',
+      'mount a layer is also deciding to make the row `position: relative` and to lay a full-size ' +
+      'clip box over it, and that box takes hit-testing decisions and stacking rungs with it, on ' +
+      'pages nobody touched. The absence that matters is the containment, not the element.',
     section: {
       ...PARALLAX_IMAGE_SECTION,
       background: { ...PARALLAX_IMAGE_SECTION.background, parallax: false },
