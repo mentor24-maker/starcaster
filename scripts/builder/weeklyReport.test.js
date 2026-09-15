@@ -304,39 +304,60 @@ test('the weekly-report job is registered to exactly one machine', () => {
   assert.equal(v.owned, false);
 });
 
-test('the gatherer never commits to main', () => {
+// ── The report is not allowed to touch the repo at all (task 86bc0nbwq) ───
+//
+// It used to publish by committing docs/reports/<date>.html into a branch and
+// opening a pull request, which is what left the files in the checkout and
+// disabled the Mini's self-update for a week at a time. Three tests used to
+// live here pinning that machinery — that it never pushed main, that it worked
+// from a throwaway worktree, that it did not open an empty PR every quiet week.
+// All three are replaced by one stronger claim: it does no git writing at all.
+
+test('the gatherer never commits, never pushes, and never opens a pull request', () => {
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
-  // A `git push origin main` here would be a scheduled deploy to production at
-  // 07:00 on a Monday with nobody awake (CLAUDE.md landmine 4).
-  assert.ok(!/push[^\n]*['"]main['"]/.test(src), 'nothing may push main');
-  // Specifically a force PUSH. `git worktree remove --force` is a different
-  // thing entirely — it discards a scratch folder, not shared history — and an
-  // assertion that cannot tell them apart would either fail honest code or get
-  // loosened until it stops meaning anything.
-  const pushLines = src.split('\n').filter((l) => /'push'/.test(l));
-  assert.ok(pushLines.length > 0, 'it does push something, or this assertion proves nothing');
-  for (const line of pushLines) {
-    assert.ok(!/--force/.test(line), `a force-push slipped in (DOCTRINE 6.6): ${line.trim()}`);
+
+  // The original worry, and it is now answered by the absence of the whole
+  // mechanism rather than by the shape of it: a `git push origin main` here
+  // would be a scheduled deploy to production at 07:00 on a Monday with nobody
+  // awake (CLAUDE.md landmine 4).
+  for (const forbidden of ["'push'", "'commit'", "'worktree'", "'checkout'"]) {
+    assert.ok(
+      !src.includes(`, ${forbidden},`) && !src.includes(`[${forbidden},`),
+      `weekly_report.mjs runs git ${forbidden} — the report is a record, not a change to the code`,
+    );
   }
+  assert.ok(!/'pr', 'create'/.test(src), 'it must not open a pull request any more');
+  // It still ASKS gh about pull requests — that is where the merge figures come
+  // from — so the assertion above has to be about creating one, not about gh.
+  assert.match(src, /'pr', 'list'/, 'it still reads the merged set from GitHub');
+
+  // The control. If the assertions above passed because the file stopped
+  // running git ENTIRELY, they would also pass on a file that does nothing —
+  // so pin the one git call that legitimately remains.
+  assert.match(src, /'fetch', 'origin', 'main'/, 'it still refreshes origin/main before reading it');
 });
 
-test('publishing happens in a throwaway worktree, never by switching the checkout branch', () => {
+test('the report is written outside every git checkout, and refuses if it is not', () => {
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
-  // The obvious version — `git checkout -B <branch> origin/main` in place —
-  // works once and then leaves the MAIN checkout parked on a weekly-report
-  // branch forever. The next bus-relay pass sees it is not on main, skips its
-  // self-update, and the Mini silently runs frozen code from then on.
-  assert.ok(!/'checkout', '-B'/.test(src), 'it must not switch the checkout off its own branch');
-  assert.match(src, /'worktree', 'add'/, 'it publishes from its own temporary worktree');
-  assert.match(src, /'worktree', 'remove'/, 'and cleans that worktree up');
-  // Cleanup has to be unconditional, or next Monday fails with "already exists".
-  assert.match(src, /\} finally \{/, 'the cleanup runs even when publishing fails');
+  assert.match(src, /checkReportHome/, 'the home is decided by the guard, not by a path literal');
+  assert.ok(!/path\.join\(REPO, 'docs', 'reports'\)/.test(src),
+    'docs/reports/ inside the checkout is the folder that disabled the Mini');
+  // The refusal is FATAL. A fall-back to "somewhere safe" is how the report
+  // lands back in a checkout with nothing saying so.
+  const guard = src.slice(src.indexOf('const HOME_CHECK'), src.indexOf('const REPORTS_DIR'));
+  assert.match(guard, /process\.exit\(1\)/, 'a home inside a checkout stops the run');
 });
 
-test('an edition identical to last week does not open an empty pull request', () => {
+test('a failed Drive upload is a failed run, not a quiet one', () => {
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
-  assert.match(src, /diff', '--cached', '--name-only'/, 'it checks whether anything actually changed');
-  assert.match(src, /no changes/, 'and stops rather than filing a weekly no-op PR');
+  const publishFn = src.slice(src.indexOf('async function publish('), src.indexOf('function fileNarrativeTicket'));
+  assert.match(publishFn, /bus\(`Weekly report could not reach Google Drive/, 'it tells the bus');
+  assert.match(publishFn, /return \{ published: false, reason: result\.error \}/,
+    'and returns the failure, which publishExitCode turns into exit 1');
+  // The wrapper is the other half: a non-zero exit has to reach a person.
+  const wrapper = fs.readFileSync(path.resolve(__dirname, '..', 'run_weekly_report.sh'), 'utf8');
+  assert.match(wrapper, /npm run --silent report:failure/, 'the wrapper reports a failed run to the bus');
+  assert.match(wrapper, /\$status" -ne 3/, 'but exit 3 — another machine owns it — is not a failure');
 });
 
 // ── The three defects the review pass found ────────────────────────────────
@@ -701,15 +722,30 @@ test('the bus warning is reachable: bus() checks the result it gets back', () =>
 
 test('a publish that was asked for and did not happen exits non-zero', () => {
   assert.equal(R.publishExitCode({ published: true }), 0, 'a report that shipped is a success');
-  assert.equal(R.publishExitCode({ published: false, reason: 'no changes' }), 0,
-    'a week identical to the last edition is a quiet week, not a failure');
   assert.equal(R.publishExitCode({ published: false, reason: 'other-node' }), 3,
     'another machine owning the job is a designed decline — the code node:owns uses');
+
+  // 'no changes' USED to be a third exemption and is deliberately not one any
+  // more (round 1 of 86bc0nbwq). It meant "identical to the edition already on
+  // main", a judgement only the pull-request mechanism could make, and that
+  // mechanism was removed when publishing became an upload to Drive. An upload
+  // is never a no-op: the edition reached the folder or it did not.
+  assert.equal(R.publishExitCode({ published: false, reason: 'no changes' }), 1,
+    'nothing can produce that reason now, and an unreachable exemption reads as a considered one');
 
   for (const reason of ['gh exited 1', 'push rejected', 'unknown-role']) {
     assert.equal(R.publishExitCode({ published: false, reason }), 1,
       `launchd must not record a clean Monday for a week that produced no report (${reason})`);
   }
+});
+
+test('nothing in the report can still produce the retired "no changes" reason', () => {
+  // The other half: publishExitCode is only right about that reason because the
+  // code path that produced it is gone. If one comes back, the exemption has to
+  // come back with it — deliberately, not by the exit code quietly being wrong.
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+  assert.ok(!/'no changes'/.test(code), 'no publish path returns it');
 });
 
 test("'unidentified' exits 1, not 3 — it is ignorance, not a decline", () => {
@@ -743,13 +779,23 @@ test('publishExitCode agrees with node_role.mjs about what 3 means', () => {
 });
 
 test('the narrative ticket can never be filed pointing at the word "undefined"', () => {
+  // The original defect: `gh` reported success, printed no URL, `.pop()` on the
+  // empty list gave `undefined`, and `undefined` interpolates into a ticket body
+  // as the WORD "undefined" — a ticket pointing at nothing, filed and looking
+  // fine. The destination changed (task 86bc0nbwq); the defect has not.
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
-  const idx = src.indexOf("const url = pr.stdout");
-  assert.ok(idx > 0, 'the PR url is still read off gh here');
-  const after = src.slice(idx, idx + 600);
-  assert.match(after, /if \(!url\)/, 'a missing url is caught');
-  assert.ok(after.indexOf('if (!url)') < after.indexOf('fileNarrativeTicket'),
-    'and it is caught BEFORE the ticket is filed, which is the only ordering that helps');
+  const publishFn = src.slice(src.indexOf('async function publish('), src.indexOf('function fileNarrativeTicket'));
+
+  // A file with no usable link falls back to the FOLDER, which always exists by
+  // the time this line runs — never to undefined.
+  assert.match(publishFn, /\|\|\s*result\.folderLink/, 'a missing per-file link falls back to the folder');
+  assert.ok(publishFn.indexOf('const pageLink') < publishFn.indexOf('fileNarrativeTicket'),
+    'and the link is settled BEFORE the ticket is filed, which is the only ordering that helps');
+
+  // And upstream of that: Drive answering 200 with no file id is a failure, not
+  // a thing to build a link out of.
+  const drive = fs.readFileSync(path.resolve(__dirname, '..', '..', 'lib', 'weeklyReportDrive.js'), 'utf8');
+  assert.match(drive, /named no file id/, 'an upload with no id is refused rather than linked to');
 });
 
 test('every window on the page means the same week — the CI median is local, like the rest', () => {
@@ -774,10 +820,21 @@ test('the schedule reports on a week that has finished, not the one we are stand
   // `--window 7` alone means "the 7 days ending TODAY". Fired Monday 07:00 it
   // stops at 07:00 and the next edition starts Tuesday, so Monday daytime falls
   // into no edition at all — 70 of 107 Monday merges since 1 July, silently.
-  const invocation = src.split('\n').find((l) => l.includes('weekly_report.mjs') && !l.trimStart().startsWith('#'));
-  assert.ok(invocation, 'the wrapper must actually run the report, or this proves nothing');
-  assert.match(invocation, /--as-of/, 'the scheduled run must pin the window to a finished day');
-  assert.ok(!/--as-of\s+"?\$\(date \+%F\)/.test(invocation), 'ending the window today is the defect itself');
+  // EVERY line that runs the report, not the first one found. Since round 1 of
+  // 86bc0nbwq there are two: the real invocation through `npm run report:weekly`
+  // (which is what gives it Doppler and therefore the Google credential) and the
+  // WEEKLY_REPORT_NODE test seam. Reading only the first would have pinned the
+  // seam and let the scheduled line drift — a test that reads a line nothing
+  // schedules is the same defect one level up.
+  const invocations = src.split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .filter((l) => l.includes('weekly_report.mjs') || l.includes('report:weekly'));
+  assert.ok(invocations.length >= 2,
+    'the wrapper must actually run the report — through npm, plus the test seam — or this proves nothing');
+  for (const invocation of invocations) {
+    assert.match(invocation, /--as-of/, 'the scheduled run must pin the window to a finished day');
+    assert.ok(!/--as-of\s+"?\$\(date \+%F\)/.test(invocation), 'ending the window today is the defect itself');
+  }
   // And the day it pins to has to be worked out, not assumed present.
   assert.match(src, /date -v-1d \+%F/, 'yesterday is computed from the clock');
   assert.match(src, /refusing to report on a partial week/, 'and a clock it cannot read stops the run rather than silently reporting a short week');
@@ -902,16 +959,18 @@ test('the closed-ticket count is bounded at BOTH ends', () => {
 });
 
 test('--out and --publish refuse to combine', () => {
-  // Publishing copies the report into a throwaway worktree by its path RELATIVE
-  // TO THE REPO. An --out inside docs/reports/ is a copy onto itself; an --out
-  // anywhere else is a relative path that climbs out of the worktree entirely.
+  // The reason changed with the destination (task 86bc0nbwq) and the refusal
+  // did not. Publishing uploads each file to a SHARED Drive folder under its
+  // name on disk, and an --out path is a name somebody picked for a look —
+  // `x.html`, `notes.txt`. Those would sit in Projects › Starcaster › Weekly
+  // Reports forever, looking like editions and listed in no index.
   const res = spawnSync(process.execPath, [
     path.resolve(__dirname, '..', 'weekly_report.mjs'), '--out', path.join(os.tmpdir(), 'x.html'), '--publish',
   ], { encoding: 'utf8', timeout: 60000 });
   assert.equal(res.status, 2, `expected a refusal, got ${res.status}: ${res.stderr || res.stdout}`);
   assert.match(res.stderr, /do not combine/, 'and it says why in words');
-  // It must refuse BEFORE doing any work — no branch, no PR, no ticket.
-  assert.ok(!/Pull request:/.test(res.stdout + res.stderr), 'it stopped before publishing anything');
+  // It must refuse BEFORE doing any work — nothing written, nothing uploaded.
+  assert.ok(!/Uploading to Google Drive/.test(res.stdout + res.stderr), 'it stopped before publishing anything');
 });
 
 // ── The report has to clean up after itself at BOTH ends (task 86bbw8j37) ──
@@ -1025,4 +1084,25 @@ test('a publish that FAILED keeps its output, and the failure is not masked', ()
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('the index links to Drive, because Drive is the only place this page is opened', () => {
+  // THE DEFECT (round 1 of 86bc0nbwq). The index shipped with relative links —
+  // href="2026-09-14.html" — which resolve to nothing in Google Drive: Drive
+  // serves every file from its own id, not from a folder path. So every link on
+  // the published index was dead, on a page whose entire job is to be links.
+  const html = R.renderIndexHtml([
+    { date: '2026-09-07', file: '2026-09-07.html', link: 'https://drive.google.com/file/d/AAA/view' },
+    { date: '2026-09-14', file: '2026-09-14.html', link: 'https://drive.google.com/file/d/BBB/view' },
+  ]);
+  assert.match(html, /href="https:\/\/drive\.google\.com\/file\/d\/BBB\/view"/,
+    'the Drive link is what a reader can actually follow');
+  assert.ok(!/href="2026-09-14\.html"/.test(html),
+    'a relative href resolves to nothing in Drive — that is the whole defect');
+  assert.ok(html.indexOf('2026-09-14') < html.indexOf('2026-09-07'), 'newest first');
+
+  // The fallback stays: a local look at the staging folder has no Drive links,
+  // and relative links DO work there.
+  const local = R.renderIndexHtml([{ date: '2026-09-14', file: '2026-09-14.html' }]);
+  assert.match(local, /href="2026-09-14\.html"/, 'no link means the filename, not an empty href');
 });
