@@ -34,6 +34,11 @@ import {
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
+import {
+  latestPostsEmptyReason,
+  resolveLatestPostsSettings,
+  selectLatestPosts
+} from "@/lib/blog-latest-posts";
 
 /** Feature cards sit up to three across the content column. */
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
@@ -2573,6 +2578,9 @@ function BuilderModulePreview({
       />
     );
   }
+  if (module.type === "blog-latest-posts") {
+    return <BlogLatestPostsPreview settings={module.settings} liveSite={liveSite} />;
+  }
   if (module.type === "blog-related-posts") {
     // liveSite decides whether an empty result explains itself or simply is
     // not there. A visitor gets nothing; the person building the page gets a
@@ -2824,13 +2832,6 @@ function BlogPostListPreview({
 
   // Card template — migrate from API (supports both old elements[] and new rows[] format)
   const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
-  const tplRows    = tpl.rows;
-  const cardLayout = tpl.cardLayout;
-  const cardStyle  = tpl.cardStyle;
-  const cardRadius = tpl.cardBorderRadius;
-  const accent     = tpl.accentColor;
-  const tplAspect  = tpl.imageAspectRatio;
-  const readMoreLabel = tpl.readMoreLabel;
   const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
 
   // Filter bar visibility
@@ -3177,8 +3178,6 @@ function BlogPostListPreview({
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
   }
 
-  const cardBorder: CSSProperties = cardFrameStyle(tpl);
-
   const gridStyle: CSSProperties =
     layout === "list"
       ? { display: "flex", flexDirection: "column", gap: `${cardGap}px` }
@@ -3309,153 +3308,16 @@ function BlogPostListPreview({
         </div>
       ) : (
         <div style={gridStyle}>
-          {visiblePosts.map((post) => {
-            const sep = postPageUrl.includes("?") ? "&" : "?";
-            const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
-            const postCats = categories.filter((c) => post.categoryIds?.includes(c.id));
-            const dateStr = post.published_at
-              ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
-              : "";
-            const imageUrl = post.featuredImageUrl || post.featured_image_url;
-            const isSideBySide = cardLayout === "side-by-side" || layout === "list";
-            const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
-            /*
-             * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
-             *
-             * A slot being present in the template says nothing about whether it
-             * draws anything: `categories` renders null on a post with no
-             * categories, `excerpt` on a post with no excerpt, and so on. Both
-             * production templates open with `["categories"]`, and the Delray
-             * posts have none — so the template order and the rendered order are
-             * different lists, and reading the wrong one caused both bugs below.
-             *
-             * PR #522 made the image's full-bleed pull-up conditional on being
-             * the first slot IN THE TEMPLATE, to stop it sliding under whatever
-             * sat above it. On those templates that test is false while the
-             * image is visibly at the top, so the card's 1.125rem top padding
-             * showed as a gap (task 86bbtvnr5). The fix is not to go back to
-             * pulling up unconditionally — that reintroduces the sliding — but to
-             * ask the question about CONTENT rather than about the template.
-             */
-            function slotRenders(id: CardElementId | null): boolean {
-              switch (id) {
-                case "categories":     return postCats.length > 0;
-                case "headline":       return true;
-                case "featured_image": return Boolean(imageUrl) && !isSideBySide;
-                case "excerpt":        return Boolean(post.excerpt);
-                case "author":         return Boolean(post.author);
-                case "date":           return Boolean(dateStr);
-                case "tags":           return Boolean(post.tags?.length);
-                case "read_more":      return true;
-                default:               return false;
-              }
-            }
-            const firstRenderedSlot =
-              tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
-
-            function renderEl(id: CardElementId): React.ReactNode {
-              switch (id) {
-                case "categories":
-                  return postCats.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {postCats.map((c) => (
-                        <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>{c.name}</span>
-                      ))}
-                    </div>
-                  ) : null;
-                case "headline":
-                  // The headline always opens the post, at the same address
-                  // "Read More" does. It used to be plain text while the image
-                  // (opt-in) and "Read More" both linked; a headline that does
-                  // nothing when clicked reads as a broken site (task 86bbzy3kb).
-                  // Only a card with no usable address keeps plain text — a dead
-                  // "#" anchor would be the same defect with a pointer cursor.
-                  return (
-                    <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
-                      display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {href && href !== "#"
-                        ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{post.title}</a>
-                        : post.title}
-                    </h3>
-                  );
-                case "featured_image": {
-                  if (isSideBySide || !imageUrl) return null;
-                  const { frame, img } = featuredImageStyles(tpl, {
-                    cardPaddingX: "1.25rem",
-                    cardPaddingTop: "1.125rem",
-                    topOfCard: firstRenderedSlot === "featured_image",
-                  });
-                  return withPostLink(
-                    <div style={frame}>
-                      <img alt={post.title} src={imageUrl} style={img} />
-                    </div>,
-                    tpl,
-                    href
-                  );
-                }
-                case "excerpt":
-                  return post.excerpt ? (
-                    <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
-                  ) : null;
-                case "author":
-                  return post.author ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
-                case "date":
-                  return dateStr ? <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
-                case "tags":
-                  return post.tags?.length ? (
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {post.tags.map((tag) => (
-                        <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
-                      ))}
-                    </div>
-                  ) : null;
-                case "read_more":
-                  return <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
-                default:
-                  return null;
-              }
-            }
-
-            return (
-              <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
-                {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  // The strip IS the flex item — it carries flexShrink, width,
-                  // border and shadow. So when the image links, the anchor has to
-                  // BE the strip; an anchor wrapped around it would become the
-                  // flex item instead and none of that styling would apply.
-                  createElement(
-                    tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
-                    tpl.imageLinkToPost && href && href !== "#"
-                      ? { href, style: sideStripStyle(tpl) }
-                      : { style: sideStripStyle(tpl) },
-                    <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-                  )
-                ) : null}
-                {/* minWidth 0 is load-bearing: a flex item defaults to
-                    min-width:auto, so the text column refuses to shrink below its
-                    content and the card overflows sideways once the image strip is
-                    wide. Reachable now that the strip's width is an operator control. */}
-                <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                  {tplRows.map((row) => {
-                    // Emptiness is measured against the POST, not the template.
-                    // The old test asked only whether the row HELD a slot, so a
-                    // categories row on a post with no categories still emitted a
-                    // flex child — invisible, but carrying the column's 0.625rem
-                    // gap, which is the other half of the gap above the image.
-                    const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
-                    if (!hasContent) return null;
-                    return (
-                      <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
-                        {row.slots.slice(0, row.cols).map((slot, si) => slot ? (
-                          <div key={si}>{renderEl(slot)}</div>
-                        ) : <div key={si} />)}
-                      </div>
-                    );
-                  })}
-                </div>
-              </article>
-            );
-          })}
+          {visiblePosts.map((post) => (
+            <BlogFeedCard
+              key={post.id}
+              post={post}
+              categories={categories}
+              tpl={tpl}
+              postPageUrl={postPageUrl}
+              listLayout={layout === "list" ? "list" : "grid"}
+            />
+          ))}
         </div>
       )}
 
@@ -3498,6 +3360,289 @@ function BlogPostListPreview({
           {partialArchiveNote}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/*
+ * ONE BLOG POST CARD, drawn from the site's shared card template.
+ *
+ * Lifted out of BlogPostListPreview so Latest Blog Posts draws exactly the same
+ * card rather than a second copy of it (task 86bc0neew) — Related Posts is what
+ * a second copy looks like: hard-coded cards that ignore the Card Manager.
+ * Everything a card needs comes in as props; the template is already migrated.
+ */
+function BlogFeedCard({
+  post,
+  categories,
+  tpl,
+  postPageUrl,
+  listLayout
+}: {
+  post: BlogPostRecord;
+  categories: BlogCategory[];
+  tpl: ReturnType<typeof migrateTemplate>;
+  postPageUrl: string;
+  listLayout: "grid" | "list";
+}) {
+  const tplRows = tpl.rows;
+  const cardRadius = tpl.cardBorderRadius;
+  const accent = tpl.accentColor;
+  const readMoreLabel = tpl.readMoreLabel;
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
+  const sep = postPageUrl.includes("?") ? "&" : "?";
+  const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
+  const postCats = categories.filter((c) => post.categoryIds?.includes(c.id));
+  const dateStr = post.published_at
+    ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    : "";
+  const imageUrl = post.featuredImageUrl || post.featured_image_url;
+  const isSideBySide = tpl.cardLayout === "side-by-side" || listLayout === "list";
+  const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
+  /*
+   * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
+   *
+   * A slot being present in the template says nothing about whether it
+   * draws anything: `categories` renders null on a post with no
+   * categories, `excerpt` on a post with no excerpt, and so on. Both
+   * production templates open with `["categories"]`, and the Delray
+   * posts have none — so the template order and the rendered order are
+   * different lists, and reading the wrong one caused both bugs below.
+   *
+   * PR #522 made the image's full-bleed pull-up conditional on being
+   * the first slot IN THE TEMPLATE, to stop it sliding under whatever
+   * sat above it. On those templates that test is false while the
+   * image is visibly at the top, so the card's 1.125rem top padding
+   * showed as a gap (task 86bbtvnr5). The fix is not to go back to
+   * pulling up unconditionally — that reintroduces the sliding — but to
+   * ask the question about CONTENT rather than about the template.
+   */
+  function slotRenders(id: CardElementId | null): boolean {
+    switch (id) {
+      case "categories":     return postCats.length > 0;
+      case "headline":       return true;
+      case "featured_image": return Boolean(imageUrl) && !isSideBySide;
+      case "excerpt":        return Boolean(post.excerpt);
+      case "author":         return Boolean(post.author);
+      case "date":           return Boolean(dateStr);
+      case "tags":           return Boolean(post.tags?.length);
+      case "read_more":      return true;
+      default:               return false;
+    }
+  }
+  const firstRenderedSlot =
+    tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
+
+  function renderEl(id: CardElementId): React.ReactNode {
+    switch (id) {
+      case "categories":
+        return postCats.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {postCats.map((c) => (
+              <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>{c.name}</span>
+            ))}
+          </div>
+        ) : null;
+      case "headline":
+        // The headline always opens the post, at the same address
+        // "Read More" does. It used to be plain text while the image
+        // (opt-in) and "Read More" both linked; a headline that does
+        // nothing when clicked reads as a broken site (task 86bbzy3kb).
+        // Only a card with no usable address keeps plain text — a dead
+        // "#" anchor would be the same defect with a pointer cursor.
+        return (
+          <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
+            display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {href && href !== "#"
+              ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{post.title}</a>
+              : post.title}
+          </h3>
+        );
+      case "featured_image": {
+        if (isSideBySide || !imageUrl) return null;
+        const { frame, img } = featuredImageStyles(tpl, {
+          cardPaddingX: "1.25rem",
+          cardPaddingTop: "1.125rem",
+          topOfCard: firstRenderedSlot === "featured_image",
+        });
+        return withPostLink(
+          <div style={frame}>
+            <img alt={post.title} src={imageUrl} style={img} />
+          </div>,
+          tpl,
+          href
+        );
+      }
+      case "excerpt":
+        return post.excerpt ? (
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
+        ) : null;
+      case "author":
+        return post.author ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
+      case "date":
+        return dateStr ? <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
+      case "tags":
+        return post.tags?.length ? (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {post.tags.map((tag) => (
+              <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
+            ))}
+          </div>
+        ) : null;
+      case "read_more":
+        return <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
+      default:
+        return null;
+    }
+  }
+
+  return (
+    <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
+      {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
+        // The strip IS the flex item — it carries flexShrink, width,
+        // border and shadow. So when the image links, the anchor has to
+        // BE the strip; an anchor wrapped around it would become the
+        // flex item instead and none of that styling would apply.
+        createElement(
+          tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
+          tpl.imageLinkToPost && href && href !== "#"
+            ? { href, style: sideStripStyle(tpl) }
+            : { style: sideStripStyle(tpl) },
+          <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
+        )
+      ) : null}
+      {/* minWidth 0 is load-bearing: a flex item defaults to
+          min-width:auto, so the text column refuses to shrink below its
+          content and the card overflows sideways once the image strip is
+          wide. Reachable now that the strip's width is an operator control. */}
+      <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+        {tplRows.map((row) => {
+          // Emptiness is measured against the POST, not the template.
+          // The old test asked only whether the row HELD a slot, so a
+          // categories row on a post with no categories still emitted a
+          // flex child — invisible, but carrying the column's 0.625rem
+          // gap, which is the other half of the gap above the image.
+          const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
+          if (!hasContent) return null;
+          return (
+            <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
+              {row.slots.slice(0, row.cols).map((slot, si) => slot ? (
+                <div key={si}>{renderEl(slot)}</div>
+              ) : <div key={si} />)}
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+/*
+ * LATEST BLOG POSTS (task 86bc0neew) — a row of the newest published posts,
+ * optionally narrowed to chosen tags or categories. Which posts, and the empty
+ * sentence, live in lib/builder-client/blog-latest-posts.ts; this reads the
+ * data and draws BlogFeedCard, so the cards match Post Feed exactly.
+ */
+function BlogLatestPostsPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  liveSite?: boolean;
+}) {
+  const s = resolveLatestPostsSettings(settings);
+  const [posts, setPosts] = useState<BlogPostRecord[] | null>(null);
+  const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [cardTemplate, setCardTemplate] = useState<CardTemplate | null>(null);
+  // The post page this site really has (Delray has /blog-post, not the
+  // platform default) unless the module names one.
+  const probedPostPageUrl = usePostPageUrl({});
+  const postPageUrl = s.postSlug ? `/${s.postSlug}` : probedPostPageUrl;
+
+  /*
+   * Latest mode needs only the first `count` posts, and the server already
+   * returns newest first, so it is one small read. A tag or category filter
+   * is applied here in the browser, so it has to see the whole archive — a
+   * post the first page missed is a post the filter could never find.
+   */
+  const needsArchive = !s.latest;
+  const readLimit = s.count;
+  useEffect(() => {
+    let cancelled = false;
+    const headers = getCrmProjectHeaders();
+    const readPosts: Promise<BlogPostRecord[]> = needsArchive
+      ? readAllPages<BlogPostRecord>(async (page, limit) => {
+          const r = await fetch(`/api/blog/posts?status=published&limit=${limit}&page=${page}`, {
+            credentials: "include",
+            headers
+          });
+          if (!r.ok) throw new Error(`blog posts page ${page}: ${r.status}`);
+          const body = await r.json();
+          return Array.isArray(body?.posts) ? (body.posts as BlogPostRecord[]) : [];
+        }, { pageSize: BLOG_FEED_PAGE_SIZE }).then((result) => result.items)
+      : fetch(`/api/blog/posts?status=published&limit=${readLimit}`, { credentials: "include", headers })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((body) => (Array.isArray(body?.posts) ? (body.posts as BlogPostRecord[]) : []));
+    Promise.all([
+      readPosts.catch(() => [] as BlogPostRecord[]),
+      fetch("/api/blog/categories", { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch("/api/blog/card-template", { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+    ]).then(([fetchedPosts, cd, td]) => {
+      if (cancelled) return;
+      setPosts(fetchedPosts);
+      setCategories(Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : []);
+      const tplData = td?.template ?? td;
+      if (tplData && typeof tplData === "object") setCardTemplate(migrateTemplate(tplData));
+    });
+    return () => { cancelled = true; };
+  }, [needsArchive, readLimit]);
+
+  if (posts === null) {
+    return liveSite ? null : <div style={{ padding: "1.5rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
+  }
+
+  const shown = selectLatestPosts(posts, s);
+  const heading = s.title ? <h2 className="builder-blog-latest-posts-title" style={{ margin: "0 0 1rem" }}>{s.title}</h2> : null;
+
+  if (shown.length === 0) {
+    // A visitor gets no module at all rather than a heading over empty space.
+    if (liveSite) return null;
+    const categoryNames = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+    return (
+      <div className="builder-blog-latest-posts">
+        {heading}
+        <BuilderOnlyNote liveSite={liveSite} className="builder-blog-latest-posts-empty">
+          {latestPostsEmptyReason(s, { publishedCount: posts.length, categoryNames })}
+        </BuilderOnlyNote>
+      </div>
+    );
+  }
+
+  const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
+  const gridStyle = {
+    "--latest-posts-columns": String(s.columns),
+    gap: `${s.gap}px`
+  } as CSSProperties;
+
+  return (
+    <div className="builder-blog-latest-posts">
+      {heading}
+      <div className="builder-blog-latest-posts-grid" style={gridStyle}>
+        {shown.map((post) => (
+          <BlogFeedCard
+            key={post.id}
+            post={post}
+            categories={categories}
+            tpl={tpl}
+            postPageUrl={postPageUrl}
+            listLayout="grid"
+          />
+        ))}
+      </div>
     </div>
   );
 }
