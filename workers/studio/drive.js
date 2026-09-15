@@ -124,9 +124,17 @@ function classifyDriveFailure(res) {
   return { kind: 'transient', status, reason, message };
 }
 
-/** Does this failure mean "stop and wait for a person", rather than "try later"? */
+/**
+ * Does this failure mean "stop and wait for a person", rather than "try later"?
+ *
+ * `wrong_drive` and `same_folder` never come out of `classifyDriveFailure` —
+ * they are configuration, not something Drive said — but they are named here
+ * because they are the most person-shaped failures in the file, and a future
+ * caller asking this question about one of them must not be told "try later".
+ */
 function needsAPerson(kind) {
-  return kind === 'auth' || kind === 'quota' || kind === 'permission' || kind === 'missing';
+  return kind === 'auth' || kind === 'quota' || kind === 'permission' || kind === 'missing'
+    || kind === 'wrong_drive' || kind === 'same_folder';
 }
 
 /**
@@ -160,6 +168,22 @@ function fixFor(kind, { account = '', folderPath = '', folderId = '', message = 
       return `The watched folder ${folderPath || ''} (id ${folderId || 'unknown'}) does not exist, or is invisible to this credential. `
         + `${who}. Check the folder id in the Studio settings, and check it against the account that actually owns /Studio/. `
         + `Drive said: ${message || 'no message'}`;
+    case 'wrong_drive':
+      // THE WATCHER IS READING A FEED THE FOLDER IS NOT IN. There is one
+      // changes stream per drive, so a folder on a shared drive is invisible
+      // to My Drive's stream and vice versa. Nothing fails, nothing is
+      // skipped, and the pass reports a clean zero for ever — which is the
+      // shape landmine 17 is about, and the ticket's own Account trap.
+      return `${folderPath || 'the watched folder'} (id ${folderId || 'unknown'}) is on a different Google drive `
+        + 'from the changes feed this watcher is reading, so nothing in it will ever be picked up. '
+        + `${message}. `
+        + 'Fix: set STUDIO_DRIVE_ID to the drive the Studio folders actually live on (blank means My Drive), '
+        + 'or move /Studio/ onto that drive. Both watched folders must be on the SAME drive.';
+    case 'same_folder':
+      return 'The Inbox and Plates folder ids are the same, so every file would be filed as a plate '
+        + 'and never transcribed. '
+        + `${message}. `
+        + 'Fix: point STUDIO_DRIVE_INBOX_FOLDER_ID and STUDIO_DRIVE_PLATES_FOLDER_ID at the two different folders.';
     default:
       return `Google Drive could not be read: ${message || 'no message'}`;
   }
@@ -234,9 +258,30 @@ async function watchDrive(options = {}) {
     // file that really was in a watched folder and was declined anyway.
     ignored: { count: 0, byReason: {}, sample: [] },
     unchecked: [],
+    // THE SUBSET OF `unchecked` THAT MAKES THE VERDICT A CANNOT-TELL.
+    //
+    // Not everything in `unchecked` is a failed reading. "Plates is not
+    // configured" and "stopped after 50 pages, the cursor is saved" are both
+    // stated, self-correcting facts about a pass that worked; gating the
+    // verdict on the whole list would wedge a one-lane install at
+    // FINISHED WITH FAILURES for ever, which is its own permanent false alarm.
+    // What goes in HERE is the other kind: a check this pass needed and could
+    // not take. Those are the ones that must not be reported as a clean pass
+    // and must never stand an alarm down (DOCTRINE 3.11, CLAUDE.md §"Read the
+    // exit code": a 2 is not a 0).
+    blind: [],
     blocked: null,
     recovered: false,
+    // Set when a page was READ but deliberately not stepped over, because
+    // something on it could not be queued. See the paging loop.
+    cursorHeld: false,
     pagesRead: 0,
+  };
+
+  /** Something this pass needed to check and could not. Says so in both lists. */
+  const cannotTell = (note) => {
+    report.blind.push(note);
+    report.unchecked.push(note);
   };
 
   /** Raise the one blocked job, refresh its reason, and stop the pass. */
@@ -261,6 +306,19 @@ async function watchDrive(options = {}) {
   };
 
   const folders = resolveFolders(options, env);
+  // TWO LANES, ONE FOLDER ID, NO NOISE AT ALL. `watched` below is a Map keyed
+  // by folder id, so the second lane written wins — and the second lane is
+  // plates, whose whole meaning is "never transcribe this". Point both
+  // settings at the same folder by accident and every interview in the Inbox
+  // is filed as a plate and silently never transcribed, with a clean green
+  // report and nothing in NOT CHECKED. Caught here, before any Drive call.
+  if (folders.inbox && folders.plates && folders.inbox === folders.plates) {
+    return stopBlocked('same_folder', {
+      folderPath: '/Studio/Inbox/ and /Studio/Plates/',
+      folderId: folders.inbox,
+      message: `both are set to ${folders.inbox}`,
+    });
+  }
   if (!folders.inbox && !folders.plates) {
     return stopBlocked('missing', {
       folderPath: '/Studio/Inbox/ and /Studio/Plates/',
@@ -274,9 +332,13 @@ async function watchDrive(options = {}) {
   if (!tokenRes || !tokenRes.ok) {
     const failure = classifyDriveFailure(tokenRes || {});
     // A token exchange that fails for ANY reason leaves the watcher blind, so
-    // a transient one still stops the pass — but it is filed as what it is,
-    // so a reader is not sent to re-mint a credential that was fine.
-    return stopBlocked(failure.kind === 'transient' ? 'auth' : failure.kind, {
+    // a transient one still stops the pass — but it is filed as WHAT IT IS.
+    // Until round 2 this line read `failure.kind === 'transient' ? 'auth' : ...`,
+    // which did the exact opposite of the sentence above it: an unreachable
+    // OAuth host told Dane to re-mint a refresh token that was perfectly fine.
+    // `fixFor`'s default branch already writes the honest version, which is
+    // "Google Drive could not be read: <what happened>" and no errand.
+    return stopBlocked(failure.kind, {
       message: (tokenRes && tokenRes.error) || 'no message',
     });
   }
@@ -304,6 +366,10 @@ async function watchDrive(options = {}) {
   for (const lane of Object.values(LANES)) {
     const folderId = folders[lane.key];
     if (!folderId) {
+      // A NOTE, NOT A BLIND SPOT. This is a stated, permanent fact about how
+      // the watcher is configured, not a reading that failed — running one
+      // lane on purpose is legitimate, and making it a blind spot would hold
+      // the verdict at "could not tell" on every pass for ever.
       report.unchecked.push(
         `${lane.path} is not configured (STUDIO_DRIVE_${lane.key.toUpperCase()}_FOLDER_ID is unset), `
         + 'so nothing in it will ever be picked up'
@@ -321,10 +387,38 @@ async function watchDrive(options = {}) {
           message: failure.message,
         });
       }
-      report.unchecked.push(
+      // A FOLDER THIS PASS COULD NOT CONFIRM IS A BLIND SPOT, not a note.
+      // Round 2 measured the cost: a real 403 raised the alarm on pass 1, a
+      // 502 on `getFolder` left pass 2 unable to confirm anything, and the
+      // pass cleared the alarm and said "Drive is readable again" — on the
+      // strength of a check that did not run. `cannotTell` is what keeps the
+      // verdict honest and the recovery locked.
+      cannotTell(
         `${lane.path} (id ${folderId}) could not be confirmed this pass (${failure.message || 'no message'}); `
         + 'files in it are still read from the changes feed'
       );
+      watched.set(folderId, lane);
+      continue;
+    }
+
+    // WHICH DRIVE IS THIS FOLDER ON? `getDriveFolder` already asks for
+    // `driveId` and the answer was being thrown away. There is one changes
+    // feed per drive, so a /Studio/ that lives on a SHARED drive is simply not
+    // in My Drive's feed: the watcher reads the wrong stream, finds nothing,
+    // for ever, and reports a clean pass every time with nothing in NOT
+    // CHECKED. That is landmine 17 exactly, and it is the ticket's own Account
+    // trap paragraph coming true. Absent means My Drive, which is what Drive
+    // returns for an ordinary folder — so "" and "" match and the common case
+    // is untouched.
+    const folderDrive = String(folderRes.data?.driveId || '').trim();
+    if (folderDrive !== driveId) {
+      return stopBlocked('wrong_drive', {
+        account: report.account,
+        folderPath: lane.path,
+        folderId,
+        message: `the folder reports drive ${folderDrive || 'My Drive'}, `
+          + `the watcher is reading ${resource}`,
+      });
     }
     watched.set(folderId, lane);
   }
@@ -371,8 +465,11 @@ async function watchDrive(options = {}) {
     queue.setCursor(resource, startToken);
     report.cursor.after = startToken;
     report.cursor.initialised = true;
-    report.ok = true;
-    report.recovered = clearAnyBlock(queue, resource);
+    // Same gate as the end of a normal pass: a first run whose folder checks
+    // could not be taken has not proved Drive is readable, so it does not get
+    // to stand an existing alarm down.
+    report.ok = report.blind.length === 0;
+    if (report.ok) report.recovered = clearAnyBlock(queue, resource);
     return report;
   }
 
@@ -400,8 +497,26 @@ async function watchDrive(options = {}) {
     report.pagesRead = pages;
 
     const changes = Array.isArray(pageRes.data?.changes) ? pageRes.data.changes : [];
+    const failedBefore = report.failed.length;
     for (const change of changes) {
       consumeChange(change, { queue, watched, report });
+    }
+
+    // A FILE THAT COULD NOT BE QUEUED MUST NOT BE STEPPED OVER.
+    //
+    // Drive never re-reports an unchanged file, so a cursor advanced past a
+    // page whose `enqueue` threw takes that footage out of reach of
+    // everything, permanently — the report names it and no pass can ever pick
+    // it up again. Round 2 measured it: one SQLITE_BUSY on a change, and pass
+    // B queued nothing because the file was already behind the cursor.
+    //
+    // This is the same move the transient page-read failure above makes, for
+    // the same reason, and it is safe for the same reason the crash case is:
+    // re-reading the page re-offers everything that DID queue, and the
+    // queue's dedupe turns each of those back into the job it already made.
+    if (report.failed.length > failedBefore) {
+      report.cursorHeld = true;
+      break;
     }
 
     const next = String(pageRes.data?.nextPageToken || '').trim();
@@ -425,8 +540,10 @@ async function watchDrive(options = {}) {
       break;
     }
     // Neither token came back, which should not happen. Leave the cursor alone
-    // rather than guessing, and say so.
-    report.unchecked.push(
+    // rather than guessing, and say so. A blind spot rather than a note: Drive
+    // answered in a shape this code does not understand, so whether the pass
+    // saw everything is exactly what cannot be told.
+    cannotTell(
       'Drive returned a page with neither nextPageToken nor newStartPageToken, '
       + 'so the cursor was left where it was and this page will be read again'
     );
@@ -440,7 +557,11 @@ async function watchDrive(options = {}) {
     );
   }
 
-  report.ok = report.failed.length === 0;
+  // THREE OUTCOMES, NOT TWO. `failed` is "this pass looked and something went
+  // wrong"; `blind` is "this pass could not look". Until round 2 only the
+  // first was consulted, so a pass that confirmed nothing reported OK and
+  // cleared a live alarm. Neither one may say Drive is readable again.
+  report.ok = report.failed.length === 0 && report.blind.length === 0;
   if (report.ok) report.recovered = clearAnyBlock(queue, resource);
   return report;
 }
@@ -508,6 +629,15 @@ function consumeChange(change, { queue, watched, report }) {
     return;
   }
 
+  // "EXACTLY ONE JOB" IS SCOPED TO A LIVE ONE, AND THAT IS DELIBERATE.
+  // `jobs_live_subject_idx` covers only pending and running, so once an ingest
+  // job reaches `done` a later Drive change on the same file — a rename, a
+  // move, a re-upload — files a fresh ingest job rather than being swallowed.
+  // That is the behaviour we want here: a file that has genuinely changed
+  // should be re-ingested, and the watcher cannot tell a rename from a
+  // re-upload. Cheap duplicate work is 4/8's to refuse, on the `md5Checksum`
+  // this payload already carries. Stated out loud because AC1 reads as
+  // "exactly one job, ever", and it means "never two waiting at once".
   let result;
   try {
     result = queue.enqueue({
@@ -580,10 +710,15 @@ function clearAnyBlock(queue, resource) {
  */
 function formatReport(report) {
   const lines = [];
+  // FOUR HEADLINES, BECAUSE THERE ARE FOUR ANSWERS. "could not tell" is its
+  // own line and never reads as either of the other two — the same three-verdict
+  // discipline the browser gates use (CLAUDE.md §"Read the exit code").
+  let headline = 'OK';
+  if (!report.ok) headline = report.failed.length ? 'FINISHED WITH FAILURES' : 'COULD NOT TELL';
   lines.push(
     report.blocked
       ? `Studio Drive watch BLOCKED — ${report.blocked.kind}`
-      : `Studio Drive watch ${report.ok ? 'OK' : 'FINISHED WITH FAILURES'}`
+      : `Studio Drive watch ${headline}`
   );
   lines.push(`  account: ${report.account || 'could not be read'}`);
   lines.push(`  cursor:  ${report.resource}${report.cursor.initialised ? ' (started watching from now — nothing replayed)' : ''}`);
@@ -609,6 +744,12 @@ function formatReport(report) {
   }
   for (const note of report.unchecked) {
     lines.push(`  NOT CHECKED: ${note}`);
+  }
+  if (report.cursorHeld) {
+    lines.push(
+      '  the cursor was NOT advanced past this page, because something on it could not be '
+      + 'queued — the next pass reads it again rather than losing the file'
+    );
   }
   if (report.blocked) {
     lines.push(`  blocked job ${report.blocked.jobId}: ${report.blocked.reason}`);

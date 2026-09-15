@@ -662,3 +662,175 @@ test('Google\'s own error reason survives the request helper', async (t) => {
   // And the watcher reads that reason the way this slice depends on.
   assert.equal(classifyDriveFailure(res).kind, 'quota');
 });
+
+// ── round 2: the failure paths, each one reproduced before it was fixed ─────
+//
+// Every test below started life as a scratch script the review pass wrote to
+// make the real `watchDrive` misbehave against a scripted Drive. None of them
+// could be reached by walking the happy path, which is why the first two
+// rounds of this ticket shipped with all four defects green.
+
+test('a file that could not be queued holds the cursor, so the next pass still gets it', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  queue.setCursor(cursorResource(''), 'CUR-1');
+
+  // The queue refuses exactly once, the way a busy SQLite does.
+  let refuseNext = true;
+  const flaky = {
+    ...queue,
+    enqueue: (job) => {
+      if (refuseNext) {
+        refuseNext = false;
+        throw new Error('SQLITE_BUSY: database is locked');
+      }
+      return queue.enqueue(job);
+    },
+  };
+  const page = {
+    changes: [{ fileId: 'x1', file: videoFile('x1', 'shoot.mp4', INBOX) }],
+    newStartPageToken: 'CUR-2',
+  };
+
+  const a = await run(flaky, fakeDrive({ pages: [page] }));
+  assert.equal(a.ok, false);
+  assert.equal(a.failed.length, 1);
+  assert.equal(a.cursorHeld, true, 'and it says out loud that it did not step over the page');
+  assert.equal(
+    queue.getCursor(cursorResource('')), 'CUR-1',
+    'THE POINT: Drive never re-reports an unchanged file, so advancing here loses it for good'
+  );
+  assert.match(formatReport(a), /cursor was NOT advanced/);
+
+  // Because the cursor never moved, the same page arrives again — and this
+  // time the queue takes it.
+  const b = await run(flaky, fakeDrive({ pages: [page] }));
+  assert.equal(b.processed.length, 1, 'the footage is picked up rather than lost');
+  assert.equal(queue.getCursor(cursorResource('')), 'CUR-2', 'and now the cursor may move');
+  assert.equal(queue.listJobs({ stage: STAGE_INGEST }).length, 1, 'exactly one job, still');
+});
+
+test('a pass that could not confirm a folder does not stand a real alarm down', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  queue.setCursor(cursorResource(''), 'CUR-1');
+
+  // Pass 1: a genuine permission refusal on the Inbox raises the alarm.
+  await run(queue, fakeDrive({
+    folderResult: (id) => (id === INBOX
+      ? { ok: false, status: 403, reason: 'insufficientPermissions', error: 'no access' }
+      : { ok: true, status: 200, data: { id, name: id } }),
+  }));
+  assert.equal(queue.listJobs({ state: 'blocked' }).length, 1, 'the permission problem is on the board');
+
+  // Pass 2: the folder check itself cannot be made at all. The account-wide
+  // changes feed reads fine, so every other reading this pass takes is clean —
+  // which is exactly what made the old code declare victory.
+  const report = await run(queue, fakeDrive({
+    folderResult: { ok: false, status: 502, error: 'Bad gateway' },
+    pages: [{ changes: [], newStartPageToken: 'CUR-2' }],
+  }));
+
+  assert.equal(report.failed.length, 0, 'nothing actually failed...');
+  assert.equal(report.blind.length, 2, '...but neither folder could be confirmed');
+  assert.equal(report.ok, false, 'so this is not a clean pass');
+  assert.equal(report.recovered, false, 'and it has not earned the right to say Drive is readable');
+  assert.equal(
+    queue.listJobs({ state: 'blocked' }).length, 1,
+    'the permission problem is untouched and still standing'
+  );
+
+  const printed = formatReport(report);
+  assert.match(printed, /COULD NOT TELL/, 'and it reads as a could-not-tell, not a failure and not a pass');
+  assert.doesNotMatch(printed, /Drive is readable again/);
+});
+
+test('an unreachable OAuth host is not reported as a dead credential', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+
+  const report = await run(queue, fakeDrive({
+    tokenResult: { ok: false, status: 502, error: 'Could not reach Google OAuth: fetch failed' },
+  }));
+
+  // Stopping the pass is right — a watcher with no token is blind. Naming the
+  // wrong fix is not: re-minting a refresh token that was fine costs an
+  // afternoon and does not help.
+  assert.equal(report.blocked.kind, 'transient', 'filed as what it is');
+  assert.doesNotMatch(report.blocked.reason, /re-mint/i);
+  assert.doesNotMatch(report.blocked.reason, /expired or has been revoked/i);
+  assert.match(report.blocked.reason, /Could not reach Google OAuth/);
+});
+
+test('a real credential failure still names the credential fix', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+
+  const report = await run(queue, fakeDrive({
+    tokenResult: { ok: false, status: 401, error: 'invalid_grant' },
+  }));
+  assert.equal(report.blocked.kind, 'auth');
+  assert.match(report.blocked.reason, /re-mint/i, 'the fix above must not have broken this one');
+});
+
+// ── the Account trap: one changes feed is one drive ─────────────────────────
+
+test('a watched folder on another drive blocks instead of reading the wrong feed', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  queue.setCursor(cursorResource(''), 'CUR-1');
+
+  const drive = fakeDrive({
+    folderResult: (id) => ({ ok: true, status: 200, data: { id, name: id, driveId: '0ABCsharedDrive' } }),
+    pages: [{ changes: [], newStartPageToken: 'CUR-2' }],
+  });
+  const report = await run(queue, drive);
+
+  assert.equal(report.ok, false);
+  assert.equal(report.blocked.kind, 'wrong_drive');
+  assert.match(report.blocked.reason, /0ABCsharedDrive/, 'it names the drive the folder is actually on');
+  assert.match(report.blocked.reason, /STUDIO_DRIVE_ID/, 'and the setting that fixes it');
+  assert.equal(
+    drive.calls.listChanges.length, 0,
+    'and it never read the wrong feed — a permanently dead watcher used to render as a clean pass'
+  );
+});
+
+test('the same folder is watched normally once the drive matches', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  queue.setCursor(cursorResource('0ABCsharedDrive'), 'CUR-1');
+
+  const report = await run(queue, fakeDrive({
+    folderResult: (id) => ({ ok: true, status: 200, data: { id, name: id, driveId: '0ABCsharedDrive' } }),
+    pages: [{
+      changes: [{ fileId: 'f1', file: videoFile('f1', 'a.mov', INBOX) }],
+      newStartPageToken: 'CUR-2',
+    }],
+  }), { driveId: '0ABCsharedDrive' });
+
+  assert.equal(report.blocked, null, 'a matching drive is not an error');
+  assert.equal(report.ok, true);
+  assert.equal(report.processed.length, 1);
+});
+
+test('both lanes pointed at one folder blocks instead of filing everything as a plate', async (t) => {
+  const queue = openQueue(':memory:');
+  t.after(() => queue.close());
+  queue.setCursor(cursorResource(''), 'CUR-1');
+
+  const drive = fakeDrive({
+    pages: [{
+      changes: [{ fileId: 'f1', file: videoFile('f1', 'interview.mov', INBOX) }],
+      newStartPageToken: 'CUR-2',
+    }],
+  });
+  const report = await watchDrive({
+    queue, drive, inboxFolderId: INBOX, platesFolderId: INBOX, env: {},
+  });
+
+  assert.equal(report.blocked.kind, 'same_folder');
+  assert.match(report.blocked.reason, /never transcribed/, 'it says what the damage would be');
+  assert.equal(report.processed.length, 0, 'and nothing was queued as a plate in the meantime');
+  assert.equal(drive.calls.getAccessToken, 0, 'caught before a single Drive call');
+});

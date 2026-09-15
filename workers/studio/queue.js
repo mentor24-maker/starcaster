@@ -195,14 +195,45 @@ function decodePayload(value) {
  * Add a column to an existing table, or do nothing if it is already there.
  *
  * `ALTER TABLE ... ADD COLUMN` has no `IF NOT EXISTS` in SQLite, and catching
- * the error instead would also swallow a genuinely broken ALTER. Asking
+ * every error instead would also swallow a genuinely broken ALTER. Asking
  * `PRAGMA table_info` first says exactly what is true.
+ *
+ * BUT THE ASK AND THE ACT ARE TWO STATEMENTS. Two workers opening the same old
+ * queue file in the same instant both read the column as absent and both
+ * ALTER; the loser throws `duplicate column name`, and it throws out of
+ * `openQueue`, on the one boot where this migration matters at all — which is
+ * the Mini, first thing, with nothing watching. That ONE error means the other
+ * process did the work and the end state is the one we asked for, so it is the
+ * only one swallowed. Everything else still throws.
  */
 function addColumnIfMissing(db, table, column, declaration) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all();
   if (columns.some((c) => String(c.name) === column)) return false;
-  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  try {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  } catch (err) {
+    if (!/duplicate column name/i.test(String(err && err.message))) throw err;
+    return false;
+  }
   return true;
+}
+
+/**
+ * Roll back, and never let the rollback's own error replace the real one.
+ *
+ * SQLite rolls a transaction back BY ITSELF on a BUSY, FULL or IOERR, so by
+ * the time a catch block runs there may be no transaction left — and the
+ * `ROLLBACK` then throws "cannot rollback - no transaction is active", which
+ * would be thrown in place of the disk-full that actually happened. The
+ * caller must always see what really went wrong.
+ */
+function rollbackQuietly(db) {
+  try {
+    db.exec('ROLLBACK');
+  } catch {
+    // Already rolled back, or never started. Either way there is nothing to
+    // undo and nothing worth saying — the real error is on its way up.
+  }
 }
 
 /**
@@ -522,7 +553,7 @@ function openQueue(file, options = {}) {
       db.exec('COMMIT');
       return { job: shape(inserted), created: true };
     } catch (err) {
-      db.exec('ROLLBACK');
+      rollbackQuietly(db);
       throw err;
     }
   }
@@ -705,6 +736,12 @@ function shape(row) {
 
 module.exports = {
   openQueue,
+  // Exported for their own tests. Both are one-line guards against a race that
+  // only happens on a busy machine at boot, which is exactly the shape that
+  // cannot be reproduced through `openQueue` from a test — and an untested
+  // guard is what sent round 1 of this ticket back.
+  addColumnIfMissing,
+  rollbackQuietly,
   backoffMs,
   STATES,
   DEFAULT_MAX_ATTEMPTS,

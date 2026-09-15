@@ -9,6 +9,8 @@ const { spawn } = require('node:child_process');
 
 const {
   openQueue,
+  addColumnIfMissing,
+  rollbackQuietly,
   backoffMs,
   STATES,
   DEFAULT_BACKOFF_CAP_MS,
@@ -624,4 +626,64 @@ test('a queue file written before `payload` existed is migrated on open', async 
     assert.equal(q.listJobs().length, 1, 'and no second job was filed for it');
     q.close();
   });
+});
+
+// ── round 2: two check-then-act races, both of them at boot on the Mini ─────
+//
+// Neither can be reached through `openQueue` from a test: both need two
+// processes hitting the same statement in the same instant. They are tested
+// through the one-line guards directly, because an untested guard is what sent
+// round 1 of this ticket back — and the guard is the whole of the change.
+
+test('the payload migration survives another process winning the same race', () => {
+  // `PRAGMA table_info` then `ALTER TABLE` is two statements. Two workers
+  // opening the same pre-payload queue file both read the column as absent and
+  // both ALTER; the loser used to throw out of `openQueue`, on the one boot
+  // where this migration matters at all.
+  const raced = {
+    prepare: () => ({ all: () => [{ name: 'id' }] }),
+    exec: () => { throw new Error('duplicate column name: payload'); },
+  };
+  assert.equal(
+    addColumnIfMissing(raced, 'jobs', 'payload', "TEXT NOT NULL DEFAULT ''"), false,
+    'the other process did the work — the end state is the one we asked for'
+  );
+
+  // And that is the ONLY error swallowed. A migration that is genuinely broken
+  // must still stop the boot rather than leaving a queue nothing can write to.
+  const broken = {
+    prepare: () => ({ all: () => [{ name: 'id' }] }),
+    exec: () => { throw new Error('no such table: jobs'); },
+  };
+  assert.throws(() => addColumnIfMissing(broken, 'jobs', 'payload', 'TEXT'), /no such table/);
+});
+
+test('a rollback that fails does not replace the error that caused it', () => {
+  // SQLite rolls a transaction back BY ITSELF on a BUSY, FULL or IOERR, so by
+  // the time `block`'s catch runs there is often no transaction left and the
+  // ROLLBACK throws. That secondary error used to be thrown in place of the
+  // disk-full that actually happened, so the caller was told the wrong thing.
+  const alreadyRolledBack = {
+    exec: () => { throw new Error('cannot rollback - no transaction is active'); },
+  };
+  const real = new Error('database or disk is full');
+  let seen = null;
+  try {
+    // Exactly the shape of block()'s catch block.
+    try {
+      throw real;
+    } catch (err) {
+      rollbackQuietly(alreadyRolledBack);
+      throw err;
+    }
+  } catch (err) {
+    seen = err;
+  }
+  assert.equal(seen, real, 'the caller sees what actually went wrong');
+});
+
+test('a rollback that works is still performed', () => {
+  const calls = [];
+  rollbackQuietly({ exec: (sql) => calls.push(sql) });
+  assert.deepEqual(calls, ['ROLLBACK'], 'swallowing the error must not mean skipping the rollback');
 });

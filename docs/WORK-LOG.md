@@ -64,6 +64,49 @@ hour it next picked up a video. There is now a test that builds the old shape
 on purpose and opens it, so anyone tidying up later finds out immediately
 instead of finding out from the Mini.
 
+A second review found four ways this could go wrong quietly, and quietly is
+the word that matters — all four produced a cheerful green run report while
+something was actually broken. The happy path was fine; nobody had walked the
+unhappy ones.
+
+The worst was losing footage. Google only tells you about a file once, so the
+watcher writes down how far it has got and never looks back. If putting a video
+on the to-do list failed for a moment — the database busy, say — the run said so
+in its report and then moved the bookmark past it anyway. That video was gone:
+nothing would ever mention it again. Now a run that could not file something
+leaves the bookmark where it is and reads that page again next time, which is
+exactly what it already did when Google itself had a bad moment.
+
+The second was an alarm standing itself down on no evidence. A run that could
+not check the folders at all — not "they are broken", but "I could not reach
+them to look" — was counting as a clean run, which cleared a genuine alarm
+raised an hour earlier and told the board Google was readable again. The two
+outcomes are now kept apart: a run says **OK**, **finished with failures**, or
+**could not tell**, and only the first of those is allowed to clear an alarm.
+
+The third was sending you on an errand. A momentary network problem reaching
+Google's login service was being filed as "your login is dead — go and re-mint
+it", which is an afternoon of work on a login that was perfectly fine. The
+comment above that line already said not to do this; the line did it anyway.
+
+The fourth is the account muddle wearing a different hat. Google keeps a
+separate "what has changed" feed for each shared drive, so if the Studio
+folders live on a shared drive rather than in somebody's own My Drive, the
+watcher would be reading the wrong feed entirely — finding nothing, for ever,
+and reporting a clean run every hour while it did. It already had the answer in
+hand and was throwing it away. It now compares the two and refuses to start,
+naming the drive it found and the setting that fixes it.
+
+Three smaller ones went in at the same time: pointing both folder settings at
+the same folder used to silently mark every interview as a background and never
+transcribe any of them (it now refuses, before it calls Google at all); two
+copies of the worker starting at the same instant could collide while adding
+that column to the old to-do list file, and the loser would crash; and an error
+while writing to the database could be replaced by a second, meaningless error
+raised while cleaning up, hiding the real one. Each of the seven fixes has a
+test, and each test was checked by putting the bug back and watching that exact
+test fail.
+
 Nothing downloads yet — that is the next piece.
 
 ## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
