@@ -4311,6 +4311,141 @@ App.builder = (function () {
     return live;
   }
 
+  // Each selected page's section list, in selection order — one entry per
+  // page, and deliberately `undefined` rather than `[]` for a page whose row
+  // this screen does not have. An empty array is a page with no sections of
+  // its own; the two must not arrive at the counter looking the same, or
+  // "could not read it" silently becomes "it has none".
+  function selectedPageLayoutSections() {
+    const lists = [];
+    selectedPageIds.forEach((id) => {
+      const item = savedPages.find((page) => safeText(page && page.id) === safeText(id));
+      lists.push(item && Array.isArray(item.layoutSections) ? item.layoutSections : undefined);
+    });
+    return lists;
+  }
+
+  // THE FRAME THE SERVER WILL ACTUALLY APPLY, not the one the template stores.
+  //
+  // 2026-09-14 round-3 review, ticket 86bc09db9. This used to read
+  // `template.layoutSections` straight off the row the dropdown was filled
+  // from — the template's RAW sections — while the server resolves every frame
+  // reference against the live saved sections first and DROPS any whose master
+  // has been deleted. Two frames, and the dialog was describing the wrong one:
+  // with one master deleted it told the operator "No shared section is
+  // removed" and the server then removed one, reporting `verified: true`
+  // afterwards because every number agreed with what it had computed.
+  //
+  // So the resolved frame is asked for. The check endpoint already computes it
+  // (it has to — it refuses a template whose frame resolves to nothing) and
+  // writes nothing whatever it is sent, which is what makes it safe to call
+  // from a dropdown's change event.
+  //
+  // Keyed by template id and emptied when the dialog opens: the masters can be
+  // edited between two openings, and a frame cached across that is the same
+  // staleness bug in a new place.
+  let bulkTemplateFrames = {};
+  // Newest-wins. Two changes in quick succession race, and the answer to the
+  // FIRST arriving second would otherwise overwrite the one the operator is
+  // looking at.
+  let bulkTemplateFrameRequest = 0;
+
+  // The resolved frame for the chosen template: an array once the server has
+  // answered, `undefined` while nothing is chosen or the answer is not in yet.
+  // Undefined and [] are different answers here — one is "I have not been
+  // told", the other is "this frame resolves to nothing" — and the wording
+  // module treats them as such, so this must not flatten them to an array.
+  function selectedBulkTemplateSections() {
+    const select = byId('builderPagesChangeTemplateSelect');
+    const id = safeText(select && select.value);
+    const entry = id ? bulkTemplateFrames[id] : null;
+    return entry && Array.isArray(entry.frame) ? entry.frame : undefined;
+  }
+
+  // Ask the server what this template's frame resolves to, then re-word the
+  // warning. A failure is recorded rather than thrown away: a refusal here is
+  // the refusal the operator would hit on pressing the button, so it is worth
+  // more said now — and the fallback while it is unknown is the RULE ("any
+  // shared section the template does not carry is taken off"), which is true
+  // of the operation whatever this call did.
+  async function loadBulkTemplateFrame(templateId) {
+    const id = safeText(templateId);
+    if (!id || bulkTemplateFrames[id]) return;
+    const ids = Array.from(selectedPageIds);
+    if (!ids.length) return;
+    const token = (bulkTemplateFrameRequest += 1);
+    let entry;
+    try {
+      const res = await api('/api/builder/landing-pages/bulk-set-template/check', {
+        method: 'POST',
+        body: JSON.stringify({ pageIds: ids, pageTemplateId: id }),
+      });
+      entry = { frame: Array.isArray(res && res.frame) ? res.frame : [] };
+    } catch (err) {
+      // The server's own sentence, kept verbatim — it names the template and
+      // what is wrong with it, which nothing in the browser can reconstruct.
+      entry = { error: (err && err.message) || 'The template could not be checked' };
+    }
+    bulkTemplateFrames[id] = entry;
+    // A newer request has started since; that one owns the screen.
+    if (token !== bulkTemplateFrameRequest) return;
+    renderBulkChangeTemplateWarning();
+  }
+
+  // THE WARNING IS RECOMPUTED WHEN THE DESTINATION CHANGES, because half of
+  // what it has to say depends on which template was picked: whether that
+  // template carries a shared header and footer at all, and which of the
+  // pages' own shared sections it does not carry and will therefore take off
+  // them. Computed once when the dialog opens — before anything is chosen — it
+  // could only ever describe the arrivals, and the operator read a sentence
+  // about a swap on an operation that was also a removal.
+  function renderBulkChangeTemplateWarning() {
+    const warningEl = byId('builderPagesChangeTemplateWarning');
+    const confirmBtn = byId('builderPagesChangeTemplateConfirmBtn');
+    if (!warningEl) return;
+
+    // THE SERVER'S OWN REFUSAL, SAID BEFORE THE BUTTON IS PRESSED. The check
+    // endpoint has already decided this template cannot be applied — its frame
+    // resolves to no saved section, it is an email template, it has been
+    // deleted since the dropdown was filled — and its sentence names which.
+    // Reworded here it would be a second, drifting copy; walked into, it is a
+    // refusal after the operator has committed to the operation.
+    const select = byId('builderPagesChangeTemplateSelect');
+    const chosen = safeText(select && select.value);
+    const entry = chosen ? bulkTemplateFrames[chosen] : null;
+    if (entry && entry.error) {
+      warningEl.textContent = entry.error;
+      if (confirmBtn) confirmBtn.disabled = true;
+      return;
+    }
+
+    const plan = sayBulkTemplate(
+      'describeBulkTemplateChangePlan',
+      {
+        pageCount: selectedPageIds.size,
+        liveCount: countLiveSelectedPages(),
+        pageSections: selectedPageLayoutSections(),
+        templateSections: selectedBulkTemplateSections(),
+      },
+      // Dull on purpose: no count, because the file that does the counting is
+      // the one that did not load.
+      'Each page keeps its own content sections; the shared header and footer sections are replaced with '
+        + 'the ones the chosen template carries. An archive of all your pages is saved first, and Restore '
+        + 'All on that archive undoes this — along with any other page edits made after it was taken.',
+    );
+    warningEl.textContent = plan.message;
+    // A destination the server will refuse is not offered as a button. The
+    // fallback sentence carries no `blocked`, so a missing module leaves the
+    // button as it was rather than disabling a control for a reason it cannot
+    // state.
+    if (confirmBtn) confirmBtn.disabled = plan.blocked === true;
+    // Asked AFTER the sentence is on screen, never before it: the operator
+    // reads the conservative wording immediately and it sharpens when the
+    // answer lands, rather than the dialog sitting blank on a network call.
+    // Returns at once when the answer is already cached.
+    if (chosen && !entry) loadBulkTemplateFrame(chosen);
+  }
+
   function openBulkChangeTemplateDialog() {
     const dialog = byId('builderPagesChangeTemplateDialog');
     const select = byId('builderPagesChangeTemplateSelect');
@@ -4336,17 +4471,33 @@ App.builder = (function () {
         : 'This project has no saved page templates yet, so there is nothing to move these pages onto. Save a page as a template first.';
       if (confirmBtn) confirmBtn.disabled = true;
     } else {
-      // WHERE the pages are, named with the count rather than implied. A page
-      // with no published snapshot is served straight from its draft
-      // (routes/publicSite.js), so on a project that has never published the
-      // re-pour is on the tenant's public domain the moment this finishes —
-      // there is no publish step between here and the visitor.
-      const live = countLiveSelectedPages();
-      const liveNote = live
-        ? ` ${live} of these ${live === 1 ? 'pages is' : 'pages are'} live on the public site, so a visitor sees the new layout as soon as this finishes — there is no separate publish step.`
-        : '';
-      warningEl.textContent = `The sections on these pages will be REPLACED with the chosen template’s layout. Each page keeps its own background and theme.${liveNote} An archive of all your pages is saved first, and Restore All on that archive undoes this — along with any other page edits made after it was taken.`;
+      // LEAD WITH WHAT IS KEPT. Until 2026-09-14 this said the sections "will
+      // be REPLACED with the chosen template's layout", which was true — the
+      // operation re-poured — and it is what the operator read before moving
+      // 57 Delray pages onto one template on 2026-09-13 and losing the content
+      // of every one of them (ticket 86bc09db9). The write path keeps the body
+      // now and swaps only the shared header/footer sections, so the warning
+      // says that, with the number.
+      //
+      // WHERE the pages are is still named with a count rather than implied: a
+      // page with no published snapshot is served straight from its draft
+      // (routes/publicSite.js), so on a project that has never published there
+      // is no publish step between here and the visitor.
+      //
+      // The counting happens in /shared/, off the section lists the browser is
+      // already holding for the rows on screen, because a count worded here
+      // could only ever be checked by eye (landmine 9). A page whose layout is
+      // not in hand would make the count an undercount, and the module refuses
+      // to state one at all in that case — it says how many it could not read.
       if (confirmBtn) confirmBtn.disabled = false;
+      // Emptied per opening: a saved section can be edited or deleted between
+      // two openings of this dialog, and the whole point of asking the server
+      // is that the frame is resolved against the masters as they are NOW.
+      bulkTemplateFrames = {};
+      renderBulkChangeTemplateWarning();
+      // Rebound rather than added, because this dialog is opened many times in
+      // one session and addEventListener would stack a listener per opening.
+      select.onchange = renderBulkChangeTemplateWarning;
     }
     if (confirmBtn) confirmBtn.textContent = 'Change Template';
     dialog.showModal();
@@ -4382,8 +4533,11 @@ App.builder = (function () {
   }
 
   // Archive first, then change. The order is the whole safety of this
-  // operation: it re-pours every selected page, which is what emptied 35
-  // sections off the Delray home page on 2026-08-14.
+  // operation: it rewrites the layout of every selected page — keeping each
+  // page's own content and swapping the shared header/footer sections for the
+  // chosen template's, since 2026-09-14 — and the version that re-poured
+  // instead is what emptied 35 sections off the Delray home page on
+  // 2026-08-14 and 57 Delray pages on 2026-09-13.
   //
   // The archive is not best-effort. If it fails, nothing is written and the
   // failure is what the operator is told. The server refuses the change
