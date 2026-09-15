@@ -1,3 +1,39 @@
+## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
+
+If you put a video behind one column of a row and a menu in that same column,
+the menu's dropdown was cut off at the bottom edge of the column. A visitor
+would tap it, see a thin white sliver appear, and nothing else — a menu that
+looks like it does not work.
+
+The cause was a piece of housekeeping doing more than it was asked. A
+background video is blown up slightly so it always fills the column with no
+gaps at the edges, which means without something holding it in, it would spill
+sideways and paint over the words in the column next door. So the column was
+told to hide anything that reached outside it — and it did exactly that, to the
+video *and* to the menu, because the browser has no way to tell those two
+apart.
+
+Now the video is put in a box of its own, laid exactly over the column, and
+that box does the holding. The video is contained just as tightly as before;
+the column itself is left alone, so anything in it that is meant to reach
+outside — a dropdown, a floating image nudged over the edge — does. Rows with a
+video, and rows with a drifting photo background, had the same fault and are
+fixed in the same stroke.
+
+Four automatic checks were added that drive a real browser, open the menu, and
+ask what the visitor could actually see and click. Each one was deliberately
+broken first and watched to fail, so a future change cannot quietly bring this
+back.
+
+A second round caught something before it ever reached anyone: on a phone a
+background video is not played at all — it would cost the visitor megabytes of
+their own data — and the holding box was still being put on the page around
+nothing. An empty box is still something the page has to lay out, and in a row
+of six columns set to stack in reverse on phones it pushed the last column into
+the middle of the pile. The box is now put up by the video itself, so when
+there is no video there is nothing at all, and the columns come out in the order
+the operator asked for. Five more browser checks cover that, including one that
+simply reads what order a phone actually put the columns in.
 ## 2026-09-15 — The Mini's health check now names all its jobs, and a job that comes back says so (#710)
 
 The Mac Mini has a self-check that answers one question without needing a
