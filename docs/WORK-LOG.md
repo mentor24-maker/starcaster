@@ -28,11 +28,22 @@ as a claim about where you were.
 
 All four are fixed, including one nobody had spotted: it sits on the path a
 visitor takes when they report a bug on one of the sites, where the same crash
-would have shown up as an error page. The message itself now says the true
-thing — that you have not taken the deck, that nothing is broken, that it clears
-itself, and specifically that this is not a network or password problem, so
-whoever reads it next does not go hunting for one. The pass still stands down
-for that minute, which is correct: it genuinely could not check.
+would have shown up as an error page.
+
+The message itself now says only what is actually known, which turned out to be
+the fiddly part. The first attempt at this fix swung too far the other way: it
+replaced *"the pipeline is paused"* with *"the operator does not have the
+deck"* — and that is a claim the code is in no position to make, because the
+whole problem is that it never managed to look. If you genuinely had paused the
+line in the same minute a background job ran out of allowance, the new sentence
+would have been flatly false, and the next reader could reasonably have gone to
+work on your deck. So it now names the **cause** (the one-minute allowance, not
+you) and says out loud that whether you have the deck is still unknown and the
+next pass will find out. It also keeps the parts that were already right: that
+nothing is broken, that it clears itself, and that this is specifically not a
+network or password problem, so whoever reads it next does not go hunting for
+one. The pass still stands down for that minute, which is correct: it genuinely
+could not check.
 
 And because four separate authors had each missed the same case, there is now a
 check that fails the build if a fifth one does.

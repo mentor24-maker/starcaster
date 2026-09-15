@@ -358,6 +358,15 @@ function pauseVerdict({ readable = true, why = '', switchFound = true, comments 
   // `certain: false` stays false: this verdict still did not read the switch.
   // `yielded: true` is what a caller reports differently — the pulse's
   // heartbeat, `--json` consumers, and the preflight line a loop pass prints.
+  //
+  // AND THE MESSAGE MAY NOT CLAIM THE OPERATOR'S STATE EITHER. The first fix
+  // for this ticket said "the operator does NOT have the deck", which is the
+  // same defect facing the other way: the read never happened, so whether he
+  // has the deck is precisely the thing this verdict cannot know, and if he
+  // HAS paused the line while a scheduled pass hits the reserve in the same
+  // minute, that sentence prints the opposite of the truth into the loop log.
+  // What is known is the CAUSE — the reserve, not the operator — and that the
+  // question is still open. Say both; claim neither answer.
   if (!readable && yielded) {
     return {
       paused: true,
@@ -365,14 +374,16 @@ function pauseVerdict({ readable = true, why = '', switchFound = true, comments 
       yielded: true,
       code: 3,
       message:
-        'The pipeline pause switch was NOT READ, so nothing may be claimed or merged on this pass —\n'
-        + 'but the operator does NOT have the deck, and nothing is broken.\n\n'
+        'The pipeline pause switch was NOT READ, so nothing may be claimed or merged on this pass.\n'
+        + 'This stand-down was not caused by the operator taking the deck — the ClickUp reserve caused it.\n'
+        + 'Whether he has the deck is UNKNOWN, because the switch was never read; the next pass finds out.\n\n'
         + `Reason: ${why || 'a scheduled job stopped at the ClickUp reserve'}\n\n`
         + 'This is a scheduled job, and the ClickUp budget for this minute was down to the reserve kept for\n'
-        + 'the sessions Dane is actually talking to, so it stopped instead of spending it. It clears itself:\n'
-        + 'the next pass reads the switch normally. It is NOT a network fault and NOT a token problem, so do\n'
-        + 'not go looking for one. To read the switch by hand from a session Dane is in, run the command\n'
-        + 'without STARCASTER_CALLER=scheduled — interactive callers never yield.',
+        + 'the sessions Dane is actually talking to, so it stopped instead of spending it. Nothing is broken,\n'
+        + 'and it clears itself: the next pass reads the switch normally.\n'
+        + 'It is NOT a network fault and NOT a token problem, so do not go looking for one. To read the switch\n'
+        + 'by hand from a session Dane is in, run the command without STARCASTER_CALLER=scheduled —\n'
+        + 'interactive callers never yield.',
     };
   }
 

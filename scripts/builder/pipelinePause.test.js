@@ -133,14 +133,34 @@ test('a RESERVE stand-down still stops the pass, but is never described as a pau
   assert.equal(v.certain, false, 'it still did not read the switch');
   assert.equal(v.yielded, true, 'a caller that must REPORT differently needs to be able to tell');
 
-  // THE WORDS ARE THE FIX.
-  assert.match(v.message, /does NOT have the deck/,
-    'the operator holding the deck is the wrong conclusion and the expensive one');
+  // THE WORDS ARE THE FIX — and the fix is to say what is KNOWN and stop.
+  // Known: the reserve caused this stand-down, not the operator. Unknown: whether
+  // he has the deck, because the switch was never read. Round 1 of this ticket
+  // asserted "the operator does NOT have the deck", which is this same defect
+  // facing the other way — if he HAS paused the line while a scheduled pass hits
+  // the reserve in the same minute, that sentence is simply false, and a hand
+  // session reading it could reasonably go to work on his deck.
+  assert.match(v.message, /not caused by the operator taking the deck/,
+    'the reader must be told what DID cause it, or they hunt for a pause that is not there');
+  assert.match(v.message, /[Ww]hether he has the deck is UNKNOWN/,
+    'and told, out loud, that the question is still open');
+  for (const claimsHisState of [
+    /does NOT have the deck/,
+    /has not taken the deck/,
+    /the deck is (free|clear)/,
+    /the pipeline is RUNNING/,
+    /is not paused/,
+  ]) {
+    assert.doesNotMatch(v.message, claimsHisState,
+      `"${claimsHisState}" claims the operator's state, which is exactly what an unread switch cannot know`);
+  }
   assert.match(v.message, /NOT a network fault and NOT a token problem/,
     'the message it replaces sent the next reader hunting for an outage that was never there');
   assert.match(v.message, /clears itself/, 'and there is nothing to fix');
   assert.doesNotMatch(v.message, /Could not read the pipeline pause switch/,
     'the old wording must not survive beside the new one');
+  assert.doesNotMatch(v.message, /treated as PAUSED/,
+    'and it must still not read as a pause — that is the whole reason this branch exists');
 });
 
 test('an ordinary unreadable switch is NOT dressed up as a reserve stand-down', () => {
@@ -1560,7 +1580,10 @@ test('a yielded LIST read reaches the verdict as a stand-down, not as a pause', 
     assert.equal(q.yielded, true, 'and the store must say WHY, not just that it failed');
     const v = pause.pauseVerdict({ readable: q.readable, why: q.why, yielded: q.yielded });
     assert.equal(v.code, 3, 'behaviour unchanged: claim nothing');
-    assert.match(v.message, /does NOT have the deck/);
+    assert.match(v.message, /not caused by the operator taking the deck/,
+      'the reserve reached the verdict, so the verdict names the reserve');
+    assert.doesNotMatch(v.message, /does NOT have the deck/,
+      'without claiming the operator state this read never established');
   });
 });
 
