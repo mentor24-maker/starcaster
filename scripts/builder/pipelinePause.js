@@ -338,7 +338,44 @@ function readTrail(comments) {
  * whole point is that "we could not check" and "it is paused" must lead to the
  * same behaviour — while never being described in the same words.
  */
-function pauseVerdict({ readable = true, why = '', switchFound = true, comments = [] } = {}) {
+function pauseVerdict({ readable = true, why = '', switchFound = true, comments = [], yielded = false } = {}) {
+  // A SCHEDULED JOB STANDING DOWN AT THE RESERVE IS NOT AN UNREADABLE SWITCH
+  // (2026-09-15, task 86bc0w6my). This is the design call that ticket asked
+  // for, and it is answered in one direction only: the BEHAVIOUR is unchanged
+  // — code 3, claim nothing, merge nothing, because the switch genuinely was
+  // not read and failing open here is the one thing this module must never do
+  // — while the WORDS stop lying.
+  //
+  // The lie was expensive. The reserve exists so a background job never blocks
+  // a session Dane is talking to; it is routine, self-clearing, and fires
+  // whenever two jobs share a minute. Reported as "could not read the switch,
+  // treating the pipeline as PAUSED" it is indistinguishable from the operator
+  // having taken the deck — which is a perfectly normal thing for a pass to
+  // report, so nobody investigates. On 2026-09-15 both loop lanes stood down
+  // that way while `npm run pipeline -- status`, on the same machine and the
+  // same token, printed RUNNING.
+  //
+  // `certain: false` stays false: this verdict still did not read the switch.
+  // `yielded: true` is what a caller reports differently — the pulse's
+  // heartbeat, `--json` consumers, and the preflight line a loop pass prints.
+  if (!readable && yielded) {
+    return {
+      paused: true,
+      certain: false,
+      yielded: true,
+      code: 3,
+      message:
+        'The pipeline pause switch was NOT READ, so nothing may be claimed or merged on this pass —\n'
+        + 'but the operator does NOT have the deck, and nothing is broken.\n\n'
+        + `Reason: ${why || 'a scheduled job stopped at the ClickUp reserve'}\n\n`
+        + 'This is a scheduled job, and the ClickUp budget for this minute was down to the reserve kept for\n'
+        + 'the sessions Dane is actually talking to, so it stopped instead of spending it. It clears itself:\n'
+        + 'the next pass reads the switch normally. It is NOT a network fault and NOT a token problem, so do\n'
+        + 'not go looking for one. To read the switch by hand from a session Dane is in, run the command\n'
+        + 'without STARCASTER_CALLER=scheduled — interactive callers never yield.',
+    };
+  }
+
   if (!readable) {
     return {
       paused: true,
