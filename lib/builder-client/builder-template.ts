@@ -654,6 +654,13 @@ export type BuilderTemplateSection = {
   mobileHidden: string;
   desktopHidden: string;
   mobileLayout: "stack" | "keep" | "reverse-stack";
+  /**
+   * What this row does differently on a tablet (1024px and below) and a phone
+   * (767px and below). Holds ONLY the settings that differ — everything else
+   * follows desktop, and phone follows tablet. Absent on nearly every row.
+   * Keys and cleaning: `BUILDER_SECTION_DEVICE_KEY_NORMALIZERS`.
+   */
+  deviceOverrides?: BuilderSectionDeviceOverrides;
   background: BackgroundSettings;
   overlayScreen?: RowOverlayScreenSettings;
   cellBackgrounds: Record<string, BackgroundSettings>;
@@ -1205,6 +1212,75 @@ export function normalizeSignedOffsetValue(value: unknown, fallback = "0", min =
     : Math.min(Math.max(Number.isFinite(fallbackValue) ? fallbackValue : min, min), max);
 
   return String(normalized);
+}
+
+/**
+ * THE ROW SETTINGS A TABLET OR PHONE MAY CHANGE, and how each is cleaned.
+ *
+ * Device settings follow desktop until changed (Dane, 2026-09-15), so a
+ * device map holds only the values that DIFFER — an empty map is the normal
+ * state of every row. Each value passes through the very normalizer its
+ * desktop field uses, so a phone cannot store what desktop could not.
+ *
+ * Background, overlay, layout and column widths are deliberately absent:
+ * they stay one value for every screen. `hidden` is the one key with no
+ * desktop field — "hide this row on this device".
+ */
+export const BUILDER_SECTION_DEVICE_KEY_NORMALIZERS: Record<string, (value: unknown) => string> = {
+  widthMode: (value) => (value === "full-width" ? "full-width" : "contained"),
+  widthPercent: (value) => normalizeSpacingValue(value, "100", 25, 100),
+  marginTop: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  marginBottom: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  marginLeft: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  marginRight: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  paddingTop: (value) => normalizeSpacingValue(value, "18", 0, 160),
+  paddingBottom: (value) => normalizeSpacingValue(value, "18", 0, 160),
+  paddingLeft: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  paddingRight: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  columnGap: (value) => normalizeSpacingValue(value, "16", 0, 120),
+  minHeight: (value) => normalizeSpacingValue(value, "0", 0, 1200),
+  horizontalOffset: (value) => normalizeSignedOffsetValue(value, "0"),
+  verticalOffset: (value) => normalizeSignedOffsetValue(value, "0"),
+  rowBorderWidth: (value) => normalizeSpacingValue(value, "0", 0, 20),
+  rowBorderColor: (value) => normalizeBuilderHexColor(typeof value === "string" ? value : "") || "#000000",
+  rowBorderStyle: (value) => (["solid", "dashed", "dotted"].includes(value as string) ? (value as string) : "solid"),
+  rowBorderRadius: (value) => normalizeSpacingValue(value, "0", 0, 60),
+  hidden: (value) => normalizeBooleanText(value)
+};
+
+export const BUILDER_STYLE_DEVICES = ["tablet", "phone"] as const;
+export type BuilderStyleDevice = (typeof BUILDER_STYLE_DEVICES)[number];
+export type BuilderSectionDeviceOverrides = Partial<Record<BuilderStyleDevice, Record<string, string>>>;
+
+/**
+ * Keeps only known keys with a real value, and drops a device with nothing
+ * left. Returns undefined when no device has anything, so a row nobody has
+ * touched on a phone serializes exactly as it did before this field existed.
+ */
+export function normalizeSectionDeviceOverrides(value: unknown): BuilderSectionDeviceOverrides | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const result: BuilderSectionDeviceOverrides = {};
+
+  for (const device of BUILDER_STYLE_DEVICES) {
+    const raw = (value as Record<string, unknown>)[device];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+
+    const cleaned: Record<string, string> = {};
+    for (const [key, normalize] of Object.entries(BUILDER_SECTION_DEVICE_KEY_NORMALIZERS)) {
+      const entry = (raw as Record<string, unknown>)[key];
+      if (entry === undefined || entry === null || entry === "") continue;
+      cleaned[key] = normalize(entry);
+    }
+
+    if (Object.keys(cleaned).length > 0) {
+      result[device] = cleaned;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function normalizeDecimalValue(value: unknown, fallback: string, min: number, max: number) {
@@ -3229,6 +3305,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       // Read once: both padding axes fall back to it, so they must see the
       // same normalized value the legacy key ends up with.
       const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
+      const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
@@ -3276,6 +3353,9 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         mobileHidden: normalizeBooleanText(normalizedSection.mobileHidden),
         desktopHidden: normalizeBooleanText(normalizedSection.desktopHidden),
         mobileLayout: normalizeMobileLayout(normalizedSection.mobileLayout),
+        // Spread, not `deviceOverrides: undefined`: a row with none must not
+        // gain a key, or every untouched row's saved JSON would change.
+        ...(deviceOverrides ? { deviceOverrides } : {}),
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),

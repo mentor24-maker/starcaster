@@ -10795,3 +10795,128 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: inherit;
   opacity: 0.8;
 }
+
+/*
+ * DEVICE SWITCH — Phone / Tablet / Desktop at the right of a Styles bar
+ * (Dane's screenshot, 2026-09-15). One pill of three icons; the screen being
+ * edited is the bright one. A dot under an icon means the row has settings of
+ * its own on that screen, so a phone-only change is visible without opening
+ * the phone panel.
+ */
+.builder-react-root .builder-device-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.builder-react-root .builder-device-switch-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-device-switch-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.builder-react-root .builder-device-switch-button.is-active {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-device-switch-button.has-overrides::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--ink-warning);
+}
+
+.builder-react-root .builder-device-switch-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The Tablet/Phone panel: what differs, and the way back to following. */
+.builder-react-root .builder-device-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  border-left: 3px solid var(--ink-warning);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.builder-react-root .builder-device-banner-note {
+  flex-basis: 100%;
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+}
+
+.builder-react-root .builder-device-override-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: var(--ink-warning);
+  color: var(--btn-flat-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-device-override-chip button,
+.builder-react-root .builder-device-reset-all {
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-warning);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-device-reset-all {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-setting-label .is-device-override::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--ink-warning);
+  vertical-align: 1px;
+}

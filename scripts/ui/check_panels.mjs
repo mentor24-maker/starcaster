@@ -157,6 +157,22 @@ async function openPanels(page) {
   });
   await page.waitForTimeout(3000);
 
+  // The Phone version of a row's style panel (device styles, task 86bc13a6v)
+  // is a different arrangement of the same lattice — groups removed, a banner
+  // on top — and it only exists after a click. ONE row is switched, so every
+  // other row is still measured in its Desktop form.
+  const switchedToPhone = await page.evaluate(() => {
+    const button = document.querySelector(
+      '.builder-section-settings-panel .builder-device-switch-button[title^="Phone"]'
+    );
+    if (button) button.click();
+    return Boolean(button);
+  });
+  if (!switchedToPhone) {
+    return 'no row carried the Phone/Tablet/Desktop switch, so the Phone style panel could not be opened and measured';
+  }
+  await page.waitForTimeout(2000);
+
   // A FOURTH collapsed panel: the Reminders module's record cards, one per
   // reminder, each collapsed until clicked (`isRecordCollapsed` returns true
   // by default). Panel sweep 2/15 seeded two real records here and said in the
