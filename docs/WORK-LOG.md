@@ -1,3 +1,43 @@
+## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
+
+A page template is the starting point you build new pages from, and it carries
+its own look — heading sizes, line heights, how bold the headings are. Open one
+in the Builder, save or delete a single module on it, and all of that reverted
+to the plain defaults. No warning, no error; the save reported success. Worse,
+every page you then built from that template started life with the defaults
+too, so the damage spread outward from the template.
+
+The ticket described the headings. Before writing anything I ran the Builder's
+exact save against a copy of the real data to watch what it did, and it was
+doing considerably more than that: the same click also blanked the template's
+summary, blanked its internal id, and changed its *kind* — the field that says
+what sort of template it is — from "starcaster landing" to "modular". Across
+the 44 templates on the live system that is 4 with a custom look, 31 with a
+summary, 44 with an id, and 31 whose kind was being changed out from under
+them. I posted that correction on the ticket before building, because it
+changes what the fix has to be.
+
+The cause is two separate things that each look harmless. All the template's
+sections, its background and its look are stored together in one single field,
+so anything that rewrites part of it rewrites all of it — and the Builder's
+save only ever mentions the sections, so the look was being replaced with a
+blank one. Separately, the code that handles the save filled in a value for
+all 32 fields whether the Builder had sent one or not, which is how the other
+31 got blanked. Fixing either one on its own still leaves the bug, so both are
+fixed here: anything the save does not actually mention is now left exactly as
+it was.
+
+Deliberately changing the look still works, including clearing it back to the
+defaults on purpose — the code now asks "did the save mention this?" rather
+than "does this have a value in it?", which are different questions and only
+the first one is safe.
+
+Checked end to end against a real database rather than from reading the code:
+the Builder's real payload now leaves the look, the kind, the id and all five
+sections untouched, and the old code reproduces the loss in the same harness.
+Each of the six fixes was deliberately broken to watch the matching test fail
+first — which caught one test that could not fail at all, and got replaced with
+one that can.
 ## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
 
 For a few hours on the 15th the build and review loops on the Mac Mini refused
