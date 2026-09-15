@@ -62,6 +62,13 @@ export type TemplateFrameResult<S extends FrameSection> = {
   frameRemoved: number;
   /** Names of the dropped frame sections, for telling the operator what changed. */
   frameRemovedNames: string[];
+  /**
+   * Incoming frame sections that arrived carrying the same `id` as one of the
+   * page's own sections, and were given a fresh one. Reported rather than
+   * silent: it is a measurement of how closely the template resembles this
+   * page, and the only place a caller can see that the collision happened.
+   */
+  frameIdsRenamed: number;
 };
 
 /** A section is frame when it is a live link to a saved section. */
@@ -196,6 +203,61 @@ export function resolveTemplateSections<S extends FrameSection>(
 }
 
 /**
+ * TWO SECTIONS ON ONE PAGE MAY NOT SHARE AN `id` — 2026-09-15, ticket 86bc09db9.
+ *
+ * A template carries its frame sections with the ids they had on the page the
+ * template was made from. Apply it back to that page and an incoming frame
+ * section arrives holding the same id as one of the page's OWN sections.
+ * Nothing rejects the list: it is written, and the damage lands in the
+ * serializer, which keys its lineage map on `id`
+ * (lib/builder/document.js -> serializeBuilderDocument). One entry per id, so
+ * the frame's `canonical: true` and `savedSectionId` are stamped onto the
+ * page's own section as well — the operator's content quietly enrolled as a
+ * copy of a saved section, to be overwritten by the next canonical
+ * propagation of that master. Measured on a copy of Delray page 1384: four of
+ * the page's own five sections came back carrying the Footer Menu and
+ * Copyright masters' savedSectionId.
+ *
+ * The page's own sections keep their ids — they are the ones Page History,
+ * revisions and the editor's drafts already point at. The INCOMING frame is
+ * what gets renamed, because it is arriving and has no history on this page
+ * yet; a frame section is identified by its `savedSectionId`, which is
+ * untouched, so canonical propagation still finds it.
+ *
+ * `makeId` can itself collide (the bulk caller's is a counter), so it is asked
+ * again until it answers with something unused, and gives up after a bounded
+ * number of tries rather than looping forever on a caller that always returns
+ * the same string.
+ */
+function withDistinctIds<S extends FrameSection>(
+  incomingFrame: readonly S[],
+  taken: ReadonlySet<string>,
+  makeId: () => string
+): { frame: S[]; renamed: number } {
+  const used = new Set(taken);
+  let renamed = 0;
+  const frame = incomingFrame.map((section) => {
+    const id = String(section.id ?? '');
+    if (id && !used.has(id)) {
+      used.add(id);
+      return section;
+    }
+    let next = '';
+    for (let attempt = 0; attempt < 50 && !next; attempt += 1) {
+      const candidate = String(makeId() ?? '');
+      if (candidate && !used.has(candidate)) next = candidate;
+    }
+    // Nothing usable came back. A deterministic suffix is still distinct from
+    // every id in `used`, which is the property that matters here.
+    if (!next) next = `${id || 'section'}-frame-${used.size + 1}`;
+    used.add(next);
+    renamed += 1;
+    return { ...section, id: next } as S;
+  });
+  return { frame, renamed };
+}
+
+/**
  * Put the page's body inside the template's frame.
  *
  * The page's body is never read from the template and never rewritten, so this
@@ -236,20 +298,30 @@ export function applyTemplateFrame<S extends FrameSection>(
       : frameSectionsOf(template.slice(0, firstBodyIndex));
   const trail = firstBodyIndex === -1 ? [] : frameSectionsOf(template.slice(firstBodyIndex));
 
-  const incomingFrame = [...lead, ...trail];
+  const rawIncomingFrame = [...lead, ...trail];
   const incomingIds = new Set(
-    incomingFrame.map((section) => String(section.savedSectionId ?? ''))
+    rawIncomingFrame.map((section) => String(section.savedSectionId ?? ''))
   );
   const dropped = pageFrame.filter(
     (section) => !incomingIds.has(String(section.savedSectionId ?? ''))
   );
 
+  // The body keeps its ids; a colliding incoming frame section takes a new
+  // one. See withDistinctIds for what a shared id does to the page once it
+  // reaches the serializer.
+  const kept = new Set(body.map((section) => String(section.id ?? '')).filter(Boolean));
+  const distinct = withDistinctIds(rawIncomingFrame, kept, makeId);
+  const incomingFrame = distinct.frame;
+  const leadOut = incomingFrame.slice(0, lead.length);
+  const trailOut = incomingFrame.slice(lead.length);
+
   return {
-    sections: [...lead, ...body, ...trail],
+    sections: [...leadOut, ...body, ...trailOut],
     keptBody: body.length,
     frameAdded: incomingFrame.length,
     frameRemoved: dropped.length,
     frameRemovedNames: dropped.map(sectionLabel),
+    frameIdsRenamed: distinct.renamed,
   };
 }
 

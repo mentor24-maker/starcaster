@@ -24,6 +24,109 @@ Four automatic checks were added that drive a real browser, open the menu, and
 ask what the visitor could actually see and click. Each one was deliberately
 broken first and watched to fail, so a future change cannot quietly bring this
 back.
+## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
+
+The Builder has two buttons that both say "change template", and until now they
+did opposite things. Open one page in the editor and change its template, and
+the page keeps everything you wrote — only the shared furniture around it, the
+header strip and the footer, gets swapped for the new template's. Tick a batch
+of pages in the list and use Change Template there, and every one of them was
+wiped and refilled with the template's blank starter layout.
+
+That is what happened to the Delray Beach Tennis Center site on 13 September.
+Fifty-seven pages were moved onto the Public Website template in one go, all
+fifty-seven lost their content, and because publishing followed twenty minutes
+later, fifty-one of them sat on the live site reading "Replace this section
+with real content." for about eighteen hours. (The pages were put back the next
+morning from the copies the change itself had banked.)
+
+The batch button now does what the single-page one does: it swaps the shared
+header and footer, pulls them from the current masters so you never get a
+six-week-old menu, and leaves your own content exactly where it was. The
+warning you read before pressing it leads with that, and with the number — "All
+31 content sections on this page are kept exactly as they are" — instead of
+telling you your sections are about to be replaced.
+
+Three things were added underneath, all of them about the same worry: this
+operation has twice done damage while reporting success. If the shared sections
+cannot be read at all, the whole run now stops rather than quietly writing every
+page with its header and footer removed. A page that would come out with less
+content than it went in with is refused instead of written. And after each page
+is saved it is read back and its content counted, not just its total number of
+blocks — swapping content for furniture keeps the total identical, which is
+precisely the kind of loss that would otherwise slip past.
+
+The review pass on this found the same accident waiting on the other side of
+the page, and it is fixed here too. Not every template carries a shared header
+and footer — in a copy of the live database, 36 of the 43 page templates carry
+none at all — and moving pages onto one of those took the header and footer
+*off* every page, put nothing back, and reported all of them confirmed. The
+same loss, from the opposite end. A template with no shared sections of its own
+is now refused before anything is written, the dialog says so and keeps the
+button off rather than letting you walk into it, and each saved page is checked
+for its shared sections as well as its content. A run is also stopped if the
+project's saved sections come back empty when the template needs them — on the
+live server an unreadable list and an empty one look identical, and the
+difference is whether 57 pages keep their header.
+
+The warning before the button now also tells you what *goes*, not only what
+arrives. Pick a template and it names any shared section your pages carry that
+the new one does not — "Old Footer will be removed from 1 of the 2 selected
+pages" — or says outright that nothing is lost, and it re-reads the moment you
+pick a different template. And it no longer states a number when it has not
+actually looked at every page you ticked: asked about five pages it was given no
+layouts for, the old wording answered "these pages have no content sections of
+their own, so there is nothing to lose here", which is the most reassuring
+sentence in the dialog and, in that case, the least supported.
+
+Two last things, from the second review pass. Pressing the button archives every
+page in the project first, because that archive is the only undo this operation
+has — so the browser asks the server "will you accept this?" before paying for
+one. Two of the new refusals above were being made only at the moment of
+writing, after the archive had already been taken: you were told the change was
+fine, a full copy of every page was filed, and then nothing happened. No page
+was ever at risk, but you were left holding a useless archive at the top of the
+list you are told to restore from, which pushes the real ones down it. Both
+questions are now asked before the archive, so a refusal costs you nothing. And
+the sentence naming the shared sections that will be removed used to count them
+by name, so two different untitled ones read as one — it counts the sections
+now, and says "2 shared sections with no title" rather than inventing a single
+name for both.
+
+Three more, from the third review pass — and the first is the one that was live
+on your own site. Some pages carry their own copy of the header and footer
+rather than the shared version: the strip and the menu are sitting on the page
+as ordinary content, not linked to the master. The system counts those as your
+content, so it keeps them — correctly — and then adds the template's real header
+and footer around them. The page ends up showing the contact strip twice, the
+menu twice, the footer twice. Two Delray pages are in exactly that state today
+and one of them is the home page, and the run reported every page confirmed,
+because the totals all added up. Those pages are now refused rather than
+written — the rest of the batch goes through as normal — and the warning names
+them before you press the button, so it is not a surprise afterwards: "All 2 of
+these pages carry their own copies of sections the chosen template also brings…
+open them in the page editor, delete each page's own copies, then run this
+again."
+
+The second: the warning was comparing your pages against the template as it is
+stored, while the server compares them against the shared sections as they are
+now. Those differ whenever a shared section has been deleted since the template
+was made — and in that case the warning promised "no shared section is removed"
+and the server removed one. It now asks the server what the template actually
+resolves to and describes that, so the sentence you read and the change you get
+are the same thing. While proving it, one more small untruth turned up in the
+same sentence: a removed shared section was described as something you "can put
+back at any time", which is not true when its master is the one that was
+deleted. It now says you can add it back as long as it is still on your Saved
+Sections list.
+
+The third is invisible but was quietly corrupting pages. A template remembers
+its header and footer under the same internal names they had on the page it was
+made from — so applying it back to that page handed the page two different
+sections with one name, and the part of the system that saves pages stamped your
+own content as a copy of the shared header. The next time that header was
+edited, your content would have been overwritten with it. Sections are now
+guaranteed distinct names on the way in.
 
 ## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
 
