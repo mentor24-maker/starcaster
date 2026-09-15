@@ -91,6 +91,8 @@ import { BuilderBlogAuthorBioModuleSettings, parseSocialLinks } from "./builder-
 import { BuilderBlogTocModuleSettings, parseTocItems } from "./builder-blog-toc-module-settings";
 import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-newsletter-subscribe-module-settings";
 import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
+import { BuilderBlogLatestPostsModuleSettings } from "./builder-blog-latest-posts-module-settings";
+import { resolveLatestPostsSettings } from "@/lib/blog-latest-posts";
 import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
@@ -1479,6 +1481,30 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-latest-posts") {
+    // A summary, not the real cards: the collapsed card has no post data.
+    const latest = resolveLatestPostsSettings(module.settings);
+    const filterWords = latest.latest
+      ? "newest published posts"
+      : [
+          latest.tags.length ? `${latest.tags.length} tag${latest.tags.length === 1 ? "" : "s"}` : "",
+          latest.categoryIds.length
+            ? `${latest.categoryIds.length} categor${latest.categoryIds.length === 1 ? "y" : "ies"}`
+            : ""
+        ].filter(Boolean).join(" + ") || "no filter chosen";
+    return (
+      <div style={{ padding: "8px 10px", fontSize: 12, color: "#35526e" }}>
+        {latest.title ? <div style={{ fontWeight: 700, marginBottom: 6 }}>{latest.title}</div> : null}
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${latest.columns}, 1fr)`, gap: 6, marginBottom: 6 }}>
+          {Array.from({ length: latest.columns }).map((_, i) => (
+            <div key={i} style={{ height: 34, borderRadius: 4, background: "#e6eef5" }} />
+          ))}
+        </div>
+        <div>Latest Blog Posts · {latest.count} post{latest.count === 1 ? "" : "s"} · {filterWords}</div>
       </div>
     );
   }
@@ -3269,6 +3295,7 @@ export function BuilderModuleCard({
     const isBlogTocModule = module.type === "blog-toc";
     const isBlogNewsletterModule = module.type === "blog-newsletter-subscribe";
     const isBlogRelatedPostsModule = module.type === "blog-related-posts";
+    const isBlogLatestPostsModule = module.type === "blog-latest-posts";
     const isBlogCategoryFilterModule = module.type === "blog-category-filter";
     const isBlogPostModule = module.type === "blog-post";
     const isBlogTagCloudModule = module.type === "blog-tag-cloud";
@@ -3340,6 +3367,7 @@ export function BuilderModuleCard({
       isBlogTocModule ||
       isBlogNewsletterModule ||
       isBlogRelatedPostsModule ||
+      isBlogLatestPostsModule ||
       isBlogCategoryFilterModule ||
       isBlogPostModule ||
       isBlogTagCloudModule ||
@@ -3561,6 +3589,8 @@ export function BuilderModuleCard({
               <BuilderBlogNewsletterSubscribeModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogRelatedPostsModule ? (
               <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogLatestPostsModule ? (
+              <BuilderBlogLatestPostsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryFilterModule ? (
               <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostModule ? (
@@ -4279,6 +4309,8 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
+          // Latest Blog Posts draws from post data alone; nothing reads its text.
+          module.type !== "blog-latest-posts" &&
           /* Nothing reads `module.text` on a carousel — `CarouselPreview`
              renders from `settings.items` alone — so this was an empty box
              sitting under the Settings column with no effect on anything

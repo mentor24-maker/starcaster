@@ -105,6 +105,41 @@ test('no token → CLICKUP_NOT_CONFIGURED and no request', async () => {
   assert.equal(requests.length, 0);
 });
 
+// 2026-09-15 (task 86bc0zuvb): a test run with the company keys loaded filed
+// 34 fixture reports as real tasks in the operator's lane. Stub the GLOBAL
+// fetch — the transport a real server uses — and prove a test run never calls it.
+async function withGlobalFetchSpy(fn) {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'task_real', url: 'https://app.clickup.com/t/task_real' }) };
+  };
+  try { return await fn(calls); } finally { globalThis.fetch = realFetch; }
+}
+
+test('a test run holding a REAL token and no injected transport never reaches ClickUp', async () => {
+  const { createHeldTask, createSyntheticReportTask } = require('../../lib/clickupForward');
+  assert.ok(process.env.NODE_TEST_CONTEXT, 'node --test must mark this process, or the guard has nothing to read');
+  await withGlobalFetchSpy(async (calls) => {
+    const held = await createHeldTask({ name: 'Bug report: Menu overlaps logo', markdownDescription: 'y' }, { token: 'pk_real_looking' });
+    const synthetic = await createSyntheticReportTask({ name: 'Bug report: x', markdownDescription: 'y' }, { token: 'pk_real_looking' });
+    assert.deepEqual(calls, [], 'no request may leave a test run');
+    assert.equal(held.ok, false);
+    assert.match(held.error, /test run may not reach the real ClickUp/);
+    assert.equal(synthetic.ok, false);
+    assert.match(synthetic.error, /test run may not reach the real ClickUp/);
+  });
+});
+
+test('outside a test runner the same call DOES go out — the guard reads the runner, not the token', async () => {
+  const { createHeldTask } = require('../../lib/clickupForward');
+  await withGlobalFetchSpy(async (calls) => {
+    await createHeldTask({ name: 'Bug report: real visitor', markdownDescription: 'y' }, { token: 'pk_real_looking', env: {} });
+    assert.ok(calls.some((u) => u.endsWith(`/api/v2/list/${LOOP_QUEUE}/task`)), `a production server must still forward, saw: ${calls.join(', ')}`);
+  });
+});
+
 test('a broken token answers a plain failure (HTTP 401), never a throw', async () => {
   const { createHeldTask } = require('../../lib/clickupForward');
   const { fetchImpl } = fakeClickup({ createStatus: 401 });
@@ -112,6 +147,43 @@ test('a broken token answers a plain failure (HTTP 401), never a throw', async (
   assert.equal(result.ok, false);
   assert.equal(result.code, 'CLICKUP_CREATE_FAILED');
   assert.match(result.error, /HTTP 401/);
+});
+
+test('a request the door declines to send is reported as a stand-down, never as a crash', async () => {
+  // 2026-09-15, task 86bc0w6my. `clickupFetch` has a THIRD outcome — a
+  // scheduled job refusing to spend the last of the minute's ClickUp budget —
+  // and it hands back `res: null`. Five callers existed; four read `res.ok`
+  // straight off it and threw `Cannot read properties of null`. This one is
+  // the quietest of the five, because it runs on a VISITOR'S request path: the
+  // crash would have surfaced as a 500 on a bug report.
+  //
+  // It cannot fire today — nothing on the web server declares
+  // STARCASTER_CALLER, and the default is `interactive`, which never yields —
+  // so the yield is forced here. "Cannot happen today" rests on a default in
+  // another file, which is not the same as cannot happen.
+  const { createHeldTask } = require('../../lib/clickupForward');
+  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
+  const before = { caller: process.env.STARCASTER_CALLER, reserve: process.env.CLICKUP_RESERVE };
+  process.env.STARCASTER_CALLER = 'scheduled';
+  // A reserve as large as the whole limit makes the very first request yield,
+  // with no ledger state to arrange and nothing written to the real one.
+  process.env.CLICKUP_RESERVE = '100';
+  try {
+    const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+    assert.equal(result.ok, false, 'nothing was created, so this is not a success');
+    assert.equal(requests.length, 0, 'and the request really was not sent');
+    assert.match(result.error, /reserve/i,
+      'the reason must name the reserve — "could not reach ClickUp" sends the reader to the network');
+    assert.doesNotMatch(result.error, /Cannot read properties of null/,
+      'the TypeError this whole ticket is about');
+    assert.doesNotMatch(result.error, /HTTP YIELDED/,
+      'the sentinel is not an HTTP status and must not be printed as one');
+  } finally {
+    if (before.caller === undefined) delete process.env.STARCASTER_CALLER;
+    else process.env.STARCASTER_CALLER = before.caller;
+    if (before.reserve === undefined) delete process.env.CLICKUP_RESERVE;
+    else process.env.CLICKUP_RESERVE = before.reserve;
+  }
 });
 
 test('a task that lands "queued" is corrected once, and if still wrong it is DELETED and reported', async () => {

@@ -936,6 +936,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     settings: {}
   },
   {
+    id: "blog-latest-posts-standard",
+    type: "blog-latest-posts",
+    group: "blog",
+    label: "Latest Blog Posts",
+    icon: "🆕",
+    description: "A row of cards for the most recently published posts, optionally narrowed to chosen tags or categories.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
     id: "blog-newsletter-subscribe-standard",
     type: "blog-newsletter-subscribe",
     group: "blog",

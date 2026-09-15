@@ -1836,7 +1836,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: block;
   padding: 10px;
   color: var(--ink-secondary, #5b6b7d);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-style: italic;
 }
 
@@ -2678,7 +2678,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   height: 30px;
   border-radius: 6px;
   border: 1px solid rgba(9, 16, 24, 0.18);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 .tw-palette-chip-name {
@@ -2848,7 +2848,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary);
   padding: 4px 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .tw-pin.is-pinned {
@@ -2868,7 +2868,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 10px;
   padding: 8px 12px;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   background: var(--bg-page, #ffffff);
 }
 
@@ -3410,20 +3410,83 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
-/* The image's file name and pixel size, under its Image field (task
-   86bc0n59x). It sits in the FIELD track, not a column of its own, so it
-   lines up under the address it describes; the name opens the picture. */
-.builder-react-root .builder-cards-panel-fields .builder-card-image-info {
-  grid-column: 2 / -1;
-  margin-top: -4px;
+/* Each item's image thumbnail, in the RIGHT pair's tracks (4 to the end),
+   beside the stacked Title / Link / Link label / Alt text column (task
+   86bc0p5f9). It spans exactly as many rows as that column has fields — the
+   editor sets --builder-card-thumb-rows — so the Image row below starts on
+   the row after the last field instead of being split around the picture.
+   The file name (opens the pop-up) and pixel size sit directly under it. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
+  grid-column: 4 / -1;
+  grid-row: span var(--builder-card-thumb-rows, 2);
+  align-self: start;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+  display: none;
+}
+/* Below the fields there is no column to fit, so the picture takes full size. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below .builder-image-thumb-image {
+  max-height: 140px;
+}
+.builder-react-root .builder-image-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-image-thumb-button {
+  appearance: none;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  cursor: zoom-in;
+  overflow: hidden;
+  max-width: 100%;
+}
+.builder-react-root .builder-image-thumb-image {
+  display: block;
+  max-width: 100%;
+  /* Shorter when the column beside it is: two fields' worth of rows cannot
+     hold a 140px picture plus its name without spreading those two apart. */
+  max-height: min(140px, calc(var(--builder-card-thumb-rows, 4) * 45px - 40px));
+  object-fit: contain;
+}
+.builder-react-root .builder-image-thumb.is-empty {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  color: white;
+  font-size: var(--text-sm);
+  opacity: 0.8;
+}
+/* Narrow panel: one pair per row, so the thumbnail takes its own row under
+   the fields, in the field track, rather than a column that no longer exists. */
+@media (max-width: 1200px) {
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
+    display: none;
+  }
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+    display: flex;
+    grid-column: 2 / -1;
+  }
 }
 .builder-react-root .builder-image-info-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  column-gap: 12px;
   min-width: 0;
-  font-size: var(--text-xs);
-  color: var(--ink-secondary);
+  /* White and a step up: the carousel editor panel is medium-dark blue, and
+     the secondary ink colour all but disappeared on it (Dane, 2026-09-14).
+     Restored here after pull request 705 overwrote it. */
+  font-size: var(--text-md);
+  color: white;
 }
 .builder-react-root .builder-image-info-name {
   appearance: none;
@@ -3442,7 +3505,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 .builder-react-root .builder-image-info-size.is-error {
-  color: var(--error);
+  color: white;
+  font-style: italic;
 }
 .builder-react-root .builder-image-info-dialog {
   display: flex;
@@ -10679,4 +10743,55 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > input[type="text"] + .builder-image-picker-field-button {
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+/*
+ * Latest Blog Posts (task 86bc0neew): the operator picks how many columns the
+ * row has, and that number is carried in as a custom property rather than an
+ * inline grid-template — an inline value would beat the media queries below,
+ * and four columns of cards on a phone are four unreadable slivers.
+ */
+.builder-blog-latest-posts-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--latest-posts-columns, 3), minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .builder-blog-latest-posts-grid {
+    grid-template-columns: repeat(min(var(--latest-posts-columns, 3), 2), minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .builder-blog-latest-posts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The tag / category checklists in the module panel. Names wrap, never truncate (UI T-1). */
+.builder-latest-posts-picklist {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.builder-latest-posts-picklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.builder-latest-posts-picklist input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 2px 0 0;
+}
+.builder-latest-posts-picklist-empty {
+  font-size: var(--text-xs);
+  color: inherit;
+  opacity: 0.8;
 }

@@ -38,6 +38,439 @@ sections untouched, and the old code reproduces the loss in the same harness.
 Each of the six fixes was deliberately broken to watch the matching test fail
 first — which caught one test that could not fail at all, and got replaced with
 one that can.
+## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
+
+For a few hours on the 15th the build and review loops on the Mac Mini refused
+to do anything, and the reason each one printed was **"the pipeline is being
+treated as PAUSED"** — which is the machine's way of saying *Dane has taken the
+deck, so I should keep my hands off.* You had not. The pipeline was running the
+whole time; a different command on the same machine, asked a second later, said
+so plainly.
+
+That is the worst shape a bug can take here, because nothing looked wrong. A
+pass standing down because you are working is completely normal, so the
+messages did not read as trouble — they read as the system behaving itself.
+
+Underneath it was one missed case. Every job that talks to ClickUp goes through
+a single piece of code, and that code can answer in three ways: *here is your
+answer*, *I could not reach them*, or — the third one — *I am a background job,
+the minute's ClickUp allowance is nearly gone, and I am not spending the last of
+it in case you are using it.* That third answer was added deliberately so a
+background job can never slow down a session you are actually sitting in front
+of. It is routine, it fixes itself within a minute, and it happens whenever two
+jobs wake up together.
+
+Five different places in the code ask that question. **Four of them had never
+been taught the third answer exists**, so they crashed on it — and the crash was
+then tidied up, one layer at a time, into "could not reach ClickUp", and then
+into "the pipeline is paused". A one-minute budget hiccup reached the operator
+as a claim about where you were.
+
+All four are fixed, including one nobody had spotted: it sits on the path a
+visitor takes when they report a bug on one of the sites, where the same crash
+would have shown up as an error page.
+
+The message itself now says only what is actually known, which turned out to be
+the fiddly part. The first attempt at this fix swung too far the other way: it
+replaced *"the pipeline is paused"* with *"the operator does not have the
+deck"* — and that is a claim the code is in no position to make, because the
+whole problem is that it never managed to look. If you genuinely had paused the
+line in the same minute a background job ran out of allowance, the new sentence
+would have been flatly false, and the next reader could reasonably have gone to
+work on your deck. So it now names the **cause** (the one-minute allowance, not
+you) and says out loud that whether you have the deck is still unknown and the
+next pass will find out. It also keeps the parts that were already right: that
+nothing is broken, that it clears itself, and that this is specifically not a
+network or password problem, so whoever reads it next does not go hunting for
+one. The pass still stands down for that minute, which is correct: it genuinely
+could not check.
+
+And because four separate authors had each missed the same case, there is now a
+check that fails the build if a fifth one does.
+## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
+
+If you put a video behind one column of a row and a menu in that same column,
+the menu's dropdown was cut off at the bottom edge of the column. A visitor
+would tap it, see a thin white sliver appear, and nothing else — a menu that
+looks like it does not work.
+
+The cause was a piece of housekeeping doing more than it was asked. A
+background video is blown up slightly so it always fills the column with no
+gaps at the edges, which means without something holding it in, it would spill
+sideways and paint over the words in the column next door. So the column was
+told to hide anything that reached outside it — and it did exactly that, to the
+video *and* to the menu, because the browser has no way to tell those two
+apart.
+
+Now the video is put in a box of its own, laid exactly over the column, and
+that box does the holding. The video is contained just as tightly as before;
+the column itself is left alone, so anything in it that is meant to reach
+outside — a dropdown, a floating image nudged over the edge — does. Rows with a
+video, and rows with a drifting photo background, had the same fault and are
+fixed in the same stroke.
+
+Four automatic checks were added that drive a real browser, open the menu, and
+ask what the visitor could actually see and click. Each one was deliberately
+broken first and watched to fail, so a future change cannot quietly bring this
+back.
+
+A second round caught something before it ever reached anyone: on a phone a
+background video is not played at all — it would cost the visitor megabytes of
+their own data — and the holding box was still being put on the page around
+nothing. An empty box is still something the page has to lay out, and in a row
+of six columns set to stack in reverse on phones it pushed the last column into
+the middle of the pile. The box is now put up by the video itself, so when
+there is no video there is nothing at all, and the columns come out in the order
+the operator asked for. Five more browser checks cover that, including one that
+simply reads what order a phone actually put the columns in.
+## 2026-09-15 — The Mini's health check now names all its jobs, and a job that comes back says so (#710)
+
+The Mac Mini has a self-check that answers one question without needing a
+password, a network connection or ClickUp: *when did each job I own last
+actually work?* That deliberate simplicity is the point — it still answers on a
+machine that is otherwise having a bad day. Four of the eight jobs it watches
+were missing from the answer entirely. Not listed as healthy, not listed as
+broken, just absent, which reads as "nobody is watching these" — and two of
+them are the Pulse pipeline jobs that went dark for 33 hours last week without
+anybody noticing. The cause was one word. A job is tagged "blocked" when the
+Mini's own setup script cannot install it, and two of these are installed by a
+different project's script instead. The report read "blocked" as "nothing to
+say about this job", which was harmless until those jobs started working. They
+are all listed now, each with a real time, and the setup script says the same
+thing in its own report so the two cannot disagree.
+
+The second half: there are two separate alarms watching for a job going quiet,
+and they measure over different lengths of time. Only one of them ever posted
+"it's back". For jobs that run every hour or so that made no difference,
+because the other alarm always fired first and did the announcing. But the
+nightly librarian job runs once a day, which flips the two windows around — so
+an outage lasting between two days and six days would be announced to the team
+chat as dead and then silently fixed, with nobody ever told. Both alarms
+announce a recovery now.
+
+One more thing turned up while checking the setup script, and it is worth
+knowing because it was quietly wrong for a long time: its "is this schedule
+already installed?" test could only ever answer *no*. Every schedule that was
+in fact installed showed up as missing, and running the script for real tore
+down and rebuilt all three of the Mini's live scheduled jobs every single time.
+Fixed in the same change.
+## 2026-09-15 — The Monday report could not have reached Google Drive at all (#709)
+
+The change above moved the weekly report out of the Mini's code folder and into
+Google Drive. A review pass then went and ran it the way the Monday schedule
+actually runs it, and found it could never have worked.
+
+When the Mac runs a job on a timer, it hands that job almost nothing — no
+settings, no passwords, just enough to find the programs it needs. The report
+was asking for Google straight out, without the step that fetches our stored
+Google sign-in first. Run by hand it worked perfectly, because a person's
+terminal already has all that loaded; run on the timer, it would have failed to
+sign in every single Monday, reported the failure, and left the report sitting
+on the Mini and nowhere else — the exact thing this whole piece of work was
+meant to stop. It now goes through that step, and a test fails if anyone takes
+it back out.
+
+Four smaller things from the same review. **A re-run will no longer wipe out the
+narrative you wrote.** The report puts the figures in Drive and asks Dane to
+write the story on top of them, on the same page, under the same name — and a
+Monday that fails halfway does get run again. The second run would have replaced
+his writing with the bare numbers and called it a success. Now it finds the page
+already there, leaves it exactly as it is, and says so. **The contents page lists
+every edition again**, because it is now built from what is really in the Drive
+folder rather than from whatever the machine that ran it happened to have on
+disk — the old way would have dropped older editions the moment the job moved to
+a different Mac. **And its links work**, which they did not: they were written as
+if the pages sat in a folder, and Google Drive does not work that way, so every
+link on that page was dead. Finally, a duplicate of an internal command was
+removed, and the one path where the report refuses to run at all now speaks up
+instead of exiting in silence.
+
+## 2026-09-14 — The weekly report now goes to Google Drive, and stops jamming the Mac Mini (#709)
+
+The weekly figures report runs on the Mac Mini every Monday at 7am. It was
+saving its three files straight into the Mini's own copy of the Starcaster
+code — and the Mini refuses to pull down new code while there are stray files
+sitting in that copy, in case they are somebody's unfinished work. So every
+report run quietly switched off the Mini's updates, and the machine carried on
+running whatever version of the pipeline it had last Monday.
+
+That is what happened on 14 September: the Mini was seven changes behind,
+including two fixes to the pipeline shipped the day before, and nothing said so.
+An agent session had to move the files out and put the copy back by hand before
+it would update again. There were already two clean-up steps written to stop
+exactly this, and they did not.
+
+The report now writes to a folder that is nowhere near the code — by default
+`Documents/Starcaster/Weekly Reports` — and uploads each edition to Google
+Drive, in Projects → Starcaster → Weekly Reports on the mentor24 account, which
+is where Dane asked for it. It refuses to run at all if anyone ever points it
+back at a code folder. After each upload it asks Drive for the file it just
+wrote and checks the size matches, because "the upload worked" and "the file is
+actually there" are not the same claim. If the upload fails, that is a failed
+run: it posts to the team chat and the Monday job raises it as a job failure,
+rather than the report quietly existing on one machine and nowhere else.
+
+The editions already saved in the repo stay where they are as history. Nothing
+is committed or published as a pull request any more.
+
+**One step is Dane's:** the saved Google sign-in for Drive has expired, and only
+a browser login on the mentor24 account can renew it. Until that happens the
+Monday upload will fail — loudly, with a message saying exactly that.
+
+## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
+
+**Read this bit first, because the original report was wrong about one thing.**
+This was filed as "set a row to full width, press Save Page, and it goes back
+to being boxed in at the normal page width." That is a real trap in the code
+and it is now closed — but a review pass went looking for a page it actually
+happens on and could not find one, and neither could we. Checked against live
+production: not one of the 133 pages that have rows on them is arranged the way
+it takes to trigger it, and the 359 full-width rows sitting in the database
+today have all stayed full width. So **please do not go looking for this on your
+sites — you will not see it, and you would not have seen it before either.**
+
+What is true is that the trap is *armed*. It fires on a page whose very first
+row has its first item sitting in the fourth, fifth or sixth column of a wide
+layout. No page is arranged that way right now, but 79 pages already use those
+wide columns, so it is one drag of one item away — and from that moment every
+save of that page would quietly reset 35 of its settings. That is worth closing
+before somebody trips it, which is what this change does.
+
+The cause is one line, and it turned out to be much bigger than the full-width
+setting. The older Builder tags every row it saves with two fields that used to
+belong only to pages imported from the old Normie system. The server sees those
+tags and thinks "this is an old imported page, run it through the importer" —
+so every ordinary save was being treated as an import. The importer rebuilds
+each row from a short list of the fields it knows about, and throws away
+anything not on that list. Full width was not on the list. Neither, it turned
+out, were 34 other things: the row's padding and margins, its column widths,
+its minimum height, its borders, how far it was nudged left or right, the
+padding and margins inside each column, and the switches for hiding a row on
+phones or on desktop. All of them silently reset to their defaults every time
+anybody saved the page.
+
+Rather than guess at which fields to rescue, we measured: ran a real row
+through the save and compared what went in against what came out, field by
+field. Then fixed it the other way round — the importer now keeps whatever the
+row already had and only translates the genuinely old-format parts. That means
+a new row setting added next year is protected automatically, instead of
+waiting for someone to remember to add it to a list. Pages genuinely imported
+from Normie still import exactly as before; there is a test holding that down.
+
+A review found that measurement had not gone deep enough, and it is worth
+saying how. It compared the row's own settings — which is where full width
+lives — but a row's background is a bundle of settings tucked inside it, and
+nothing looked in there. Six more were reverting on every save: the angle of a
+gradient, how see-through the background is, which picture was chosen, whether
+the background drifts as you scroll and how fast, and how an overlay tint
+blends. So the second pass measured the whole row recursively, right down into
+every nested setting, and reported its own blind spots as it went: 221 row
+settings and 9 module settings, every one of them actually exercised, none
+skipped. Nothing is lost now.
+
+One of the six is worth calling out, because it is the kind of thing that makes
+people distrust an editor. If you picked a colour for a row and then set the
+background to "none", the colour was thrown away on the next save — so
+switching the background back on later gave you white, not the colour you
+chose. The Builder keeps that colour on purpose; the save was discarding it.
+
+The review also caught the first fix going slightly too far the other way: in
+rescuing everything, it could overwrite the per-column padding the importer had
+just correctly worked out. That is now handled by the one function that has
+always known how to do it properly.
+
+Checked against a real page in the database, saved twice with no edits in
+between, and confirmed every setting survived both times — then deliberately
+removed each fix and watched the settings revert again, which is how we know
+the tests would catch this coming back.
+
+A third review pass found one more thing, and it is the mirror image of the
+colour problem above. In teaching the importer that "none" is a real choice
+rather than a missing one, the fix accidentally broke a much older rule: a
+genuinely old Normie page could say "no background" in its new-style field
+while still carrying a colour in its old-style one, and the importer used to
+show that old colour. After the fix it showed nothing at all. Nobody would
+have noticed, because no part of this app sends that combination — but
+importing old pages is the only job that code has, so it is exactly the wrong
+place to be quietly wrong. It now honours the old colour again, which is also
+what the Builder itself does before it saves, so the two ends agree instead of
+disagreeing. Everything the second pass rescued still comes through untouched.
+
+Two of the tests were also tightened. One of them had been quietly excusing two
+settings from the check meant to catch any setting going missing — so we made
+one of those two go missing on purpose and watched the test pass anyway, which
+proved the excuse was hiding real failures rather than preventing false ones.
+It compares everything now. And the note left in the code for the next reader
+had the mechanism wrong: it blamed the older editor, which does trip the trap
+but has nothing to lose by it. The note now names the arrangement that actually
+causes the loss, with the production numbers beside it.
+## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
+
+The Builder has two buttons that both say "change template", and until now they
+did opposite things. Open one page in the editor and change its template, and
+the page keeps everything you wrote — only the shared furniture around it, the
+header strip and the footer, gets swapped for the new template's. Tick a batch
+of pages in the list and use Change Template there, and every one of them was
+wiped and refilled with the template's blank starter layout.
+
+That is what happened to the Delray Beach Tennis Center site on 13 September.
+Fifty-seven pages were moved onto the Public Website template in one go, all
+fifty-seven lost their content, and because publishing followed twenty minutes
+later, fifty-one of them sat on the live site reading "Replace this section
+with real content." for about eighteen hours. (The pages were put back the next
+morning from the copies the change itself had banked.)
+
+The batch button now does what the single-page one does: it swaps the shared
+header and footer, pulls them from the current masters so you never get a
+six-week-old menu, and leaves your own content exactly where it was. The
+warning you read before pressing it leads with that, and with the number — "All
+31 content sections on this page are kept exactly as they are" — instead of
+telling you your sections are about to be replaced.
+
+Three things were added underneath, all of them about the same worry: this
+operation has twice done damage while reporting success. If the shared sections
+cannot be read at all, the whole run now stops rather than quietly writing every
+page with its header and footer removed. A page that would come out with less
+content than it went in with is refused instead of written. And after each page
+is saved it is read back and its content counted, not just its total number of
+blocks — swapping content for furniture keeps the total identical, which is
+precisely the kind of loss that would otherwise slip past.
+
+The review pass on this found the same accident waiting on the other side of
+the page, and it is fixed here too. Not every template carries a shared header
+and footer — in a copy of the live database, 36 of the 43 page templates carry
+none at all — and moving pages onto one of those took the header and footer
+*off* every page, put nothing back, and reported all of them confirmed. The
+same loss, from the opposite end. A template with no shared sections of its own
+is now refused before anything is written, the dialog says so and keeps the
+button off rather than letting you walk into it, and each saved page is checked
+for its shared sections as well as its content. A run is also stopped if the
+project's saved sections come back empty when the template needs them — on the
+live server an unreadable list and an empty one look identical, and the
+difference is whether 57 pages keep their header.
+
+The warning before the button now also tells you what *goes*, not only what
+arrives. Pick a template and it names any shared section your pages carry that
+the new one does not — "Old Footer will be removed from 1 of the 2 selected
+pages" — or says outright that nothing is lost, and it re-reads the moment you
+pick a different template. And it no longer states a number when it has not
+actually looked at every page you ticked: asked about five pages it was given no
+layouts for, the old wording answered "these pages have no content sections of
+their own, so there is nothing to lose here", which is the most reassuring
+sentence in the dialog and, in that case, the least supported.
+
+Two last things, from the second review pass. Pressing the button archives every
+page in the project first, because that archive is the only undo this operation
+has — so the browser asks the server "will you accept this?" before paying for
+one. Two of the new refusals above were being made only at the moment of
+writing, after the archive had already been taken: you were told the change was
+fine, a full copy of every page was filed, and then nothing happened. No page
+was ever at risk, but you were left holding a useless archive at the top of the
+list you are told to restore from, which pushes the real ones down it. Both
+questions are now asked before the archive, so a refusal costs you nothing. And
+the sentence naming the shared sections that will be removed used to count them
+by name, so two different untitled ones read as one — it counts the sections
+now, and says "2 shared sections with no title" rather than inventing a single
+name for both.
+
+Three more, from the third review pass — and the first is the one that was live
+on your own site. Some pages carry their own copy of the header and footer
+rather than the shared version: the strip and the menu are sitting on the page
+as ordinary content, not linked to the master. The system counts those as your
+content, so it keeps them — correctly — and then adds the template's real header
+and footer around them. The page ends up showing the contact strip twice, the
+menu twice, the footer twice. Two Delray pages are in exactly that state today
+and one of them is the home page, and the run reported every page confirmed,
+because the totals all added up. Those pages are now refused rather than
+written — the rest of the batch goes through as normal — and the warning names
+them before you press the button, so it is not a surprise afterwards: "All 2 of
+these pages carry their own copies of sections the chosen template also brings…
+open them in the page editor, delete each page's own copies, then run this
+again."
+
+The second: the warning was comparing your pages against the template as it is
+stored, while the server compares them against the shared sections as they are
+now. Those differ whenever a shared section has been deleted since the template
+was made — and in that case the warning promised "no shared section is removed"
+and the server removed one. It now asks the server what the template actually
+resolves to and describes that, so the sentence you read and the change you get
+are the same thing. While proving it, one more small untruth turned up in the
+same sentence: a removed shared section was described as something you "can put
+back at any time", which is not true when its master is the one that was
+deleted. It now says you can add it back as long as it is still on your Saved
+Sections list.
+
+The third is invisible but was quietly corrupting pages. A template remembers
+its header and footer under the same internal names they had on the page it was
+made from — so applying it back to that page handed the page two different
+sections with one name, and the part of the system that saves pages stamped your
+own content as a copy of the shared header. The next time that header was
+edited, your content would have been overwritten with it. Sections are now
+guaranteed distinct names on the way in.
+
+## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
+
+When you publish a page, the system saves a complete copy of it — that copy is
+what visitors are actually served, so the site stays fast and stable while you
+keep editing. When you *delete* a page, that saved copy is thrown away too.
+
+But when you merely untick Published, or mark a page private, or rename its
+web address, the saved copy stays where it is. Nobody can reach it: your site
+will not serve a page you have hidden. It is simply still on file.
+
+You were asked which of three things that should mean, and you chose: keep the
+copy, and write down plainly that unpublishing **hides** a page rather than
+erasing it — with erasing being what deleting the page is for. This change is
+that decision being recorded.
+
+**Nothing works differently than it did yesterday.** What was missing was the
+reasoning. Read the code as it stood, "deleting a page throws away its saved
+copy" looks like half a job, and the obvious way to finish it would be to throw
+the copy away on unpublish as well. That would quietly change what the Publish
+button promises: a page you hid and later put back would show your unsaved
+draft edits the moment it went live again, before you had pressed Publish. It
+would also buy very little — checked against the live database, hidden pages
+were holding a single page and 26 kB between them.
+
+So the decision now sits in three places: in the code exactly where someone
+would go to make that change, in the documentation for the table itself, and in
+three tests that fail if the option you did not choose ever gets built by
+mistake. Each of those tests was deliberately broken first and watched to fail,
+so we know they can.
+## 2026-09-14 — Saving a Builder page no longer wipes that page's own heading sizes (#699)
+
+Open any page in the Builder, press **Save Page**, change nothing — and the page
+lost its own typography. Heading sizes, line heights and heading weights all
+reverted to the defaults, with no message and nothing on screen to connect the
+change to the save. 184 pages in this machine's copy of production carry those
+settings, so 184 pages were one ordinary save away from losing them. The page's
+own background was going the same way, by the same route.
+
+Two separate faults, and fixing either one alone left the bug exactly as
+reported.
+
+The first is in the machinery that imports pages from the old Normie system. It
+recognises an old page by two settings objects that the current editor happens
+to attach to every section it saves — so every ordinary save gets treated as an
+import. The importer then rebuilt the page from a list of two things, the
+background and the sections, and the page's typography was simply not on that
+list. It now carries the page's own fields through and translates only the
+genuinely old-format parts. That is the same shape as the fixes for the two
+sibling tickets one level down, and it is written as a carry rather than a
+longer list on purpose: a list only ever protects the fields somebody
+remembered, and this is the third time the same rebuild has dropped something.
+
+The second is that the editor's save never sends the typography at all. The
+sections, the page background and the page theme share one database column, and
+the store rebuilt that whole column whenever a save named any one of them — so a
+save naming only the sections wrote "no theme", and the defaults filled in
+behind it. A save that touches that column now carries forward whatever it did
+not name. A save that *does* name a theme still wins, including one deliberately
+naming an empty theme to reset a page.
+
+Both halves were broken on purpose and measured against every real stored page:
+with either one reverted, 184 pages lose their heading sizes on a save; with
+both in place, none do.
 
 ## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
 

@@ -733,15 +733,19 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { results: result.data }), true;
   }
 
-  // Move a whole selection of pages onto one page template, replacing each
-  // page's sections with that template's.
+  // Move a whole selection of pages onto one page template: the template's
+  // shared header/footer frame replaces each page's, and each page's own
+  // content is kept (2026-09-14, ticket 86bc09db9 — before that it replaced the
+  // sections wholesale, which emptied 57 Delray pages and left 51 of them live
+  // to visitors reading "Replace this section with real content." for about
+  // eighteen hours).
   //
-  // `snapshotId` is REQUIRED and is checked before a single page is touched.
-  // The archive is the only undo this operation has — the operator chose the
-  // destructive re-pour on 2026-09-01 having been shown the 2026-08-14 incident
-  // where it emptied 35 sections off a live page — and a guard that lives only
-  // in the browser is not a guard: a stale bundle, a retried request or a
-  // direct API call all reach this route with no archive behind them.
+  // `snapshotId` is still REQUIRED and is still checked before a single page is
+  // touched. Keeping the body removes the way this operation lost work; it does
+  // not make the operation reversible — the frame really is replaced, and the
+  // archive is the only undo for that. A guard that lives only in the browser
+  // is not a guard: a stale bundle, a retried request or a direct API call all
+  // reach this route with no archive behind them.
   // WOULD this change be refused? Asked before the browser takes an archive.
   //
   // A separate path rather than a flag on the route below, deliberately: a

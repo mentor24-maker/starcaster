@@ -35,13 +35,35 @@ const pagesStorePath = require.resolve('../../lib/builderPagesStore');
 const templatesStorePath = require.resolve('../../lib/builderPageTemplatesStore');
 const snapshotsStorePath = require.resolve('../../lib/builderPageSnapshotsStore');
 const revisionsStorePath = require.resolve('../../lib/builderPageRevisionsStore');
+const savedSectionsStorePath = require.resolve('../../lib/builderSavedSectionsStore');
 const routePath = require.resolve('../../routes/builder');
+
+// The live master the template's frame reference resolves against. Since
+// 2026-09-14 the change applies the template's FRAME and keeps each page's
+// body, so a fixture with no frame anywhere would not exercise the operation
+// at all.
+const HEADER_MASTER = {
+  id: 'ss-header',
+  name: 'Site Header',
+  section: {
+    id: 'master-header',
+    title: 'Site Header',
+    canonical: true,
+    savedSectionId: 'ss-header',
+    modules: [{ id: 'm-header', type: 'text', settings: { text: 'HEADER' } }],
+  },
+};
 
 const TEMPLATE = {
   id: '47',
   name: 'Website Main Template',
   template_kind: 'modular',
-  layout_sections: JSON.stringify({ sections: [{ id: 'new-1', type: 'text' }] }),
+  layout_sections: JSON.stringify({
+    sections: [
+      { id: 'tpl-header', title: 'Site Header', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'new-1', type: 'text' },
+    ],
+  }),
 };
 
 function page(id, name) {
@@ -62,7 +84,7 @@ function page(id, name) {
 function withRoute({ pages = [page(1, 'Home'), page(2, 'About')], snapshots = [{ id: 37 }] } = {}) {
   for (const p of [
     supabasePath, scopePath, pagesStorePath, templatesStorePath,
-    snapshotsStorePath, revisionsStorePath, routePath,
+    snapshotsStorePath, revisionsStorePath, savedSectionsStorePath, routePath,
   ]) {
     delete require.cache[p];
   }
@@ -76,6 +98,7 @@ function withRoute({ pages = [page(1, 'Home'), page(2, 'About')], snapshots = [{
     builderPageTemplates: 'builder_page_templates',
     builderPageRevisions: 'builder_page_revisions',
     builderPageSnapshots: 'builder_page_snapshots',
+    builderSavedSections: 'builder_saved_sections',
   });
   supabase.sbQuery = async ({ method = 'GET', table = '', query = '', body }) => {
     // The tenant-column probe (lib/projectScope) — answered no, because
@@ -90,6 +113,7 @@ function withRoute({ pages = [page(1, 'Home'), page(2, 'About')], snapshots = [{
       return { ok: true, data: snapshots.filter((s) => String(s.id) === String(id)) };
     }
     if (table === 'builder_page_revisions') return { ok: true, data: [] };
+    if (table === 'builder_saved_sections') return { ok: true, data: [{ ...HEADER_MASTER }] };
     if (table === 'builder_page_templates') return { ok: true, data: [{ ...TEMPLATE }] };
     if (table === 'builder_landing_page') {
       const id = (query.match(/id=eq\.(\d+)/) || [])[1];

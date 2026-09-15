@@ -217,6 +217,103 @@ test('the write\'s try holds the request and nothing else', () => {
   assert.ok(block.includes('bulk-set-template'), 'the request itself should still be in there');
 });
 
+/**
+ * The DIALOG's warning goes through the wording module too (2026-09-14).
+ *
+ * It is the third call site, and it is the one the operator reads BEFORE
+ * pressing the button — the sentence he acted on when 57 Delray pages lost
+ * their content on 2026-09-13. Worded inline here it could only be checked by
+ * eye, which is how the old one stayed accurate to a behaviour that had
+ * changed underneath it.
+ */
+test('the dialog warning is worded in /shared/, through the same guard', () => {
+  const body = functionBody(source, 'renderBulkChangeTemplateWarning');
+  assert.match(
+    body,
+    /sayBulkTemplate\(\s*'describeBulkTemplateChangePlan'/,
+    'the dialog words its own warning again, where nothing can assert on it',
+  );
+
+  // The sentence that shipped the incident, in either apostrophe.
+  const code = body.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+  assert.doesNotMatch(
+    code,
+    /will be REPLACED/,
+    'the dialog still tells the operator his sections will be replaced; since 2026-09-14 they are kept',
+  );
+});
+
+/**
+ * THE WARNING IS RECOMPUTED WHEN THE DESTINATION CHANGES.
+ *
+ * Half of what it has to say depends on which template was picked — whether
+ * that template carries a shared header and footer at all, and which of the
+ * pages' own shared sections it does not carry and will therefore take off
+ * them. Computed once when the dialog opens, before anything is chosen, it can
+ * only ever describe the arrivals, which is the 2026-09-14 send-back's second
+ * item: the operator was told about a swap on an operation that is also a
+ * removal.
+ */
+test('the chosen template is passed to the warning, and the warning is redrawn when it changes', () => {
+  const body = functionBody(source, 'renderBulkChangeTemplateWarning');
+  assert.match(body, /templateSections:/, 'the plan is computed without the chosen template');
+  assert.match(
+    body,
+    /selectedBulkTemplateSections\(\)/,
+    'the chosen template\'s own sections are no longer read',
+  );
+
+  const opener = functionBody(source, 'openBulkChangeTemplateDialog');
+  assert.match(
+    opener,
+    /onchange = renderBulkChangeTemplateWarning/,
+    'choosing a template no longer redraws the warning, so it describes whatever was chosen last',
+  );
+
+  // undefined, never []: "nothing is chosen yet" and "this template has no
+  // sections" are different answers, and the wording module treats them as
+  // such. Collapsed to an array, the dialog would announce a frameless
+  // template before one had been picked.
+  const reader = functionBody(source, 'selectedBulkTemplateSections');
+  assert.match(reader, /: undefined/, 'no template chosen is collapsed to something the module reads as empty');
+  assert.doesNotMatch(reader, /:\s*\[\]/, 'no template chosen is passed as an empty list');
+});
+
+test('a destination the server will refuse does not leave the button enabled', () => {
+  // A template carrying no shared header or footer is refused by the store
+  // (describeBulkTemplateTarget). 36 of 43 page templates in a copy of the
+  // production database are that shape, and nothing about the picker
+  // distinguishes them, so the dialog says why and keeps the button off rather
+  // than letting the operator walk into the refusal.
+  const body = functionBody(source, 'renderBulkChangeTemplateWarning');
+  assert.match(body, /plan\.blocked === true/, 'the dialog no longer disables the button on a refused template');
+});
+
+test('the dialog\'s fallback states no count it did not take', () => {
+  // The fallback runs when /shared/bulkTemplateOutcome.js did not load — which
+  // is exactly when nothing counted anything. A number in this sentence would
+  // be invented.
+  const code = functionBody(source, 'renderBulkChangeTemplateWarning')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n');
+  const fallbacks = code.match(/'[^']*content sections[^']*'/g) || [];
+  assert.ok(fallbacks.length, 'the dialog fallback sentence is gone');
+  for (const sentence of fallbacks) {
+    assert.doesNotMatch(sentence, /\d/, `the fallback quotes a number it never counted: ${sentence}`);
+  }
+});
+
+test('a page the screen has no row for is passed as unreadable, not as empty', () => {
+  // The counter can only tell "could not read it" from "it has none" if this
+  // function hands it undefined rather than []. Collapsed to [], a page whose
+  // row is missing silently reduces the number the operator is asked to trust.
+  const body = functionBody(source, 'selectedPageLayoutSections');
+  assert.match(body, /Array\.isArray\(item\.layoutSections\)/, 'the section list is no longer type-checked');
+  assert.match(body, /: undefined/, 'a missing page is collapsed to something the counter reads as empty');
+  assert.doesNotMatch(body, /:\s*\[\]/, 'a missing page is passed as an empty list, which counts as zero content');
+});
+
 // ── The weakest link in the evidence chain ──────────────────────────────────
 
 /**

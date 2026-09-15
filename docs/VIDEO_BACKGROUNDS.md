@@ -273,6 +273,54 @@ Overlay; this section stays because it is where the story started.
 
 ---
 
+## The containment is around the LAYER, not around the surface
+
+A background layer has to be contained. The video is scaled to cover, a blurred
+one is scaled further still so its soft rim falls outside on purpose, and a
+parallaxing image layer is taller than its row by the whole travel distance. Let
+loose, a cell's footage paints over the column beside it and a row's spills onto
+the rows above and below.
+
+The obvious way to do that is `overflow: hidden` on the row, and then on the
+cell when per-cell video arrived. It is also wrong, and the reason is that
+`overflow: hidden` is not selective: **it cannot tell footage escaping from a
+thing that is supposed to escape.** A navigation module's dropdown is supposed
+to hang out of its column. With a video behind that column the menu was cut off
+at the column's edge, which to a visitor reads as a menu that will not open —
+they tap it and nothing appears (86bbwmp2y, 2026-09-14). A floating image with a
+horizontal offset had the same fate, silently.
+
+So the layer is mounted inside a **clip box** of its own —
+`lib/builder-client/background-clip.ts`, one function used by the row and by the
+cell so the two cannot drift — absolutely positioned at the surface's bounds,
+`overflow: hidden`, `pointer-events: none`, `border-radius: inherit`, at the
+same `z-index: 0` rung the layer itself used to occupy. The footage is held; the
+row and the cell stay `overflow: visible`, exactly as they are with no
+background at all.
+
+Two things follow that are easy to miss:
+
+- **The parallax driver no longer reaches its surface with `parentElement`.**
+  The box is in the way, and the box is `inset: 0` against the surface's
+  *padding* box, which is a different rectangle from the surface's own
+  `getBoundingClientRect()` the moment the row carries a border — so measuring
+  the box instead would shift the drift by the border width, silently and only
+  on bordered rows. `builderBackgroundLayerSurface()` steps over it.
+- **`pointer-events: none` on the box is load-bearing.** It is a full-size
+  element laid over the cell; without it, it would swallow every click in that
+  column — the same defect the fix removes, arriving one element higher up.
+
+Each surface carries a matched PAIR of render contracts, because either one
+alone passes on the other's bug: `…-is-clipped-…` proves the box contains the
+layer, `…-leaves-the-…-uncontained` proves the surface is not doing it, and
+`cell-video-background-lets-overhanging-decor-out-of-the-cell` probes what the
+browser actually reports on top where decor crosses the gutter — the only one
+of the three that reproduces what the visitor sees, because clipping does not
+move a clipped element's rect and every style reading in the broken scene is
+identical to the working one.
+
+---
+
 ## Traps this work walked into
 
 Five, and the pattern is the same each time: everything reported success.
@@ -311,7 +359,7 @@ Five, and the pattern is the same each time: everything reported success.
 
 ## Checking a change here
 
-`npm run check:render` carries eight `video-background-*` contracts and eight
+`npm run check:render` carries ten `video-background-*` contracts and eight
 `*-parallax-*` ones, and reaching them needs no database, no login and no
 fixture — a video and a greyscale poster are committed at
 `public/images/render-fixture-background*`, and the parallax contracts reuse
