@@ -550,3 +550,78 @@ test('the queue file is created, and survives being reopened', () => {
   assert.equal(second.listJobs().length, 1, 'the work list is still there after a restart');
   second.close();
 });
+
+// ── Migrating a queue file that already exists ────────────────────────────
+
+test('a queue file written before `payload` existed is migrated on open', async (t) => {
+  // THE ONLY TEST THAT CAN FAIL WHEN THE MIGRATION IS REMOVED. Every other
+  // test in this file builds a fresh database, where `CREATE TABLE IF NOT
+  // EXISTS` already contains `payload` — so `addColumnIfMissing` is a no-op in
+  // all of them and deleting it leaves the whole suite green. The Mini has
+  // been running this queue since Studio 2/8 shipped, and its file predates
+  // the column: without the migration the first payload-carrying enqueue dies
+  // there with an opaque `SQL logic error`, on the one machine nobody watches.
+  //
+  // The old shape is produced by dropping the column rather than by pasting a
+  // copy of the pre-#711 schema, so the rest of the table stays whatever the
+  // current schema says and this test does not rot when a later slice adds
+  // another column.
+  //
+  // Break-tested: with the `addColumnIfMissing` call deleted, subtests 1, 3
+  // and 4 fail (the missing column, then `SQL logic error` out of `enqueue`).
+  // Subtest 2 passes either way on purpose — it asks whether the existing work
+  // list SURVIVES the migration, which is a different question from whether
+  // the migration happened, and it is the one that would catch a future
+  // migration that dropped rows.
+  function legacyQueueFile() {
+    const file = tmpFile('legacy/queue.db');
+    const q = openQueue(file);
+    q.enqueue(JOB); // a row filed by the old code, before payloads existed
+    q.db.exec('ALTER TABLE jobs DROP COLUMN payload');
+    const columns = q.db.prepare('PRAGMA table_info(jobs)').all().map((c) => String(c.name));
+    // Assert the SETUP, not just the outcome: if a future SQLite refused the
+    // drop, every assertion below would pass for the boring reason and this
+    // test would be guarding nothing.
+    assert.ok(!columns.includes('payload'), 'the fixture must actually be the old shape');
+    q.close();
+    return file;
+  }
+
+  await t.test('opening it adds the column', () => {
+    const q = openQueue(legacyQueueFile());
+    const columns = q.db.prepare('PRAGMA table_info(jobs)').all().map((c) => String(c.name));
+    assert.ok(columns.includes('payload'), 'openQueue must migrate a file it did not create');
+    q.close();
+  });
+
+  await t.test('the row written by the old code still reads back, with no payload', () => {
+    const q = openQueue(legacyQueueFile());
+    const [job] = q.listJobs();
+    assert.equal(job.subjectId, JOB.subjectId, 'the existing work list survives the migration');
+    assert.equal(job.payload, null, 'a row from before the column is roleless, not broken');
+    q.close();
+  });
+
+  await t.test('and an enqueue carrying a payload succeeds on it', () => {
+    const q = openQueue(legacyQueueFile());
+    const { job, created } = q.enqueue({
+      stage: 'probe',
+      subjectKind: 'source',
+      subjectId: 'drive-file-2',
+      payload: { layerRole: 'plate', transcribe: false },
+    });
+    assert.equal(created, true);
+    assert.deepEqual(job.payload, { layerRole: 'plate', transcribe: false });
+    q.close();
+  });
+
+  await t.test('and the legacy subject still dedupes to the job already there', () => {
+    const q = openQueue(legacyQueueFile());
+    const before = q.listJobs();
+    const again = q.enqueue({ ...JOB, payload: { layerRole: 'plate' } });
+    assert.equal(again.created, false, 'the migration must not make old work look new');
+    assert.equal(again.job.id, before[0].id);
+    assert.equal(q.listJobs().length, 1, 'and no second job was filed for it');
+    q.close();
+  });
+});

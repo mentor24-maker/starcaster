@@ -53,7 +53,19 @@ mattered. Files that have nothing to do with the Studio are now counted by
 category with a few examples kept, and only files genuinely in a watched folder
 are named one by one.
 
+One correction after review, and it is the kind that only shows up on a real
+machine. The Mini has been running the Studio's to-do list since the previous
+piece shipped, so its file is older than the new column this work needed. The
+code adds that column on the way in — one line, exactly right, and nothing was
+checking it. Every test built a brand-new file, which already has the column,
+so deleting that line left all sixty tests green while the Mini itself would
+have stopped dead with an unreadable database error, unattended, at whatever
+hour it next picked up a video. There is now a test that builds the old shape
+on purpose and opens it, so anyone tidying up later finds out immediately
+instead of finding out from the Mini.
+
 Nothing downloads yet — that is the next piece.
+
 ## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
 
 If you put a video behind one column of a row and a menu in that same column,
