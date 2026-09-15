@@ -59,7 +59,13 @@ const { loopNote, heartbeatNote } = loopNoteLib;
 import loopNoteComment from './builder/loopNoteComment.js';
 import { spawnSync } from 'node:child_process';
 import clickupLib from './lib/clickup.cjs';
-const { clickupFetch, ledger: clickupLedger, callerKind } = clickupLib;
+const {
+  clickupFetch, ledger: clickupLedger, callerKind,
+  // The third outcome's vocabulary moved to the door in task 86bc0w6my.
+  // It was written here first and four other call sites went without it —
+  // see the block above `callOnce` in scripts/lib/clickup.cjs.
+  YIELDED_STATUS, EXIT_YIELDED, yieldedResult, stoppedAtReserve,
+} = clickupLib;
 import busRelayPlan from './builder/busRelayPlan.js';
 import clickupRetry from './builder/clickupRetry.js';
 import mergeOnComment from './builder/mergeOnComment.js';
@@ -357,75 +363,24 @@ async function callOnce(method, path, body) {
   return { res: out.res, json: out.json, text: out.text };
 }
 
-/**
- * The shape a yielded request travels in.
+/*
+ * THE THIRD OUTCOME lives in the door now (2026-09-15, task 86bc0w6my).
  *
- * The same trick `unreachable()` plays, and for the same reason: every call
- * site in this 4,500-line file is written around `{ res, json, text }`, so a
- * new outcome has to arrive in that shape or a hundred call sites need
- * editing. Status 0 is already taken by "never left the machine"; 429 is
- * ClickUp refusing. YIELDED is us refusing, and `die()` gives it its own
- * explanation and its own exit code.
+ * `YIELDED_STATUS`, `EXIT_YIELDED`, `yieldedResult` and `stoppedAtReserve`
+ * were written here, in the one file that handled a yield correctly — and
+ * that was the problem. Four other callers of `clickupFetch` could not reach
+ * them without importing a 5,000-line CLI, so each wrote `res.ok` on a null
+ * `res` instead and crashed. They are imported from scripts/lib/clickup.cjs
+ * at the top of this file; the wording and behaviour here are unchanged.
  */
-/**
- * A STRING, not a number, and that is the whole point.
- *
- * Eighteen places in this file format a failure as `HTTP ${res.status}`. With
- * a numeric sentinel every one of them printed `HTTP -1`, which is not an HTTP
- * status, means nothing to a reader, and sends them looking for a network
- * fault — the exact thing DOCTRINE 2.2 is about. As a string, those same
- * eighteen messages say what actually happened without any of them being
- * edited. Every numeric comparison in this file (`!== 429`, `=== 401`,
- * `=== 404`, `=== 0`) keeps behaving correctly, because a string equals none
- * of them: a yield is not retried and not mistaken for an auth problem.
- */
-const YIELDED_STATUS = 'YIELDED (the ClickUp reserve)';
-function yieldedResult(yielded) {
-  return {
-    res: { ok: false, status: YIELDED_STATUS, headers: { get: () => null } },
-    json: null,
-    text: yielded.why,
-    yielded,
-  };
-}
-
-/**
- * Did this result stop at the ClickUp reserve rather than fail?
- *
- * A yield travels in the ordinary `{res}` shape with `res.ok === false`, which
- * is indistinguishable from a refusal to any caller that only asks `ok`. Every
- * place that branches on failure and means something different by "the server
- * said no" has to ask this first. Written once because it was got wrong twice
- * on the same call path: at the chat POST (review round 1) and then one level
- * down inside the fallback (review round 2).
- *
- * Accepts both `call()` results and `fetchAllTasks`'s non-fatal return, which
- * carries the same `res` and `yielded` fields.
- */
-function stoppedAtReserve(out) {
-  return Boolean(out && (out.yielded || (out.res && out.res.status === YIELDED_STATUS)));
-}
-
-/**
- * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not
- * 1. A scheduled job that yields has NOT done its work — so it must not exit 0
- * (the ticket's Non-goal) — but it also has not failed, and reporting it as a
- * failure would put a ClickUp outage on the bus every time the budget got
- * tight. A code of its own lets `run_bus_relay.sh` tell the two apart.
- */
-const EXIT_YIELDED = 7;
 
 function die(label, { res, json, text, yielded }) {
   if (yielded || res.status === YIELDED_STATUS) {
-    const why = (yielded && yielded.why) || text;
-    console.error(`\n${label} STOPPED — the ClickUp reserve, not a failure.`);
-    console.error(why);
-    console.error('\nWhat this means: this is a scheduled job, and the ClickUp budget for this minute');
-    console.error('is down to the reserve kept for the sessions Dane is actually talking to. The job');
-    console.error('stopped instead of spending it. Nothing is half-done that was not already half-done;');
-    console.error('the next scheduled pass picks up where this one stopped.');
-    console.error('To run this by hand anyway, from a session Dane is in, run it WITHOUT');
-    console.error('STARCASTER_CALLER=scheduled — interactive callers never yield.');
+    // ONE wording, shared with pipeline.mjs and pulse.cjs (task 86bc0w6my) —
+    // three commands that can hit the same stop must not describe it three
+    // ways, which is how "could not reach ClickUp" got written in the first
+    // place.
+    console.error(`\n${clickupLib.reserveStopMessage(label, (yielded && yielded.why) || text)}`);
     process.exit(EXIT_YIELDED);
   }
   console.error(`\n${label} FAILED — HTTP ${res.status}`);
@@ -3902,6 +3857,12 @@ if (cmd === 'whoami') {
       headers: { Authorization: TOKEN },
       body: form,
     });
+    // THE THIRD OUTCOME, HANDLED FIRST (task 86bc0w6my). This path went two
+    // years without it: a yield hands back `res: null`, so the `up.res.ok`
+    // below threw a TypeError instead of saying a scheduled job stood down —
+    // and this is how `check:shots` puts before/after pictures on a ticket, so
+    // the crash landed in the middle of a build pass.
+    if (up.yielded) die(`attach ${basename(file)}`, yieldedResult(up.yielded));
     if (up.transportError) die(`attach ${basename(file)}`, unreachable(up.transportError));
     const res = up.res;
     const text = up.text;
@@ -4712,6 +4673,9 @@ if (cmd === 'whoami') {
     why: pauseSwitch.why,
     switchFound: pauseSwitch.switchFound,
     comments: pauseSwitch.comments || [],
+    // See task 86bc0w6my: merging still stops, but the relay says WHY, and a
+    // reserve stand-down must not read as the operator holding the deck.
+    yielded: Boolean(pauseSwitch.yielded),
   });
   if (pauseState.paused) console.error(`\n${pauseState.message}\n`);
   const mergingAllowed = mergeSwitchOn && !pauseState.paused;

@@ -466,6 +466,109 @@ class ClickUpReserveYield extends Error {
   }
 }
 
+
+/**
+ * THE THIRD OUTCOME, IN THE SHAPE EVERY CALLER ALREADY READS (2026-09-15,
+ * task 86bc0w6my).
+ *
+ * `clickupFetch` has three outcomes — a response, a transport error, and a
+ * yield — and the docstring above `yielded` used to say "both call sites
+ * handle it by name". There were FIVE, and four of them did not: they wrote
+ * `const { res } = out; res.ok`, and a yield hands back `res: null`. So the
+ * one thing built to be quiet and self-clearing arrived as
+ * `TypeError: Cannot read properties of null (reading 'ok')`, which every
+ * layer above then dressed up as a network fault. On 2026-09-15 that stopped
+ * the build and review loops on the Mini with the message "the pipeline is
+ * being treated as PAUSED" while the pipeline was running perfectly.
+ *
+ * The lesson is not "remember to check `yielded`" — four call sites already
+ * failed to remember. It is that the check has to be cheap and the words have
+ * to be written once. So the vocabulary lives HERE, beside the door that
+ * produces the outcome, and `clickupReserveCallSites.test.js` fails if a new
+ * call site does not use it.
+ */
+
+/**
+ * A STRING, not a number, and that is the whole point.
+ *
+ * Eighteen places in `clickup_direct.mjs` format a failure as
+ * `HTTP ${res.status}`. With a numeric sentinel every one of them printed
+ * `HTTP -1`, which is not an HTTP status, means nothing to a reader, and sends
+ * them looking for a network fault — the exact thing DOCTRINE 2.2 is about. As
+ * a string, those same messages say what actually happened without any of them
+ * being edited. Every numeric comparison in this repo (`!== 429`, `=== 401`,
+ * `=== 404`, `=== 0`) keeps behaving correctly, because a string equals none
+ * of them: a yield is not retried and not mistaken for an auth problem.
+ */
+const YIELDED_STATUS = 'YIELDED (the ClickUp reserve)';
+
+/**
+ * Exit 7 means "I stopped on purpose at the ClickUp reserve", and it is not 1.
+ * A scheduled job that yields has NOT done its work — so it must not exit 0 —
+ * but it also has not failed, and reporting it as a failure would put a
+ * ClickUp outage on the bus every time the budget got tight.
+ */
+const EXIT_YIELDED = 7;
+
+/**
+ * The yield, travelling in the ordinary `{ res, json, text }` shape.
+ *
+ * The same trick a transport failure plays, and for the same reason: hundreds
+ * of call sites across this repo are written around that shape, so a new
+ * outcome has to arrive in it or every one of them needs editing. Status 0 is
+ * already taken by "never left the machine"; 429 is ClickUp refusing. This is
+ * US refusing.
+ */
+function yieldedResult(yielded) {
+  return {
+    res: { ok: false, status: YIELDED_STATUS, headers: { get: () => null } },
+    json: null,
+    text: (yielded && yielded.why) || YIELDED_STATUS,
+    yielded: yielded || null,
+  };
+}
+
+/**
+ * Did this result stop at the ClickUp reserve rather than fail?
+ *
+ * A yield travels with `res.ok === false`, which is indistinguishable from a
+ * refusal to any caller that only asks `ok`. Every place that branches on
+ * failure and means something different by "the server said no" has to ask
+ * this first. Accepts a raw door result, a `yieldedResult`, and the
+ * `{ res, yielded }` shape non-fatal readers hand back.
+ */
+function stoppedAtReserve(out) {
+  return Boolean(out && (out.yielded || (out.res && out.res.status === YIELDED_STATUS)));
+}
+
+/**
+ * What a reader is told when a scheduled job stops at the reserve — ONE
+ * wording, for every command that can hit it.
+ *
+ * It says the three things the 2026-09-15 incident proved a reader needs, in
+ * this order: that nothing failed, that it clears itself, and — explicitly —
+ * that this is NOT a network or token fault. That last line is not padding.
+ * The message it replaces ("could not reach ClickUp") sent the next reader
+ * hunting for an outage that was never there.
+ *
+ * Returned as a string rather than printed, so a caller can put it on stderr,
+ * in a ClickUp comment, or inside a larger verdict.
+ */
+function reserveStopMessage(label, why) {
+  return [
+    `${label} STOPPED — the ClickUp reserve, not a failure.`,
+    String(why || YIELDED_STATUS),
+    '',
+    'What this means: this is a scheduled job, and the ClickUp budget for this minute',
+    'is down to the reserve kept for the sessions Dane is actually talking to. The job',
+    'stopped instead of spending it. Nothing is half-done that was not already half-done;',
+    'the next scheduled pass picks up where this one stopped.',
+    'It is NOT a network fault and NOT a token problem — do not go looking for one.',
+    'To run this by hand anyway, from a session Dane is in, run it WITHOUT',
+    'STARCASTER_CALLER=scheduled — interactive callers never yield.',
+  ].join('\n');
+}
+
 async function callOnce(method, apiPath, body, { timeoutMs = HTTP_TIMEOUT_MS } = {}) {
   requireToken();
   // Through the one door. This file's contract is to THROW on a transport
@@ -757,6 +860,14 @@ module.exports = {
   // second copy of it would drift (task 86bc0wrxg, review round 2).
   underTestRunner,
   ClickUpReserveYield,
+  // The third outcome's shared vocabulary (task 86bc0w6my). Every caller of
+  // `clickupFetch` outside this file must use these rather than inventing its
+  // own; `clickupReserveCallSites.test.js` holds them to it.
+  YIELDED_STATUS,
+  EXIT_YIELDED,
+  yieldedResult,
+  stoppedAtReserve,
+  reserveStopMessage,
   COMMENT_PAGE_SIZE,
   HTTP_TIMEOUT_MS,
   SHELL_TIMEOUT_MS,

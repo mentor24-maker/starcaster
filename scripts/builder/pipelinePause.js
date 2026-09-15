@@ -338,7 +338,55 @@ function readTrail(comments) {
  * whole point is that "we could not check" and "it is paused" must lead to the
  * same behaviour — while never being described in the same words.
  */
-function pauseVerdict({ readable = true, why = '', switchFound = true, comments = [] } = {}) {
+function pauseVerdict({ readable = true, why = '', switchFound = true, comments = [], yielded = false } = {}) {
+  // A SCHEDULED JOB STANDING DOWN AT THE RESERVE IS NOT AN UNREADABLE SWITCH
+  // (2026-09-15, task 86bc0w6my). This is the design call that ticket asked
+  // for, and it is answered in one direction only: the BEHAVIOUR is unchanged
+  // — code 3, claim nothing, merge nothing, because the switch genuinely was
+  // not read and failing open here is the one thing this module must never do
+  // — while the WORDS stop lying.
+  //
+  // The lie was expensive. The reserve exists so a background job never blocks
+  // a session Dane is talking to; it is routine, self-clearing, and fires
+  // whenever two jobs share a minute. Reported as "could not read the switch,
+  // treating the pipeline as PAUSED" it is indistinguishable from the operator
+  // having taken the deck — which is a perfectly normal thing for a pass to
+  // report, so nobody investigates. On 2026-09-15 both loop lanes stood down
+  // that way while `npm run pipeline -- status`, on the same machine and the
+  // same token, printed RUNNING.
+  //
+  // `certain: false` stays false: this verdict still did not read the switch.
+  // `yielded: true` is what a caller reports differently — the pulse's
+  // heartbeat, `--json` consumers, and the preflight line a loop pass prints.
+  //
+  // AND THE MESSAGE MAY NOT CLAIM THE OPERATOR'S STATE EITHER. The first fix
+  // for this ticket said "the operator does NOT have the deck", which is the
+  // same defect facing the other way: the read never happened, so whether he
+  // has the deck is precisely the thing this verdict cannot know, and if he
+  // HAS paused the line while a scheduled pass hits the reserve in the same
+  // minute, that sentence prints the opposite of the truth into the loop log.
+  // What is known is the CAUSE — the reserve, not the operator — and that the
+  // question is still open. Say both; claim neither answer.
+  if (!readable && yielded) {
+    return {
+      paused: true,
+      certain: false,
+      yielded: true,
+      code: 3,
+      message:
+        'The pipeline pause switch was NOT READ, so nothing may be claimed or merged on this pass.\n'
+        + 'This stand-down was not caused by the operator taking the deck — the ClickUp reserve caused it.\n'
+        + 'Whether he has the deck is UNKNOWN, because the switch was never read; the next pass finds out.\n\n'
+        + `Reason: ${why || 'a scheduled job stopped at the ClickUp reserve'}\n\n`
+        + 'This is a scheduled job, and the ClickUp budget for this minute was down to the reserve kept for\n'
+        + 'the sessions Dane is actually talking to, so it stopped instead of spending it. Nothing is broken,\n'
+        + 'and it clears itself: the next pass reads the switch normally.\n'
+        + 'It is NOT a network fault and NOT a token problem, so do not go looking for one. To read the switch\n'
+        + 'by hand from a session Dane is in, run the command without STARCASTER_CALLER=scheduled —\n'
+        + 'interactive callers never yield.',
+    };
+  }
+
   if (!readable) {
     return {
       paused: true,
