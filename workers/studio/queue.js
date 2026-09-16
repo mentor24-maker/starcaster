@@ -476,6 +476,50 @@ function openQueue(file, options = {}) {
     return true;
   }
 
+  /**
+   * Put a claimed job back, because the MACHINE could not do it — not the job.
+   *
+   * THE THIRD OUTCOME, and it exists for the same reason `attempts` and
+   * `recoveries` are two counters rather than one. `complete` and `fail` are
+   * both verdicts on the work; there was no way to say "this work is fine, the
+   * conditions are not". Ingest (4/8) is the first caller: a disk with no room
+   * for a 3.57 GB file is a fact about the Mini, and charging it to the file
+   * means five full disks in a row send a perfectly good piece of footage to
+   * `blocked` with an error about somebody else's video.
+   *
+   * It counts NOTHING — not an attempt, not a recovery — and it keeps the
+   * reason, so `listJobs` can say why a pending job is waiting rather than
+   * showing a blank `last_error` that reads as "never tried". `runAfterMs`
+   * holds it off for a while, because the condition that caused this is not
+   * usually fixed in the next ten seconds.
+   *
+   * ONE STATEMENT, GUARDED IN THE WHERE CLAUSE, like heartbeat / complete /
+   * fail: a stale worker must not be able to reset a job a live worker has
+   * since claimed. Returns false when the job is no longer this worker's.
+   */
+  function release(id, owner, { reason = '', runAfterMs = 0 } = {}) {
+    const at = clock();
+    const result = db
+      .prepare(
+        `UPDATE jobs
+            SET state = '${STATES.PENDING}',
+                lease_owner = '',
+                lease_expires_at = 0,
+                run_after = ?,
+                progress_pct = 0,
+                last_error = ?,
+                updated_at = ?
+          WHERE id = ? AND lease_owner = ? AND state = '${STATES.RUNNING}'`
+      )
+      .run(
+        at + Math.max(0, Number(runAfterMs) || 0),
+        text(reason) || 'put back with no reason given',
+        at,
+        Number(id),
+        text(owner)
+      );
+    return result.changes > 0;
+  }
 
   /**
    * File a job that is ALREADY terminal, with the reason that made it so.
@@ -706,7 +750,7 @@ function openQueue(file, options = {}) {
   }
 
   return {
-    enqueue, claim, heartbeat, complete, fail, block, clearBlock, reap,
+    enqueue, claim, heartbeat, complete, fail, release, block, clearBlock, reap,
     getJob, listJobs, counts,
     getCursor, setCursor, cacheGet, cacheSet,
     close, db,
