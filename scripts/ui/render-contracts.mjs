@@ -551,6 +551,218 @@ export const RENDER_CONTRACTS = [
         : `the sixth column of a Reverse stack row with phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
     },
   },
+  /*
+   * PER-DEVICE MODULE STYLES (86bc14pfq), the module half of the row
+   * contracts above. Same reason for reading a browser rather than the
+   * markup: every failure mode here is invisible in the DOM — a rule that
+   * loses to the inline style, a rule that loses to the pre-device mobile
+   * stylesheet, or a query at the wrong width.
+   */
+  {
+    id: 'module-device-styles-phone-margin-applies-on-a-phone',
+    why:
+      'The feature itself. A heading set to 40px of top margin on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 0 wins and the Phone panel silently does nothing.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A module styled per device', settings: { marginTop: '0', 'phone.marginTop': '40' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['marginTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.marginTop === '40px'
+        ? null
+        : `a module with Phone margin-top 40 rendered margin-top ${sample.styles.marginTop} at 420px — the phone rule is not reaching the module.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
+    why:
+      'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +
+      'Desktop declares center/right on the CHILD (`.is-align-center .builder-preview-heading ' +
+      '{ justify-self: center }`), and a child\'s own justify-self beats the parent\'s ' +
+      'justify-items — so a device rule written only on the wrapper moved a module OUT of left ' +
+      'and could never move it back IN. Measured at 420px: center + phone.alignment left rendered ' +
+      'justify-self: center, unmoved.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Left on a phone', settings: { alignment: 'center', 'phone.alignment': 'left' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      if (sample.styles.justifySelf === 'center') {
+        return 'a centred heading set to Phone alignment "left" still rendered justify-self: center at 420px — the device rule is on the wrapper only, and the child\'s own justify-self beats it.';
+      }
+      return sample.styles.textAlign === 'left'
+        ? null
+        : `a centred heading set to Phone alignment "left" rendered text-align ${sample.styles.textAlign} at 420px, not left.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-alignment-can-centre-a-module',
+    why:
+      'The OTHER direction of the contract above, and the direction that already worked — so a ' +
+      'fix cannot buy one by breaking the other. A left heading set to Phone alignment "center" ' +
+      'centres at 420px.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Centred on a phone', settings: { alignment: 'left', 'phone.alignment': 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.textAlign === 'center' && sample.styles.justifySelf !== 'auto'
+        ? null
+        : `a left-aligned heading set to Phone alignment "center" rendered justify-self ${sample.styles.justifySelf} / text-align ${sample.styles.textAlign} at 420px. A device alignment must write the SAME declarations desktop writes, on the same element — the wrapper alone happens to centre this one, and that is exactly why the opposite direction silently did nothing.`;
+    },
+  },
+  {
+    id: 'module-device-styles-a-tablet-edit-does-not-move-a-legacy-phone-font-size',
+    why:
+      'REVIEW ROUND 1, finding 4, and the one that would have moved a live client page. The ' +
+      'emit guard was per MODULE, so an unrelated tablet margin let the phone chain re-emit the ' +
+      'pre-device `mobileFontSize` at 767px with !important and a three-repeat selector on it — ' +
+      'at a width it has never applied at. A heading rendering `clamp(1.35rem, 9vw, 2.35rem)` ' +
+      'today would have dropped to 18px because somebody set a tablet margin.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Untouched by a tablet margin',
+          settings: { fontSize: '48', mobileFontSize: '18', 'tablet.marginTop': '12' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '18px'
+        ? 'a heading carrying the legacy mobileFontSize and an unrelated tablet margin rendered 18px at 420px — the device rules are emitting a legacy value at a width it never applied at.'
+        : null;
+    },
+  },
+  {
+    id: 'module-device-styles-leave-desktop-alone',
+    why:
+      'The other direction, so the contract above cannot pass by breaking every width: the same ' +
+      'heading keeps its own 0 on a desktop screen.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A module styled per device', settings: { marginTop: '0', 'phone.marginTop': '40' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['marginTop'],
+    expect(sample) {
+      return sample.styles.marginTop === '0px'
+        ? null
+        : `a module whose desktop margin-top is 0 rendered ${sample.styles.marginTop} on a desktop screen — a device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-font-size-beats-the-desktop-inline-size',
+    why:
+      'A heading paints its font size INLINE on the heading element, not on the wrapper, so the ' +
+      'phone rule has to reach past the wrapper and outrank an inline value. This is the one the ' +
+      'operator asked for by name ("set the font size to something much smaller").',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Smaller on a phone', settings: { fontSize: '48', 'phone.fontSize': '16' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] .builder-preview-heading',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '16px'
+        ? null
+        : `a heading with Phone font size 16 rendered ${sample.styles.fontSize} at 420px.`;
+    },
+  },
+  {
+    id: 'module-device-styles-leave-the-old-mobile-fields-alone',
+    why:
+      'Acceptance criterion: a page using the pre-device `mobileHidden`/`mobileAlignment`/' +
+      '`mobileFontSize` must render EXACTLY as it does today. Those render through stylesheet ' +
+      'classes at 900px, not 767px, so a generator that emitted for them would move every ' +
+      'untouched page by 133px of breakpoint. The selector is the contract: this module must carry ' +
+      'no device scope at all, and if one ever appears nothing matches and the harness says so.\n' +
+      'Do NOT "fix" this by asserting the font size is 18px. Measured 2026-09-15, it is not: ' +
+      '`.builder-react-root .builder-preview-heading:not(.eyebrow)` inside the same 900px block ' +
+      'sets `clamp(1.35rem, 9vw, 2.35rem) !important` at equal specificity and later in the file, ' +
+      'so Mobile Font Size has never reached a real phone — only the preview\'s phone frame, which ' +
+      'has a rule of its own. That is a live defect and it belongs to slice 4 (86bc14pgq), which ' +
+      'owns the old phone rules; this slice deliberately changes nothing about it.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Still the old way',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'false' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module:not([data-builder-module-device-scope])',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect() {
+      return null;
+    },
+  },
+  {
+    id: 'module-device-styles-hide-on-tablet-hides-at-tablet-width',
+    why: '"Hide on Tablet" must take the module out at 900px, where a phone rule must not reach.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Gone on a tablet', settings: { 'tablet.hidden': 'true' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'module-device-styles-hide-on-tablet-also-hides-on-a-phone',
+    why: 'A phone FOLLOWS its tablet. Hiding on Tablet and seeing it on a phone would be the rule broken.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Gone on a tablet', settings: { 'tablet.hidden': 'true' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'module-device-styles-a-phone-can-show-a-tablet-hidden-module-again',
+    why:
+      'The half that is easy to get wrong: the tablet hide is confined to the tablet BAND rather ' +
+      'than undone by a second display declaration, because there is no one value to undo it to ' +
+      '(a module in an equal-height row is display:flex, everywhere else block).',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Back on a phone', settings: { 'tablet.hidden': 'true', 'phone.hidden': 'false' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.display !== 'none'
+        ? null
+        : 'a module hidden on Tablet and shown again on Phone is still display:none at 420px — the tablet hide is not confined to the tablet band.';
+    },
+  },
 
   /*
    * TABLET AND PHONE CELL STYLES (device styles 2 of 4, task 86bc14pey).
