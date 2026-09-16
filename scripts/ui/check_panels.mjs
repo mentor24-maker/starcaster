@@ -188,6 +188,24 @@ async function openPanels(page) {
   }
   await page.waitForTimeout(2000);
 
+  // And the Phone version of a CELL's style panel (device styles 2 of 4, task
+  // 86bc14pey) — a different arrangement again: the Overlay axis drops out,
+  // the Frame axis keeps only its border rows, and a banner sits on top. ONE
+  // cell is switched, so every other cell is still measured in its Desktop
+  // form. Scoped to a column card so it cannot pick up the ROW's switch, which
+  // the block above has already used.
+  const switchedCellToPhone = await page.evaluate(() => {
+    const button = document.querySelector(
+      '.builder-column-card .builder-cell-panel .builder-device-switch-button[title^="Phone"]'
+    );
+    if (button) button.click();
+    return Boolean(button);
+  });
+  if (!switchedCellToPhone) {
+    return 'no cell carried the Phone/Tablet/Desktop switch, so the Phone cell panel could not be opened and measured';
+  }
+  await page.waitForTimeout(2000);
+
   // A FOURTH collapsed panel: the Reminders module's record cards, one per
   // reminder, each collapsed until clicked (`isRecordCollapsed` returns true
   // by default). Panel sweep 2/15 seeded two real records here and said in the
