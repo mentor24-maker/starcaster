@@ -938,3 +938,45 @@ test('serializeBuilderDocument keeps a row\'s tablet and phone settings, and add
   // are seen as different from a master that lacks it.
   assert.notEqual(sectionContentHash(restored), sectionContentHash(normalizeBuilderDocument(serialized).layoutSections[1]));
 });
+
+// Tablet/phone CELL styles (device styles 2 of 4, task 86bc14pey). Same
+// serializer, same failure if it is missed — a column's phone padding would
+// survive one edit and vanish on the next save, with nothing reporting it.
+test('serializeBuilderDocument keeps a cell\'s tablet and phone settings, and adds nothing to a row without them', () => {
+  const { normalizeBuilderSection } = require('../../lib/builder/template');
+  const { sectionContentHash } = require('../../lib/builder/document');
+  const base = { id: 'section-1', layout: 'two-column', title: '', modules: [] };
+  const withCellDevices = {
+    ...base,
+    cellDeviceOverrides: {
+      tablet: { left: { cellPaddingTop: '20' } },
+      phone: { left: { cellPaddingTop: '40' }, right: { hidden: 'true' } },
+    },
+  };
+
+  const serialized = serializeBuilderDocument({ layoutSections: [withCellDevices, { ...base, id: 'section-2' }] });
+  assert.deepEqual(serialized.sections[0].cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+  assert.equal('cellDeviceOverrides' in serialized.sections[1], false);
+
+  const restored = normalizeBuilderDocument(serialized).layoutSections[0];
+  assert.deepEqual(restored.cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+
+  // The saved-sections store normalizes through this function.
+  assert.deepEqual(normalizeBuilderSection(withCellDevices).cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+
+  // A cell's phone-only change is a content change, so a shared section's
+  // copies are seen as different from a master that lacks it — which is what
+  // makes the push in `docs/SAVED_SECTIONS.md` carry it.
+  assert.notEqual(
+    sectionContentHash(restored),
+    sectionContentHash(normalizeBuilderDocument(serialized).layoutSections[1])
+  );
+
+  // A column the layout does not have is dropped rather than stored, the same
+  // way every other cell map on a row is keyed by the layout's own columns.
+  const narrowed = normalizeBuilderSection({
+    ...withCellDevices,
+    layout: 'single',
+  });
+  assert.equal(narrowed.cellDeviceOverrides, undefined);
+});

@@ -96,6 +96,25 @@ const DEVICE_STYLED_SECTION = {
  */
 const PLAIN_DEVICE_SECTION = { ...DEVICE_STYLED_SECTION, background: undefined };
 
+/**
+ * A row whose ONE column has its own Tablet (20) and Phone (40) top padding
+ * over a desktop 10 (device styles 2 of 4, task 86bc14pey).
+ *
+ * Padding rather than anything prettier because it is measurable to the pixel
+ * from a computed style, and because it is the setting the operator's own
+ * test steps use.
+ */
+const CELL_DEVICE_STYLED_SECTION = {
+  layout: 'single',
+  background: { mode: 'color', color: '#eeeeee' },
+  cellPaddingTop: { main: '10' },
+  cellDeviceOverrides: {
+    tablet: { main: { cellPaddingTop: '20' } },
+    phone: { main: { cellPaddingTop: '40' } },
+  },
+  modules: [{ type: 'heading', text: 'A column styled per device', settings: {} }],
+};
+
 /** How the parallax contracts watch: scroll a fixed step, read, repeat. */
 const PARALLAX_SERIES = {
   count: 14,
@@ -530,6 +549,147 @@ export const RENDER_CONTRACTS = [
       return Number(sample.styles.order) === -2
         ? null
         : `the sixth column of a Reverse stack row with phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
+    },
+  },
+
+  /*
+   * TABLET AND PHONE CELL STYLES (device styles 2 of 4, task 86bc14pey).
+   *
+   * Same three-width shape as the row contracts above, for the same reason:
+   * the failures are all invisible in the markup. What is NEW here is the
+   * scope — the rules are hung off the COLUMN, so a contract reading the row
+   * would pass on a rule that reached the wrong element.
+   */
+  {
+    id: 'device-styles-cell-phone-padding-applies-on-a-phone',
+    why:
+      'The feature itself. A column set to 40px of top padding on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 10px wins and the Phone panel silently does nothing.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `a column with Phone padding-top 40 rendered padding-top ${sample.styles.paddingTop} at 420px — the phone rule is not reaching the column.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-tablet-padding-applies-on-a-tablet-and-not-phone-value',
+    why:
+      'Tablet has its own value (20) and Phone its own (40). At 900px only the tablet rule may match; ' +
+      'getting 40 means the phone query is too wide, getting 10 means the tablet rule is missing.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '20px'
+        ? null
+        : `a column with Tablet padding-top 20 rendered padding-top ${sample.styles.paddingTop} at 900px.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-leaves-desktop-alone',
+    why:
+      'The other direction, so the two contracts above cannot pass by breaking every width: on a ' +
+      'desktop screen the same column keeps its own 10px.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '10px'
+        ? null
+        : `a column whose desktop padding-top is 10 rendered ${sample.styles.paddingTop} on a desktop screen — a cell device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-rules-reach-only-their-own-column',
+    why:
+      'The rules are scoped per COLUMN, not per row. TWO columns are given DIFFERENT phone padding ' +
+      'here on purpose: with one scope id shared by the row, both columns would match both rules and ' +
+      'the later one would win everywhere, so the first column would read the second\'s 60. A fixture ' +
+      'where only one column is styled cannot see that at all — the unstyled column carries no scope ' +
+      'attribute, so it passes whatever the ids are.',
+    section: {
+      layout: 'two-column',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellPaddingTop: { left: '10', right: '10' },
+      cellDeviceOverrides: {
+        phone: { left: { cellPaddingTop: '40' }, right: { cellPaddingTop: '60' } },
+      },
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column > .builder-preview-column:nth-of-type(1)',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `the first column rendered padding-top ${sample.styles.paddingTop} at 420px, not its own 40 — the second column's phone rules are reaching it.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-hide-on-phone-hides-the-column',
+    why: '"Hide on Phone" must take the column out at phone width — and only there (the desktop contract above reads the same column visible).',
+    section: {
+      ...CELL_DEVICE_STYLED_SECTION,
+      cellDeviceOverrides: { phone: { main: { hidden: 'true' } } },
+    },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'device-styles-cell-legacy-hide-on-mobile-still-hides',
+    why:
+      'Every page saved before this feature hides its columns with the old per-cell "Hide on Mobile" ' +
+      'field. Nothing in this slice may stop that working — a column that reappears on a phone is a ' +
+      'live site changing under a client who asked for nothing.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellMobileHidden: { main: 'true' },
+      modules: [{ type: 'heading', text: 'Hidden the old way', settings: {} }],
+    },
+    selector: '.builder-preview-column-mobile-hidden',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'device-styles-cell-keep-reverse-stack-column-order',
+    why:
+      'The rules element lives INSIDE the row and the phone Reverse stack rules count the row\'s ' +
+      'children with :nth-child(1..6). Every column\'s rules go into that ONE element, placed last; ' +
+      'a per-column element between the columns would renumber them and show the sixth one fourth.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      cellDeviceOverrides: {
+        phone: { left: { cellPaddingTop: '4' }, col6: { cellPaddingTop: '8' } },
+      },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section-mobile-reverse-stack > .builder-preview-column:nth-of-type(6)',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return Number(sample.styles.order) === -2
+        ? null
+        : `the sixth column of a Reverse stack row with per-cell phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
     },
   },
   {
