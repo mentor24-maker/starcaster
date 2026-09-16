@@ -10929,7 +10929,36 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: var(--ink-primary);
 }
 
-.builder-react-root .builder-setting-label .is-device-override::before {
+/*
+ * A module's device panel is the same panel in the module editor's own
+ * vocabulary (86bc14pfq): the banner and the chips are the row editor's,
+ * the fields underneath are the module chrome's. Only the "this screen
+ * changed it" dot needs a second selector, because the two panels name
+ * their labels differently.
+ */
+/*
+ * The banner sits ABOVE the fields, always. `.builder-module-chrome` resolves
+ * to flex or to `display: contents` depending on which editor it is dropped
+ * into — a heading editor laid the banner and the field strip side by side,
+ * with the banner taking two thirds of the card and the fields squeezed into
+ * a 249px column at the far right (measured 2026-09-15 in the real app). The
+ * device panel is its own thing rather than a chrome strip in an editor, so
+ * it states its own stacking instead of inheriting whichever one it landed in.
+ */
+.builder-react-root .builder-module-editor .builder-module-device-panel,
+.builder-react-root .builder-module-device-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 12px);
+  align-content: start;
+}
+
+.builder-react-root .builder-module-device-panel .builder-device-banner {
+  grid-column: 1 / -1;
+}
+
+.builder-react-root .builder-setting-label .is-device-override::before,
+.builder-react-root .builder-module-field-label .is-device-override::before {
   content: "";
   display: inline-block;
   width: 7px;

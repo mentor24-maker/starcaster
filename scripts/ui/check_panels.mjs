@@ -181,6 +181,21 @@ async function openPanels(page) {
   }
   await page.waitForTimeout(2000);
 
+  // The same switch on a MODULE (device styles 3/4, task 86bc14pfq). A
+  // module's Phone panel is its own arrangement — a banner, then the chrome
+  // strip's fields and nothing else — so it is a panel this check has never
+  // seen unless it clicks. ONE module is switched, for the same reason one
+  // row is: every other module stays measured in its Desktop form.
+  const moduleSwitchedToPhone = await page.evaluate(() => {
+    const button = document.querySelector('.builder-module-card .builder-device-switch-button[title^="Phone"]');
+    if (button) button.click();
+    return Boolean(button);
+  });
+  if (!moduleSwitchedToPhone) {
+    return 'no module carried the Phone/Tablet/Desktop switch, so a module\'s Phone panel could not be opened and measured';
+  }
+  await page.waitForTimeout(2000);
+
   // And the Phone version of a CELL's style panel (device styles 2 of 4, task
   // 86bc14pey) — a different arrangement again: the Overlay axis drops out,
   // the Frame axis keeps only its border rows, and a banner sits on top. ONE

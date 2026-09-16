@@ -10,8 +10,9 @@ import {
  * bar (Dane's screenshot, 2026-09-15). Desktop is the default; choosing a
  * device swaps the panel under the bar to that device's settings.
  *
- * Shared on purpose: rows use it now, and cells and modules mount this same
- * component in the next slices, so the control is one thing to learn.
+ * Shared on purpose: rows, cells and modules all mount this same component,
+ * so the control is one thing to learn — which is also why nothing it says
+ * names the thing being styled.
  */
 const DEVICE_ORDER: BuilderEditorStyleDevice[] = ["phone", "tablet", "desktop"];
 
@@ -64,7 +65,10 @@ export function BuilderDeviceSwitch({
             title={
               device === "desktop"
                 ? "Desktop styles (every screen, unless a device changes them)"
-                : `${label} styles${changed ? " — this row has settings of its own here" : ""}`
+                : // No noun: this same switch sits on a row, a column and a module, and
+                  // saying "row" on a module card is a small lie in the one place
+                  // the operator looks to find out what he is editing.
+                  `${label} styles${changed ? " — this screen has settings of its own" : ""}`
             }
             onClick={() => onChange(device)}
           >

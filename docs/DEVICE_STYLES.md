@@ -1,15 +1,15 @@
 # Device styles — what a page looks like on a tablet and a phone
 
-A row, and each column inside it, can be styled differently on a tablet and
-on a phone. This is the document for that feature: the model, the two
-breakpoints, why the generated CSS is marked `!important`, and where the
-`<style>` element is allowed to sit.
+A row, each column inside it, and each module inside those, can be styled
+differently on a tablet and on a phone. This is the document for that feature:
+the model, the two breakpoints, why the generated CSS is marked `!important`,
+and where the `<style>` element is allowed to sit.
 
 Slices: rows shipped as 86bc13a6v (PR #716), cells as 86bc14pey (PR #717).
 Modules are slice 3 (86bc14pfq, PR #718). Slice 4 (86bc14pgq) added the
 preview's **Tablet frame** and moved the layout half of the old 900px/560px
 rules onto these breakpoints; retiring the page list's Desktop/Mobile toggle
-is what remains of it, and waits on slice 3 being on `main`.
+is what remains of it, and is filed on its own as 86bc1ecxx.
 
 ## The model — a device FOLLOWS until it is changed
 
@@ -32,32 +32,58 @@ is a thing a naive "save every setting per device" design gets wrong:
 - **A page nobody has styled per device serializes exactly as it did before
   this feature existed.** The key is absent, not empty.
 
-Two fields carry it, both optional:
+Three fields carry it, all optional, plus the module shape below:
 
 | Field | Shape | Cleaned by |
 |---|---|---|
 | `deviceOverrides` | `{ tablet?: { <setting>: <value> }, phone?: … }` | `BUILDER_SECTION_DEVICE_KEY_NORMALIZERS` |
 | `cellDeviceOverrides` | `{ tablet?: { <column>: { <setting>: <value> } }, phone?: … }` | `BUILDER_CELL_DEVICE_KEY_NORMALIZERS` |
+| a module's `settings` | flat `tablet.<key>` / `phone.<key>` entries | `BUILDER_MODULE_DEVICE_KEY_NORMALIZERS` |
 
 The cell map is keyed by column before it is keyed by setting, because **a
 cell is not an object in this codebase** — every cell setting is a map on the
 row, keyed by column (`cellPaddingTop`, `cellBorderWidth`, …), so a device has
 to say which column it is talking about before it can say which setting.
 
-Both live in `lib/builder-client/builder-template.ts`; every value passes
-through the same normalizer its desktop field uses, so a phone cannot store
-what desktop could not. A cell's padding side caps at 50 where a row's caps at
+A **module** is different again: its settings are a flat
+`Record<string, string>` that keeps unknown keys, so a device value is simply
+a flat key rather than a nested map:
+
+```json
+{ "marginTop": "10", "phone.marginTop": "4", "phone.fontSize": "16" }
+```
+
+All of them live in `lib/builder-client/builder-template.ts` (rows and cells)
+and `builder-module-device-overrides.ts` (modules); every value passes through
+the same normalizer its desktop field uses, so a phone cannot store what
+desktop could not. A cell's padding side caps at 50 where a row's caps at
 160 — that is not an inconsistency, it is `normalizeCellPaddingSide` being
 mirrored exactly.
 
 **What is deliberately NOT a device setting:** layout, column widths,
-background, overlay, opacity, shadow and access. Those are one value for every
+background, overlay, opacity, shadow and access — and, for a module, every
+per-type content setting (text, images, links). Those are one value for every
 screen. A control offered on a phone that silently writes desktop is worse
 than a control that is not offered, so the panel hides them in device mode.
 
-The reading, writing and resetting all live in one file,
-`lib/builder-client/builder-device-overrides.ts` — row helpers first, cell
-helpers below them.
+The reading, writing and resetting live in two files —
+`lib/builder-client/builder-device-overrides.ts` (row helpers first, cell
+helpers below them) and `builder-module-device-overrides.ts`.
+
+### What a device may change
+
+| | Row | Cell | Module |
+|---|---|---|---|
+| Spacing | margin and padding, four sides each | padding, four sides | margin, four sides |
+| Size | Width mode, Width %, min height, column gap | — | Width % (Simple/Rich Text) |
+| Nudge | horizontal / vertical offset | — | horizontal / vertical offset |
+| Type | — | — | font size (heading, headline-rotator, poll-category-list) |
+| Other | alignment, border width/style/colour/radius | border width/style/colour/radius | alignment |
+| Visibility | Hide on this screen | Hide on this screen | Hide on this screen |
+
+`BUILDER_SECTION_DEVICE_KEY_NORMALIZERS`, `BUILDER_CELL_DEVICE_KEY_NORMALIZERS`
+and `BUILDER_MODULE_DEVICE_KEY_NORMALIZERS` are the key lists. **Adding a key
+is an edit to one of those three objects and nothing else.**
 
 ## The breakpoints
 
@@ -83,7 +109,7 @@ worth reading before moving it:
 | Still at the old width | Why |
 |---|---|
 | `.builder-preview-column-mobile-hidden`, `.builder-preview-module-mobile-hidden` | Widening makes content VANISH on tablets that show it today. Narrowing cannot be written at all: the rule is `display: none !important` and the element's real display lives in an inline style, which a stylesheet cannot hand back. These move when the legacy fields are read through the device chain. |
-| the module's legacy Mobile Font Size and Mobile Alignment | Same mechanism, same company — they belong with the module slice. |
+| the module's legacy Mobile Font Size and Mobile Alignment | The module slice shipped and deliberately left them: a module carrying ONLY legacy fields emits no device CSS at all, so these stylesheet classes are still what renders it. `mobileFontSize` also loses to a heading rule inside the same 900px block — see "The legacy fields underneath" below. |
 | every `.site-nav*` rule at 900/720/560px | The hamburger breakpoint that turns the menu into a drawer lives in `legacy.css`. Moving the nav's sizing without it leaves a drawer-shaped menu beside a desktop nav. |
 | `gap: 18px !important` on a stacked row | No desktop value to return to, and at 901-1024px the row's own Column Gap is the better answer. |
 | everything admin-only | Those are screens in the app, not a visitor's page. |
@@ -120,9 +146,9 @@ opens the frame, and three contracts hold both frames now.
 
 ## Why `!important`
 
-The renderer paints rows and columns with **inline styles**, and an inline
-style cannot say "only below 1024px". So a row that has device settings
-carries its own little `<style>` element of media rules.
+The renderer paints rows, columns and modules with **inline styles**, and an
+inline style cannot say "only below 1024px". So a row that has device settings
+carries its own little `<style>` element of media rules, and so does a module.
 
 An ordinary rule in that element loses to the inline style — every time, at
 every width — so the phone panel would appear to work in the editor and do
@@ -130,6 +156,12 @@ nothing on the page. `!important` is what makes the rule outrank the inline
 value. It is a requirement of the mechanism, not a shortcut, and
 `scripts/ui/render-contracts.mjs` holds it: remove it and the phone and
 tablet padding contracts fail at 420px and 900px.
+
+A module's scope selector is additionally **repeated three times**. The
+pre-device mobile stylesheet is class-based and therefore beats a single
+attribute selector; the tallest rule to clear is at (0,4,0). This is spelled
+out rather than fixed with a `.builder-react-root` prefix because a published
+tenant page has no such wrapper.
 
 ## How the rules are generated — by running the desktop code again
 
@@ -154,9 +186,28 @@ inline desktop value stays. `initial` is right for a custom property (it makes
 - a **column's `display` resets to `grid`**, because `display: initial` is
   `inline` and would collapse the whole column.
 
+**Modules take the other road**, in `builder-module-device-css.ts`, and for a
+structural reason: a module's styles land on three different elements (the
+wrapper, the module's own root, and deeper still for a font size), so there is
+no single style object to diff. That generator maps each device KEY to its
+declarations and its element. The two values where drift would actually
+matter — Width % and the nudge — are still computed by the renderer's own
+helpers.
+
+**Alignment is the case that proves the element matters.** Desktop alignment
+for `center` and `right` is declared on the module's CHILD
+(`.is-align-center .builder-preview-heading { justify-self: center }`,
+`src/css/_builder-react.css`), and a child's own `justify-self` beats the
+parent's `justify-items` no matter what the parent says. So a device alignment
+writes the same declarations the desktop stylesheet writes, on the same child,
+as well as on the wrapper — otherwise the override works in only one
+direction (left → center) and silently fails in the other. Two contracts hold
+both directions.
+
 ## Where the `<style>` element goes, and why it is not negotiable
 
-**Last child of the row, never between the columns, never beside the row.**
+**Last child of the row, never between the columns, never beside the row.** A
+module's goes last inside its column, for the same reason.
 
 - The phone Reverse-stack rules count the row's children with
   `:nth-child(1..6)`. An element placed ahead of the columns renumbers every
@@ -182,38 +233,123 @@ keywords only — no operator text reaches it — which is what makes writing it
 as a style element safe. The scope string is stripped of `"`, `\`, `<` and `>`
 as a second line.
 
+**Phone rules are emitted twice** — under a media query for the live site, and
+under `.builder-preview-device-mobile` for the preview's phone frame, which is
+a narrow box on a wide screen and matches no media query.
+
+### Hiding, and showing again
+
+Hiding is `display: none !important`. A phone follows its tablet, so a tablet
+hide normally applies at phone width too.
+
+When the phone shows the module again, the tablet hide is confined to the
+tablet **band** — `(min-width: 768px) and (max-width: 1024px)` — rather than
+being undone by a second `display` declaration. There is no one value to undo
+it to: a module in an equal-height row is `display: flex` and everywhere else
+it is block, so writing `display: block` back would break the one case. (Rows
+do write the display back, because a row's own display is always `grid`.)
+
 ## The legacy fields underneath
 
 | Old field | Read as |
 |---|---|
 | `cellMobileHidden[column]` | the cell's **Hide on Phone** value, when no device map names `hidden` |
+| a module's `mobileHidden` | the module's **Hide on Phone** value |
+| a module's `mobileAlignment` | the module's phone **Alignment** |
+| a module's `mobileFontSize` | the module's phone **Font size** |
 
-Using the new control retires the old field for that column — the write clears
-it. That is not tidiness: the old field is read as a phone seed, so leaving it
-in place would have the device map say "follows desktop" while the old field
-went on hiding the column, and unticking the box would do nothing.
+They sit in the phone chain between tablet and `phone.*`, so an untouched page
+resolves on a phone to what it already renders, and a new `phone.*` value
+simply wins over the old field.
 
-Rows have the same pair (`mobileHidden` / `desktopHidden`) and slice 1 left
+**Using the new control retires the old field.** The write clears it — for a
+cell, for a module, for every one of them. That is not tidiness, and it is the
+fault that sent slice 3 back in review round 1: the old field is read as a
+phone seed, so leaving it in place has the device map say "follows desktop"
+while the old field goes on hiding the module, and unticking the box does
+nothing at all.
+
+Two rules make that hold, and they are one idea stated twice:
+
+- **The baseline a write compares against is the same chain the resolver
+  reads.** For `phone` that is tablet **plus** the legacy fields, never tablet
+  alone. A write that asks "would I inherit this anyway?" of a shorter chain
+  than the reader uses will drop an override as redundant and then read the
+  legacy value back — which is exactly how "Hide on Phone" became a box that
+  snapped straight back.
+- **A device value that equals its baseline still WRITES when a legacy field
+  is what supplied that baseline**, because the same write clears the legacy
+  field; dropping the key would leave the legacy value standing.
+
+Rows have their own pair (`mobileHidden` / `desktopHidden`) and slice 1 left
 them alone; they are slice 4's to reconcile.
+
+A module that carries **only** legacy fields emits no device CSS at all — it
+goes on rendering through the stylesheet classes it always did, at 900px.
+The guard for that is per DEVICE AND KEY rather than per module: an unrelated
+tablet margin must not drag a module's `mobileFontSize` into a 767px rule with
+`!important` on it, which would change a live client page that nobody had
+touched. (It did, before review round 1 caught it.)
+
+> Measured 2026-09-15: `mobileFontSize` on a heading has in fact never reached
+> a real phone. Inside the same 900px block,
+> `.builder-react-root .builder-preview-heading:not(.builder-preview-heading-eyebrow)`
+> sets `font-size: clamp(1.35rem, 9vw, 2.35rem) !important` at equal
+> specificity and later in the file, so it wins. Mobile Font Size works only
+> inside the preview's phone frame, which has a rule of its own. That is a real
+> defect and it belongs to 86bc14pgq, which owns the old phone rules.
+
+## The editor
+
+`BuilderDeviceSwitch` — three icons, Desktop highlighted — is shared by rows,
+cells and modules so the control is one thing to learn. An icon carrying a dot
+means that screen has settings of its own.
+
+Choosing Tablet or Phone **replaces** the panel rather than adding to it: one
+panel is one screen's settings, so there is never a question of which screen a
+field you can see belongs to. The panel shows a banner naming the screen, a
+chip per setting this screen changes with a `reset` beside it, `Reset all`, and
+a dot beside each changed label.
+
+Every control in it reads the object as that screen sees it and writes through
+`writeSectionDeviceEdit` / `writeCellDeviceEdit` / `writeModuleDeviceEdit`, so
+**the controls themselves do not know devices exist**. That is what makes
+adding a key cheap.
+
+The switch is deliberately absent in three places: the old page-list Mobile
+mode (it has its own pane), the **module repository**, and the
+**saved-section modal**. A master in those two is a template rather than a
+placed module, and its device settings would be copied onto every page that
+follows it with no screen to check them on.
 
 ## What holds this
 
-- `lib/builder-client/builder-device-overrides.test.ts` — the inheritance,
-  the "removes rather than pins" promise, the legacy read, normalization.
-- `components/builder/builder-device-css.test.ts` — what CSS comes out,
-  including the neutral values and that the scope string cannot break out of
-  its own selector.
+- `lib/builder-client/builder-device-overrides.test.ts` and
+  `builder-module-device-overrides.test.ts` — the inheritance, the "removes
+  rather than pins" promise, the legacy read AND the legacy clear,
+  normalization.
+- `components/builder/builder-device-css.test.ts` and
+  `builder-module-device-css.test.ts` — what CSS comes out, including the
+  neutral values and that the scope string cannot break out of its own
+  selector.
 - `scripts/builder/document.test.js` — the round trip through the serializer.
   A field the normalizer does not list is silently dropped, which would lose
   every phone setting on the next save.
 - `scripts/ui/render-contracts.mjs` — a real browser at 420px, 800px, 900px,
   1000px and 1440px, plus both preview frames. These are the only checks that
   can see `!important` losing, a media query at the wrong width, a frame
-  disagreeing with the device it imitates, or a style element renumbering the
-  columns.
-- `scripts/ui/check_panels.mjs` — switches one row and one cell to Phone, so
-  the device arrangement of each panel is measured rather than assumed. The row
-  it switches is the fixture's **two-column** one: several row controls exist
-  only where there is more than one column (Column Gap, Column Widths, Match
-  Column Heights, Mobile Layout), and switching a single-column row measured a
-  Phone panel none of them could appear in.
+  disagreeing with the device it imitates, a style element renumbering the
+  columns, or a child's `justify-self` beating the wrapper's `justify-items`.
+- `scripts/ui/check_panels.mjs` — switches one row, one module and one cell to
+  Phone, so the device arrangement of each panel is measured rather than
+  assumed. The row it switches is the fixture's **two-column** one: several row
+  controls exist only where there is more than one column (Column Gap, Column
+  Widths, Match Column Heights, Mobile Layout), and switching a single-column
+  row measured a Phone panel none of them could appear in.
+
+## Changing this
+
+**Break it on purpose and watch the named check fail before believing a
+pass.** Every contract above was break-tested when it was written; the ones
+worth re-breaking after a change are the specificity (`SCOPE_REPEATS`), the
+`!important`, the tablet band, and the legacy-only guard.
