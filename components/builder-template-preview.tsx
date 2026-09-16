@@ -150,6 +150,7 @@ import {
   getSectionMarginStyle,
   getSectionColumnGapStyle,
   getSectionColumnPercent,
+  getSectionBandPaddingStyle,
   getSectionGridTemplate,
   getSectionHorizontalMarginStyle,
   getSectionMinHeightStyle,
@@ -1697,11 +1698,16 @@ function BuilderSectionPreview({
   const bandStyle: CSSProperties | undefined = bandRole
     ? {
         background: `var(--lp-${bandRole}, transparent)`,
-        color: `var(--lp-${bandRole}-text, inherit)`,
-        paddingTop: "var(--lp-band-padding, 0px)",
-        paddingBottom: "var(--lp-band-padding, 0px)"
+        color: `var(--lp-${bandRole}-text, inherit)`
       }
     : undefined;
+  // The band's vertical spacing is deliberately NOT here. It used to be an
+  // inline `padding-top`/`padding-bottom` in this object, which outranked the
+  // stylesheet rule reading the operator's own Top/Bottom Padding — so his
+  // setting did nothing on any backgroundless row. It is applied further down
+  // `buildGridStyle`, after his padding and as a fallback to it, and it has to
+  // be a function of the row rather than a constant here so the tablet and
+  // phone rules recompute it for the row as each device sees it.
 
   // Hero treatment: a tint over an image background so text can sit on the
   // photo, with the inverse text color on top. Layered as a gradient IN FRONT
@@ -1864,6 +1870,12 @@ function BuilderSectionPreview({
       // Navigation-only rows already render flush by design; overlay slots are
       // not really rows at all. Everything else honours the operator's number.
       ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(s)),
+      // ...and only then the theme band's spacing, which fills in for the two
+      // padding sides he has left at their default. After his padding because
+      // it writes the same two custom properties and is the weaker of the two.
+      ...(bandRole && !isNavigationSection && !isOverlayLayoutCollapsed
+        ? getSectionBandPaddingStyle(s)
+        : {}),
       // A row with content sizes to that content. The 56px floor exists so an
       // EMPTY row is still big enough to drop a module onto, and keeping it on
       // filled rows was padding every contact strip out to nearly triple height.

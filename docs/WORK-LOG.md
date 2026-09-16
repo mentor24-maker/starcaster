@@ -37,6 +37,29 @@ would have pulled that old size onto phones at a width it has never applied at
 — a live client heading would have shrunk because somebody adjusted a tablet
 margin. Both are fixed, and both are now held by a check that photographs a
 real browser at phone width.
+## 2026-09-15 — Top and Bottom Padding now work on a row with no background (#719)
+
+On a themed page, a row that has no background colour of its own takes one of
+the theme's alternating bands — the pale/slightly-darker stripes that stop a
+page reading as one flat wash. The band also carried its own spacing above and
+below, and it was setting that spacing in a way that could not be argued with:
+whatever you typed into that row's **Top Padding** or **Bottom Padding** was
+read, stored, shown back to you in the panel, and then completely ignored on
+the page. The same was true of the Phone and Tablet padding on those rows.
+
+Because most rows on most pages never get a background of their own, that was
+the ordinary case rather than a corner of it.
+
+The band's spacing is now a *default* rather than an override. A row nobody has
+touched takes the band's number exactly as before — every one of the seven
+before/after page photographs came back pixel-for-pixel identical to what is
+live today — and the moment you set a padding of your own, yours is what the
+page uses.
+
+One honest limit: the page format records "18" for a row whose padding has
+never been changed, so typing 18 by hand on one of these rows is
+indistinguishable from leaving it alone, and that row still takes the band's
+spacing. Any other number works.
 
 ## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
 
