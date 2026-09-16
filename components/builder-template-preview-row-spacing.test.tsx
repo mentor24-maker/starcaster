@@ -62,6 +62,77 @@ describe("row padding", () => {
   });
 });
 
+/*
+ * A row with no background of its own takes the theme band's vertical spacing.
+ * That used to be written as an inline `padding-top`, which outranks the
+ * stylesheet rule reading `--builder-section-padding-top` — so the operator's
+ * Top/Bottom Padding did nothing at all on those rows, on every site.
+ * Measured on builder-preview.html at 1440px on 2026-09-15: Top Padding 18,
+ * computed `--builder-section-padding-top` 18px, computed `padding-top` 0px.
+ */
+const PLAIN_ROW = {
+  id: "row-plain",
+  title: "Plain Band",
+  layout: "single",
+  background: { mode: "none" },
+  modules: [{ id: "m1", type: "text", column: "main", text: "561-243-7360" }]
+};
+
+describe("row padding on a row with no background", () => {
+  it("writes no inline padding, which is what used to outrank the operator's setting", () => {
+    const html = renderRows([PLAIN_ROW]);
+
+    // A real `padding-top` declaration, not the custom property whose NAME
+    // ends in the same eleven characters — the whole point is which of the two
+    // is written, so the test has to be able to tell them apart.
+    expect(html).not.toMatch(/[;"]padding-top:/);
+    expect(html).not.toMatch(/[;"]padding-bottom:/);
+  });
+
+  it("still takes the band's spacing when he has not changed the padding, so no saved page moves", () => {
+    const html = renderRows([PLAIN_ROW]);
+
+    expect(html).toContain("--builder-section-padding-top:var(--lp-band-padding, 0px)");
+    expect(html).toContain("--builder-section-padding-bottom:var(--lp-band-padding, 0px)");
+  });
+
+  it("honours the padding he did set, instead of the band's", () => {
+    const html = renderRows([{ ...PLAIN_ROW, paddingTop: "40", paddingBottom: "40" }]);
+
+    expect(html).toContain("--builder-section-padding-top:40px");
+    expect(html).toContain("--builder-section-padding-bottom:40px");
+    expect(html).not.toContain("var(--lp-band-padding");
+  });
+
+  it("decides the two edges separately — a top he set, a bottom he left alone", () => {
+    const html = renderRows([{ ...PLAIN_ROW, paddingTop: "40" }]);
+
+    expect(html).toContain("--builder-section-padding-top:40px");
+    expect(html).toContain("--builder-section-padding-bottom:var(--lp-band-padding, 0px)");
+  });
+
+  it("leaves a row that has its own background alone — it never wore a band", () => {
+    const html = renderRows([TEXT_ROW]);
+
+    expect(html).toContain("--builder-section-padding-top:18px");
+    expect(html).not.toContain("var(--lp-band-padding");
+  });
+
+  it("leaves a navigation-only row flush, which is chrome rather than a band", () => {
+    const html = renderRows([
+      {
+        id: "nav",
+        title: "Menu",
+        layout: "single",
+        background: { mode: "none" },
+        modules: [{ id: "n1", type: "navigation", column: "main" }]
+      }
+    ]);
+
+    expect(html).not.toContain("var(--lp-band-padding");
+  });
+});
+
 describe("row minimum height", () => {
   it("releases the 56px floor once a row holds something", () => {
     const html = renderRows([TEXT_ROW]);
