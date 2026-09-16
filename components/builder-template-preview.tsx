@@ -38,6 +38,10 @@ import {
   buildCellDeviceCss,
   buildSectionDeviceCss
 } from "@/components/builder/builder-device-css";
+import {
+  BUILDER_MODULE_DEVICE_SCOPE_ATTRIBUTE,
+  buildModuleDeviceCss
+} from "@/components/builder/builder-module-device-css";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
 import {
   latestPostsEmptyReason,
@@ -146,6 +150,7 @@ import {
   getSectionMarginStyle,
   getSectionColumnGapStyle,
   getSectionColumnPercent,
+  getSectionBandPaddingStyle,
   getSectionGridTemplate,
   getSectionHorizontalMarginStyle,
   getSectionMinHeightStyle,
@@ -1693,11 +1698,16 @@ function BuilderSectionPreview({
   const bandStyle: CSSProperties | undefined = bandRole
     ? {
         background: `var(--lp-${bandRole}, transparent)`,
-        color: `var(--lp-${bandRole}-text, inherit)`,
-        paddingTop: "var(--lp-band-padding, 0px)",
-        paddingBottom: "var(--lp-band-padding, 0px)"
+        color: `var(--lp-${bandRole}-text, inherit)`
       }
     : undefined;
+  // The band's vertical spacing is deliberately NOT here. It used to be an
+  // inline `padding-top`/`padding-bottom` in this object, which outranked the
+  // stylesheet rule reading the operator's own Top/Bottom Padding — so his
+  // setting did nothing on any backgroundless row. It is applied further down
+  // `buildGridStyle`, after his padding and as a fallback to it, and it has to
+  // be a function of the row rather than a constant here so the tablet and
+  // phone rules recompute it for the row as each device sees it.
 
   // Hero treatment: a tint over an image background so text can sit on the
   // photo, with the inverse text color on top. Layered as a gradient IN FRONT
@@ -1860,6 +1870,12 @@ function BuilderSectionPreview({
       // Navigation-only rows already render flush by design; overlay slots are
       // not really rows at all. Everything else honours the operator's number.
       ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(s)),
+      // ...and only then the theme band's spacing, which fills in for the two
+      // padding sides he has left at their default. After his padding because
+      // it writes the same two custom properties and is the weaker of the two.
+      ...(bandRole && !isNavigationSection && !isOverlayLayoutCollapsed
+        ? getSectionBandPaddingStyle(s)
+        : {}),
       // A row with content sizes to that content. The 56px floor exists so an
       // EMPTY row is still big enough to drop a module onto, and keeping it on
       // filled rows was padding every contact strip out to nearly triple height.
@@ -1993,6 +2009,21 @@ function BuilderSectionPreview({
       ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
+        /*
+          Per-device module styles (86bc14pfq), one entry per module that has
+          any. Generated from normalized numbers and fixed keywords only — no
+          operator text reaches it — so writing it as a style element below is
+          safe. Email has no media queries worth the name, and an overlay row's
+          modules are positioned decor rather than laid-out content, so both
+          opt out exactly as the row's own device CSS does.
+        */
+        const moduleDeviceCssById = new Map<string, string>(
+          emailPreview || isOverlayLayoutCollapsed
+            ? []
+            : columnModules
+                .map((module) => [module.id, buildModuleDeviceCss(module, `${deviceScopeId}-${module.id}`)] as const)
+                .filter(([, css]) => css !== "")
+        );
         // What share of the row this column occupies, so an image inside it can
         // ask the browser for a file sized to the real slot rather than the page.
         const columnWidthPercent = getSectionColumnPercent(section, columnKey);
@@ -2125,6 +2156,7 @@ function BuilderSectionPreview({
               <div className="builder-preview-cell-overlay-screen" style={cellOverlayScreenStyle} />
             ) : null}
             {columnModules.map((module) => {
+              const moduleDeviceCss = moduleDeviceCssById.get(module.id) ?? "";
               const isPageOverlayFlowModule =
                 isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module);
               const isSectionOverlayModule = isSectionScopedOverlayDecor(module);
@@ -2177,6 +2209,9 @@ function BuilderSectionPreview({
                       ? `${module.settings.mobileFontSize}px`
                       : undefined
                   } as CSSProperties}
+                  {...(moduleDeviceCss
+                    ? { [BUILDER_MODULE_DEVICE_SCOPE_ATTRIBUTE]: `${deviceScopeId}-${module.id}` }
+                    : {})}
                 >
                   <BuilderModulePreview
                     columnWidthPercent={columnWidthPercent}
@@ -2193,6 +2228,18 @@ function BuilderSectionPreview({
                 </div>
               );
             })}
+            {/*
+              LAST child of the COLUMN, never of the row: a style element among
+              the row's children would renumber the columns the phone
+              reverse-stack rules count with `nth-child` (86bbwmp2y). Inside the
+              column it is still a child, but the only `nth-child` rule that
+              counts in here asks for a second `.builder-preview-module`, which
+              a style element is not. A `<style>` is `display: none`, so it
+              takes no track in the column's grid either.
+            */}
+            {moduleDeviceCssById.size ? (
+              <style dangerouslySetInnerHTML={{ __html: [...moduleDeviceCssById.values()].join("\n") }} />
+            ) : null}
           </div>
         );
       })}

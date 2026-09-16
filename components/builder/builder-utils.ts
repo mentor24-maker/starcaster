@@ -234,14 +234,22 @@ export function getSectionMarginStyle(section: BuilderTemplateSection): CSSPrope
 }
 
 /**
+ * The Top/Bottom Padding a row carries when nobody has changed it. Shared with
+ * `getSectionBandPaddingStyle` below rather than written twice, because those
+ * two have to agree on what "he never touched this" means — and the serializer
+ * stamps this number onto every stored row, so the value IS the only signal.
+ */
+export const BUILDER_SECTION_DEFAULT_PADDING = "18";
+
+/**
  * Space inside the row, above and below its columns. Emitted as a custom
  * property rather than a plain `padding-block` on purpose: the mobile
  * stylesheet still overrides the shorthand under 900px, which an inline
  * padding would silently outrank and freeze desktop spacing onto phones.
  */
 export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProperties {
-  const top = normalizeSpacingValue(section.paddingTop, "18", 0, 160);
-  const bottom = normalizeSpacingValue(section.paddingBottom, "18", 0, 160);
+  const top = normalizeSpacingValue(section.paddingTop, BUILDER_SECTION_DEFAULT_PADDING, 0, 160);
+  const bottom = normalizeSpacingValue(section.paddingBottom, BUILDER_SECTION_DEFAULT_PADDING, 0, 160);
   const left = normalizeSpacingValue(section.paddingLeft, "0", 0, 160);
   const right = normalizeSpacingValue(section.paddingRight, "0", 0, 160);
   return {
@@ -252,6 +260,43 @@ export function getSectionPaddingStyle(section: BuilderTemplateSection): CSSProp
     // when set, so an untouched row keeps the exact inset it has today.
     ...(Number(left) > 0 ? { "--builder-section-padding-left": `${left}px` } : {}),
     ...(Number(right) > 0 ? { "--builder-section-padding-right": `${right}px` } : {})
+  } as CSSProperties;
+}
+
+/**
+ * The theme band's vertical spacing, for a row that has no background of its
+ * own — as a DEFAULT the operator's own Top/Bottom Padding outranks.
+ *
+ * It used to be written as an inline `padding-top` / `padding-bottom` on the
+ * row, and an inline padding beats the stylesheet rule that reads the
+ * operator's `--builder-section-padding-top` — so on a themed page his Top and
+ * Bottom Padding did nothing at all on any backgroundless row, and the phone
+ * and tablet rules for that row could not reach it either. Measured on
+ * 2026-09-15 at 1440px: Top Padding 18 gave a computed `--builder-section-
+ * padding-top` of 18px and a computed `padding-top` of 0px.
+ *
+ * So the band writes the SAME custom property instead, one level further down
+ * the cascade: it replaces the row's default with `var(--lp-band-padding)` and
+ * gets out of the way the moment he sets a number of his own. A row he never
+ * touched renders byte-identically to before — the value reaching `padding-top`
+ * is the same `var(--lp-band-padding, 0px)`, at every screen width.
+ *
+ * "He set a number" can only mean "it differs from the default", because the
+ * serializer stamps `paddingTop: "18"` onto every row it normalizes, so an
+ * untouched row and a row he deliberately set to 18 are the same bytes. The
+ * cost is that 18 exactly cannot be chosen on a themed backgroundless row; it
+ * is the same trade `--builder-section-padding-left` already makes above.
+ *
+ * Must be applied AFTER `getSectionPaddingStyle` in the same style object —
+ * they write the same two properties, and this one is the fallback.
+ */
+export function getSectionBandPaddingStyle(section: BuilderTemplateSection): CSSProperties {
+  const bandPadding = "var(--lp-band-padding, 0px)";
+  const top = normalizeSpacingValue(section.paddingTop, BUILDER_SECTION_DEFAULT_PADDING, 0, 160);
+  const bottom = normalizeSpacingValue(section.paddingBottom, BUILDER_SECTION_DEFAULT_PADDING, 0, 160);
+  return {
+    ...(top === BUILDER_SECTION_DEFAULT_PADDING ? { "--builder-section-padding-top": bandPadding } : {}),
+    ...(bottom === BUILDER_SECTION_DEFAULT_PADDING ? { "--builder-section-padding-bottom": bandPadding } : {})
   } as CSSProperties;
 }
 

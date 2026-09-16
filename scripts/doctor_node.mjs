@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const nodeRoles = require('../lib/nodeRoles.js');
 const provision = require('../lib/nodeProvision.js');
+const nodeBackup = require('../lib/nodeBackup.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const rebootTest = require('../lib/nodeRebootTest.js');
 const { mainCheckoutDir } = await import('./lib/main_checkout.mjs');
@@ -629,7 +630,51 @@ heading('REBOOT TEST — have this machine\'s roles been confirmed since it rest
     + 'including the one that does not own the job. A machine that cannot log in cannot report on itself.');
 }
 
-// --- 7. the steps that are Dane's -------------------------------------------
+// --- 7. is there a copy of this machine anywhere else? -----------------------
+
+heading('BACKUP — would anything survive this machine dying?');
+
+// WHY THIS SECTION EXISTS (ticket 86bc1c1zb)
+// Every section above asks whether this machine works. None of them asks the
+// question that matters on the one morning they all answer FAIL at once, and
+// on 2026-09-15 the answer for the Mac Mini was "nothing" — no Time Machine
+// destination had ever been configured on the machine running the bus relay,
+// both loop lanes, the pulse, the weekly report and two Pulse pipelines.
+//
+// This READS ONLY, like the rest of this file. `npm run backup:node` is what
+// takes one, and the separation is the same one node:verify has: a report that
+// quietly did the thing it was reporting on could not be trusted to report.
+{
+  let stamp = null;
+  try {
+    stamp = JSON.parse(fs.readFileSync(nodeBackup.backupStampFile(os.homedir()), 'utf8'));
+  } catch (_) {
+    stamp = null;
+  }
+  const report = nodeBackup.freshnessReport({ stamp, node: node.name });
+  if (report.state === 'FRESH') {
+    pass(`Backed up to ${stamp.repo || nodeBackup.BACKUP_REPO}.`, report.text);
+  } else if (report.state === 'NEVER') {
+    // NEVER is a FAIL, not a CANNOT TELL. The reading was taken and it was
+    // definite: there is no copy of this machine anywhere.
+    fail('This machine has never been backed up.', report.fix, report.text);
+  } else if (report.state === 'STALE') {
+    fail('The backup of this machine has gone stale.', report.fix, report.text);
+  } else {
+    unknown('Whether this machine is backed up.', report.text, report.fix);
+  }
+
+  // The gap this section cannot close, said out loud rather than left as an
+  // absence — the same discipline the reboot test uses two sections up. A
+  // machine that is switched off cannot report that its own backup stopped,
+  // which is precisely the case a backup exists for.
+  note('This only reads the stamp on THIS machine. A machine that is off reports nothing at all, '
+    + `so the cross-machine answer is the commit history of ${nodeBackup.BACKUP_REPO}.`);
+  note('What a backup deliberately does NOT contain is every credential (docs/DOCTRINE.md \u00a74.1). '
+    + 'The rebuild route, end to end, is docs/NODE_RECOVERY.md.');
+}
+
+// --- 8. the steps that are Dane's -------------------------------------------
 
 heading("WAITING ON DANE — steps no script may perform");
 
