@@ -57,11 +57,63 @@ describe("module device overrides", () => {
     expect(hasModuleDeviceOverrides(legacy)).toBe(false);
   });
 
-  it("lets a new phone value win over the legacy field it replaces", () => {
+  it("lets a new phone value win over the legacy field it replaces, and retires that field", () => {
     const legacy = heading({ mobileFontSize: "18" });
     const next = writeModuleDeviceEdit(legacy, "heading", "phone", (c) => ({ ...c, fontSize: "14" }));
     expect(resolveModuleDeviceValues(next, "heading", "phone").fontSize).toBe("14");
+    // The old field is GONE. Leaving it is what made the control dead below.
+    expect(next.mobileFontSize).toBeUndefined();
+  });
+
+  /*
+   * REVIEW ROUND 1, 2026-09-15. Every one of these is a control that accepted
+   * an edit, reported success, and left the page rendering the legacy value —
+   * because the writer's "what would I inherit?" baseline was tablet alone
+   * while the reader's phone chain went through the legacy fields. Each is
+   * written from the shipped functions' own measured output.
+   */
+  it("lets Hide on Phone be UNTICKED on a page carrying the old mobileHidden", () => {
+    const legacy = heading({ mobileHidden: "true" });
+    expect(isModuleHiddenOnDevice(legacy, "heading", "phone")).toBe(true);
+    const shown = setModuleHiddenOnDevice(legacy, "heading", "phone", false);
+    expect(isModuleHiddenOnDevice(shown, "heading", "phone")).toBe(false);
+    expect(shown.mobileHidden).toBeUndefined();
+  });
+
+  it("lets a phone value be put BACK to desktop's on a page carrying a legacy field", () => {
+    // The quiet half of the same fault: the panel accepted 48 and the phone
+    // went on rendering 18, with nothing stored to show for the edit.
+    const legacy = heading({ mobileFontSize: "18" });
+    expect(resolveModuleDeviceValues(legacy, "heading", "phone").fontSize).toBe("18");
+    const next = writeModuleDeviceEdit(legacy, "heading", "phone", (c) => ({ ...c, fontSize: "48" }));
+    expect(resolveModuleDeviceValues(next, "heading", "phone").fontSize).toBe("48");
+    // Following desktop again, so nothing is PINNED — a later desktop change
+    // still reaches the phone.
+    expect(next["phone.fontSize"]).toBeUndefined();
+    expect(next.mobileFontSize).toBeUndefined();
+  });
+
+  it("retires only the legacy field for the key that was edited", () => {
+    const legacy = heading({ mobileFontSize: "18", mobileAlignment: "center", mobileHidden: "true" });
+    const next = writeModuleDeviceEdit(legacy, "heading", "phone", (c) => ({ ...c, fontSize: "14" }));
+    expect(next.mobileFontSize).toBeUndefined();
+    expect(next.mobileAlignment).toBe("center");
+    expect(next.mobileHidden).toBe("true");
+  });
+
+  it("does not retire a legacy field when the edit was made on TABLET", () => {
+    const legacy = heading({ mobileFontSize: "18" });
+    const next = writeModuleDeviceEdit(legacy, "heading", "tablet", (c) => ({ ...c, fontSize: "30" }));
     expect(next.mobileFontSize).toBe("18");
+    expect(resolveModuleDeviceValues(next, "heading", "tablet").fontSize).toBe("30");
+    // The legacy field still sits below `phone.*` and above tablet.
+    expect(resolveModuleDeviceValues(next, "heading", "phone").fontSize).toBe("18");
+  });
+
+  it("does not invent a legacy field on a module that never had one", () => {
+    const next = writeModuleDeviceEdit(heading(), "heading", "phone", (c) => ({ ...c, fontSize: "14" }));
+    expect("mobileFontSize" in next).toBe(false);
+    expect("mobileHidden" in setModuleHiddenOnDevice(heading(), "heading", "phone", true)).toBe(false);
   });
 
   it("hides on tablet and lets the phone show it again", () => {

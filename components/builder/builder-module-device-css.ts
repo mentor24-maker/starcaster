@@ -6,6 +6,7 @@ import {
 } from "@/lib/builder-device-overrides";
 import {
   hasModuleDeviceOverrides,
+  listModuleDeviceChainKeys,
   listModuleDeviceKeys,
   resolveModuleDeviceValues,
   resolveModuleSettingsForDevice,
@@ -85,8 +86,14 @@ function fontSizeTarget(type: string): TargetSuffix | null {
 /**
  * The declarations one device wants, grouped by the element they land on.
  *
- * Only keys whose RESOLVED value differs from desktop's are written, which is
- * what keeps a module that follows desktop emitting nothing at all.
+ * A key is written when its resolved value differs from desktop's AND the
+ * value came from a device map — `listModuleDeviceChainKeys`. Both halves
+ * matter. The first keeps a module that follows desktop emitting nothing at
+ * all; the second keeps a module's pre-device `mobileHidden` /
+ * `mobileAlignment` / `mobileFontSize` out of these rules entirely, because
+ * they already reach the page through their own stylesheet at their own
+ * width. Without it, one unrelated tablet margin re-emits a legacy font size
+ * at 767px with `!important` on it and a live page moves (review round 1).
  */
 function deviceDeclarations(
   module: BuilderTemplateModule,
@@ -95,7 +102,10 @@ function deviceDeclarations(
   const type = String(module.type);
   const desktop = resolveModuleDeviceValues(module.settings, type, "desktop");
   const values = resolveModuleDeviceValues(module.settings, type, device);
-  const changed = new Set(listModuleDeviceKeys(type).filter((key) => values[key] !== desktop[key]));
+  const fromADevice = listModuleDeviceChainKeys(module.settings, device);
+  const changed = new Set(
+    listModuleDeviceKeys(type).filter((key) => fromADevice.has(key) && values[key] !== desktop[key])
+  );
   const byTarget = new Map<TargetSuffix, string[]>();
   const add = (target: TargetSuffix, style: CSSProperties) => {
     const lines = declarations(style);
@@ -120,6 +130,22 @@ function deviceDeclarations(
 
   const resolved = resolveModuleSettingsForDevice(module.settings, type, device);
   const root: CSSProperties = {};
+  if (changed.has("alignment")) {
+    /*
+     * AND on the module's own root, because that is where DESKTOP declares it.
+     * `.builder-react-root .is-align-center .builder-preview-heading` sets
+     * `justify-self: center; text-align: center` on the CHILD, and a child's
+     * own `justify-self` beats the parent's `justify-items` while its own
+     * `text-align` beats an inherited one. Writing only the wrapper made the
+     * override work in exactly one direction — left to centre moved, centre
+     * back to left did not (review round 1, measured in a browser at 420px).
+     * `auto` is the child's neutral: the stylesheet declares nothing on the
+     * child for `is-align-left`, so the wrapper's `justify-items` decides.
+     */
+    const alignment = values.alignment;
+    root.justifySelf = alignment === "center" ? "center" : alignment === "right" ? "end" : "auto";
+    root.textAlign = alignment as CSSProperties["textAlign"];
+  }
   if (changed.has("horizontalOffset") || changed.has("verticalOffset")) {
     const transform = getModuleNudgeTransform(resolved);
     root.transform = transform ?? "none";
@@ -151,7 +177,10 @@ function deviceDeclarations(
     if (target) add(target, { fontSize: `${values.fontSize}px` });
   }
 
-  return { byTarget, hidden: values.hidden === "true" };
+  // `changed` already carries both halves: desktop `hidden` is always "false",
+  // so a key here means a DEVICE asked for the hide. A module carrying only
+  // `mobileHidden` emits no display rule and goes on hiding at 900px as it did.
+  return { byTarget, hidden: changed.has("hidden") };
 }
 
 /**

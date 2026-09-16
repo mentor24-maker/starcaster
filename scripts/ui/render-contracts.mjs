@@ -532,6 +532,81 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
+    why:
+      'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +
+      'Desktop declares center/right on the CHILD (`.is-align-center .builder-preview-heading ' +
+      '{ justify-self: center }`), and a child\'s own justify-self beats the parent\'s ' +
+      'justify-items — so a device rule written only on the wrapper moved a module OUT of left ' +
+      'and could never move it back IN. Measured at 420px: center + phone.alignment left rendered ' +
+      'justify-self: center, unmoved.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Left on a phone', settings: { alignment: 'center', 'phone.alignment': 'left' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      if (sample.styles.justifySelf === 'center') {
+        return 'a centred heading set to Phone alignment "left" still rendered justify-self: center at 420px — the device rule is on the wrapper only, and the child\'s own justify-self beats it.';
+      }
+      return sample.styles.textAlign === 'left'
+        ? null
+        : `a centred heading set to Phone alignment "left" rendered text-align ${sample.styles.textAlign} at 420px, not left.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-alignment-can-centre-a-module',
+    why:
+      'The OTHER direction of the contract above, and the direction that already worked — so a ' +
+      'fix cannot buy one by breaking the other. A left heading set to Phone alignment "center" ' +
+      'centres at 420px.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Centred on a phone', settings: { alignment: 'left', 'phone.alignment': 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.textAlign === 'center' && sample.styles.justifySelf !== 'auto'
+        ? null
+        : `a left-aligned heading set to Phone alignment "center" rendered justify-self ${sample.styles.justifySelf} / text-align ${sample.styles.textAlign} at 420px. A device alignment must write the SAME declarations desktop writes, on the same element — the wrapper alone happens to centre this one, and that is exactly why the opposite direction silently did nothing.`;
+    },
+  },
+  {
+    id: 'module-device-styles-a-tablet-edit-does-not-move-a-legacy-phone-font-size',
+    why:
+      'REVIEW ROUND 1, finding 4, and the one that would have moved a live client page. The ' +
+      'emit guard was per MODULE, so an unrelated tablet margin let the phone chain re-emit the ' +
+      'pre-device `mobileFontSize` at 767px with !important and a three-repeat selector on it — ' +
+      'at a width it has never applied at. A heading rendering `clamp(1.35rem, 9vw, 2.35rem)` ' +
+      'today would have dropped to 18px because somebody set a tablet margin.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Untouched by a tablet margin',
+          settings: { fontSize: '48', mobileFontSize: '18', 'tablet.marginTop': '12' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '18px'
+        ? 'a heading carrying the legacy mobileFontSize and an unrelated tablet margin rendered 18px at 420px — the device rules are emitting a legacy value at a width it never applied at.'
+        : null;
+    },
+  },
+  {
     id: 'module-device-styles-leave-desktop-alone',
     why:
       'The other direction, so the contract above cannot pass by breaking every width: the same ' +

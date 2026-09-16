@@ -21,6 +21,17 @@
  * real pages, so they sit in the phone chain between tablet and `phone.*` —
  * a page nobody has touched resolves on a phone to exactly what it renders
  * today, and a new `phone.*` value simply wins over the old field.
+ *
+ * AND USING THE PHONE CONTROL RETIRES THE OLD FIELD IT ANSWERS FOR. Two
+ * fields answering one question is how a control goes dead: leaving
+ * `mobileHidden` in place has the device map say "follows desktop" while the
+ * old field goes on hiding the module, so unticking "Hide on Phone" stores
+ * nothing and the box snaps back. Every one of the ten keys had that shape
+ * (review round 1, 2026-09-15) — a Phone value put back to desktop's was
+ * dropped as redundant and then read straight back off the legacy field. The
+ * write clears the field for the key it edits, which is what makes the chain
+ * the writer compares against and the chain the reader walks the same chain.
+ * Rows and cells retire theirs the same way (`builder-device-overrides.ts`).
  */
 import {
   HEADLINE_ROTATOR_DEFAULT_FONT_SIZE
@@ -139,20 +150,57 @@ function desktopValues(settings: BuilderModuleSettings, type: string): Record<st
 }
 
 /**
+ * The pre-device field that answers for each device key on a phone. One
+ * place, because the reader below and the writer at the bottom of this file
+ * MUST agree about it: a reader that consults a field the writer cannot
+ * clear is a control that does nothing.
+ */
+const MODULE_LEGACY_PHONE_FIELDS: Record<string, string> = {
+  alignment: "mobileAlignment",
+  fontSize: "mobileFontSize",
+  hidden: "mobileHidden"
+};
+
+/**
  * The pre-device phone fields, as a device map. They apply BELOW `phone.*`
  * and ABOVE tablet, which is what makes an untouched page render on a phone
  * exactly as it does today.
  */
 function legacyPhoneValues(settings: BuilderModuleSettings): Record<string, string> {
   const values: Record<string, string> = {};
-  if (settings.mobileAlignment) {
-    values.alignment = BUILDER_MODULE_DEVICE_KEY_NORMALIZERS.alignment(settings.mobileAlignment);
+  if (settings[MODULE_LEGACY_PHONE_FIELDS.alignment]) {
+    values.alignment = BUILDER_MODULE_DEVICE_KEY_NORMALIZERS.alignment(
+      settings[MODULE_LEGACY_PHONE_FIELDS.alignment]
+    );
   }
-  if (settings.mobileFontSize) {
-    values.fontSize = BUILDER_MODULE_DEVICE_KEY_NORMALIZERS.fontSize(settings.mobileFontSize);
+  if (settings[MODULE_LEGACY_PHONE_FIELDS.fontSize]) {
+    values.fontSize = BUILDER_MODULE_DEVICE_KEY_NORMALIZERS.fontSize(
+      settings[MODULE_LEGACY_PHONE_FIELDS.fontSize]
+    );
   }
-  if (settings.mobileHidden === "true") values.hidden = "true";
+  if (settings[MODULE_LEGACY_PHONE_FIELDS.hidden] === "true") values.hidden = "true";
   return values;
+}
+
+/**
+ * The settings with the pre-device phone field for each named key removed.
+ *
+ * Only on a phone, and only for the keys the operator actually edited: a
+ * phone font size must not retire a module's `mobileAlignment` on its way
+ * past. A field is DELETED rather than set to a falsy value so a module that
+ * never had one does not gain one.
+ */
+function retireLegacyPhoneFields(
+  settings: BuilderModuleSettings,
+  device: BuilderEditorStyleDevice,
+  keys: string[]
+): BuilderModuleSettings {
+  if (device !== "phone") return settings;
+  const retiring = keys.map((key) => MODULE_LEGACY_PHONE_FIELDS[key]).filter((field) => field && field in settings);
+  if (!retiring.length) return settings;
+  const next: BuilderModuleSettings = { ...settings };
+  for (const field of retiring) delete next[field];
+  return next;
 }
 
 /** One device's own stored map, read back off the flat keys. */
@@ -215,6 +263,31 @@ export function listModuleDeviceOverrideKeys(
   return BUILDER_MODULE_DEVICE_KEYS.filter((key) => key in readModuleDeviceMap(settings, device));
 }
 
+/**
+ * The keys that reach `device` from a DEVICE MAP — its own or one above it —
+ * never one supplied by a pre-device phone field.
+ *
+ * This is what the CSS generator emits for, and the distinction is the whole
+ * of review round 1's fourth finding. A module's legacy values already reach
+ * the page through the stylesheet classes they always did, at 900px. Treating
+ * them as "differs from desktop" had one unrelated `tablet.marginTop` drag a
+ * module's `mobileFontSize` into a 767px rule carrying `!important` and a
+ * three-repeat selector — so a heading on a live client page, rendering at
+ * `clamp(1.35rem, 9vw, 2.35rem)` today, would drop to 18px on a phone because
+ * somebody set a tablet margin. The answer is per DEVICE AND KEY, not per
+ * module: a device emits for the keys somebody chose on a device, full stop.
+ */
+export function listModuleDeviceChainKeys(
+  settings: BuilderModuleSettings,
+  device: BuilderEditorStyleDevice
+): Set<string> {
+  const keys = new Set<string>();
+  for (const step of deviceChain(device)) {
+    for (const key of Object.keys(readModuleDeviceMap(settings, step))) keys.add(key);
+  }
+  return keys;
+}
+
 /** True when ANY device carries a setting of its own — the `tablet.`/`phone.` keys only. */
 export function hasModuleDeviceOverrides(settings: BuilderModuleSettings) {
   return BUILDER_STYLE_DEVICES.some((device) => listModuleDeviceOverrideKeys(settings, device).length > 0);
@@ -251,17 +324,27 @@ export function writeModuleDeviceEdit(
 
   const before = resolveModuleSettingsForDevice(settings, type, device);
   const after = updater(before);
-  const inherited = resolveModuleDeviceValues(settings, type, parentDevice(device));
-  const map = readModuleDeviceMap(settings, device);
+  const edited = listModuleDeviceKeys(type).filter((key) => key !== "hidden" && after[key] !== before[key]);
 
-  for (const key of listModuleDeviceKeys(type)) {
-    if (key === "hidden" || after[key] === before[key]) continue;
+  /*
+   * The edited keys' pre-device fields go FIRST, and everything below reads
+   * the retired settings. That is the whole of review round 1: with
+   * `mobileFontSize` still in place, a Phone font size put back to desktop's
+   * matched what tablet inherits, was dropped as redundant, and then resolved
+   * straight back to the legacy value — so the panel accepted 48 and the page
+   * went on rendering 18.
+   */
+  const base = retireLegacyPhoneFields(settings, device, edited);
+  const inherited = resolveModuleDeviceValues(base, type, parentDevice(device));
+  const map = readModuleDeviceMap(base, device);
+
+  for (const key of edited) {
     const value = BUILDER_MODULE_DEVICE_KEY_NORMALIZERS[key](after[key]);
     if (value === inherited[key]) delete map[key];
     else map[key] = value;
   }
 
-  return withDeviceMap(settings, device, map);
+  return withDeviceMap(base, device, map);
 }
 
 export function setModuleHiddenOnDevice(
@@ -270,12 +353,19 @@ export function setModuleHiddenOnDevice(
   device: BuilderStyleDevice,
   hidden: boolean
 ): BuilderModuleSettings {
-  const inherited = resolveModuleDeviceValues(settings, type, parentDevice(device));
-  const map = readModuleDeviceMap(settings, device);
+  /*
+   * Ticking or unticking this box retires the module's old `mobileHidden`.
+   * Without that, unticking "Hide on Phone" on a page that carries the old
+   * field writes nothing at all and the box snaps back — the worst of the
+   * round 1 findings, and the one a real client page would hit first.
+   */
+  const base = retireLegacyPhoneFields(settings, device, ["hidden"]);
+  const inherited = resolveModuleDeviceValues(base, type, parentDevice(device));
+  const map = readModuleDeviceMap(base, device);
   const value = hidden ? "true" : "false";
   if (value === inherited.hidden) delete map.hidden;
   else map.hidden = value;
-  return withDeviceMap(settings, device, map);
+  return withDeviceMap(base, device, map);
 }
 
 /** Puts one setting — or, with no key, every setting — back to following. */

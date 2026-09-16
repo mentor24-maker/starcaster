@@ -30,6 +30,29 @@ describe("buildModuleDeviceCss", () => {
     expect(buildModuleDeviceCss(legacy, "m1")).toBe("");
   });
 
+  it("keeps a legacy field out of the rules when ANOTHER key is set on a device", () => {
+    /*
+     * Review round 1, finding 4, and the one that would have moved a live
+     * client page. The guard used to be per MODULE, so one unrelated tablet
+     * margin let the phone chain — which reads the legacy fields — emit
+     * `mobileFontSize` at 767px with `!important` and a three-repeat selector
+     * on it. A heading rendering at `clamp(1.35rem, 9vw, 2.35rem)` today would
+     * have dropped to 18px because somebody set a tablet margin.
+     */
+    const module = moduleOf("heading", {
+      fontSize: "48",
+      mobileFontSize: "18",
+      mobileHidden: "true",
+      mobileAlignment: "center",
+      "tablet.marginTop": "12"
+    });
+    const css = buildModuleDeviceCss(module, "m1");
+    expect(css).toContain("margin-top:12px !important");
+    expect(css).not.toContain("font-size");
+    expect(css).not.toContain("display:none");
+    expect(css).not.toContain("justify-items");
+  });
+
   it("puts a phone margin under the phone query and the phone preview frame, and nowhere else", () => {
     const css = buildModuleDeviceCss(edit(moduleOf("heading"), "phone", { marginTop: "4" }), "m1");
     expect(css).toContain("@media (max-width:767px)");
@@ -84,6 +107,31 @@ describe("buildModuleDeviceCss", () => {
     expect(css).toContain("transform:none !important");
     // ...and clears the margin the heading used to compensate with.
     expect(css).toContain("margin-bottom:0px !important");
+  });
+
+  it("writes a device alignment on the module's ROOT as well as its wrapper", () => {
+    /*
+     * Review round 1, finding 3. Desktop declares `center` and `right` on the
+     * CHILD (`.is-align-center .builder-preview-heading { justify-self }`), and
+     * a child's own `justify-self` beats the parent's `justify-items` — so a
+     * wrapper-only rule could move a module OUT of left but never back INTO
+     * it. Both directions, because only one of them was broken.
+     */
+    const toLeft = buildModuleDeviceCss(
+      edit(moduleOf("heading", { alignment: "center" }), "phone", { alignment: "left" }),
+      "m1"
+    );
+    expect(toLeft).toContain("justify-items:stretch !important");
+    expect(toLeft).toContain("justify-self:auto !important");
+    expect(toLeft).toContain("text-align:left !important");
+
+    const toCenter = buildModuleDeviceCss(
+      edit(moduleOf("heading", { alignment: "left" }), "phone", { alignment: "center" }),
+      "m1"
+    );
+    expect(toCenter).toContain("justify-items:center !important");
+    expect(toCenter).toContain("justify-self:center !important");
+    expect(toCenter).toContain("text-align:center !important");
   });
 
   it("outranks the pre-device mobile stylesheet by repeating its scope", () => {

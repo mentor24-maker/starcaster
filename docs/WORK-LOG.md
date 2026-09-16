@@ -20,6 +20,24 @@ Builder's own phone preview. That is a real fault, it is not changed here, and
 it belongs with the next slice of this work, which is about those old phone
 rules.
 
+**Corrected after review.** The first version worked on pages that had never
+had a mobile setting, and quietly failed on the ones that had — which are the
+real client pages. On those, *Hide on Phone* could not be unticked: the box
+sprang straight back, because the old *Hide Module on Mobile* was still sitting
+underneath answering the same question. The same fault made every Phone setting
+refuse to be put back to the desktop value. It is one idea, fixed once: using a
+Phone control now retires the old field it replaced, so only one setting ever
+answers for one screen.
+
+Two more came out of the same review. Phone and Tablet *Alignment* could move a
+module out of centred but never back into it, because the desktop stylesheet
+declares centring on a different element than the new rules were written on.
+And setting a *tablet* margin on a page that carried the old Mobile Font Size
+would have pulled that old size onto phones at a width it has never applied at
+— a live client heading would have shrunk because somebody adjusted a tablet
+margin. Both are fixed, and both are now held by a check that photographs a
+real browser at phone width.
+
 ## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
 
 Third of eight pieces in the Studio work. The first two built the filing
