@@ -1,3 +1,45 @@
+## 2026-09-15 — The Studio now downloads the footage it spotted (#720)
+
+Fourth of eight pieces in the Studio work. The watcher that shipped yesterday
+notices a new video in your Drive folder and writes a note saying "fetch this
+one". Nothing was reading those notes. This is the part that reads them.
+
+Downloading a video does not sound like it needs much explaining, until you
+look at the size. A 54-minute recording off the iPhone is about three and a
+half gigabytes. That takes a while, and the Mac Mini is a machine that goes to
+sleep, loses its wifi, and gets restarted. A download that starts over from the
+beginning every time something interrupts it is a download that, for a file
+that big, may genuinely never finish. So it keeps whatever it already got and
+asks Google for only the part that is missing.
+
+The other half is not trusting what arrived. Google tells us how big the file
+is and gives us a fingerprint of its contents, so before the video is written
+into the catalog at all, the downloaded copy is measured and fingerprinted and
+the two are compared. If they do not match, the copy is deleted and that file
+stops with both numbers written down — rather than being quietly filed as a
+good video that is actually half a video. If Google gives us no fingerprint to
+check against, that stops too: "we could not check" is not the same as "we
+checked and it was fine", and the whole rest of the Studio treats the catalog
+as the truth.
+
+It also refuses to fill the disk. If free space is under the line, it does not
+start — and it does not start rather than getting half way and dying, because a
+half-written three-gigabyte file is the worst of both. A video turned away for
+lack of room goes back on the to-do list instead of being marked as failed: the
+disk being full is the machine's problem, not that video's, and five full disks
+in a row should not add up to a perfectly good recording being given up on.
+
+And the same video only ever gets one entry, whether it turns up twice because
+somebody renamed it, or arrives once by AirDrop and again through a Photos
+sync under a completely different Drive name. The second one is recognised by
+what the bytes actually are, not by what the file is called.
+
+One thing deliberately left undecided: which recording *session* a file belongs
+to. Working out that this wide shot and that close-up are one shoot needs the
+next two pieces. So for now everything lands in a clearly-labelled holding pen —
+"Unsorted — inbox — 2026-09-15" — which a later piece can sort out and which
+reads, to a person looking at it, as exactly what it is.
+
 ## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
 
 Third of eight pieces in the Studio work. The first two built the filing
