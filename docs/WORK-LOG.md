@@ -63,6 +63,37 @@ the half-finished download is no longer filed under the video's name, so
 renaming the file in Drive part-way through no longer throws the progress away
 — which is the one thing this whole piece exists to prevent.
 
+**Sent back a second time, for the same sentence one pass later.** Fixing "a
+full disk reports finished cleanly" fixed the pass that hits a full disk. It did
+not fix the pass fifteen minutes afterwards. A video turned away for lack of
+room is put back on the to-do list and held there for a quarter of an hour, so
+the next pass finds nothing it is allowed to pick up — and from the inside,
+"everything is held back" and "there is nothing to do" looked identical. So it
+said "finished cleanly" over a disk exactly as full as before, wrote "no videos
+were waiting" when one was, and then deleted its own alarm on the way out. The
+alarm was the only lasting record that anything was wrong; it survived about as
+long as the hold, and a pass that did nothing at all erased it.
+
+The fix is to stop asking "did anything happen to me?" and start asking "what
+is actually true?". The to-do list can now be asked what it is holding back and
+for how long, the alarm itself remembers which videos are stuck behind it, and
+an alarm is only stood down by a pass that can show the problem is over — never
+by one that simply did nothing. So a quiet morning now reads "one video is
+waiting for disk room, next attempt in ten minutes" with the alarm printed
+above it, rather than a clean bill of health.
+
+Two smaller things came back with it. Two settings the code's own notes told
+you about — how long to wait on Google, and how long a silent download is given
+before it is abandoned — were never actually read from anywhere, so an operator
+could have spent an hour setting something that did nothing; they are read now,
+and a value that is not a number is refused out loud rather than swapped back
+for the default behind your back. And the *finished* video file was still filed
+under its Drive name, so renaming a clip in the moment between the download
+finishing and the catalog entry being written meant the next attempt could not
+find the three and a half gigabytes already sitting on the disk and fetched the
+whole thing again, leaving the first copy stranded with nothing pointing at it.
+It now recognises its own file whatever it has since been called.
+
 ## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
 
 A heading that looks right on a laptop is often far too big on a phone, and

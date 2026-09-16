@@ -34,6 +34,11 @@ const {
   holdingSessionTitle,
   formatIngestReport,
   getIngestMetadata,
+  realDriveClient,
+  findCachedFiles,
+  humanDuration,
+  resolveDriveTimeouts,
+  HEALTH_NO_ROOM,
   STAGE_INGEST,
   SUBJECT_DRIVE_FILE,
   STAGE_INGEST_HEALTH,
@@ -596,6 +601,164 @@ test('a disk too full to do any work raises the alarm instead of clearing it', a
   assert.equal(after[0].id, health[0].id);
 });
 
+/**
+ * A pass that runs INSIDE the hold-off window and does nothing at all.
+ *
+ * This is round 2's blocker, and it is the same sentence round 1 was sent back
+ * for, one pass later. `release` holds the job off for fifteen minutes and
+ * `claim` honours `run_after`, so the pass five minutes later claims nothing:
+ * every bucket empty, `ok` flipping to true, the header line saying "finished
+ * cleanly" over a disk exactly as full as it was, the empty-state line saying
+ * nothing was waiting when something was, and `clearBlock` DELETING the only
+ * durable record of the condition.
+ *
+ * It is deliberately the previous test's scenario with one more beat, rather
+ * than a new one: the version on the branch re-ran it with a NEWLY ENQUEUED
+ * second file, which re-hits the condition and so exercises the refresh path
+ * and never the do-nothing path.
+ */
+function fullDiskPass(t, { clockRef }) {
+  const bytes = crypto.randomBytes(4_000);
+  const drive = fakeDrive(bytes);
+  const truthful = drive.getMetadata;
+  drive.getMetadata = async (fileId) => {
+    const res = await truthful(fileId);
+    return { ...res, data: { ...res.data, size: String(4 * 1024 * 1024 * 1024) } };
+  };
+  return {
+    ...passOptions(t, { drive, freeBytes: 52 * 1024 * 1024 * 1024 }),
+    diskFloorBytes: 50 * 1024 * 1024 * 1024,
+  };
+}
+
+test('the pass five minutes later does NOT report clean and does NOT delete the alarm', async (t) => {
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const opts = fullDiskPass(t, { clockRef: at });
+  queueIngestJob(queue);
+
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.released.length, 1, 'the file was put back for want of room');
+  assert.equal(first.ok, false);
+  const alarm = queue.listJobs({ stage: STAGE_INGEST_HEALTH })[0];
+  assert.equal(alarm.state, 'blocked');
+  assert.deepEqual(
+    alarm.payload, { kind: HEALTH_NO_ROOM, heldJobIds: first.awaitingRoom },
+    'the alarm records WHICH jobs are stuck — the fact that has to outlive this pass'
+  );
+
+  // Five minutes later. Nothing has changed on the disk; the job is not due.
+  at.now += 5 * 60 * 1000;
+  const second = await runIngest({ queue, owner: `${OWNER}-2`, ...opts });
+
+  assert.equal(second.released.length, 0, 'it claimed nothing — the job is held off');
+  assert.equal(second.ingested.length, 0);
+  assert.equal(
+    second.ok, false,
+    'a pass that shipped nothing while a file sits waiting for disk is not a clean pass'
+  );
+  assert.equal(second.healthCleared, false, 'and it did not stand the alarm down');
+  assert.equal(second.healthStanding, true);
+  assert.equal(
+    queue.listJobs({ stage: STAGE_INGEST_HEALTH })[0].state, 'blocked',
+    'the alarm is the only durable record of the condition, and the condition still holds'
+  );
+  assert.deepEqual(second.awaitingRoom, first.awaitingRoom, 'the same job, still stuck');
+
+  const printed = formatIngestReport(second);
+  assert.match(printed, /FINISHED WITH THINGS TO LOOK AT/);
+  assert.match(printed, /ALARM STANDING/);
+  assert.doesNotMatch(
+    printed, /no ingest jobs were waiting/,
+    'one WAS waiting — landmine 17: an empty state that says the wrong why is worse than one that says none'
+  );
+  assert.match(printed, /1 ingest job\(s\) are waiting and not due yet, the next in 10 minutes/);
+});
+
+test('the alarm stands down once the held-off file actually gets through', async (t) => {
+  // The other half, and the one that keeps this from being an alarm nobody can
+  // clear: when the disk is freed and the job comes due, the pass that ingests
+  // it takes the alarm down.
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const cramped = fullDiskPass(t, { clockRef: at });
+  queueIngestJob(queue);
+
+  const first = await runIngest({ queue, owner: OWNER, ...cramped });
+  assert.equal(first.released.length, 1);
+  assert.equal(queue.listJobs({ stage: STAGE_INGEST_HEALTH })[0].state, 'blocked');
+
+  // Past the hold-off, with room and a Drive telling the truth about the size.
+  at.now += 16 * 60 * 1000;
+  const bytes = crypto.randomBytes(4_000);
+  const roomy = {
+    ...cramped,
+    drive: fakeDrive(bytes),
+    statfs: fakeStatfs(500 * 1024 * 1024 * 1024),
+  };
+  const second = await runIngest({ queue, owner: OWNER, ...roomy });
+
+  assert.equal(second.ingested.length, 1, formatIngestReport(second));
+  assert.deepEqual(second.awaitingRoom, [], 'nothing is stuck any more');
+  assert.equal(second.healthCleared, true);
+  assert.equal(second.healthStanding, false);
+  assert.equal(second.ok, true, formatIngestReport(second));
+  assert.equal(queue.listJobs({ stage: STAGE_INGEST_HEALTH })[0].state, 'done');
+});
+
+test('a queue holding work back is never reported as an empty queue', async (t) => {
+  // The narrower claim on its own, away from the disk: `listJobs({ state:
+  // "pending" })` cannot tell "nothing is waiting" from "something is waiting
+  // and is not due", and the pass used to print the first for the second.
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const job = queueIngestJob(queue);
+  queue.claim(OWNER);
+  queue.release(job.id, OWNER, { reason: 'the disk is full', runAfterMs: 15 * 60 * 1000 });
+
+  assert.deepEqual(
+    queue.waiting({ stage: STAGE_INGEST }),
+    {
+      pending: 1, dueNow: 0, heldOff: 1,
+      nextDueAt: at.now + 15 * 60 * 1000, nextDueInMs: 15 * 60 * 1000,
+      jobs: queue.waiting({ stage: STAGE_INGEST }).jobs,
+    }
+  );
+  assert.equal(queue.claim(`${OWNER}-2`), null, 'and claim agrees it is not due');
+
+  at.now += 15 * 60 * 1000 + 1;
+  const due = queue.waiting({ stage: STAGE_INGEST });
+  assert.equal(due.heldOff, 0, 'the same job, once its clock comes round');
+  assert.equal(due.dueNow, 1);
+  assert.equal(due.nextDueInMs, 0);
+});
+
+test('a job backing off after a FAILURE is outstanding work too, not a clean pass', async (t) => {
+  // `heldOff` is not only the disk: a file that failed and is waiting out its
+  // backoff has not been ingested either, and 7/8's daemon reads `report.ok`.
+  // The alarm is NOT raised — that one is about disk room and would be a lie.
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const opts = passOptions(t, { drive: fakeDrive(crypto.randomBytes(30_000), { cutAfter: 12_000 }) });
+  queueIngestJob(queue);
+
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.failed.length, 1);
+
+  // One second later: the backoff has not elapsed, so nothing is claimable.
+  at.now += 1000;
+  const second = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.deepEqual(second.failed, []);
+  assert.equal(second.ok, false, 'a file is still waiting to be retried');
+  assert.equal(second.waiting.heldOff, 1);
+  assert.deepEqual(second.awaitingRoom, [], 'and it is not a disk problem');
+  assert.equal(
+    queue.listJobs({ stage: STAGE_INGEST_HEALTH }).length, 0,
+    'so no disk alarm was invented for it'
+  );
+  assert.match(formatIngestReport(second), /waiting and not due yet/);
+});
+
 test('a blocked file NEVER leaves its own job running, even on the second round', async (t) => {
   // Blocker 1 as the review reproduced it, driven through the real pass rather
   // than the queue alone: block a file on a checksum mismatch, re-queue the
@@ -1057,6 +1220,181 @@ test('renaming a file in Drive between attempts does not throw the partial bytes
   assert.equal(second.ok, true);
   assert.equal(second.resumedFrom, 15_000, 'it resumed rather than starting again after the rename');
   assert.deepEqual(fs.readFileSync(after.partPath), bytes);
+});
+
+test('a rename between the DOWNLOAD and the registration does not refetch the file', async (t) => {
+  // The part file moved onto the Drive file id in round 1; the FINISHED file
+  // was left keyed on the name, which is the identical hole one step later.
+  // `createSource` failing (the `failIt` retry path) leaves a complete file on
+  // disk; rename the clip in Drive before the retry and the next attempt used
+  // to compute a different `finalPath`, not find its own 3.57 GB, fetch the
+  // whole thing again, and strand the first copy with no catalog row pointing
+  // at it — a leak the disk floor cannot see.
+  const bytes = crypto.randomBytes(9_000);
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  let firstWrite = true;
+  const realCreate = catalog.createSource;
+  catalog.createSource = async (input) => {
+    if (firstWrite) {
+      firstWrite = false;
+      return { ok: false, status: 503, error: 'the database was unreachable' };
+    }
+    return realCreate(input);
+  };
+
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+  queueIngestJob(queue);
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.failed.length, 1, 'the row could not be written, so the job retries');
+
+  const oldPaths = cachePathsFor({
+    cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov',
+  });
+  assert.equal(fs.statSync(oldPaths.finalPath).size, bytes.length, 'the finished file is on disk');
+
+  // Now the clip is renamed in Drive, and the job comes round again (`fail`
+  // holds a retry off with a backoff, so wind the clock rather than sleep).
+  at.now += 10 * 60 * 1000;
+  const renamed = fakeDrive(bytes, { name: 'Wedding — take 2.mov' });
+  const second = await runIngest({
+    queue, owner: OWNER, ...opts, drive: renamed, catalog,
+  });
+  assert.equal(second.ingested.length, 1, formatIngestReport(second));
+  assert.deepEqual(renamed.calls, [], 'NOT ONE BYTE was fetched again');
+
+  const newPaths = cachePathsFor({
+    cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'Wedding — take 2.mov',
+  });
+  assert.equal(second.ingested[0].localPath, newPaths.finalPath, 'the catalog points at the current name');
+  assert.deepEqual(
+    (await findCachedFiles(newPaths.dir)).map((f) => f.path), [newPaths.finalPath],
+    'and exactly one copy is on disk — the old name is not left behind as a stray'
+  );
+});
+
+test('a leftover copy of an OLDER version of the file is cleared up, not counted', async (t) => {
+  // Same folder, wrong length: it can only be a previous version of this Drive
+  // file, because the folder is named for the id. The old code removed it only
+  // when it happened to carry the current name.
+  const bytes = crypto.randomBytes(9_000);
+  const queue = tmpQueue(t);
+  const opts = passOptions(t, { drive: fakeDrive(bytes) });
+  const paths = cachePathsFor({
+    cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov',
+  });
+  fs.mkdirSync(paths.dir, { recursive: true });
+  const stale = path.join(paths.dir, 'an older cut.mov');
+  fs.writeFileSync(stale, crypto.randomBytes(4_321));
+
+  queueIngestJob(queue);
+  const report = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(report.ingested.length, 1, formatIngestReport(report));
+  assert.equal(fs.existsSync(stale), false, 'the stale copy went');
+  assert.deepEqual(
+    (await findCachedFiles(paths.dir)).map((f) => f.path), [paths.finalPath],
+    'leaving one file, the right one'
+  );
+});
+
+test('the two documented Drive budgets are actually READ, and junk is refused', async (t) => {
+  // The comment said "Override with STUDIO_DRIVE_TIMEOUT_MS /
+  // STUDIO_DRIVE_STALL_MS" and neither name was read anywhere in the repo, so
+  // both were hard-wired and an operator would have spent an hour setting a
+  // variable that did nothing.
+  assert.deepEqual(
+    resolveDriveTimeouts({}, {}),
+    { ok: true, value: { timeoutMs: 30 * 1000, stallMs: 2 * 60 * 1000 } }
+  );
+  assert.deepEqual(
+    resolveDriveTimeouts({}, { STUDIO_DRIVE_TIMEOUT_MS: '5000', STUDIO_DRIVE_STALL_MS: '600000' }),
+    { ok: true, value: { timeoutMs: 5000, stallMs: 600_000 } }
+  );
+
+  const junk = resolveDriveTimeouts({}, { STUDIO_DRIVE_STALL_MS: '5 minutes' });
+  assert.equal(junk.ok, false, 'a junk value is not quietly swapped for the default');
+  assert.match(junk.error, /STUDIO_DRIVE_STALL_MS is set to "5 minutes"/);
+  assert.match(junk.error, /Fix: set it to a plain millisecond count/);
+});
+
+test('a junk Drive budget stops the pass with an alarm, and downloads nothing', async (t) => {
+  const queue = tmpQueue(t);
+  const drive = fakeDrive(crypto.randomBytes(4_000));
+  const opts = passOptions(t, { drive, env: { STUDIO_DRIVE_TIMEOUT_MS: 'thirty seconds' } });
+  queueIngestJob(queue);
+
+  const report = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(report.ok, false);
+  assert.equal(report.unchecked.length, 1);
+  assert.match(report.unchecked[0], /STUDIO_DRIVE_TIMEOUT_MS is set to "thirty seconds"/);
+  assert.deepEqual(drive.calls, [], 'nothing was downloaded on a setting nobody can read');
+  assert.equal(queue.listJobs({ stage: STAGE_INGEST_HEALTH })[0].state, 'blocked');
+  assert.equal(report.healthStanding, true);
+});
+
+test('the stall budget set in the environment is the one the download uses', { timeout: 10_000 }, async (t) => {
+  // Reading the variable is only half of it; it has to reach the watchdog.
+  // With the wiring missing this does not fail loudly — it waits the hard-wired
+  // two minutes, which is why the test carries its own timeout.
+  const queue = tmpQueue(t);
+  const silent = {
+    getMetadata: fakeDrive(crypto.randomBytes(4_000)).getMetadata,
+    openStream: async () => ({
+      ok: true,
+      status: 200,
+      rangeHonoured: true,
+      stream: new Readable({ read() { /* nothing, ever */ } }),
+    }),
+  };
+  const opts = passOptions(t, { drive: silent, env: { STUDIO_DRIVE_STALL_MS: '60' } });
+  queueIngestJob(queue);
+
+  const started = Date.now();
+  const report = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(report.failed.length, 1, formatIngestReport(report));
+  assert.match(report.failed[0].reason, /no bytes arrived from Google Drive/);
+  assert.ok(
+    Date.now() - started < 30_000,
+    'it gave up on the configured 60ms, not on the hard-wired two minutes'
+  );
+});
+
+test('the metadata budget reaches the real Drive client, which used to drop it', async (t) => {
+  // `realDriveClient` had `getMetadata: (fileId) => getIngestMetadata(fileId)`
+  // — the options argument was swallowed on the way through, so a caller could
+  // pass any budget it liked and the call was always the hard-wired 30s.
+  const realToken = googleDrive.getAccessToken;
+  const realFetch = globalThis.fetch;
+  googleDrive.getAccessToken = async () => ({ ok: true, status: 200, data: { accessToken: 'test' } });
+  globalThis.fetch = (url, opts = {}) => new Promise((resolve, reject) => {
+    const socket = setTimeout(() => {
+      reject(new Error('the fake fetch was never aborted — the budget did not reach it'));
+    }, 5_000);
+    if (!opts.signal) return;
+    opts.signal.addEventListener('abort', () => {
+      clearTimeout(socket);
+      reject(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }));
+    });
+  });
+  t.after(() => {
+    googleDrive.getAccessToken = realToken;
+    globalThis.fetch = realFetch;
+  });
+
+  const res = await realDriveClient().getMetadata('file_1', { timeoutMs: 20 });
+  assert.equal(res.ok, false, 'the 20ms budget was honoured rather than dropped');
+  assert.equal(res.status, 504);
+  assert.match(res.error, /did not answer within 0s/);
+});
+
+test('a span is rendered for a person', () => {
+  assert.equal(humanDuration(0), '0 seconds');
+  assert.equal(humanDuration(1000), '1 second');
+  assert.equal(humanDuration(45_000), '45 seconds');
+  assert.equal(humanDuration(10 * 60 * 1000), '10 minutes');
+  assert.equal(humanDuration(60 * 1000), '1 minute');
+  assert.equal(humanDuration(3 * 60 * 60 * 1000), '3 hours');
 });
 
 test('a hung Drive metadata call is abandoned with a timeout, not left hanging', async (t) => {

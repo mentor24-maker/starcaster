@@ -806,3 +806,43 @@ test('a caller holding a job for a DIFFERENT subject still has it taken out', ()
   assert.equal(queue.getJob(held.id).state, STATES.BLOCKED);
   queue.close();
 });
+
+test('waiting() separates work that is DUE from work that is merely pending', () => {
+  // `listJobs({ state: 'pending' })` cannot tell those apart, and a caller
+  // that treats "claim returned nothing" as "the queue is empty" reports a
+  // held-off job as no job at all — which is how ingest came to print
+  // "finished cleanly" over a full disk and delete its own alarm (86bbjv686,
+  // round 2). It is answered HERE, by the queue's own clock, because "is this
+  // due?" has to be decided by the same clock `claim` decides it with.
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock });
+
+  // Enqueued first, so it is the one `claim` hands out and the one released.
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'held' });
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'ready' });
+  queue.enqueue({ stage: 'probe', subjectKind: 'source', subjectId: 'elsewhere' });
+
+  const held = queue.claim('w1', { stages: ['ingest'] });
+  queue.release(held.id, 'w1', { reason: 'no room on the disk', runAfterMs: 15 * 60 * 1000 });
+
+  const ingest = queue.waiting({ stage: 'ingest' });
+  assert.equal(ingest.pending, 2);
+  assert.equal(ingest.dueNow, 1);
+  assert.equal(ingest.heldOff, 1);
+  assert.equal(ingest.nextDueInMs, 15 * 60 * 1000);
+  assert.equal(ingest.nextDueAt, clock() + 15 * 60 * 1000);
+  assert.equal(queue.waiting().pending, 3, 'and without a stage it answers for the whole queue');
+
+  // The clock agreement is the property that matters: what `waiting` calls
+  // held off is exactly what `claim` refuses.
+  assert.equal(queue.claim('w2', { stages: ['ingest'] }).subjectId, 'ready');
+  assert.equal(queue.claim('w3', { stages: ['ingest'] }), null, 'the held one is not handed out');
+
+  clock.advance(15 * 60 * 1000 + 1);
+  const later = queue.waiting({ stage: 'ingest' });
+  assert.equal(later.heldOff, 0);
+  assert.equal(later.dueNow, 1);
+  assert.equal(later.nextDueInMs, 0);
+  assert.equal(queue.claim('w4', { stages: ['ingest'] }).subjectId, 'held', 'and claim agrees');
+  queue.close();
+});

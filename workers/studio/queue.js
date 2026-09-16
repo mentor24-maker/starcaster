@@ -777,6 +777,48 @@ function openQueue(file, options = {}) {
     return db.prepare(sql).all(...params).map(shape);
   }
 
+  /**
+   * What is still WAITING, and whether the queue would hand it out right now.
+   *
+   * `listJobs({ state: 'pending' })` cannot answer this, and the difference is
+   * the whole point: a pending job with `run_after` in the future is invisible
+   * to `claim` but is absolutely still work outstanding. A pass that claims
+   * nothing inside that window looked exactly like a pass with an empty queue,
+   * so it reported "finished cleanly", said "no ingest jobs were waiting on
+   * the queue" — which was false — and stood its own alarm down while the
+   * condition that raised it was still true. Found by review on 2026-09-16
+   * (round 2 of 86bbjv686); round 1 fixed the pass that hits the condition and
+   * left every pass afterwards contradicting it.
+   *
+   * IT ASKS THE QUEUE'S OWN CLOCK, WHICH IS WHY IT LIVES HERE RATHER THAN IN
+   * THE CALLER. "Is this job due?" has to be decided by the same clock `claim`
+   * decides it with, or a report can say nothing is held off while `claim`
+   * refuses the very job it is talking about — two surfaces disagreeing about
+   * one fact, which is the shape of every bug on this ticket so far.
+   *
+   * `heldOff` counts the jobs `claim` would refuse; `dueNow` counts the ones
+   * it would hand out. A backlog bigger than one pass's `max` is ordinary and
+   * shows up as `dueNow`; work put back by `release` or held off by `fail`'s
+   * backoff shows up as `heldOff`.
+   */
+  function waiting({ stage = null } = {}) {
+    const at = clock();
+    const params = [];
+    let sql = `SELECT * FROM jobs WHERE state = '${STATES.PENDING}'`;
+    if (stage) { sql += ' AND stage = ?'; params.push(text(stage)); }
+    sql += ' ORDER BY run_after, id';
+    const jobs = db.prepare(sql).all(...params).map(shape);
+    const heldOff = jobs.filter((job) => job.runAfter > at);
+    return {
+      pending: jobs.length,
+      dueNow: jobs.length - heldOff.length,
+      heldOff: heldOff.length,
+      nextDueAt: heldOff.length ? heldOff[0].runAfter : 0,
+      nextDueInMs: heldOff.length ? heldOff[0].runAfter - at : 0,
+      jobs,
+    };
+  }
+
   function counts() {
     const rows = db.prepare('SELECT state, COUNT(*) AS n FROM jobs GROUP BY state').all();
     const out = { pending: 0, running: 0, done: 0, blocked: 0 };
@@ -821,7 +863,7 @@ function openQueue(file, options = {}) {
 
   return {
     enqueue, claim, heartbeat, complete, fail, release, block, clearBlock, reap,
-    getJob, listJobs, counts,
+    getJob, listJobs, waiting, counts,
     getCursor, setCursor, cacheGet, cacheSet,
     close, db,
   };

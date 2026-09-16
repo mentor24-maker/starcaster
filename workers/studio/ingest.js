@@ -68,6 +68,17 @@ const STAGE_INGEST_HEALTH = 'ingest.health';
 const SUBJECT_INGEST_HEALTH = 'ingest_health';
 
 /**
+ * What the standing alarm is ABOUT, carried in its own payload.
+ *
+ * The alarm has to survive passes that do not touch the condition at all, so
+ * the row itself has to say what it is waiting on and which jobs are still
+ * stuck behind it. Without that, a later pass has only "did anything happen to
+ * me?" to go on, and the answer on a quiet pass is no — which is how a full
+ * disk's alarm was deleted by a pass five minutes later that did nothing.
+ */
+const HEALTH_NO_ROOM = 'no_room';
+
+/**
  * How much room the Mini must keep free, over and above whatever it is about
  * to download. 50 GB is not a guess at a nice margin — it is the observation
  * that 6/8 makes a proxy and a WAV out of every source, and that a boot disk
@@ -94,7 +105,17 @@ const DEFAULT_HEARTBEAT_MS = 30 * 1000;
  * legitimate 3.57 GB download takes the best part of an hour on a home
  * connection, so "this call has run too long" is meaningless there, while
  * "no bytes have arrived for two minutes" is exactly the condition worth
- * acting on. Override with STUDIO_DRIVE_TIMEOUT_MS / STUDIO_DRIVE_STALL_MS.
+ * acting on.
+ *
+ * Both are overridable with STUDIO_DRIVE_TIMEOUT_MS / STUDIO_DRIVE_STALL_MS,
+ * and that sentence used to be a lie: neither name was read anywhere in the
+ * repo, so a home connection that legitimately pauses for longer than two
+ * minutes could not be given more room and an operator would have spent an
+ * hour setting a variable that did nothing. `resolveDriveTimeouts` reads them
+ * now, refusing a junk value rather than silently swapping the default back in
+ * — the same judgement `resolveDiskFloorBytes` makes, because a budget nobody
+ * can read is a budget that is not holding anything up. Found by review on
+ * 2026-09-16.
  */
 const DEFAULT_DRIVE_TIMEOUT_MS = 30 * 1000;
 const DEFAULT_DRIVE_STALL_MS = 2 * 60 * 1000;
@@ -119,6 +140,16 @@ function humanBytes(value) {
   }
   const rendered = unit === 0 ? String(Math.round(size)) : size.toFixed(2);
   return `${n < 0 ? '-' : ''}${rendered} ${units[unit]}`;
+}
+
+/** A span, for a person: "10 minutes", not "600000". */
+function humanDuration(ms) {
+  const seconds = Math.round(Math.max(0, Number(ms) || 0) / 1000);
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hour${hours === 1 ? '' : 's'}`;
 }
 
 /**
@@ -155,6 +186,43 @@ function resolveDiskFloorBytes(options = {}, env = process.env) {
     };
   }
   return { ok: true, value: parsed };
+}
+
+/**
+ * The two Drive budgets, in milliseconds.
+ *
+ * Same contract as the disk floor: a junk value is REFUSED rather than quietly
+ * swapped for the default, because `STUDIO_DRIVE_STALL_MS=5 minutes` would
+ * otherwise read as five minutes of patience that was never configured. The
+ * caller turns the refusal into a blocked health job.
+ */
+function resolveDriveTimeouts(options = {}, env = process.env) {
+  const read = (label, supplied, fromEnv, fallback, example) => {
+    const raw = supplied === undefined || supplied === null ? text(fromEnv) : supplied;
+    if (raw === '' || raw === undefined || raw === null) return { ok: true, value: fallback };
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return {
+        ok: false,
+        error: `${label} is set to "${raw}", which is not a number of milliseconds. `
+          + `Fix: set it to a plain millisecond count (${example}), or unset it to use the default of `
+          + `${Math.round(fallback / 1000)}s.`,
+      };
+    }
+    return { ok: true, value: parsed };
+  };
+
+  const timeout = read(
+    'STUDIO_DRIVE_TIMEOUT_MS', options.driveTimeoutMs, env.STUDIO_DRIVE_TIMEOUT_MS,
+    DEFAULT_DRIVE_TIMEOUT_MS, '30 seconds is 30000'
+  );
+  if (!timeout.ok) return timeout;
+  const stall = read(
+    'STUDIO_DRIVE_STALL_MS', options.driveStallMs, env.STUDIO_DRIVE_STALL_MS,
+    DEFAULT_DRIVE_STALL_MS, 'two minutes is 120000'
+  );
+  if (!stall.ok) return stall;
+  return { ok: true, value: { timeoutMs: timeout.value, stallMs: stall.value } };
 }
 
 /**
@@ -285,6 +353,44 @@ function cachePathsFor({ cacheDir, lane, driveFileId, name }) {
   const fileName = safeFileName(name, `${text(driveFileId)}.media`);
   const finalPath = path.join(dir, fileName);
   return { dir, finalPath, partPath: path.join(dir, PART_FILE_NAME) };
+}
+
+/**
+ * Every FINISHED file already sitting in one Drive file's cache folder.
+ *
+ * WHY THIS IS A DIRECTORY LISTING AND NOT A `stat` ON `finalPath`. The part
+ * file was moved onto the Drive file id because a name in Drive is a value a
+ * person can change at any moment — and the finished file was left keyed on
+ * the name, which leaves the identical hole one step later. Rename a clip
+ * between a finished download and a successful `createSource` (the `failIt`
+ * retry path is exactly that gap) and the next attempt computes a different
+ * `finalPath`, does not find the 3.57 GB already on disk, fetches the whole
+ * thing again, and strands the first copy inside the folder with no catalog
+ * row pointing at it — a cache leak the disk floor cannot see, because the
+ * floor measures free space and never asks what is using it. Found by review
+ * on 2026-09-16.
+ *
+ * The folder IS the Drive file id, so anything finished inside it is a copy of
+ * this one file under whatever name it had at the time. Listing it is how the
+ * caller finds its own bytes again after a rename, and how it knows which
+ * strays to clear up. Sorted so two runs on the same folder pick the same
+ * file rather than whatever the filesystem happened to say first.
+ */
+async function findCachedFiles(dir) {
+  let entries;
+  try {
+    entries = await fsp.readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return [];
+    throw err;
+  }
+  const found = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name === PART_FILE_NAME) continue;
+    const full = path.join(dir, entry.name);
+    found.push({ path: full, size: await sizeOnDisk(full) });
+  }
+  return found.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 /** Size on disk, or 0 when it is not there. Anything else is a real failure. */
@@ -421,7 +527,7 @@ async function openDriveStream(fileId, { offset = 0, signal = null } = {}) {
 /** The real Drive, behind the same small interface a test hands a fake of. */
 function realDriveClient() {
   return {
-    getMetadata: (fileId) => getIngestMetadata(fileId),
+    getMetadata: (fileId, opts) => getIngestMetadata(fileId, opts),
     openStream: (fileId, opts) => openDriveStream(fileId, opts),
   };
 }
@@ -762,6 +868,9 @@ async function ingestJob({
       + 'Fix: this should not be reachable from the watcher — report it, then delete the job.'
     );
   }
+  const timeouts = resolveDriveTimeouts(options, env);
+  if (!timeouts.ok) return blockIt(timeouts.error);
+
   if (!scope) {
     return blockIt(
       'STUDIO_PROJECT_ID is not set, so there is no project to file this footage under. '
@@ -791,7 +900,7 @@ async function ingestJob({
   }
 
   // ── What does Drive say the file is, right now? ──────────────────────────
-  const meta = await drive.getMetadata(facts.driveFileId);
+  const meta = await drive.getMetadata(facts.driveFileId, { timeoutMs: timeouts.value.timeoutMs });
   if (!meta.ok) {
     if (meta.status === 404) {
       return blockIt(
@@ -847,7 +956,12 @@ async function ingestJob({
     return failIt(`${free.error} — so whether there is room for ${humanBytes(expectedBytes)} could not be decided`);
   }
   const paths = cachePathsFor({ cacheDir, lane: facts.lane, driveFileId: facts.driveFileId, name: driveName });
-  const alreadyOnDisk = (await sizeOnDisk(paths.partPath)) + (await sizeOnDisk(paths.finalPath));
+  // Whatever is finished in this Drive file's folder counts towards what is
+  // already here, WHATEVER IT IS CALLED — see findCachedFiles. Asking only
+  // about `finalPath` made a renamed clip look like a file nobody had started.
+  const cached = await findCachedFiles(paths.dir);
+  const usable = cached.find((file) => file.size === expectedBytes) || null;
+  const alreadyOnDisk = (await sizeOnDisk(paths.partPath)) + (usable ? usable.size : 0);
   const stillNeeded = Math.max(0, expectedBytes - alreadyOnDisk);
   if (free.value - stillNeeded < floor.value) {
     // The job goes BACK on the queue rather than failing: a full disk is not
@@ -877,22 +991,32 @@ async function ingestJob({
   await fsp.mkdir(paths.dir, { recursive: true });
 
   // A complete file from an earlier attempt that died before it registered:
-  // verify that rather than fetching 3.57 GB again.
-  const finalSize = await sizeOnDisk(paths.finalPath);
-  let verifyPath = paths.finalPath;
+  // verify that rather than fetching 3.57 GB again — and adopt it even if the
+  // clip has been RENAMED in Drive since, which is the whole reason this asks
+  // the folder rather than one path.
+  let verifyPath = usable ? usable.path : paths.finalPath;
   let resumedFrom = 0;
   let restarted = false;
-  if (finalSize !== expectedBytes) {
-    if (finalSize > 0) {
-      // Right name, wrong length — a previous version of this Drive file.
-      await removeQuietly(paths.finalPath);
-    }
+
+  // Anything finished in this folder that is NOT the right length is a copy of
+  // a previous version of this Drive file (the folder is keyed by the id, so
+  // it can be nothing else). That is the same judgement the old code made
+  // about a wrong-length `finalPath`, widened to one whose name has moved —
+  // without which the stray is a full-size file no catalog row points at and
+  // no free-space check can account for.
+  for (const stray of cached) {
+    if (usable && stray.path === usable.path) continue;
+    await removeQuietly(stray.path);
+  }
+
+  if (!usable) {
     let lastBeat = clock();
     const downloaded = await downloadToPart({
       drive,
       driveFileId: facts.driveFileId,
       partPath: paths.partPath,
       expectedBytes,
+      stallMs: timeouts.value.stallMs,
       onProgress: async ({ bytes }) => {
         const at = clock();
         if (at - lastBeat < heartbeatMs) return true;
@@ -985,6 +1109,11 @@ async function ingestJob({
 
   if (verifyPath === paths.partPath) {
     await fsp.rename(paths.partPath, paths.finalPath);
+  } else if (verifyPath !== paths.finalPath) {
+    // Adopted under an older Drive name. Move it to the name the clip has now,
+    // so the catalog's `localPath` and the disk agree; the bytes are the same
+    // bytes and have just been hashed against Drive's own checksum.
+    await fsp.rename(verifyPath, paths.finalPath);
   }
 
   let sessionId = '';
@@ -1084,6 +1213,48 @@ async function ingestJob({
 }
 
 /**
+ * The alarm that is currently raised for this cache, or null.
+ *
+ * Read back rather than remembered, because the pass that raised it was a
+ * different process fifteen minutes ago. This is the "fact that outlives one
+ * pass" the round-2 review asked for.
+ */
+function standingAlarm(queue, cacheDir) {
+  if (typeof queue.listJobs !== 'function') return null;
+  return queue
+    .listJobs({ stage: STAGE_INGEST_HEALTH, state: 'blocked' })
+    .find((job) => job.subjectKind === SUBJECT_INGEST_HEALTH && job.subjectId === cacheDir) || null;
+}
+
+/**
+ * Which jobs are STILL stuck for want of disk room, at the end of this pass.
+ *
+ * The ids come from two places and both are needed: the files this pass put
+ * back, and the ones a previous pass put back and recorded on the alarm. Each
+ * is then looked up, because an id on the alarm proves only that it was stuck
+ * once — a job that has since been ingested, failed, blocked or deleted is not
+ * stuck any more, and an alarm that cannot stand down is an alarm that gets
+ * ignored.
+ */
+function stillWaitingForRoom({ queue, released, alarm }) {
+  const carried = alarm && alarm.payload && alarm.payload.kind === HEALTH_NO_ROOM
+    ? (Array.isArray(alarm.payload.heldJobIds) ? alarm.payload.heldJobIds : [])
+    : [];
+  const ids = new Set();
+  for (const id of [...carried, ...released.map((entry) => entry.jobId)]) {
+    const n = Number(id);
+    if (Number.isFinite(n)) ids.add(n);
+  }
+  if (typeof queue.getJob !== 'function') return [...ids].sort((a, b) => a - b);
+  return [...ids]
+    .filter((id) => {
+      const job = queue.getJob(id);
+      return Boolean(job) && (job.state === 'pending' || job.state === 'running');
+    })
+    .sort((a, b) => a - b);
+}
+
+/**
  * Claim ingest jobs and do them, up to `max`.
  *
  * Returns a REPORT, always, and never throws for an ordinary failure — the
@@ -1124,6 +1295,15 @@ async function runIngest(options = {}) {
     unchecked: [],
     health: null,
     healthCleared: false,
+    // Raised at the END of the pass and true whenever the alarm is up — the
+    // field a reader should believe, because `health` is only set by the pass
+    // that wrote it and says nothing about one that did nothing.
+    healthStanding: false,
+    // What the QUEUE says is outstanding, which is not the same question as
+    // what this pass touched. `null` only when the queue is too old to answer.
+    waiting: null,
+    // The jobs still stuck for want of disk room, by id.
+    awaitingRoom: [],
   };
 
   const stopThePass = (reason) => {
@@ -1133,6 +1313,7 @@ async function runIngest(options = {}) {
       subjectId: cacheDir,
       reason,
     }).job;
+    report.healthStanding = true;
     report.unchecked.push(reason);
     return report;
   };
@@ -1149,6 +1330,11 @@ async function runIngest(options = {}) {
   const floor = resolveDiskFloorBytes(options, env);
   if (!floor.ok) return stopThePass(floor.error);
   report.floorBytes = floor.value;
+
+  // Read before any file is claimed, so a junk value stops the pass with one
+  // alarm rather than blocking each file it reaches in turn.
+  const timeouts = resolveDriveTimeouts(options, env);
+  if (!timeouts.ok) return stopThePass(timeouts.error);
 
   const free = freeBytesFor(cacheDir, statfs);
   if (!free.ok) {
@@ -1204,49 +1390,81 @@ async function runIngest(options = {}) {
   }
 
   // ── The verdict, and the alarm ───────────────────────────────────────────
-  // `released` COUNTS. It did not, and that is the bug the header line was
-  // telling a lie about: on ordinary numbers — 52 GB free, a 50 GB floor, one
-  // 3.57 GB file — the pass-level floor check passes (52 > 50), the per-file
-  // check correctly refuses (52 − 3.57 < 50), the file goes back on the queue,
-  // nothing is ingested, and the report said "Studio ingest: finished
-  // cleanly." every fifteen minutes for ever. Putting a file back is the right
-  // call and it is not a clean pass: the disk does not get bigger on its own,
-  // `release` spends no attempt, so nothing ever escalates and 7/8's daemon
-  // reads `report.ok` to decide whether anything is wrong. "Alive but useless
-  // never renders as healthy" (CLAUDE.md; DOCTRINE). Found by review on
+  // BOTH ARE COMPUTED FROM WHAT IS TRUE OF THE QUEUE AND THE DISK, NEVER FROM
+  // WHAT THIS PASS HAPPENED TO TOUCH. That distinction is the whole of round 2
+  // of this ticket, and round 1 got half of it: counting `released` fixed the
+  // pass that HITS the condition, and every pass afterwards still contradicted
+  // it. `release` holds a job off for fifteen minutes and `claim` honours
+  // `run_after`, so the pass five minutes later claims nothing at all — every
+  // bucket empty, `ok` flipping to true, "no ingest jobs were waiting on the
+  // queue" printed while one was, and `clearBlock` DELETING the only durable
+  // record of a disk that is exactly as full as it was. Found by review on
   // 2026-09-16.
-  report.ok = report.failed.length === 0
-    && report.blocked.length === 0
-    && report.unchecked.length === 0
-    && report.released.length === 0;
+  //
+  // So the pass asks two things it cannot learn from its own buckets: what the
+  // queue is still holding (`queue.waiting`, decided by the queue's own clock
+  // — the same clock `claim` uses, or the two would disagree about one fact),
+  // and which files the standing alarm says are still stuck. An alarm stands
+  // down only on a pass that can show the condition is over; never on a pass
+  // that simply did nothing.
+  const waiting = typeof queue.waiting === 'function' ? queue.waiting({ stage: STAGE_INGEST }) : null;
+  if (waiting) {
+    report.waiting = {
+      pending: waiting.pending,
+      dueNow: waiting.dueNow,
+      heldOff: waiting.heldOff,
+      nextDueInMs: waiting.nextDueInMs,
+    };
+  }
 
-  // AND THE ALARM IS DECIDED HERE, NOT AT THE TOP OF THE PASS. It used to be
-  // cleared before any file was looked at, which is why the two disk checks
-  // disagreed about the same facts: the pass-level one raised the alarm, and
-  // the per-file one — the identical condition, one branch later — stood it
-  // back down on its way past. Deciding at the END means the alarm survives
-  // exactly as long as the condition does, and because `block` is idempotent
-  // per subject it is ONE row refreshed each pass rather than a new row every
-  // fifteen minutes.
-  if (report.released.length) {
+  const alarm = standingAlarm(queue, cacheDir);
+  const stuck = stillWaitingForRoom({ queue, released: report.released, alarm });
+  report.awaitingRoom = stuck;
+
+  if (stuck.length) {
+    const nextDue = waiting && waiting.nextDueInMs > 0
+      ? ` The next attempt is due in ${humanDuration(waiting.nextDueInMs)}.`
+      : '';
+    const first = report.released[0] || null;
     report.health = queue.block({
       stage: STAGE_INGEST_HEALTH,
       subjectKind: SUBJECT_INGEST_HEALTH,
       subjectId: cacheDir,
-      reason: `${report.released.length} file(s) could not be downloaded for want of disk room, so ingest is `
-        + 'making no progress and will keep refusing on every pass until space is freed. '
-        + `The first of them: ${report.released[0].reason}`,
+      reason: `${stuck.length} file(s) could not be downloaded for want of disk room, so ingest is `
+        + 'making no progress and will keep refusing on every pass until space is freed.'
+        + nextDue
+        + (first
+          ? ` The first of them: ${first.reason}`
+          : ` ${humanBytes(report.freeBytes)} is free on ${report.measuredAt}, `
+            + `and the floor is ${humanBytes(report.floorBytes)}.`),
+      // The ids ARE the durable record. Without them a later pass has only its
+      // own empty buckets to reason from, which is how this alarm got deleted.
+      payload: { kind: HEALTH_NO_ROOM, heldJobIds: stuck },
     }).job;
+    report.healthStanding = true;
   } else if (typeof queue.clearBlock === 'function') {
-    // The floor is standing, a project is configured, and nothing had to be
-    // put back, so any earlier alarm about any of that is over. An alarm that
-    // cannot stand down is an alarm that gets ignored.
+    // The floor is standing, a project is configured, and nothing is left
+    // stuck for want of room, so any earlier alarm about any of that is over.
+    // An alarm that cannot stand down is an alarm that gets ignored.
     report.healthCleared = queue.clearBlock({
       stage: STAGE_INGEST_HEALTH,
       subjectKind: SUBJECT_INGEST_HEALTH,
       subjectId: cacheDir,
     });
+  } else if (alarm) {
+    report.healthStanding = true;
   }
+
+  // A pass is clean when nothing went wrong in it AND nothing is left waiting
+  // that it could not do. `heldOff` is the half a pass cannot see from its own
+  // buckets: a job put back for want of room, or backing off after a failure,
+  // is work outstanding whether or not this particular pass ever saw it.
+  report.ok = report.failed.length === 0
+    && report.blocked.length === 0
+    && report.unchecked.length === 0
+    && report.released.length === 0
+    && !report.healthStanding
+    && (!waiting || waiting.heldOff === 0);
 
   return report;
 }
@@ -1261,6 +1479,23 @@ function formatIngestReport(report) {
       `Disk: ${humanBytes(report.freeBytes)} free, floor ${humanBytes(report.floorBytes)}`
       + `${report.cacheDirExists === false ? ` (measured on ${report.measuredAt} — the cache folder does not exist yet)` : ''}.`
     );
+  }
+  // THE STANDING ALARM GETS ITS OWN LINE, HIGH UP, ON EVERY PASS IT IS UP FOR.
+  // Whoever reads this at 9am is reading ONE pass's log, and the condition the
+  // alarm is about outlives passes — a quiet pass that prints nothing about it
+  // reads as a pipeline with nothing wrong, which is exactly what a full disk
+  // looked like five minutes after it was found.
+  //
+  // It is suppressed only where this same pass is already saying the same
+  // thing at the same volume a line or two below: as a `COULD NOT CHECK`
+  // (`stopThePass` files the alarm with the identical sentence) or as the
+  // `NO ROOM` lines for the files it has just put back. The line exists for
+  // the pass that has nothing of its own to report.
+  const alarmReason = report.healthStanding && report.health ? String(report.health.lastError || '') : '';
+  const alreadySaid = report.released.length > 0 || report.unchecked
+    .some((entry) => (typeof entry === 'string' ? entry : entry && entry.reason) === alarmReason);
+  if (alarmReason && !alreadySaid) {
+    lines.push(`  ALARM STANDING — ${alarmReason}`);
   }
   for (const entry of report.ingested) {
     lines.push(`  downloaded  ${entry.name || entry.fileId} — ${entry.reason}, registered as source ${entry.sourceId}`);
@@ -1288,8 +1523,24 @@ function formatIngestReport(report) {
   if (!report.ingested.length && !report.deduped.length && !report.skipped.length
       && !report.failed.length && !report.blocked.length && !report.released.length
       && !report.unchecked.length) {
-    // Landmine 17: an empty report that does not say WHY reads as a broken one.
-    lines.push('  Nothing to do — no ingest jobs were waiting on the queue.');
+    // Landmine 17: an empty report that does not say WHY reads as a broken
+    // one — and one that says the WRONG why is worse. "no ingest jobs were
+    // waiting on the queue" was printed on a pass where a file was waiting and
+    // simply not due yet, which is the opposite of nothing to do.
+    const waiting = report.waiting;
+    if (waiting && waiting.heldOff) {
+      lines.push(
+        `  Nothing was claimed — ${waiting.heldOff} ingest job(s) are waiting and not due yet`
+        + `${waiting.nextDueInMs > 0 ? `, the next in ${humanDuration(waiting.nextDueInMs)}` : ''}.`
+      );
+    } else if (waiting && waiting.dueNow) {
+      lines.push(
+        `  Nothing was claimed — ${waiting.dueNow} ingest job(s) are waiting on the queue `
+        + 'and were not picked up, which should not happen.'
+      );
+    } else {
+      lines.push('  Nothing to do — no ingest jobs were waiting on the queue.');
+    }
   }
   return lines.join('\n');
 }
@@ -1305,11 +1556,14 @@ module.exports = {
   hashFile,
   freeBytesFor,
   cachePathsFor,
+  findCachedFiles,
   PART_FILE_NAME,
   safeFileName,
   humanBytes,
+  humanDuration,
   resolveCacheDir,
   resolveDiskFloorBytes,
+  resolveDriveTimeouts,
   resolveProjectId,
   readJobPayload,
   holdingSessionTitle,
@@ -1322,6 +1576,7 @@ module.exports = {
   SUBJECT_DRIVE_FILE,
   STAGE_INGEST_HEALTH,
   SUBJECT_INGEST_HEALTH,
+  HEALTH_NO_ROOM,
   DEFAULT_DISK_FLOOR_BYTES,
   DEFAULT_HEARTBEAT_MS,
   DEFAULT_DRIVE_TIMEOUT_MS,
