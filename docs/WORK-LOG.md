@@ -1,3 +1,42 @@
+## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
+
+A heading that looks right on a laptop is often far too big on a phone, and
+until now the only way out was to accept it. Expand a module in the Builder and
+its header carries three small icons — phone, tablet, desktop — the same ones
+rows got a few days ago. Click the phone and the settings panel swaps to that
+screen: spacing, alignment, width, font size, and a box to leave the module out
+altogether. Change one and only that one is remembered for phones; everything
+else keeps following the desktop version, so tidying the page later still
+reaches every screen that never asked to be different.
+
+Nothing on an existing page moves. The three older settings — Hide Module on
+Mobile, Mobile Alignment, Mobile Font Size — still work exactly as they did, and
+the new panel shows their values so what you see is what the page is doing.
+
+One thing turned up while building it that is worth knowing: *Mobile Font Size*
+has never actually reached a real phone. Another rule in the same stylesheet
+sizes every heading and beats it, so the setting only ever worked inside the
+Builder's own phone preview. That is a real fault, it is not changed here, and
+it belongs with the next slice of this work, which is about those old phone
+rules.
+
+**Corrected after review.** The first version worked on pages that had never
+had a mobile setting, and quietly failed on the ones that had — which are the
+real client pages. On those, *Hide on Phone* could not be unticked: the box
+sprang straight back, because the old *Hide Module on Mobile* was still sitting
+underneath answering the same question. The same fault made every Phone setting
+refuse to be put back to the desktop value. It is one idea, fixed once: using a
+Phone control now retires the old field it replaced, so only one setting ever
+answers for one screen.
+
+Two more came out of the same review. Phone and Tablet *Alignment* could move a
+module out of centred but never back into it, because the desktop stylesheet
+declares centring on a different element than the new rules were written on.
+And setting a *tablet* margin on a page that carried the old Mobile Font Size
+would have pulled that old size onto phones at a width it has never applied at
+— a live client heading would have shrunk because somebody adjusted a tablet
+margin. Both are fixed, and both are now held by a check that photographs a
+real browser at phone width.
 ## 2026-09-15 — Top and Bottom Padding now work on a row with no background (#719)
 
 On a themed page, a row that has no background colour of its own takes one of
