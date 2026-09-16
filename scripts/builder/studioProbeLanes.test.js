@@ -157,6 +157,28 @@ test('an Apple model nobody has taught it lands in unknown with the model kept',
   assert.equal(placed.deviceModel, 'Apple Vision Pro', 'so a person can decide what it should have been');
 });
 
+test('a camera that writes a model and no make is never filed as an unrecognised APPLE one', () => {
+  // The GoPro/DJI shape: a bare `model` tag, no `make` at all. Nothing in that
+  // file said Apple, so a reason that says "apple_model_unrecognised" is the
+  // wrong guess this ticket's own criteria forbid — and it is the string the
+  // Footage screen (8/8) prints.
+  const probe = { streams: [videoStream(), audioStream()], format: { tags: { model: 'HERO12 Black' } } };
+  const placed = inferDeviceLane({ probe });
+  assert.equal(placed.lane, LANES.UNKNOWN);
+  assert.equal(placed.reason, UNKNOWN_REASONS.MODEL_WITHOUT_MAKE);
+  assert.notEqual(placed.reason, UNKNOWN_REASONS.APPLE_MODEL_UNRECOGNISED, 'no maker was named — do not name one');
+  assert.equal(placed.deviceMake, null, 'what was NOT read stays empty');
+  assert.equal(placed.deviceModel, 'HERO12 Black', 'what WAS read is kept verbatim');
+});
+
+test('an unrecognised model keeps saying Apple when the file actually said Apple', () => {
+  // The other half of the same rule: the fix must not blank out a maker the
+  // file really did write.
+  const placed = inferDeviceLane({ probe: appleProbe({ model: 'Apple Vision Pro' }) });
+  assert.equal(placed.reason, UNKNOWN_REASONS.APPLE_MODEL_UNRECOGNISED);
+  assert.equal(placed.deviceMake, 'Apple');
+});
+
 test('another maker is a reading, not a shrug', () => {
   const probe = appleProbe({ make: 'Canon', model: 'EOS R5' });
   const placed = inferDeviceLane({ probe });
@@ -354,6 +376,31 @@ test('a hung file times out and says so', () => {
   err.code = 'ETIMEDOUT';
   const out = probeFile('/Volumes/gone/a.mov', { run: fakeRun({ error: err }), timeoutMs: 1000 });
   assert.equal(out.ok, false);
+  assert.equal(out.reason, PROBE_FAILURES.TIMEOUT);
+});
+
+test('an answer too big for the buffer is reported as that, not as a timeout that never happened', () => {
+  // Node kills the child with SIGTERM on a maxBuffer overflow — the same
+  // signal a timeout uses — so a signal-first check calls an instant answer
+  // "did not answer within 30000ms" and sends the reader hunting a hung mount.
+  const err = new Error('spawnSync maxBuffer length exceeded');
+  err.code = 'ENOBUFS';
+  const out = probeFile('/Studio/Inbox/huge.mov', {
+    run: fakeRun({ error: err, signal: 'SIGTERM', stdout: '{"streams":[' }),
+    timeoutMs: 30000,
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.reason, PROBE_FAILURES.OVERFLOW);
+  assert.notEqual(out.reason, PROBE_FAILURES.TIMEOUT, 'it answered instantly and was cut off');
+  assert.doesNotMatch(out.message, /did not answer within/, 'nothing timed out');
+  assert.match(out.message, /cut off/i, 'and it says what actually happened');
+  assert.equal(out.lane, undefined, 'still no lane — a truncated reading is not a reading');
+});
+
+test('a real timeout is still a timeout once ENOBUFS is checked first', () => {
+  const err = new Error('spawnSync ETIMEDOUT');
+  err.code = 'ETIMEDOUT';
+  const out = probeFile('/Volumes/gone/b.mov', { run: fakeRun({ error: err, signal: 'SIGTERM' }), timeoutMs: 1000 });
   assert.equal(out.reason, PROBE_FAILURES.TIMEOUT);
 });
 

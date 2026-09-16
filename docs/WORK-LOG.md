@@ -18,11 +18,16 @@ it in that folder is you saying so.
 
 When it genuinely cannot tell, it says which kind of cannot-tell it is — an
 Apple file with no model written in it, a model it has never been taught, a
-camera from another maker — and keeps everything it read, so the question can
-be settled later without going back to the file. And if the inspection tool is
-missing or the file is damaged, that is reported as "no reading taken" rather
-than as "unknown", because those two piling up in the same bucket is how a
-machine with a missing tool ends up looking like a library of mystery footage.
+camera from another maker, or a file that names a model and never says who
+made it, which is what a GoPro or a drone writes — and keeps everything it
+read, so the question can be settled later without going back to the file. It
+never fills in a maker the file did not name. And if the inspection tool is
+missing, the file is damaged, the file takes too long to answer, or it answers
+with more than the reader can hold, that is reported as "no reading taken",
+each with its own reason, rather than as "unknown" — because those piling up
+in the same bucket is how a machine with a missing tool ends up looking like a
+library of mystery footage, and because sending somebody to hunt a stuck disk
+over a file that answered instantly wastes an afternoon.
 
 Every claim here is checked against real video files, built fresh each time the
 tests run and thrown away afterwards — no video is stored in the code, where it

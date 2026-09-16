@@ -106,6 +106,13 @@ const UNKNOWN_REASONS = Object.freeze({
   APPLE_WITHOUT_MODEL: 'apple_device_without_model',
   APPLE_MODEL_UNRECOGNISED: 'apple_model_unrecognised',
   DEVICE_NOT_APPLE: 'device_tags_name_another_maker',
+  // A camera that writes a bare `model` and no `make` — the GoPro/DJI shape.
+  // It is NOT `apple_model_unrecognised`: nothing in that file said Apple, and
+  // naming a maker the file never named is exactly the wrong guess this
+  // module's own acceptance criteria forbid. The Footage screen (8/8) prints
+  // this string, so an unknown that explains itself wrongly is worse than one
+  // that says less (DOCTRINE 5.31).
+  MODEL_WITHOUT_MAKE: 'model_tag_names_no_maker',
   NO_DEVICE_TAGS: 'no_device_tags_and_not_zoom_shaped',
 });
 
@@ -113,6 +120,10 @@ const UNKNOWN_REASONS = Object.freeze({
 const PROBE_FAILURES = Object.freeze({
   MISSING: 'ffprobe_missing',
   TIMEOUT: 'ffprobe_timeout',
+  // An answer too big for the buffer. Node kills the child with SIGTERM on a
+  // maxBuffer overflow — the same signal a timeout uses — so this reason only
+  // exists if `ENOBUFS` is read BEFORE the signal. See `runFfprobe`.
+  OVERFLOW: 'ffprobe_output_too_large',
   FAILED: 'ffprobe_failed',
   UNPARSEABLE: 'ffprobe_unparseable',
 });
@@ -340,7 +351,7 @@ function inferDeviceLane({ probe, sourcePath = '', platesRoot = PLATES_ROOT } = 
     if (majorBrand) signals.push(`major_brand=${majorBrand}`);
 
     const isApple = /^apple$/i.test(make.trim());
-    if (!isApple && make) {
+    if (make && !isApple) {
       // Some other camera named itself. That is a real reading and a useful
       // one, but it is not a lane this pipeline has — so it is `unknown` WITH
       // the maker kept, not a shrug.
@@ -354,6 +365,9 @@ function inferDeviceLane({ probe, sourcePath = '', platesRoot = PLATES_ROOT } = 
       });
     }
 
+    // Only a make can be missing here — a file with neither tag never entered
+    // this block — and a make that is present and not Apple already returned
+    // above. So `!model` means an Apple file that did not name its device.
     if (!model) {
       return verdict(LANES.UNKNOWN, {
         basis: 'device-tag',
@@ -368,13 +382,18 @@ function inferDeviceLane({ probe, sourcePath = '', platesRoot = PLATES_ROOT } = 
     const lane = /\biphone\b/i.test(model) ? LANES.IPHONE
       : (/\bipad\b/i.test(model) ? LANES.IPAD : null);
     if (!lane) {
+      // The model is kept whatever the maker, so a person can decide what it
+      // should have been — but the REASON must not claim a maker. With no make
+      // tag at all, all this file said is "some device called itself this".
       return verdict(LANES.UNKNOWN, {
         basis: 'device-tag',
         confidence: 'measured',
         deviceMake: make || null,
         deviceModel: model,
         signals,
-        reason: UNKNOWN_REASONS.APPLE_MODEL_UNRECOGNISED,
+        reason: isApple
+          ? UNKNOWN_REASONS.APPLE_MODEL_UNRECOGNISED
+          : UNKNOWN_REASONS.MODEL_WITHOUT_MAKE,
       });
     }
     return verdict(lane, {
@@ -441,6 +460,20 @@ function runFfprobe(filePath, { run = spawnSync, bin = process.env.STUDIO_FFPROB
         ok: false,
         reason: PROBE_FAILURES.MISSING,
         message: `${bin} is not installed on this machine — install ffmpeg (which carries ffprobe) or set STUDIO_FFPROBE to its path`,
+      };
+    }
+    // ENOBUFS IS CHECKED BEFORE THE SIGNAL, AND THE ORDER IS THE WHOLE POINT.
+    // Node kills the child with SIGTERM when its output overruns `maxBuffer`,
+    // exactly as it does on a timeout — so testing the signal first answers
+    // "ffprobe did not answer within 30000ms" about a probe that answered
+    // instantly and was cut off, and sends whoever reads it hunting a hung
+    // mount. In a module whose whole job is telling causes apart, that is the
+    // defect, not a wording nit.
+    if (code === 'ENOBUFS') {
+      return {
+        ok: false,
+        reason: PROBE_FAILURES.OVERFLOW,
+        message: `${bin} answered more than ${FFPROBE_MAX_BUFFER} bytes for ${filePath} and was cut off — the answer is incomplete, not late`,
       };
     }
     if (res.signal === 'SIGTERM' || code === 'ETIMEDOUT') {
