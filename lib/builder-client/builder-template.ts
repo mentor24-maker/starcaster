@@ -699,6 +699,14 @@ export type BuilderTemplateSection = {
   cellOpacity: Record<string, string>;
   cellHAlign: Record<string, string>;
   cellVAlign: Record<string, string>;
+  /**
+   * What each COLUMN of this row does differently on a tablet (1024px and
+   * below) and a phone (767px and below). Holds ONLY the settings that
+   * differ — everything else follows desktop, and phone follows tablet.
+   * Absent on nearly every row.
+   * Keys and cleaning: `BUILDER_CELL_DEVICE_KEY_NORMALIZERS`.
+   */
+  cellDeviceOverrides?: BuilderCellDeviceOverrides;
   modules: BuilderTemplateModule[];
 };
 
@@ -1248,6 +1256,43 @@ export const BUILDER_SECTION_DEVICE_KEY_NORMALIZERS: Record<string, (value: unkn
   hidden: (value) => normalizeBooleanText(value)
 };
 
+/**
+ * THE CELL SETTINGS A TABLET OR PHONE MAY CHANGE, and how each is cleaned.
+ *
+ * The cell twin of `BUILDER_SECTION_DEVICE_KEY_NORMALIZERS` above, and it
+ * follows the same promise: a device map holds only what DIFFERS from the
+ * screen above it, so an empty map is the normal state of every cell. Each
+ * value passes through the same arithmetic its desktop field does — the
+ * padding sides cap at 50 where the row's cap at 160, because that is what
+ * `normalizeCellPaddingSide` does — so a phone cannot store what desktop
+ * could not.
+ *
+ * Background and overlay are deliberately absent: a cell's fill and its tint
+ * stay one value for every screen (Dane's slice, 2026-09-15). `hidden` is the
+ * one key with no desktop field — "leave this column out on this device".
+ *
+ * A cell is not an object in this codebase — every cell setting is a map on
+ * the row, keyed by column — so these keys are the names of those maps, and
+ * a device's entry is keyed by column before it is keyed by setting.
+ */
+export const BUILDER_CELL_DEVICE_KEY_NORMALIZERS: Record<string, (value: unknown) => string> = {
+  cellPaddingTop: (value) => normalizeSpacingValue(value, "0", 0, 50),
+  cellPaddingBottom: (value) => normalizeSpacingValue(value, "0", 0, 50),
+  cellPaddingLeft: (value) => normalizeSpacingValue(value, "0", 0, 50),
+  cellPaddingRight: (value) => normalizeSpacingValue(value, "0", 0, 50),
+  cellMarginTop: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  cellMarginBottom: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  cellMarginLeft: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  cellMarginRight: (value) => normalizeSpacingValue(value, "0", 0, 160),
+  cellBorderWidth: (value) => normalizeSpacingValue(value, "0", 0, 20),
+  cellBorderColor: (value) => safeText(value, 40) || "transparent",
+  cellBorderRadius: (value) => normalizeSpacingValue(value, "0", 0, 60),
+  cellBorderStyle: (value) => safeText(value, 40) || "solid",
+  cellHAlign: (value) => safeText(value, 40) || "left",
+  cellVAlign: (value) => safeText(value, 40) || "top",
+  hidden: (value) => normalizeBooleanText(value)
+};
+
 export const BUILDER_STYLE_DEVICES = ["tablet", "phone"] as const;
 export type BuilderStyleDevice = (typeof BUILDER_STYLE_DEVICES)[number];
 export type BuilderSectionDeviceOverrides = Partial<Record<BuilderStyleDevice, Record<string, string>>>;
@@ -1277,6 +1322,69 @@ export function normalizeSectionDeviceOverrides(value: unknown): BuilderSectionD
 
     if (Object.keys(cleaned).length > 0) {
       result[device] = cleaned;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+/**
+ * What each COLUMN of a row does differently on a tablet and a phone, keyed
+ * by device and then by column: `{ phone: { left: { cellPaddingTop: "40" } } }`.
+ *
+ * Two levels rather than the row's one, because a cell is not an object here
+ * — it is a column key into a map on the row — so the device has to say which
+ * column it is talking about before it can say which setting.
+ */
+export type BuilderCellDeviceOverrides = Partial<
+  Record<BuilderStyleDevice, Record<string, Record<string, string>>>
+>;
+
+/**
+ * Keeps only known columns and known keys with a real value, and drops a
+ * column — then a device — with nothing left. Returns undefined when no
+ * device has anything, so a row no one has touched on a phone serializes
+ * exactly as it did before this field existed.
+ *
+ * `layout` is what says which column keys are real. A layout change that
+ * drops a column drops its device settings with it, which is the same thing
+ * every other cell map on the row already does.
+ */
+export function normalizeCellDeviceOverrides(
+  value: unknown,
+  layout: BuilderTemplateLayout
+): BuilderCellDeviceOverrides | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const columns = new Set(getLayoutColumns(layout));
+  const result: BuilderCellDeviceOverrides = {};
+
+  for (const device of BUILDER_STYLE_DEVICES) {
+    const rawDevice = (value as Record<string, unknown>)[device];
+    if (!rawDevice || typeof rawDevice !== "object" || Array.isArray(rawDevice)) continue;
+
+    const cleanedDevice: Record<string, Record<string, string>> = {};
+
+    for (const [column, rawCell] of Object.entries(rawDevice as Record<string, unknown>)) {
+      if (!columns.has(column)) continue;
+      if (!rawCell || typeof rawCell !== "object" || Array.isArray(rawCell)) continue;
+
+      const cleaned: Record<string, string> = {};
+      for (const [key, normalize] of Object.entries(BUILDER_CELL_DEVICE_KEY_NORMALIZERS)) {
+        const entry = (rawCell as Record<string, unknown>)[key];
+        if (entry === undefined || entry === null || entry === "") continue;
+        cleaned[key] = normalize(entry);
+      }
+
+      if (Object.keys(cleaned).length > 0) {
+        cleanedDevice[column] = cleaned;
+      }
+    }
+
+    if (Object.keys(cleanedDevice).length > 0) {
+      result[device] = cleanedDevice;
     }
   }
 
@@ -3306,6 +3414,7 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       // same normalized value the legacy key ends up with.
       const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
       const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
+      const cellDeviceOverrides = normalizeCellDeviceOverrides(normalizedSection.cellDeviceOverrides, layout);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
@@ -3356,6 +3465,9 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
         // Spread, not `deviceOverrides: undefined`: a row with none must not
         // gain a key, or every untouched row's saved JSON would change.
         ...(deviceOverrides ? { deviceOverrides } : {}),
+        // Same spread, same reason: a row with no per-cell device settings
+        // must serialize without the key at all, not with an undefined one.
+        ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
         background: normalizeBackgroundSettings(normalizedSection.background),
         overlayScreen: normalizeRowOverlayScreenSettings(normalizedSection.overlayScreen),
         cellBackgrounds: normalizeCellBackgrounds(normalizedSection.cellBackgrounds, layout),
