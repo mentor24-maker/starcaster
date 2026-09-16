@@ -313,10 +313,15 @@ function spendsClickUpBudget(url, { injectedTransport = false, env = process.env
  *
  * ONE definition, exported, because `lib/clickupForward.js` asks the same
  * question at its own door and two copies of a predicate drift apart.
+ *
+ * It is DEFINED one floor down, in `clickupLedger.cjs`, and re-exported here
+ * (2026-09-15, task 86bc125u6). The ledger asks the same question for itself —
+ * `shouldYield` has a caller that skips this door entirely, and `record` keeps
+ * a test process off the machine's live file — and the ledger cannot require
+ * this module back without a cycle. So the bottom of the stack owns it and
+ * every floor above reads the one answer.
  */
-function underTestRunner(env = process.env) {
-  return Boolean(env.NODE_TEST_CONTEXT || env.VITEST);
-}
+const { underTestRunner } = ledger;
 
 /** Say WHICH of the three conditions spared the budget, so a yield verdict
  *  that never fired still explains itself to whoever is reading the log. */

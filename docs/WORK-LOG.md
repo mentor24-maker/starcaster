@@ -1,3 +1,29 @@
+## 2026-09-15 — One last lock on the tally the test suite was filling up (#715)
+
+This is the tail end of the job **#713** finished — "Running the tests no longer
+eats the real ClickUp budget". Read that one first; this adds one thing to it.
+
+Both pieces of work were started the same day, by two sessions, against the same
+problem, and #713 got to the finish line first with the better answer. So most of
+what this branch carried has been thrown away in favour of what already shipped —
+deliberately, because two slightly different versions of the same rule sitting in
+one codebase is how the rule quietly stops meaning anything.
+
+What survives is the lock at the very bottom. #713 stops a pretend request being
+written into the shared tally on the way in. This says that a test run may never
+write to the machine's real tally file **at all**, no matter which door it comes
+to or what it claims about itself — a test is allowed a scratch tally of its own,
+and nothing else. The first is the rule; this is the bolt behind it, for a write
+that finds a way around the front.
+
+Also folded in: "is this a test run?" was about to exist as two separate
+definitions in two files, one from each branch. There is one, in the file
+furthest down, and everything above reads that.
+
+Checked by deliberately removing the bolt and watching the test that names it
+fail, then putting it back. The whole suite passes as a background job — the
+thing that was broken in the first place — 4,116 of 4,116.
+
 ## 2026-09-15 — A column can now look different on a phone and on a tablet (#717)
 
 Last time, a whole ROW could be styled differently on small screens. This does
