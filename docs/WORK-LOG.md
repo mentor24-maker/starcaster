@@ -109,6 +109,59 @@ test fail.
 
 Nothing downloads yet — that is the next piece.
 
+## 2026-09-15 — One last lock on the tally the test suite was filling up (#715)
+
+This is the tail end of the job **#713** finished — "Running the tests no longer
+eats the real ClickUp budget". Read that one first; this adds one thing to it.
+
+Both pieces of work were started the same day, by two sessions, against the same
+problem, and #713 got to the finish line first with the better answer. So most of
+what this branch carried has been thrown away in favour of what already shipped —
+deliberately, because two slightly different versions of the same rule sitting in
+one codebase is how the rule quietly stops meaning anything.
+
+What survives is the lock at the very bottom. #713 stops a pretend request being
+written into the shared tally on the way in. This says that a test run may never
+write to the machine's real tally file **at all**, no matter which door it comes
+to or what it claims about itself — a test is allowed a scratch tally of its own,
+and nothing else. The first is the rule; this is the bolt behind it, for a write
+that finds a way around the front.
+
+Also folded in: "is this a test run?" was about to exist as two separate
+definitions in two files, one from each branch. There is one, in the file
+furthest down, and everything above reads that.
+
+Checked by deliberately removing the bolt and watching the test that names it
+fail, then putting it back. The whole suite passes as a background job — the
+thing that was broken in the first place — 4,116 of 4,116.
+
+## 2026-09-15 — A column can now look different on a phone and on a tablet (#717)
+
+Last time, a whole ROW could be styled differently on small screens. This does
+the same one level down: each **column** inside a row now carries its own
+padding, margins, border, alignment and "hide this" setting for Tablet and for
+Phone. The controls are the same three little Phone / Tablet / Desktop icons,
+now sitting on each column's own Styles bar — click the phone, change a
+setting, and it changes only on phones.
+
+The rule you set stays the rule. A phone **follows** the desktop until you
+change something on it, and only the differences are stored. So widening a
+column on the desktop later still widens it on a phone, unless you had asked
+that phone to be different — and setting a value back to what it was
+inheriting removes it entirely rather than quietly freezing it at today's
+number. A banner above the settings says in words what this screen is
+following, lists anything you have changed, and gives each one a **reset**
+button.
+
+Tablet means 1024px and below; Phone means 767px and below. Background,
+overlay, opacity, shadow and who can see the column are deliberately the same
+on every screen, so the panel simply does not offer them on a phone — a
+control that looks like it works and silently writes the desktop value is
+worse than no control.
+
+Nothing changes on any existing page: the before/after photographs came back
+pixel-identical, and a column hidden with the old "Hide on Mobile" tickbox
+still hides exactly as it did.
 ## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
 
 Every background job on the Mac Mini — the bus relay, the pipeline pulse, both

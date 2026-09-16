@@ -98,7 +98,25 @@ const PRUNE_EVERY = 200;
 
 function ledgerPath(env = process.env) {
   if (env.CLICKUP_LEDGER_PATH) return env.CLICKUP_LEDGER_PATH;
+  return defaultLedgerPath();
+}
+
+/** The machine's LIVE ledger — the one the relay and the loops actually read. */
+function defaultLedgerPath() {
   return path.join(os.homedir(), '.starcaster', 'clickup-ledger.jsonl');
+}
+
+/*
+ * WHAT A TEST RUN IS, DEFINED ONCE (2026-09-15, task 86bc125u6).
+ *
+ * It lives in this file because this file is the bottom of the stack — the
+ * door (`clickup.cjs`) requires it, `lib/clickupForward.js` requires the door,
+ * and the CLI requires both. Putting it any higher means a cycle; putting it
+ * in two places means two ideas of "under test" that drift apart quietly,
+ * which is the failure this whole ticket is an instance of.
+ */
+function underTestRunner(env = process.env) {
+  return Boolean(env && (env.NODE_TEST_CONTEXT || env.VITEST));
 }
 
 function reserveSize(env = process.env) {
@@ -148,6 +166,24 @@ let appendsSincePrune = 0;
  */
 function record({ n = 1, rem = null, reset = null, limit = null, now = Date.now(), env = process.env, kind = null } = {}) {
   const file = ledgerPath(env);
+  /*
+   * A TEST PROCESS NEVER WRITES THE MACHINE'S LIVE LEDGER (task 86bc125u6).
+   *
+   * The door already declines to count a test run, and that is the fix. This
+   * is the backstop behind it, and it is here rather than there because
+   * "am I inside a test runner" is a fact about the PROCESS, while the `env`
+   * a caller hands the door is a story it is telling — `bugReportForward.test.js`
+   * legitimately passes `env: {}` to mean "pretend you are a production
+   * server", and that story must not be able to reach the real file.
+   *
+   * It is deliberately narrow: only the DEFAULT path is refused. A test that
+   * names its own `CLICKUP_LEDGER_PATH` — which every test exercising the
+   * reserve already does — records exactly as before, so nothing that proves
+   * the reserve stops proving it.
+   */
+  if (file === defaultLedgerPath() && underTestRunner()) {
+    return { ok: true, why: 'a test run spends nothing of the company token, so the live ledger is left alone' };
+  }
   const line = JSON.stringify({
     t: now,
     n,
@@ -340,6 +376,31 @@ function headroom({ now = Date.now(), env = process.env } = {}) {
  * reached the reserve, and when the reading cannot be taken at all.
  */
 function shouldYield({ kind, now = Date.now(), env = process.env } = {}) {
+  /*
+   * THERE IS DELIBERATELY NO TEST-RUN EXEMPTION HERE (2026-09-15, task
+   * 86bc16xwc — the catch-up merge that brought task 86bc0wrxg's door fix onto
+   * this branch). This branch carried one, for the callers that skip the door:
+   * `scripts/clickup_direct.mjs` calls `shouldYield` DIRECTLY at its loop
+   * boundaries (`reserveGate()` in the bus relay). It is gone for two reasons,
+   * and the second one is the reason it MUST be gone.
+   *
+   * 1. It is redundant. `clickupReserveDoor.test.js` now enforces, repo-wide,
+   *    that a test stubbing fetch in a spawned child gives that child its own
+   *    `CLICKUP_LEDGER_PATH` — so a spawned CLI's `reserveGate()` reads a
+   *    scratch ledger holding its own handful of requests, never the machine's
+   *    live one.
+   * 2. It contradicted the rule the door settled on. There, a faked request
+   *    that NAMES a ledger of its own spends against it: declaring a ledger is
+   *    how a test says "I am driving the reserve on purpose". An exemption
+   *    here read the test markers first and switched the reserve off underneath
+   *    exactly those tests — `bugReportForward.test.js`'s stand-down case
+   *    stopped standing down, and a test that quietly ceases to test its own
+   *    subject is the failure this whole line of work is about.
+   *
+   * The ledger you declared is the ledger you are judged against. The one
+   * thing a test process may never do is touch the machine's live file, and
+   * that is asserted one floor down, in `record`.
+   */
   if (kind !== 'scheduled') {
     return { yield: false, why: `an ${kind || 'interactive'} caller never yields — the reserve exists to protect it`, headroom: null };
   }
@@ -370,6 +431,8 @@ module.exports = {
   MAX_ENTRIES,
   PRUNE_EVERY,
   ledgerPath,
+  defaultLedgerPath,
+  underTestRunner,
   reserveSize,
   record,
   headroom,
