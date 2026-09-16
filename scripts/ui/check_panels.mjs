@@ -162,9 +162,17 @@ async function openPanels(page) {
   // on top — and it only exists after a click. ONE row is switched, so every
   // other row is still measured in its Desktop form.
   const switchedToPhone = await page.evaluate(() => {
-    const button = document.querySelector(
-      '.builder-section-settings-panel .builder-device-switch-button[title^="Phone"]'
-    );
+    // The LAST row, not the first — the fixture's last row is the two-column
+    // one (`PANEL_CHECK_MULTI_COLUMN_SECTION`), and several row controls exist
+    // only where there is more than one column: Column Gap, Column Widths,
+    // Match Column Heights, and Mobile Layout on the Phone panel. Switching a
+    // single-column row measured a Phone panel those controls cannot appear
+    // in, and reported a green that covered none of them (task 86bc14pgq).
+    // It also keeps the sentence above true: one row goes to Phone, the rest
+    // stay in their Desktop form.
+    const panels = [...document.querySelectorAll('.builder-section-settings-panel')];
+    const panel = panels[panels.length - 1];
+    const button = panel && panel.querySelector('.builder-device-switch-button[title^="Phone"]');
     if (button) button.click();
     return Boolean(button);
   });

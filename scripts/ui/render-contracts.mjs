@@ -507,6 +507,154 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  {
+    id: 'device-styles-tablet-padding-applies-at-800px',
+    why:
+      'The Tablet band is 768-1024px and 800px sits near its bottom edge, where the phone query used ' +
+      'to be. Reading 60 here would mean the phone rule reaches above 767px; reading 18 would mean the ' +
+      'tablet rule stops short of 800. The 900px contract above cannot catch either — it is comfortably ' +
+      'inside the band from both sides (device styles 4 of 4, task 86bc14pgq).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 800, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `a row with Tablet padding-top 30 rendered padding-top ${sample.styles.paddingTop} at 800px — the tablet band does not cover 800px, or the phone rule is reaching above 767px.`;
+    },
+  },
+
+  /*
+   * THE LEGACY NARROW-SCREEN RULES, ON THE DEVICE WIDTHS (device styles 4 of
+   * 4, task 86bc14pgq).
+   *
+   * The Builder used to carry two unrelated sets of breakpoints: the device
+   * system at 1024/767, and the older "mobile" rules at 900/560. These three
+   * hold the move of the rule that decides the most — whether a row's columns
+   * sit side by side — onto the tablet width, in both directions, plus the
+   * operator's opt-out. The move shows up nowhere in the markup: the class
+   * list of a stacked row and a side-by-side row are identical, so only a real
+   * browser at a real width can tell them apart.
+   */
+  {
+    id: 'legacy-narrow-rules-stack-a-row-at-the-tablet-width',
+    why:
+      'A two-column row must be ONE column at 1000px. It stacked only below 900px before this task, ' +
+      'so 901-1024px showed two columns on a screen the Builder calls a tablet.',
+    section: {
+      layout: 'two-column',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column',
+    read: ['gridTemplateColumns'],
+    emulate: { viewport: { width: 1000, height: 900 } },
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 1
+        ? null
+        : `a two-column row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) at 1000px, not 1 — the stacking rule is still at the old 900px.`;
+    },
+  },
+  {
+    id: 'legacy-narrow-rules-leave-desktop-alone',
+    why:
+      'The other direction, so the contract above cannot pass by stacking every width: the same row ' +
+      'keeps its two columns on a desktop screen. Widening a breakpoint is only safe while it stops.',
+    section: {
+      layout: 'two-column',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column',
+    read: ['gridTemplateColumns'],
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 2
+        ? null
+        : `a two-column row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) on a desktop screen, not 2 — the tablet stacking rule is leaking upward.`;
+    },
+  },
+  {
+    id: 'legacy-narrow-rules-keep-columns-still-opts-out-at-the-tablet-width',
+    why:
+      'Mobile Layout "Keep columns" is the escape hatch that makes the wider stacking width safe — it ' +
+      'is the only way an operator can say "not this row". If it stopped working at 1000px, the move ' +
+      'would be a one-way change to every client page that relies on it.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'keep',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-mobile-keep',
+    read: ['gridTemplateColumns'],
+    emulate: { viewport: { width: 1000, height: 900 } },
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 2
+        ? null
+        : `a "Keep columns" row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) at 1000px, not 2 — the opt-out does not reach the tablet width.`;
+    },
+  },
+
+  {
+    id: 'preview-tablet-frame-shows-the-rows-tablet-styles',
+    why:
+      'The Tablet frame is an 820px box inside a 1440px window, so `@media (max-width: 1024px)` is ' +
+      'FALSE inside it. Without a class-keyed copy of every tablet rule the frame shows desktop, and ' +
+      'the operator reads that as the Tablet panel not working (device styles 4 of 4, task 86bc14pgq).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-tablet .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `the Tablet frame rendered padding-top ${sample.styles.paddingTop} for a row whose Tablet padding-top is 30 — the frame is not getting the tablet rules.`;
+    },
+  },
+  {
+    id: 'preview-tablet-frame-does-not-show-phone-styles',
+    why:
+      'The other half, and the easy mistake: the phone rule is the one that already had a frame copy, ' +
+      'so emitting it for both frames is one careless line. A tablet sits ABOVE the phone breakpoint — ' +
+      'reading 60 here means the Tablet frame is showing a phone.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-tablet .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? 'the Tablet frame rendered the PHONE padding-top (60) — a phone-only rule is reaching the tablet frame.'
+        : null;
+    },
+  },
+  {
+    id: 'preview-phone-frame-agrees-with-a-real-phone',
+    why:
+      'Measured 2026-09-15: a row with 90px of Tablet top padding rendered 10px in the phone frame and ' +
+      '90px in a real 420px browser, because the frame took its padding from a flat `padding: 10px` ' +
+      'instead of the row\'s own variables. A preview that disagrees with the device it imitates is ' +
+      'worse than no preview — the phone contract at 420px above reads 60, so this must too.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-mobile .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'mobile' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `the phone frame rendered padding-top ${sample.styles.paddingTop} for a row whose Phone padding-top is 60 — the frame is not reading the row's own device values.`;
+    },
+  },
+
   /*
    * TABLET AND PHONE CELL STYLES (device styles 2 of 4, task 86bc14pey).
    *

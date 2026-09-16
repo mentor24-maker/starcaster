@@ -22,6 +22,17 @@ const styleOf = (section: BuilderTemplateSection): CSSProperties => ({
   ...getSectionHorizontalMarginStyle(section)
 });
 
+/**
+ * The phone media rule out of a generated block, by what it IS rather than by
+ * its position. These tests read `split("\n")[1]` until 2026-09-15, when the
+ * tablet preview-frame rule arrived and quietly took that slot — the
+ * assertions then read a rule about a different device and failed for a reason
+ * nothing to do with what they were testing (task 86bc14pgq).
+ */
+function phoneMediaRule(css: string): string {
+  return css.split("\n").find((rule) => rule.startsWith("@media (max-width:767px)")) ?? "";
+}
+
 describe("buildSectionDeviceCss", () => {
   it("emits nothing for a row with no device settings", () => {
     expect(buildSectionDeviceCss(createEmptySection("single"), "r1", styleOf)).toBe("");
@@ -40,6 +51,33 @@ describe("buildSectionDeviceCss", () => {
     expect(css).not.toContain("1024px");
   });
 
+  it("emits every tablet rule twice — the media query and the tablet preview frame", () => {
+    const section = writeSectionDeviceEdit(createEmptySection("single"), "tablet", (current) => ({
+      ...current,
+      paddingTop: "30"
+    }));
+    const css = buildSectionDeviceCss(section, "r1", styleOf);
+    // The frame is a narrow box inside a WIDE window, so no media query can
+    // ever match inside it. Without the class copy the Tablet frame shows
+    // desktop and the operator reads that as the panel not working.
+    expect(css).toContain('@media (max-width:1024px){[data-builder-device-scope="r1"]{');
+    expect(css).toContain('.builder-preview-device-tablet [data-builder-device-scope="r1"]{');
+  });
+
+  it("never puts a phone-only rule in the tablet frame", () => {
+    const section = writeSectionDeviceEdit(createEmptySection("single"), "phone", (current) => ({
+      ...current,
+      paddingTop: "60"
+    }));
+    const css = buildSectionDeviceCss(section, "r1", styleOf);
+    // A tablet is ABOVE the phone breakpoint. A phone setting appearing in the
+    // Tablet frame would be the frame lying about the device it is named after
+    // — and it is the easy mistake, because the phone rule is the one that
+    // already has a frame copy.
+    expect(css).toContain(".builder-preview-device-mobile");
+    expect(css).not.toContain(".builder-preview-device-tablet");
+  });
+
   it("writes an explicit neutral value when a device removes a style desktop sets", () => {
     const desktop = { ...createEmptySection("single"), marginLeft: "40" };
     const section = writeSectionDeviceEdit(desktop, "tablet", (current) => ({ ...current, marginLeft: "0" }));
@@ -52,7 +90,7 @@ describe("buildSectionDeviceCss", () => {
     const hidden = setSectionHiddenOnDevice(createEmptySection("single"), "tablet", true);
     expect(buildSectionDeviceCss(hidden, "r1", styleOf)).toContain("display:none !important");
     const shown = setSectionHiddenOnDevice(hidden, "phone", false);
-    const phoneRule = buildSectionDeviceCss(shown, "r1", styleOf).split("\n")[1];
+    const phoneRule = phoneMediaRule(buildSectionDeviceCss(shown, "r1", styleOf));
     expect(phoneRule).toContain("display:grid !important");
   });
 
@@ -136,7 +174,7 @@ describe("buildCellDeviceCss", () => {
     const hidden = setCellHiddenOnDevice(createEmptySection("single"), CELL, "tablet", true);
     expect(buildCellDeviceCss(hidden, CELL, "c1", cellStyleOf(CELL))).toContain("display:none !important");
     const shown = setCellHiddenOnDevice(hidden, CELL, "phone", false);
-    const phoneRule = buildCellDeviceCss(shown, CELL, "c1", cellStyleOf(CELL)).split("\n")[1];
+    const phoneRule = phoneMediaRule(buildCellDeviceCss(shown, CELL, "c1", cellStyleOf(CELL)));
     expect(phoneRule).toContain("display:grid !important");
   });
 

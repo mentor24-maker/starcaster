@@ -3837,7 +3837,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   );
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .builder-react-root .builder-preview-section {
     padding-left: calc(14px + var(--builder-section-padding-left, 0px));
     padding-right: calc(14px + var(--builder-section-padding-right, 0px));
@@ -3846,13 +3846,32 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 767px) {
   .builder-react-root .builder-preview-section {
     padding-left: calc(10px + var(--builder-section-padding-left, 0px));
     padding-right: calc(10px + var(--builder-section-padding-right, 0px));
     padding-top: var(--builder-section-padding-top, 10px);
     padding-bottom: var(--builder-section-padding-bottom, 10px);
   }
+}
+
+/*
+ * The same numbers again for the preview's PHONE FRAME, which no media query
+ * can reach — it is a 390px box inside a 1400px window.
+ *
+ * Without this the frame used the regenerated file's flat `padding: 10px`, so
+ * a row with a Phone or Tablet padding setting rendered 10px in the frame and
+ * its real value on an actual phone. Measured on 2026-09-15 with a row set to
+ * 90px of Tablet top padding: the frame said 10px, a 420px browser said 90px —
+ * the preview disagreeing with the device it is imitating, which is the one
+ * thing a preview may not do. The cell twin of this rule has been here since
+ * PR 173 for exactly the same reason; the row one was simply never written.
+ */
+.builder-react-root .builder-preview-device-mobile .builder-preview-section {
+  padding-left: calc(10px + var(--builder-section-padding-left, 0px));
+  padding-right: calc(10px + var(--builder-section-padding-right, 0px));
+  padding-top: var(--builder-section-padding-top, 10px);
+  padding-bottom: var(--builder-section-padding-bottom, 10px);
 }
 
 /* Column Widths: one small box per column, side by side, sized so a three
@@ -4845,7 +4864,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    as var() fallbacks, so anything that renders without the variables is
    unchanged. Both rules must keep `!important`: they are answering one.
    --------------------------------------------------------------------- */
-@media (max-width: 560px) {
+@media (max-width: 767px) {
   .builder-react-root .builder-preview-column {
     padding: var(--builder-cell-padding-box, 12px) !important;
     border-radius: var(--builder-cell-radius, 16px) !important;
@@ -5887,7 +5906,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   order: -2;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .builder-react-root .builder-columns-4,
   .builder-react-root .builder-columns-5,
   .builder-react-root .builder-columns-6,
@@ -10919,4 +10938,202 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   border-radius: 50%;
   background: var(--ink-warning);
   vertical-align: 1px;
+}
+
+/* ==============================================================
+   THE LEGACY NARROW-SCREEN RULES, MOVED ONTO THE DEVICE WIDTHS
+   Task 86bc14pgq (device styles 4 of 4), Dane's widths 2026-09-15
+   ============================================================== */
+
+/*
+ * Before this, the Builder had TWO unrelated sets of breakpoints. The device
+ * system reads 1024px (Tablet) and 767px (Phone) from
+ * `builder-device-overrides.ts`; the old "mobile" rules that predate it fire
+ * at 900px and 560px. So a column hidden with the new Hide on Phone vanished
+ * at 767px while the row it sat in stacked at 900px, and no screen width
+ * showed both halves of one page agreeing with each other.
+ *
+ * WHAT MOVED, and how. Widening a rule needs no removal: every screen the old
+ * query matched is still matched by the wider one, with the same values, so
+ * the old block is simply absorbed. That is why nothing below has to undo
+ * anything — and it is also why the direction is widening rather than
+ * narrowing. Narrowing would need the desktop value written back between the
+ * two widths, and for `display` that value lives in an INLINE style, which a
+ * stylesheet cannot restore.
+ *
+ * Three rules decide the layout, and all three are in the regenerated file
+ * (`_builder-react.css`, ~line 10309) where they may not be edited:
+ *
+ *   - the row stacks into one column          900px -> 1024px
+ *   - "Keep columns" opts back out of that    900px -> 1024px
+ *   - "Reverse stack" reorders the columns    900px -> 1024px
+ *   - a column fills the width once stacked   900px -> 1024px
+ *   - two- and three-column grids collapse    900px -> 1024px
+ *
+ * The operator's own escape hatch is unchanged and is what makes the wider
+ * width safe: a row set to "Keep columns" still keeps them, at every width.
+ *
+ * WHAT DELIBERATELY DID NOT MOVE, because each would change a live client
+ * page in a way no acceptance criterion asked for:
+ *
+ *   - `.builder-preview-column-mobile-hidden` / `-module-mobile-hidden`.
+ *     Widening these makes content DISAPPEAR on tablets that can see it
+ *     today, and narrowing them cannot be expressed in CSS at all (see
+ *     above). They move when the legacy fields are read through the device
+ *     chain, which is the module half of this work.
+ *   - the module's legacy Mobile Font Size and Mobile Alignment rules, for
+ *     the same reason and in the same company.
+ *   - every `.site-nav*` rule at 900px / 720px / 560px. The hamburger
+ *     breakpoint that decides when the menu becomes a drawer lives in
+ *     `legacy.css`, which this task does not own; moving the nav's sizing
+ *     without it would leave a drawer-shaped menu beside a desktop nav.
+ *   - `gap: 18px !important` on a stacked row. It has no desktop value to
+ *     return to, and at 901-1024px the row's own Column Gap is the better
+ *     answer anyway.
+ *   - everything admin-only (`.admin-*`, the dialogs, the poll and blog
+ *     editors). Those are screens in the app, not a visitor's page.
+ */
+@media (max-width: 1024px) {
+  .builder-react-root .builder-preview-section {
+    grid-template-columns: 1fr !important;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-keep {
+    grid-template-columns: var(--builder-layout-grid, 1fr) !important;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(1) {
+    order: 3;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(2) {
+    order: 2;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(3) {
+    order: 1;
+  }
+
+  .builder-react-root .builder-preview-column {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .builder-react-root .builder-columns-2,
+  .builder-react-root .builder-columns-3,
+  .builder-react-root .builder-preview-columns-2,
+  .builder-react-root .builder-preview-columns-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==============================================================
+   THE TABLET FRAME on the preview page
+   ============================================================== */
+
+/*
+ * An iPad-ish box, shaped like the phone frame one size up so the two read as
+ * the same object rather than two designs. 820px is a tablet in portrait with
+ * its chrome taken off, and it sits below the 1024px Tablet width on purpose:
+ * a frame that straddled its own breakpoint would show a device the page
+ * would never actually meet.
+ */
+.builder-react-root .builder-preview-device-tablet {
+  width: min(820px, 100%);
+  min-height: 1100px;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid rgba(9, 16, 24, 0.16);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 22px 60px rgba(10, 73, 112, 0.2);
+}
+
+.builder-react-root .builder-preview-device-tablet>div {
+  min-height: 1100px;
+  overflow-x: hidden;
+}
+
+/* Browser mode has no wrapper, so the tablet frame needs room of its own —
+   the same allowance the phone frame is given above. */
+.builder-react-root.builder-public-site .builder-preview-device-tablet {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+/*
+ * And the rules the frame cannot reach any other way. The frame is a narrow
+ * box inside a WIDE window, so `@media (max-width: 1024px)` never matches
+ * inside it however narrow it is drawn — exactly the reason the phone frame
+ * has its own copy of the phone rules in the regenerated file. This is that
+ * same mirror, one screen up, and it carries ONLY the tablet-width rules:
+ * a phone rule showing up in the Tablet frame would be the frame lying about
+ * the device it is named after.
+ */
+.builder-react-root .builder-preview-device-tablet .builder-preview-section {
+  grid-template-columns: 1fr !important;
+  padding-left: calc(14px + var(--builder-section-padding-left, 0px));
+  padding-right: calc(14px + var(--builder-section-padding-right, 0px));
+  padding-top: var(--builder-section-padding-top, 14px);
+  padding-bottom: var(--builder-section-padding-bottom, 14px);
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-keep {
+  grid-template-columns: var(--builder-layout-grid, 1fr) !important;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(1) {
+  order: 3;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(2) {
+  order: 2;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(3) {
+  order: 1;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(4) {
+  order: 0;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(5) {
+  order: -1;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
+  order: -2;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-column {
+  width: 100%;
+  min-width: 0;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-columns-2,
+.builder-react-root .builder-preview-device-tablet .builder-columns-3,
+.builder-react-root .builder-preview-device-tablet .builder-columns-4,
+.builder-react-root .builder-preview-device-tablet .builder-columns-5,
+.builder-react-root .builder-preview-device-tablet .builder-columns-6,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-2,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-3,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-4,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-5,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-6 {
+  grid-template-columns: 1fr;
+}
+
+/*
+ * The TABLET frame hides the shell video for a different reason from the
+ * phone frame above, and it is worth being plain about: a real tablet DOES
+ * play it. But the layer measures the real window, decides (correctly) that
+ * 1400px of browser is not a phone, and mounts a `position: fixed` element —
+ * and `overflow: hidden` on the frame cannot clip a fixed element, so the clip
+ * would paint across the entire browser window with the little tablet drawn on
+ * top of it. The poster underneath is the right picture and merely still; a
+ * video escaping its frame reads as the page being broken.
+ */
+.builder-react-root .builder-preview-device-tablet .builder-preview-video-background-page {
+  display: none;
 }
