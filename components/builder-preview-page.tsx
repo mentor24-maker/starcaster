@@ -22,6 +22,19 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 
+/**
+ * The frames this page can show. `email` is not one of the buttons — an email
+ * template is only ever previewed at 600px, so it is set from the Builder and
+ * the device toggle is hidden entirely.
+ */
+type PreviewDevice = "desktop" | "tablet" | "mobile" | "email";
+
+const PREVIEW_DEVICES: readonly PreviewDevice[] = ["desktop", "tablet", "mobile", "email"];
+
+function isPreviewDevice(value: string | null): value is PreviewDevice {
+  return value !== null && (PREVIEW_DEVICES as readonly string[]).includes(value);
+}
+
 type PreviewDraft = {
   name: string;
   pageBackground: ReturnType<typeof createDefaultBackgroundSettings>;
@@ -147,13 +160,13 @@ export function BuilderPreviewPage() {
   const [themeStyles, setThemeStyles] = useState<BuilderThemeStyles | undefined>(undefined);
   const [themeShellBackground, setThemeShellBackground] = useState<ThemeShellBackgroundSource>(null);
   const [loaded, setLoaded] = useState(false);
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile" | "email">("desktop");
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [targetSlug, setTargetSlug] = useState("");
   const isEmailPreview = previewDevice === "email";
 
   useEffect(() => {
     const storedDevice = window.localStorage.getItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY);
-    if (storedDevice === "mobile" || storedDevice === "desktop" || storedDevice === "email") {
+    if (isPreviewDevice(storedDevice)) {
       setPreviewDevice(storedDevice);
     }
 
@@ -262,7 +275,7 @@ export function BuilderPreviewPage() {
       : filterPublicSections(draft.layoutSections)
     : [];
 
-  const setDevice = (device: "desktop" | "mobile") => {
+  const setDevice = (device: Exclude<PreviewDevice, "email">) => {
     setPreviewDevice(device);
     window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, device);
   };
@@ -311,7 +324,15 @@ export function BuilderPreviewPage() {
                 onClick={() => setDevice("desktop")}
                 type="button"
               >
-                Browser
+                Desktop
+              </button>
+              <button
+                aria-pressed={previewDevice === "tablet"}
+                className={previewDevice === "tablet" ? "is-active" : ""}
+                onClick={() => setDevice("tablet")}
+                type="button"
+              >
+                Tablet
               </button>
               <button
                 aria-pressed={previewDevice === "mobile"}
@@ -346,6 +367,17 @@ export function BuilderPreviewPage() {
           // stacking CSS keys off `.builder-preview-device-mobile`, and in
           // Browser mode any wrapper at all is what the live site does not have.
           <div className="builder-preview-device-frame builder-preview-device-mobile">
+            {pagePreview}
+          </div>
+        ) : previewDevice === "tablet" ? (
+          // Same bargain one screen up. A frame is a narrow box on a wide
+          // window, so no media query inside it can ever match — the tablet
+          // rules have to be reachable by a class as well, which is why
+          // `builder-device-css.ts` emits every tablet rule twice and the
+          // stylesheet mirrors the legacy narrow-screen rules under this
+          // class. Phone rules are deliberately NOT mirrored here: a tablet
+          // is above the phone breakpoint, so it must not inherit them.
+          <div className="builder-preview-device-frame builder-preview-device-tablet">
             {pagePreview}
           </div>
         ) : (
