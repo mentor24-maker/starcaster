@@ -2,6 +2,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 /**
  * Bug Report 3/5 — every stored report becomes a ClickUp task HELD for the
@@ -162,26 +165,30 @@ test('a request the door declines to send is reported as a stand-down, never as 
   // so the yield is forced here. "Cannot happen today" rests on a default in
   // another file, which is not the same as cannot happen.
   //
-  // THE YIELD IS FORCED THROUGH `deps.env`, NOT `process.env` (2026-09-15,
-  // task 86bc125u6). This test used to set `process.env.STARCASTER_CALLER` and
-  // put it back afterwards. That stopped working the moment a test run stopped
-  // spending the ClickUp ledger — under `node --test`, `process.env` carries
-  // NODE_TEST_CONTEXT, so the door correctly reads the whole thing as fake
-  // traffic and never yields. An env built by hand is how the reserve's own
-  // tests have always driven it (`clickupReserveDoor.test.js`), it forces the
-  // real decision, and it no longer mutates global state a parallel test could
-  // see. What is being proved here is unchanged: the forwarder survives the
-  // third outcome.
+  // IT MUST DECLARE A LEDGER OF ITS OWN (task 86bc0wrxg, review round 3). The
+  // door only reaches its yield verdict for a request that spends the budget,
+  // and a faked request from a test run spends it only against a ledger the
+  // test declared (`CLICKUP_LEDGER_PATH`). Without that line this test stops
+  // exercising the stand-down at all: the door waves the request through, the
+  // fake transport answers 200, and the assertion below fails on a SUCCESS —
+  // which is what a test silently ceasing to test its own subject looks like.
+  // The fixture path is a throwaway, so the operator's shared ledger at
+  // ~/.starcaster/clickup-ledger.jsonl is untouched either way.
   const { createHeldTask } = require('../../lib/clickupForward');
   const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
-  const env = {
-    STARCASTER_CALLER: 'scheduled',
-    // A reserve as large as the whole limit makes the very first request yield,
-    // with no ledger state to arrange and nothing written to the real one.
-    CLICKUP_RESERVE: '100',
+  const ledgerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bugreport-ledger-'));
+  const before = {
+    caller: process.env.STARCASTER_CALLER,
+    reserve: process.env.CLICKUP_RESERVE,
+    ledger: process.env.CLICKUP_LEDGER_PATH,
   };
-  {
-    const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't', env });
+  process.env.STARCASTER_CALLER = 'scheduled';
+  // A reserve as large as the whole limit makes the very first request yield,
+  // with no ledger state to arrange.
+  process.env.CLICKUP_RESERVE = '100';
+  process.env.CLICKUP_LEDGER_PATH = path.join(ledgerDir, 'ledger.jsonl');
+  try {
+    const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
     assert.equal(result.ok, false, 'nothing was created, so this is not a success');
     assert.equal(requests.length, 0, 'and the request really was not sent');
     assert.match(result.error, /reserve/i,
@@ -190,6 +197,14 @@ test('a request the door declines to send is reported as a stand-down, never as 
       'the TypeError this whole ticket is about');
     assert.doesNotMatch(result.error, /HTTP YIELDED/,
       'the sentinel is not an HTTP status and must not be printed as one');
+  } finally {
+    if (before.caller === undefined) delete process.env.STARCASTER_CALLER;
+    else process.env.STARCASTER_CALLER = before.caller;
+    if (before.reserve === undefined) delete process.env.CLICKUP_RESERVE;
+    else process.env.CLICKUP_RESERVE = before.reserve;
+    if (before.ledger === undefined) delete process.env.CLICKUP_LEDGER_PATH;
+    else process.env.CLICKUP_LEDGER_PATH = before.ledger;
+    fs.rmSync(ledgerDir, { recursive: true, force: true });
   }
 });
 

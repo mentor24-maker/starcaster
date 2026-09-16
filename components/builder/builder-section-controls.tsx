@@ -23,10 +23,26 @@ import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 import { formatColumnName } from "./builder-utils";
+import type { ReactNode } from "react";
+import {
+  BUILDER_DEVICE_LABELS,
+  isSectionHiddenOnDevice,
+  listSectionDeviceOverrideKeys,
+  resetSectionDeviceOverride,
+  resolveSectionForDevice,
+  setSectionHiddenOnDevice,
+  writeSectionDeviceEdit,
+  type BuilderEditorStyleDevice
+} from "@/lib/builder-device-overrides";
 
 type BuilderSectionControlsProps = {
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
+  /**
+   * Which screen the panel edits. Desktop edits the row itself; Tablet and
+   * Phone show the row as that screen sees it and store only what differs.
+   */
+  styleDevice?: BuilderEditorStyleDevice;
   /** False for the very first row, which has nothing above it to join. */
   canJoinPrevious?: boolean;
   onUpdateSection: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
@@ -114,11 +130,35 @@ export function changeSectionBackgroundMode(
   }));
 }
 
+/** Plain names for the settings a device can change, for the "differs" list. */
+const DEVICE_SETTING_NAMES: Record<string, string> = {
+  widthMode: "Width",
+  widthPercent: "Width",
+  marginTop: "Margin top",
+  marginBottom: "Margin bottom",
+  marginLeft: "Margin left",
+  marginRight: "Margin right",
+  paddingTop: "Padding top",
+  paddingBottom: "Padding bottom",
+  paddingLeft: "Padding left",
+  paddingRight: "Padding right",
+  columnGap: "Column gap",
+  minHeight: "Min height",
+  horizontalOffset: "Horizontal offset",
+  verticalOffset: "Vertical offset",
+  rowBorderWidth: "Border width",
+  rowBorderStyle: "Border style",
+  rowBorderColor: "Border color",
+  rowBorderRadius: "Border radius",
+  hidden: "Hidden"
+};
+
 export function BuilderSectionControls({
-  section,
+  section: storedSection,
   editorDevice,
+  styleDevice = "desktop",
   canJoinPrevious = false,
-  onUpdateSection,
+  onUpdateSection: updateStoredSection,
   onOpenSectionBackgroundGallery,
   onUploadSectionBackgroundMedia,
   themeBackgroundColor,
@@ -126,6 +166,8 @@ export function BuilderSectionControls({
   themeColors = []
 }: BuilderSectionControlsProps) {
   if (editorDevice === "mobile") {
+    const section = storedSection;
+    const onUpdateSection = updateStoredSection;
     return (
       <div className="builder-section-settings is-lattice">
         <BuilderSettingRow label="Mobile Layout" fullWidth>
@@ -150,6 +192,25 @@ export function BuilderSectionControls({
     );
   }
 
+  // On Tablet or Phone every control below reads the row as that screen sees
+  // it, and every edit is routed through `writeSectionDeviceEdit`, which keeps
+  // only what differs. So the controls themselves do not know devices exist.
+  const device = styleDevice === "desktop" ? null : styleDevice;
+  const section = device ? resolveSectionForDevice(storedSection, device) : storedSection;
+  const onUpdateSection: BuilderSectionControlsProps["onUpdateSection"] = device
+    ? (updater) => updateStoredSection((current) => writeSectionDeviceEdit(current, device, updater))
+    : updateStoredSection;
+  const overrideKeys = device ? listSectionDeviceOverrideKeys(storedSection, device) : [];
+  // A dot beside a label whose setting this device changed.
+  const mark = (label: string, ...keys: string[]): ReactNode =>
+    keys.some((key) => overrideKeys.includes(key)) ? (
+      <span className="is-device-override" title={`${label} is set just for ${device ? BUILDER_DEVICE_LABELS[device] : ""}`}>
+        {label}
+      </span>
+    ) : (
+      label
+    );
+
   const columnKeys = getLayoutColumns(section.layout);
   // What the Column Widths boxes show. Until he sets a complete set, they show
   // the Layout preset's own proportions — so the numbers he starts editing are
@@ -168,7 +229,47 @@ export function BuilderSectionControls({
   const overlayScreen = normalizeRowOverlayScreenSettings(section.overlayScreen);
 
   return (
-    <div className="builder-section-settings is-lattice">
+    <div className={`builder-section-settings is-lattice${device ? " is-device-mode" : ""}`}>
+      {device ? (
+        <div className="builder-device-banner" role="status">
+          <strong>{BUILDER_DEVICE_LABELS[device]}</strong>
+          {overrideKeys.length === 0 ? (
+            <span>
+              {" "}— every setting follows {device === "phone" ? "Tablet and Desktop" : "Desktop"}. Change one here to
+              set it just for {device === "phone" ? "phones" : "tablets"}.
+            </span>
+          ) : (
+            <>
+              <span>
+                {" "}— {overrideKeys.length} setting{overrideKeys.length === 1 ? "" : "s"} set just for{" "}
+                {device === "phone" ? "phones" : "tablets"}:
+              </span>
+              {overrideKeys.map((key) => (
+                <span className="builder-device-override-chip" key={key}>
+                  {DEVICE_SETTING_NAMES[key] ?? key}
+                  <button
+                    type="button"
+                    title={`Put ${DEVICE_SETTING_NAMES[key] ?? key} back to following ${device === "phone" ? "Tablet" : "Desktop"}`}
+                    onClick={() => updateStoredSection((current) => resetSectionDeviceOverride(current, device, key))}
+                  >
+                    reset
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                className="builder-device-reset-all"
+                onClick={() => updateStoredSection((current) => resetSectionDeviceOverride(current, device))}
+              >
+                Reset all
+              </button>
+            </>
+          )}
+          <div className="builder-device-banner-note">
+            Layout, column widths, background and overlay are the same on every screen.
+          </div>
+        </div>
+      ) : null}
       {/*
        * D8 axes and the W0 lattice, same as a module panel (operator 8/13,
        * "Section editors. Please proceed.").
@@ -184,9 +285,10 @@ export function BuilderSectionControls({
        * `check_panels` all come with it, and a row editor now reads like a
        * module editor (S1 — learn one, know them all).
        */}
-      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "5" } as CSSProperties}>
+      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": device ? "4" : "5" } as CSSProperties}>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Structure</div>
+          {device ? null : (
           <BuilderSettingRow label="Layout">
                     <select
                       value={section.layout}
@@ -217,7 +319,8 @@ export function BuilderSectionControls({
                       ))}
                     </select>
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Width">
+          )}
+          <BuilderSettingRow label={mark("Width", "widthMode", "widthPercent")}>
                     <select
                       value={
                         section.widthMode === "full-width"
@@ -247,7 +350,7 @@ export function BuilderSectionControls({
                       <option value="50">50% (centered)</option>
                     </select>
                   </BuilderSettingRow>
-          {canJoinPrevious ? (
+          {canJoinPrevious && !device ? (
                     <BuilderSettingRow label="Share background">
                       <input
                         type="checkbox"
@@ -259,7 +362,7 @@ export function BuilderSectionControls({
                       />
                     </BuilderSettingRow>
                   ) : null}
-          {columnKeys.length > 1 ? (
+          {columnKeys.length > 1 && !device ? (
             <BuilderSettingRow label="Column Widths">
               <div className="builder-column-width-fields">
                 {columnKeys.map((columnKey, index) => (
@@ -288,7 +391,7 @@ export function BuilderSectionControls({
             </BuilderSettingRow>
           ) : null}
           {columnKeys.length > 1 ? (
-            <BuilderSettingRow label="Column Gap">
+            <BuilderSettingRow label={mark("Column Gap", "columnGap")}>
               <BuilderNumberSelectControl
                 value={section.columnGap ?? "16"}
                 min={0}
@@ -299,7 +402,7 @@ export function BuilderSectionControls({
               />
             </BuilderSettingRow>
           ) : null}
-          <BuilderSettingRow label="Min Height">
+          <BuilderSettingRow label={mark("Min Height", "minHeight")}>
             <BuilderNumberSelectControl
               value={section.minHeight ?? "0"}
               min={0}
@@ -309,7 +412,7 @@ export function BuilderSectionControls({
               onChange={(minHeight) => onUpdateSection((current) => ({ ...current, minHeight }))}
             />
           </BuilderSettingRow>
-          {columnKeys.length > 1 ? (
+          {columnKeys.length > 1 && !device ? (
             <BuilderSettingRow label="Match Column Heights">
               <input
                 type="checkbox"
@@ -327,6 +430,7 @@ export function BuilderSectionControls({
         </div>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Placement</div>
+          {device ? null : (
           <BuilderSettingRow label="Alignment">
                     <select
                       value={section.alignment}
@@ -342,6 +446,7 @@ export function BuilderSectionControls({
                       <option value="right">Right</option>
                     </select>
                   </BuilderSettingRow>
+          )}
           {/*
             The row's spacing, matched per axis with the split one click away
             (E4b) — the same control the module panels and the cell editor
@@ -380,7 +485,7 @@ export function BuilderSectionControls({
           />
           {/* Last on the axis (D9): the fine nudge you reach for after the
               margins and padding are already where you want them. */}
-          <BuilderSettingRow label="Vertical Offset">
+          <BuilderSettingRow label={mark("Vertical Offset", "verticalOffset")}>
             <input
               type="number"
               min={-500}
@@ -396,7 +501,7 @@ export function BuilderSectionControls({
               }
             />
           </BuilderSettingRow>
-          <BuilderSettingRow label="Horizontal Offset">
+          <BuilderSettingRow label={mark("Horizontal Offset", "horizontalOffset")}>
             <input
               type="number"
               min={-500}
@@ -415,6 +520,7 @@ export function BuilderSectionControls({
         </div>
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Frame</div>
+          {device ? null : (
           <BuilderSettingRow label="Row Background">
                     <select
                       value={section.background.mode}
@@ -433,7 +539,8 @@ export function BuilderSectionControls({
                       <option value="style">Style</option>
                     </select>
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Border Width">
+          )}
+          <BuilderSettingRow label={mark("Border Width", "rowBorderWidth")}>
                     <BuilderNumberSelectControl
                       value={section.rowBorderWidth ?? "0"}
                       min={0}
@@ -444,7 +551,7 @@ export function BuilderSectionControls({
                       }
                     />
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Border Style">
+          <BuilderSettingRow label={mark("Border Style", "rowBorderStyle")}>
                     <select
                       disabled={Number(section.rowBorderWidth ?? "0") === 0}
                       value={section.rowBorderStyle ?? "solid"}
@@ -457,7 +564,7 @@ export function BuilderSectionControls({
                       <option value="dotted">Dotted</option>
                     </select>
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Border Color">
+          <BuilderSettingRow label={mark("Border Color", "rowBorderColor")}>
                     <BuilderThemeColorField
                       disabled={Number(section.rowBorderWidth ?? "0") === 0}
                       fallback="#000000"
@@ -468,7 +575,7 @@ export function BuilderSectionControls({
                       }
                     />
                   </BuilderSettingRow>
-          <BuilderSettingRow label="Border Radius">
+          <BuilderSettingRow label={mark("Border Radius", "rowBorderRadius")}>
                     <BuilderNumberSelectControl
                       disabled={Number(section.rowBorderWidth ?? "0") === 0}
                       value={section.rowBorderRadius ?? "0"}
@@ -504,6 +611,7 @@ export function BuilderSectionControls({
          * `onOpenSectionBackgroundGallery` would quietly set the row's
          * background instead.
          */}
+        {device ? null : (
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Overlay</div>
           <BuilderBackgroundControls
@@ -554,8 +662,22 @@ export function BuilderSectionControls({
             </>
           ) : null}
         </div>
+        )}
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Visibility</div>
+          {device ? (
+            <BuilderSettingRow label={mark(`Hide on ${BUILDER_DEVICE_LABELS[device]}`, "hidden")}>
+              <input
+                type="checkbox"
+                checked={isSectionHiddenOnDevice(storedSection, device)}
+                title={`Leaves this row out on ${device === "phone" ? "phones" : "tablets and phones"}. It still shows on larger screens.`}
+                onChange={(event) =>
+                  updateStoredSection((current) => setSectionHiddenOnDevice(current, device, event.target.checked))
+                }
+              />
+            </BuilderSettingRow>
+          ) : (
+          <>
           <BuilderSettingRow label="Visibility">
                     <div className="builder-radio-group">
                       <label>
@@ -589,8 +711,11 @@ export function BuilderSectionControls({
                       }
                     />
                   </BuilderSettingRow>
+          </>
+          )}
         </div>
       </div>
+      {device ? null : (
       <BuilderBackgroundControls
         hideModeRow
         allowVideo
@@ -605,6 +730,7 @@ export function BuilderSectionControls({
         themeColors={themeColors}
         themePrimaryColor={themePrimaryColor}
       />
+      )}
     </div>
   );
 }

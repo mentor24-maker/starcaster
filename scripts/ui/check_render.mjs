@@ -125,6 +125,16 @@ function documentForSection({
   cellOverlayScreens,
   spacers = 0,
   themeTreatments,
+  // Tablet/phone row settings and the desktop top padding they differ from
+  // (device styles, task 86bc13a6v).
+  paddingTop,
+  deviceOverrides,
+  // The same, one level down: a column's own tablet/phone settings, the
+  // desktop padding they differ from, and the legacy per-cell "Hide on
+  // Mobile" they had to keep working (device styles 2 of 4, task 86bc14pey).
+  cellPaddingTop,
+  cellDeviceOverrides,
+  cellMobileHidden,
 } = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
@@ -169,6 +179,11 @@ function documentForSection({
     // along for the ride.
     ...(cellBackgrounds ? { cellBackgrounds } : {}),
     ...(cellOverlayScreens ? { cellOverlayScreens } : {}),
+    ...(paddingTop ? { paddingTop } : {}),
+    ...(deviceOverrides ? { deviceOverrides } : {}),
+    ...(cellPaddingTop ? { cellPaddingTop } : {}),
+    ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
+    ...(cellMobileHidden ? { cellMobileHidden } : {}),
     modules: modules.map(moduleFrom),
   };
 
@@ -736,6 +751,23 @@ try {
         `(${result.page.modules} module(s) on the page). NOTHING WAS MEASURED — the module did not ` +
         'render, or the selector is stale. A contract that measures nothing cannot verify anything.'
       );
+      continue;
+    }
+    /*
+     * A HIDDEN contract: the element must be IN the page and must not show —
+     * "Hide on Phone" is correct exactly when it measures 0x0, which the rule
+     * below rightly calls unmeasurable everywhere else. Presence was already
+     * required above, so this cannot pass by the row failing to render; and
+     * it reads the display, so a row that merely collapsed does not pass.
+     */
+    if (contract.hidden) {
+      measured += 1;
+      if (result.styles?.display !== 'none') {
+        failures.push(
+          `${contract.id}: \`${contract.selector}\` must be hidden and resolved display ` +
+          `${result.styles?.display} (${result.box.width}x${result.box.height}). ${contract.why || ''}`
+        );
+      }
       continue;
     }
     if (!result.box.width || !result.box.height) {

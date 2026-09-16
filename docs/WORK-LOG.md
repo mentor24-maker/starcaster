@@ -1,40 +1,136 @@
-## 2026-09-15 — The build robots' own test gate was failing on code nobody had touched (#715)
+## 2026-09-15 — One last lock on the tally the test suite was filling up (#715)
 
-Before any automated pass reports a job done, it runs the full test suite. That
-suite had started **failing on a clean copy of the live code, with no changes at
-all** — but only when a robot ran it. If Dane ran the exact same command himself,
-it passed, every time. That is the worst kind of broken gate: the next pass either
-sends perfectly good work back as faulty, or quietly learns that red means
-nothing. One pass burned four full test runs just proving the failures were not
-its own doing.
+This is the tail end of the job **#713** finished — "Running the tests no longer
+eats the real ClickUp budget". Read that one first; this adds one thing to it.
 
-Nothing was actually broken. Two sensible things were colliding.
+Both pieces of work were started the same day, by two sessions, against the same
+problem, and #713 got to the finish line first with the better answer. So most of
+what this branch carried has been thrown away in favour of what already shipped —
+deliberately, because two slightly different versions of the same rule sitting in
+one codebase is how the rule quietly stops meaning anything.
 
-ClickUp only lets us make about a hundred requests a minute, for the whole
-company. So background jobs are built to stop early and leave the last quarter of
-each minute alone — that way a background job can never be the reason Dane's own
-session is refused. To do that, every request gets written down in a tally on the
-machine.
+What survives is the lock at the very bottom. #713 stops a pretend request being
+written into the shared tally on the way in. This says that a test run may never
+write to the machine's real tally file **at all**, no matter which door it comes
+to or what it claims about itself — a test is allowed a scratch tally of its own,
+and nothing else. The first is the rule; this is the bolt behind it, for a write
+that finds a way around the front.
 
-Meanwhile, the tests need a pretend ClickUp to talk to. They do that by swapping
-out the *delivery van* while leaving the *address on the envelope* alone. So the
-tally saw hundreds of letters addressed to ClickUp, wrote them all down as real
-spending, decided the minute's budget was gone — and started refusing the test
-suite's own requests. The tests read that refusal as a failure. Which tests fell
-over moved around from run to run depending on timing, which is why the count kept
-changing.
+Also folded in: "is this a test run?" was about to exist as two separate
+definitions in two files, one from each branch. There is one, in the file
+furthest down, and everything above reads that.
 
-The fix is one sentence, applied in the three places that each needed it: a test
-run spends nothing, so it is not written down and not counted against anybody.
-There was also a fourth place worth mentioning — the definition of "is this a
-test?" existed in two files, and two copies of a rule like that drift apart
-quietly. There is one now.
+Checked by deliberately removing the bolt and watching the test that names it
+fail, then putting it back. The whole suite passes as a background job — the
+thing that was broken in the first place — 4,116 of 4,116.
 
-The protection itself is untouched, which mattered more than the fix: a real
-background job at the limit still stands down exactly as before, and two of the
-new tests exist purely to prove that. Every part of the change was checked by
-deliberately undoing it and watching the right test fail — five times — and the
-suite now passes three runs in a row as a robot, and once as Dane.
+## 2026-09-15 — A column can now look different on a phone and on a tablet (#717)
+
+Last time, a whole ROW could be styled differently on small screens. This does
+the same one level down: each **column** inside a row now carries its own
+padding, margins, border, alignment and "hide this" setting for Tablet and for
+Phone. The controls are the same three little Phone / Tablet / Desktop icons,
+now sitting on each column's own Styles bar — click the phone, change a
+setting, and it changes only on phones.
+
+The rule you set stays the rule. A phone **follows** the desktop until you
+change something on it, and only the differences are stored. So widening a
+column on the desktop later still widens it on a phone, unless you had asked
+that phone to be different — and setting a value back to what it was
+inheriting removes it entirely rather than quietly freezing it at today's
+number. A banner above the settings says in words what this screen is
+following, lists anything you have changed, and gives each one a **reset**
+button.
+
+Tablet means 1024px and below; Phone means 767px and below. Background,
+overlay, opacity, shadow and who can see the column are deliberately the same
+on every screen, so the panel simply does not offer them on a phone — a
+control that looks like it works and silently writes the desktop value is
+worse than no control.
+
+Nothing changes on any existing page: the before/after photographs came back
+pixel-identical, and a column hidden with the old "Hide on Mobile" tickbox
+still hides exactly as it did.
+## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
+
+Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
+loop lanes — shares one per-minute allowance of requests to ClickUp, and they
+keep a shared tally file so each can see how much of the minute is left and
+stand down politely when a live session needs it. It turned out that simply
+running the test suite filled that tally with requests that never happened.
+
+The tests do not really call ClickUp; they hand the code a stand-in. But they
+keep the real ClickUp web address in the request, and the tally was decided by
+the address alone — so a few hundred imaginary requests piled up in a few
+seconds. Two things came off that. The tests started refusing their own
+requests partway through a run and reported about 22 failures that were not
+real, which matters because that command is a gate every automated build pass
+has to run and believe. And anyone running the tests made the relay, the pulse
+and both loops stand down for the next minute for no reason at all.
+
+A request now counts against the budget only if it is going to ClickUp *and*
+going out over the real network, rather than through a stand-in the caller
+brought with it. Nothing in the live site ever brings one, so real traffic is
+counted exactly as before. The tests for the budget code itself still have to
+drive that path with a stand-in — that is how we prove a background job really
+does stop when it should — so those may still be counted, but only against a
+throwaway tally file of their own. That is what makes it impossible, rather
+than merely unlikely, for invented traffic to reach the shared one.
+
+Two other test files stub the network deeper down, inside a separate process
+the budget code has no way to inspect. Those now hand that process its own
+throwaway tally, and a new guard fails the build if a future test forgets.
+Measured afterwards: the suite gives 4039 passes and no failures whether it is
+run by a background job or by hand, and neither run adds a single line to the
+shared tally.
+
+A check of this work found three loose ends, all now closed. Two were comments
+left saying the opposite of what the code does — one of them in the single
+live file that uses this seam, which is precisely where somebody would later
+have trusted it. The third was a real, if sleeping, hazard: if a caller handed
+the code something that was not a working stand-in at all, it used to fail on
+the spot without contacting anyone, and after the first round of this work it
+would instead have quietly sent a genuine request to ClickUp. Nothing in the
+code does that today, but it is the wrong way round for the one piece of code
+whose whole job is that nothing slips out uncounted, so it now refuses out
+loud and explains what it was handed. The guard that stops a future test
+forgetting its throwaway tally was also tightened: it used to look at a whole
+file at once and only knew one way of starting a second process, so a third
+one added to a file that already looked fine would have slipped through.
+
+A second check then found one more, and it was a good catch: a test added by
+separate work a few hours earlier, on purpose, does the one thing neither of
+the protections above can see. It keeps the real ClickUp address, does *not*
+hand in a stand-in, and replaces the network call inside its own process — so
+to the budget code it looks exactly like a genuine request, and five lines per
+test run were still landing in the shared tally. The two protections were each
+right on their own and quietly cancelled each other out.
+
+So there is now a third condition, and it is about the *process* rather than
+about what the caller handed in: a test run may write to a throwaway tally it
+named for itself, and may never write to the shared one. That closes the whole
+family rather than this one case — a test nobody has written yet, in whatever
+style, cannot reach the shared tally through this door at all. Measured on the
+finished code, with the tally pointed somewhere only this run could touch so
+another job on the machine could not be mistaken for it: the suite gives 4083
+passes and no failures, whether run by a background job or by hand, and the
+shared tally moves by zero lines either way. With the new condition taken back
+out again it moves by five, which is how we know the measurement can see it.
+
+A third check found the two halves had drifted apart again, this time by
+nothing either of them did: the separate work mentioned above went live on the
+main copy of the code while this was waiting to be checked, so the two no
+longer fitted together. Two lines had each gained a different thing and had to
+be joined into one, and then the test that separate work added stopped
+proving what it was written to prove. It forces the budget code to stand down
+on purpose, and standing down is only ever decided for a request that counts
+against the budget at all — which, under the new third condition, a test run's
+request does only when it has named a throwaway tally for itself. It had not,
+so the request sailed through, the stand-in answered as if all were well, and
+the test failed on a success. Naming a throwaway tally inside that one test
+restores it: 18 of 18 pass, and the shared tally still moves by zero. With the
+third condition taken back out, that same file puts five lines into the shared
+tally again, so the zero is a reading rather than an assumption.
 
 ## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
 

@@ -1,9 +1,17 @@
 "use client";
 
 import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { BackgroundSettings, BuilderTemplateSection } from "@/lib/builder-template";
 import { createDefaultBackgroundSettings, normalizeRowOverlayScreenSettings } from "@/lib/builder-template";
+import {
+  BUILDER_DEVICE_LABELS,
+  isCellHiddenOnDevice,
+  listCellDeviceOverrideKeys,
+  resetCellDeviceOverride,
+  setCellHiddenOnDevice,
+  type BuilderEditorStyleDevice
+} from "@/lib/builder-device-overrides";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
 import { BuilderSettingRow } from "./builder-setting-row";
@@ -14,6 +22,22 @@ type BuilderCellStyleSettingsProps = {
   column: string;
   section: BuilderTemplateSection;
   editorDevice: "browser" | "mobile";
+  /**
+   * Which screen this panel is editing. On Tablet or Phone the cell's own
+   * writers below are already routed through `writeCellDeviceEdit` by the
+   * card, so the controls here do not know devices exist — what this prop
+   * changes is what the panel SHOWS: the banner, the reset chips, the dots
+   * beside changed labels, and which groups are offered at all.
+   */
+  styleDevice?: BuilderEditorStyleDevice;
+  /**
+   * The whole row, for the two writes that are not cell settings: "Hide on
+   * Phone" and the banner's reset buttons. They cannot go through
+   * `onSetCellExtra` — that writes a cell map, and neither of these is one.
+   * Optional so the two modal surfaces that draw this panel with no device
+   * switch keep working unchanged.
+   */
+  onUpdateSection?: (updater: (section: BuilderTemplateSection) => BuilderTemplateSection) => void;
   onUpdateCellBackground: (column: string, updater: (bg: BackgroundSettings) => BackgroundSettings) => void;
   /**
    * The cell's background MODE was just changed — the one step that does more
@@ -98,10 +122,31 @@ const CELL_MARGIN_SIDES = [
  * same: spacing and alignment are Placement, everything that paints the box
  * is Frame, and who can see the cell is Visibility.
  */
+/** Plain names for the cell settings a device can change, for the "differs" list. */
+const CELL_DEVICE_SETTING_NAMES: Record<string, string> = {
+  cellPaddingTop: "Top Padding",
+  cellPaddingBottom: "Bottom Padding",
+  cellPaddingLeft: "Left Padding",
+  cellPaddingRight: "Right Padding",
+  cellMarginTop: "Top Margin",
+  cellMarginBottom: "Bottom Margin",
+  cellMarginLeft: "Left Margin",
+  cellMarginRight: "Right Margin",
+  cellBorderWidth: "Border Width",
+  cellBorderColor: "Border Color",
+  cellBorderRadius: "Border Radius",
+  cellBorderStyle: "Border Style",
+  cellHAlign: "Horizontal",
+  cellVAlign: "Vertical",
+  hidden: "Hidden"
+};
+
 export function BuilderCellStyleSettings({
   column,
   section,
   editorDevice,
+  styleDevice = "desktop",
+  onUpdateSection,
   onUpdateCellBackground,
   onChangeCellBackgroundMode,
   onUploadCellBackgroundMedia,
@@ -169,19 +214,87 @@ export function BuilderCellStyleSettings({
     for (const [key, value] of Object.entries(values)) onSetCellExtra(column, key, value);
   };
 
+  /*
+   * Tablet and Phone, the same arrangement the ROW panel wears (S1 — learn
+   * one, know them all): a banner saying what this screen follows, a chip per
+   * setting this screen changes with a reset beside it, and a dot on the
+   * label of every changed setting.
+   *
+   * Background and Overlay drop out entirely, because a cell's fill and its
+   * tint are one value for every screen — offering them here would be a
+   * control that silently writes desktop. Access drops out for the same
+   * reason: who may SEE a cell is not a screen-size question.
+   */
+  const device = styleDevice === "desktop" || !onUpdateSection ? null : styleDevice;
+  const overrideKeys = device ? listCellDeviceOverrideKeys(section, column, device) : [];
+  const mark = (label: string, ...keys: string[]): ReactNode =>
+    keys.some((key) => overrideKeys.includes(key)) ? (
+      <span className="is-device-override" title={`${label} is set just for ${device ? BUILDER_DEVICE_LABELS[device] : ""}`}>
+        {label}
+      </span>
+    ) : (
+      label
+    );
+
   return (
-    <div className="builder-cell-style-settings is-lattice">
-      <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "4" } as CSSProperties}>
+    <div className={`builder-cell-style-settings is-lattice${device ? " is-device-mode" : ""}`}>
+      {device && onUpdateSection ? (
+        <div className="builder-device-banner" role="status">
+          <strong>{BUILDER_DEVICE_LABELS[device]}</strong>
+          {overrideKeys.length === 0 ? (
+            <span>
+              {" "}— every setting follows {device === "phone" ? "Tablet and Desktop" : "Desktop"}. Change one here to
+              set it just for {device === "phone" ? "phones" : "tablets"}.
+            </span>
+          ) : (
+            <>
+              <span>
+                {" "}— {overrideKeys.length} setting{overrideKeys.length === 1 ? "" : "s"} set just for{" "}
+                {device === "phone" ? "phones" : "tablets"}:
+              </span>
+              {overrideKeys.map((key) => (
+                <span className="builder-device-override-chip" key={key}>
+                  {CELL_DEVICE_SETTING_NAMES[key] ?? key}
+                  <button
+                    type="button"
+                    title={`Put ${CELL_DEVICE_SETTING_NAMES[key] ?? key} back to following ${device === "phone" ? "Tablet" : "Desktop"}`}
+                    onClick={() => onUpdateSection((current) => resetCellDeviceOverride(current, column, device, key))}
+                  >
+                    reset
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                className="builder-device-reset-all"
+                onClick={() => onUpdateSection((current) => resetCellDeviceOverride(current, column, device))}
+              >
+                Reset all
+              </button>
+            </>
+          )}
+          <div className="builder-device-banner-note">
+            Background, overlay and access are the same on every screen.
+          </div>
+        </div>
+      ) : null}
+      <div
+        className="builder-schema-panel-columns"
+        /* Three axes on a device, four on desktop: Overlay drops out (a cell's
+           tint is one value for every screen) while Placement, Frame and
+           Visibility stay. */
+        style={{ "--builder-axis-count": device ? "3" : "4" } as CSSProperties}
+      >
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Placement</div>
-          <BuilderSettingRow label="Horizontal">
+          <BuilderSettingRow label={mark("Horizontal", "cellHAlign")}>
             <select value={hAlign} onChange={(event) => onSetCellExtra(column, "cellHAlign", event.target.value)}>
               <option value="left">Left</option>
               <option value="center">Center</option>
               <option value="right">Right</option>
             </select>
           </BuilderSettingRow>
-          <BuilderSettingRow label="Vertical">
+          <BuilderSettingRow label={mark("Vertical", "cellVAlign")}>
             <select value={vAlign} onChange={(event) => onSetCellExtra(column, "cellVAlign", event.target.value)}>
               <option value="top">Top</option>
               <option value="center">Middle</option>
@@ -211,6 +324,8 @@ export function BuilderCellStyleSettings({
 
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Frame</div>
+          {device ? null : (
+          <>
           {/* D9, blast radius descending: the fill moves the most, then how
               much of it shows, then the border — style first because it gates
               width and colour — and the shadow last. */}
@@ -257,7 +372,9 @@ export function BuilderCellStyleSettings({
               onChange={(value) => onSetCellExtra(column, "cellOpacity", opacityFromPercent(value))}
             />
           </BuilderSettingRow>
-          <BuilderSettingRow label="Border Style">
+          </>
+          )}
+          <BuilderSettingRow label={mark("Border Style", "cellBorderStyle")}>
             <select
               value={borderStyle}
               onChange={(event) => onSetCellExtra(column, "cellBorderStyle", event.target.value)}
@@ -268,7 +385,7 @@ export function BuilderCellStyleSettings({
               <option value="dotted">Dotted</option>
             </select>
           </BuilderSettingRow>
-          <BuilderSettingRow label="Border Width">
+          <BuilderSettingRow label={mark("Border Width", "cellBorderWidth")}>
             <BuilderNumberSelectControl
               disabled={borderDisabled}
               value={section.cellBorderWidth[column] ?? "0"}
@@ -278,7 +395,7 @@ export function BuilderCellStyleSettings({
               onChange={(value) => onUpdateCellBorderWidth(column, value)}
             />
           </BuilderSettingRow>
-          <BuilderSettingRow label="Border Color">
+          <BuilderSettingRow label={mark("Border Color", "cellBorderColor")}>
             <BuilderThemeColorField
               disabled={borderDisabled}
               fallback="#d9e4ef"
@@ -287,7 +404,7 @@ export function BuilderCellStyleSettings({
               onChange={(hex) => onUpdateCellBorderColor(column, hex)}
             />
           </BuilderSettingRow>
-          <BuilderSettingRow label="Border Radius">
+          <BuilderSettingRow label={mark("Border Radius", "cellBorderRadius")}>
             <BuilderNumberSelectControl
               value={section.cellBorderRadius[column] ?? "0"}
               min={0}
@@ -297,6 +414,10 @@ export function BuilderCellStyleSettings({
               onChange={(value) => onUpdateCellBorderRadius(column, value)}
             />
           </BuilderSettingRow>
+          {/* Shadow is not a device setting — it has no key in
+              BUILDER_CELL_DEVICE_KEY_NORMALIZERS, so offering it on a phone
+              would write desktop's value while the panel said otherwise. */}
+          {device ? null : (
           <BuilderSettingRow label="Shadow">
             <select value={shadow} onChange={(event) => onSetCellExtra(column, "cellShadow", event.target.value)}>
               <option value="none">None</option>
@@ -305,6 +426,7 @@ export function BuilderCellStyleSettings({
               <option value="heavy">Heavy</option>
             </select>
           </BuilderSettingRow>
+          )}
         </div>
 
         {/* The same Overlay group the ROW panel carries, on the cell — one
@@ -320,6 +442,7 @@ export function BuilderCellStyleSettings({
             would quietly repaint the fill instead. `allowVideo` is off here
             for the same reason it is off on the row: a video screen over a
             background is a second <video> element. */}
+        {device ? null : (
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Overlay</div>
           <BuilderBackgroundControls
@@ -344,9 +467,23 @@ export function BuilderCellStyleSettings({
             </BuilderSettingRow>
           ) : null}
         </div>
+        )}
 
         <div className="builder-schema-panel-column">
           <div className="builder-schema-group-title">Visibility</div>
+          {device && onUpdateSection ? (
+            <BuilderSettingRow label={mark(`Hide on ${BUILDER_DEVICE_LABELS[device]}`, "hidden")}>
+              <input
+                type="checkbox"
+                checked={isCellHiddenOnDevice(section, column, device)}
+                title={`Leaves this column out on ${device === "phone" ? "phones" : "tablets and phones"}. It still shows on larger screens.`}
+                onChange={(event) =>
+                  onUpdateSection((current) => setCellHiddenOnDevice(current, column, device, event.target.checked))
+                }
+              />
+            </BuilderSettingRow>
+          ) : null}
+          {device ? null : (
           <BuilderSettingRow label="Access">
             <div className="builder-radio-group">
               <label>
@@ -371,6 +508,7 @@ export function BuilderCellStyleSettings({
               </label>
             </div>
           </BuilderSettingRow>
+          )}
         </div>
       </div>
     </div>

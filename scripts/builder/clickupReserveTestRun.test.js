@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * A TEST RUN DOES NOT SPEND THE COMPANY'S CLICKUP TOKEN (2026-09-15, task
+ * A TEST RUN DOES NOT WRITE THE MACHINE'S CLICKUP LEDGER (2026-09-15, task
  * 86bc125u6).
  *
  * `clickupReserveDoor.test.js` proves the door obeys the reserve.
@@ -19,7 +19,21 @@
  *
  * Both directions are asserted here on purpose. The bug is fixed by making the
  * door ignore a test run; the DANGER in that fix is weakening the live reserve,
- * so the last two cases are the ones that matter most.
+ * so the cases marked THE PROTECTION IS INTACT are the ones that matter most.
+ *
+ * WHAT THIS FILE OWNS AFTER THE 2026-09-15 CATCH-UP MERGE (task 86bc16xwc).
+ * The door's own half of this fix landed on `main` first, under task
+ * 86bc0wrxg, by a route two review rounds hardened, and
+ * `clickupReserveDoor.test.js` pins it: a faked request declaring no ledger of
+ * its own is not counted at all, and one that DOES declare a ledger spends
+ * against that one. Six cases here restated that in this branch's own words
+ * and were dropped rather than kept as a second, slightly different copy.
+ *
+ * What survives is the part that is still only here, and it is one statement:
+ * `record` refuses the machine's LIVE ledger from a test process, whatever env
+ * it is handed — the backstop behind the door, for a write the door never saw.
+ * Everything else below is the danger half: proof that none of it weakened the
+ * live reserve.
  *
  * BREAK-TESTED, each case naming the edit that makes it fail. Every one was
  * made, watched to fail, and reverted before this file was committed.
@@ -31,7 +45,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { clickupFetch, ledger, underTestRunner, spendsCompanyBudget } = require('../lib/clickup.cjs');
+const { clickupFetch, ledger, underTestRunner } = require('../lib/clickup.cjs');
 
 const URL_REAL = 'https://api.clickup.com/api/v2/task/abc';
 const NOW = 1_757_000_000_000;
@@ -72,48 +86,6 @@ function ledgerLines(env) {
   }
 }
 
-// ── The bug: the suite's own volume must not refuse the suite ───────────────
-
-test('a scheduled caller under a test runner is NOT refused, however full the ledger is', async () => {
-  // Break-test: drop `&& !underTestRunner(env)` from spendsCompanyBudget and
-  // this yields, which is the failure the whole ticket is about.
-  const { env } = fixture({ STARCASTER_CALLER: 'scheduled', NODE_TEST_CONTEXT: 'child-v8' });
-  for (let i = 0; i < 99; i += 1) ledger.record({ now: NOW + i, env });
-  const spy = spyFetch();
-  const out = await clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: spy.impl, env, now: () => NOW + 100 });
-  assert.equal(out.yielded, null, 'a fake request has spent nothing, so there is nothing to stand down from');
-  assert.equal(spy.calls.length, 1, 'the request reaches its stand-in transport');
-  assert.equal(out.res.status, 200);
-});
-
-test('a test run does not write to the machine ledger at all', async () => {
-  // Break-test: change `if (spends)` back to `if (spendsClickUpBudget(url))`
-  // at either record site and the count below becomes 1.
-  const { env } = fixture({ STARCASTER_CALLER: 'scheduled', NODE_TEST_CONTEXT: 'child-v8' });
-  const spy = spyFetch();
-  await clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: spy.impl, env, now: () => NOW });
-  assert.equal(ledgerLines(env), 0, 'nothing of the token was spent, so nothing is recorded');
-});
-
-test('a test run whose transport fails is still not recorded', async () => {
-  // The catch branch records too — deliberately, because an attempt that never
-  // connected still spends a real request. A fake one still does not.
-  const { env } = fixture({ STARCASTER_CALLER: 'scheduled', NODE_TEST_CONTEXT: 'child-v8' });
-  const boom = async () => { throw new Error('stand-in refused'); };
-  const out = await clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: boom, env, now: () => NOW });
-  assert.ok(out.transportError, 'the failure is still reported to the caller');
-  assert.equal(ledgerLines(env), 0);
-});
-
-test('vitest is a test runner too', async () => {
-  const { env } = fixture({ STARCASTER_CALLER: 'scheduled', VITEST: 'true' });
-  for (let i = 0; i < 99; i += 1) ledger.record({ now: NOW + i, env });
-  const spy = spyFetch();
-  const out = await clickupFetch(URL_REAL, { method: 'GET' }, { fetchImpl: spy.impl, env, now: () => NOW + 100 });
-  assert.equal(out.yielded, null);
-  assert.equal(spy.calls.length, 1);
-});
-
 // ── The danger: the live reserve must be exactly as strict as it was ────────
 
 test('THE PROTECTION IS INTACT: a genuinely scheduled job at the ceiling still yields', async () => {
@@ -148,13 +120,6 @@ test('what a test run is, said once', () => {
   assert.equal(underTestRunner(null), false);
 });
 
-test('only api.clickup.com spends, and not even that under a test runner', () => {
-  assert.equal(spendsCompanyBudget('https://api.clickup.com/x', {}), true);
-  assert.equal(spendsCompanyBudget('http://127.0.0.1:9/x', {}), false);
-  assert.equal(spendsCompanyBudget('not a url at all', {}), false);
-  assert.equal(spendsCompanyBudget('https://api.clickup.com/x', { NODE_TEST_CONTEXT: 'child-v8' }), false);
-});
-
 test('the bug-report forwarder reads THIS definition, not its own copy', () => {
   // Task 86bc0zuvb filed 34 fake tickets into the operator's queue because a
   // test run reached real ClickUp. That guard and this one must never come to
@@ -166,21 +131,7 @@ test('the bug-report forwarder reads THIS definition, not its own copy', () => {
   assert.doesNotMatch(forward, /function underTestRunner/, 'and does not define a second one');
 });
 
-// ── The two backstops behind the door ──────────────────────────────────────
-
-test('shouldYield exempts a test run, so the callers that SKIP the door are covered too', () => {
-  // `scripts/clickup_direct.mjs` calls shouldYield directly at its loop
-  // boundaries (`reserveGate()` in the bus relay) so a stop is legible instead
-  // of happening mid-flight. That caller never touches clickupFetch, so the
-  // door's own exemption cannot reach it.
-  // Break-test: delete the underTestRunner branch at the top of shouldYield and
-  // this yields, because the env below names a ledger that is over the line.
-  const { env } = fixture({ NODE_TEST_CONTEXT: 'child-v8' });
-  for (let i = 0; i < 99; i += 1) ledger.record({ now: NOW + i, env });
-  const gate = ledger.shouldYield({ kind: 'scheduled', now: NOW + 100, env });
-  assert.equal(gate.yield, false);
-  assert.match(gate.why, /spent nothing/);
-});
+// ── The backstop behind the door ───────────────────────────────────────────
 
 test('shouldYield still refuses a real scheduled job over the line', () => {
   const { env } = fixture({});
