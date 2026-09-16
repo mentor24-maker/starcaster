@@ -29,6 +29,25 @@ in the same bucket is how a machine with a missing tool ends up looking like a
 library of mystery footage, and because sending somebody to hunt a stuck disk
 over a file that answered instantly wastes an afternoon.
 
+One of those readings — which way up the clip was shot — was recorded turning
+the wrong way. A phone held upright writes a note inside the file saying how
+far the picture has to be spun to stand up, and there are two opposite ways of
+writing that note down. This piece had picked the wrong one, so the commonest
+file in the whole Studio, a portrait iPhone clip, would have come out upside
+down as soon as anything used the number to build a thumbnail. Nothing reads it
+yet, so nothing was actually broken — which is exactly why it was worth settling
+now, three steps before it would have surfaced somewhere that looks nothing like
+its cause. It was settled by measuring rather than by reasoning: a test builds a
+clip that is red down one side and blue down the other, spins it, renders the
+picture a viewer would actually see, and looks at which side the red ended up
+on. Where the file uses the older way of writing the note, that is said plainly
+in the code as an assumption rather than a measurement, because no file on this
+machine can be made to demonstrate it either way.
+
+A file whose name begins with a dash is also read properly now, instead of the
+inspection tool mistaking the name for an instruction and refusing perfectly
+good footage.
+
 Every claim here is checked against real video files, built fresh each time the
 tests run and thrown away afterwards — no video is stored in the code, where it
 would sit forever.

@@ -163,12 +163,13 @@ function parseFrameRate(text) {
 }
 
 /**
- * Rotation as degrees CLOCKWISE in 0/90/180/270.
+ * Snap any multiple-of-90-ish number onto 0/90/180/270.
  *
- * ffprobe reports the display matrix as a signed rotation that can be negative
- * (`-90` is the ordinary portrait iPhone case) and, from the legacy `rotate`
- * tag, as any multiple of 90. Both are normalised here so nothing downstream
- * has to remember which spelling it got.
+ * IT CARRIES NO DIRECTION OF ITS OWN. ffprobe writes rotation two ways and
+ * they run OPPOSITE ways round, so the caller is the one that knows which way
+ * the number it holds was pointing — see `rotationOf` and
+ * `clockwiseFromDisplayMatrix` below. A blanket negation here would just move
+ * the bug from one spelling to the other.
  */
 function normaliseRotation(value) {
   const deg = Number(value);
@@ -177,11 +178,53 @@ function normaliseRotation(value) {
   return ((snapped % 360) + 360) % 360;
 }
 
+/**
+ * The display matrix's reading, as the CLOCKWISE turn the rest of the Studio
+ * works in — the turn a thumbnail or a proxy applies to the STORED picture to
+ * get the one a viewer sees.
+ *
+ * MEASURED, not reasoned about (2026-09-16, on this machine): a 320x160 clip
+ * with RED on the left and BLUE on the right was muxed with
+ * `ffmpeg -display_rotation -90 -c copy`, the frame a viewer actually sees was
+ * rendered, and its pixels were sampled.
+ *
+ *   ffprobe rotation = -90  ->  displays 160x320 with RED at the TOP
+ *                               (left edge to the top = a CLOCKWISE quarter
+ *                               turn), so -90 on the wire is 90 clockwise
+ *   ffprobe rotation =  90  ->  displays 160x320 with RED at the BOTTOM
+ *                               (counter-clockwise), so 90 on the wire is 270
+ *
+ * ffmpeg says the same thing in its own help text: `-display_rotation ... set
+ * pure counter-clockwise rotation in degrees`. The portrait iPhone spelling is
+ * `-90`, which is the commonest file in this whole Studio, so getting this
+ * backwards would put every portrait clip 180 degrees out.
+ */
+function clockwiseFromDisplayMatrix(value) {
+  const deg = Number(value);
+  if (!Number.isFinite(deg)) return null;
+  return normaliseRotation(-deg);
+}
+
+/**
+ * One physical orientation, one number: degrees CLOCKWISE in 0/90/180/270.
+ *
+ * The display matrix is negated (measured, above). The legacy `rotate` tag is
+ * NOT, because it is already clockwise — and THAT HALF IS ASSERTED RATHER THAN
+ * MEASURED, which is worth saying plainly. No file on this machine can be made
+ * to display a legacy rotation: ffmpeg 9.0.1 silently drops
+ * `-metadata:s:v:0 rotate=` on mp4/mov write, and the tag it does keep on
+ * Matroska it then ignores on playback (checked both, 2026-09-16). The
+ * assertion rests on the pairing older ffprobe printed for ONE physical
+ * orientation — a portrait iPhone reading `TAG:rotate=90` beside
+ * `displaymatrix: rotation of -90.00 degrees`, the same quarter turn written
+ * twice, once each way round. If a real legacy-tagged file ever turns up,
+ * measure it the way the display matrix was measured and correct this.
+ */
 function rotationOf(stream) {
   const sideData = Array.isArray(stream && stream.side_data_list) ? stream.side_data_list : [];
   for (const entry of sideData) {
     if (entry && entry.rotation !== undefined) {
-      const deg = normaliseRotation(entry.rotation);
+      const deg = clockwiseFromDisplayMatrix(entry.rotation);
       if (deg !== null) return deg;
     }
   }
@@ -242,8 +285,9 @@ function readProbe(probeJson) {
 
   const rotationDeg = video ? rotationOf(video) : null;
   // What the viewer actually sees. A portrait iPhone clip is stored 1920×1080
-  // with a 90° matrix on it; a thumbnail built from the stored numbers comes
-  // out on its side.
+  // and carries a display matrix ffprobe spells `-90`, which is a quarter turn
+  // CLOCKWISE (see `clockwiseFromDisplayMatrix`); a thumbnail built from the
+  // stored numbers comes out on its side.
   const turned = rotationDeg === 90 || rotationDeg === 270;
   const displayWidth = width === null || height === null ? null : (turned ? height : width);
   const displayHeight = width === null || height === null ? null : (turned ? width : height);
@@ -445,7 +489,13 @@ function runFfprobe(filePath, { run = spawnSync, bin = process.env.STUDIO_FFPROB
     '-print_format', 'json',
     '-show_format',
     '-show_streams',
-    String(filePath),
+    // `-i` AND NOT A BARE PATH. ffprobe reads a leading `-` as an option, so a
+    // file genuinely called `-dash-name.mp4` comes back
+    // "Missing argument for option 'dash-name.mp4'" over perfectly good media.
+    // Measured 2026-09-16 with ffprobe 9.0.1; `-i` takes the same file fine.
+    // Studio paths are absolute in practice, which makes this cheap insurance
+    // rather than a live bug — but it removes the class outright.
+    '-i', String(filePath),
   ];
   const res = run(bin, args, {
     encoding: 'utf8',
@@ -558,6 +608,7 @@ module.exports = {
   isUnderFolder,
   parseFrameRate,
   normaliseRotation,
+  clockwiseFromDisplayMatrix,
   primaryVideoStream,
   LANES,
   UNKNOWN_REASONS,

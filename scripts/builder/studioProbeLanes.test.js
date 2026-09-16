@@ -41,6 +41,7 @@ const {
   isUnderFolder,
   parseFrameRate,
   normaliseRotation,
+  clockwiseFromDisplayMatrix,
   primaryVideoStream,
   LANES,
   UNKNOWN_REASONS,
@@ -304,8 +305,11 @@ test('frame rates parse, including the broken spellings', () => {
   assert.equal(parseFrameRate('nonsense'), null);
 });
 
-test('rotation is normalised to clockwise 0/90/180/270 whichever way it was written', () => {
-  assert.equal(normaliseRotation(-90), 270, 'the ordinary portrait iPhone spelling');
+test('normaliseRotation only snaps to 0/90/180/270 — it does not pick a direction', () => {
+  // It is deliberately direction-blind: the two spellings ffprobe emits run
+  // opposite ways, so the caller supplies the sign. -90 in, 270 out, with no
+  // claim about which way the picture turns.
+  assert.equal(normaliseRotation(-90), 270);
   assert.equal(normaliseRotation(90), 90);
   assert.equal(normaliseRotation(450), 90);
   assert.equal(normaliseRotation('180'), 180);
@@ -313,18 +317,54 @@ test('rotation is normalised to clockwise 0/90/180/270 whichever way it was writ
   assert.equal(normaliseRotation('sideways'), null);
 });
 
+test('the display matrix is counter-clockwise, so a portrait iPhone turns 90 CLOCKWISE', () => {
+  // THE DIRECTION IN WORDS, checked against a real file by the measuring test
+  // further down: ffprobe's -90 renders with the stored LEFT edge at the TOP,
+  // which is a clockwise quarter turn. Getting this backwards puts every
+  // portrait clip 180 degrees out three slices downstream.
+  assert.equal(clockwiseFromDisplayMatrix(-90), 90, 'the ordinary portrait iPhone spelling');
+  assert.equal(clockwiseFromDisplayMatrix(90), 270);
+  assert.equal(clockwiseFromDisplayMatrix(-180), 180, '180 is the same either way round');
+  assert.equal(clockwiseFromDisplayMatrix(180), 180);
+  assert.equal(clockwiseFromDisplayMatrix(0), 0);
+  assert.equal(clockwiseFromDisplayMatrix('sideways'), null);
+});
+
 test('a turned clip reports what a viewer would see, not what is stored', () => {
   const streams = [videoStream({ side_data_list: [{ side_data_type: 'Display Matrix', rotation: -90 }] })];
   const media = readProbe({ streams, format: { tags: {} } });
-  assert.equal(media.rotationDeg, 270);
+  assert.equal(media.rotationDeg, 90, 'the matrix said -90 counter-clockwise, which is 90 clockwise');
   assert.equal(media.width, 1920, 'stored');
   assert.equal(media.displayWidth, 1080, 'shown');
   assert.equal(media.displayHeight, 1920);
 });
 
-test('the legacy rotate tag is read when there is no display matrix', () => {
-  const streams = [videoStream({ tags: { handler_name: 'Core Media Video', rotate: '180' } })];
-  assert.equal(readProbe({ streams, format: { tags: {} } }).rotationDeg, 180);
+test('the legacy rotate tag is already clockwise, so it is NOT negated', () => {
+  // The two paths have to end on the same scale — one physical orientation,
+  // one number. This half is asserted rather than measured (see the note on
+  // `rotationOf`): ffmpeg 9 will not write a legacy tag that anything honours,
+  // so it cannot be rendered and sampled the way the matrix path was.
+  const quarter = [videoStream({ tags: { handler_name: 'Core Media Video', rotate: '90' } })];
+  assert.equal(readProbe({ streams: quarter, format: { tags: {} } }).rotationDeg, 90,
+    'a legacy rotate=90 is 90 CLOCKWISE, the same turn the matrix spells -90');
+
+  const half = [videoStream({ tags: { handler_name: 'Core Media Video', rotate: '180' } })];
+  assert.equal(readProbe({ streams: half, format: { tags: {} } }).rotationDeg, 180);
+});
+
+test('one physical orientation produces one number, whichever way the file spelled it', () => {
+  // The portrait iPhone quarter turn, written both ways. If a future edit
+  // negates the wrong path, these two stop agreeing.
+  const matrix = readProbe({
+    streams: [videoStream({ side_data_list: [{ side_data_type: 'Display Matrix', rotation: -90 }] })],
+    format: { tags: {} },
+  });
+  const legacy = readProbe({
+    streams: [videoStream({ tags: { handler_name: 'Core Media Video', rotate: '90' } })],
+    format: { tags: {} },
+  });
+  assert.equal(matrix.rotationDeg, legacy.rotationDeg, 'the same turn must not read as two different numbers');
+  assert.equal(matrix.rotationDeg, 90);
 });
 
 test('a missing reading is null, never zero', () => {
@@ -419,7 +459,7 @@ test('an answer that is not JSON is a failure, not an empty probe', () => {
   assert.equal(out.reason, PROBE_FAILURES.UNPARSEABLE);
 });
 
-test('ffprobe is asked for JSON, with the path last and quiet stderr', () => {
+test('ffprobe is asked for JSON, with the path behind -i and quiet stderr', () => {
   let seen = null;
   probeFile('/Studio/Inbox/a mov with spaces.mov', {
     run: (bin, args) => { seen = { bin, args }; return { status: 0, stdout: '{}' }; },
@@ -429,6 +469,7 @@ test('ffprobe is asked for JSON, with the path last and quiet stderr', () => {
   assert.equal(seen.bin, FFPROBE);
   assert.deepEqual(seen.args.slice(0, 6), ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams']);
   assert.equal(seen.args.at(-1), '/Studio/Inbox/a mov with spaces.mov', 'passed as one argument — never shelled out');
+  assert.equal(seen.args.at(-2), '-i', 'so a filename that starts with a dash is a filename, not an option');
 });
 
 test('a successful probe keeps the raw ffprobe output whatever the verdict', () => {
@@ -569,17 +610,140 @@ test('a real seven-stream file probes cleanly', { skip: !HAVE_FFMPEG && 'ffmpeg 
   assert.equal(out.lane, LANES.IPHONE);
 });
 
-test('a real rotated clip reports what a viewer would see', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
+// ---------------------------------------------------------------------------
+// Which way does it turn? Measured from the pixels, not reasoned about.
+//
+// `rotationDeg` is published as degrees CLOCKWISE, and the display matrix is
+// written counter-clockwise, so the sign has to be flipped somewhere. A test
+// that only asserts a number cannot tell a correct flip from a missing one —
+// both look like "270 came out" until somebody builds a thumbnail three slices
+// downstream and every portrait clip is upside down. So these two build a clip
+// with RED on the LEFT, turn it, render the frame a viewer actually sees, and
+// look at where the red went.
+// ---------------------------------------------------------------------------
+
+/** A 320x160 clip, RED on the left half, BLUE on the right half. */
+function makeSplitFile(dir, name) {
+  const out = path.join(dir, name);
+  ffmpeg([
+    '-f', 'lavfi', '-i', 'color=red:s=160x160:d=1:r=10',
+    '-f', 'lavfi', '-i', 'color=blue:s=160x160:d=1:r=10',
+    '-filter_complex', '[0:v][1:v]hstack=inputs=2[v]', '-map', '[v]',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+    out,
+  ]);
+  return out;
+}
+
+/** What ffprobe says is on the wire, before this module touches the sign. */
+function rawMatrixRotation(file) {
+  const out = execFileSync(FFPROBE, [
+    '-v', 'error', '-show_entries', 'stream_side_data=rotation', '-of', 'csv=p=0', file,
+  ], { encoding: 'utf8' });
+  const match = out.match(/-?\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+/** The single frame a player would put on screen, autorotation applied. */
+function displayedFrame(dir, file, name) {
+  const png = path.join(dir, name);
+  ffmpeg(['-i', file, '-frames:v', '1', '-update', '1', png]);
+  return png;
+}
+
+function frameSize(file) {
+  const out = execFileSync(FFPROBE, [
+    '-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', file,
+  ], { encoding: 'utf8' });
+  const [width, height] = out.trim().split(',').map(Number);
+  return { width, height };
+}
+
+/** The colour of an 8x8 patch, read straight out of the decoded frame. */
+function patchColour(file, x, y) {
+  const raw = execFileSync(FFMPEG, [
+    '-hide_banner', '-loglevel', 'error', '-i', file,
+    '-vf', `crop=8:8:${x}:${y}`, '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-',
+  ], { maxBuffer: 1 << 20 });
+  const [r, g, b] = [raw[0], raw[1], raw[2]];
+  if (r > 128 && b < 128) return 'red';
+  if (b > 128 && r < 128) return 'blue';
+  return `neither, rgb(${r},${g},${b})`;
+}
+
+test('a portrait clip turns CLOCKWISE — the stored LEFT edge ends up at the TOP', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
+  const dir = tmpDir(t);
+  const portrait = path.join(dir, 'portrait.mp4');
+  ffmpeg(['-display_rotation', '-90', '-i', makeSplitFile(dir, 'split.mp4'), '-c', 'copy', portrait]);
+
+  assert.equal(rawMatrixRotation(portrait), -90, 'the ordinary portrait iPhone spelling, on the wire');
+
+  const out = probeFile(portrait);
+  assert.equal(out.ok, true, out.message || '');
+  assert.equal(out.media.width, 320, 'stored');
+  assert.equal(out.media.height, 160);
+  assert.equal(out.media.displayWidth, 160, 'shown');
+  assert.equal(out.media.displayHeight, 320);
+  assert.equal(out.media.rotationDeg, 90,
+    'ffprobe wrote -90 counter-clockwise, so the clockwise turn is 90 — not 270');
+
+  // And now the proof, from the picture itself rather than from the number.
+  const shown = displayedFrame(dir, portrait, 'shown-portrait.png');
+  assert.deepEqual(frameSize(shown), { width: 160, height: 320 }, 'the picture stands up');
+  assert.equal(patchColour(shown, 76, 4), 'red',
+    'the stored LEFT edge is at the TOP, and left-to-top IS a clockwise quarter turn');
+  assert.equal(patchColour(shown, 76, 308), 'blue', 'with the stored RIGHT edge at the bottom');
+});
+
+test('the other quarter turn is counter-clockwise, and reads as 270', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
+  const dir = tmpDir(t);
+  const other = path.join(dir, 'other-way.mp4');
+  ffmpeg(['-display_rotation', '90', '-i', makeSplitFile(dir, 'split.mp4'), '-c', 'copy', other]);
+
+  assert.equal(rawMatrixRotation(other), 90);
+  assert.equal(probeFile(other).media.rotationDeg, 270, 'a clockwise 270 is the same turn as a counter-clockwise 90');
+
+  const shown = displayedFrame(dir, other, 'shown-other.png');
+  assert.deepEqual(frameSize(shown), { width: 160, height: 320 });
+  assert.equal(patchColour(shown, 76, 308), 'red',
+    'the stored LEFT edge is at the BOTTOM, which is the counter-clockwise way round');
+  assert.equal(patchColour(shown, 76, 4), 'blue');
+});
+
+test('a real turned iPhone capture reports what a viewer would see', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
   const dir = tmpDir(t);
   const base = makeApplePhoneFile(dir, 'flat.mov');
   const turned = path.join(dir, 'portrait.mov');
-  ffmpeg(['-display_rotation', '90', '-i', base, '-c', 'copy', turned]);
+  // A plain remux drops the Apple udta tags, and this test is about a file
+  // that is still recognisably an iPhone after it has been turned.
+  ffmpeg(['-display_rotation', '-90', '-i', base, '-c', 'copy',
+    '-map_metadata', '0', '-movflags', 'use_metadata_tags', turned]);
 
   const out = probeFile(turned);
+  assert.equal(out.lane, LANES.IPHONE);
   assert.equal(out.media.rotationDeg, 90);
   assert.equal(out.media.width, 1920);
   assert.equal(out.media.displayWidth, 1080);
   assert.equal(out.media.displayHeight, 1920);
+});
+
+test('a real file whose name starts with a dash is read, not mistaken for an option', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
+  // Without `-i`, ffprobe answers "Missing argument for option 'dash.mp4'"
+  // over perfectly good media. Absolute Studio paths never hit it, which is
+  // why this is insurance rather than a live bug — but the class is gone.
+  const dir = tmpDir(t);
+  ffmpeg(['-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30:duration=1',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', path.join(dir, '-dash-leading-name.mp4')]);
+
+  // THE NAME HAS TO REACH FFPROBE STILL STARTING WITH A DASH. An absolute
+  // temp path starts with `/`, so probing one proves nothing at all — the run
+  // is given the temp folder as its working directory and the bare name, which
+  // is the only shape that reproduces it.
+  const out = probeFile('-dash-leading-name.mp4', {
+    run: (bin, args, opts) => spawnSync(bin, args, { ...opts, cwd: dir }),
+  });
+  assert.equal(out.ok, true, out.message || '');
+  assert.equal(out.media.width, 320);
 });
 
 test('a real container nobody recognises lands in unknown with its probe kept', { skip: !HAVE_FFMPEG && 'ffmpeg not installed' }, (t) => {
