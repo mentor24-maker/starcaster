@@ -121,18 +121,34 @@ function walkFiles(dir, { maxAgeDays = null, skipEntries = [], now = Date.now() 
  * of the scan is in the naming; silently dropping it would leave somebody
  * restoring a machine without a shell config and no idea why.
  */
-function stageFile({ from, to, scan }) {
+function stageFile({ from, to, scan, tailBytes }) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
-  if (scan) {
-    let text = null;
+
+  // A file that is going to be TAILED has to be read anyway, so the tail and
+  // the scan share the one read rather than each doing their own.
+  const needsText = Boolean(scan) || (Number.isFinite(tailBytes) && tailBytes > 0);
+  let text = null;
+  if (needsText) {
     try { text = fs.readFileSync(from, 'utf8'); } catch (_) { text = null; }
-    if (text !== null) {
-      const hits = nodeBackup.scanForSecrets(text);
-      if (hits.length) {
-        return { ok: false, why: `held back — it looks like it contains ${hits.map((h) => h.name).join(' and ')}` };
-      }
+  }
+
+  if (scan && text !== null) {
+    const hits = nodeBackup.scanForSecrets(text);
+    if (hits.length) {
+      return { ok: false, why: `held back — it looks like it contains ${hits.map((h) => h.name).join(' and ')}` };
     }
   }
+
+  if (Number.isFinite(tailBytes) && tailBytes > 0 && text !== null) {
+    const tail = nodeBackup.tailWithNotice(text, tailBytes, { name: path.basename(from) });
+    try {
+      fs.writeFileSync(to, tail.text);
+      return { ok: true, bytes: fs.statSync(to).size, truncated: tail.truncated, originalBytes: tail.originalBytes };
+    } catch (err) {
+      return { ok: false, why: `could not be written (${err.code || err.message})` };
+    }
+  }
+
   try {
     fs.copyFileSync(from, to);
     return { ok: true, bytes: fs.statSync(to).size };
@@ -270,7 +286,11 @@ for (const item of nodeBackup.CAPTURE) {
   }
 
   if (DRY) {
-    const bytes = sources.reduce((n, s) => n + s.bytes, 0);
+    // Predict the tail rather than the file, or the dry run advertises a size
+    // the real run will never write — and the whole point of a dry run is that
+    // it is a faithful description of what is about to happen.
+    const cap = Number.isFinite(item.tailBytes) && item.tailBytes > 0 ? item.tailBytes : Infinity;
+    const bytes = sources.reduce((n, s) => n + Math.min(s.bytes, cap), 0);
     record(item, sources.length, bytes);
     continue;
   }
@@ -278,9 +298,21 @@ for (const item of nodeBackup.CAPTURE) {
   let files = 0;
   let bytes = 0;
   const heldBack = [];
+  let truncatedCount = 0;
   for (const s of sources) {
-    const res = stageFile({ from: s.from, to: path.join(dest, s.rel), scan: item.scanForSecrets });
-    if (res.ok) { files += 1; bytes += res.bytes; } else heldBack.push(`${s.rel} ${res.why}`);
+    const res = stageFile({ from: s.from, to: path.join(dest, s.rel), scan: item.scanForSecrets, tailBytes: item.tailBytes });
+    if (res.ok) {
+      files += 1;
+      bytes += res.bytes;
+      if (res.truncated) {
+        truncatedCount += 1;
+        notes.push(`${item.title}: ${s.rel} was ${nodeBackup.humanBytes(res.originalBytes)} and only its last `
+          + `${nodeBackup.humanBytes(item.tailBytes)} was kept. The file says so at the top.`);
+      }
+    } else heldBack.push(`${s.rel} ${res.why}`);
+  }
+  if (truncatedCount) {
+    say(`  note      ${truncatedCount} large log file(s) captured as their recent tail — see the manifest.`);
   }
   for (const h of heldBack) notes.push(`${item.title}: ${h}`);
   if (!files) skip(item, heldBack.length ? heldBack.join('; ') : 'every file in it could not be read', { fatal: !item.optional });

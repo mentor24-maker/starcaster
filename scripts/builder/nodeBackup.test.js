@@ -25,6 +25,7 @@ const {
   nodeFolder,
   renderManifest,
   scanForSecrets,
+  tailWithNotice,
 } = require('../../lib/nodeBackup.js');
 
 const HOUR = 60 * 60 * 1000;
@@ -263,4 +264,59 @@ test('an unmeasured size says so rather than claiming zero', () => {
   assert.equal(humanBytes(undefined), 'size not measured');
   assert.equal(humanBytes(0), '0 B');
   assert.equal(humanBytes(1536), '1.5 KB');
+});
+
+// --- keeping the backup repo cloneable -------------------------------------
+
+test('a file under the cap is kept whole and is not labelled', () => {
+  const r = tailWithNotice('a short log\n', 1024, { name: 'x.log' });
+  assert.equal(r.truncated, false);
+  assert.equal(r.text, 'a short log\n');
+});
+
+test('a file over the cap keeps its RECENT end, not its start', () => {
+  // The value in these logs is entirely in the recent end — check A1 of
+  // `npm run pulse` reads the last few passes, not the last few months.
+  const body = Array.from({ length: 5000 }, (_, i) => `line ${i}`).join('\n');
+  const r = tailWithNotice(body, 2048, { name: 'loop-build.log' });
+  assert.equal(r.truncated, true);
+  assert.ok(r.text.includes('line 4999'), 'the newest line must survive');
+  assert.ok(!r.text.includes('\nline 0\n'), 'the oldest lines are the ones dropped');
+});
+
+test('a truncated file SAYS it is truncated, and says how big the original was', () => {
+  // A truncated log that looks like a whole log misleads its reader about what
+  // they are holding — they scroll to the top and conclude the job started
+  // there. Same defect class as a check that could not run reporting a pass.
+  const body = 'x'.repeat(200000);
+  const r = tailWithNotice(body, 1024, { name: 'loop-review.log' });
+  assert.ok(r.truncated);
+  assert.ok(r.text.startsWith('***'), 'the notice must be the first thing a reader sees');
+  assert.ok(r.text.includes('NOT THE WHOLE FILE'));
+  assert.ok(r.text.includes('loop-review.log'), 'the notice names the file');
+  assert.ok(/195(\.\d)? KB/.test(r.text), `the notice states the original size, got: ${r.text.slice(0, 300)}`);
+});
+
+test('the surviving text starts at a line boundary', () => {
+  const body = Array.from({ length: 500 }, (_, i) => `a line of log number ${i}`).join('\n');
+  const r = tailWithNotice(body, 300, { name: 'x.log' });
+  const firstRealLine = r.text.split('\n').find((l) => !l.startsWith('***') && l.length);
+  assert.ok(/^a line of log number \d+$/.test(firstRealLine), `got a mid-line start: ${JSON.stringify(firstRealLine)}`);
+});
+
+test('the log item declares a cap, because an uncapped one grows the repo without limit', () => {
+  // loop-build.log and loop-review.log are appended to and never rotated. A
+  // nightly whole-file copy stores a new multi-megabyte blob every night — about
+  // 1.8 GB a year — in the repo whose job is to be cloned quickly onto a
+  // replacement Mac. A backup that makes its own recovery slower every day is
+  // working against itself.
+  const logs = CAPTURE.find((c) => c.id === 'loop-logs');
+  assert.ok(logs.tailBytes > 0, 'the loop-logs item must cap what it captures');
+  assert.ok(logs.tailBytes <= 1024 * 1024, 'the cap has to actually bound nightly growth');
+});
+
+test('tailWithNotice survives nothing at all', () => {
+  assert.equal(tailWithNotice(null, 100).text, '');
+  assert.equal(tailWithNotice('', 100).truncated, false);
+  assert.equal(tailWithNotice('abc', 0).truncated, false);
 });
