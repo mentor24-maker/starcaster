@@ -537,12 +537,43 @@ function openQueue(file, options = {}) {
    * dedupe has to happen here. One blocked job per (stage, subject); a repeat
    * refreshes the reason and the clock instead of filing another.
    *
+   * AND IT TAKES THE LIVE JOB OUT OF THE RUNNING, WHICH IS THE HALF THAT WAS
+   * MISSING. The lookup below prefers an ALREADY-BLOCKED row, because that row
+   * is the record of when this subject first became impossible. But a blocked
+   * row and a fresh pending row for the same subject coexist by design — the
+   * live index covers only `pending`/`running` — and when they did, the old
+   * code refreshed the blocked row and never touched the job the caller was
+   * holding. The caller reported the file as blocked; the job stayed `running`
+   * with nobody working it, `reap` returned it to `pending` after the lease,
+   * and the cycle repeated to the recovery ceiling before going terminal with
+   * entirely the wrong reason ("the worker stopped responding every time",
+   * when the worker responded correctly every time). On the ingest checksum
+   * path each of those rounds re-downloaded the whole file: about 71 GB of
+   * transfer for one 3.57 GB corrupt clip. Found by review on 2026-09-16.
+   *
+   * So blocking a subject now ALWAYS ends with no live job for it. The live
+   * duplicate is absorbed into the canonical blocked row and its own row is
+   * removed — not dropped work, because the identical work is recorded as
+   * blocked in the same transaction, with the newer reason and payload. The
+   * alternative, leaving a second blocked row behind, re-opens the very
+   * thousand-identical-rows problem this function exists to prevent: one more
+   * blocked row per re-queue, for ever. The absorbed ids are returned so a
+   * caller can say what happened rather than guess.
+   *
+   * `jobId` is optional and belt-and-braces: the live row for the subject IS
+   * normally the caller's job, but a caller that holds a job whose payload
+   * names a different subject would otherwise leave it running. Name the job
+   * you hold and it is taken out whatever the subject lookup finds — absorbed
+   * when it is a duplicate of the subject being blocked, blocked in place with
+   * the same reason when it is not, because a job for a different subject is
+   * not a duplicate of anything and its own record is worth keeping.
+   *
    * Wrapped in `BEGIN IMMEDIATE` because it is a read-then-write: two workers
    * both finding no blocked row before either inserts is the same double-file
    * this function exists to prevent. `IMMEDIATE` takes the write lock at the
    * start rather than on first write, which is what makes the read safe.
    */
-  function block({ stage, subjectKind, subjectId, reason, payload = null }) {
+  function block({ stage, subjectKind, subjectId, reason, payload = null, jobId = null }) {
     const at = clock();
     const row = {
       stage: text(stage),
@@ -554,18 +585,21 @@ function openQueue(file, options = {}) {
     }
     const why = text(reason) || 'blocked with no reason given';
     const encoded = encodePayload(payload);
+    const heldId = jobId === null || jobId === undefined ? null : Number(jobId);
 
     db.exec('BEGIN IMMEDIATE');
     try {
-      const existing = db
+      const candidates = db
         .prepare(
           `SELECT * FROM jobs
             WHERE stage = ? AND subject_kind = ? AND subject_id = ?
               AND state IN ('${STATES.BLOCKED}', '${STATES.PENDING}', '${STATES.RUNNING}')
-            ORDER BY CASE state WHEN '${STATES.BLOCKED}' THEN 0 ELSE 1 END, id
-            LIMIT 1`
+            ORDER BY CASE state WHEN '${STATES.BLOCKED}' THEN 0 ELSE 1 END, id`
         )
-        .get(row.stage, row.subject_kind, row.subject_id);
+        .all(row.stage, row.subject_kind, row.subject_id);
+
+      const existing = candidates[0] || null;
+      let result;
 
       if (existing) {
         // Either it is already blocked (refresh the reason) or it is live and
@@ -583,19 +617,55 @@ function openQueue(file, options = {}) {
               RETURNING *`
           )
           .get(why, encoded, encoded, at, existing.id);
-        db.exec('COMMIT');
-        return { job: shape(updated), created: false };
+        result = { job: shape(updated), created: false };
+      } else {
+        const inserted = db
+          .prepare(
+            `INSERT INTO jobs (stage, subject_kind, subject_id, state, last_error, payload, created_at, updated_at)
+             VALUES (?, ?, ?, '${STATES.BLOCKED}', ?, ?, ?, ?)
+             RETURNING *`
+          )
+          .get(row.stage, row.subject_kind, row.subject_id, why, encoded, at, at);
+        result = { job: shape(inserted), created: true };
       }
 
-      const inserted = db
-        .prepare(
-          `INSERT INTO jobs (stage, subject_kind, subject_id, state, last_error, payload, created_at, updated_at)
-           VALUES (?, ?, ?, '${STATES.BLOCKED}', ?, ?, ?, ?)
-           RETURNING *`
-        )
-        .get(row.stage, row.subject_kind, row.subject_id, why, encoded, at, at);
+      // Anything else still live FOR THIS SUBJECT is a duplicate of the row
+      // just written. It is absorbed, never left running: see the note above.
+      const absorbed = [];
+      const isLive = (candidate) => candidate.state === STATES.PENDING || candidate.state === STATES.RUNNING;
+      for (const candidate of candidates) {
+        if (Number(candidate.id) === Number(result.job.id)) continue;
+        if (!isLive(candidate)) continue;
+        db.prepare(`DELETE FROM jobs WHERE id = ? AND state IN ('${STATES.PENDING}', '${STATES.RUNNING}')`)
+          .run(candidate.id);
+        absorbed.push(Number(candidate.id));
+      }
+
+      // And the caller's own job, when it is not one of those. Normally it IS
+      // — a claimed ingest job carries the subject being blocked — but ingest
+      // reads its subject from the payload and falls back to the job's own, so
+      // the two can differ, and the caller has told us it is walking away from
+      // this job either way. A job for a DIFFERENT subject is not a duplicate
+      // of anything, so it is blocked in place with the same reason rather
+      // than deleted: its own subject keeps its own record.
+      const held = heldId !== null && Number.isFinite(heldId)
+        ? db.prepare('SELECT * FROM jobs WHERE id = ?').get(heldId)
+        : null;
+      const blockedInPlace = [];
+      if (held && isLive(held)
+          && Number(held.id) !== Number(result.job.id)
+          && !absorbed.includes(Number(held.id))) {
+        db.prepare(
+          `UPDATE jobs
+              SET state = '${STATES.BLOCKED}', last_error = ?, lease_owner = '', lease_expires_at = 0,
+                  updated_at = ?
+            WHERE id = ?`
+        ).run(why, at, held.id);
+        blockedInPlace.push(Number(held.id));
+      }
+
       db.exec('COMMIT');
-      return { job: shape(inserted), created: true };
+      return { ...result, absorbedJobIds: absorbed, blockedJobIds: blockedInPlace };
     } catch (err) {
       rollbackQuietly(db);
       throw err;

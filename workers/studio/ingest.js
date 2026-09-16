@@ -79,6 +79,26 @@ const DEFAULT_DISK_FLOOR_BYTES = 50 * 1024 * 1024 * 1024;
 /** Tell the queue we are alive this often while bytes are moving. */
 const DEFAULT_HEARTBEAT_MS = 30 * 1000;
 
+/**
+ * How long a Drive call may take before it is abandoned.
+ *
+ * NEITHER FETCH HAD A TIMEOUT, WHICH IS WORSE THAN IT SOUNDS ON THIS PATH.
+ * `onProgress` — the only thing that renews the queue lease — fires on a
+ * CHUNK, so a connection that goes quiet without closing delivers no chunks,
+ * sends no heartbeat, and leaves the pass sitting there while its lease
+ * silently expires and another worker claims the same 3.57 GB file. Node's
+ * fetch waits for ever by default. Found by review on 2026-09-16.
+ *
+ * The metadata call gets a whole-call timeout, because it is one small
+ * request. The media stream gets a STALL timeout instead of a total one: a
+ * legitimate 3.57 GB download takes the best part of an hour on a home
+ * connection, so "this call has run too long" is meaningless there, while
+ * "no bytes have arrived for two minutes" is exactly the condition worth
+ * acting on. Override with STUDIO_DRIVE_TIMEOUT_MS / STUDIO_DRIVE_STALL_MS.
+ */
+const DEFAULT_DRIVE_TIMEOUT_MS = 30 * 1000;
+const DEFAULT_DRIVE_STALL_MS = 2 * 60 * 1000;
+
 /** The state a source is in the moment its bytes are on disk and verified. */
 const STATE_DOWNLOADED = 'downloaded';
 
@@ -162,30 +182,66 @@ function scopeFor(options = {}, env = process.env) {
  *
  * Measured on the DIRECTORY, not on the machine: the cache may be an external
  * drive, and "the boot disk has room" is not an answer about the disk the
- * bytes are going to. A directory that does not exist yet is measured by
- * walking up to the nearest parent that does, because creating it in order to
- * ask the question would itself be a write to a disk we are not yet sure of.
+ * bytes are going to.
+ *
+ * IT WALKS UP EXACTLY ONE LEVEL, AND NO FURTHER. The first draft walked up to
+ * the nearest parent that existed, which is a reasonable-sounding rule with a
+ * hole straight through the thing this module is for: with
+ * `STUDIO_CACHE_DIR=/Volumes/Studio/cache` and the drive NOT MOUNTED, the walk
+ * reaches `/Volumes` and measures the BOOT DISK. The floor then passes on the
+ * wrong disk's numbers, `mkdir -p` creates `/Volumes/Studio/cache` as an
+ * ordinary folder on the boot disk, and 3.57 GB lands on the one disk the
+ * floor exists to protect. Found by review on 2026-09-16.
+ *
+ * So "not created yet" and "not mounted" get different answers, which is the
+ * distinction that was missing. One level covers the ordinary first run — the
+ * cache folder itself has never been made, inside a parent that is plainly
+ * there — and refuses everything beyond it, because a MISSING PARENT is what
+ * an unmounted volume looks like from here. The refusal names both causes,
+ * since from inside the process they are genuinely indistinguishable and the
+ * operator can tell them apart in a second.
+ *
+ * `exists` says which of the two readings this is, so a caller can report
+ * "measured the parent, the cache folder is not there yet" rather than
+ * implying it looked at the folder itself.
  */
 function freeBytesFor(dir, statfs = fs.statfsSync) {
-  let probe = path.resolve(dir);
-  for (;;) {
+  const target = path.resolve(dir);
+  const parent = path.dirname(target);
+
+  const measure = (probe, exists) => {
     let stats;
     try {
       stats = statfs(probe);
     } catch (err) {
-      const parent = path.dirname(probe);
-      if (parent === probe) {
-        return { ok: false, error: `the free space on ${dir} could not be read: ${err.message}` };
-      }
-      probe = parent;
-      continue;
+      return { ok: false, error: err };
     }
     const free = Number(stats.bavail) * Number(stats.bsize);
     if (!Number.isFinite(free)) {
-      return { ok: false, error: `the free space on ${probe} came back as something other than a number` };
+      return { ok: false, error: new Error(`the free space on ${probe} came back as something other than a number`) };
     }
-    return { ok: true, value: free, measuredAt: probe };
+    return { ok: true, value: free, measuredAt: probe, exists };
+  };
+
+  const onTarget = measure(target, true);
+  if (onTarget.ok) return onTarget;
+
+  if (parent === target) {
+    return { ok: false, error: `the free space on ${dir} could not be read: ${onTarget.error.message}` };
   }
+
+  const onParent = measure(parent, false);
+  if (onParent.ok) return onParent;
+
+  return {
+    ok: false,
+    error: `the free space on ${target} could not be read, and neither could the folder that should `
+      + `contain it (${parent}): ${onParent.error.message}. `
+      + 'Fix: this is either a cache folder whose parent has never been created, or a drive that is not '
+      + 'mounted — check that the disk STUDIO_CACHE_DIR points at is plugged in and mounted, then create '
+      + `${parent} if it is genuinely missing. Measuring further up the tree would report some OTHER disk's `
+      + 'free space, which is how footage ends up on the boot disk.',
+  };
 }
 
 /**
@@ -206,12 +262,29 @@ function safeFileName(name, fallback) {
   return cleaned || fallback;
 }
 
-/** Where one Drive file's bytes live, and the half-written form of it. */
+/**
+ * Where one Drive file's bytes live, and the half-written form of it.
+ *
+ * THE PART FILE IS NAMED FROM THE DRIVE FILE ID, NOT FROM THE DRIVE NAME.
+ * It used to be `<the name>.part`, and a name in Drive is a value a person can
+ * change at any moment: rename a clip between two attempts and the second
+ * attempt looks for a part file that no longer exists, throws away 3 GB of
+ * progress and starts from zero — the one thing this slice exists to prevent.
+ * The containing directory is already the Drive file id, which is the only
+ * identity here that cannot move, so the partial bytes are called
+ * `download.part` inside it and survive any number of renames. Found by review
+ * on 2026-09-16.
+ *
+ * The FINISHED file keeps the human name, because by then it is something a
+ * person opens rather than something a retry has to find again.
+ */
+const PART_FILE_NAME = 'download.part';
+
 function cachePathsFor({ cacheDir, lane, driveFileId, name }) {
   const dir = path.join(cacheDir, text(lane) || 'inbox', text(driveFileId));
   const fileName = safeFileName(name, `${text(driveFileId)}.media`);
   const finalPath = path.join(dir, fileName);
-  return { dir, finalPath, partPath: `${finalPath}.part` };
+  return { dir, finalPath, partPath: path.join(dir, PART_FILE_NAME) };
 }
 
 /** Size on disk, or 0 when it is not there. Anything else is a real failure. */
@@ -244,7 +317,7 @@ async function removeQuietly(file) {
  * verifying against the payload would prove the download matched a file that
  * no longer exists.
  */
-async function getIngestMetadata(fileId) {
+async function getIngestMetadata(fileId, { timeoutMs = DEFAULT_DRIVE_TIMEOUT_MS } = {}) {
   const id = text(fileId);
   if (!id) return { ok: false, status: 400, error: 'fileId is required' };
   const tokenRes = await googleDrive.getAccessToken();
@@ -253,13 +326,26 @@ async function getIngestMetadata(fileId) {
     fields: 'id,name,mimeType,size,md5Checksum,trashed,createdTime,modifiedTime',
     supportsAllDrives: 'true',
   }).toString();
+  const budget = Math.max(0, Number(timeoutMs) || 0);
   let res;
   try {
     res = await fetch(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?${query}`,
-      { headers: { Authorization: `Bearer ${tokenRes.data.accessToken}` } }
+      {
+        headers: { Authorization: `Bearer ${tokenRes.data.accessToken}` },
+        // A hung metadata read used to hold the whole pass open indefinitely.
+        ...(budget > 0 ? { signal: AbortSignal.timeout(budget) } : {}),
+      }
     );
   } catch (err) {
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      return {
+        ok: false,
+        status: 504,
+        error: `Google Drive did not answer within ${Math.round(budget / 1000)}s when asked to describe `
+          + `file ${id}, so the call was abandoned rather than left hanging`,
+      };
+    }
     return { ok: false, status: 502, error: `Google Drive could not be reached: ${err.message}` };
   }
   const body = await res.text().catch(() => '');
@@ -285,7 +371,7 @@ async function getIngestMetadata(fileId) {
  * the size check passes and only the hash catches. The caller truncates and
  * starts again when this comes back false.
  */
-async function openDriveStream(fileId, { offset = 0 } = {}) {
+async function openDriveStream(fileId, { offset = 0, signal = null } = {}) {
   const id = text(fileId);
   if (!id) return { ok: false, status: 400, error: 'fileId is required' };
   const tokenRes = await googleDrive.getAccessToken();
@@ -300,9 +386,16 @@ async function openDriveStream(fileId, { offset = 0 } = {}) {
           Authorization: `Bearer ${tokenRes.data.accessToken}`,
           ...(start > 0 ? { Range: `bytes=${start}-` } : {}),
         },
+        // The caller's stall watchdog owns this signal, and it is armed before
+        // the call so a connection that never returns HEADERS is abandoned too
+        // — not only one that stops mid-body.
+        ...(signal ? { signal } : {}),
       }
     );
   } catch (err) {
+    if (err && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      return { ok: false, status: 504, error: `Google Drive stopped responding while opening file ${id}` };
+    }
     return { ok: false, status: 502, error: `Google Drive could not be reached: ${err.message}` };
   }
   if (!res.ok) {
@@ -340,7 +433,7 @@ function realCatalog() {
     findSourceByContentHash: videoSourcesStore.findSourceByContentHash,
     createSource: videoSourcesStore.createSource,
     getSourceById: videoSourcesStore.getSourceById,
-    listSessions: videoSessionsStore.listSessions,
+    findSessionByTitle: videoSessionsStore.findSessionByTitle,
     createSession: videoSessionsStore.createSession,
   };
 }
@@ -375,6 +468,14 @@ function holdingSessionTitle(lane, recordedAt) {
 /**
  * Find that holding session, or make it.
  *
+ * IT ASKS FOR THE TITLE, IT DOES NOT SCAN A PAGE OF SESSIONS. The first draft
+ * looked for the title inside `listSessions(200, scope)`, which orders by
+ * `recorded_at desc` — so past about 200 sessions, any backfilled older day
+ * falls off the end of that page, the lookup misses, and a duplicate holding
+ * session is created on EVERY ingest from then on. A list read is not a
+ * lookup. Found by review on 2026-09-16; the targeted finder is
+ * `videoSessionsStore.findSessionByTitle`.
+ *
  * Read-then-write, and the race is stated rather than hidden: two ingest jobs
  * for two different files recorded on the same day could both find nothing and
  * both create one. The cost is a duplicate holding session, which is cosmetic
@@ -384,12 +485,15 @@ function holdingSessionTitle(lane, recordedAt) {
  */
 async function ensureHoldingSession({ catalog, lane, recordedAt, scope }) {
   const title = holdingSessionTitle(lane, recordedAt);
-  const existing = await catalog.listSessions(200, scope);
+  const existing = await catalog.findSessionByTitle(title, scope);
   if (!existing.ok) {
-    return { ok: false, status: existing.status, error: `the session list could not be read: ${existing.error}` };
+    return {
+      ok: false,
+      status: existing.status,
+      error: `the holding session "${title}" could not be looked up: ${existing.error}`,
+    };
   }
-  const found = (existing.data || []).find((session) => session.title === title);
-  if (found) return { ok: true, status: 200, data: found, created: false };
+  if (existing.data) return { ok: true, status: 200, data: existing.data, created: false };
 
   const created = await catalog.createSession({
     title,
@@ -435,6 +539,7 @@ async function downloadToPart({
   partPath,
   expectedBytes,
   onProgress = null,
+  stallMs = DEFAULT_DRIVE_STALL_MS,
 }) {
   let have = await sizeOnDisk(partPath);
 
@@ -449,73 +554,131 @@ async function downloadToPart({
     return { ok: true, bytes: have, resumedFrom: have, restarted: false, transferred: 0 };
   }
 
-  const opened = await drive.openStream(driveFileId, { offset: have });
-  if (!opened.ok) {
-    return { ok: false, status: opened.status, error: opened.error, bytes: have, resumedFrom: have };
-  }
-
-  let restarted = false;
-  let flags = 'a';
-  if (have > 0 && opened.rangeHonoured === false) {
-    // The server sent the whole file even though we asked for the tail.
-    // Appending it would produce a file of the right length made of the wrong
-    // bytes — see the note on openDriveStream.
-    restarted = true;
-    flags = 'w';
-    have = 0;
-  }
-
-  const resumedFrom = have;
-  let written = 0;
-  let leaseLost = false;
-  const out = fs.createWriteStream(partPath, { flags });
-  try {
-    await pipeline(
-      opened.stream,
-      async function* (source) {
-        for await (const chunk of source) {
-          written += chunk.length;
-          if (onProgress) {
-            const verdict = await onProgress({ bytes: resumedFrom + written, expectedBytes });
-            if (verdict === false) {
-              leaseLost = true;
-              return;
-            }
-          }
-          yield chunk;
-        }
-      },
-      out
-    );
-  } catch (err) {
-    return {
-      ok: false,
-      status: 502,
-      error: `the download stopped after ${humanBytes(resumedFrom + written)}: ${err.message}`,
-      bytes: await sizeOnDisk(partPath),
-      resumedFrom,
-      restarted,
-    };
-  }
-  if (leaseLost) {
-    return {
-      ok: false,
-      status: 409,
-      error: 'the lease on this job was lost, so the download was stopped',
-      bytes: await sizeOnDisk(partPath),
-      resumedFrom,
-      restarted,
-      leaseLost: true,
-    };
-  }
-
-  return {
-    ok: true,
-    bytes: await sizeOnDisk(partPath),
-    resumedFrom,
-    restarted,
-    transferred: written,
+  // ── The stall watchdog ───────────────────────────────────────────────────
+  // Armed BEFORE the call, because a connection that never returns its headers
+  // hangs just as completely as one that stops mid-body, and disarmed in the
+  // `finally` below so nothing is left running after the function returns
+  // (DOCTRINE 5.2 — this is a timer inside a function, never at module scope).
+  //
+  // It both aborts the controller, which is what tears a real socket down, and
+  // destroys the stream, which is what guarantees the pipeline below actually
+  // ends rather than trusting a transport to honour the signal.
+  const budget = Math.max(0, Number(stallMs) || 0);
+  const controller = new AbortController();
+  let stallTimer = null;
+  let stalled = false;
+  let liveStream = null;
+  const stallError = () => new Error(
+    `no bytes arrived from Google Drive for ${Math.round(budget / 1000)}s, so the download was abandoned `
+    + 'rather than left hanging with its queue lease quietly expiring'
+  );
+  const disarm = () => {
+    if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
   };
+  const arm = () => {
+    if (!budget) return;
+    disarm();
+    stallTimer = setTimeout(() => {
+      stalled = true;
+      try { controller.abort(stallError()); } catch { /* already aborted */ }
+      if (liveStream && typeof liveStream.destroy === 'function') liveStream.destroy(stallError());
+    }, budget);
+    // Deliberately NOT unref'd. This timer is the only thing that will ever end
+    // a hung download, so it has to hold the event loop open — an unref'd one
+    // lets the process decide there is nothing left to do while a stream that
+    // will never emit is still being awaited. It is cleared in the `finally`
+    // below, so it cannot outlive the call.
+  };
+
+  try {
+    return await withStallWatchdog();
+  } finally {
+    disarm();
+  }
+
+  async function withStallWatchdog() {
+    arm();
+    const opened = await drive.openStream(driveFileId, { offset: have, signal: controller.signal });
+    if (!opened.ok) {
+      disarm();
+      return {
+        ok: false,
+        status: opened.status,
+        error: stalled ? stallError().message : opened.error,
+        bytes: have,
+        resumedFrom: have,
+      };
+    }
+    liveStream = opened.stream;
+    arm();
+
+    let restarted = false;
+    let flags = 'a';
+    if (have > 0 && opened.rangeHonoured === false) {
+      // The server sent the whole file even though we asked for the tail.
+      // Appending it would produce a file of the right length made of the wrong
+      // bytes — see the note on openDriveStream.
+      restarted = true;
+      flags = 'w';
+      have = 0;
+    }
+
+    const resumedFrom = have;
+    let written = 0;
+    let leaseLost = false;
+    const out = fs.createWriteStream(partPath, { flags });
+    try {
+      await pipeline(
+        opened.stream,
+        async function* (source) {
+          for await (const chunk of source) {
+            arm(); // bytes are moving, so the clock starts again
+            written += chunk.length;
+            if (onProgress) {
+              const verdict = await onProgress({ bytes: resumedFrom + written, expectedBytes });
+              if (verdict === false) {
+                leaseLost = true;
+                return;
+              }
+            }
+            yield chunk;
+          }
+        },
+        out
+      );
+    } catch (err) {
+      return {
+        ok: false,
+        status: stalled ? 504 : 502,
+        error: `the download stopped after ${humanBytes(resumedFrom + written)}: `
+          + `${stalled ? stallError().message : err.message}`,
+        bytes: await sizeOnDisk(partPath),
+        resumedFrom,
+        restarted,
+      };
+    } finally {
+      disarm();
+    }
+    if (leaseLost) {
+      return {
+        ok: false,
+        status: 409,
+        error: 'the lease on this job was lost, so the download was stopped',
+        bytes: await sizeOnDisk(partPath),
+        resumedFrom,
+        restarted,
+        leaseLost: true,
+      };
+    }
+
+    return {
+      ok: true,
+      bytes: await sizeOnDisk(partPath),
+      resumedFrom,
+      restarted,
+      transferred: written,
+    };
+  }
 }
 
 /**
@@ -571,6 +734,12 @@ async function ingestJob({
   const cacheDir = resolveCacheDir(options, env);
   const base = { fileId: facts.driveFileId, name: facts.name, lane: facts.lane, jobId: job.id };
 
+  // `jobId` is what stops this pass reporting a file as blocked while leaving
+  // its own job `running` — see the long note on `queue.block`. The subject
+  // lookup usually finds that same job, but "usually" is not a guarantee when
+  // the payload's Drive file id and the job's subject can differ, and the
+  // failure is silent and expensive (about 71 GB of re-download for one
+  // corrupt clip). Name the job we are holding.
   const blockIt = (reason) => {
     queue.block({
       stage: STAGE_INGEST,
@@ -578,6 +747,7 @@ async function ingestJob({
       subjectId: facts.driveFileId || text(job.subjectId),
       reason,
       payload: job.payload || null,
+      jobId: job.id,
     });
     return { ...base, outcome: 'blocked', jobAction: 'blocked', reason };
   };
@@ -849,13 +1019,25 @@ async function ingestJob({
       // registered these exact bytes between the check above and this write.
       // One row is the rule and one row is what there is, so this is a dedupe,
       // not a failure.
+      //
+      // AND THE COPY GOES, exactly as it does on the dedupe path thirty lines
+      // above. By this point the bytes have been renamed to `finalPath`, so
+      // leaving them there strands a full-size file with no catalog row
+      // pointing at it — a cache leak the disk floor cannot see, because the
+      // floor measures free space and never asks what is using it. The winning
+      // row is a DIFFERENT Drive file (the same id was already caught by
+      // findSourceByDriveFileId), and the cache path is keyed by Drive file
+      // id, so this can never be the surviving row's own copy. Found by review
+      // on 2026-09-16.
+      await removeQuietly(paths.finalPath);
       queue.complete(job.id, owner);
       return {
         ...base,
         outcome: 'deduped',
         jobAction: 'completed',
         contentHash: digests.sha256,
-        reason: 'another worker registered these exact bytes first, so no second row was made',
+        reason: 'another worker registered these exact bytes first, so the duplicate copy was deleted '
+          + 'and no second row was made',
       };
     }
     return failIt(`the source row could not be written: ${created.error}`);
@@ -931,6 +1113,8 @@ async function runIngest(options = {}) {
     cacheDir,
     floorBytes: null,
     freeBytes: null,
+    measuredAt: null,
+    cacheDirExists: null,
     ingested: [],
     deduped: [],
     skipped: [],
@@ -977,23 +1161,17 @@ async function runIngest(options = {}) {
     );
   }
   report.freeBytes = free.value;
+  report.measuredAt = free.measuredAt;
+  // `false` means the cache folder itself is not there yet and the reading was
+  // taken on its parent — worth saying out loud, because "0 files ingested"
+  // and "the folder is empty because it has never existed" read identically.
+  report.cacheDirExists = free.exists !== false;
   if (free.value < floor.value) {
     return stopThePass(
       `only ${humanBytes(free.value)} is free on ${free.measuredAt} and the floor is ${humanBytes(floor.value)}, `
       + 'so ingest refused to start and nothing was downloaded — the disk was not partially filled. '
       + 'Fix: free space on that disk, or lower STUDIO_DISK_FLOOR_BYTES if the floor is set too high.'
     );
-  }
-
-  // The floor is standing and a project is configured, so any earlier alarm
-  // about either is over. An alarm that cannot stand down is an alarm that
-  // gets ignored.
-  if (typeof queue.clearBlock === 'function') {
-    report.healthCleared = queue.clearBlock({
-      stage: STAGE_INGEST_HEALTH,
-      subjectKind: SUBJECT_INGEST_HEALTH,
-      subjectId: cacheDir,
-    });
   }
 
   for (let done = 0; done < Math.max(1, Number(max) || 1); done += 1) {
@@ -1025,7 +1203,51 @@ async function runIngest(options = {}) {
     if (result.outcome === 'no_room') break; // the disk will not have got bigger
   }
 
-  report.ok = report.failed.length === 0 && report.blocked.length === 0 && report.unchecked.length === 0;
+  // ── The verdict, and the alarm ───────────────────────────────────────────
+  // `released` COUNTS. It did not, and that is the bug the header line was
+  // telling a lie about: on ordinary numbers — 52 GB free, a 50 GB floor, one
+  // 3.57 GB file — the pass-level floor check passes (52 > 50), the per-file
+  // check correctly refuses (52 − 3.57 < 50), the file goes back on the queue,
+  // nothing is ingested, and the report said "Studio ingest: finished
+  // cleanly." every fifteen minutes for ever. Putting a file back is the right
+  // call and it is not a clean pass: the disk does not get bigger on its own,
+  // `release` spends no attempt, so nothing ever escalates and 7/8's daemon
+  // reads `report.ok` to decide whether anything is wrong. "Alive but useless
+  // never renders as healthy" (CLAUDE.md; DOCTRINE). Found by review on
+  // 2026-09-16.
+  report.ok = report.failed.length === 0
+    && report.blocked.length === 0
+    && report.unchecked.length === 0
+    && report.released.length === 0;
+
+  // AND THE ALARM IS DECIDED HERE, NOT AT THE TOP OF THE PASS. It used to be
+  // cleared before any file was looked at, which is why the two disk checks
+  // disagreed about the same facts: the pass-level one raised the alarm, and
+  // the per-file one — the identical condition, one branch later — stood it
+  // back down on its way past. Deciding at the END means the alarm survives
+  // exactly as long as the condition does, and because `block` is idempotent
+  // per subject it is ONE row refreshed each pass rather than a new row every
+  // fifteen minutes.
+  if (report.released.length) {
+    report.health = queue.block({
+      stage: STAGE_INGEST_HEALTH,
+      subjectKind: SUBJECT_INGEST_HEALTH,
+      subjectId: cacheDir,
+      reason: `${report.released.length} file(s) could not be downloaded for want of disk room, so ingest is `
+        + 'making no progress and will keep refusing on every pass until space is freed. '
+        + `The first of them: ${report.released[0].reason}`,
+    }).job;
+  } else if (typeof queue.clearBlock === 'function') {
+    // The floor is standing, a project is configured, and nothing had to be
+    // put back, so any earlier alarm about any of that is over. An alarm that
+    // cannot stand down is an alarm that gets ignored.
+    report.healthCleared = queue.clearBlock({
+      stage: STAGE_INGEST_HEALTH,
+      subjectKind: SUBJECT_INGEST_HEALTH,
+      subjectId: cacheDir,
+    });
+  }
+
   return report;
 }
 
@@ -1035,7 +1257,10 @@ function formatIngestReport(report) {
   lines.push(report.ok ? 'Studio ingest: finished cleanly.' : 'Studio ingest: FINISHED WITH THINGS TO LOOK AT.');
   lines.push(`Cache: ${report.cacheDir}`);
   if (report.freeBytes !== null && report.freeBytes !== undefined) {
-    lines.push(`Disk: ${humanBytes(report.freeBytes)} free, floor ${humanBytes(report.floorBytes)}.`);
+    lines.push(
+      `Disk: ${humanBytes(report.freeBytes)} free, floor ${humanBytes(report.floorBytes)}`
+      + `${report.cacheDirExists === false ? ` (measured on ${report.measuredAt} — the cache folder does not exist yet)` : ''}.`
+    );
   }
   for (const entry of report.ingested) {
     lines.push(`  downloaded  ${entry.name || entry.fileId} — ${entry.reason}, registered as source ${entry.sourceId}`);
@@ -1047,7 +1272,9 @@ function formatIngestReport(report) {
     lines.push(`  skipped     ${entry.name || entry.fileId} — ${entry.reason}`);
   }
   for (const entry of report.released) {
-    lines.push(`  put back    ${entry.name || entry.fileId} — ${entry.reason}`);
+    // NOT "put back". Putting a file back is the right call and it is still a
+    // pass that shipped nothing, so it reads at the same volume as a failure.
+    lines.push(`  NO ROOM     ${entry.name || entry.fileId} — ${entry.reason}`);
   }
   for (const entry of report.failed) {
     lines.push(`  FAILED      ${entry.name || entry.fileId} — ${entry.reason}`);
@@ -1078,6 +1305,7 @@ module.exports = {
   hashFile,
   freeBytesFor,
   cachePathsFor,
+  PART_FILE_NAME,
   safeFileName,
   humanBytes,
   resolveCacheDir,
@@ -1096,5 +1324,7 @@ module.exports = {
   SUBJECT_INGEST_HEALTH,
   DEFAULT_DISK_FLOOR_BYTES,
   DEFAULT_HEARTBEAT_MS,
+  DEFAULT_DRIVE_TIMEOUT_MS,
+  DEFAULT_DRIVE_STALL_MS,
   STATE_DOWNLOADED,
 };

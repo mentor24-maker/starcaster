@@ -20,6 +20,7 @@ const { Readable } = require('node:stream');
  */
 
 const { openQueue } = require('../../workers/studio/queue.js');
+const googleDrive = require('../../lib/googleDrive.js');
 const {
   runIngest,
   ingestJob,
@@ -32,6 +33,7 @@ const {
   resolveDiskFloorBytes,
   holdingSessionTitle,
   formatIngestReport,
+  getIngestMetadata,
   STAGE_INGEST,
   SUBJECT_DRIVE_FILE,
   STAGE_INGEST_HEALTH,
@@ -150,7 +152,11 @@ function fakeCatalog({ projectIdOnInsert = PROJECT } = {}) {
         ? { ok: true, status: 200, data: found }
         : { ok: false, status: 404, error: 'Source not found' };
     },
-    listSessions: async () => ({ ok: true, status: 200, data: sessions.slice() }),
+    findSessionByTitle: async (title) => ({
+      ok: true,
+      status: 200,
+      data: sessions.find((sess) => sess.title === title) || null,
+    }),
     createSession: async (input) => {
       const row = { id: `sess_${sessions.length + 1}`, ...input };
       sessions.push(row);
@@ -540,6 +546,95 @@ test('a file that would EAT the floor is put back, not failed', async (t) => {
   assert.equal(job.state, 'pending', 'it went back on the queue');
   assert.equal(job.attempts, 0, 'and a full disk did not spend the file\'s retry budget');
   assert.match(job.lastError, /not enough room/, 'while still saying why it is waiting');
+
+  // The half this test used to leave unasserted, which is the half that was
+  // wrong: it checked everything about the JOB and nothing about the verdict.
+  assert.equal(
+    report.ok, false,
+    'a pass that shipped nothing at all is not a pass that finished cleanly'
+  );
+  assert.match(formatIngestReport(report), /FINISHED WITH THINGS TO LOOK AT/);
+  assert.match(formatIngestReport(report), /NO ROOM/);
+});
+
+test('a disk too full to do any work raises the alarm instead of clearing it', async (t) => {
+  // 52 GB free, a 50 GB floor, one 3.57 GB file: the pass-level check passes
+  // (52 > 50), the per-file check correctly refuses (52 - 3.57 < 50), and the
+  // old code cleared the health alarm on its way past — so nothing was
+  // ingested, no alarm was standing, `release` spent no attempt, and it
+  // repeated every fifteen minutes for ever saying "finished cleanly".
+  const bytes = crypto.randomBytes(4_000);
+  const queue = tmpQueue(t);
+  const drive = fakeDrive(bytes);
+  const truthful = drive.getMetadata;
+  drive.getMetadata = async (fileId) => {
+    const res = await truthful(fileId);
+    return { ...res, data: { ...res.data, size: String(4 * 1024 * 1024 * 1024) } };
+  };
+  const opts = passOptions(t, { drive, freeBytes: 52 * 1024 * 1024 * 1024 });
+  queueIngestJob(queue);
+
+  const report = await runIngest({
+    queue, owner: OWNER, ...opts, diskFloorBytes: 50 * 1024 * 1024 * 1024,
+  });
+
+  const health = queue.listJobs({ stage: STAGE_INGEST_HEALTH });
+  assert.equal(health.length, 1, 'one alarm');
+  assert.equal(health[0].state, 'blocked', 'and it is RAISED, not cleared');
+  assert.match(health[0].lastError, /making no progress/);
+  assert.equal(report.healthCleared, false);
+
+  // Run it again on the same still-full disk: the alarm is REFRESHED, never
+  // duplicated, or a 15-minute timer files 96 rows a day.
+  queue.enqueue({
+    stage: STAGE_INGEST, subjectKind: SUBJECT_DRIVE_FILE, subjectId: 'file_2',
+    payload: { driveFileId: 'file_2', name: 'other.mov', lane: 'inbox' },
+  });
+  await runIngest({ queue, owner: OWNER, ...opts, diskFloorBytes: 50 * 1024 * 1024 * 1024 });
+  const after = queue.listJobs({ stage: STAGE_INGEST_HEALTH });
+  assert.equal(after.length, 1, 'still one row, refreshed in place');
+  assert.equal(after[0].id, health[0].id);
+});
+
+test('a blocked file NEVER leaves its own job running, even on the second round', async (t) => {
+  // Blocker 1 as the review reproduced it, driven through the real pass rather
+  // than the queue alone: block a file on a checksum mismatch, re-queue the
+  // same Drive file exactly as the blocked reason tells the operator to, and
+  // block it again. The old code reported it blocked and left job #2 running,
+  // where `reap` found it, ingest re-claimed it and re-downloaded the WHOLE
+  // file — up to twenty times, about 71 GB for one 3.57 GB clip — before going
+  // terminal with a reason about the worker not responding.
+  const bytes = crypto.randomBytes(3_000);
+  const queue = tmpQueue(t);
+  const lying = fakeDrive(bytes);
+  const truthful = lying.getMetadata;
+  lying.getMetadata = async (fileId) => {
+    const res = await truthful(fileId);
+    return { ...res, data: { ...res.data, md5Checksum: 'f'.repeat(32) } };
+  };
+  const opts = passOptions(t, { drive: lying });
+  queueIngestJob(queue);
+
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.blocked.length, 1);
+  assert.deepEqual(queue.listJobs({ state: 'running' }), []);
+
+  queueIngestJob(queue); // the operator re-queues, as the reason tells them to
+  const second = await runIngest({ queue, owner: `${OWNER}-2`, ...opts });
+
+  assert.equal(second.blocked.length, 1, 'the report still says blocked');
+  assert.equal(second.ok, false);
+  assert.deepEqual(
+    queue.listJobs({ state: 'running' }), [],
+    'and NOTHING is left running behind that report'
+  );
+  assert.deepEqual(queue.listJobs({ state: 'pending' }), [], 'nor pending');
+  const blocked = queue.listJobs({ stage: STAGE_INGEST, state: 'blocked' });
+  assert.equal(blocked.length, 1, 'exactly one blocked row, not one more per re-queue');
+  assert.match(blocked[0].lastError, /do not match Drive's checksum/);
+
+  // The cost was the next round, so prove there is no next round.
+  assert.deepEqual(queue.reap(), { recovered: 0, blocked: 0 }, 'no lease left to expire');
 });
 
 test('the health alarm stands down on the next pass that has room', async (t) => {
@@ -750,19 +845,55 @@ test('hashFile gives both digests in one read', async (t) => {
   assert.equal(digests.sha256, crypto.createHash('sha256').update(bytes).digest('hex'));
 });
 
-test('free space is measured by walking up to a folder that exists', async (t) => {
+test('a cache folder that does not exist yet is measured on its parent, and says so', async (t) => {
   const dir = tmpDir(t);
-  const deep = path.join(dir, 'not', 'made', 'yet');
+  const notMadeYet = path.join(dir, 'cache');
   const seen = [];
-  const result = freeBytesFor(deep, (p) => {
+  const result = freeBytesFor(notMadeYet, (p) => {
     seen.push(p);
     if (p !== dir) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     return { bsize: 4096, bavail: 100 };
   });
   assert.equal(result.ok, true);
   assert.equal(result.value, 409_600);
+  assert.equal(result.measuredAt, dir, 'it measured the parent, which is the disk the mkdir would land on');
+  assert.equal(result.exists, false, 'and it says the folder itself was not there');
+  assert.deepEqual(seen, [notMadeYet, dir], 'it asked about exactly two paths and stopped');
+});
+
+test('an UNMOUNTED volume is refused, not measured on whatever is further up', async (t) => {
+  // The defect this replaces: the old walk-up went all the way to the nearest
+  // existing ancestor, so STUDIO_CACHE_DIR=/Volumes/Studio/cache with the
+  // drive unplugged measured `/Volumes` — i.e. the BOOT DISK — the floor
+  // passed on another disk's numbers, and `mkdir -p` then put 3.57 GB on the
+  // one disk the floor exists to protect.
+  const seen = [];
+  const result = freeBytesFor('/Volumes/Studio/cache', (p) => {
+    seen.push(p);
+    if (p === '/Volumes') return { bsize: 4096, bavail: 1_000_000 };
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+  });
+  assert.equal(result.ok, false, 'a missing PARENT is what an unmounted volume looks like from here');
+  assert.match(result.error, /could not be read/);
+  assert.match(result.error, /not[\s\S]*mounted/);
+  assert.deepEqual(
+    seen,
+    ['/Volumes/Studio/cache', '/Volumes/Studio'],
+    'and it never asked /Volumes, which would have answered for the boot disk'
+  );
+});
+
+test('a cache folder that IS there is measured on itself', async (t) => {
+  const dir = tmpDir(t);
+  const seen = [];
+  const result = freeBytesFor(dir, (p) => {
+    seen.push(p);
+    return { bsize: 4096, bavail: 100 };
+  });
+  assert.equal(result.ok, true);
   assert.equal(result.measuredAt, dir);
-  assert.equal(seen.length, 4, 'it walked up rather than creating the folder to ask');
+  assert.equal(result.exists, true);
+  assert.deepEqual(seen, [dir], 'no walk at all when the folder is there');
 });
 
 test('a Drive name cannot escape the cache folder', async () => {
@@ -790,4 +921,177 @@ test('a holding session with an unreadable date says undated rather than guessin
   assert.equal(holdingSessionTitle('inbox', '2026-09-15T04:00:00.000Z'), 'Unsorted — inbox — 2026-09-15');
   assert.equal(holdingSessionTitle('plates', 'sometime last week'), 'Unsorted — plates — undated');
   assert.equal(holdingSessionTitle('', ''), 'Unsorted — inbox — undated');
+});
+
+// ── The smaller findings from review round 1 (2026-09-16) ──────────────────
+
+test('a Drive connection that goes quiet is abandoned, not waited on for ever', async (t) => {
+  // `onProgress` — the only thing that renews the queue lease — fires on a
+  // CHUNK. A connection that stops delivering without closing therefore sends
+  // no heartbeat, and Node's fetch waits for ever by default: the pass sat
+  // there while its lease quietly expired and another worker claimed the same
+  // 3.57 GB file.
+  const dir = tmpDir(t);
+  const partPath = path.join(dir, 'download.part');
+  let sawSignal = null;
+
+  const silent = {
+    openStream: async (fileId, { signal = null } = {}) => {
+      sawSignal = signal;
+      // A stream that emits nothing and never ends, exactly like a socket that
+      // has gone quiet without being closed.
+      const stream = new Readable({ read() { /* nothing, ever */ } });
+      return { ok: true, status: 200, rangeHonoured: true, stream };
+    },
+  };
+
+  const result = await downloadToPart({
+    drive: silent,
+    driveFileId: 'file_1',
+    partPath,
+    expectedBytes: 40_000,
+    stallMs: 40,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 504, 'a stall is a timeout, not a transport error');
+  assert.match(result.error, /no bytes arrived from Google Drive/);
+  assert.equal(sawSignal !== null, true, 'and the real fetch is handed a signal, so a socket is torn down');
+  assert.equal(sawSignal.aborted, true);
+});
+
+test('a stream that is still delivering is NEVER abandoned by the stall clock', async (t) => {
+  // The other half, and the one that matters on a 3.57 GB download: the clock
+  // is a STALL clock, not a total-time budget, so bytes arriving slowly over an
+  // hour must not trip it. Chunks land 20ms apart with a 60ms stall budget.
+  const dir = tmpDir(t);
+  const partPath = path.join(dir, 'download.part');
+  const bytes = crypto.randomBytes(500);
+
+  const trickle = {
+    openStream: async () => ({
+      ok: true,
+      status: 200,
+      rangeHonoured: true,
+      stream: Readable.from((async function* () {
+        for (let at = 0; at < bytes.length; at += 100) {
+          await new Promise((resolve) => { setTimeout(resolve, 20); });
+          yield bytes.subarray(at, at + 100);
+        }
+      })()),
+    }),
+  };
+
+  const result = await downloadToPart({
+    drive: trickle, driveFileId: 'file_1', partPath, expectedBytes: bytes.length, stallMs: 60,
+  });
+
+  assert.equal(result.ok, true, 'five chunks over ~100ms, well past any total-time budget of 60ms');
+  assert.equal(result.bytes, bytes.length);
+  assert.deepEqual(fs.readFileSync(partPath), bytes);
+});
+
+test('a 409 from the database deletes the duplicate copy instead of leaking it', async (t) => {
+  // The findSourceByContentHash dedupe deletes its copy; the 409 path — the
+  // same dedupe, decided by the database — did not, and by then the bytes have
+  // been renamed to finalPath. A full-size file with no catalog row pointing
+  // at it is a cache leak the disk floor cannot see, because the floor measures
+  // free space and never asks what is using it.
+  const bytes = crypto.randomBytes(2_500);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { bytes, catalog });
+
+  // A pre-existing row with these bytes that the in-memory FINDER cannot see,
+  // so the collision is only discovered by the write — which is the race the
+  // 409 path exists for.
+  const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+  const realCreate = catalog.createSource;
+  catalog.createSource = async (input) => {
+    catalog.createSource = realCreate;
+    return { ok: false, status: 409, error: 'This file is already in the catalog for this project' };
+  };
+
+  queueIngestJob(queue);
+  const report = await runIngest({ queue, owner: OWNER, ...opts });
+
+  assert.equal(report.deduped.length, 1, formatIngestReport(report));
+  assert.match(report.deduped[0].reason, /duplicate copy was deleted/);
+  assert.equal(report.deduped[0].contentHash, hash);
+
+  const paths = cachePathsFor({
+    cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov',
+  });
+  assert.equal(fs.existsSync(paths.finalPath), false, 'the duplicate copy is gone');
+  assert.equal(fs.existsSync(paths.partPath), false, 'and so is the part file');
+});
+
+test('renaming a file in Drive between attempts does not throw the partial bytes away', async (t) => {
+  // The part file used to be named from the Drive NAME, which a person can
+  // change at any moment — so a rename mid-download orphaned the partial bytes
+  // and restarted from zero, the one thing this slice exists to prevent. The
+  // containing directory is the Drive file id, which cannot move.
+  const bytes = crypto.randomBytes(40_000);
+  const dir = tmpDir(t);
+  const cacheDir = path.join(dir, 'cache');
+
+  const before = cachePathsFor({ cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov' });
+  const after = cachePathsFor({ cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'Wedding — take 2.mov' });
+
+  assert.equal(before.partPath, after.partPath, 'the partial bytes live at the same place either way');
+  assert.equal(path.dirname(before.partPath), before.dir, 'inside the folder named for the Drive file id');
+  assert.equal(before.finalPath === after.finalPath, false, 'while the FINISHED file keeps the human name');
+
+  // And it really does resume across the rename.
+  fs.mkdirSync(before.dir, { recursive: true });
+  const dying = fakeDrive(bytes, { cutAfter: 15_000 });
+  await downloadToPart({
+    drive: dying, driveFileId: 'file_1', partPath: before.partPath, expectedBytes: bytes.length,
+  });
+  assert.equal(fs.statSync(before.partPath).size, 15_000);
+
+  const renamed = fakeDrive(bytes, { name: 'Wedding — take 2.mov' });
+  const second = await downloadToPart({
+    drive: renamed, driveFileId: 'file_1', partPath: after.partPath, expectedBytes: bytes.length,
+  });
+  assert.equal(second.ok, true);
+  assert.equal(second.resumedFrom, 15_000, 'it resumed rather than starting again after the rename');
+  assert.deepEqual(fs.readFileSync(after.partPath), bytes);
+});
+
+test('a hung Drive metadata call is abandoned with a timeout, not left hanging', async (t) => {
+  // The other fetch. One small request, so a whole-call budget is the right
+  // shape here — unlike the media stream, where only a stall clock makes sense.
+  // No network: the token call and `fetch` are both swapped out, so what is
+  // being tested is our own wiring — that a signal is passed, and that the
+  // abort comes back as a 504 saying what happened rather than as a crash.
+  const realToken = googleDrive.getAccessToken;
+  const realFetch = globalThis.fetch;
+  googleDrive.getAccessToken = async () => ({ ok: true, status: 200, data: { accessToken: 'test' } });
+  let sawSignal = null;
+  globalThis.fetch = (url, opts = {}) => new Promise((resolve, reject) => {
+    sawSignal = opts.signal || null;
+    // A real hung fetch holds the event loop open on its socket, and
+    // AbortSignal.timeout's own timer deliberately does not — so the fake has
+    // to stand in for the socket, or the loop drains before the abort fires.
+    const socket = setTimeout(() => {
+      reject(new Error('the fake fetch was never aborted — the timeout did not fire'));
+    }, 5_000);
+    if (!opts.signal) return; // no signal means this would hang for ever
+    opts.signal.addEventListener('abort', () => {
+      clearTimeout(socket);
+      reject(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }));
+    });
+  });
+  t.after(() => {
+    googleDrive.getAccessToken = realToken;
+    globalThis.fetch = realFetch;
+  });
+
+  const res = await getIngestMetadata('file_1', { timeoutMs: 20 });
+  assert.equal(sawSignal !== null, true, 'the call carries a signal at all');
+  assert.equal(res.ok, false, 'it answered rather than hanging');
+  assert.equal(res.status, 504);
+  assert.match(res.error, /did not answer within/);
+  assert.match(res.error, /abandoned rather than left hanging/);
 });

@@ -39,6 +39,30 @@ to. Working out that this wide shot and that close-up are one shoot needs the
 next two pieces. So for now everything lands in a clearly-labelled holding pen —
 "Unsorted — inbox — 2026-09-15" — which a later piece can sort out and which
 reads, to a person looking at it, as exactly what it is.
+
+**Sent back once, and two of the things it found were worth the round trip.**
+The first: a video that was turned away — a bad copy, say — was correctly
+reported as stopped, while the job telling the machine to fetch it was quietly
+left running. Nobody was working it, so five minutes later the machine assumed
+the worker had died and handed it out again, and again, up to twenty times,
+re-downloading the whole three and a half gigabytes each round before giving up
+with a reason that had nothing to do with what actually went wrong. About
+seventy gigabytes of pointless downloading for one bad file. The second: a disk
+too full to take any video at all said "finished cleanly" in the morning log.
+It was doing the right thing — putting the videos back rather than failing them
+— and then reporting a completely empty morning as a good one, every fifteen
+minutes, for ever. Nothing gets to look healthy while shipping nothing.
+
+Four smaller things came back with them. If the external drive the cache lives
+on is not plugged in, it now says so instead of quietly measuring the Mac's own
+disk and putting three gigabytes of video on it. A Google connection that goes
+silent without hanging up is given two minutes and then abandoned, rather than
+being waited on for ever. A duplicate copy the database rejected at the last
+moment is deleted rather than left on the disk with nothing pointing at it. And
+the half-finished download is no longer filed under the video's name, so
+renaming the file in Drive part-way through no longer throws the progress away
+— which is the one thing this whole piece exists to prevent.
+
 ## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
 
 A heading that looks right on a laptop is often far too big on a phone, and
