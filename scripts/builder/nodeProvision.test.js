@@ -76,6 +76,18 @@ test('Homebrew and the Claude CLI are manual — they pipe a URL into a shell', 
   }
 });
 
+test('ffmpeg is required, because the suite that gates every ship probes real video', () => {
+  // `npm run test:builder` builds real files with ffmpeg and probes them with
+  // ffprobe rather than skipping that proof, and that suite gates
+  // `npm run ship`. A node without ffmpeg would be called fully provisioned
+  // and then fail the ship of a ticket that has nothing to do with the Studio.
+  const tool = provision.REQUIRED_TOOLS.find((t) => t.id === 'ffmpeg');
+  assert.ok(tool, 'ffmpeg is missing from REQUIRED_TOOLS');
+  assert.strictEqual(tool.command, 'ffprobe', 'the probe is the binary the code actually calls');
+  assert.strictEqual(tool.brew, 'ffmpeg', 'a pass may install it — it is an ordinary brew formula');
+  assert.ok(!tool.manual, 'nothing about ffmpeg needs a person');
+});
+
 test('exactly one tool is version-pinned, and it is node', () => {
   const pinned = provision.REQUIRED_TOOLS.filter((t) => t.pinned).map((t) => t.id);
   assert.deepStrictEqual(pinned, ['node']);
