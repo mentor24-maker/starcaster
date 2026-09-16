@@ -1,3 +1,114 @@
+## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
+
+Third of eight pieces in the Studio work. The first two built the filing
+cabinet and the to-do list; this is the part that notices you have put
+something new in the folder.
+
+Two folders are watched, and they mean different things. `/Studio/Inbox/` is
+footage, which goes through the whole pipeline. `/Studio/Plates/` is
+backgrounds and screen recordings, which are looked at but never sent for
+transcription — a screen capture has nobody talking in it, and transcribing
+them all would spend real money on silence.
+
+The interesting choice is the question it asks Google. The obvious one is
+"what is in this folder?", and it works beautifully until the folder has a few
+thousand files in it, at which point it gets slower every single week and
+eventually stops answering. So it asks the other question instead: "what has
+changed since the last time I asked?" That costs the same whether the folder
+holds ten files or ten thousand. It writes down where it got to, so turning the
+machine off and on again picks up from there rather than re-filing every video
+you have ever shot.
+
+Two things were worth building carefully, because both have bitten this project
+before.
+
+The first is the account muddle. The footage lives on one Google account and
+the login belongs to a different one. When that arrangement breaks, Google's
+answer is "file not found" — which is exactly what it says when a folder has
+genuinely been deleted, and it sends you looking in completely the wrong place.
+So every run now says out loud which account the login belongs to, whether or
+not anything went wrong, and a folder it cannot see raises an alarm that names
+both accounts and the two ways to fix it.
+
+The second is not pestering. An expired login does not start working again
+because you asked it a second time ninety seconds later; it starts working
+when somebody re-mints it. So a broken login raises exactly **one** flagged
+item that keeps its reason, and refreshes it rather than filing another on
+every pass — ten broken hours leave one alarm, not ten. When it starts working
+again the alarm clears itself and says that it has, because an alarm that
+cannot stand down is one everybody learns to ignore.
+
+There is a related trap underneath that. Google reports "your login is dead"
+and "you are asking too fast" with the same error number, and those want
+opposite reactions — one needs a person, the other fixes itself in a minute.
+They are now told apart properly, so nobody gets sent to replace a login that
+was fine.
+
+One more thing, found while looking at what a real run would print rather than
+what the tests print: Google's "what has changed" feed covers the whole
+account, not just the two watched folders. On the real account that is a very
+large archive ticking over, so the first draft's run report would have listed
+a few thousand unrelated holiday videos by name and buried the three lines that
+mattered. Files that have nothing to do with the Studio are now counted by
+category with a few examples kept, and only files genuinely in a watched folder
+are named one by one.
+
+One correction after review, and it is the kind that only shows up on a real
+machine. The Mini has been running the Studio's to-do list since the previous
+piece shipped, so its file is older than the new column this work needed. The
+code adds that column on the way in — one line, exactly right, and nothing was
+checking it. Every test built a brand-new file, which already has the column,
+so deleting that line left all sixty tests green while the Mini itself would
+have stopped dead with an unreadable database error, unattended, at whatever
+hour it next picked up a video. There is now a test that builds the old shape
+on purpose and opens it, so anyone tidying up later finds out immediately
+instead of finding out from the Mini.
+
+A second review found four ways this could go wrong quietly, and quietly is
+the word that matters — all four produced a cheerful green run report while
+something was actually broken. The happy path was fine; nobody had walked the
+unhappy ones.
+
+The worst was losing footage. Google only tells you about a file once, so the
+watcher writes down how far it has got and never looks back. If putting a video
+on the to-do list failed for a moment — the database busy, say — the run said so
+in its report and then moved the bookmark past it anyway. That video was gone:
+nothing would ever mention it again. Now a run that could not file something
+leaves the bookmark where it is and reads that page again next time, which is
+exactly what it already did when Google itself had a bad moment.
+
+The second was an alarm standing itself down on no evidence. A run that could
+not check the folders at all — not "they are broken", but "I could not reach
+them to look" — was counting as a clean run, which cleared a genuine alarm
+raised an hour earlier and told the board Google was readable again. The two
+outcomes are now kept apart: a run says **OK**, **finished with failures**, or
+**could not tell**, and only the first of those is allowed to clear an alarm.
+
+The third was sending you on an errand. A momentary network problem reaching
+Google's login service was being filed as "your login is dead — go and re-mint
+it", which is an afternoon of work on a login that was perfectly fine. The
+comment above that line already said not to do this; the line did it anyway.
+
+The fourth is the account muddle wearing a different hat. Google keeps a
+separate "what has changed" feed for each shared drive, so if the Studio
+folders live on a shared drive rather than in somebody's own My Drive, the
+watcher would be reading the wrong feed entirely — finding nothing, for ever,
+and reporting a clean run every hour while it did. It already had the answer in
+hand and was throwing it away. It now compares the two and refuses to start,
+naming the drive it found and the setting that fixes it.
+
+Three smaller ones went in at the same time: pointing both folder settings at
+the same folder used to silently mark every interview as a background and never
+transcribe any of them (it now refuses, before it calls Google at all); two
+copies of the worker starting at the same instant could collide while adding
+that column to the old to-do list file, and the loser would crash; and an error
+while writing to the database could be replaced by a second, meaningless error
+raised while cleaning up, hiding the real one. Each of the seven fixes has a
+test, and each test was checked by putting the bug back and watching that exact
+test fail.
+
+Nothing downloads yet — that is the next piece.
+
 ## 2026-09-15 — One last lock on the tally the test suite was filling up (#715)
 
 This is the tail end of the job **#713** finished — "Running the tests no longer
