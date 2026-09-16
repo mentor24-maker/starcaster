@@ -220,6 +220,81 @@ test("another project cannot read this project's session", async () => {
   }
 });
 
+// ── finding one session by its title ────────────────────────────────────────
+
+test('a session is found by its exact title, scoped, without a list scan', async () => {
+  // Ingest (4/8) files footage into a HOLDING session named for its lane and
+  // day, and used to look for that title inside listSessions(200, scope) —
+  // which orders by recorded_at desc, so past ~200 sessions a backfilled older
+  // day falls off the page and a duplicate holding session is made on every
+  // single ingest. A list read is not a lookup.
+  const { sessions, restore } = withDb();
+  try {
+    await seedSession(sessions, SCOPE_A, 'Unsorted — inbox — 2026-09-15');
+    const found = await sessions.findSessionByTitle('Unsorted — inbox — 2026-09-15', SCOPE_A);
+    assert.equal(found.ok, true);
+    assert.equal(found.data.title, 'Unsorted — inbox — 2026-09-15');
+  } finally {
+    restore();
+  }
+});
+
+test('the SAME title is past the end of a 200-session page and is still found', async () => {
+  // The defect, reproduced: the holding session is the OLDEST recording, so
+  // ordering by recorded_at desc puts it past any page of newer ones. 205
+  // sessions is enough to push it off a page of 200.
+  const { sessions, restore } = withDb();
+  try {
+    const wanted = 'Unsorted — inbox — 2020-01-01';
+    await sessions.createSession({ title: wanted, recordedAt: '2020-01-01T00:00:00.000Z' }, SCOPE_A);
+    for (let i = 0; i < 205; i += 1) {
+      await sessions.createSession(
+        { title: `Newer ${i}`, recordedAt: `2026-09-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z` },
+        SCOPE_A
+      );
+    }
+
+    const page = await sessions.listSessions(200, SCOPE_A);
+    assert.equal(page.ok, true);
+    assert.equal(
+      page.data.some((sess) => sess.title === wanted), false,
+      'the holding session really is off the end of the page — this is the trap'
+    );
+
+    const found = await sessions.findSessionByTitle(wanted, SCOPE_A);
+    assert.equal(found.ok, true);
+    assert.equal(found.data.title, wanted, 'but the targeted lookup still finds it');
+  } finally {
+    restore();
+  }
+});
+
+test('a title nobody has used is data: null, NOT a 404', async () => {
+  // "We have not got this yet" and "the database is unreachable" have to stay
+  // on different paths, or the caller retries a question already answered.
+  const { sessions, restore } = withDb();
+  try {
+    const missing = await sessions.findSessionByTitle('Unsorted — inbox — 1999-01-01', SCOPE_A);
+    assert.equal(missing.ok, true);
+    assert.equal(missing.status, 200);
+    assert.equal(missing.data, null);
+  } finally {
+    restore();
+  }
+});
+
+test("another project's session with the same title is not found", async () => {
+  const { sessions, restore } = withDb();
+  try {
+    await seedSession(sessions, SCOPE_B, 'Unsorted — inbox — 2026-09-15');
+    const found = await sessions.findSessionByTitle('Unsorted — inbox — 2026-09-15', SCOPE_A);
+    assert.equal(found.ok, true);
+    assert.equal(found.data, null, 'a holding session is per project, like everything else here');
+  } finally {
+    restore();
+  }
+});
+
 // ── content_hash dedupe ─────────────────────────────────────────────────────
 
 test('the same content_hash twice in ONE project is rejected', async () => {
