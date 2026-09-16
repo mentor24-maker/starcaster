@@ -1,3 +1,68 @@
+## 2026-09-16 — The Studio makes small working copies of your footage (#725)
+
+Sixth of eight pieces in the Studio work. The earlier pieces built the filing
+cabinet, the to-do list, the eye on Google Drive and the download. This is the
+one that turns a big camera file into the three small things everything after
+it actually reads: a **proxy** you can scrub through without waiting, a plain
+**sound file** for the transcription step, and a **contact sheet** — twelve
+stills in a grid — so you can see what a clip is without opening it.
+
+Three things were worth building carefully.
+
+**An iPhone file has seven tracks in it, not two.** There is the picture and
+the sound, and then five more the phone writes for itself. Tell the conversion
+tool to "just convert this" and it either refuses outright or quietly carries
+something wrong into the copy. So the two tracks that matter are named by hand,
+every time, and the other five are left exactly where they are. The original
+file is never written to at all, and there is a test that checks the original
+byte for byte before and after to prove it.
+
+**A copy that is bigger than the original is not a copy worth making.** The
+Zoom recordings are already small, and measured here, a 720p copy of one comes
+out **23% larger** than the file it was meant to replace — and slower to read.
+So a file that is already small enough is used as it is, and the run says so
+with the number it decided on rather than leaving you to wonder why no copy
+appeared.
+
+But size is not the only reason to make a copy. The second job is making a
+file **ordinary**: an iPhone records in a newer format that is perfectly small
+and still plays as a black rectangle in Safari. So there are two questions, not
+one — is it small enough, *and* is it already in a format everything can read —
+and only both together skip the copy. Getting that wrong would not have looked
+like a bug; it would have looked like a video player that does not work.
+
+**Running it twice does not do the work twice.** Each copy has one fixed name,
+so nothing can ever pile up as `proxy (1)`, `proxy (2)`. Work in progress is
+written under a temporary name and only given its real one when the conversion
+has finished cleanly — so a machine that loses power halfway through leaves
+something the next run throws away, rather than a half-finished file that looks
+finished forever. And a file that is there but too short, which is what a full
+disk leaves behind, is rebuilt rather than trusted.
+
+The ticket also asked for a measurement: is it faster to decode video on the
+graphics chip than on the main processor? On the Mini, over thirty seconds of
+the format an iPhone writes, the answer is **no difference at all** on the
+clock — two seconds either way. But the graphics chip used **a sixth** of the
+processor time to do it. That is the number that matters on a machine running
+several jobs at once, and a stopwatch on its own would have said "no
+difference" and been wrong about the only thing worth knowing.
+
+The main processor is still the default anyway, and that is a decision rather
+than caution. The two ways of decoding do not produce quite the same file — the
+brightness is identical to the last bit, one colour channel differs by an
+amount no eye could ever see — and "run it again and you get the same thing" is
+only a question anybody can check while that stays true. The faster path is
+there to be switched on, it falls back on its own when the graphics chip
+refuses a particular file, and it says which one made each copy.
+
+Two things were found by running it rather than by reading it, which is the
+whole argument for doing both. The temporary file name left the conversion tool
+with no idea what kind of file it was being asked to write, so every single
+conversion failed until that was said out loud. And the check for "is this an
+older format" was written as a pattern that reads perfectly and misses the one
+format Apple's own hardware produces — exactly the file this pipeline sees
+most. Both are now tests.
+
 ## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
 
 A heading that looks right on a laptop is often far too big on a phone, and
