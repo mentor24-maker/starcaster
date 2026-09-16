@@ -1,3 +1,33 @@
+## 2026-09-15 — The Studio can now tell what a video file actually is (#724)
+
+Fifth of eight pieces in the Studio work. A file's name is not evidence —
+Episode 3's project file is called `youtube_cover_S1-E3.wfp`, and a file named
+`DoE_S1-E2.mp4` sits inside the Episode 3 folder. So this piece opens the file
+itself and reads what the camera or the app wrote inside it: how long it runs,
+how big the picture is, how many frames a second, which way up it was shot, and
+when it was recorded.
+
+It then works out where the footage came from. An iPhone or an iPad says so in
+a tag Apple writes into the file, and that tag is stored word for word, so an
+iPad never gets filed as an iPhone by a rule that nearly matched. Zoom writes
+no such tag, so a Zoom recording is recognised by its shape instead — and the
+answer says out loud that it is an educated guess rather than something the
+file stated. A file in the Plates folder is a plate no matter what shot it,
+because a plate is a job in the edit rather than a kind of camera, and putting
+it in that folder is you saying so.
+
+When it genuinely cannot tell, it says which kind of cannot-tell it is — an
+Apple file with no model written in it, a model it has never been taught, a
+camera from another maker — and keeps everything it read, so the question can
+be settled later without going back to the file. And if the inspection tool is
+missing or the file is damaged, that is reported as "no reading taken" rather
+than as "unknown", because those two piling up in the same bucket is how a
+machine with a missing tool ends up looking like a library of mystery footage.
+
+Every claim here is checked against real video files, built fresh each time the
+tests run and thrown away afterwards — no video is stored in the code, where it
+would sit forever.
+
 ## 2026-09-15 — Top and Bottom Padding now work on a row with no background (#719)
 
 On a themed page, a row that has no background colour of its own takes one of
