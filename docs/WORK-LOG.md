@@ -1,3 +1,56 @@
+## 2026-09-15 — The Studio can now tell what a video file actually is (#724)
+
+Fifth of eight pieces in the Studio work. A file's name is not evidence —
+Episode 3's project file is called `youtube_cover_S1-E3.wfp`, and a file named
+`DoE_S1-E2.mp4` sits inside the Episode 3 folder. So this piece opens the file
+itself and reads what the camera or the app wrote inside it: how long it runs,
+how big the picture is, how many frames a second, which way up it was shot, and
+when it was recorded.
+
+It then works out where the footage came from. An iPhone or an iPad says so in
+a tag Apple writes into the file, and that tag is stored word for word, so an
+iPad never gets filed as an iPhone by a rule that nearly matched. Zoom writes
+no such tag, so a Zoom recording is recognised by its shape instead — and the
+answer says out loud that it is an educated guess rather than something the
+file stated. A file in the Plates folder is a plate no matter what shot it,
+because a plate is a job in the edit rather than a kind of camera, and putting
+it in that folder is you saying so.
+
+When it genuinely cannot tell, it says which kind of cannot-tell it is — an
+Apple file with no model written in it, a model it has never been taught, a
+camera from another maker, or a file that names a model and never says who
+made it, which is what a GoPro or a drone writes — and keeps everything it
+read, so the question can be settled later without going back to the file. It
+never fills in a maker the file did not name. And if the inspection tool is
+missing, the file is damaged, the file takes too long to answer, or it answers
+with more than the reader can hold, that is reported as "no reading taken",
+each with its own reason, rather than as "unknown" — because those piling up
+in the same bucket is how a machine with a missing tool ends up looking like a
+library of mystery footage, and because sending somebody to hunt a stuck disk
+over a file that answered instantly wastes an afternoon.
+
+One of those readings — which way up the clip was shot — was recorded turning
+the wrong way. A phone held upright writes a note inside the file saying how
+far the picture has to be spun to stand up, and there are two opposite ways of
+writing that note down. This piece had picked the wrong one, so the commonest
+file in the whole Studio, a portrait iPhone clip, would have come out upside
+down as soon as anything used the number to build a thumbnail. Nothing reads it
+yet, so nothing was actually broken — which is exactly why it was worth settling
+now, three steps before it would have surfaced somewhere that looks nothing like
+its cause. It was settled by measuring rather than by reasoning: a test builds a
+clip that is red down one side and blue down the other, spins it, renders the
+picture a viewer would actually see, and looks at which side the red ended up
+on. Where the file uses the older way of writing the note, that is said plainly
+in the code as an assumption rather than a measurement, because no file on this
+machine can be made to demonstrate it either way.
+
+A file whose name begins with a dash is also read properly now, instead of the
+inspection tool mistaking the name for an instruction and refusing perfectly
+good footage.
+
+Every claim here is checked against real video files, built fresh each time the
+tests run and thrown away afterwards — no video is stored in the code, where it
+would sit forever.
 ## 2026-09-14 — A page with no name no longer shows up as a blank line when you link to it (#694)
 
 In the Builder you can drop an image into a cell of a table, and give that image

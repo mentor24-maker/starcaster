@@ -85,7 +85,13 @@ which is why this is checked first.
 
 ### Toolchain
 
-`brew`, `git`, `node`, `npm`, `gh`, `doppler`, `supabase`, `jq`, `claude`.
+`brew`, `git`, `node`, `npm`, `gh`, `doppler`, `supabase`, `jq`, `ffmpeg`,
+`claude`.
+
+`ffmpeg` is on the list because the Studio reads what a video file actually
+is with `ffprobe`, and the node suite that gates every `npm run ship` probes
+real generated files rather than skipping that proof — so a node without it
+fails the ship of an unrelated ticket.
 
 `brew` and `claude` install by piping a URL into a shell, so the script prints
 them and never runs them — that is a decision with a person's name on it, not
