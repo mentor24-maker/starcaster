@@ -11,6 +11,10 @@
  *   npm run heartbeat                       read the roll call, print it, post nothing
  *   npm run heartbeat -- --check            the same, and post to the bus if a job is quiet
  *   npm run heartbeat -- --beat --role X    record a successful run of X (jobs call this)
+ *   npm run heartbeat -- --beat --role X --stood-down "<why>"
+ *                                           the pass FIRED but did no work (a usage limit).
+ *                                           Recorded distinctly, because 90 hours of these read
+ *                                           as 90 hours of health on 2026-09-16 (task 86bc3t0n1)
  *   npm run heartbeat -- --stale-check      the LOCAL recency alarm, read-only, no ClickUp read
  *   npm run heartbeat -- --stale-check --check   the same, and post to the bus
  *   npm run heartbeat -- --push-owned       relay this machine's local stamps onto the shared row
@@ -157,6 +161,7 @@ function closeAlarms(recovered) {
         quiet: readStamp(`quiet-${r.role}`),
         failed: readStamp(`failed-${r.role}`),
         stale: readStamp(`stale-${r.role}`),
+        standdown: readStamp(`standdown-${r.role}`),
       },
     })),
   });
@@ -179,9 +184,20 @@ function closeAlarms(recovered) {
   for (const item of plan.announce) {
     try {
       clickup.postBusMessage(BUS_CHANNEL, heartbeat.renderRecoveredPost({
-        role: item.role, node: NODE.name || 'an unnamed machine', quietSince: item.quietSince, now: NOW,
+        role: item.role,
+        node: NODE.name || 'an unnamed machine',
+        quietSince: item.quietSince,
+        now: NOW,
+        wasStandDown: Boolean(item.wasStandDown),
       }));
-      said.push({ role: item.role, level: 'clear', told: true, text: `${item.role} was reported quiet at ${item.quietSince} — posted that it is beating again.` });
+      said.push({
+        role: item.role,
+        level: 'clear',
+        told: true,
+        text: item.wasStandDown
+          ? `${item.role} was reported as firing and claiming nothing at ${item.quietSince} — posted that it is doing real work again.`
+          : `${item.role} was reported quiet at ${item.quietSince} — posted that it is beating again.`,
+      });
     } catch (err) {
       said.push({ role: item.role, level: 'cannot', told: false, text: `${item.role} is beating again and its alarm is closed, but nobody could be told (${String(err && err.message).slice(0, 200)}).` });
     }
@@ -292,7 +308,7 @@ function printReport(state) {
     return 2;
   }
 
-  const { beating, overdue, notReporting } = state.report;
+  const { beating, overdue, stoodDown, notReporting } = state.report;
 
   for (const b of beating) {
     out.push(`  ${green('BEAT')}  ${b.role} on ${b.owner} — last succeeded ${heartbeat.ageText(b.ageMs)}.`);
@@ -308,6 +324,17 @@ function printReport(state) {
       ? `        ${dim('Never beaten — either nothing is installed to beat from, or its emitter is newer than the job\'s last run.')}`
       : `        ${dim('A job that stops firing writes nothing anywhere. This is that.')}`);
   }
+  // STOOD DOWN sits between BEAT and QUIET on purpose, and never wears either
+  // label: the runner is alive, and it is doing nothing. Printing it as BEAT is
+  // what made 90 hours of dead pipeline read as a clean board.
+  for (const sd of (stoodDown || [])) {
+    const label = sd.alarming ? red('STOOD DOWN') : yellow('stood down');
+    out.push(`  ${label} ${sd.role} on ${sd.owner} — ${sd.reason}.`);
+    out.push(`        ${dim(`last beat ${sd.at}; standing down since ${sd.since}`)}`);
+    if (sd.alarming) {
+      out.push(`        ${dim('The schedule is fine and the machine is awake. No work is coming out of this lane.')}`);
+    }
+  }
   for (const n of notReporting) {
     out.push(`  ${yellow('????')}  ${n.role} on ${n.owner} — not reporting.`);
     out.push(`        ${dim(`cannot tell: ${n.why}`)}`);
@@ -316,9 +343,21 @@ function printReport(state) {
   if (state.task) out.push('', dim(`  Roll call: ${state.task.url}`));
   else out.push('', dim('  No roll-call ticket exists yet — the first beat creates it.'));
 
+  const alarming = (stoodDown || []).filter((sd) => sd.alarming);
   out.push('');
-  if (overdue.length === 0 && beating.length > 0) {
+  // A STAND-DOWN IS NEVER FOLDED INTO THE HEADLINE VERDICT. "Everything that
+  // reports, reports" was a true sentence on every one of the 90 hours from
+  // 2026-09-16, and it is the sentence Dane read.
+  if (alarming.length > 0) {
+    out.push(bold(red(`${alarming.length} job${alarming.length === 1 ? '' : 's'} ${alarming.length === 1 ? 'is' : 'are'} firing on time and doing no work.`)));
+    out.push(dim('This is not a machine problem and not a schedule problem. The passes cannot work — a usage'));
+    out.push(dim('limit, most likely. Nothing will come out of these lanes until that clears.'));
+    if (overdue.length > 0) out.push(bold(red(`${overdue.length} more ${overdue.length === 1 ? 'has' : 'have'} gone quiet altogether.`)));
+  } else if (overdue.length === 0 && beating.length > 0) {
     out.push(bold(green('Everything that reports, reports.')));
+    if ((stoodDown || []).length > 0) {
+      out.push(yellow(`${stoodDown.length} stood down on its last pass, within the window that counts as ordinary.`));
+    }
   } else if (overdue.length === 0) {
     out.push(bold(yellow('Nothing is overdue, and nothing is reporting either.')));
     out.push(dim('Read the ???? lines. A system with no beat emitters is not a healthy system.'));
@@ -327,36 +366,66 @@ function printReport(state) {
   }
   out.push('');
   console.log(out.join('\n'));
-  return overdue.length > 0 ? 1 : 0;
+  return (overdue.length > 0 || alarming.length > 0) ? 1 : 0;
 }
 
 // --- recording a beat -------------------------------------------------------
 
-async function doBeat(role) {
+async function doBeat(role, { standDownWhy = '' } = {}) {
   if (!role) {
     console.error(`--beat needs --role <role>. Known roles: ${Object.keys(nodeRoles.ROLES).join(', ')}`);
     return 0;
   }
   const at = new Date(NOW).toISOString();
+  const kind = standDownWhy ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN;
+
+  // HOW LONG HAS THIS BEEN GOING ON? Read the PREVIOUS stamp before overwriting
+  // it, so an unbroken run of stand-downs keeps one start instant instead of
+  // resetting to "just now" on every pass — which would make hour 90 read
+  // exactly like hour 1, the whole of the 2026-09-16 failure.
+  const prior = kind === heartbeat.BEAT_STOOD_DOWN ? heartbeat.readBeat({ role }) : null;
+  const since = heartbeat.standDownSince({ prior, kind, at });
+  if (since.note) console.error(`heartbeat: ${since.note}.`);
 
   // 1. The local stamp, every time. Free, offline, and the precise answer to
   //    "when did this last work on this machine".
-  const local = heartbeat.recordBeat({ role, node: NODE.name, at });
+  const local = heartbeat.recordBeat({
+    role, node: NODE.name, at, kind, why: standDownWhy, standingDownSince: since.since,
+  });
   if (!local.ok) console.error(`heartbeat: could not write the local beat (${local.why}) — carrying on.`);
-  else console.error(`heartbeat: ${role} beat recorded locally at ${at}.`);
+  else if (kind === heartbeat.BEAT_STOOD_DOWN) {
+    console.error(`heartbeat: ${role} STOOD DOWN at ${at} (${standDownWhy}) — recorded as a stand-down, not as a run.`);
+    console.error(`heartbeat: it has been standing down since ${since.since}.`);
+  } else console.error(`heartbeat: ${role} beat recorded locally at ${at}.`);
 
-  // A successful run closes its own alarms and says so. One helper, called from
-  // here and from the recency check, so exactly one place knows where those
-  // stamps live (NODES P1) — and so the roles that never call this line get the
-  // same duty performed for them.
-  for (const said of closeAlarms([{ role, beatAt: at }])) {
-    console.error(`heartbeat: ${said.text}`);
+  // A STAND-DOWN CLOSES NOTHING. `closeAlarms` exists to say "this job is
+  // working again", and a pass that fired and did no work has not earned that
+  // sentence — clearing the suppression stamps here would let the same alarm
+  // re-fire in a loop, and worse, would post the recovery notice for a job that
+  // has not recovered. A real run closes them, which is the only thing that
+  // should.
+  if (kind === heartbeat.BEAT_RAN) {
+    for (const said of closeAlarms([{ role, beatAt: at }])) {
+      console.error(`heartbeat: ${said.text}`);
+    }
   }
 
   // 2. The shared row, at most once a day. This is the throttle that keeps the
   //    feature from being channel noise x365 — and it is also the resolution
   //    the requirement asks for: a day-long absence, not a ten-minute one.
-  if (!heartbeat.dueAgain({ lastAt: readStamp(`push-${role}`), now: NOW, everyMs: heartbeat.PUSH_EVERY_MS })) {
+  //
+  //    A CHANGE OF KIND OUTRANKS THE THROTTLE, in both directions. A day is the
+  //    right resolution for "when did this last run" and the wrong one for
+  //    "this lane has stopped doing any work at all" — held for a day, a
+  //    pipeline that went dead this morning is reported tomorrow morning, and
+  //    one that came back goes on reading as dead just as long.
+  const pushedKind = readStamp(`push-kind-${role}`);
+  const kindChanged = Boolean(pushedKind) && pushedKind !== kind;
+  if (kindChanged) {
+    console.error(`heartbeat: this pass ${kind === heartbeat.BEAT_STOOD_DOWN ? 'stood down' : 'ran'} where the roll call says it `
+      + `${pushedKind === heartbeat.BEAT_STOOD_DOWN ? 'stood down' : 'ran'} — pushing now rather than waiting for the daily slot.`);
+  }
+  if (!kindChanged && !heartbeat.dueAgain({ lastAt: readStamp(`push-${role}`), now: NOW, everyMs: heartbeat.PUSH_EVERY_MS })) {
     console.error('heartbeat: shared row already pushed within the last day — not pushing again.');
     return 0;
   }
@@ -400,7 +469,15 @@ async function doBeat(role) {
     return 0;
   }
   const existing = heartbeat.parseRollCall(descriptionOf(fresh.json));
-  const rows = heartbeat.mergeRollCall(existing.parsed ? existing.rows : [], [{ node: NODE.name, role, at }]);
+  const rows = heartbeat.mergeRollCall(existing.parsed ? existing.rows : [], [{
+    node: NODE.name,
+    role,
+    at,
+    kind,
+    ...(kind === heartbeat.BEAT_STOOD_DOWN
+      ? { why: standDownWhy, standingDownSince: since.since }
+      : {}),
+  }]);
   if (!existing.parsed) {
     console.error('heartbeat: the roll call was read but carries no readable beat block — rebuilding it from this beat alone.');
   }
@@ -413,7 +490,10 @@ async function doBeat(role) {
     return 0;
   }
   writeStamp(`push-${role}`, at);
-  console.error(`heartbeat: ${role} pushed to the roll call (${task.url}).`);
+  // The KIND that is now on the shared row, so the next pass can tell a
+  // transition from an ordinary repeat without re-reading ClickUp.
+  writeStamp(`push-kind-${role}`, kind);
+  console.error(`heartbeat: ${role} pushed to the roll call as "${kind}" (${task.url}).`);
   return 0;
 }
 
@@ -497,7 +577,9 @@ async function doStaleCheck({ post }) {
   // see `alarmCloseoutPlan` for the rule and why it is one rule and not three.
   if (post && report.fresh.length > 0) {
     const said = closeAlarms(report.fresh.map((f) => ({
-      role: f.role, beatAt: f.at,
+      // `beatKind` travels with the beat so the closeout rule can refuse to let
+      // a stand-down close the stand-down alarm — see alarmCloseoutPlan.
+      role: f.role, beatAt: f.at, beatKind: f.standDown ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN,
     })));
     for (const item of said) {
       if (item.level === 'clear') out.push(`  ${green('CLEAR')} ${item.text}`);
@@ -512,7 +594,22 @@ async function doStaleCheck({ post }) {
 
   out.push('');
   if (report.quiet.length > 0) {
-    out.push(bold(red(`${report.quiet.length} job${report.quiet.length === 1 ? ' has' : 's have'} stopped beating on this machine.`)));
+    // TWO FINDINGS, TWO HEADLINES. "Stopped beating" sends a reader to launchd,
+    // and it is a wrong fact about a lane that is firing on time and producing
+    // nothing — which is the fault this whole ticket is about, so stating it
+    // wrongly in the summary line would be the fix reintroducing the bug in the
+    // one sentence most people read. Caught by running the command rather than
+    // by reading it.
+    const down = report.quiet.filter((q) => q.standDown);
+    const stopped = report.quiet.filter((q) => !q.standDown);
+    if (stopped.length > 0) {
+      out.push(bold(red(`${stopped.length} job${stopped.length === 1 ? ' has' : 's have'} stopped beating on this machine.`)));
+    }
+    if (down.length > 0) {
+      out.push(bold(red(`${down.length} job${down.length === 1 ? ' is' : 's are'} firing on time and doing no work.`)));
+      out.push(dim('The schedule is fine and this machine is awake. The passes cannot work — a usage limit,'));
+      out.push(dim('most likely. Nothing comes out of these lanes until it clears.'));
+    }
   } else if (report.fresh.length > 0) {
     out.push(bold(green('Every job this machine owns is beating inside its own threshold.')));
   } else {
@@ -628,6 +725,7 @@ async function pushOwnedPass(out) {
     role,
     beat: heartbeat.readBeat({ role }),
     lastPushAt: readStamp(`push-${role}`),
+    lastPushKind: readStamp(`push-kind-${role}`),
   }));
   const plan = heartbeat.rollCallPushPlan({ entries, now: NOW });
 
@@ -703,7 +801,19 @@ async function pushOwnedPass(out) {
   // The instant pushed is the STAMP's, never NOW. That is what makes relaying
   // safe: a relay running every ten minutes over a job that died on Tuesday
   // reports Tuesday, so it can never silence the alarm it feeds.
-  const incoming = plan.push.map((item) => ({ node: NODE.name, role: item.role, at: item.at }));
+  // The row carries WHAT THE PASS DID as well as when, or relaying a stand-down
+  // would launder it into an ordinary beat on the shared surface — which is the
+  // exact failure this ticket is about, arriving through the relay instead of
+  // through the emitter.
+  const incoming = plan.push.map((item) => ({
+    node: NODE.name,
+    role: item.role,
+    at: item.at,
+    kind: item.kind || heartbeat.BEAT_RAN,
+    ...(item.kind === heartbeat.BEAT_STOOD_DOWN
+      ? { why: item.standDownWhy, standingDownSince: item.standingDownSince }
+      : {}),
+  }));
   const rows = heartbeat.mergeRollCall(existing.parsed ? existing.rows : [], incoming);
   if (!existing.parsed) {
     out.push(`        ${dim('the roll call was read but carries no readable beat block — rebuilding it from these beats alone')}`);
@@ -722,7 +832,10 @@ async function pushOwnedPass(out) {
 
   // Stamped only AFTER a confirmed write, so a failed push is retried rather
   // than being recorded as done — the same discipline the bus posts above use.
-  for (const item of plan.push) writeStamp(`push-${item.role}`, item.at);
+  for (const item of plan.push) {
+    writeStamp(`push-${item.role}`, item.at);
+    writeStamp(`push-kind-${item.role}`, item.kind || heartbeat.BEAT_RAN);
+  }
   const verdict = heartbeat.relayVerdict({
     ownedEmitters: entries.length, pushed: plan.push.length, unknown: plan.unknown.length,
   });
@@ -746,6 +859,7 @@ async function pushOwnedPass(out) {
 // announcement was gated on the OTHER channel's stamp. Both announce now.
 async function doCheck(state) {
   if (!state.readable) return; // printReport has already said CANNOT TELL.
+  await announceStandDowns(state);
   const quiet = state.report.overdue;
   if (quiet.length === 0) return;
 
@@ -778,10 +892,49 @@ async function doCheck(state) {
   }
 }
 
+/**
+ * The other alarm this check raises: a lane that keeps beating and does no work.
+ *
+ * Its own suppression stamp (`standdown-<role>`), separate from `quiet-<role>`,
+ * because the two are different findings about the same role and sharing a
+ * window would let whichever fired first silence the other for six hours. The
+ * stamp is cleared by the first pass that actually RUNS — `doBeat` does that
+ * through `closeAlarms`, which a stand-down deliberately does not call.
+ */
+async function announceStandDowns(state) {
+  const alarming = (state.report.stoodDown || []).filter((sd) => sd.alarming);
+  if (alarming.length === 0) return;
+
+  const toAnnounce = alarming.filter((sd) => heartbeat.dueAgain({
+    lastAt: readStamp(`standdown-${sd.role}`), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+  }));
+  if (toAnnounce.length === 0) {
+    console.error('heartbeat: the stand-down was already announced within the suppression window — not posting again.');
+    return;
+  }
+
+  const text = heartbeat.renderStandDownPost({
+    standingDown: toAnnounce,
+    now: NOW,
+    reportedBy: NODE.name || 'an unnamed machine',
+  });
+  try {
+    clickup.postBusMessage(BUS_CHANNEL, text);
+    const at = new Date(NOW).toISOString();
+    for (const sd of toAnnounce) writeStamp(`standdown-${sd.role}`, at);
+    console.error(`heartbeat: posted to the bus — ${toAnnounce.map((sd) => sd.role).join(', ')} firing and doing no work.`);
+  } catch (err) {
+    // NOT stamped as announced, so the next pass retries. Same discipline as
+    // the silence alarm, and for the same 2026-08-23 reason.
+    console.error(`heartbeat: could NOT post the stand-down alarm to the bus (${String(err && err.message).slice(0, 200)}).`);
+    console.error('heartbeat: not stamping it as announced, so the next pass tries again.');
+  }
+}
+
 // --- main -------------------------------------------------------------------
 
 if (flag('beat')) {
-  process.exit(await doBeat(arg('role')));
+  process.exit(await doBeat(arg('role'), { standDownWhy: arg('stood-down') }));
 }
 
 if (flag('stale-check')) {

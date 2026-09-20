@@ -117,22 +117,43 @@ while true; do
   # verdict there is.
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") END /$SKILL (exit $CODE — not a verdict; the pass's report above is) =====" >> "$LOG"
 
-  # ── 2. The beat: this runner fired a pass ──────────────────────────────────
-  # LIVENESS, not quality — recorded whatever the pass concluded, because what
-  # the heartbeat exists to catch is the runner going quiet (a dead Mini, a
-  # dead screen, a stale lock), and pass QUALITY is throughput's question.
-  # `--beat` never fails its caller by contract (scripts/node_heartbeat.mjs).
-  npm run --silent heartbeat -- --beat --role "$SKILL" >> "$LOG" 2>&1 || true
-
-  # ── 3. How long to sleep ───────────────────────────────────────────────────
-  # A usage limit outranks the pacing curve: the limit message names its own
-  # reset time, and retrying before it is a pass spent discovering the same
+  # ── 2. Did this pass hit a usage limit? ────────────────────────────────────
+  # ASKED BEFORE THE BEAT, AND THAT ORDER IS THE POINT (task 86bc3t0n1). This
+  # used to run after, so the beat could only ever say "a pass happened" — and
+  # from 2026-09-16 to 2026-09-19 both lanes fired hourly, died on a limit in
+  # seconds, exited cleanly and beat every time. 90 hours, 20 tickets open, and
+  # the roll call showed all six jobs healthy, because every one of those
+  # statements was true. Reading the limit first is what lets the beat below
+  # say WHICH of the two kinds of pass this was.
+  #
+  # A usage limit also outranks the pacing curve: the limit message names its
+  # own reset time, and retrying before it is a pass spent discovering the same
   # closed window (2:05am, 2:23am, 2:38am on 2026-09-02). The decision is
   # scripts/builder/loopRunnerGuard.js — pure and tested; this call may answer
   # 0 ("no limit") and may never fail the runner.
   LIMIT_SLEEP=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" 2>> "$LOG")
+
+  # ── 3. The beat: this runner fired a pass, and what that pass could do ─────
+  # LIVENESS, not quality — recorded whatever the pass concluded, because what
+  # the heartbeat exists to catch is the runner going quiet (a dead Mini, a
+  # dead screen, a stale lock), and pass QUALITY is throughput's question.
+  #
+  # A STAND-DOWN IS STILL A BEAT, marked as one. The runner IS alive, and
+  # saying otherwise would send somebody to launchd over a working schedule —
+  # so it beats, and the beat carries the kind so nothing downstream has to
+  # read this log to find out. `--beat` never fails its caller by contract
+  # (scripts/node_heartbeat.mjs).
   if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
-    echo "[loop-runner] $(date "+%H:%M:%S") usage limit — sleeping ${LIMIT_SLEEP}s (the reason is two lines up)" >> "$LOG"
+    npm run --silent heartbeat -- --beat --role "$SKILL" \
+      --stood-down "a usage limit closed this pass; the runner is sleeping ${LIMIT_SLEEP}s until it resets" \
+      >> "$LOG" 2>&1 || true
+  else
+    npm run --silent heartbeat -- --beat --role "$SKILL" >> "$LOG" 2>&1 || true
+  fi
+
+  # ── 4. How long to sleep ───────────────────────────────────────────────────
+  if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
+    echo "[loop-runner] $(date "+%H:%M:%S") usage limit — sleeping ${LIMIT_SLEEP}s (the reason is above)" >> "$LOG"
     sleep "$LIMIT_SLEEP"
     continue
   fi

@@ -114,17 +114,38 @@ test('a log with no pass marker is scanned whole', () => {
 // is a bash file whose behaviour IS its text.
 // ---------------------------------------------------------------------------
 
-test('a pass runs pull -> claude -> beat -> sleep decision, in that order', () => {
+test('a pass runs pull -> claude -> limit reading -> beat -> sleep decision, in that order', () => {
   const sh = shellWithoutComments(read('scripts/loop_runner.sh'));
   const pull = sh.indexOf('checkout:current');
   const pass = sh.indexOf('"$CLAUDE_BIN" -p');
-  const beat = sh.indexOf('heartbeat -- --beat --role');
   const limit = sh.indexOf('loop_runner_delay.mjs');
+  const beat = sh.indexOf('heartbeat -- --beat --role');
   const pace = sh.indexOf('next-interval');
   assert.ok(pull > 0 && pass > pull, 'the timid pull comes before the pass, or a merged skill edit lags a cycle');
-  assert.ok(beat > pass, 'the beat records that a pass FIRED — it follows the pass');
-  assert.ok(limit > beat, 'the beat lands even on a limited pass — liveness is not quality');
-  assert.ok(pace > limit, 'the usage limit outranks the pacing curve');
+  assert.ok(limit > pass, 'the limit is read out of the pass\'s own output, so it follows the pass');
+  // THE ORDER OF THESE TWO FLIPPED ON PURPOSE (task 86bc3t0n1). The beat used
+  // to come first, so it could only ever say "a pass happened" — and from
+  // 2026-09-16 to 2026-09-19 both lanes fired hourly, stood down on a usage
+  // limit in seconds, exited cleanly and beat every time. 90 hours; the roll
+  // call showed every job healthy, truthfully. Reading the limit first is what
+  // lets the beat say WHICH kind of pass this was.
+  assert.ok(beat > limit, 'the limit must be known before the beat, or the beat cannot say what the pass did');
+  assert.ok(pace > beat, 'the usage limit outranks the pacing curve');
+});
+
+test('a pass that stood down STILL beats, and says that is what it did', () => {
+  const sh = shellWithoutComments(read('scripts/loop_runner.sh'));
+  // Both halves matter and they pull in opposite directions. The runner IS
+  // alive on a limited pass, so withholding the beat would report a dead
+  // schedule and send somebody to launchd over a working one. And the beat must
+  // carry the kind, or it reads as real work — the whole of the 90-hour
+  // failure.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down /,
+    'the limited branch beats, with the stand-down flag');
+  assert.match(sh, /--stood-down "a usage limit closed this pass/,
+    'and the reason is recorded, because "it stood down" with no cause is not actionable');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 2,
+    'exactly two beat calls: one for a pass that worked, one for a pass that could not');
 });
 
 test('the lock records its pid and a stale lock is cleared, not obeyed forever', () => {

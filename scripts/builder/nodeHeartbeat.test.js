@@ -995,7 +995,10 @@ test('a failure alarm older than the newest beat IS closed — a success since t
   // of two clears. This test asserted `announce` was empty until 86bbzzyxb, on
   // the reasoning "a failure alert is not a silence report" — true of `failed-`
   // and false of the `quiet-` sitting next to it in the same fixture.
-  assert.deepEqual(plan.announce, [{ role: 'bus-relay', quietSince: agoHours(2) }]);
+  // `wasStandDown: false` picks the wording (task 86bc3t0n1): this recovery
+  // really is "beating again", and the stand-down channel's own sentence would
+  // be a wrong fact about a job that had genuinely stopped.
+  assert.deepEqual(plan.announce, [{ role: 'bus-relay', quietSince: agoHours(2), wasStandDown: false }]);
 });
 
 // --- task 86bbzzyxb: the shared-row channel could be reported dead and never
@@ -1365,4 +1368,353 @@ test('the four blocked-but-beating roles really are blocked AND registered emitt
     assert.ok(spec.blocked, `${role} is no longer blocked — the skip this fixes may be removable`);
     assert.ok(hb.BEAT_EMITTERS[role], `${role} is no longer a beat emitter`);
   }
+});
+
+// --- a pass that fired and did no work --------------------------------------
+//
+// THE INCIDENT (task 86bc3t0n1). From 2026-09-16 to 2026-09-19 both loop lanes
+// fired hourly, hit an Anthropic usage limit, stood down in seconds and exited
+// cleanly. 90 hours; 20 tickets open; three of them in review for the better
+// part of a week. The roll call showed all six jobs BEAT, and every one of
+// those statements was true — a beat only ever meant "a pass happened".
+//
+// Every test below is written against that specific way of being quietly
+// wrong: a reading that is technically correct and answers the wrong question.
+
+const LOOP_ROLES = {
+  'loop-build': { owner: 'mac-mini' },
+};
+const LOOP_EMITTERS = {
+  'loop-build': { intervalMs: HOUR, beatMeans: 'liveness', why: 'fixture' },
+};
+// 24h push resolution + max(1h interval, 1h slack) = 25h.
+const LOOP_OVERDUE_MS = 25 * HOUR;
+// six missed runs of an hourly job, floored at three hours.
+const LOOP_QUIET_MS = 6 * HOUR;
+
+const standDownRow = ({ at, since, why = 'a usage limit closed this pass' }) => ({
+  node: 'mac-mini', role: 'loop-build', at, kind: hb.BEAT_STOOD_DOWN, why, standingDownSince: since,
+});
+
+test('a stood-down pass is NOT reported as beating — this is the 90-hour failure', () => {
+  const r = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: agoHours(90) })],
+    now: NOW,
+    roles: LOOP_ROLES,
+    emitters: LOOP_EMITTERS,
+  });
+  assert.deepEqual(r.beating.map((b) => b.role), [],
+    'a lane doing no work must never appear in the column a reader scans for health');
+  assert.equal(r.stoodDown.length, 1);
+  assert.equal(r.stoodDown[0].alarming, true);
+  assert.equal(r.silent, true, 'a stand-down past the role window must reach the bus');
+  assert.match(r.stoodDown[0].reason, /claimed nothing for/);
+});
+
+test('a stood-down pass is not OVERDUE either — the schedule is working', () => {
+  const r = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: agoHours(90) })],
+    now: NOW,
+    roles: LOOP_ROLES,
+    emitters: LOOP_EMITTERS,
+  });
+  assert.deepEqual(r.overdue.map((o) => o.role), [],
+    'calling it overdue sends somebody to launchd over a schedule that is firing perfectly');
+});
+
+test('one ordinary stand-down inside the window is reported but raises no alarm', () => {
+  const r = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: agoHours(2) })],
+    now: NOW,
+    roles: LOOP_ROLES,
+    emitters: LOOP_EMITTERS,
+  });
+  assert.equal(r.stoodDown.length, 1);
+  assert.equal(r.stoodDown[0].alarming, false, 'limits clear on their own; alarming on every one is noise');
+  assert.equal(r.silent, false);
+  assert.deepEqual(r.beating, [], 'still not healthy — it just is not worth waking anyone about');
+});
+
+test('the alarm turns on exactly at the role\'s own window, not a number somebody liked', () => {
+  const just_inside = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: new Date(NOW - LOOP_OVERDUE_MS + 60000).toISOString() })],
+    now: NOW, roles: LOOP_ROLES, emitters: LOOP_EMITTERS,
+  });
+  const just_outside = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: new Date(NOW - LOOP_OVERDUE_MS - 60000).toISOString() })],
+    now: NOW, roles: LOOP_ROLES, emitters: LOOP_EMITTERS,
+  });
+  assert.equal(just_inside.stoodDown[0].alarming, false);
+  assert.equal(just_outside.stoodDown[0].alarming, true);
+});
+
+test('a stand-down whose start instant cannot be read ALARMS rather than passing', () => {
+  const r = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(1), since: 'not a date' })],
+    now: NOW, roles: LOOP_ROLES, emitters: LOOP_EMITTERS,
+  });
+  assert.equal(r.stoodDown[0].alarming, true,
+    'the duration is the only thing between this and a dead lane — an unreadable one is a reading not taken');
+  assert.equal(r.silent, true);
+  assert.match(r.stoodDown[0].reason, /cannot be read as a date/);
+});
+
+test('a STALE stand-down row is overdue, because the runner itself has stopped', () => {
+  const r = hb.rollCallReport({
+    rows: [standDownRow({ at: agoHours(30), since: agoHours(40) })],
+    now: NOW, roles: LOOP_ROLES, emitters: LOOP_EMITTERS,
+  });
+  assert.deepEqual(r.overdue.map((o) => o.role), ['loop-build'],
+    'nothing has beaten in 30 hours — that is silence, whatever the last pass was doing');
+  assert.deepEqual(r.stoodDown, []);
+});
+
+test('a row with no kind at all reads as a real run — every stamp written before this existed', () => {
+  const r = hb.rollCallReport({
+    rows: [{ node: 'mac-mini', role: 'loop-build', at: agoHours(1) }],
+    now: NOW, roles: LOOP_ROLES, emitters: LOOP_EMITTERS,
+  });
+  assert.deepEqual(r.beating.map((b) => b.role), ['loop-build']);
+  assert.deepEqual(r.stoodDown, []);
+});
+
+// --- how long has this been going on? ---------------------------------------
+
+test('an unbroken run of stand-downs keeps ONE start instant', () => {
+  const first = hb.standDownSince({
+    prior: { found: true, readable: true, beat: { at: agoHours(4), kind: hb.BEAT_RAN } },
+    kind: hb.BEAT_STOOD_DOWN,
+    at: agoHours(3),
+  });
+  assert.equal(first.since, agoHours(3), 'the first stand-down after a real run starts the clock');
+
+  const later = hb.standDownSince({
+    prior: { found: true, readable: true, beat: { at: agoHours(2), kind: hb.BEAT_STOOD_DOWN, standingDownSince: agoHours(3) } },
+    kind: hb.BEAT_STOOD_DOWN,
+    at: agoHours(1),
+  });
+  assert.equal(later.since, agoHours(3),
+    'carried forward — resetting it every pass would make hour 90 read exactly like hour 1');
+});
+
+test('a real run clears the stand-down clock entirely', () => {
+  const r = hb.standDownSince({
+    prior: { found: true, readable: true, beat: { at: agoHours(2), kind: hb.BEAT_STOOD_DOWN, standingDownSince: agoHours(9) } },
+    kind: hb.BEAT_RAN,
+    at: agoHours(1),
+  });
+  assert.equal(r.since, '');
+});
+
+test('an unreadable prior stamp starts the clock over AND says so', () => {
+  const r = hb.standDownSince({
+    prior: { found: false, readable: false, why: 'the stamp is not JSON' },
+    kind: hb.BEAT_STOOD_DOWN,
+    at: agoHours(1),
+  });
+  assert.equal(r.since, agoHours(1),
+    'a 90-hour alarm raised off a corrupt file is an alarm that can fire on its own bookkeeping');
+  assert.match(r.note, /could not be read/);
+});
+
+test('recordBeat writes the kind, and defaults to a real run', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-kind-'));
+  try {
+    hb.recordBeat({ role: 'loop-build', node: 'mac-mini', at: agoHours(1), homedir: dir });
+    const plain = hb.readBeat({ role: 'loop-build', homedir: dir });
+    assert.equal(plain.beat.kind, hb.BEAT_RAN);
+    assert.equal(plain.beat.standingDownSince, undefined, 'a real run carries no stand-down clock');
+
+    hb.recordBeat({
+      role: 'loop-build', node: 'mac-mini', at: agoHours(1), homedir: dir,
+      kind: hb.BEAT_STOOD_DOWN, why: 'a usage limit', standingDownSince: agoHours(9),
+    });
+    const down = hb.readBeat({ role: 'loop-build', homedir: dir });
+    assert.equal(down.beat.kind, hb.BEAT_STOOD_DOWN);
+    assert.equal(down.beat.why, 'a usage limit');
+    assert.equal(down.beat.standingDownSince, agoHours(9));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- the LOCAL alarm, which needs no ClickUp at all --------------------------
+
+const standDownBeat = ({ at, since, why = 'a usage limit closed this pass' }) => ({
+  found: true, readable: true, beat: { at, kind: hb.BEAT_STOOD_DOWN, why, standingDownSince: since },
+});
+
+test('the local recency check calls a long stand-down QUIET, not fresh', () => {
+  const r = hb.recencyReport({
+    entries: [{ role: 'loop-build', owner: 'mac-mini', beat: standDownBeat({ at: agoHours(1), since: agoHours(90) }) }],
+    now: NOW,
+    emitters: LOOP_EMITTERS,
+  });
+  assert.equal(r.silent, true);
+  assert.equal(r.quiet.length, 1);
+  assert.equal(r.quiet[0].standDown, true);
+  assert.deepEqual(r.fresh, [],
+    'the stamps were fresh every hour for 90 hours — freshness was never the question');
+  assert.match(r.quiet[0].reason, /claimed nothing/);
+});
+
+test('the local check leaves a short stand-down alone', () => {
+  const r = hb.recencyReport({
+    entries: [{ role: 'loop-build', owner: 'mac-mini', beat: standDownBeat({ at: agoHours(1), since: agoHours(2) }) }],
+    now: NOW,
+    emitters: LOOP_EMITTERS,
+  });
+  assert.equal(r.silent, false);
+  assert.equal(r.fresh.length, 1);
+  assert.equal(r.fresh[0].standDown, true, 'still flagged, so nothing downstream can mistake it for real work');
+});
+
+test('the local check measures the stand-down against this role\'s own quiet threshold', () => {
+  const inside = hb.recencyReport({
+    entries: [{ role: 'loop-build', owner: 'mac-mini', beat: standDownBeat({ at: agoHours(1), since: new Date(NOW - LOOP_QUIET_MS + 60000).toISOString() }) }],
+    now: NOW, emitters: LOOP_EMITTERS,
+  });
+  const outside = hb.recencyReport({
+    entries: [{ role: 'loop-build', owner: 'mac-mini', beat: standDownBeat({ at: agoHours(1), since: new Date(NOW - LOOP_QUIET_MS - 60000).toISOString() }) }],
+    now: NOW, emitters: LOOP_EMITTERS,
+  });
+  assert.equal(inside.silent, false);
+  assert.equal(outside.silent, true);
+});
+
+test('a stand-down with an unreadable start is UNKNOWN locally, never fresh', () => {
+  const r = hb.recencyReport({
+    entries: [{ role: 'loop-build', owner: 'mac-mini', beat: standDownBeat({ at: agoHours(1), since: 'nonsense' }) }],
+    now: NOW, emitters: LOOP_EMITTERS,
+  });
+  assert.deepEqual(r.fresh, []);
+  assert.equal(r.unknown.length, 1);
+  assert.match(r.unknown[0].why, /cannot be read as a date/);
+});
+
+test('the stand-down bus message never says the job stopped firing', () => {
+  const text = hb.renderStandDownPost({
+    standingDown: [{ role: 'loop-build', owner: 'mac-mini', reason: 'it has fired and claimed nothing for 90h', since: agoHours(90), at: agoHours(1) }],
+    now: NOW,
+    reportedBy: 'macbook-pro',
+  });
+  assert.match(text, /firing on schedule and doing no work/);
+  assert.match(text, /NOT a dead machine and NOT a dead schedule/);
+  assert.doesNotMatch(text, /has gone quiet/,
+    'the silence alarm sends a reader to launchd; this one must not, or it stops being believed');
+});
+
+// --- the transitions, both directions ---------------------------------------
+
+test('a change of kind is pushed at once rather than waiting for the daily slot', () => {
+  const beat = standDownBeat({ at: agoHours(1), since: agoHours(9) });
+  const throttled = hb.rollCallPushPlan({
+    entries: [{ role: 'loop-build', beat, lastPushAt: agoHours(2), lastPushKind: hb.BEAT_STOOD_DOWN }],
+    now: NOW,
+  });
+  assert.deepEqual(throttled.push, [], 'the same kind an hour later is the ordinary daily throttle');
+
+  const transition = hb.rollCallPushPlan({
+    entries: [{ role: 'loop-build', beat, lastPushAt: agoHours(2), lastPushKind: hb.BEAT_RAN }],
+    now: NOW,
+  });
+  assert.equal(transition.push.length, 1);
+  assert.equal(transition.push[0].kind, hb.BEAT_STOOD_DOWN);
+  assert.equal(transition.push[0].standDownWhy, 'a usage limit closed this pass');
+  assert.equal(transition.push[0].standingDownSince, agoHours(9));
+});
+
+test('coming BACK is pushed at once too — a lane that recovered must stop reading as dead', () => {
+  const plan = hb.rollCallPushPlan({
+    entries: [{
+      role: 'loop-build',
+      beat: { found: true, readable: true, beat: { at: agoHours(1), kind: hb.BEAT_RAN } },
+      lastPushAt: agoHours(2),
+      lastPushKind: hb.BEAT_STOOD_DOWN,
+    }],
+    now: NOW,
+  });
+  assert.equal(plan.push.length, 1);
+  assert.equal(plan.push[0].kind, hb.BEAT_RAN);
+});
+
+test('the stand-down reason is not confused with the reason the row is being pushed', () => {
+  const plan = hb.rollCallPushPlan({
+    entries: [{
+      role: 'loop-build',
+      beat: standDownBeat({ at: agoHours(1), since: agoHours(9) }),
+      lastPushAt: agoHours(2),
+      lastPushKind: hb.BEAT_RAN,
+    }],
+    now: NOW,
+  });
+  assert.match(plan.push[0].why, /change of kind/, 'this `why` explains the PUSH');
+  assert.equal(plan.push[0].standDownWhy, 'a usage limit closed this pass', 'this one explains the STAND-DOWN');
+});
+
+test('a real run closes a stand-down alarm and announces it in its own words', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt: agoHours(1), stamps: { standdown: agoHours(5) } }],
+  });
+  assert.deepEqual(plan.clear, [{ role: 'loop-build', kind: 'standdown' }]);
+  assert.equal(plan.announce.length, 1);
+  assert.equal(plan.announce[0].wasStandDown, true);
+
+  const text = hb.renderRecoveredPost({
+    role: 'loop-build', node: 'mac-mini', quietSince: agoHours(5), now: NOW, wasStandDown: true,
+  });
+  assert.match(text, /doing real work again/);
+  assert.doesNotMatch(text, /beating again/,
+    'it never stopped beating — saying so would read as a repaired schedule');
+});
+
+test('a mixed close uses the bigger claim, not the stand-down wording', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt: agoHours(1), stamps: { quiet: agoHours(9), standdown: agoHours(5) } }],
+  });
+  assert.equal(plan.announce[0].wasStandDown, false);
+});
+
+test('a stand-down alarm raised AFTER the newest beat is left standing', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt: agoHours(5), stamps: { standdown: agoHours(1) } }],
+  });
+  assert.deepEqual(plan.clear, []);
+  assert.equal(plan.keep.length, 1);
+});
+
+test('a stand-down never closes the stand-down alarm — only real work does', () => {
+  const beatAt = agoHours(1);
+  const stamps = { standdown: agoHours(5) };
+
+  const byStandDown = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt, beatKind: hb.BEAT_STOOD_DOWN, stamps }],
+  });
+  assert.deepEqual(byStandDown.clear, [],
+    'the alarm means "this lane is doing no work" — a pass that did no work cannot retire it');
+  assert.deepEqual(byStandDown.announce, [], 'and nothing announces a recovery that did not happen');
+  assert.match(byStandDown.keep[0].why, /only a pass that does real work/);
+
+  const byRealRun = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt, beatKind: hb.BEAT_RAN, stamps }],
+  });
+  assert.deepEqual(byRealRun.clear, [{ role: 'loop-build', kind: 'standdown' }]);
+});
+
+test('a stand-down DOES close the alarms that mean it stopped firing — it plainly has not', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{ role: 'loop-build', beatAt: agoHours(1), beatKind: hb.BEAT_STOOD_DOWN, stamps: { quiet: agoHours(5), stale: agoHours(5) } }],
+  });
+  assert.deepEqual(kinds(plan.clear), ['loop-build:quiet', 'loop-build:stale']);
+});
+
+test('the stale-check headline does not call a stood-down lane a job that stopped beating', () => {
+  const cli = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  assert.match(cli, /const down = report\.quiet\.filter\(\(q\) => q\.standDown\)/,
+    'the two findings are separated before either is summarised');
+  assert.match(cli, /firing on time and doing no work/);
+  // The summary line is the one sentence most readers take away; stating the
+  // wrong fault there would be this fix reintroducing its own bug.
+  assert.match(cli, /stopped\.length > 0/, 'the "stopped beating" headline is gated on the roles that actually stopped');
 });
