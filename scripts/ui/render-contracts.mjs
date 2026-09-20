@@ -645,10 +645,17 @@ export const RENDER_CONTRACTS = [
     selector: '.builder-preview-module[data-builder-module-device-scope] > *',
     read: ['fontSize'],
     emulate: { viewport: { width: 420, height: 900 } },
+    // Until 2026-09-20 this asserted NOT 18px, which only worked because the
+    // legacy field never reached a real phone (the 560px cap beat it). Since
+    // 86bc3xrhz the field wins on its own, so 18px is now right from BOTH
+    // paths and a browser cannot tell them apart. The emit guard itself is
+    // pinned where it can be seen, in builder-module-device-css.test.ts ("keeps
+    // a legacy field out of the rules when ANOTHER key is set"); what is left
+    // for a browser is that a tablet edit leaves the old field working.
     expect(sample) {
       return sample.styles.fontSize === '18px'
-        ? 'a heading carrying the legacy mobileFontSize and an unrelated tablet margin rendered 18px at 420px — the device rules are emitting a legacy value at a width it never applied at.'
-        : null;
+        ? null
+        : `a heading carrying the legacy mobileFontSize 18 and an unrelated tablet margin rendered ${sample.styles.fontSize} at 420px — the tablet edit broke the old phone size.`;
     },
   },
   {
