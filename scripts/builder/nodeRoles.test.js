@@ -148,7 +148,12 @@ test('every registered job explains why it may only run in one place', () => {
 
 test('rolesOwnedBy lists what a machine is allowed to do', () => {
   const mini = rolesOwnedBy('mac-mini');
-  assert.ok(mini.includes('loop-review'));
+  // `bus-relay` rather than a loop lane: the loops can legitimately move
+  // between machines (see the always-on test below), and a test that pins the
+  // MECHANISM must not fail because an ownership decision changed. The relay
+  // is the stable example — it has never moved and the test below is what
+  // would stop it.
+  assert.ok(mini.includes('bus-relay'));
   assert.ok(!mini.includes('db-refresh'));
 });
 
@@ -163,12 +168,60 @@ test('db-refresh has exactly one owner — the disk-IO budget is one meter', () 
 // answered two tickets at 06:19, and both were still waiting nine hours later
 // — nothing errored, the answers just landed where nothing was listening.
 // Moving one of these back to a machine with a lid should fail here first.
-test('the jobs that carry Dane\'s answers forward live on the always-on machine', () => {
-  for (const role of ['bus-relay', 'loop-build', 'loop-review']) {
-    assert.equal(
-      roleOwner(role),
-      'mac-mini',
-      `${role} moves the operator's instructions along; on a machine that sleeps, it stops`,
+//
+// AMENDED 2026-09-20 (task 86bc3wn1v), and the amendment is the point.
+//
+// This test caught the loops being moved to the laptop, which is exactly what
+// it was written to do. But it was a flat prohibition, and the move was the
+// right call: the Mini could not sign in to Claude and could not be reached to
+// fix it for eleven days, so "the always-on machine" was running nothing at
+// all. A rule that cannot express "deliberately, for now, for this reason"
+// gets deleted the first time it is inconvenient — and then it is not there
+// for the accidental move it was really written against.
+//
+// So the guard is now about the RECORD rather than the value. A lane may sit
+// on a machine with a lid, but only if `lib/nodeRoles.js` says out loud that
+// it is temporary and names the ticket that will move it back. An undocumented
+// move still fails here, which is the case from 2026-08-23: the relay sat on
+// the laptop, Dane answered two tickets at 06:19, and both were still waiting
+// nine hours later — nothing errored, the answers just landed where nothing
+// was listening.
+//
+// `bus-relay` keeps the flat rule. It is the job that carries Dane's own words
+// to the machines, it has never moved, and nothing about the Mini being
+// unreachable makes the laptop a better place for it.
+test('the relay that carries Dane\'s answers forward lives on the always-on machine', () => {
+  assert.equal(
+    roleOwner('bus-relay'),
+    'mac-mini',
+    'bus-relay moves the operator\'s instructions along; on a machine that sleeps, it stops',
+  );
+});
+
+test('a loop lane on a machine with a lid has to say it is temporary and name its way back', () => {
+  const ALWAYS_ON = 'mac-mini';
+  for (const role of ['loop-build', 'loop-review']) {
+    const owner = roleOwner(role);
+    if (owner === ALWAYS_ON) continue;
+
+    const why = String(ROLES[role]?.why || '');
+    assert.match(
+      why,
+      /TEMPORARY/,
+      `${role} is on ${owner}, which sleeps. That is allowed, but lib/nodeRoles.js has to say `
+        + 'TEMPORARY so the next reader knows it is an exception and not the settled answer.',
+    );
+    assert.match(
+      why,
+      /\b86[a-z0-9]{7}\b/,
+      `${role} is on ${owner} without naming the ticket that moves it back. An exception with no `
+        + 'route home is a permanent change wearing the word "temporary".',
+    );
+    assert.match(
+      why,
+      new RegExp(`back to ${ALWAYS_ON}`, 'i'),
+      `${role} is on ${owner} without saying where it returns to. Name the machine, so restoring `
+        + 'it is a lookup rather than an act of memory.',
     );
   }
 });
