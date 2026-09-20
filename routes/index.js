@@ -66,6 +66,7 @@ const platformScreenshots = require('./platformScreenshots');
 const crm         = require('./crm');
 const blog        = require('./blog');
 const events      = require('./events');
+const studio      = require('./studio');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
@@ -125,6 +126,7 @@ const ROUTE_MODULES = [
   crm,
   blog,
   events,
+  studio,
   eventCategories,
   eventHarvest,
   publicSite,

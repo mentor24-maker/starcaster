@@ -37,6 +37,8 @@ const { BUILDER_MODULE_TYPES, createEmptyModule } = require(path.join(ROOT, 'lib
 const projectsStore = require(path.join(ROOT, 'lib/projectsStore.js'));
 const crmConfigStore = require(path.join(ROOT, 'lib/crmConfigStore.js'));
 const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
+const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'));
+const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -1509,6 +1511,79 @@ for (const [name, slug, sections = []] of buildPages(ids)) {
   created += 1;
 }
 
+/**
+ * Studio footage for Assets › Footage (Studio 8/8, 86bbjv68z).
+ *
+ * Without rows the screen renders its "No footage yet" sentence, which fits
+ * any viewport — so check:screens would pass without ever measuring a table.
+ * The content is shaped the way the pipeline really leaves it: a long session
+ * title that has to wrap, files with no device lane yet (5/8 has not probed
+ * them), files with no recording date (the screen falls back and marks it),
+ * one with no Drive id at all, and a Drive id that will not resolve locally —
+ * both of which must render the placeholder, never a broken image.
+ *
+ * Idempotent by content hash: the hash is unique per project, so a re-seed
+ * finds each file instead of duplicating it.
+ */
+async function seedStudioFootage(scope) {
+  // Not `must`: a lookup's miss is `data: null`, and `must` answers
+  // `res.data ?? res` — the whole envelope, which is truthy, so every miss
+  // would read as a hit and nothing would ever be created.
+  const lookup = (res, what) => {
+    if (!res || res.ok === false) throw new Error(`${what}: ${res?.error || 'failed'}`);
+    return res.data || null;
+  };
+  const shoots = [
+    {
+      title: `${LONG} — Saturday match-play filming, all three courts, two iPhones and the MacBook screen`,
+      recordedAt: '2026-09-13T14:00:00Z',
+      files: [
+        { hash: 'fixture-footage-01', deviceLane: 'iphone', layerRole: 'subject', durationS: 3725.4, width: 3840, height: 2160, recordedAt: '2026-09-13T14:02:00Z', state: 'proxied', driveFileId: 'fixture-missing-drive-file-1' },
+        { hash: 'fixture-footage-02', deviceLane: 'iphone', layerRole: 'background', durationS: 3690, width: 1920, height: 1080, recordedAt: '2026-09-13T14:01:30Z', state: 'probed' },
+        { hash: 'fixture-footage-03', deviceLane: 'macbook', layerRole: 'plate', durationS: 612.25, width: 2880, height: 1800, state: 'downloaded', driveFileId: 'fixture-missing-drive-file-2' },
+        { hash: 'fixture-footage-04', layerRole: 'reference', state: 'new' },
+      ],
+    },
+    {
+      title: 'Adult clinic — coach cam',
+      recordedAt: '2026-09-06T09:30:00Z',
+      files: [
+        { hash: 'fixture-footage-05', deviceLane: 'ipad', layerRole: 'subject', durationS: 45.9, width: 1080, height: 1920, recordedAt: '2026-09-06T09:31:00Z', state: 'ready' },
+        { hash: 'fixture-footage-06', deviceLane: 'screen', layerRole: 'plate', durationS: 128, width: 1440, height: 900, state: 'failed' },
+      ],
+    },
+  ];
+  let made = 0;
+  let found = 0;
+  for (const shoot of shoots) {
+    let session = lookup(await videoSessionsStore.findSessionByTitle(shoot.title, scope), 'find footage session');
+    if (!session) {
+      session = must(
+        await videoSessionsStore.createSession({ title: shoot.title, recordedAt: shoot.recordedAt }, scope),
+        'create footage session'
+      );
+    }
+    for (const file of shoot.files) {
+      const existing = lookup(await videoSourcesStore.findSourceByContentHash(file.hash, scope), 'find footage file');
+      if (existing) { found += 1; continue; }
+      const { hash, ...rest } = file;
+      must(
+        await videoSourcesStore.createSource({ sessionId: session.id, contentHash: hash, ...rest }, scope),
+        'create footage file'
+      );
+      made += 1;
+    }
+  }
+  return { made, found };
+}
+
+let footageSeeded = null;
+try {
+  footageSeeded = await seedStudioFootage({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed Studio footage: ${err.message}`);
+}
+
 console.log(
   `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
   `${refreshed} refreshed, ${existing.length} already present.`
@@ -1519,5 +1594,12 @@ console.log(
   sharedSectionSeeded
     ? `shared section "${SHARED_SECTION_NAME}" seeded — Block States shows Following / Changed / Independent.`
     : 'WARNING: the shared section master was NOT seeded; every block header will read Independent.'
+);
+// Said out loud for the same reason: without these rows Assets › Footage shows
+// its empty sentence and check:screens measures no table there at all.
+console.log(
+  footageSeeded
+    ? `Studio footage seeded — ${footageSeeded.made} file(s) created, ${footageSeeded.found} already present.`
+    : 'WARNING: Studio footage was NOT seeded; Assets › Footage will show its empty state and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
