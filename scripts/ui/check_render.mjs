@@ -137,6 +137,15 @@ function documentForSection({
   cellPaddingTop,
   cellDeviceOverrides,
   cellMobileHidden,
+  /*
+   * The column's own border, three keys that have to travel together: a width
+   * with no style renders the renderer's default and a style with no width
+   * renders nothing, so a fixture carrying one of them cannot see the setting
+   * it is asking about (86bc16vve).
+   */
+  cellBorderWidth,
+  cellBorderColor,
+  cellBorderStyle,
 } = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
@@ -186,6 +195,9 @@ function documentForSection({
     ...(cellPaddingTop ? { cellPaddingTop } : {}),
     ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
     ...(cellMobileHidden ? { cellMobileHidden } : {}),
+    ...(cellBorderWidth ? { cellBorderWidth } : {}),
+    ...(cellBorderColor ? { cellBorderColor } : {}),
+    ...(cellBorderStyle ? { cellBorderStyle } : {}),
     modules: modules.map(moduleFrom),
   };
 

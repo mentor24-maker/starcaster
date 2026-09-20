@@ -3269,4 +3269,98 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  /*
+   * A COLUMN'S BORDER STYLE — 86bc16vve.
+   *
+   * `buildBuilderColumnStyle` wrote the border as `${width}px solid ${color}`
+   * with `solid` as a literal and never read `cellBorderStyle` at all. The
+   * Builder's own column card DID read it, so the editor showed a dashed
+   * border while the page rendered a solid one — the operator was styling
+   * against a picture that was not what a visitor would get.
+   *
+   * Three contracts because the dropdown makes three distinct promises and the
+   * old code broke all three in different ways: Dashed and Dotted were painted
+   * as Solid, and None was ignored entirely because the WIDTH alone decided
+   * whether to draw anything.
+   */
+  {
+    id: 'column-border-style-dashed-renders-dashed',
+    why:
+      'The Border Style dropdown offers Dashed and the page rendered solid, because the renderer had ' +
+      'the word "solid" hard-coded. The editor honoured the setting, so this disagreed with the one ' +
+      'picture the operator was actually looking at while building.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A column with a dashed border', settings: {} }],
+      cellBorderWidth: { main: '4' },
+      cellBorderColor: { main: '#ff0000' },
+      cellBorderStyle: { main: 'dashed' },
+    },
+    selector: '.builder-preview-column',
+    read: ['borderTopStyle', 'borderTopWidth'],
+    expect(sample) {
+      const { borderTopStyle: style, borderTopWidth: width } = sample.styles;
+      if (style !== 'dashed') {
+        return `a column set to Border Style = Dashed rendered a ${style} border. The Builder's own ` +
+          'column card shows it dashed, so the editor and the page disagree about what the operator built.';
+      }
+      if (width !== '4px') {
+        return `the dashed border rendered ${width} wide with Border Width set to 4 — reading the style ` +
+          'must not disturb the width beside it.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'column-border-style-dotted-renders-dotted',
+    why:
+      'Dotted is the other half of the same literal. Asserting only Dashed would pass on a fix that ' +
+      'hard-coded "dashed" in place of "solid", which is the same defect wearing a different word.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A column with a dotted border', settings: {} }],
+      cellBorderWidth: { main: '4' },
+      cellBorderColor: { main: '#ff0000' },
+      cellBorderStyle: { main: 'dotted' },
+    },
+    selector: '.builder-preview-column',
+    read: ['borderTopStyle'],
+    expect(sample) {
+      return sample.styles.borderTopStyle === 'dotted'
+        ? null
+        : `a column set to Border Style = Dotted rendered a ${sample.styles.borderTopStyle} border.`;
+    },
+  },
+  {
+    id: 'column-border-style-none-draws-no-border-even-with-a-width',
+    why:
+      'The nastiest of the three: the renderer decided whether to draw a border from the WIDTH alone, ' +
+      'so None with a width still drew a solid line. The settings panel greys Width and Colour out ' +
+      'when None is chosen, so the panel was already promising a border that the page then drew anyway.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A column with no border', settings: {} }],
+      cellBorderWidth: { main: '5' },
+      cellBorderColor: { main: '#ff0000' },
+      cellBorderStyle: { main: 'none' },
+    },
+    selector: '.builder-preview-column',
+    read: ['borderTopStyle', 'borderTopWidth'],
+    expect(sample) {
+      const { borderTopStyle: style, borderTopWidth: width } = sample.styles;
+      // A browser reports width 0px whenever the style is none, so the style is
+      // the fact worth reading; the width is asserted too because "none" must
+      // mean nothing is painted, not merely that it is painted invisibly.
+      if (style !== 'none') {
+        return `a column set to Border Style = None with a Border Width of 5 rendered a ${style} ` +
+          `border ${width} wide. None must mean no border at all, whatever the width says.`;
+      }
+      if (width !== '0px') {
+        return `Border Style = None rendered no line but still reserved ${width} of border box, which ` +
+          'moves the column\'s contents exactly as a visible border would.';
+      }
+      return null;
+    },
+  },
 ];

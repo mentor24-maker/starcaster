@@ -2308,6 +2308,33 @@ function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: str
   const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
   const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
   const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
+  /*
+   * The column's Border Style, which this renderer used to ignore: the
+   * border was written as `${borderWidth}px solid ${borderColor}` with
+   * `solid` as a literal, so Dashed and Dotted rendered solid on the page
+   * while the Builder's own column card honoured them — the editor showed
+   * one thing and a visitor got another (86bc16vve).
+   *
+   * `solid` is the default the normalizer and the blank section both
+   * write (builder-template.ts), so an unset column is unchanged.
+   */
+  const borderStyle = section.cellBorderStyle?.[columnKey] ?? "solid";
+  /*
+   * None needs no clause of its own, and this is worth stating because the
+   * obvious fix adds one.
+   *
+   * A column set to None with a width of 5 used to draw a 5px SOLID border —
+   * but that was the literal above, not the width test here: the style was
+   * thrown away, so `none` was rendered as `solid`. With the style carried
+   * through, the browser is handed `5px none <colour>` and paints nothing,
+   * reporting borderTopStyle `none` and borderTopWidth `0px`.
+   *
+   * An extra `borderStyle !== "none"` guard was written here first and then
+   * removed: it changed no rendering, so the contract written to prove it
+   * could not fail — each guard masked the other, and both read as passing.
+   * A guard no test can fail is not a guard (86bc16vve).
+   */
+  const hasBorder = Number(borderWidth) > 0;
 
   /*
    * The cell's own numbers, as one answer each, used BOTH by the inline
@@ -2364,9 +2391,9 @@ function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: str
     // the control that should move a menu inside its cell.
     padding: effectiveCellPadding,
     border:
-      isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
+      isPageOverlayFlowColumn || isSectionOverlayColumn || !hasBorder
         ? undefined
-        : `${borderWidth}px solid ${borderColor}`,
+        : `${borderWidth}px ${borderStyle} ${borderColor}`,
     borderRadius: effectiveCellRadius,
     // {} at the left/top default, so only a cell he aligned moves.
     ...(isPageOverlayFlowColumn || isSectionOverlayColumn

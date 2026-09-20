@@ -1,3 +1,24 @@
+## 2026-09-20 — A column's Border Style now does what it says (#TBD)
+
+Expand a column's Styles bar in the Builder and there is a Border Style
+dropdown offering None, Solid, Dashed and Dotted. Only Solid ever reached the
+page. Choosing Dashed or Dotted changed nothing a visitor would see, and
+choosing None still drew a solid line if a width was set.
+
+What made it worse than a dead control is that the Builder's own column card
+DID honour the setting. So the editor showed you a dashed border while the
+page showed a solid one — you were styling against a picture that was not what
+anyone else would get.
+
+The renderer was writing the border with the word "solid" typed into it as a
+fixed value and never reading your choice at all. It reads it now. None needed
+no special handling once the choice was carried through: a border told to draw
+nothing draws nothing.
+
+Nothing on any existing site changes — the before-and-after photographs of six
+pages came back pixel-for-pixel identical, because no live column has ever had
+a style other than Solid stored on it.
+
 ## 2026-09-20 — The Studio notices when a video in Drive has been swapped out (#720)
 
 If you re-export a clip and save it over the original in Google Drive, Drive
