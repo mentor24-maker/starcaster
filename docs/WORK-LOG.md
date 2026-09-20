@@ -12,8 +12,22 @@ happened against that specific job, and carries on — one bad video does not
 stop the line. If the whole process dies, macOS starts it again, and the job it
 was holding comes back on its own a minute later, without anybody noticing it
 was gone. And if the daemon stops running altogether — the quiet failure, the
-one that looks exactly like a slow week — it goes six hours without checking in
-and that silence raises an alarm by itself.
+one that looks exactly like a slow week — it checks in every five minutes, so
+its silence is something a watchdog can see. That watchdog is deliberately left
+switched OFF for now, with the reason written down, because the daemon cannot
+be installed until the Mac Mini is reachable and an alarm nobody can clear for
+eleven days just teaches everyone to ignore alarms. The roster says "not
+reporting, and here is why" — never "healthy".
+
+It also keeps its own diary, and that part had to be fixed before this could
+ship. The first version capped the size of one file and wrote everything into a
+different one, so the file being watched was never created at all and the file
+that grew had no limit on it. It now writes the same file it caps, and — the
+part that is easy to get wrong — it reopens that file every time it rolls it
+over, or everything after the first rollover would quietly pour into the
+archived copy instead. The status command used to say "nothing written yet" on
+a perfectly healthy machine forever; it now says which of the two real reasons
+applies.
 
 The other half of this is about keeping all of it OFF the live website's
 servers. The Studio code drives video tools over files that are gigabytes each;
