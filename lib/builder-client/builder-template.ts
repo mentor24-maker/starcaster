@@ -1391,7 +1391,7 @@ export function normalizeCellDeviceOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-function normalizeDecimalValue(value: unknown, fallback: string, min: number, max: number) {
+export function normalizeDecimalValue(value: unknown, fallback: string, min: number, max: number) {
   const parsed = Number.parseFloat(String(value ?? fallback));
   const fallbackValue = Number.parseFloat(fallback);
   const normalized = Number.isFinite(parsed)
