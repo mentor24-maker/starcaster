@@ -1,3 +1,30 @@
+## 2026-09-20 — A dead pipeline can no longer look like a healthy one (#728)
+
+Between the 16th and the 19th of September nothing reached Live for 90 hours.
+Both build lanes were firing every hour the whole time — each pass started, hit
+the usage limit, stopped in a few seconds and exited cleanly, and recorded a
+successful run on its way out, because that is all a "heartbeat" has ever
+meant: the job fired and came back. So every status screen said everything was
+fine, truthfully, while twenty tickets piled up. It was found because Dane
+asked whether the pipeline needed restarting.
+
+A heartbeat now records what the pass actually did — real work, or stood down
+because it could not work — and, when it stood down, how long that has been
+going on without a break. That last part is the whole trick: one stand-down is
+ordinary and clears itself within the hour, and without a start time hour 90
+looks exactly like hour 1. A lane that has been standing down longer than it
+should now shows up as its own thing on the roll call: not healthy, and not
+"stopped firing" either, because the schedule is working perfectly and saying
+otherwise would send somebody hunting a fault that is not there. It raises an
+alarm on its own, and clears when a pass does real work again.
+
+The second half was delivery. The one check that got the answer right did post
+it — into a chat channel that was refusing every message that week, so it was
+saved to a holding ticket nobody watches. That ticket now puts itself on
+Dane's ClickUp "Assigned to me" list when an alarm lands on it, which reaches
+him without going anywhere near the chat that was broken. It stays there until
+he unassigns himself.
+
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 
 Expand a column's Styles bar in the Builder and there is a Border Style
