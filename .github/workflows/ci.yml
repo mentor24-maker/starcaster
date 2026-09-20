@@ -143,13 +143,14 @@ jobs:
           fi
 
       # The Studio slices read and WRITE real media, and every acceptance
-      # criterion on them is about what really comes out of ffmpeg — a proxy
-      # that is 8-bit, a WAV at 16 kHz, a source whose five extra tracks were
-      # left alone. So their fixtures are built by ffmpeg at test time rather
-      # than committed (a 40 MB test video in the repo is permanent). GitHub's
-      # ubuntu image does not carry ffmpeg, and those suites are deliberately
-      # RED rather than quietly skipped when it is missing, so the tool has to
-      # be installed here or two whole slices stop being checked.
+      # criterion on them is about what really comes out of ffmpeg — what
+      # ffprobe says a container IS (5/8), and a proxy that is 8-bit, a WAV at
+      # 16 kHz, a source whose five extra tracks were left alone (6/8). So
+      # their fixtures are built by ffmpeg at test time rather than committed
+      # (a 40 MB test video in the repo is permanent). GitHub's ubuntu image
+      # does not carry ffmpeg, and those suites are deliberately RED rather
+      # than quietly skipped when it is missing, so the tool has to be
+      # installed here or two whole slices stop being checked.
       - name: Install ffmpeg (Studio media fixtures)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
