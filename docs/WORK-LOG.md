@@ -1,3 +1,26 @@
+## 2026-09-20 — Every video you own, in one list: Assets › Footage (#730)
+
+The Studio pipeline has been collecting footage into a catalog since the first
+Studio slice, but there was nowhere to see it. Now there is: **Assets ›
+Footage** in the admin app lists every file, grouped by recording session with
+the newest shoot at the top, and inside each shoot the files in the order they
+were recorded. Each one shows a small preview, which device made it, what it
+is for in an edit, how long it is, its picture size, when it was recorded and
+how far through the pipeline it has got. You can search session names and
+filter by device and by date.
+
+The previews are Google Drive's own, because nothing in the pipeline draws
+one and the edit copies live on the Mac Mini where the website cannot reach
+them. A file Drive has not drawn a preview for yet says "No preview yet" rather
+than showing a broken picture. And where a file has not been read for its own
+recording date yet, the date shown is marked with a star and says which date
+it really is — a "recorded" date that is secretly an "added" date would be a
+confident wrong answer.
+
+Alongside it, `docs/STUDIO.md` is the plain-language guide: what happens to a
+video step by step, what every column means, how to tell whether the pipeline
+is running, and what to do when it stops.
+
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 
 Expand a column's Styles bar in the Builder and there is a Border Style
