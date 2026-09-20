@@ -219,7 +219,7 @@ function TableCellModules({
                             >
                               <option value="">— Page —</option>
                               {sortPagesByName(pages).map((p: BuilderPageRecord) => (
-                                <option key={p.id} value={`/${p.slug}`}>{p.name}</option>
+                                <option key={p.id} value={`/${p.slug}`}>{p.name || p.slug || p.id}</option>
                               ))}
                             </select>
                           )}

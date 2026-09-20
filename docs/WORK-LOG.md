@@ -93,6 +93,178 @@ finishing and the catalog entry being written meant the next attempt could not
 find the three and a half gigabytes already sitting on the disk and fetched the
 whole thing again, leaving the first copy stranded with nothing pointing at it.
 It now recognises its own file whatever it has since been called.
+## 2026-09-16 — The Studio makes small working copies of your footage (#725)
+
+Sixth of eight pieces in the Studio work. The earlier pieces built the filing
+cabinet, the to-do list, the eye on Google Drive and the download. This is the
+one that turns a big camera file into the three small things everything after
+it actually reads: a **proxy** you can scrub through without waiting, a plain
+**sound file** for the transcription step, and a **contact sheet** — twelve
+stills in a grid — so you can see what a clip is without opening it.
+
+Three things were worth building carefully.
+
+**An iPhone file has seven tracks in it, not two.** There is the picture and
+the sound, and then five more the phone writes for itself. Tell the conversion
+tool to "just convert this" and it either refuses outright or quietly carries
+something wrong into the copy. So the two tracks that matter are named by hand,
+every time, and the other five are left exactly where they are. The original
+file is never written to at all, and there is a test that checks the original
+byte for byte before and after to prove it.
+
+**A copy that is bigger than the original is not a copy worth making.** The
+Zoom recordings are already small, and measured here, a 720p copy of one comes
+out **23% larger** than the file it was meant to replace — and slower to read.
+So a file that is already small enough is used as it is, and the run says so
+with the number it decided on rather than leaving you to wonder why no copy
+appeared.
+
+But size is not the only reason to make a copy. The second job is making a
+file **ordinary**: an iPhone records in a newer format that is perfectly small
+and still plays as a black rectangle in Safari. So there are two questions, not
+one — is it small enough, *and* is it already in a format everything can read —
+and only both together skip the copy. Getting that wrong would not have looked
+like a bug; it would have looked like a video player that does not work.
+
+**Running it twice does not do the work twice.** Each copy has one fixed name,
+so nothing can ever pile up as `proxy (1)`, `proxy (2)`. Work in progress is
+written under a temporary name and only given its real one when the conversion
+has finished cleanly — so a machine that loses power halfway through leaves
+something the next run throws away, rather than a half-finished file that looks
+finished forever. And a file that is there but too short, which is what a full
+disk leaves behind, is rebuilt rather than trusted.
+
+The ticket also asked for a measurement: is it faster to decode video on the
+graphics chip than on the main processor? On the Mini, over thirty seconds of
+the format an iPhone writes, the answer is **no difference at all** on the
+clock — two seconds either way. But the graphics chip used **a sixth** of the
+processor time to do it. That is the number that matters on a machine running
+several jobs at once, and a stopwatch on its own would have said "no
+difference" and been wrong about the only thing worth knowing.
+
+The main processor is still the default anyway, and that is a decision rather
+than caution. The two ways of decoding do not produce quite the same file — the
+brightness is identical to the last bit, one colour channel differs by an
+amount no eye could ever see — and "run it again and you get the same thing" is
+only a question anybody can check while that stays true. The faster path is
+there to be switched on, it falls back on its own when the graphics chip
+refuses a particular file, and it says which one made each copy.
+
+Two things were found by running it rather than by reading it, which is the
+whole argument for doing both. The temporary file name left the conversion tool
+with no idea what kind of file it was being asked to write, so every single
+conversion failed until that was said out loud. And the check for "is this an
+older format" was written as a pattern that reads perfectly and misses the one
+format Apple's own hardware produces — exactly the file this pipeline sees
+most. Both are now tests.
+## 2026-09-15 — The Studio can now tell what a video file actually is (#724)
+
+Fifth of eight pieces in the Studio work. A file's name is not evidence —
+Episode 3's project file is called `youtube_cover_S1-E3.wfp`, and a file named
+`DoE_S1-E2.mp4` sits inside the Episode 3 folder. So this piece opens the file
+itself and reads what the camera or the app wrote inside it: how long it runs,
+how big the picture is, how many frames a second, which way up it was shot, and
+when it was recorded.
+
+It then works out where the footage came from. An iPhone or an iPad says so in
+a tag Apple writes into the file, and that tag is stored word for word, so an
+iPad never gets filed as an iPhone by a rule that nearly matched. Zoom writes
+no such tag, so a Zoom recording is recognised by its shape instead — and the
+answer says out loud that it is an educated guess rather than something the
+file stated. A file in the Plates folder is a plate no matter what shot it,
+because a plate is a job in the edit rather than a kind of camera, and putting
+it in that folder is you saying so.
+
+When it genuinely cannot tell, it says which kind of cannot-tell it is — an
+Apple file with no model written in it, a model it has never been taught, a
+camera from another maker, or a file that names a model and never says who
+made it, which is what a GoPro or a drone writes — and keeps everything it
+read, so the question can be settled later without going back to the file. It
+never fills in a maker the file did not name. And if the inspection tool is
+missing, the file is damaged, the file takes too long to answer, or it answers
+with more than the reader can hold, that is reported as "no reading taken",
+each with its own reason, rather than as "unknown" — because those piling up
+in the same bucket is how a machine with a missing tool ends up looking like a
+library of mystery footage, and because sending somebody to hunt a stuck disk
+over a file that answered instantly wastes an afternoon.
+
+One of those readings — which way up the clip was shot — was recorded turning
+the wrong way. A phone held upright writes a note inside the file saying how
+far the picture has to be spun to stand up, and there are two opposite ways of
+writing that note down. This piece had picked the wrong one, so the commonest
+file in the whole Studio, a portrait iPhone clip, would have come out upside
+down as soon as anything used the number to build a thumbnail. Nothing reads it
+yet, so nothing was actually broken — which is exactly why it was worth settling
+now, three steps before it would have surfaced somewhere that looks nothing like
+its cause. It was settled by measuring rather than by reasoning: a test builds a
+clip that is red down one side and blue down the other, spins it, renders the
+picture a viewer would actually see, and looks at which side the red ended up
+on. Where the file uses the older way of writing the note, that is said plainly
+in the code as an assumption rather than a measurement, because no file on this
+machine can be made to demonstrate it either way.
+
+A file whose name begins with a dash is also read properly now, instead of the
+inspection tool mistaking the name for an instruction and refusing perfectly
+good footage.
+
+Every claim here is checked against real video files, built fresh each time the
+tests run and thrown away afterwards — no video is stored in the code, where it
+would sit forever.
+## 2026-09-14 — A page with no name no longer shows up as a blank line when you link to it (#694)
+
+In the Builder you can drop an image into a cell of a table, and give that image
+a link. The link box offers a dropdown of your own pages to pick from. If one of
+your pages had not been given a name yet, it showed up in that list as an empty
+line — a gap you could click, with nothing written on it and no way to tell
+which page it was.
+
+Now it falls back to the page's web address instead, so the row reads something
+like `empty-name-row`. That is what every other page dropdown in the product
+already did; this one had been missed. Picking a page still links to exactly the
+same address as before — only what you see in the list changed.
+
+One thing worth writing down, because it explains why this survived so long. The
+ticket assumed the automatic layout checker had never been able to open this
+dropdown, and asked for test content to be added so it could. The test content
+was already there and had been for a month. The real reason is that the checker
+measures where things sit on screen, not the words inside them — so a blank
+label is precisely the kind of fault it will wave through. A blank row and a
+correctly-drawn row occupy the same space. The guard added here is a different
+kind of test, one that reads the words.
+## 2026-09-15 — The preview gets a Tablet view, and the Builder stops using two different sets of screen widths (#723)
+
+The Builder's page preview had two buttons, Browser and Mobile. It now has
+three: Desktop, Tablet and Mobile, so you can see a page the way a tablet shows
+it without owning one.
+
+The bigger half is underneath. Over the last three pieces of work the Builder
+learned to style a row differently on phones and tablets, and it decides "this
+is a tablet" at 1024px wide and "this is a phone" at 767px. But the Builder
+already had an older, separate idea of a narrow screen, from years before any
+of that, which fired at 900px and 560px. Both sets were live at once — so a
+column you hid on phones disappeared at 767px while the row around it stacked
+at 900px, and there was no screen width where the whole page agreed with
+itself. The rules that decide layout now use the same two widths as everything
+else.
+
+What you will actually see change on a client site: between about 900 and
+1024 pixels wide — a small laptop, an iPad turned sideways — a row with several
+columns now stacks into one, the way it already did on anything narrower. If
+there is a row you want left alone, its Mobile Layout setting has always had a
+"Keep columns" option and that still wins at every width. Mobile Layout itself
+moved into the row's phone panel, where the rest of the phone settings live.
+
+Building the Tablet frame turned up a fault in the phone frame nobody had
+spotted: a row set to 90 pixels of padding on tablets showed 10 pixels in the
+preview's phone frame and 90 on an actual phone. A preview that disagrees with
+the real thing is worse than no preview. That is fixed, and the automated
+checks can now open a preview frame and measure it, which they could not do
+before — which is exactly why it had gone unnoticed.
+
+One piece is deliberately left for later: the old Desktop/Mobile switch on the
+page list is still there. It now duplicates the new Phone/Tablet/Desktop switch
+rather than being the only way to reach three module settings, so taking it
+away is its own small job and is written up separately.
 
 ## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
 
