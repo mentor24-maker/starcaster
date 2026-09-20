@@ -142,14 +142,16 @@ jobs:
             exit 1
           fi
 
-      # Studio 5/8 reads what a video file IS out of its container, and every
-      # acceptance criterion on it is about what REAL ffprobe says about REAL
-      # media — so its fixtures are built by ffmpeg at test time rather than
-      # committed (a 40 MB test video in the repo is permanent). GitHub's
-      # ubuntu-24.04 image does not carry ffmpeg, and the suite is deliberately
-      # RED rather than quietly skipped when it is missing, so the tool has to
-      # be installed here or that whole slice stops being checked.
-      - name: Install ffmpeg (Studio probe fixtures)
+      # The Studio slices read and WRITE real media, and every acceptance
+      # criterion on them is about what really comes out of ffmpeg — what
+      # ffprobe says a container IS (5/8), and a proxy that is 8-bit, a WAV at
+      # 16 kHz, a source whose five extra tracks were left alone (6/8). So
+      # their fixtures are built by ffmpeg at test time rather than committed
+      # (a 40 MB test video in the repo is permanent). GitHub's ubuntu image
+      # does not carry ffmpeg, and those suites are deliberately RED rather
+      # than quietly skipped when it is missing, so the tool has to be
+      # installed here or two whole slices stop being checked.
+      - name: Install ffmpeg (Studio media fixtures)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Unit tests (builder server libs)
