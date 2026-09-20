@@ -390,6 +390,38 @@ export function BuilderSectionControls({
               </div>
             </BuilderSettingRow>
           ) : null}
+          {/*
+            * Mobile Layout, in the PHONE panel — the one place it can be
+            * reached now that the page list's Desktop/Mobile toggle is on its
+            * way out (task 86bc14pgq).
+            *
+            * It writes to the STORED row, not through `writeSectionDeviceEdit`
+            * like everything else on this panel, and that is deliberate:
+            * `mobileLayout` is not one of the device-changeable keys, so there
+            * is one answer for every narrow screen rather than one per device.
+            * Routing it through the device writer would store it in the phone
+            * map, where nothing reads it, and the control would do nothing at
+            * all. The title says so on the control, because a setting that
+            * behaves differently from its neighbours has to admit it.
+            */}
+          {device === "phone" && columnKeys.length > 1 ? (
+            <BuilderSettingRow label="Mobile Layout">
+              <select
+                title="How this row's columns arrange themselves once the screen is too narrow for them side by side. One answer for every narrow screen — tablets and phones both."
+                value={storedSection.mobileLayout ?? "stack"}
+                onChange={(event) =>
+                  updateStoredSection((current) => ({
+                    ...current,
+                    mobileLayout: event.target.value as BuilderTemplateSection["mobileLayout"]
+                  }))
+                }
+              >
+                <option value="stack">Stack columns</option>
+                <option value="keep">Keep columns</option>
+                <option value="reverse-stack">Reverse stack</option>
+              </select>
+            </BuilderSettingRow>
+          ) : null}
           {columnKeys.length > 1 ? (
             <BuilderSettingRow label={mark("Column Gap", "columnGap")}>
               <BuilderNumberSelectControl

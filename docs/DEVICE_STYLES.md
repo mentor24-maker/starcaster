@@ -5,9 +5,11 @@ differently on a tablet and on a phone. This is the document for that feature:
 the model, the two breakpoints, why the generated CSS is marked `!important`,
 and where the `<style>` element is allowed to sit.
 
-Slices: rows shipped as 86bc13a6v (PR #716), cells as 86bc14pey (PR #717),
-modules as 86bc14pfq. Slice 4 is the preview's Tablet frame and the retirement
-of the old 900px and 560px rules.
+Slices: rows shipped as 86bc13a6v (PR #716), cells as 86bc14pey (PR #717).
+Modules are slice 3 (86bc14pfq, PR #718). Slice 4 (86bc14pgq) added the
+preview's **Tablet frame** and moved the layout half of the old 900px/560px
+rules onto these breakpoints; retiring the page list's Desktop/Mobile toggle
+is what remains of it, and is filed on its own as 86bc1ecxx.
 
 ## The model — a device FOLLOWS until it is changed
 
@@ -93,12 +95,54 @@ is an edit to one of those three objects and nothing else.**
 Both are in `builder-device-overrides.ts` as `BUILDER_TABLET_MAX_WIDTH` and
 `BUILDER_PHONE_MAX_WIDTH`, and nothing else may hard-code them.
 
-There are older, unrelated narrow-screen rules in the stylesheet at **900px**
-and **560px** — including the ones behind a cell's legacy "Hide on Mobile" and
-a module's `mobileHidden` / `mobileAlignment` / `mobileFontSize`.
-They are not these breakpoints and they have not moved; moving them is slice 4.
-Until then, a column hidden with the old field hides at ≤900px, and a column
-hidden with **Hide on Phone** hides at ≤767px.
+There were older, unrelated narrow-screen rules in the stylesheet at **900px**
+and **560px**, from before this feature existed. Slice 4 (86bc14pgq) moved the
+ones that decide LAYOUT — whether a row's columns sit side by side, and the
+row and column padding that goes with it — onto the two widths above. What the
+operator sees from that: a multi-column row now stacks from 1024px down rather
+than 900px, and "Keep columns" is still the per-row way out of it at every
+width.
+
+**Some legacy rules deliberately stayed at 900px**, and each has a reason
+worth reading before moving it:
+
+| Still at the old width | Why |
+|---|---|
+| `.builder-preview-column-mobile-hidden`, `.builder-preview-module-mobile-hidden` | Widening makes content VANISH on tablets that show it today. Narrowing cannot be written at all: the rule is `display: none !important` and the element's real display lives in an inline style, which a stylesheet cannot hand back. These move when the legacy fields are read through the device chain. |
+| the module's legacy Mobile Font Size and Mobile Alignment | The module slice shipped and deliberately left them: a module carrying ONLY legacy fields emits no device CSS at all, so these stylesheet classes are still what renders it. `mobileFontSize` also loses to a heading rule inside the same 900px block — see "The legacy fields underneath" below. |
+| every `.site-nav*` rule at 900/720/560px | The hamburger breakpoint that turns the menu into a drawer lives in `legacy.css`. Moving the nav's sizing without it leaves a drawer-shaped menu beside a desktop nav. |
+| `gap: 18px !important` on a stacked row | No desktop value to return to, and at 901-1024px the row's own Column Gap is the better answer. |
+| everything admin-only | Those are screens in the app, not a visitor's page. |
+
+So a column hidden with the old **Hide on Mobile** field still hides at ≤900px,
+while one hidden with **Hide on Phone** hides at ≤767px. The two disagree
+between 768 and 900px, and that is a known, written-down gap rather than an
+oversight.
+
+### The preview frames cannot see a media query
+
+The Builder's preview page draws a page inside a **Mobile** (390px) or
+**Tablet** (820px) box. A frame is a narrow element in a WIDE window, so every
+`@media` rule in the stylesheet is false inside it however narrow the box is
+drawn. Both frames therefore need a parallel copy of their rules keyed by
+class: `builder-device-css.ts` emits every phone rule under
+`.builder-preview-device-mobile` and every tablet rule under
+`.builder-preview-device-tablet`, and the stylesheet mirrors the legacy
+narrow-screen rules the same way.
+
+The split is not symmetrical, and that is deliberate. A phone rule is computed
+from the row as a PHONE sees it, which already has tablet's settings folded in
+— so the phone frame needs no tablet rule of its own. The tablet frame must
+never receive the phone rule: a tablet is above the phone breakpoint, and a
+phone-only setting appearing in the Tablet frame is the frame lying about the
+device it is named after.
+
+Nothing could test a frame until 2026-09-15, and the gap had already cost a
+real defect: a row with 90px of Tablet top padding rendered **10px** in the
+phone frame and **90px** in a real 420px browser, because the frame took its
+padding from a flat `padding: 10px` in the regenerated stylesheet instead of
+the row's own variables. `emulate: { previewDevice }` on a render contract
+opens the frame, and three contracts hold both frames now.
 
 ## Why `!important`
 
@@ -291,13 +335,17 @@ follows it with no screen to check them on.
 - `scripts/builder/document.test.js` — the round trip through the serializer.
   A field the normalizer does not list is silently dropped, which would lose
   every phone setting on the next save.
-- `scripts/ui/render-contracts.mjs` — a real browser at 420px, 900px and
-  1440px. These are the only checks that can see `!important` losing, a media
-  query at the wrong width, a style element renumbering the columns, or a
-  child's `justify-self` beating the wrapper's `justify-items`.
+- `scripts/ui/render-contracts.mjs` — a real browser at 420px, 800px, 900px,
+  1000px and 1440px, plus both preview frames. These are the only checks that
+  can see `!important` losing, a media query at the wrong width, a frame
+  disagreeing with the device it imitates, a style element renumbering the
+  columns, or a child's `justify-self` beating the wrapper's `justify-items`.
 - `scripts/ui/check_panels.mjs` — switches one row, one module and one cell to
   Phone, so the device arrangement of each panel is measured rather than
-  assumed.
+  assumed. The row it switches is the fixture's **two-column** one: several row
+  controls exist only where there is more than one column (Column Gap, Column
+  Widths, Match Column Heights, Mobile Layout), and switching a single-column
+  row measured a Phone panel none of them could appear in.
 
 ## Changing this
 
