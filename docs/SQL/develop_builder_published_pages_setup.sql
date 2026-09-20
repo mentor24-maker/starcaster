@@ -41,6 +41,40 @@
 -- ONE ROW PER PAGE, replaced on each publish. Keeping previous builds so the
 -- live site can be rolled back is step 5, and wants its own table rather than
 -- a version column here.
+--
+-- WHEN A ROW GOES AWAY -- and when it deliberately does not
+-- Deleting a page deletes its snapshot (PR #532, lib/builderPagesStore.js
+-- deletePage). Nothing else does, and that is a decision rather than an
+-- oversight:
+--
+--     unpublishing a page (is_published -> false)   keeps its snapshot
+--     marking a page private (is_private -> true)   keeps its snapshot
+--     changing a page's slug                        keeps its snapshot
+--
+-- Asked of the operator on 2026-09-14 as a three-way choice -- drop the
+-- snapshot, shelve it somewhere unservable, or keep it and say so -- and
+-- answered: keep it and say so. This is the saying so.
+--
+-- None of the three is a serving bug. resolvePublicPageIdForSlug will not
+-- resolve an address to an unpublished or private page, so those snapshots are
+-- unreachable to a visitor; a renamed page's snapshot is fetched by page id and
+-- serves pre-rename content until the next publish, which is exactly what
+-- publishing promises. What is left is retention, and it was measured against
+-- production the day the decision was taken: ONE row and 26 kB in the
+-- "exists, unpublished" bucket, and zero rows in the other two.
+--
+-- The price of the alternative is what settled it. A visitor is served "the
+-- build if there is one, the draft if not", so dropping the snapshot on
+-- unpublish means a page taken private and put back serves its DRAFT -- every
+-- unpublished edit going live the moment it is republished, before anybody
+-- presses Publish. That is a permanent change to what Publish promises, paid
+-- for 26 kB.
+--
+-- So: unpublishing HIDES a page, it does not erase what was published of it.
+-- Erasing is what deleting the page is for. If this ever needs revisiting, the
+-- thing to build first is a surface listing snapshots whose page is gone or
+-- hidden, with a way to clear them -- which is what would have made Delray's
+-- 51 rows from deleted pages visible instead of nobody noticing.
 
 -- BOTH tenant columns, and owner_user_id is not optional decoration.
 -- lib/projectScope.js decides whether to stamp a tenant by probing

@@ -860,6 +860,7 @@ function CreatedModulesTable({
                           </div>
                           <div className="builder-saved-module-column-pod">
                             <BuilderModuleCard
+                              deviceStylesEnabled={false}
                               editorDevice="browser"
                               hideHeaderActions
                               isExpanded={editingCreatedExpanded}
@@ -1245,6 +1246,7 @@ function RepositoryTable({
                           <div className="builder-saved-module-column-pod builder-saved-module-editor-stack">
                             {editingModules.map((module) => (
                               <BuilderModuleCard
+                                deviceStylesEnabled={false}
                                 editorDevice="browser"
                                 hideHeaderActions
                                 isExpanded={editingExpandedModuleIds.includes(module.id)}
@@ -1866,6 +1868,21 @@ export function BuilderModuleRepositoryList({
       cellOpacity: { ...section.cellOpacity },
       cellHAlign: { ...section.cellHAlign },
       cellVAlign: { ...section.cellVAlign },
+      // Two levels deep, and a SPREAD rather than a key set to undefined: a
+      // row with no per-cell device settings must not gain the key here, or
+      // it serializes differently for having been opened in this modal.
+      ...(section.cellDeviceOverrides
+        ? {
+            cellDeviceOverrides: Object.fromEntries(
+              Object.entries(section.cellDeviceOverrides).map(([device, byColumn]) => [
+                device,
+                Object.fromEntries(
+                  Object.entries(byColumn ?? {}).map(([column, values]) => [column, { ...values }])
+                )
+              ])
+            )
+          }
+        : {}),
       modules: section.modules.map((module) => ({ ...module, settings: { ...module.settings } }))
     };
   }

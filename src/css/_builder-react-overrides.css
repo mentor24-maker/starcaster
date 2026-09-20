@@ -1437,8 +1437,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root .builder-module-preview-carousel-card-copy p {
   margin: 2px 0 0;
-  font-size: var(--text-xs);
-  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  color: inherit;
 }
 
 /* --- Carousel: alignment and narrow screens ---
@@ -1836,7 +1836,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: block;
   padding: 10px;
   color: var(--ink-secondary, #5b6b7d);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-style: italic;
 }
 
@@ -2678,7 +2678,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   height: 30px;
   border-radius: 6px;
   border: 1px solid rgba(9, 16, 24, 0.18);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 .tw-palette-chip-name {
@@ -2848,7 +2848,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink-primary);
   padding: 4px 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .tw-pin.is-pinned {
@@ -2868,7 +2868,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   border-radius: 10px;
   padding: 8px 12px;
   margin: 8px 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   background: var(--bg-page, #ffffff);
 }
 
@@ -3410,6 +3410,136 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
+/* Each item's image thumbnail, in the RIGHT pair's tracks (4 to the end),
+   beside the stacked Title / Link / Link label / Alt text column (task
+   86bc0p5f9). It spans exactly as many rows as that column has fields — the
+   editor sets --builder-card-thumb-rows — so the Image row below starts on
+   the row after the last field instead of being split around the picture.
+   The file name (opens the pop-up) and pixel size sit directly under it. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
+  grid-column: 4 / -1;
+  grid-row: span var(--builder-card-thumb-rows, 2);
+  align-self: start;
+}
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+  display: none;
+}
+/* Below the fields there is no column to fit, so the picture takes full size. */
+.builder-react-root .builder-cards-panel-fields .builder-card-thumb--below .builder-image-thumb-image {
+  max-height: 140px;
+}
+.builder-react-root .builder-image-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-image-thumb-button {
+  appearance: none;
+  display: block;
+  padding: 0;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  cursor: zoom-in;
+  overflow: hidden;
+  max-width: 100%;
+}
+.builder-react-root .builder-image-thumb-image {
+  display: block;
+  max-width: 100%;
+  /* Shorter when the column beside it is: two fields' worth of rows cannot
+     hold a 140px picture plus its name without spreading those two apart. */
+  max-height: min(140px, calc(var(--builder-card-thumb-rows, 4) * 45px - 40px));
+  object-fit: contain;
+}
+.builder-react-root .builder-image-thumb.is-empty {
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  border: 1px dashed currentColor;
+  border-radius: 6px;
+  color: white;
+  font-size: var(--text-sm);
+  opacity: 0.8;
+}
+/* Narrow panel: one pair per row, so the thumbnail takes its own row under
+   the fields, in the field track, rather than a column that no longer exists. */
+@media (max-width: 1200px) {
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--beside {
+    display: none;
+  }
+  .builder-react-root .builder-cards-panel-fields .builder-card-thumb--below {
+    display: flex;
+    grid-column: 2 / -1;
+  }
+}
+.builder-react-root .builder-image-info-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  min-width: 0;
+  /* White and a step up: the carousel editor panel is medium-dark blue, and
+     the secondary ink colour all but disappeared on it (Dane, 2026-09-14).
+     Restored here after pull request 705 overwrote it. */
+  font-size: var(--text-md);
+  color: white;
+}
+.builder-react-root .builder-image-info-name {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.builder-react-root .builder-image-info-size {
+  white-space: nowrap;
+}
+.builder-react-root .builder-image-info-size.is-error {
+  color: white;
+  font-style: italic;
+}
+.builder-react-root .builder-image-info-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: max-content;
+  min-width: min(48px, 100%);
+  max-width: min(75vw, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--bg-page);
+  box-shadow: 0 24px 60px rgba(9, 16, 24, 0.3);
+}
+.builder-react-root .builder-image-info-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.builder-react-root .builder-image-info-dialog-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.builder-react-root .builder-image-info-dialog-image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 140px);
+  object-fit: contain;
+  margin: 0 auto;
+}
+
 /* Narrow panel: one pair per row. Still one label track and one field track,
    which is plain W0. */
 @media (max-width: 1200px) {
@@ -3707,7 +3837,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   );
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .builder-react-root .builder-preview-section {
     padding-left: calc(14px + var(--builder-section-padding-left, 0px));
     padding-right: calc(14px + var(--builder-section-padding-right, 0px));
@@ -3716,13 +3846,32 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 767px) {
   .builder-react-root .builder-preview-section {
     padding-left: calc(10px + var(--builder-section-padding-left, 0px));
     padding-right: calc(10px + var(--builder-section-padding-right, 0px));
     padding-top: var(--builder-section-padding-top, 10px);
     padding-bottom: var(--builder-section-padding-bottom, 10px);
   }
+}
+
+/*
+ * The same numbers again for the preview's PHONE FRAME, which no media query
+ * can reach — it is a 390px box inside a 1400px window.
+ *
+ * Without this the frame used the regenerated file's flat `padding: 10px`, so
+ * a row with a Phone or Tablet padding setting rendered 10px in the frame and
+ * its real value on an actual phone. Measured on 2026-09-15 with a row set to
+ * 90px of Tablet top padding: the frame said 10px, a 420px browser said 90px —
+ * the preview disagreeing with the device it is imitating, which is the one
+ * thing a preview may not do. The cell twin of this rule has been here since
+ * PR 173 for exactly the same reason; the row one was simply never written.
+ */
+.builder-react-root .builder-preview-device-mobile .builder-preview-section {
+  padding-left: calc(10px + var(--builder-section-padding-left, 0px));
+  padding-right: calc(10px + var(--builder-section-padding-right, 0px));
+  padding-top: var(--builder-section-padding-top, 10px);
+  padding-bottom: var(--builder-section-padding-bottom, 10px);
 }
 
 /* Column Widths: one small box per column, side by side, sized so a three
@@ -4715,7 +4864,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    as var() fallbacks, so anything that renders without the variables is
    unchanged. Both rules must keep `!important`: they are answering one.
    --------------------------------------------------------------------- */
-@media (max-width: 560px) {
+@media (max-width: 767px) {
   .builder-react-root .builder-preview-column {
     padding: var(--builder-cell-padding-box, 12px) !important;
     border-radius: var(--builder-cell-radius, 16px) !important;
@@ -5757,7 +5906,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   order: -2;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .builder-react-root .builder-columns-4,
   .builder-react-root .builder-columns-5,
   .builder-react-root .builder-columns-6,
@@ -9170,11 +9319,129 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   color: var(--ink-secondary);
 }
 
+/*
+ * W0 / L8 — a group's controls are a GRID, not a wrapping flex bar.
+ *
+ * Panel sweep 14/15, ticket 86bbjt1be. This was `flex-wrap: wrap` with every
+ * control sized to its own content, which meant a group that wrapped onto
+ * three lines started each line wherever the previous one happened to run
+ * out. Measured at 1440 before the fix, the Structure group's controls began
+ * at x=441, 611 / 441, 539, 649 / 441, 547 — three lines, seven different
+ * left edges, not one column among them. That IS the sentence that opened
+ * this whole sweep ("the column width varies arbitrarily"), still live in
+ * the one panel nobody had measured.
+ *
+ * TWO tracks, fixed, not `auto-fit`. A responsive track count would change
+ * the number of columns between 1440 and 1920, and the acceptance criterion
+ * is that the form reads as one rectangle at all three — a panel that
+ * reflows is a panel whose alignment has to be re-argued at every width.
+ * Two also holds the longest label here ("Card Border Color", 134px) without
+ * cropping it at the narrowest group width the bar produces.
+ *
+ * `align-items: start`, not `flex-end`, and the reason is about ROW HEIGHT,
+ * not about labels wrapping. A grid row is as tall as its tallest cell, and
+ * `flex-end` was left over from the flex bar this replaced. With every field
+ * now filling its track, the two cells on a row are routinely different
+ * heights — a two-line segmented control beside a single-line select — and
+ * bottom-alignment pushes the shorter pair's LABEL down the row instead of
+ * leaving it on the row's top edge, so two labels on one line sit at two
+ * different heights. `start` puts every label on the row's top edge.
+ *
+ * An earlier version of this comment blamed a two-line LABEL shoving its own
+ * field out of line. Round 1 of this ticket's review measured that and it is
+ * not happening: no `.bcm-label` in this panel wraps at 1440, 1600 or 1920.
+ * The CSS was right and the explanation was wrong, which is the more expensive
+ * of the two to leave in place — the next person reads the comment, not the
+ * measurement.
+ */
 .builder-react-root .bcm-group-controls {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px 14px;
-  align-items: flex-end;
+  align-items: start;
+}
+
+/*
+ * A grid item defaults to `min-width: auto`, which refuses to shrink below
+ * its content — so a long select would push its track wider than its sibling
+ * and put the two columns out of step, which is the defect one level along.
+ */
+.builder-react-root .bcm-group-controls .bcm-control {
+  min-width: 0;
+}
+
+/*
+ * ONE field width per column: every stretchy control fills its track.
+ *
+ * Listed by type rather than as `> *`, because the two NON-STRETCH shapes
+ * the panel lattice already recognises are here too — a colour swatch and a
+ * checkbox are fixed-size controls, and stretching them across a 180px track
+ * would leave a 28px box floating at one end of an empty row. That is the
+ * same exception `check_panels` makes for `check`, `align` and `color`.
+ */
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-input,
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-num-row,
+.builder-react-root .bcm-group-controls .bcm-control > .bcm-btn-group {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/*
+ * The number box takes the track and its unit sits at the end of it, so
+ * "Card Border" and "Card Radius" end on the same line as the selects beside
+ * them instead of stopping at their own 56px.
+ */
+.builder-react-root .bcm-group-controls .bcm-num-row > .bcm-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+/*
+ * A segmented control fills its track, and its buttons share the spare room
+ * in proportion to their own words rather than being forced to equal halves.
+ *
+ * `flex: 1 1 0` was the first attempt and it broke "Side-by-side" onto two
+ * lines: equal halves gave each button ~89px of a 179px track, which is less
+ * than that word needs. `auto` grows each button FROM its natural width, so
+ * the pair still ends exactly on the block edge (L8) and neither wraps —
+ * L6a's button-track rule is that both edges line up, not that the buttons
+ * are the same size. `nowrap` is the guard: if a longer label is ever added
+ * here the control overflows visibly instead of silently going two-line.
+ */
+.builder-react-root .bcm-group-controls .bcm-btn-group > button {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/*
+ * The field face itself, lifted out of an inline style object (W0). The
+ * declarations are the ones `sel` carried in
+ * `components/builder-template-preview.tsx`; the WIDTH it also carried is
+ * deliberately not among them — width belongs to the track, never to the
+ * field.
+ *
+ * TOKENS, not the raw values `sel` held, because `check_conventions` [R3]/[R8]
+ * blocks a colour literal or a one-off type size in a stylesheet — and it is
+ * right to: those three values were invisible while they sat inline, and
+ * copying them across unchanged would have smuggled them past the gate that
+ * exists to make the count of one-off values go down.
+ *
+ * Two of the three move by a hair, which is worth stating rather than
+ * glossing. The white is an exact match for `--bg-surface`. The border colour
+ * lands on `--border-strong`, one unit of blue away from what was inline. The
+ * size lands on `--text-sm`, 0.32px larger than the 0.8rem that was. Neither
+ * is visible at any width, and both are now values the theme owns rather than
+ * values this file does.
+ */
+.builder-react-root .bcm-input {
+  padding: 4px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: var(--text-sm);
+  background: var(--bg-surface);
 }
 
 /* A number and its unit read as one control, so they stay on one line. */
@@ -9646,12 +9913,18 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * renders byte-identically before and after.
  *
  * Scoped to this ticket's six panels ON PURPOSE. The identical defect is live
- * on ten other panels (blog-tag-cloud, blog-category-filter, blog-post-tags,
- * blog-post-manager, blog-search, blog-search-results, site-search,
+ * on six other panels (blog-post-tags, blog-post-manager, site-search,
  * event-manager, event-calendar, event-detail — each an 846px track at 1440),
- * and those belong to panel sweeps 10/15 and 12–14/15, which are still queued.
- * One panel family per PR is the whole point of the sweep; widening this
- * selector is the one-line fix each of those tickets can reach for.
+ * which belong to panel sweeps still to come. One panel family per PR is the
+ * whole point of the sweep; widening this selector is the one-line fix each of
+ * those tickets can reach for.
+ *
+ * This list named ten panels when 15/15 shipped. Panel sweep 13/15 (ticket
+ * 86bbjt1bd) has since bounded four of them — blog-tag-cloud,
+ * blog-category-filter, blog-search and blog-search-results — in its own block
+ * further down this file. Keep this list and the one in docs/UI_RULES.md (rule
+ * L8) saying the same thing: two counts of the same fact that disagree is
+ * CLAUDE.md landmine 17.
  *
  * Panel sweep 15/15, ticket 86bbjt1bg.
  */
@@ -9661,6 +9934,236 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .is-lattice.builder-module-editor--admin-site-settings .builder-module-field-control > .builder-project-data-picker,
 .builder-react-root .is-lattice.builder-module-editor--admin-support-form .builder-module-field-control > .builder-project-data-picker,
 .builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/*
+ * The same composite-picker escape, on the Blog Post Manager panel.
+ *
+ * Panel sweep 14/15, ticket 86bbjt1be. The block above names this panel in
+ * its own list of ten still carrying the defect, and says the one-line fix
+ * belongs to whichever sweep reaches the panel. This is that sweep.
+ *
+ * Measured here at 1440/1600/1920 before the fix: Edit Page URL and View Page
+ * URL each rendered an 846px picker (select 560 + gap + input 280) and, because
+ * the column's control track is `max-content`, THEY sized the track. Label,
+ * Background, V Margin and H Margin all stopped correctly at the 560px ceiling
+ * and so ended 286px short of the two rows that set the width — one column, six
+ * rows, two right edges. That is the notch L8 names.
+ *
+ * Bounding the BLOCK, not widening the other controls (W9 over L8 where they
+ * disagree). `max-width` can only ever lower a used width, so a panel whose
+ * track was already under the ceiling is untouched.
+ *
+ * The remaining panels on 15/15's list (blog-tag-cloud, blog-category-filter,
+ * blog-post-tags, blog-search, blog-search-results, site-search, event-manager,
+ * event-calendar, event-detail) are NOT in this ticket's scope — one panel
+ * family per PR — and are left for sweeps 11-13/15. Naming them is the point:
+ * an undocumented omission is indistinguishable from an oversight.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-post-manager .builder-module-field-control > .builder-project-data-picker {
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/* --------------------------------------------------------------------------
+ * PANEL SWEEP 12/15 — the blog reading panels (ticket 86bbjt1bc)
+ *
+ * Three of the seven panels carried a hand-rolled item manager built from
+ * `.builder-slider-item-card` and `label.field` — the shape W0 says to RETIRE
+ * rather than style. Those conversions reuse `.builder-cards-panel-fields`,
+ * which Feature Cards, Carousel and the Tag Cloud already share, but they
+ * declare `data-lattice-pairs="1"` rather than `"2"` and so they DO need CSS
+ * of their own: the `--stacked` block below, and the picker rule under it.
+ * (An earlier version of this header said they "needed no CSS at all" and
+ * named `"2"` — wrong on both counts, and dangerous rather than merely untidy:
+ * a later sweep reading it as the inventory would have copied the 2x2 shape
+ * back over this work. Review round 2, 2026-09-13.) What is below is the rest.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The Blog Post panel's tab bar. It was eleven inline hex values per button,
+ * chosen when a settings panel had a white background; the editor's ground is
+ * blue now, and an unselected tab rendered a mid grey-blue on it — "Meta",
+ * "Categories & Tags", "SEO" and "Display" were all but invisible in the
+ * before screenshot, which is R9 (never a low-contrast pairing) as much as it
+ * is L8.
+ *
+ * It sits ABOVE the lattice column rather than inside it: a button dropped
+ * into that two-track grid takes a label cell and puts every pair below it out
+ * of phase. It starts on the block's left edge, which is L8 rule 5 — chrome
+ * sits on the same edges as the rows.
+ */
+.builder-react-root .builder-settings-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1, 4px);
+  margin: 0 0 var(--space-4, 12px);
+}
+
+.builder-react-root .builder-settings-section-tab {
+  font-size: var(--text-sm, 0.8rem);
+  padding: 3px 9px;
+  border-radius: 4px;
+  border: 1px solid var(--builder-editor-hairline, rgba(11, 42, 74, 0.12));
+  background: transparent;
+  color: var(--builder-editor-heading, #0b2a4a);
+  cursor: pointer;
+  /* L2: a tab is a label. It never wraps. */
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-settings-section-tab.is-active {
+  border-color: var(--builder-editor-heading, #0b2a4a);
+  background: var(--surface, #ffffff);
+  font-weight: 600;
+}
+
+/*
+ * Field prose — "Comma-separated tags", the SEO character count, the note
+ * under Post Tags' Tags field. Same story as the tabs: an inline 11px pale
+ * grey, chosen for a white panel and close to invisible against this one
+ * (R9). They span both tracks through `.builder-schema-bare`, which the
+ * lattice already handles; this is colour and size only.
+ */
+.builder-react-root .builder-panel-field-note {
+  font-size: var(--text-sm, 0.8rem);
+  line-height: 1.4;
+  margin: 2px 0 var(--space-3, 8px);
+  color: var(--builder-editor-heading, #0b2a4a);
+}
+
+.builder-react-root .builder-panel-field-note.is-over {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
+}
+
+/* The SEO counter's other half. Before this sweep the count was an inline
+   green under 160 and an inline red over it; the class pair replaced both, and
+   only `.is-over` got a rule — so "you are within budget" rendered in the
+   ordinary heading colour and the counter lost the signal it existed for
+   (review round 1, 2026-09-13). */
+.builder-react-root .builder-panel-field-note.is-within {
+  color: var(--success, #1f7a4b);
+  font-weight: 600;
+}
+
+/* The TOC manager's two add buttons, which were an inline flex row. */
+.builder-react-root .builder-blog-toc-add-actions {
+  display: flex;
+  gap: var(--space-3, 8px);
+  margin-top: var(--space-1, 4px);
+}
+
+/*
+ * ONE PAIR PER ROW — `.builder-cards-panel-fields--stacked`.
+ *
+ * The 2x2 shape is right where Feature Cards, Carousel and Program List use
+ * it: each of those managers IS one half of a 50/50 editor, so it has the
+ * room for two label tracks, two field tracks and the 40px between them. The
+ * three managers converted in this sweep do not — they live inside an AXIS
+ * COLUMN of a three-axis panel, and W0 keeps an axis column compact and gives
+ * the slack to the gaps, so the column does not grow with the screen.
+ *
+ * Measured: at BOTH 1440 and 1920 the two tracks split what is left of a
+ * 429px column, giving 94px text fields in Related Posts, 144px in Author Bio
+ * and **52px** in the TOC — where the field holds "junior-high-performance-
+ * academy" and a select reading "H3 (sub)". That is the operator's own
+ * complaint about this exact family of panels, verbatim: "You always either
+ * shorten fields to the minimum length or just assign a random width."
+ *
+ * So these declare `data-lattice-pairs="1"` and take two tracks instead of
+ * five. It is the same grid, the same flattening, the same head row, the same
+ * picker treatment and the same bounded block — only the track count and the
+ * `--b` placement change, which is exactly what the 1200px media query below
+ * already does for a narrow viewport. L6a permits both shapes by name; two
+ * pairs sharing a row is a relaxation the operator asked for on a wide block,
+ * never a requirement.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-label {
+  grid-column: 1;
+}
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--b > .builder-module-field-control {
+  grid-column: 2;
+}
+
+/*
+ * A PICKER IN A ONE-PAIR-PER-ROW MANAGER PUTS ITS BUTTON ON ITS OWN ROW.
+ *
+ * `--wide` asks for the row: label in the label track, control running to the
+ * END of the grid (`grid-column: 2 / -1`). On the five-track grid that is four
+ * tracks of control, so a picker's input still had ~630px after its button
+ * took 176. On THIS grid `2 / -1` **is** column 2 — the same single track every
+ * ordinary field gets — so `--wide` has nothing left to give horizontally and
+ * the button ate the slot from the inside.
+ *
+ * Measured at 1440 before this rule (review round 2, 2026-09-13, reproduced
+ * here): the Related Posts Image row's slot was a correct 312px reaching the
+ * block's right edge at 429, and the input inside it was **96px** — showing
+ * `/images/l` where the before-shot showed the whole
+ * `/images/Gemini_Generated_starcaster_banner.png`. Title, URL, Date and
+ * Categories were 312px each, so the panel had one field a third the width of
+ * its neighbours while every gate went green: `check_panels` drops a `full`
+ * field from the width comparisons by design, and the slot it would have
+ * measured was right.
+ *
+ * The room the input needs is a ROW, not a column, and that is the shape the
+ * panel had before this sweep — the button full width underneath. So the
+ * control becomes a column here: the input takes the whole 312px track, the
+ * button sits under it on the same two edges (L8), and the block still has one
+ * left edge and one right edge. The 40px that separates the input from its
+ * button on a wide row is horizontal room between two controls; stacked, they
+ * are two rows of one block and take the manager's own row-gap.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2, 6px);
+}
+/*
+ * The button takes the row it is now on, both edges.
+ *
+ * `margin-left: auto` is what pushes it to the block's right edge on a wide
+ * row; in a column that is the cross axis, and an auto cross margin turns
+ * `stretch` off. `width: fit-content` (line ~2685) is the other half and the
+ * one that is easy to miss — `align-items: stretch` only stretches an item
+ * whose cross size is `auto`, so a button declaring `fit-content` sat at its
+ * 176px minimum under a 312px input, leaving exactly the notch L8 is about.
+ * Both are undone here rather than left to resolve by accident.
+ */
+.builder-react-root .builder-cards-panel-fields--stacked .builder-card-field--picker > .builder-module-field-control > .builder-image-picker-field-button {
+  margin-left: 0;
+  width: auto;
+}
+
+/*
+ * THE PICKER SIZES THE TRACK — the defect panel sweep 15/15 bounded for its
+ * own six panels, and whose note names blog-post-tags as one of the ten
+ * panels carrying it live, with "widening this selector is the one-line fix
+ * each of those tickets can reach for". This ticket owns two of them.
+ *
+ * `.builder-project-data-picker` in Custom mode is a select and a text input
+ * side by side, ~846px at 1440 (560 + gap + 280). The column's shared control
+ * track is `max-content`, so that one row SET the track: measured here before
+ * this change, blog-post-tags held a 846px control track while every control
+ * in it that respects the 560px ceiling stopped 286px short of the row that
+ * set it — six rows notched by one (L8: "a control that stops short leaves a
+ * notch").
+ *
+ * Bounding the BLOCK rather than widening the controls is what W9 and L8 both
+ * ask for where they disagree. `max-width` can only ever lower a used width,
+ * so a panel whose track was already under the ceiling is untouched.
+ *
+ * blog-post-list carries the same picker and was NOT showing it, because its
+ * fixture value resolved to a real page and the custom input never rendered —
+ * a latent bump, not an absent one. `scripts/ui/seed_fixture.mjs` now gives it
+ * a custom value so the check can see it, which is the only reason this line
+ * is here rather than being asserted from reading the code.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-post-tags .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-post-list .builder-module-field-control > .builder-project-data-picker {
   max-width: var(--builder-field-long-max, 560px);
 }
 
@@ -9800,4 +10303,866 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   background: var(--btn-danger-flat-disabled) !important;
   color: var(--btn-flat-ink) !important;
   opacity: 1 !important;
+}
+
+/* ==========================================================================
+ * THE REMINDER RECORD CARD IS ONE LATTICE (W0 / L6a / L8 / W9).
+ * Panel sweep 11/15, ticket 86bbjt1b9.
+ *
+ * The editor for one reminder was eight flex strips and two legacy
+ * `BuilderSettingRow`s stacked on each other, each sizing its own label
+ * against its own content. Measured at 1440 before this change: SEVEN label
+ * widths (81, 84, 88, 95, 98, 103, 125, 130px) and FIVE x-positions for the
+ * first field in the column (181, 184, 198, 203, 225px), with right edges at
+ * 393, 475, 485, 519, 573, 602, 763, 804, 976, 1037 and 1346. Not one pair of
+ * rows agreed about anything.
+ *
+ * Nothing caught it, and that is the interesting half: the record cards are
+ * COLLAPSED until clicked, `check_panels.openPanels` did not click them, and
+ * so the whole editor was measured as a single field — the module's Label —
+ * from the day the check was written. Panel sweep 2/15 seeded two real
+ * records here and said in the fixture itself that seeding did not make them
+ * measurable. Opening them is this ticket's change to `check_panels.mjs`;
+ * `data-lattice-pairs="2"` on the card is what gives the check a group to
+ * measure once they are open.
+ *
+ * The card reuses `.builder-cards-panel-fields` — Feature Cards' grid, which
+ * L6a names as the worked example and Carousel already reused rather than
+ * inventing a second pattern. Everything below is the DIFFERENCE between a
+ * reminder card and a feature card, and there are only three:
+ * ========================================================================== */
+
+/*
+ * 1. THE BLOCK IS BOUNDED BY THE CARD, NOT BY A max-width OF ITS OWN.
+ *
+ * `.builder-cards-panel-fields` caps itself at `--builder-field-long-max +
+ * 7rem` because it is one half of a fixed 50/50 editor and its own column is
+ * narrower than that. A reminder card is the full width of the module panel
+ * (1254px at 1440), so inheriting that cap would leave ~560px of empty card
+ * to the right of the form — the "wide empty strip" reading that ticket
+ * 86bbzux9m is open about. The card carries the bound instead, so the form,
+ * the card's border, and the card header's clone/delete buttons all land on
+ * ONE right edge (L8 point 5: chrome sits on the same edges).
+ *
+ * The number: the widest thing in the card is a `--wide` control spanning
+ * `2 / -1`, and W9 caps any control at `--builder-field-long-max`. Bound the
+ * BLOCK so that span lands just inside the ceiling rather than just outside
+ * it, and no row ever stops short of the edge (L8 point 2). 10rem is the
+ * label track ("Border Color" plus its 40px of room) plus the card's own
+ * border — measured against the rendered card, not guessed.
+ */
+/*
+ * ...and THE LIST owns the tracks, so every card lines up with every other.
+ *
+ * This is the second half of the same rule and it needed measuring to find.
+ * With the grid on each card, card 1 and card 2 were two separate grids: a
+ * speech-bubble record carries "Border Color" and a strip record carries
+ * "Placement", so `max-content` gave them right-hand label tracks of 130px and
+ * 115px starting 8px apart — two bordered boxes stacked on each other,
+ * disagreeing. L6a says the whole LIST is one grid for exactly this reason
+ * ("which is what makes card 2's fields start where card 1's do").
+ *
+ * Feature Cards gets there by having no per-card box at all; a reminder record
+ * is a collapsible bordered panel with its own header, so the box has to
+ * survive. `subgrid` is how a box joins a grid it is not a direct child of —
+ * the same mechanism `feature-cards` and `program-list` use to share the
+ * editor's `lattice-start` tracks. The chain is unbroken here (list → card →
+ * settings are direct children all the way down), which is precisely what
+ * `builder-module-chrome-slot.tsx` records as NOT being true of the schema
+ * panels, so this is the cheap case.
+ */
+.builder-react-root .builder-reminder-module-records {
+  grid-template-columns:
+    max-content minmax(0, 1fr)
+    var(--builder-field-room, 40px)
+    max-content minmax(0, 1fr);
+  /*
+   * ...and THE GUTTER IS THE TRACK, not the track plus a gap.
+   *
+   * The base sheet gives this list `gap: 12px` (_builder-react.css), which is
+   * the shorthand — it sets column-gap as well as row-gap. So the space
+   * between the two columns rendered as 52px (the declared 40px room track
+   * PLUS the inherited 12px), against an acceptance criterion that asks for
+   * "a real 40px gap between columns". Worse, the 12px is spent on all four
+   * gutters and the subgrid chain below sets `column-gap: 0`, so the cards
+   * absorbed the list's gutters unevenly: two control tracks the CSS resolves
+   * as equal (181.438px and 181.453px at 1440) rendered 193px and 174px —
+   * nineteen pixels apart, which is Dane's founding complaint for this whole
+   * sweep arriving one level up ("the column width varies arbitrarily").
+   *
+   * `.builder-cards-panel-fields` — the panel these rules were settled on —
+   * has carried `column-gap: 0` from the start for exactly this reason: the
+   * 40px of room between a label and its field is padding the `.is-lattice`
+   * rules add to the label, and the 40px between the two COLUMNS is the
+   * `--builder-field-room` track above. Neither is a grid gap, so a grid gap
+   * can only ever be added on top of them.
+   *
+   * Row-gap keeps the 12px the shorthand was really there for: the vertical
+   * separation between one bordered record card and the next.
+   *
+   * Measured at 1440 with this in place: gutter exactly 40px, control tracks
+   * 198.938px / 198.953px. The two RENDERED control widths come to 198.94 and
+   * 185.95 rather than dead equal, because a nested box's padding is absorbed
+   * out of the first and last track — that residue is documented with the
+   * card's own spacing rule below. Closing 19px to 13px is the honest claim;
+   * the 40px the ticket asks for is exact.
+   *
+   * (Those track numbers were 196.438 / 196.453 until round 3 took the same
+   * shorthand off the three boxes BELOW this one — see the criteria rules. A
+   * measurement in a comment is a claim like any other, so it is restated
+   * rather than left to read as still-true.)
+   */
+  column-gap: 0;
+  row-gap: 12px;
+  max-width: calc(var(--builder-field-long-max, 560px) + 10rem);
+}
+
+.builder-react-root .builder-reminder-record-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+}
+
+/*
+ * Narrow panel: one pair per row, mirroring `.builder-cards-panel-fields`'s own
+ * media query. That rule targets the settings div, which now reads its tracks
+ * from the list instead of declaring them, so without this the card would keep
+ * five tracks while `--b` fields had already been moved back to the first pair.
+ */
+@media (max-width: 1200px) {
+  .builder-react-root .builder-reminder-module-records {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+/* The card's chrome spans the lattice: the title on the left edge, the
+   clone/delete buttons on the right one (L8 point 5). */
+.builder-react-root .builder-reminder-record-card > .builder-panel-toggle-row,
+.builder-react-root .builder-reminder-record-card > .builder-cell-panel-header {
+  grid-column: 1 / -1;
+}
+
+/*
+ * 2. THE CARD'S OWN SPACING, which `.builder-cards-panel-fields` does not
+ * carry because a feature card is separated by its head row's rule instead.
+ * A reminder record already has a bordered box and a header of its own.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: 10px 12px 14px;
+  row-gap: var(--space-2, 6px);
+  max-width: none;
+}
+
+/*
+ * 3. THE TWO LEGACY PAIR SHAPES INSIDE IT.
+ *
+ * `AdminGameAudienceField` and the criteria editor's Match Logic row are
+ * `BuilderSettingRow fullWidth`, shared with the legacy admin screens, whose
+ * base rule sizes its tracks PROPORTIONALLY against the whole block
+ * (`minmax(0,1fr) minmax(0,2fr)`) rather than against their own content —
+ * the same thing the Trigger block needed unpicking in sweep 8/15, and for
+ * the same reason. Flattened onto the card's tracks they measure with every
+ * other label instead of beside them.
+ *
+ * `.builder-setting-label` carries its own left padding where
+ * `.builder-module-field-label` does not; zeroed here so the two shapes put
+ * their TEXT on one vertical line, which is what `labelTextX` measures and
+ * what the 2026-08-11 heading incident was.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full {
+  display: contents;
+}
+
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row > .builder-setting-label,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full > .builder-setting-label {
+  grid-column: 1;
+  padding-left: 0;
+  padding-right: var(--builder-field-room, 40px);
+  border-top: 0;
+}
+
+/*
+ * Audience and Match Logic are ordinary selects, so they take the ordinary
+ * field track — NOT the `2 / -1` span the genuinely wide rows take. Spanning
+ * them was the first cut and `check:panels` refused it in the right words:
+ * "stretchable fields are 2 different widths (184/538px)". W0's same-width
+ * rule holds across a pair-column, and a control that spans because its
+ * wrapper class said so, rather than because its content needs the room, is
+ * the per-field width in a different coat.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row > .builder-setting-value,
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-setting-row-full > .builder-setting-value {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/*
+ * The Active toggle is a checkbox plus the words beside it, and W0's exception
+ * gives a checkbox `width: auto` at the start of its slot. In a `--wide` slot
+ * that resolved to a shrink-to-fit box and broke "Show when criteria match"
+ * over three lines (L2: a label never wraps, shorten the words instead). It is
+ * one control, so it takes one line.
+ */
+.builder-react-root .builder-reminder-record-settings .admin-game-reminder-active-toggle {
+  white-space: nowrap;
+}
+
+/* The offset hint is a sentence, not a row of the lattice: it spans, and it
+   sits under the controls it explains rather than in the label track. */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .builder-module-offset-hint {
+  grid-column: 2 / -1;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--muted, #445465);
+}
+
+/*
+ * The criteria block is a NESTED lattice, and it says so.
+ *
+ * Its rows live inside `.admin-game-reminder-criterion-card`, a bordered box
+ * with its own padding, so their labels legitimately start further in than the
+ * card's own — they are not a third column of the card's lattice and holding
+ * them to it would fail a panel that is correct (the Tag Cloud lesson, L6a).
+ * `data-lattice-pairs="1"` on the criteria panel is what tells `check_panels`
+ * both halves of that: exclude these rows from the card's group, AND measure
+ * them as a group of their own, so the block is checked rather than skipped.
+ */
+/*
+ * One label track for every criterion, in every card, measured from content.
+ *
+ * It was a hard-coded `7.5rem` on `.admin-game-reminder-editor
+ * .builder-setting-row-full` — the per-block width W0 calls lining up by luck.
+ * It happened to be wide enough for "Registered" and would crop or gape the
+ * day a criterion type was renamed, and because each card was its own grid the
+ * blocks did not agree with each other either: measured at 1440 with the
+ * per-card grid, a speech-bubble record's criteria track came to 124px and a
+ * strip record's to 118px, six pixels apart in two boxes stacked on each other.
+ *
+ * So the subgrid chain runs all the way down — list → card → settings →
+ * criteria panel → criteria list → criterion card — and every criterion label
+ * in the module sits in the SAME track. The indent that marks the criteria as
+ * a nested block is the criterion card's own padding, which a subgrid absorbs
+ * out of its first and last tracks; it is 15px of real box, not a number
+ * somebody chose.
+ */
+/*
+ * ...AND THE SHORTHAND COMES OFF EVERY BOX IN THE CHAIN, not just the top one
+ * (round 3 of this ticket).
+ *
+ * Round 2 took `gap`'s column half off the record LIST and stopped there. The
+ * three boxes this rule and the two below it newly made subgrids kept theirs
+ * from the base sheet — panel 10px, list 12px, criterion card 10px — which is
+ * the identical defect one level down, and it quietly falsified the comment on
+ * the criterion-control rule further down claiming a criterion "takes the
+ * ordinary field track, the same one every other control in the module takes".
+ * It did not: measured at 1440 in the running app, the module's field track
+ * started at x=250.25 and every criterion control started at x=255.25.
+ *
+ * A subgrid whose own column-gap is wider than its parent's takes the extra
+ * out of its own tracks, so each box in the chain shrank the one inside it.
+ * With all three zeroed, measured the same way: module field control and
+ * criterion control both start at x=245.25 — one line, which is what the
+ * comment below already promised. The whole lattice also gained 2.5px per
+ * control track (196.438 -> 198.938), which is the room the panel's 10px had
+ * been eating; the record list's gutter is unmoved at exactly 40.00px, checked
+ * at 1440, 1600 and 1920.
+ *
+ * The criterion control still ENDS 15px short of the module's (429.19 against
+ * 444.19). That residue is not a gap and does not come off: it is the criterion
+ * card's own `padding: 12px 14px` plus its 1px border, absorbed out of the
+ * last track, and it is the same 15px of real box the nested-lattice comment
+ * above names as the indent. Row gaps are restated beside each `column-gap: 0`
+ * because that is the spacing the shorthand was actually there for.
+ */
+.builder-react-root .builder-reminder-record-settings.builder-cards-panel-fields > .admin-game-reminder-criteria-panel {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
+}
+
+/*
+ * ...and the criteria themselves occupy the FIRST pair-column only.
+ *
+ * A criterion is one label and one short control — a type, a comparison, a
+ * count. Spanning its box across both pair-columns while the controls stayed
+ * in the left one left each criterion card two-thirds empty on the right,
+ * which is the notch L8 is about and the "loose rows" reading the operator
+ * opened this sweep with. Bounding the BLOCK rather than widening the control
+ * is what W9 and L8 ask for when they disagree (the same call sweep 8/15 made
+ * on the Trigger block), so the criterion boxes wrap their own content and the
+ * "Add Criterion" button lands on the same right edge they do.
+ */
+.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-header {
+  grid-column: 1 / 3;
+}
+
+/* The list carries its own `grid-column` rather than sharing the header's rule
+   above. It said the same thing either way, but it meant this selector named
+   two rules, and a test asking for "the body of the rule with this selector"
+   read the first one it found — the placement — and reported a missing
+   `column-gap` that was declared four lines below. One selector, one rule. */
+.builder-react-root .admin-game-reminder-criteria-panel > .admin-game-reminder-criteria-list {
+  grid-column: 1 / 3;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 12px;
+}
+
+.builder-react-root .admin-game-reminder-criteria-list > .admin-game-reminder-criterion-card {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  column-gap: 0;
+  row-gap: 10px;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .admin-game-reminder-criterion-card-header {
+  grid-column: 1 / -1;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full {
+  display: contents;
+}
+
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row > .builder-setting-label,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full > .builder-setting-label {
+  grid-column: 1;
+  padding-left: 0;
+  padding-right: var(--builder-field-room, 40px);
+}
+
+/*
+ * A criterion's control takes the ordinary field track, the same one every
+ * other control in the module takes. It used to be a `minmax(0, 2fr)` share of
+ * the whole block — 1,090px of select at 1440 for a two-word value — which is
+ * W1's "never stretch a field to the widest possible width" and was only ever
+ * bounded by the W9 ceiling catching it on the way past.
+ */
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row > .builder-setting-value,
+.builder-react-root .admin-game-reminder-criterion-card > .builder-setting-row-full > .builder-setting-value {
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------------------
+ * PANEL SWEEP 13/15 — the blog discovery panels (ticket 86bbjt1bd)
+ *
+ * Blog Category Filter, Blog Tag Cloud, Blog Search, Blog Search Results,
+ * Blog Newsletter Subscribe, Blog Post Create.
+ *
+ * THE PICKER SIZES THE TRACK, AND THEN FAILS TO FILL IT. Panel sweep 15/15
+ * bounded this for its own six panels and named the ten it could not reach —
+ * four of them are in this ticket. `.builder-project-data-picker` is a
+ * composite control (a select plus an optional "Custom…" input) inside a
+ * `<span>` wrapper, so the lattice's control rule, which matches only DIRECT
+ * children of `.builder-module-field-control`, never reached it. It has two
+ * opposite failure modes and both are L8 notches:
+ *
+ *   TOO WIDE. In Custom mode the span is 846px at 1440 (select 560 + 6px gap
+ *   + input 280). The column's shared control track is `max-content`, so that
+ *   one row SET the track and every control beside it, correctly stopping at
+ *   the 560px W9 ceiling, ended **286px short** of it. Measured here before
+ *   this change, at 1440: blog-category-filter 6 rows notched (track right
+ *   edge 1064, controls ending 778), blog-tag-cloud 8 rows (1064 / 778),
+ *   blog-search 7 rows (1103 / 817), blog-search-results 6 rows (1091 / 805).
+ *
+ *   TOO NARROW. With no Custom input the span is just the select at its own
+ *   content width, and nothing stretches it, because the rule that stretches
+ *   every other select in a lattice column cannot see through the wrapper.
+ *   blog-newsletter-subscribe's CRM Form select measured 226px in a 373px
+ *   slot — **147px short** of the edge its Headline and Description reach.
+ *   Same defect, same row, opposite direction; capping alone would have left
+ *   it exactly as it was.
+ *
+ * So the block is bounded AND filled: `width: 100%` puts its right edge on
+ * the column's, and `max-width` holds it to the W9 ceiling. Bounding the
+ * BLOCK rather than widening or shrinking the controls is what W9 and L8 both
+ * ask for where they disagree, and `max-width` can only ever lower a used
+ * width — blog-post-create's picker already sat at 560 in a 560 slot and
+ * renders identically before and after.
+ *
+ * Scoped to this ticket's six panels ON PURPOSE, which is the whole point of
+ * one panel family per PR. The same defect is still live on blog-post-tags,
+ * blog-post-manager, site-search, event-manager, event-calendar and
+ * event-detail; widening this selector is the one-line fix each of those
+ * tickets can reach for.
+ * ------------------------------------------------------------------------ */
+.builder-react-root .is-lattice.builder-module-editor--blog-category-filter .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-tag-cloud .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-search .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-search-results .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > .builder-project-data-picker,
+.builder-react-root .is-lattice.builder-module-editor--blog-post-create .builder-module-field-control > .builder-project-data-picker {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+/*
+ * The select takes the slack inside that bounded block, and the "Custom…"
+ * input keeps its own 200px. Without this the select keeps `flex: 0 1 auto`
+ * and its own content width, so filling the span would only move the notch
+ * inward — the block would reach the edge with empty space inside it, which
+ * reads exactly the same to the eye (L8: "a control that stops short leaves a
+ * notch"). `min-width: 0` is what lets it shrink in Custom mode instead of
+ * pushing the input past the ceiling.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-category-filter .builder-module-field-control > .builder-project-data-picker > select,
+.builder-react-root .is-lattice.builder-module-editor--blog-tag-cloud .builder-module-field-control > .builder-project-data-picker > select,
+.builder-react-root .is-lattice.builder-module-editor--blog-search .builder-module-field-control > .builder-project-data-picker > select,
+.builder-react-root .is-lattice.builder-module-editor--blog-search-results .builder-module-field-control > .builder-project-data-picker > select,
+.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > .builder-project-data-picker > select,
+.builder-react-root .is-lattice.builder-module-editor--blog-post-create .builder-module-field-control > .builder-project-data-picker > select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * THE MANAGER'S RIGHT EDGE IS THE COLUMN'S. `.builder-cards-panel-fields`
+ * bounds its block at `--builder-field-long-max + 7rem` (672px), and that
+ * number was measured for Feature Cards, whose manager owns half a fixed
+ * 50/50 editor and whose label track is "Description" wide. These two live in
+ * an AXIS COLUMN whose label track is 125px, so the column is 685px and the
+ * manager stopped **13px short of it at 1440, 1600 and 1920** — every text row
+ * above ending at 778 and the cards below ending at 765. Small, and it is
+ * precisely the notch L8 rule 1 is about: "the rightmost thing in every row
+ * ends at the same x".
+ *
+ * `100%` rather than `none`: the axis column is already the bound, and W9
+ * forbids `max-width: none` on something that can grow. The block's five
+ * tracks divide 685 instead of 672, which moves each field from 241px to
+ * 247px — measured, and still far under the ceiling.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-category-filter .builder-cards-panel-fields,
+.builder-react-root .is-lattice.builder-module-editor--blog-tag-cloud .builder-cards-panel-fields {
+  max-width: 100%;
+}
+
+/*
+ * The image picker is an input and its "Choose Image" button sharing one
+ * control slot, and in this panel they TOUCHED — input 218..425, button
+ * 425..591, no space between them, so the two read as one control. The card
+ * editor already puts `--builder-field-room` between the same two parts for
+ * the same reason ("without it the two touch and read as one control"); this
+ * is that treatment where the composite sits in a lattice column instead.
+ * The pair still finishes flush on the block edge (L8 rule 3), which is what
+ * L8 is actually protecting. Where the 40px comes FROM depends on the row:
+ * when this row is the one sizing the column's `max-content` control track —
+ * which it usually is — the track grows by 40px and every field in the axis
+ * widens with it, rather than the input giving the space up.
+ */
+.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control:has(> .builder-image-picker-field-button) {
+  gap: var(--builder-field-room, 40px);
+}
+.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > input[type="text"] + .builder-image-picker-field-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/*
+ * Latest Blog Posts (task 86bc0neew): the operator picks how many columns the
+ * row has, and that number is carried in as a custom property rather than an
+ * inline grid-template — an inline value would beat the media queries below,
+ * and four columns of cards on a phone are four unreadable slivers.
+ */
+.builder-blog-latest-posts-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--latest-posts-columns, 3), minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .builder-blog-latest-posts-grid {
+    grid-template-columns: repeat(min(var(--latest-posts-columns, 3), 2), minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  .builder-blog-latest-posts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The tag / category checklists in the module panel. Names wrap, never truncate (UI T-1). */
+.builder-latest-posts-picklist {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.builder-latest-posts-picklist label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  cursor: pointer;
+}
+.builder-latest-posts-picklist input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 2px 0 0;
+}
+.builder-latest-posts-picklist-empty {
+  font-size: var(--text-xs);
+  color: inherit;
+  opacity: 0.8;
+}
+
+/*
+ * DEVICE SWITCH — Phone / Tablet / Desktop at the right of a Styles bar
+ * (Dane's screenshot, 2026-09-15). One pill of three icons; the screen being
+ * edited is the bright one. A dot under an icon means the row has settings of
+ * its own on that screen, so a phone-only change is visible without opening
+ * the phone panel.
+ */
+.builder-react-root .builder-device-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 6px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.builder-react-root .builder-device-switch-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-device-switch-button:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.builder-react-root .builder-device-switch-button.is-active {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-device-switch-button.has-overrides::after {
+  content: "";
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--ink-warning);
+}
+
+.builder-react-root .builder-device-switch-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The Tablet/Phone panel: what differs, and the way back to following. */
+.builder-react-root .builder-device-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  border-left: 3px solid var(--ink-warning);
+  color: var(--ink-primary);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+}
+
+.builder-react-root .builder-device-banner-note {
+  flex-basis: 100%;
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+}
+
+.builder-react-root .builder-device-override-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: var(--ink-warning);
+  color: var(--btn-flat-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-device-override-chip button,
+.builder-react-root .builder-device-reset-all {
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-surface);
+  color: var(--ink-warning);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-device-reset-all {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  color: var(--ink-primary);
+}
+
+/*
+ * A module's device panel is the same panel in the module editor's own
+ * vocabulary (86bc14pfq): the banner and the chips are the row editor's,
+ * the fields underneath are the module chrome's. Only the "this screen
+ * changed it" dot needs a second selector, because the two panels name
+ * their labels differently.
+ */
+/*
+ * The banner sits ABOVE the fields, always. `.builder-module-chrome` resolves
+ * to flex or to `display: contents` depending on which editor it is dropped
+ * into — a heading editor laid the banner and the field strip side by side,
+ * with the banner taking two thirds of the card and the fields squeezed into
+ * a 249px column at the far right (measured 2026-09-15 in the real app). The
+ * device panel is its own thing rather than a chrome strip in an editor, so
+ * it states its own stacking instead of inheriting whichever one it landed in.
+ */
+.builder-react-root .builder-module-editor .builder-module-device-panel,
+.builder-react-root .builder-module-device-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4, 12px);
+  align-content: start;
+}
+
+.builder-react-root .builder-module-device-panel .builder-device-banner {
+  grid-column: 1 / -1;
+}
+
+.builder-react-root .builder-setting-label .is-device-override::before,
+.builder-react-root .builder-module-field-label .is-device-override::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--ink-warning);
+  vertical-align: 1px;
+}
+
+/* ==============================================================
+   THE LEGACY NARROW-SCREEN RULES, MOVED ONTO THE DEVICE WIDTHS
+   Task 86bc14pgq (device styles 4 of 4), Dane's widths 2026-09-15
+   ============================================================== */
+
+/*
+ * Before this, the Builder had TWO unrelated sets of breakpoints. The device
+ * system reads 1024px (Tablet) and 767px (Phone) from
+ * `builder-device-overrides.ts`; the old "mobile" rules that predate it fire
+ * at 900px and 560px. So a column hidden with the new Hide on Phone vanished
+ * at 767px while the row it sat in stacked at 900px, and no screen width
+ * showed both halves of one page agreeing with each other.
+ *
+ * WHAT MOVED, and how. Widening a rule needs no removal: every screen the old
+ * query matched is still matched by the wider one, with the same values, so
+ * the old block is simply absorbed. That is why nothing below has to undo
+ * anything — and it is also why the direction is widening rather than
+ * narrowing. Narrowing would need the desktop value written back between the
+ * two widths, and for `display` that value lives in an INLINE style, which a
+ * stylesheet cannot restore.
+ *
+ * Three rules decide the layout, and all three are in the regenerated file
+ * (`_builder-react.css`, ~line 10309) where they may not be edited:
+ *
+ *   - the row stacks into one column          900px -> 1024px
+ *   - "Keep columns" opts back out of that    900px -> 1024px
+ *   - "Reverse stack" reorders the columns    900px -> 1024px
+ *   - a column fills the width once stacked   900px -> 1024px
+ *   - two- and three-column grids collapse    900px -> 1024px
+ *
+ * The operator's own escape hatch is unchanged and is what makes the wider
+ * width safe: a row set to "Keep columns" still keeps them, at every width.
+ *
+ * WHAT DELIBERATELY DID NOT MOVE, because each would change a live client
+ * page in a way no acceptance criterion asked for:
+ *
+ *   - `.builder-preview-column-mobile-hidden` / `-module-mobile-hidden`.
+ *     Widening these makes content DISAPPEAR on tablets that can see it
+ *     today, and narrowing them cannot be expressed in CSS at all (see
+ *     above). They move when the legacy fields are read through the device
+ *     chain, which is the module half of this work.
+ *   - the module's legacy Mobile Font Size and Mobile Alignment rules, for
+ *     the same reason and in the same company.
+ *   - every `.site-nav*` rule at 900px / 720px / 560px. The hamburger
+ *     breakpoint that decides when the menu becomes a drawer lives in
+ *     `legacy.css`, which this task does not own; moving the nav's sizing
+ *     without it would leave a drawer-shaped menu beside a desktop nav.
+ *   - `gap: 18px !important` on a stacked row. It has no desktop value to
+ *     return to, and at 901-1024px the row's own Column Gap is the better
+ *     answer anyway.
+ *   - everything admin-only (`.admin-*`, the dialogs, the poll and blog
+ *     editors). Those are screens in the app, not a visitor's page.
+ */
+@media (max-width: 1024px) {
+  .builder-react-root .builder-preview-section {
+    grid-template-columns: 1fr !important;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-keep {
+    grid-template-columns: var(--builder-layout-grid, 1fr) !important;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(1) {
+    order: 3;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(2) {
+    order: 2;
+  }
+
+  .builder-react-root .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(3) {
+    order: 1;
+  }
+
+  .builder-react-root .builder-preview-column {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .builder-react-root .builder-columns-2,
+  .builder-react-root .builder-columns-3,
+  .builder-react-root .builder-preview-columns-2,
+  .builder-react-root .builder-preview-columns-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==============================================================
+   THE TABLET FRAME on the preview page
+   ============================================================== */
+
+/*
+ * An iPad-ish box, shaped like the phone frame one size up so the two read as
+ * the same object rather than two designs. 820px is a tablet in portrait with
+ * its chrome taken off, and it sits below the 1024px Tablet width on purpose:
+ * a frame that straddled its own breakpoint would show a device the page
+ * would never actually meet.
+ */
+.builder-react-root .builder-preview-device-tablet {
+  width: min(820px, 100%);
+  min-height: 1100px;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid rgba(9, 16, 24, 0.16);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 22px 60px rgba(10, 73, 112, 0.2);
+}
+
+.builder-react-root .builder-preview-device-tablet>div {
+  min-height: 1100px;
+  overflow-x: hidden;
+}
+
+/* Browser mode has no wrapper, so the tablet frame needs room of its own —
+   the same allowance the phone frame is given above. */
+.builder-react-root.builder-public-site .builder-preview-device-tablet {
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+/*
+ * And the rules the frame cannot reach any other way. The frame is a narrow
+ * box inside a WIDE window, so `@media (max-width: 1024px)` never matches
+ * inside it however narrow it is drawn — exactly the reason the phone frame
+ * has its own copy of the phone rules in the regenerated file. This is that
+ * same mirror, one screen up, and it carries ONLY the tablet-width rules:
+ * a phone rule showing up in the Tablet frame would be the frame lying about
+ * the device it is named after.
+ */
+.builder-react-root .builder-preview-device-tablet .builder-preview-section {
+  grid-template-columns: 1fr !important;
+  padding-left: calc(14px + var(--builder-section-padding-left, 0px));
+  padding-right: calc(14px + var(--builder-section-padding-right, 0px));
+  padding-top: var(--builder-section-padding-top, 14px);
+  padding-bottom: var(--builder-section-padding-bottom, 14px);
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-keep {
+  grid-template-columns: var(--builder-layout-grid, 1fr) !important;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(1) {
+  order: 3;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(2) {
+  order: 2;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(3) {
+  order: 1;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(4) {
+  order: 0;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(5) {
+  order: -1;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-section-mobile-reverse-stack>.builder-preview-column:nth-child(6) {
+  order: -2;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-preview-column {
+  width: 100%;
+  min-width: 0;
+}
+
+.builder-react-root .builder-preview-device-tablet .builder-columns-2,
+.builder-react-root .builder-preview-device-tablet .builder-columns-3,
+.builder-react-root .builder-preview-device-tablet .builder-columns-4,
+.builder-react-root .builder-preview-device-tablet .builder-columns-5,
+.builder-react-root .builder-preview-device-tablet .builder-columns-6,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-2,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-3,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-4,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-5,
+.builder-react-root .builder-preview-device-tablet .builder-preview-columns-6 {
+  grid-template-columns: 1fr;
+}
+
+/*
+ * The TABLET frame hides the shell video for a different reason from the
+ * phone frame above, and it is worth being plain about: a real tablet DOES
+ * play it. But the layer measures the real window, decides (correctly) that
+ * 1400px of browser is not a phone, and mounts a `position: fixed` element —
+ * and `overflow: hidden` on the frame cannot clip a fixed element, so the clip
+ * would paint across the entire browser window with the little tablet drawn on
+ * top of it. The poster underneath is the right picture and merely still; a
+ * video escaping its frame reads as the page being broken.
+ */
+.builder-react-root .builder-preview-device-tablet .builder-preview-video-background-page {
+  display: none;
 }

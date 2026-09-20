@@ -1,6 +1,7 @@
 'use strict';
 
 const { BANNER_LABEL } = require('./operatorCard.js');
+const { normalizeCommand } = require('./mergeOnComment');
 
 /**
  * bus-relay's decision table: which lists it watches, and what a fresh
@@ -336,6 +337,47 @@ function handbackTarget(watch, taskStatus, authorized) {
 }
 
 /**
+ * AN ANSWER THAT SAYS "CLOSE IT" (2026-09-14, task 86bc08xx5).
+ *
+ * The `needs your input` watch released every answered ticket to `Queued`
+ * without reading the answer. On 2026-09-14 ticket 86bbwmumk was already fixed
+ * on main; a build pass escalated "NEEDED FROM DANE: Close this ticket", he
+ * answered "close it", and the relay put it back at the top of the claim line —
+ * where the next build pass claimed it again and spent a whole pass
+ * re-verifying a fix to close it by hand.
+ *
+ * NARROW ON PURPOSE. Getting this wrong in the generous direction closes a
+ * ticket he meant to keep open; getting it wrong in the narrow direction is
+ * today's behaviour, merely wasteful. So the WHOLE answer, once the editor's
+ * formatting and trailing punctuation are stripped (the same normalizeCommand
+ * `merge` uses), must be one of these — never a sentence that contains one.
+ *
+ * Deliberately NOT here: "done" and "nothing to do". Both are what he writes
+ * after doing the thing a card asked HIM to do ("ran the SQL — done"), which
+ * means carry on, not close.
+ */
+const CLOSE_PHRASES = [
+  'close',
+  'close it',
+  'close this',
+  'close this ticket',
+  'close the ticket',
+  'close it please',
+  'please close it',
+  'please close',
+  'yes close it',
+  'yes, close it',
+  'ok close it',
+  'ok, close it',
+  'closed',
+];
+
+function isCloseCommand(text) {
+  if (typeof text !== 'string' || !text.trim()) return false;
+  return CLOSE_PHRASES.includes(normalizeCommand(text));
+}
+
+/**
  * WHERE an answered ticket GOES — read off the ticket, not off a flat map.
  * (2026-09-08, task 86bbw596q.)
  *
@@ -381,9 +423,21 @@ function handbackTarget(watch, taskStatus, authorized) {
  * (this watch does not release this status, or nothing authorized it) or
  * 'cannot-tell' (a reading failed — say so, move nothing).
  */
-function handbackDestination(watch, taskStatus, authorized, pr) {
+function handbackDestination(watch, taskStatus, authorized, pr, answerText) {
   const unbuilt = handbackTarget(watch, taskStatus, authorized);
   if (!unbuilt) return { act: 'skip', target: null, why: '' };
+  // His answer, read BEFORE the trail: "close it" is an instruction about the
+  // ticket, and the trail only answers where unfinished work belongs.
+  if (isCloseCommand(answerText)) {
+    const open = pr && String(pr.state || '').trim().toUpperCase() === 'OPEN';
+    return {
+      act: 'move',
+      target: 'Live',
+      why: open
+        ? `your answer says to close it — note PR #${pr.number || '?'} is still open and was not touched`
+        : 'your answer says to close it',
+    };
+  }
   if (!pr) {
     return {
       act: 'move',
@@ -451,8 +505,12 @@ const HANDBACK_FAILURE_MARKER = '[bus-relay-handback]';
 const HANDBACK_DONE_MARKER = '[bus-relay-handback-done]';
 
 function handbackDoneText({ target, at } = {}) {
-  return `${HANDBACK_DONE_MARKER} Your answer was delivered and this ticket was returned to `
-    + `"${target}", so it is back with the machines.\n\n`
+  // A close is not a hand-back to the machines, and saying it was would be the
+  // receipt lying about the one thing he asked for (task 86bc08xx5).
+  const what = String(target || '').toLowerCase() === 'live'
+    ? `Your answer was delivered and this ticket was closed (moved to "${target}"), as you asked.\n\n`
+    : `Your answer was delivered and this ticket was returned to "${target}", so it is back with the machines.\n\n`;
+  return `${HANDBACK_DONE_MARKER} ${what}`
     + 'This note is what stops a later pass acting on the same answer twice — park the ticket here '
     + `again and it will be left where you put it.${at ? ` (Automatic — bus-relay, ${at}.)` : ''}`;
 }
@@ -610,6 +668,7 @@ const BUS_RELAY_MARKER = '[bus-relay]';
  *  a fallback, not a second channel. */
 function deliveryVerdict({
   chatOk, handsBack, receiptAttempted, receiptPosted, receiptOk, receiptStatus,
+  alarmTicketAttempted, alarmTicketOk, alarmTicketWhy,
 } = {}) {
   if (chatOk) return { ok: true, via: 'chat' };
 
@@ -632,7 +691,25 @@ function deliveryVerdict({
   // Before this feature those two cases retried every pass until the bus took
   // them. Turning a self-healing retry into silent permanent loss is the exact
   // shape of bug this ticket exists to remove, so: no handback, no delivery.
+  //
+  // THE UNDELIVERED ALARMS TICKET IS NOT THAT RECEIPT (2026-09-14, task
+  // 86bc0mxv0). Everything above is about a note on the SAME ticket, which
+  // nothing reads. The standing "Undelivered alarms" ticket is a different
+  // place, one Dane reads, and the message is kept there whole — so nothing is
+  // lost when chat recovers, which was the whole objection. It is the rule
+  // #678 and #689 already set for the relay's own alarms. Without it, every
+  // comment he left on a Ready to launch ticket failed every relay pass while
+  // chat was refused: 18 of 40 passes exited 1 on 2026-09-14, the relay read
+  // QUIET for 5h40m, and each pass said merge commands were not read.
+  if (!handsBack && alarmTicketOk) return { ok: true, via: 'alarm-ticket' };
   if (!handsBack) {
+    if (alarmTicketAttempted) {
+      return {
+        ok: false,
+        via: 'none',
+        why: `the "Undelivered alarms" ticket refused it too (${alarmTicketWhy || 'reason unknown'})`,
+      };
+    }
     return {
       ok: false,
       via: 'none',
@@ -658,6 +735,7 @@ function deliveryVerdict({
 function relayMarkerText({ via, channel, at } = {}) {
   if (via === 'chat') return `${BUS_RELAY_MARKER} sent to channel ${channel} at ${at}`;
   if (via === 'ticket') return `${BUS_RELAY_MARKER} chat unavailable, receipted on the ticket at ${at}`;
+  if (via === 'alarm-ticket') return `${BUS_RELAY_MARKER} chat unavailable, saved on the "Undelivered alarms" ticket at ${at}`;
   return null;
 }
 
@@ -676,7 +754,10 @@ function receiptText({ why, target, at } = {}) {
   //
   // A receipt is only ever written on a watch that hands the ticket back, so
   // `target` is always set by the time this is called.
-  const move = target ? ` This ticket is being returned to ${target}.` : '';
+  const move = !target ? ''
+    : String(target).toLowerCase() === 'live'
+      ? ' This ticket is being closed, as you asked.'
+      : ` This ticket is being returned to ${target}.`;
   return `${RECEIPT_FINGERPRINT}${move} The party line is unavailable right now (${why || 'reason unknown'}), so this note is the record instead.
 
 ${receiptSignature(at)}`;
@@ -785,6 +866,9 @@ function simulationLine({ verdict, target } = {}) {
   if (v.ok && v.via === 'ticket') {
     return `  SIMULATION — party line down: delivered by receipt on the ticket; hand-back to "${target}" WOULD fire`;
   }
+  if (v.ok && v.via === 'alarm-ticket') {
+    return '  SIMULATION — party line down: delivered by saving it on the "Undelivered alarms" ticket; no hand-back (this watch hands nothing back)';
+  }
   if (v.ok && v.via === 'chat') {
     // Unreachable while simulating (chat always fails), but a verdict of
     // "chat" here would mean the simulation did not take effect — say so
@@ -810,6 +894,8 @@ module.exports = {
   answerAwaitingHandback,
   handbackTarget,
   handbackDestination,
+  isCloseCommand,
+  CLOSE_PHRASES,
   HANDBACK_FAILURE_MARKER,
   handbackFailureText,
   HANDBACK_DONE_MARKER,

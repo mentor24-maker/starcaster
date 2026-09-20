@@ -62,6 +62,8 @@ try {
 
 /** The preview page reads its document from here (BUILDER_PREVIEW_STORAGE_KEY). */
 const DRAFT_KEY = 'starcaster_builder_preview_draft';
+/** And which frame to draw it in (BUILDER_PREVIEW_DEVICE_STORAGE_KEY). */
+const DEVICE_KEY = 'starcaster_builder_preview_device';
 const WIDTH = Number(process.env.UI_HARNESS_WIDTH || 1440);
 /** Long enough for an animation's currentTime to move visibly past jitter. */
 const SETTLE_MS = 600;
@@ -110,6 +112,13 @@ function documentFor(...specs) {
  *  documentFor (always `layout: 'single'`) cannot reach. */
 function documentForSection({
   layout = 'single',
+  /*
+   * What the row does at phone width — `stack` unless a contract asks. Carried
+   * for the same reason `background` is: the reverse-stack orders are the only
+   * place the renderer's CHILD COUNT is load-bearing, and a fixture that
+   * cannot ask for them cannot see an extra child at all (86bbwmp2y round 2).
+   */
+  mobileLayout,
   modules = [],
   background,
   pageBackground,
@@ -118,6 +127,16 @@ function documentForSection({
   cellOverlayScreens,
   spacers = 0,
   themeTreatments,
+  // Tablet/phone row settings and the desktop top padding they differ from
+  // (device styles, task 86bc13a6v).
+  paddingTop,
+  deviceOverrides,
+  // The same, one level down: a column's own tablet/phone settings, the
+  // desktop padding they differ from, and the legacy per-cell "Hide on
+  // Mobile" they had to keep working (device styles 2 of 4, task 86bc14pey).
+  cellPaddingTop,
+  cellDeviceOverrides,
+  cellMobileHidden,
 } = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
@@ -146,6 +165,7 @@ function documentForSection({
     id: 'section-render-contract',
     title: 'Render Contract Section',
     layout,
+    ...(mobileLayout ? { mobileLayout } : {}),
     locked: false,
     alignment: 'left',
     widthMode: 'contained',
@@ -161,6 +181,11 @@ function documentForSection({
     // along for the ride.
     ...(cellBackgrounds ? { cellBackgrounds } : {}),
     ...(cellOverlayScreens ? { cellOverlayScreens } : {}),
+    ...(paddingTop ? { paddingTop } : {}),
+    ...(deviceOverrides ? { deviceOverrides } : {}),
+    ...(cellPaddingTop ? { cellPaddingTop } : {}),
+    ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
+    ...(cellMobileHidden ? { cellMobileHidden } : {}),
     modules: modules.map(moduleFrom),
   };
 
@@ -216,8 +241,14 @@ function documentForSection({
   };
 }
 
-async function render(page, doc) {
-  await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [DRAFT_KEY, JSON.stringify(doc)]);
+async function render(page, doc, previewDevice = 'desktop') {
+  await page.evaluate(
+    ([draftKey, draft, deviceKey, device]) => {
+      window.localStorage.setItem(draftKey, draft);
+      window.localStorage.setItem(deviceKey, device);
+    },
+    [DRAFT_KEY, JSON.stringify(doc), DEVICE_KEY, previewDevice]
+  );
   // NOT `networkidle`: the page runs animations and never goes idle, so it
   // times out after 30s having rendered perfectly. Wait for the module.
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -655,7 +686,21 @@ try {
       await page.setViewportSize(contract.emulate.viewport);
     }
 
-    await render(page, contract.section ? documentForSection(contract.section) : documentFor(contract.module));
+    /*
+     * Optional PREVIEW FRAME. The Builder's preview page can draw a page
+     * inside a phone or tablet box, and a frame is a narrow element in a WIDE
+     * window — so every media query in the stylesheet is false inside it and
+     * the frame needs a parallel set of rules keyed by class. Nothing here
+     * could reach those rules until 2026-09-15, and the gap had already cost a
+     * real defect: a row with 90px of Tablet top padding rendered 10px in the
+     * phone frame and 90px on an actual 420px browser, so the preview was
+     * quietly disagreeing with the device it is named after (task 86bc14pgq).
+     */
+    await render(
+      page,
+      contract.section ? documentForSection(contract.section) : documentFor(contract.module),
+      contract.emulate?.previewDevice || 'desktop'
+    );
 
     /*
      * Optional HOVER, for behaviour that only exists while the pointer is on
@@ -694,6 +739,8 @@ try {
 
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
+    // The frame needs no reset: `render` writes the device key on every
+    // contract, so the next one cannot inherit this one's box.
     if (contract.hover) await page.mouse.move(0, 0);
 
     if (hoverError) {
@@ -728,6 +775,23 @@ try {
         `(${result.page.modules} module(s) on the page). NOTHING WAS MEASURED — the module did not ` +
         'render, or the selector is stale. A contract that measures nothing cannot verify anything.'
       );
+      continue;
+    }
+    /*
+     * A HIDDEN contract: the element must be IN the page and must not show —
+     * "Hide on Phone" is correct exactly when it measures 0x0, which the rule
+     * below rightly calls unmeasurable everywhere else. Presence was already
+     * required above, so this cannot pass by the row failing to render; and
+     * it reads the display, so a row that merely collapsed does not pass.
+     */
+    if (contract.hidden) {
+      measured += 1;
+      if (result.styles?.display !== 'none') {
+        failures.push(
+          `${contract.id}: \`${contract.selector}\` must be hidden and resolved display ` +
+          `${result.styles?.display} (${result.box.width}x${result.box.height}). ${contract.why || ''}`
+        );
+      }
       continue;
     }
     if (!result.box.width || !result.box.height) {

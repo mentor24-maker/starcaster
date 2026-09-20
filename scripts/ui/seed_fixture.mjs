@@ -435,6 +435,16 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // `latestPosts: false` is the gate on the tag and category checklists; left
+  // at its default the panel is two strips shorter and they are not measured.
+  'blog-latest-posts': {
+    name: 'Latest Blog Posts',
+    settings: {
+      title: LONG, latestPosts: 'false', filterTags: JSON.stringify(['junior tennis']),
+      filterCategories: JSON.stringify([]), count: '4', columns: '4', cardGap: '24',
+    },
+  },
+
   // `matchBy: manual` is the gate on the whole manual-post list; left at its
   // default the list does not render and the panel is three strips shorter.
   'blog-related-posts': {
@@ -492,10 +502,17 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // `postSlug` is deliberately a value no fixture page carries, which puts
+  // the shared Post Page picker into its CUSTOM mode — a select AND a text
+  // input side by side, ~846px wide. That is the one state in which the
+  // picker sizes the column's `max-content` control track and notches every
+  // 560px-capped row beside it (L8), and left resolving to a real page the
+  // check could never see it. Panel sweep 12/15, ticket 86bbjt1bc.
   'blog-post-list': {
     name: LONG,
     settings: {
       postTitle: LONG, postsPerPage: '9', layout: 'grid', columns: '3', cardGap: '16',
+      postSlug: 'a-post-page-that-is-not-in-this-project',
       showSearch: 'true', showCategoryFilter: 'true', showTagFilter: 'true',
       showAuthorFilter: 'true', showDateFilter: 'true',
     },
@@ -1233,6 +1250,39 @@ const UNLINKED_SECTION = {
   title: 'Local Notice',
 };
 
+/**
+ * A SECOND row on the panel page, and the only thing it is for is having more
+ * than one column.
+ *
+ * Several row controls exist only on a multi-column row — Column Gap, Column
+ * Widths, Match Column Heights, and since 2026-09-15 Mobile Layout on the
+ * Phone panel (task 86bc14pgq). The fixture's other row is `layout: 'single'`,
+ * so every one of them was invisible to `check:panels`: it opened a Phone
+ * panel, measured what it found, and reported a confident green over controls
+ * the page could not render. That is the 2026-08-12 shape exactly — the check
+ * measures what it can see, and what it cannot see it calls fine.
+ *
+ * Deliberately plain otherwise. The row above is the one carrying awkward
+ * content on purpose; this one adds a column count and nothing else, so a
+ * failure here points at the multi-column controls rather than at a second
+ * pile of adversarial strings.
+ */
+const PANEL_CHECK_MULTI_COLUMN_SECTION = {
+  id: 'section-panel-lattice-check-columns',
+  title: 'Panel Lattice Check — two columns',
+  layout: 'two-column',
+  locked: false,
+  alignment: 'left',
+  widthMode: 'contained',
+  // Non-default, so the Phone panel has something to show as a per-device
+  // override chip beside the controls being measured.
+  columnGap: '24',
+  modules: [
+    { id: 'panel-columns-left', type: 'heading', text: 'Left column', column: 'left', settings: {} },
+    { id: 'panel-columns-right', type: 'heading', text: 'Right column', column: 'right', settings: {} },
+  ],
+};
+
 /** Content chosen to break layouts, not to look plausible. */
 const buildPages = (ids) => [
   ['Meet Brent Wellman, Junior Tennis Director of Delray Champions Junior Tennis & High Performance in Delray',
@@ -1244,7 +1294,7 @@ const buildPages = (ids) => [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
-  ['Panel Lattice Check', 'panel-lattice-check', [buildPanelCheckSection(ids)]],
+  ['Panel Lattice Check', 'panel-lattice-check', [buildPanelCheckSection(ids), PANEL_CHECK_MULTI_COLUMN_SECTION]],
   // Two pages follow the same master, so the lineage line reads "2 pages" and
   // exercises the plural path rather than the "1 page" special case.
   ['Block States', 'block-states', [

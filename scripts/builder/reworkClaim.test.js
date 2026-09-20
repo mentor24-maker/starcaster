@@ -111,6 +111,15 @@ globalThis.fetch = async (url, opts = {}) => {
         ...process.env,
         CLICKUP_API_TOKEN: 'test-token-not-a-real-one',
         CLICKUP_LOOP_QUEUE_LIST: LIST,
+        // A ledger of its own. This spawns the REAL CLI with the global
+        // `fetch` replaced, which is the one shape the door cannot tell from
+        // live traffic — no `fetchImpl` is injected, so it has nothing to look
+        // at. Without this line the stubbed requests landed on the operator's
+        // ~/.starcaster/clickup-ledger.jsonl (34 from this file alone), and
+        // this suite then yielded against its own invented traffic and failed
+        // itself (2026-09-15, task 86bc0wrxg). `clickupReserveDoor.test.js`
+        // fails if a future spawning test omits it.
+        CLICKUP_LEDGER_PATH: path.join(dir, 'ledger.jsonl'),
       },
     });
     const writes = fs.existsSync(log)
@@ -301,6 +310,15 @@ globalThis.fetch = async (url, opts = {}) => {
         PATH: `${dir}:${process.env.PATH}`,
         CLICKUP_API_TOKEN: 'test-token-not-a-real-one',
         CLICKUP_LOOP_QUEUE_LIST: LIST,
+        // A ledger of its own. This spawns the REAL CLI with the global
+        // `fetch` replaced, which is the one shape the door cannot tell from
+        // live traffic — no `fetchImpl` is injected, so it has nothing to look
+        // at. Without this line the stubbed requests landed on the operator's
+        // ~/.starcaster/clickup-ledger.jsonl (34 from this file alone), and
+        // this suite then yielded against its own invented traffic and failed
+        // itself (2026-09-15, task 86bc0wrxg). `clickupReserveDoor.test.js`
+        // fails if a future spawning test omits it.
+        CLICKUP_LEDGER_PATH: path.join(dir, 'ledger.jsonl'),
       },
     });
     const writes = fs.existsSync(log)

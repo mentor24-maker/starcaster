@@ -45,7 +45,7 @@ import localWorkReading from './builder/localWorkReading.js';
 // The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
 import clickupLib from './lib/clickup.cjs';
 
-const { clickupFetch, getBudget } = clickupLib;
+const { clickupFetch, getBudget, yieldedResult } = clickupLib;
 
 const {
   SWITCH_TASK_NAME, SWITCH_SEED_DESCRIPTION, STRANDED_AFTER_MS,
@@ -152,6 +152,14 @@ async function call(method, path, body) {
     headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   });
+  // THE THIRD OUTCOME, AND IT MUST NOT THROW (task 86bc0w6my). A yield is not
+  // a transport failure and must not be raised as one: `safely()` below would
+  // catch it and `whyOf` would render it as "could not reach ClickUp", which
+  // is the sentence that stopped both loops on 2026-09-15 while the pipeline
+  // was running. It comes back as a RESULT carrying `yielded`, in the shape
+  // every reader here already handles — `whyOf` has printed a non-numeric
+  // status verbatim since task 86bbugd8j, waiting for exactly this.
+  if (out.yielded) return { ...yieldedResult(out.yielded), ok: false };
   if (out.transportError) throw out.transportError;
   const { res, json, text } = out;
   return { res, json, text, ok: res.ok };
@@ -229,6 +237,9 @@ function verdictFrom(sw) {
     why: sw.why,
     switchFound: sw.switchFound,
     comments: sw.comments || [],
+    // Why the read failed, not just that it did (task 86bc0w6my). Dropped
+    // here, a reserve stand-down is reported as "the operator has the deck".
+    yielded: Boolean(sw.yielded),
   });
 }
 
@@ -381,6 +392,12 @@ if (cmd === 'check') {
   if (flag('json')) {
     console.log(JSON.stringify({
       paused: Boolean(v.paused), certain: v.certain !== false, code: v.code, message: v.message,
+      // WHICH kind of "could not tell" (task 86bc0w6my). `certain: false`
+      // covers a dead token, a ClickUp outage and a scheduled job declining to
+      // spend the last of the minute's budget — three things with three
+      // different fixes, and the third needs none at all. The pulse is the
+      // caller that must not raise an alarm for the third.
+      yielded: Boolean(v.yielded),
     }));
     process.exit(v.code);
   }

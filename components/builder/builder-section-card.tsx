@@ -24,6 +24,14 @@ import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-do
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderCellStyleSettings } from "./builder-cell-style-settings";
+import { BuilderDeviceSwitch } from "./builder-device-switch";
+import {
+  listCellDeviceOverrideKeys,
+  listSectionDeviceOverrideKeys,
+  resolveSectionForCellDevice,
+  writeCellDeviceEdit,
+  type BuilderEditorStyleDevice
+} from "@/lib/builder-device-overrides";
 import { cancelBuilderDragIfFormField } from "./builder-drag-utils";
 import { BuilderModuleCard } from "./builder-module-card";
 import { BuilderSectionControls } from "./builder-section-controls";
@@ -46,6 +54,8 @@ type BuilderSectionCardProps = {
   /** True when this canonical instance's content no longer matches its
    *  master — hand-edited here directly rather than through a push. */
   hasDrifted?: boolean;
+  /** See `awaitingPush` on `describeBlockLineage` (@/lib/block-lineage). */
+  awaitingPush?: boolean;
   /** Usage for the master this block belongs to, from
    *  `buildSavedSectionUsageIndex`. Drives the "used on N pages" half of the
    *  lineage line; omit it and the line names the master without a count. */
@@ -129,6 +139,7 @@ export function BuilderSectionCard({
   expandedModuleIds,
   canonicalSourceName,
   hasDrifted = false,
+  awaitingPush = false,
   canonicalUsage,
   isCanonicalMaster = false,
   onToggleCanonical,
@@ -190,6 +201,7 @@ export function BuilderSectionCard({
     isMaster: isCanonicalMaster,
     isFollowing: isCanonical,
     hasDrifted,
+    awaitingPush,
     hasMasterSource: hasCanonicalSource,
     masterName: canonicalSourceName,
     usage: canonicalUsage,
@@ -213,6 +225,19 @@ export function BuilderSectionCard({
   // row to reach its content meant scrolling past every one of them. Now the
   // bar is all you see until you want them.
   const [isSectionSettingsCollapsed, setIsSectionSettingsCollapsed] = useState(true);
+  // Which screen the row's style panel is editing. Not saved: every panel
+  // opens on Desktop, which is what the operator expects to be editing.
+  const [sectionStyleDevice, setSectionStyleDevice] = useState<BuilderEditorStyleDevice>("desktop");
+  /*
+   * Which screen each CELL's Styles bar is editing, keyed by column.
+   *
+   * Per column rather than one for the whole row, because the switch lives on
+   * each cell's own bar: a single value would move every other column's
+   * switch when the operator clicked one, and he would be looking at one
+   * column's Phone settings while another column's bar claimed Desktop.
+   */
+  const [cellStyleDevices, setCellStyleDevices] = useState<Record<string, BuilderEditorStyleDevice>>({});
+  const cellStyleDevice = (column: string): BuilderEditorStyleDevice => cellStyleDevices[column] ?? "desktop";
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const sectionHeaderRef = useRef<HTMLDivElement | null>(null);
@@ -355,6 +380,14 @@ export function BuilderSectionCard({
     return collapsedCellPanels[column] ?? { styles: true, content: true };
   }
 
+  /** Open one of a cell's panels, whatever it was — choosing a device shows it. */
+  function setCellPanelOpen(column: string, panel: "styles" | "content") {
+    setCollapsedCellPanels((current) => {
+      const state = current[column] ?? { styles: true, content: true };
+      return { ...current, [column]: { ...state, [panel]: false } };
+    });
+  }
+
   function toggleCellPanel(column: string, panel: "styles" | "content") {
     setCollapsedCellPanels((current) => {
       const state = current[column] ?? { styles: true, content: true };
@@ -462,6 +495,35 @@ export function BuilderSectionCard({
         [column]: value
       }
     }));
+  }
+
+  /**
+   * The same write, made while looking at a tablet or a phone.
+   *
+   * `writeCellDeviceEdit` hands the updater the row as that screen sees its
+   * cells and keeps only what the edit actually CHANGED — so the panel's own
+   * writers work unchanged and a value set back to what the cell inherits
+   * removes the key rather than pinning it.
+   */
+  function setCellExtraOnDevice(
+    column: string,
+    key: string,
+    value: string,
+    device: BuilderEditorStyleDevice
+  ) {
+    if (device === "desktop") {
+      setCellExtra(column, key, value);
+      return;
+    }
+    onUpdateSection((current) =>
+      writeCellDeviceEdit(current, column, device, (resolved) => ({
+        ...resolved,
+        [key]: {
+          ...((resolved as unknown as Record<string, Record<string, string>>)[key] ?? {}),
+          [column]: value
+        }
+      }))
+    );
   }
 
   /**
@@ -641,6 +703,22 @@ export function BuilderSectionCard({
               onToggle={() => setIsSectionSettingsCollapsed((current) => !current)}
               panelName="Section Settings and Styles"
               title="Section Settings and Styles"
+              trailingActions={
+                // The old page-list Mobile mode has its own panel; the switch
+                // would only confuse it, so it is shown in the normal mode.
+                editorDevice === "browser" ? (
+                  <BuilderDeviceSwitch
+                    value={sectionStyleDevice}
+                    changedDevices={(["tablet", "phone"] as const).filter(
+                      (device) => listSectionDeviceOverrideKeys(section, device).length > 0
+                    )}
+                    onChange={(device) => {
+                      setSectionStyleDevice(device);
+                      setIsSectionSettingsCollapsed(false);
+                    }}
+                  />
+                ) : null
+              }
             />
 
             {!isSectionSettingsCollapsed ? (
@@ -648,6 +726,7 @@ export function BuilderSectionCard({
                 section={section}
                 canJoinPrevious={sectionIndex > 0}
                 editorDevice={editorDevice}
+                styleDevice={sectionStyleDevice}
                 onUpdateSection={onUpdateSection}
                 onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
                 onUploadSectionBackgroundMedia={onUploadSectionBackgroundMedia}
@@ -686,23 +765,82 @@ export function BuilderSectionCard({
                       onToggle={() => toggleCellPanel(column, "styles")}
                       panelName={editorDevice === "mobile" ? "Mobile styles" : "Styles"}
                       title={editorDevice === "mobile" ? "Mobile" : "Styles"}
+                      trailingActions={
+                        // Same reasoning as the row's switch above: the old
+                        // page-list Mobile mode has a panel of its own, so the
+                        // switch would only confuse it.
+                        editorDevice === "browser" ? (
+                          <BuilderDeviceSwitch
+                            value={cellStyleDevice(column)}
+                            changedDevices={(["tablet", "phone"] as const).filter(
+                              (device) => listCellDeviceOverrideKeys(section, column, device).length > 0
+                            )}
+                            onChange={(device) => {
+                              setCellStyleDevices((current) => ({ ...current, [column]: device }));
+                              setCellPanelOpen(column, "styles");
+                            }}
+                          />
+                        ) : null
+                      }
                     />
 
                     {!cellPanels.styles ? (
                       <BuilderCellStyleSettings
                         column={column}
-                        section={section}
+                        /*
+                         * The row as this cell's chosen screen sees it, so
+                         * every control in the panel shows the value that
+                         * screen actually renders — the panel reads cell maps
+                         * straight off this prop, and resolution writes the
+                         * device's values into those same maps. The device
+                         * maps themselves ride along untouched, which is what
+                         * lets the banner list what THIS screen changed.
+                         */
+                        section={
+                          cellStyleDevice(column) === "desktop"
+                            ? section
+                            : resolveSectionForCellDevice(section, cellStyleDevice(column))
+                        }
                         editorDevice={editorDevice}
+                        styleDevice={cellStyleDevice(column)}
+                        onUpdateSection={onUpdateSection}
                         onUpdateCellBackground={onUpdateCellBackground}
                         onChangeCellBackgroundMode={changeCellBackgroundMode}
                         onUploadCellBackgroundMedia={onUploadCellBackgroundMedia}
-                        onUpdateCellBorderWidth={onUpdateCellBorderWidth}
-                        onUpdateCellBorderColor={onUpdateCellBorderColor}
-                        onUpdateCellBorderRadius={onUpdateCellBorderRadius}
+                        /* Border width, colour and radius are ordinary cell
+                           maps, so on a device they take the same routed
+                           write every other cell setting does. The parent's
+                           handlers write desktop and are right for desktop. */
+                        onUpdateCellBorderWidth={(col, value) =>
+                          cellStyleDevice(col) === "desktop"
+                            ? onUpdateCellBorderWidth(col, value)
+                            : setCellExtraOnDevice(col, "cellBorderWidth", value, cellStyleDevice(col))
+                        }
+                        onUpdateCellBorderColor={(col, value) =>
+                          cellStyleDevice(col) === "desktop"
+                            ? onUpdateCellBorderColor(col, value)
+                            : setCellExtraOnDevice(col, "cellBorderColor", value, cellStyleDevice(col))
+                        }
+                        onUpdateCellBorderRadius={(col, value) =>
+                          cellStyleDevice(col) === "desktop"
+                            ? onUpdateCellBorderRadius(col, value)
+                            : setCellExtraOnDevice(col, "cellBorderRadius", value, cellStyleDevice(col))
+                        }
                         onUpdateCellOverlayBackground={updateCellOverlayBackground}
                         onUpdateCellOverlayOpacity={updateCellOverlayOpacity}
-                        onSetCellExtra={setCellExtra}
-                        getCellExtra={getCellExtra}
+                        onSetCellExtra={(col, key, value) =>
+                          setCellExtraOnDevice(col, key, value, cellStyleDevice(col))
+                        }
+                        getCellExtra={(col, key, fallback = "") =>
+                          cellStyleDevice(col) === "desktop"
+                            ? getCellExtra(col, key, fallback)
+                            : (
+                                resolveSectionForCellDevice(section, cellStyleDevice(col)) as unknown as Record<
+                                  string,
+                                  Record<string, string>
+                                >
+                              )[key]?.[col] ?? fallback
+                        }
                         themeBackgroundColor={themeBackgroundColor}
                         themeColors={themeColors}
                         themePrimaryColor={themePrimaryColor}
@@ -795,6 +933,9 @@ export function BuilderSectionCard({
                                 onDrop={(event) => handleModuleDrop(event, column, module.id)}
                               >
                                 <BuilderModuleCard
+                                  // A saved-section master is a template, not
+                                  // a placed module — see the prop's own note.
+                                  deviceStylesEnabled={!isCanonicalMaster}
                                   isEmailTemplate={isEmailTemplate}
                                   module={module}
                                   pages={pages}

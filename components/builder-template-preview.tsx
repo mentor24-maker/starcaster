@@ -33,7 +33,21 @@ import {
 } from "@/lib/builder-template";
 import { imageProps } from "@/lib/image-renditions";
 import { BuilderBackgroundLayer } from "@/components/builder/builder-background-layer";
+import {
+  BUILDER_DEVICE_SCOPE_ATTRIBUTE,
+  buildCellDeviceCss,
+  buildSectionDeviceCss
+} from "@/components/builder/builder-device-css";
+import {
+  BUILDER_MODULE_DEVICE_SCOPE_ATTRIBUTE,
+  buildModuleDeviceCss
+} from "@/components/builder/builder-module-device-css";
 import { BLOG_FEED_PAGE_SIZE, readAllPages } from "@/components/builder/blog-feed-paging";
+import {
+  latestPostsEmptyReason,
+  resolveLatestPostsSettings,
+  selectLatestPosts
+} from "@/lib/blog-latest-posts";
 
 /** Feature cards sit up to three across the content column. */
 const FEATURE_CARD_SIZES = "(max-width: 700px) 100vw, 400px";
@@ -136,6 +150,7 @@ import {
   getSectionMarginStyle,
   getSectionColumnGapStyle,
   getSectionColumnPercent,
+  getSectionBandPaddingStyle,
   getSectionGridTemplate,
   getSectionHorizontalMarginStyle,
   getSectionMinHeightStyle,
@@ -1674,17 +1689,25 @@ function BuilderSectionPreview({
   /** Treatment: this section pulls up over the previous image section. */
   overlapsHero?: boolean;
 }) {
+  // Names this row in its own tablet/phone CSS. useId rather than section.id:
+  // copies of one saved section share an id, and must not share rules.
+  const deviceScopeId = useId();
   const sectionStyle = getBuilderBackgroundStyle(section.background);
   // `transparent` and `inherit` are the no-palette answers, so a theme without
   // one leaves this section exactly as it renders today.
   const bandStyle: CSSProperties | undefined = bandRole
     ? {
         background: `var(--lp-${bandRole}, transparent)`,
-        color: `var(--lp-${bandRole}-text, inherit)`,
-        paddingTop: "var(--lp-band-padding, 0px)",
-        paddingBottom: "var(--lp-band-padding, 0px)"
+        color: `var(--lp-${bandRole}-text, inherit)`
       }
     : undefined;
+  // The band's vertical spacing is deliberately NOT here. It used to be an
+  // inline `padding-top`/`padding-bottom` in this object, which outranked the
+  // stylesheet rule reading the operator's own Top/Bottom Padding — so his
+  // setting did nothing on any backgroundless row. It is applied further down
+  // `buildGridStyle`, after his padding and as a fallback to it, and it has to
+  // be a function of the row rather than a constant here so the tablet and
+  // phone rules recompute it for the row as each device sees it.
 
   // Hero treatment: a tint over an image background so text can sit on the
   // photo, with the inverse text color on top. Layered as a gradient IN FRONT
@@ -1761,8 +1784,13 @@ function BuilderSectionPreview({
    * not to play at all (reduce motion, phone width). The <video> simply covers
    * the still when it is allowed to run.
    *
-   * Overlay slots are excluded on purpose: they are not really rows, and the
-   * containment below would clip the very thing they exist to let overflow.
+   * Overlay slots are excluded on purpose: they are not really rows. The
+   * reason is no longer containment — since 86bbwmp2y the layer wraps itself
+   * in a clip box and the row is never clipped — but the guard is still right,
+   * because the layer and that box are both full-size absolutely-positioned
+   * elements sitting at a stacking rung. An overlay slot is a decor mount with
+   * its box thrown away, so dropping one in would lay a full-size element over
+   * the very thing the slot exists to place.
    */
   const sectionVideoBackground =
     !isOverlayLayoutCollapsed &&
@@ -1775,10 +1803,21 @@ function BuilderSectionPreview({
    *
    * Everywhere else an image is a CSS background on this very element, which
    * is why the check is `builderBackgroundParallaxActive` and not "is this an
-   * image": mounting a layer for every image section would give all of them
-   * the containment below (`overflow: hidden`), and a row with an overlay
-   * module deliberately spilling out of it would start being clipped. Off by
-   * default means off, all the way down to the element count.
+   * image": a layer mounted for every image section would be a React component
+   * with refs, effects and a scroll loop, running on every image row on the
+   * page to decide it has nothing to do. Off by default means off.
+   *
+   * It would not put an ELEMENT on those rows — the image branch returns null
+   * unless parallax is live, and since 86bbwmp2y the clip box goes up with the
+   * layer rather than around the decision to mount one, so nothing renders and
+   * nothing is wrapped. That used to be the argument here and it no longer is;
+   * the cost is the component, not the markup.
+   *
+   * Until 86bbwmp2y the reason was stronger and different: the containment was
+   * `overflow: hidden` on the ROW, so a layer here would have clipped an
+   * overlay module deliberately spilling out of it. The row is no longer
+   * clipped, so that consequence is gone; the element-count one is what keeps
+   * the check as it is.
    */
   const sectionParallaxImageBackground =
     !isOverlayLayoutCollapsed &&
@@ -1809,62 +1848,125 @@ function BuilderSectionPreview({
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
 
-  const gridStyle: CSSProperties = {
-    // Band first: a section carrying its own background never gets one, so
-    // this cannot overwrite an operator's choice.
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
-    // A menu-only row used to throw its own background away, which is half of
-    // the operator's "the style controls of the container have no effect"
-    // (2026-08-11) — he set a header strip's color and nothing happened.
-    // Honoured now: it is `undefined` until he picks one, so a row he never
-    // touched still renders flush. The automatic treatments above and below
-    // (band, hero tint, overlap) stay off — those are not his controls.
-    ...(isOverlayLayoutCollapsed ? {} : sectionStyle),
-    // Hero tint and overlap layer on top of the section's own background.
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
-    ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
-    ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(section)),
-    ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(section)),
-    // Navigation-only rows already render flush by design; overlay slots are
-    // not really rows at all. Everything else honours the operator's number.
-    ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(section)),
-    // A row with content sizes to that content. The 56px floor exists so an
-    // EMPTY row is still big enough to drop a module onto, and keeping it on
-    // filled rows was padding every contact strip out to nearly triple height.
-    ...(section.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
-    // ...unless the operator has asked for a taller band, which overrides both
-    // the floor and the release above it.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(section)),
-    // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(section)),
-    // The operator's own nudge, after the layout styles it is nudging away
-    // from. {} until he sets one, and it deliberately sits BEFORE the overlay
-    // and navigation z-index rules below so those still win their stack.
-    ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(section)),
-    ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
-    ...(isSectionOverlaySlot
-      ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(section) }
-      : hasNavigationModule
-      ? { position: "relative", zIndex: 10 }
-      : {}),
-    ...(rowBorderWidth > 0 && !isOverlayLayoutCollapsed
-      ? {
-          border: `${rowBorderWidth}px ${section.rowBorderStyle ?? "solid"} ${section.rowBorderColor ?? "#000000"}`,
-          borderRadius: `${section.rowBorderRadius ?? "0"}px`
-        }
-      : {}),
-    // Containment for the video layer and the tint screen, both of which are
-    // absolutely positioned children. Without `overflow: hidden` a blurred
-    // video — which is scaled up so its soft rim falls outside — would spill
-    // over the rows above and below it.
-    ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-      ? { position: "relative", overflow: "hidden" }
-      : {}),
-    display: "grid",
-    gridTemplateColumns: sectionGridTemplate,
-    ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(section)),
-    "--builder-layout-grid": sectionGridTemplate
-  } as CSSProperties;
+  // A function of the row, not a constant, so the tablet and phone rules below
+  // are computed by exactly this code on the row as each device sees it.
+  const buildGridStyle = (s: BuilderTemplateSection): CSSProperties =>
+    ({
+      // Band first: a section carrying its own background never gets one, so
+      // this cannot overwrite an operator's choice.
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : bandStyle),
+      // A menu-only row used to throw its own background away, which is half of
+      // the operator's "the style controls of the container have no effect"
+      // (2026-08-11) — he set a header strip's color and nothing happened.
+      // Honoured now: it is `undefined` until he picks one, so a row he never
+      // touched still renders flush. The automatic treatments above and below
+      // (band, hero tint, overlap) stay off — those are not his controls.
+      ...(isOverlayLayoutCollapsed ? {} : sectionStyle),
+      // Hero tint and overlap layer on top of the section's own background.
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
+      ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(s)),
+      ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(s)),
+      // Navigation-only rows already render flush by design; overlay slots are
+      // not really rows at all. Everything else honours the operator's number.
+      ...(isOverlayLayoutCollapsed || isNavigationSection ? {} : getSectionPaddingStyle(s)),
+      // ...and only then the theme band's spacing, which fills in for the two
+      // padding sides he has left at their default. After his padding because
+      // it writes the same two custom properties and is the weaker of the two.
+      ...(bandRole && !isNavigationSection && !isOverlayLayoutCollapsed
+        ? getSectionBandPaddingStyle(s)
+        : {}),
+      // A row with content sizes to that content. The 56px floor exists so an
+      // EMPTY row is still big enough to drop a module onto, and keeping it on
+      // filled rows was padding every contact strip out to nearly triple height.
+      ...(s.modules.length > 0 ? { "--builder-section-min-height": "0px" } : {}),
+      // ...unless the operator has asked for a taller band, which overrides both
+      // the floor and the release above it.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionMinHeightStyle(s)),
+      // Same reasoning: {} at the 100% default, so only a row he narrowed moves.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionWidthStyle(s)),
+      // The operator's own nudge, after the layout styles it is nudging away
+      // from. {} until he sets one, and it deliberately sits BEFORE the overlay
+      // and navigation z-index rules below so those still win their stack.
+      ...(isOverlayLayoutCollapsed ? {} : getSectionOffsetStyle(s)),
+      ...getOverlayFlowCollapsedSectionStyle(isOverlayLayoutCollapsed),
+      ...(isSectionOverlaySlot
+        ? { position: "relative", zIndex: resolveSectionScopedOverlaySectionZIndex(s) }
+        : hasNavigationModule
+        ? { position: "relative", zIndex: 10 }
+        : {}),
+      ...(Number(s.rowBorderWidth ?? "0") > 0 && !isOverlayLayoutCollapsed
+        ? {
+            border: `${Number(s.rowBorderWidth ?? "0")}px ${s.rowBorderStyle ?? "solid"} ${s.rowBorderColor ?? "#000000"}`,
+            borderRadius: `${s.rowBorderRadius ?? "0"}px`
+          }
+        : {}),
+      // The containing block for the video layer and the tint screen, both of
+      // which are absolutely positioned children.
+      //
+      // NO `overflow: hidden` HERE, and that is the fix for 86bbwmp2y. A blurred
+      // video is scaled up so its soft rim falls outside, and a parallaxing
+      // image layer is taller than the row by the whole travel distance, so both
+      // genuinely have to be contained — but containing them on the ROW clips
+      // everything else inside it too, and `overflow: hidden` cannot tell
+      // footage escaping from a navigation dropdown that is SUPPOSED to escape.
+      // The layer wraps ITSELF in a clip box instead (`background-clip.ts`, and
+      // the box is mounted by `BuilderBackgroundLayer` rather than from here, so
+      // a layer that renders nothing adds no element), which puts the
+      // containment on exactly the element that needs it — a menu in a video row
+      // opens over the row beneath, as it does with no video at all.
+      //
+      // A ROW CARRYING ONLY A TINT SCREEN IS NOW UNCLIPPED TOO, and it needs no
+      // replacement containment: `.builder-preview-row-overlay-screen` is
+      // `inset: 0` with `border-radius: inherit`, so it is already exactly the
+      // row's shape and has nothing to escape with. Letting the row's CONTENT
+      // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
+      // a tinted row was cut off for the same reason it was in a video one.
+      // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
+      ...(sectionBackgroundLayer || sectionOverlayScreenStyle
+        ? { position: "relative" }
+        : {}),
+      display: "grid",
+      gridTemplateColumns: sectionGridTemplate,
+      ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(s)),
+      "--builder-layout-grid": sectionGridTemplate
+    }) as CSSProperties;
+  const gridStyle = buildGridStyle(section);
+  // Generated from normalized numbers, hex colours and fixed keywords only —
+  // no operator text reaches it — so writing it as a style element is safe.
+  const deviceCss =
+    emailPreview || isOverlayLayoutCollapsed ? "" : buildSectionDeviceCss(section, deviceScopeId, buildGridStyle);
+  /*
+   * THE SAME, PER COLUMN (device styles 2 of 4, task 86bc14pey).
+   *
+   * Computed here rather than inside the column map because all of it has to
+   * reach ONE style element, and that element goes LAST inside the row: the
+   * phone reverse-stack rules count the row's children with `:nth-child`, so
+   * a style element between two columns renumbers every column after it and
+   * shows the sixth one fourth. A per-column element cannot be placed safely
+   * at all; one element carrying every column's rules can.
+   *
+   * Each column gets its own scope id, so the rules land on that column and
+   * not on its neighbours.
+   */
+  const cellDeviceScopeId = (columnKey: string) => `${deviceScopeId}-${columnKey}`;
+  const cellDeviceCss =
+    emailPreview || isOverlayLayoutCollapsed || !section.cellDeviceOverrides
+      ? new Map<string, string>()
+      : new Map(
+          columnKeys
+            .map(
+              (columnKey) =>
+                [
+                  columnKey,
+                  buildCellDeviceCss(section, columnKey, cellDeviceScopeId(columnKey), (resolved) =>
+                    buildBuilderColumnStyle(resolved, columnKey)
+                  )
+                ] as const
+            )
+            .filter(([, css]) => Boolean(css))
+        );
+  const rowAndCellDeviceCss = [deviceCss, ...cellDeviceCss.values()].filter(Boolean).join("\n");
 
   return (
     <section
@@ -1884,7 +1986,17 @@ function BuilderSectionPreview({
           : ""
       }`}
       style={gridStyle}
+      {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
     >
+      {/*
+        NO WRAPPER HERE. The layer mounts its own clip box
+        (`background-clip.ts`) around whatever it actually renders — and it
+        renders NOTHING at phone width and under reduce motion. Wrapping it
+        from out here put an empty box in front of the columns on a phone, and
+        the mobile reverse-stack rules count children: the sixth column of a
+        six-column row fell out of `:nth-child(1..6)` and landed fourth
+        (86bbwmp2y, review round 2).
+      */}
       {sectionBackgroundLayer ? (
         <BuilderBackgroundLayer
           background={sectionBackgroundLayer}
@@ -1897,42 +2009,26 @@ function BuilderSectionPreview({
       ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);
+        /*
+          Per-device module styles (86bc14pfq), one entry per module that has
+          any. Generated from normalized numbers and fixed keywords only — no
+          operator text reaches it — so writing it as a style element below is
+          safe. Email has no media queries worth the name, and an overlay row's
+          modules are positioned decor rather than laid-out content, so both
+          opt out exactly as the row's own device CSS does.
+        */
+        const moduleDeviceCssById = new Map<string, string>(
+          emailPreview || isOverlayLayoutCollapsed
+            ? []
+            : columnModules
+                .map((module) => [module.id, buildModuleDeviceCss(module, `${deviceScopeId}-${module.id}`)] as const)
+                .filter(([, css]) => css !== "")
+        );
         // What share of the row this column occupies, so an image inside it can
         // ask the browser for a file sized to the real slot rather than the page.
         const columnWidthPercent = getSectionColumnPercent(section, columnKey);
         const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
         const columnBackground = section.cellBackgrounds?.[columnKey];
-        /*
-         * Cell spacing, four sides, with both older generations read as
-         * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
-         * the single all-sides `cellPadding` before it. Reading them here as
-         * well as in the normalizer is what lets a page that has not been
-         * re-saved render exactly as it did.
-         *
-         * The cast is because those older keys are off the type now — they
-         * exist only in stored data, which is precisely why this reads them.
-         */
-        const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
-        const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
-        const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
-          record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
-        const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
-        const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
-        const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
-        const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
-        // `--builder-cell-padding` feeds one rule only, and that rule is
-        // `margin-inline` — a full-bleed overlay slot reaching back out
-        // sideways (_builder-react.css). So it takes a HORIZONTAL side;
-        // handing it a vertical one would pull the slot out by the wrong
-        // number the moment the sides differ.
-        const padding = paddingLeft;
-        const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
-        const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
-        const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
-        const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
-        const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
-        const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
-        const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
         const isPageOverlayFlowColumn =
           columnModules.length > 0 &&
           columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
@@ -1970,17 +2066,28 @@ function BuilderSectionPreview({
          * The two collapsed-slot guards mirror the overlay screen's directly
          * above, and they mirror the ROW's `isOverlayLayoutCollapsed` guard for
          * the same reason: an overlay-flow column and a section-scoped overlay
-         * slot are decor mounts with their box thrown away, and the containment
-         * this layer needs (`overflow: hidden`) would clip the very thing they
-         * exist to let overflow.
+         * slot are decor mounts with their box thrown away, and this layer
+         * arrives wrapped in a clip box (`background-clip.ts`) that is itself
+         * full-size, absolutely positioned and on a stacking rung — so
+         * mounting one into a slot like that lays a full-size element over the
+         * decor the slot exists to place.
+         *
+         * NOT because it would be clipped. Since 86bbwmp2y the containment is
+         * the box rather than `overflow: hidden` on this column, so nothing
+         * inside a cell is clipped by a background any more — which is also
+         * what retired the two cases raised on that ticket, a column holding
+         * decor AND ordinary content being clipped along with it, and the clip
+         * being applied at phone width and under reduce-motion where the layer
+         * mounts no footage at all.
          *
          * There is no parallax twin here. An image background parallaxes by
-         * mounting this same layer, but the driver measures `parentElement` as
-         * the surface and translates against the SCROLL — a row-height effect.
+         * mounting this same layer, but the driver measures its surface with
+         * `builderBackgroundLayerSurface()` — one step up past the clip box —
+         * and translates against the SCROLL, which is a row-height effect.
          * Cells are not offered it (no `allowParallax` on the cell panel), so
          * mounting a layer for a plain cell image would give every one of them
-         * the containment above and start clipping overhanging decor for no
-         * gain. Video only, which is exactly what the panel can produce.
+         * a clip box for no gain. Video only, which is exactly what the panel
+         * can produce.
          */
         const columnVideoBackground =
           !isPageOverlayFlowColumn &&
@@ -1989,88 +2096,7 @@ function BuilderSectionPreview({
           Boolean(columnBackground?.videoUrl)
             ? columnBackground
             : null;
-        /*
-         * The cell's own numbers, as one answer each, used BOTH by the inline
-         * properties below and by the variables the narrow-screen rules read.
-         *
-         * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
-         * because the generated stylesheet compacts every cell there with
-         * `padding: 12px !important` — and an `!important` in a stylesheet
-         * outranks an ordinary inline style, so the setting was never in the
-         * argument. Publishing the values lets those rules honour them
-         * instead of replacing them (see _builder-react-overrides.css).
-         *
-         * Deliberately NOT reusing `--builder-cell-padding`: that one carries
-         * the LEFT side alone, for a `margin-inline` rule that reaches an
-         * overlay slot back out sideways. It would be the wrong number here.
-         */
-        const effectiveCellPadding =
-          isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? "0px"
-            : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
-        const effectiveCellRadius =
-          isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
-
-        // Custom properties are not in the CSSProperties type, so they are
-        // built once and cast rather than sprinkling casts through the block.
-        const cellVariables = {
-          "--builder-cell-padding-box": effectiveCellPadding,
-          "--builder-cell-radius": effectiveCellRadius,
-        } as CSSProperties;
-
-        const columnStyle: CSSProperties = {
-          // The cell's own fill, honoured on menu cells too — see the row
-          // background above. `columnBackground` is falsy until the operator
-          // sets one, so an untouched menu cell is unchanged.
-          ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? {}
-            : {
-                marginTop: `${marginTop}px`,
-                marginBottom: `${marginBottom}px`,
-                marginLeft: `${marginLeft}px`,
-                marginRight: `${marginRight}px`
-              }),
-          ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
-          ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
-          ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
-            ? { "--builder-cell-padding": `${padding}px` }
-            : {}),
-          ...cellVariables,
-          // Cell padding stays off for menu cells, and this one is deliberate:
-          // it used to default to 18px, so honouring it would have pushed
-          // every live header down without anybody asking. The menu module
-          // carries its own four padding sides now (Placement axis), which is
-          // the control that should move a menu inside its cell.
-          padding: effectiveCellPadding,
-          border:
-            isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
-              ? undefined
-              : `${borderWidth}px solid ${borderColor}`,
-          borderRadius: effectiveCellRadius,
-          // {} at the left/top default, so only a cell he aligned moves.
-          ...(isPageOverlayFlowColumn || isSectionOverlayColumn
-            ? {}
-            : getCellContentAlignmentStyle(
-                section.cellHAlign?.[columnKey] ?? "left",
-                section.cellVAlign?.[columnKey] ?? "top"
-              )),
-          position: "relative",
-          /*
-           * Containment for the video layer, and the reason this ticket is
-           * about cells rather than rows: the layer is scaled to cover, so
-           * without `overflow: hidden` a cell's footage spills sideways over
-           * the column beside it — the one thing a per-cell background must
-           * never do. The row clips its own layer for the same reason.
-           *
-           * Applied ONLY when a video layer is actually mounted. Clipping
-           * every cell unconditionally would silently start cutting off the
-           * floating images and overhanging decor that deliberately reach out
-           * of their column, which is why the collapsed-slot guards sit on
-           * `columnVideoBackground` itself.
-           */
-          ...(columnVideoBackground ? { overflow: "hidden" } : {})
-        };
+        const columnStyle = buildBuilderColumnStyle(section, columnKey);
 
         return (
           <div
@@ -2083,6 +2109,9 @@ function BuilderSectionPreview({
               cellOverlayScreenStyle || columnVideoBackground ? " builder-preview-column-layered" : ""
             }`}
             style={columnStyle}
+            {...(cellDeviceCss.has(columnKey)
+              ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: cellDeviceScopeId(columnKey) }
+              : {})}
           >
             {/*
               The video sits UNDER the tint screen and under the modules. Order
@@ -2092,8 +2121,15 @@ function BuilderSectionPreview({
 
               `builder-preview-column-layered` is on the column above whenever
               EITHER is mounted, which is what lifts the modules to the content
-              rung; this element stays at 0 with the screen, from the shared
-              `.builder-preview-video-background` rule.
+              rung; the clip box the layer mounts around itself stays at 0 with
+              the screen, from `builderBackgroundClipStyle()` inline. The shared
+              `.builder-preview-video-background` rule still sizes and covers
+              the <video> INSIDE that box — it is the box that carries the rung
+              now, because the box is what the stylesheet's siblings see.
+
+              Nothing is rendered here at all on a phone or under reduce
+              motion: the layer returns null, so the box does not go up either
+              and the column's children are exactly its modules.
             */}
             {columnVideoBackground ? (
               <BuilderBackgroundLayer background={columnVideoBackground} surface="cell" />
@@ -2120,6 +2156,7 @@ function BuilderSectionPreview({
               <div className="builder-preview-cell-overlay-screen" style={cellOverlayScreenStyle} />
             ) : null}
             {columnModules.map((module) => {
+              const moduleDeviceCss = moduleDeviceCssById.get(module.id) ?? "";
               const isPageOverlayFlowModule =
                 isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module);
               const isSectionOverlayModule = isSectionScopedOverlayDecor(module);
@@ -2172,6 +2209,9 @@ function BuilderSectionPreview({
                       ? `${module.settings.mobileFontSize}px`
                       : undefined
                   } as CSSProperties}
+                  {...(moduleDeviceCss
+                    ? { [BUILDER_MODULE_DEVICE_SCOPE_ATTRIBUTE]: `${deviceScopeId}-${module.id}` }
+                    : {})}
                 >
                   <BuilderModulePreview
                     columnWidthPercent={columnWidthPercent}
@@ -2188,11 +2228,179 @@ function BuilderSectionPreview({
                 </div>
               );
             })}
+            {/*
+              LAST child of the COLUMN, never of the row: a style element among
+              the row's children would renumber the columns the phone
+              reverse-stack rules count with `nth-child` (86bbwmp2y). Inside the
+              column it is still a child, but the only `nth-child` rule that
+              counts in here asks for a second `.builder-preview-module`, which
+              a style element is not. A `<style>` is `display: none`, so it
+              takes no track in the column's grid either.
+            */}
+            {moduleDeviceCssById.size ? (
+              <style dangerouslySetInnerHTML={{ __html: [...moduleDeviceCssById.values()].join("\n") }} />
+            ) : null}
           </div>
         );
       })}
+      {/*
+        LAST child, never first: the phone reverse-stack rules count the row's
+        children from the front (nth-child), and a style element placed ahead
+        of the columns would renumber them. And inside the row, not beside it:
+        `.full-width + .full-width` joins adjacent rows.
+      */}
+      {rowAndCellDeviceCss ? <style dangerouslySetInnerHTML={{ __html: rowAndCellDeviceCss }} /> : null}
     </section>
   );
+}
+
+/**
+ * ONE COLUMN'S inline style, as a function of the row.
+ *
+ * A function rather than a block inside the render, and for exactly the
+ * reason `buildGridStyle` is one: the tablet and phone rules for this cell
+ * are computed by running THIS code on the row as each device sees its
+ * cells (`builder-device-css.ts`), so a device rule can never disagree with
+ * how desktop computes the same value.
+ *
+ * It re-derives the three column facts the caller also computes — menu-only,
+ * overlay-flow, section-scoped overlay — rather than taking them as
+ * arguments. They are read off the row's modules, which no device changes,
+ * and a style builder the CSS generator can call with nothing but a row is
+ * what keeps that generator from having to learn what a column is.
+ */
+function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: string): CSSProperties {
+  const columnModules = section.modules.filter((module) => module.column === columnKey);
+  const isNavigationColumn = columnModules.length > 0 && columnModules.every((module) => module.type === "navigation");
+  const columnBackground = section.cellBackgrounds?.[columnKey];
+  const isPageOverlayFlowColumn =
+    columnModules.length > 0 &&
+    columnModules.every((module) => isOverlayImageModule(module) && !isSectionScopedOverlayDecor(module));
+  const isSectionOverlayColumn = columnHasOnlySectionScopedOverlayModules(columnModules);
+  /*
+   * Cell spacing, four sides, with both older generations read as
+   * fallbacks: the vertical/horizontal pair that shipped 2026-08-11 and
+   * the single all-sides `cellPadding` before it. Reading them here as
+   * well as in the normalizer is what lets a page that has not been
+   * re-saved render exactly as it did.
+   *
+   * The cast is because those older keys are off the type now — they
+   * exist only in stored data, which is precisely why this reads them.
+   */
+  const legacyCell = section as unknown as Record<string, Record<string, string> | undefined>;
+  const legacyPadding = section.cellPadding?.[columnKey] ?? "0";
+  const cellSide = (record: Record<string, string> | undefined, pairKey: string, fallback: string) =>
+    record?.[columnKey] ?? legacyCell[pairKey]?.[columnKey] ?? fallback;
+  const paddingTop = cellSide(section.cellPaddingTop, "cellVerticalPadding", legacyPadding);
+  const paddingBottom = cellSide(section.cellPaddingBottom, "cellVerticalPadding", legacyPadding);
+  const paddingLeft = cellSide(section.cellPaddingLeft, "cellHorizontalPadding", legacyPadding);
+  const paddingRight = cellSide(section.cellPaddingRight, "cellHorizontalPadding", legacyPadding);
+  // `--builder-cell-padding` feeds one rule only, and that rule is
+  // `margin-inline` — a full-bleed overlay slot reaching back out
+  // sideways (_builder-react.css). So it takes a HORIZONTAL side;
+  // handing it a vertical one would pull the slot out by the wrong
+  // number the moment the sides differ.
+  const padding = paddingLeft;
+  const marginTop = cellSide(section.cellMarginTop, "cellVerticalMargin", "0");
+  const marginBottom = cellSide(section.cellMarginBottom, "cellVerticalMargin", "0");
+  const marginLeft = section.cellMarginLeft?.[columnKey] ?? "0";
+  const marginRight = section.cellMarginRight?.[columnKey] ?? "0";
+  const borderWidth = section.cellBorderWidth?.[columnKey] ?? "0";
+  const borderColor = section.cellBorderColor?.[columnKey] ?? "transparent";
+  const borderRadius = section.cellBorderRadius?.[columnKey] ?? "0";
+
+  /*
+   * The cell's own numbers, as one answer each, used BOTH by the inline
+   * properties below and by the variables the narrow-screen rules read.
+   *
+   * Operator, 2026-08-12: a cell set to 4 rendered 12 below 560px,
+   * because the generated stylesheet compacts every cell there with
+   * `padding: 12px !important` — and an `!important` in a stylesheet
+   * outranks an ordinary inline style, so the setting was never in the
+   * argument. Publishing the values lets those rules honour them
+   * instead of replacing them (see _builder-react-overrides.css).
+   *
+   * Deliberately NOT reusing `--builder-cell-padding`: that one carries
+   * the LEFT side alone, for a `margin-inline` rule that reaches an
+   * overlay slot back out sideways. It would be the wrong number here.
+   */
+  const effectiveCellPadding =
+    isNavigationColumn || isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? "0px"
+      : `${paddingTop}px ${paddingRight}px ${paddingBottom}px ${paddingLeft}px`;
+  const effectiveCellRadius =
+    isPageOverlayFlowColumn || isSectionOverlayColumn ? "0px" : `${borderRadius}px`;
+
+  // Custom properties are not in the CSSProperties type, so they are
+  // built once and cast rather than sprinkling casts through the block.
+  const cellVariables = {
+    "--builder-cell-padding-box": effectiveCellPadding,
+    "--builder-cell-radius": effectiveCellRadius,
+  } as CSSProperties;
+
+  const columnStyle: CSSProperties = {
+    // The cell's own fill, honoured on menu cells too — see the row
+    // background above. `columnBackground` is falsy until the operator
+    // sets one, so an untouched menu cell is unchanged.
+    ...(!columnBackground ? {} : getBuilderBackgroundStyle(columnBackground)),
+    ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? {}
+      : {
+          marginTop: `${marginTop}px`,
+          marginBottom: `${marginBottom}px`,
+          marginLeft: `${marginLeft}px`,
+          marginRight: `${marginRight}px`
+        }),
+    ...getOverlayFlowCollapsedColumnStyle(isPageOverlayFlowColumn),
+    ...getSectionScopedOverlayColumnStyle(isSectionOverlayColumn),
+    ...(Number(padding) > 0 && !isPageOverlayFlowColumn && !isSectionOverlayColumn
+      ? { "--builder-cell-padding": `${padding}px` }
+      : {}),
+    ...cellVariables,
+    // Cell padding stays off for menu cells, and this one is deliberate:
+    // it used to default to 18px, so honouring it would have pushed
+    // every live header down without anybody asking. The menu module
+    // carries its own four padding sides now (Placement axis), which is
+    // the control that should move a menu inside its cell.
+    padding: effectiveCellPadding,
+    border:
+      isPageOverlayFlowColumn || isSectionOverlayColumn || Number(borderWidth) <= 0
+        ? undefined
+        : `${borderWidth}px solid ${borderColor}`,
+    borderRadius: effectiveCellRadius,
+    // {} at the left/top default, so only a cell he aligned moves.
+    ...(isPageOverlayFlowColumn || isSectionOverlayColumn
+      ? {}
+      : getCellContentAlignmentStyle(
+          section.cellHAlign?.[columnKey] ?? "left",
+          section.cellVAlign?.[columnKey] ?? "top"
+        )),
+    position: "relative"
+    /*
+     * NO `overflow: hidden` HERE — this is where 86bbwmp2y lived.
+     *
+     * The footage still has to be contained: the layer is scaled to
+     * cover, so left loose it spills sideways over the column beside it,
+     * which is the one thing a per-cell background must never do. But
+     * clipping the CELL clips everything in it, and a navigation
+     * module's dropdown is supposed to hang out of its column — with a
+     * video behind it the menu was cut off at the column's edge and read
+     * to a visitor as one that would not open.
+     *
+     * So the layer wraps ITSELF in a clip box (`background-clip.ts`) at
+     * exactly these bounds. The footage is contained; the column stays
+     * `overflow: visible`, which is what it is on every cell that has no
+     * video.
+     *
+     * The box is mounted by `BuilderBackgroundLayer` rather than from
+     * here, and that is load-bearing rather than tidiness: the layer
+     * renders nothing at phone width and under reduce motion, and a box
+     * around nothing is still an extra child — in the row's case it
+     * reordered the columns on a phone (86bbwmp2y, review round 2).
+     */
+  };
+
+  return columnStyle;
 }
 
 function BuilderModulePreview({
@@ -2573,6 +2781,9 @@ function BuilderModulePreview({
       />
     );
   }
+  if (module.type === "blog-latest-posts") {
+    return <BlogLatestPostsPreview settings={module.settings} liveSite={liveSite} />;
+  }
   if (module.type === "blog-related-posts") {
     // liveSite decides whether an empty result explains itself or simply is
     // not there. A visitor gets nothing; the person building the page gets a
@@ -2824,13 +3035,6 @@ function BlogPostListPreview({
 
   // Card template — migrate from API (supports both old elements[] and new rows[] format)
   const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
-  const tplRows    = tpl.rows;
-  const cardLayout = tpl.cardLayout;
-  const cardStyle  = tpl.cardStyle;
-  const cardRadius = tpl.cardBorderRadius;
-  const accent     = tpl.accentColor;
-  const tplAspect  = tpl.imageAspectRatio;
-  const readMoreLabel = tpl.readMoreLabel;
   const cardGap = parseInt(settings.cardGap || "24", 10) || 24;
 
   // Filter bar visibility
@@ -3177,8 +3381,6 @@ function BlogPostListPreview({
     return <div style={{ padding: "2rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
   }
 
-  const cardBorder: CSSProperties = cardFrameStyle(tpl);
-
   const gridStyle: CSSProperties =
     layout === "list"
       ? { display: "flex", flexDirection: "column", gap: `${cardGap}px` }
@@ -3309,153 +3511,16 @@ function BlogPostListPreview({
         </div>
       ) : (
         <div style={gridStyle}>
-          {visiblePosts.map((post) => {
-            const sep = postPageUrl.includes("?") ? "&" : "?";
-            const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
-            const postCats = categories.filter((c) => post.categoryIds?.includes(c.id));
-            const dateStr = post.published_at
-              ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
-              : "";
-            const imageUrl = post.featuredImageUrl || post.featured_image_url;
-            const isSideBySide = cardLayout === "side-by-side" || layout === "list";
-            const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
-            /*
-             * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
-             *
-             * A slot being present in the template says nothing about whether it
-             * draws anything: `categories` renders null on a post with no
-             * categories, `excerpt` on a post with no excerpt, and so on. Both
-             * production templates open with `["categories"]`, and the Delray
-             * posts have none — so the template order and the rendered order are
-             * different lists, and reading the wrong one caused both bugs below.
-             *
-             * PR #522 made the image's full-bleed pull-up conditional on being
-             * the first slot IN THE TEMPLATE, to stop it sliding under whatever
-             * sat above it. On those templates that test is false while the
-             * image is visibly at the top, so the card's 1.125rem top padding
-             * showed as a gap (task 86bbtvnr5). The fix is not to go back to
-             * pulling up unconditionally — that reintroduces the sliding — but to
-             * ask the question about CONTENT rather than about the template.
-             */
-            function slotRenders(id: CardElementId | null): boolean {
-              switch (id) {
-                case "categories":     return postCats.length > 0;
-                case "headline":       return true;
-                case "featured_image": return Boolean(imageUrl) && !isSideBySide;
-                case "excerpt":        return Boolean(post.excerpt);
-                case "author":         return Boolean(post.author);
-                case "date":           return Boolean(dateStr);
-                case "tags":           return Boolean(post.tags?.length);
-                case "read_more":      return true;
-                default:               return false;
-              }
-            }
-            const firstRenderedSlot =
-              tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
-
-            function renderEl(id: CardElementId): React.ReactNode {
-              switch (id) {
-                case "categories":
-                  return postCats.length > 0 ? (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {postCats.map((c) => (
-                        <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>{c.name}</span>
-                      ))}
-                    </div>
-                  ) : null;
-                case "headline":
-                  // The headline always opens the post, at the same address
-                  // "Read More" does. It used to be plain text while the image
-                  // (opt-in) and "Read More" both linked; a headline that does
-                  // nothing when clicked reads as a broken site (task 86bbzy3kb).
-                  // Only a card with no usable address keeps plain text — a dead
-                  // "#" anchor would be the same defect with a pointer cursor.
-                  return (
-                    <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
-                      display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {href && href !== "#"
-                        ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{post.title}</a>
-                        : post.title}
-                    </h3>
-                  );
-                case "featured_image": {
-                  if (isSideBySide || !imageUrl) return null;
-                  const { frame, img } = featuredImageStyles(tpl, {
-                    cardPaddingX: "1.25rem",
-                    cardPaddingTop: "1.125rem",
-                    topOfCard: firstRenderedSlot === "featured_image",
-                  });
-                  return withPostLink(
-                    <div style={frame}>
-                      <img alt={post.title} src={imageUrl} style={img} />
-                    </div>,
-                    tpl,
-                    href
-                  );
-                }
-                case "excerpt":
-                  return post.excerpt ? (
-                    <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
-                  ) : null;
-                case "author":
-                  return post.author ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
-                case "date":
-                  return dateStr ? <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
-                case "tags":
-                  return post.tags?.length ? (
-                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      {post.tags.map((tag) => (
-                        <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
-                      ))}
-                    </div>
-                  ) : null;
-                case "read_more":
-                  return <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
-                default:
-                  return null;
-              }
-            }
-
-            return (
-              <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
-                {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
-                  // The strip IS the flex item — it carries flexShrink, width,
-                  // border and shadow. So when the image links, the anchor has to
-                  // BE the strip; an anchor wrapped around it would become the
-                  // flex item instead and none of that styling would apply.
-                  createElement(
-                    tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
-                    tpl.imageLinkToPost && href && href !== "#"
-                      ? { href, style: sideStripStyle(tpl) }
-                      : { style: sideStripStyle(tpl) },
-                    <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
-                  )
-                ) : null}
-                {/* minWidth 0 is load-bearing: a flex item defaults to
-                    min-width:auto, so the text column refuses to shrink below its
-                    content and the card overflows sideways once the image strip is
-                    wide. Reachable now that the strip's width is an operator control. */}
-                <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-                  {tplRows.map((row) => {
-                    // Emptiness is measured against the POST, not the template.
-                    // The old test asked only whether the row HELD a slot, so a
-                    // categories row on a post with no categories still emitted a
-                    // flex child — invisible, but carrying the column's 0.625rem
-                    // gap, which is the other half of the gap above the image.
-                    const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
-                    if (!hasContent) return null;
-                    return (
-                      <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
-                        {row.slots.slice(0, row.cols).map((slot, si) => slot ? (
-                          <div key={si}>{renderEl(slot)}</div>
-                        ) : <div key={si} />)}
-                      </div>
-                    );
-                  })}
-                </div>
-              </article>
-            );
-          })}
+          {visiblePosts.map((post) => (
+            <BlogFeedCard
+              key={post.id}
+              post={post}
+              categories={categories}
+              tpl={tpl}
+              postPageUrl={postPageUrl}
+              listLayout={layout === "list" ? "list" : "grid"}
+            />
+          ))}
         </div>
       )}
 
@@ -3498,6 +3563,300 @@ function BlogPostListPreview({
           {partialArchiveNote}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/*
+ * ONE BLOG POST CARD, drawn from the site's shared card template.
+ *
+ * Lifted out of BlogPostListPreview so Latest Blog Posts draws exactly the same
+ * card rather than a second copy of it (task 86bc0neew) — Related Posts is what
+ * a second copy looks like: hard-coded cards that ignore the Card Manager.
+ * Everything a card needs comes in as props; the template is already migrated.
+ */
+function BlogFeedCard({
+  post,
+  categories,
+  tpl,
+  postPageUrl,
+  listLayout
+}: {
+  post: BlogPostRecord;
+  categories: BlogCategory[];
+  tpl: ReturnType<typeof migrateTemplate>;
+  postPageUrl: string;
+  listLayout: "grid" | "list";
+}) {
+  const tplRows = tpl.rows;
+  const cardRadius = tpl.cardBorderRadius;
+  const accent = tpl.accentColor;
+  const readMoreLabel = tpl.readMoreLabel;
+  const cardBorder: CSSProperties = cardFrameStyle(tpl);
+  const sep = postPageUrl.includes("?") ? "&" : "?";
+  const href = postPageUrl ? `${postPageUrl}${sep}post=${encodeURIComponent(post.slug)}` : "#";
+  const postCats = categories.filter((c) => post.categoryIds?.includes(c.id));
+  const dateStr = post.published_at
+    ? new Date(post.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    : "";
+  const imageUrl = post.featuredImageUrl || post.featured_image_url;
+  const isSideBySide = tpl.cardLayout === "side-by-side" || listLayout === "list";
+  const hasFeaturedImageInRows = tplRows.some((r) => r.slots.includes("featured_image"));
+  /*
+   * WHICH SLOTS ACTUALLY RENDER SOMETHING FOR THIS POST.
+   *
+   * A slot being present in the template says nothing about whether it
+   * draws anything: `categories` renders null on a post with no
+   * categories, `excerpt` on a post with no excerpt, and so on. Both
+   * production templates open with `["categories"]`, and the Delray
+   * posts have none — so the template order and the rendered order are
+   * different lists, and reading the wrong one caused both bugs below.
+   *
+   * PR #522 made the image's full-bleed pull-up conditional on being
+   * the first slot IN THE TEMPLATE, to stop it sliding under whatever
+   * sat above it. On those templates that test is false while the
+   * image is visibly at the top, so the card's 1.125rem top padding
+   * showed as a gap (task 86bbtvnr5). The fix is not to go back to
+   * pulling up unconditionally — that reintroduces the sliding — but to
+   * ask the question about CONTENT rather than about the template.
+   */
+  function slotRenders(id: CardElementId | null): boolean {
+    switch (id) {
+      case "categories":     return postCats.length > 0;
+      case "headline":       return true;
+      case "featured_image": return Boolean(imageUrl) && !isSideBySide;
+      case "excerpt":        return Boolean(post.excerpt);
+      case "author":         return Boolean(post.author);
+      case "date":           return Boolean(dateStr);
+      case "tags":           return Boolean(post.tags?.length);
+      case "read_more":      return true;
+      default:               return false;
+    }
+  }
+  const firstRenderedSlot =
+    tplRows.flatMap((r) => r.slots.slice(0, r.cols)).find(slotRenders) ?? null;
+
+  function renderEl(id: CardElementId): React.ReactNode {
+    switch (id) {
+      case "categories":
+        return postCats.length > 0 ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {postCats.map((c) => (
+              <span key={c.id} style={{ fontSize: "0.6875rem", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: accent }}>{c.name}</span>
+            ))}
+          </div>
+        ) : null;
+      case "headline":
+        // The headline always opens the post, at the same address
+        // "Read More" does. It used to be plain text while the image
+        // (opt-in) and "Read More" both linked; a headline that does
+        // nothing when clicked reads as a broken site (task 86bbzy3kb).
+        // Only a card with no usable address keeps plain text — a dead
+        // "#" anchor would be the same defect with a pointer cursor.
+        return (
+          <h3 style={{ margin: 0, fontSize: "1.0625rem", lineHeight: 1.3, color: "#1a202c", fontWeight: 700,
+            display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {href && href !== "#"
+              ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{post.title}</a>
+              : post.title}
+          </h3>
+        );
+      case "featured_image": {
+        if (isSideBySide || !imageUrl) return null;
+        const { frame, img } = featuredImageStyles(tpl, {
+          cardPaddingX: "1.25rem",
+          cardPaddingTop: "1.125rem",
+          topOfCard: firstRenderedSlot === "featured_image",
+        });
+        return withPostLink(
+          <div style={frame}>
+            <img alt={post.title} src={imageUrl} style={img} />
+          </div>,
+          tpl,
+          href
+        );
+      }
+      case "excerpt":
+        return post.excerpt ? (
+          <p style={{ margin: 0, fontSize: "0.875rem", color: "#4a5568", lineHeight: 1.5 }}>{post.excerpt}</p>
+        ) : null;
+      case "author":
+        return post.author ? <span style={{ fontSize: "0.8125rem", color: "#718096" }}>{post.author}</span> : null;
+      case "date":
+        return dateStr ? <span style={{ fontSize: "0.8125rem", color: "#a0aec0" }}>{dateStr}</span> : null;
+      case "tags":
+        return post.tags?.length ? (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {post.tags.map((tag) => (
+              <span key={tag} style={{ fontSize: "0.65rem", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "1px 6px", color: "#64748b" }}>{tag}</span>
+            ))}
+          </div>
+        ) : null;
+      case "read_more":
+        return <a href={href} style={{ color: accent, fontSize: "0.875rem", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>{readMoreLabel} →</a>;
+      default:
+        return null;
+    }
+  }
+
+  return (
+    <article key={post.id} style={{ ...cardBorder, borderRadius: cardRadius, overflow: "hidden", background: "#fff", display: "flex", flexDirection: isSideBySide ? sideBySideDirection(tpl) : "column" }}>
+      {isSideBySide && imageUrl && hasFeaturedImageInRows ? (
+        // The strip IS the flex item — it carries flexShrink, width,
+        // border and shadow. So when the image links, the anchor has to
+        // BE the strip; an anchor wrapped around it would become the
+        // flex item instead and none of that styling would apply.
+        createElement(
+          tpl.imageLinkToPost && href && href !== "#" ? "a" : "div",
+          tpl.imageLinkToPost && href && href !== "#"
+            ? { href, style: sideStripStyle(tpl) }
+            : { style: sideStripStyle(tpl) },
+          <img alt={post.title} src={imageUrl} style={{ width: "100%", height: "100%", objectFit: tpl.imageCrop === "contain" ? "contain" : "cover", display: "block" }} />
+        )
+      ) : null}
+      {/* minWidth 0 is load-bearing: a flex item defaults to
+          min-width:auto, so the text column refuses to shrink below its
+          content and the card overflows sideways once the image strip is
+          wide. Reachable now that the strip's width is an operator control. */}
+      <div style={{ padding: "1.125rem 1.25rem", flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+        {tplRows.map((row) => {
+          // Emptiness is measured against the POST, not the template.
+          // The old test asked only whether the row HELD a slot, so a
+          // categories row on a post with no categories still emitted a
+          // flex child — invisible, but carrying the column's 0.625rem
+          // gap, which is the other half of the gap above the image.
+          const hasContent = row.slots.slice(0, row.cols).some(slotRenders);
+          if (!hasContent) return null;
+          return (
+            <div key={row.id} style={row.cols > 1 ? { display: "grid", gridTemplateColumns: `repeat(${row.cols}, 1fr)`, gap: "0.5rem", alignItems: "center" } : {}}>
+              {row.slots.slice(0, row.cols).map((slot, si) => slot ? (
+                <div key={si}>{renderEl(slot)}</div>
+              ) : <div key={si} />)}
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+/*
+ * LATEST BLOG POSTS (task 86bc0neew) — a row of the newest published posts,
+ * optionally narrowed to chosen tags or categories. Which posts, and the empty
+ * sentence, live in lib/builder-client/blog-latest-posts.ts; this reads the
+ * data and draws BlogFeedCard, so the cards match Post Feed exactly.
+ */
+function BlogLatestPostsPreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  liveSite?: boolean;
+}) {
+  const s = resolveLatestPostsSettings(settings);
+  const [posts, setPosts] = useState<BlogPostRecord[] | null>(null);
+  const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [cardTemplate, setCardTemplate] = useState<CardTemplate | null>(null);
+  // The post page this site really has (Delray has /blog-post, not the
+  // platform default) unless the module names one.
+  const probedPostPageUrl = usePostPageUrl({});
+  const postPageUrl = s.postSlug ? `/${s.postSlug}` : probedPostPageUrl;
+
+  /*
+   * Latest mode needs only the first `count` posts, and the server already
+   * returns newest first, so it is one small read. A tag or category filter
+   * is applied here in the browser, so it has to see the whole archive — a
+   * post the first page missed is a post the filter could never find.
+   */
+  const needsArchive = !s.latest;
+  const readLimit = s.count;
+  useEffect(() => {
+    let cancelled = false;
+    const headers = getCrmProjectHeaders();
+    const readPosts: Promise<BlogPostRecord[]> = needsArchive
+      ? readAllPages<BlogPostRecord>(async (page, limit) => {
+          const r = await fetch(`/api/blog/posts?status=published&limit=${limit}&page=${page}`, {
+            credentials: "include",
+            headers
+          });
+          if (!r.ok) throw new Error(`blog posts page ${page}: ${r.status}`);
+          const body = await r.json();
+          return Array.isArray(body?.posts) ? (body.posts as BlogPostRecord[]) : [];
+        }, { pageSize: BLOG_FEED_PAGE_SIZE }).then((result) => result.items)
+      : fetch(`/api/blog/posts?status=published&limit=${readLimit}`, { credentials: "include", headers })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((body) => (Array.isArray(body?.posts) ? (body.posts as BlogPostRecord[]) : []));
+    Promise.all([
+      readPosts.catch(() => [] as BlogPostRecord[]),
+      fetch("/api/blog/categories", { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch("/api/blog/card-template", { credentials: "include", headers })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)
+    ]).then(([fetchedPosts, cd, td]) => {
+      if (cancelled) return;
+      setPosts(fetchedPosts);
+      setCategories(Array.isArray(cd?.categories) ? (cd.categories as BlogCategory[]) : []);
+      const tplData = td?.template ?? td;
+      if (tplData && typeof tplData === "object") setCardTemplate(migrateTemplate(tplData));
+    });
+    return () => { cancelled = true; };
+  }, [needsArchive, readLimit]);
+
+  if (posts === null) {
+    return liveSite ? null : <div style={{ padding: "1.5rem", textAlign: "center", color: "#888" }}>Loading posts…</div>;
+  }
+
+  const shown = selectLatestPosts(posts, s);
+  const heading = s.title
+    ? createElement(
+        s.headingLevel,
+        {
+          className: "builder-blog-latest-posts-title",
+          // No colour chosen leaves `color` unset, so the site theme's heading
+          // colour still applies — the look every row had before this setting.
+          style: { margin: "0 0 1rem", ...(s.headingColor ? { color: s.headingColor } : {}) }
+        },
+        s.title
+      )
+    : null;
+
+  if (shown.length === 0) {
+    // A visitor gets no module at all rather than a heading over empty space.
+    if (liveSite) return null;
+    const categoryNames = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+    return (
+      <div className="builder-blog-latest-posts">
+        {heading}
+        <BuilderOnlyNote liveSite={liveSite} className="builder-blog-latest-posts-empty">
+          {latestPostsEmptyReason(s, { publishedCount: posts.length, categoryNames })}
+        </BuilderOnlyNote>
+      </div>
+    );
+  }
+
+  const tpl = cardTemplate ? migrateTemplate(cardTemplate) : DEFAULT_CARD_TEMPLATE;
+  const gridStyle = {
+    "--latest-posts-columns": String(s.columns),
+    gap: `${s.gap}px`
+  } as CSSProperties;
+
+  return (
+    <div className="builder-blog-latest-posts">
+      {heading}
+      <div className="builder-blog-latest-posts-grid" style={gridStyle}>
+        {shown.map((post) => (
+          <BlogFeedCard
+            key={post.id}
+            post={post}
+            categories={categories}
+            tpl={tpl}
+            postPageUrl={postPageUrl}
+            listLayout="grid"
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -5613,7 +5972,16 @@ export function BlogCardManagerPreview() {
     return <div className="builder-blog-card-manager-module"><div className="builder-blog-post-manager-stub">Loading card template…</div></div>;
   }
 
-  const sel: CSSProperties = { padding: "4px 8px", border: "1px solid #cbd5e0", borderRadius: 5, fontSize: "0.8rem", background: "#fff", width: "100%" };
+  /*
+   * W0 — the field styling is a CLASS now, not an inline object.
+   *
+   * This was `const sel: CSSProperties = { ..., width: "100%" }`, spread into
+   * every control, and three call sites overrode the width with a hard number
+   * (110px, 64px, 56px). An inline width beats every stylesheet rule there is,
+   * so those controls could never take a shared track — which is precisely
+   * "never a width on an individual field" (W0), and is why the groups below
+   * rendered as loose rows rather than columns. Panel sweep 14/15, 86bbjt1be.
+   */
   // The image-position and image-width controls only do anything in
   // Side-by-side. They are disabled rather than hidden, so the operator can see
   // the setting exists and why it is not available (the title says which layout).
@@ -5634,10 +6002,20 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Content</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               <span className="bcm-label">Read More</span>
-              <input type="text" style={{ ...sel, width: 110 }} value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
+              <input type="text" className="bcm-input" value={tpl.readMoreLabel} onChange={(e) => setField("readMoreLabel", e.target.value)} placeholder="Read More" />
             </div>
             <label className="bcm-control">
               <span className="bcm-label">Link Image</span>
@@ -5654,7 +6032,17 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Structure</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               <span className="bcm-label">Layout</span>
               <div className="bcm-btn-group">
@@ -5667,7 +6055,7 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Position</span>
-              <select style={sel} value={tpl.imageSide} onChange={(e) => setField("imageSide", e.target.value)} disabled={!isSideBySide}
+              <select className="bcm-input" value={tpl.imageSide} onChange={(e) => setField("imageSide", e.target.value)} disabled={!isSideBySide}
                 title={isSideBySide ? undefined : "Side-by-side layout only"}>
                 <option value="left">Left of text</option>
                 <option value="right">Right of text</option>
@@ -5677,7 +6065,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Width</span>
               <div className="bcm-num-row">
-                <input type="number" min={80} max={600} step={10} style={{ ...sel, width: 64 }}
+                <input type="number" min={80} max={600} step={10} className="bcm-input"
                   value={tpl.imageSideWidth} disabled={!isSideBySide || tpl.imageSide === "top"}
                   title={isSideBySide && tpl.imageSide !== "top" ? undefined : "Side-by-side layout, image left or right"}
                   onChange={(e) => setField("imageSideWidth", parseInt(e.target.value, 10) || 220)} />
@@ -5686,14 +6074,14 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Edge</span>
-              <select style={sel} value={tpl.imageBleed} onChange={(e) => setField("imageBleed", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageBleed} onChange={(e) => setField("imageBleed", e.target.value)}>
                 <option value="full">Full bleed</option>
                 <option value="inset">Inset</option>
               </select>
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Aspect</span>
-              <select style={sel} value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}
+              <select className="bcm-input" value={tpl.imageAspectRatio} onChange={(e) => setField("imageAspectRatio", e.target.value)}
                 disabled={tpl.imageHeight > 0} title={tpl.imageHeight > 0 ? "A fixed height is set, which overrides the aspect ratio" : undefined}>
                 <option value="16:9">16:9</option>
                 <option value="4:3">4:3</option>
@@ -5704,7 +6092,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Fixed Height</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={800} step={10} style={{ ...sel, width: 64 }}
+                <input type="number" min={0} max={800} step={10} className="bcm-input"
                   value={tpl.imageHeight} title="0 keeps the aspect ratio above"
                   onChange={(e) => setField("imageHeight", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">{tpl.imageHeight > 0 ? "px" : "auto"}</span>
@@ -5712,7 +6100,7 @@ export function BlogCardManagerPreview() {
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Crop</span>
-              <select style={sel} value={tpl.imageCrop} onChange={(e) => setField("imageCrop", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageCrop} onChange={(e) => setField("imageCrop", e.target.value)}>
                 <option value="cover">Fill frame</option>
                 <option value="contain">Fit whole photo</option>
               </select>
@@ -5722,7 +6110,17 @@ export function BlogCardManagerPreview() {
 
         <fieldset className="bcm-group">
           <legend className="bcm-group-title">Frame</legend>
-          <div className="bcm-group-controls">
+          {/*
+            data-lattice-pairs — two label/field columns, declared so
+            `check:panels` MEASURES this group instead of skipping it (L6a /
+            panel sweep 14/15, 86bbjt1be). Until this attribute existed the
+            designer matched no selector the checker reads, so the panel's
+            entire content was absent from a 684-panel green run. The number
+            is the grid's track count in `_builder-react-overrides.css`; the
+            two have to move together, and the checker fails loudly if they
+            disagree rather than quietly measuring the wrong thing.
+          */}
+          <div className="bcm-group-controls" data-lattice-pairs="2">
             <div className="bcm-control">
               {/*
                 Was "Card Style" (Default / Bordered / Shadow), which decided the
@@ -5732,7 +6130,7 @@ export function BlogCardManagerPreview() {
                 a legacy "bordered" row reads as None, which is what it drew.
               */}
               <span className="bcm-label">Card Shadow</span>
-              <select style={sel} value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
+              <select className="bcm-input" value={tpl.cardStyle === "shadow" ? "shadow" : "default"}
                 onChange={(e) => setField("cardStyle", e.target.value)}>
                 <option value="default">None</option>
                 <option value="shadow">Shadow</option>
@@ -5741,7 +6139,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Card Border</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={16} step={1} className="bcm-input"
                   value={tpl.cardBorderWidth} title="0 removes the card's border"
                   onChange={(e) => setField("cardBorderWidth", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
@@ -5756,7 +6154,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Card Radius</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={32} step={2} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={32} step={2} className="bcm-input"
                   value={tpl.cardBorderRadius} onChange={(e) => setField("cardBorderRadius", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
@@ -5764,7 +6162,7 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Border</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={16} step={1} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={16} step={1} className="bcm-input"
                   value={tpl.imageBorderWidth} onChange={(e) => setField("imageBorderWidth", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
@@ -5777,14 +6175,14 @@ export function BlogCardManagerPreview() {
             <div className="bcm-control">
               <span className="bcm-label">Image Radius</span>
               <div className="bcm-num-row">
-                <input type="number" min={0} max={48} step={2} style={{ ...sel, width: 56 }}
+                <input type="number" min={0} max={48} step={2} className="bcm-input"
                   value={tpl.imageBorderRadius} onChange={(e) => setField("imageBorderRadius", parseInt(e.target.value, 10) || 0)} />
                 <span className="bcm-unit">px</span>
               </div>
             </div>
             <div className="bcm-control">
               <span className="bcm-label">Image Shadow</span>
-              <select style={sel} value={tpl.imageShadow} onChange={(e) => setField("imageShadow", e.target.value)}>
+              <select className="bcm-input" value={tpl.imageShadow} onChange={(e) => setField("imageShadow", e.target.value)}>
                 <option value="none">None</option>
                 <option value="soft">Soft</option>
                 <option value="medium">Medium</option>

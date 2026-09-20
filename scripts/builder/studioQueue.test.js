@@ -9,6 +9,8 @@ const { spawn } = require('node:child_process');
 
 const {
   openQueue,
+  addColumnIfMissing,
+  rollbackQuietly,
   backoffMs,
   STATES,
   DEFAULT_BACKOFF_CAP_MS,
@@ -549,4 +551,139 @@ test('the queue file is created, and survives being reopened', () => {
   const second = openQueue(file);
   assert.equal(second.listJobs().length, 1, 'the work list is still there after a restart');
   second.close();
+});
+
+// ── Migrating a queue file that already exists ────────────────────────────
+
+test('a queue file written before `payload` existed is migrated on open', async (t) => {
+  // THE ONLY TEST THAT CAN FAIL WHEN THE MIGRATION IS REMOVED. Every other
+  // test in this file builds a fresh database, where `CREATE TABLE IF NOT
+  // EXISTS` already contains `payload` — so `addColumnIfMissing` is a no-op in
+  // all of them and deleting it leaves the whole suite green. The Mini has
+  // been running this queue since Studio 2/8 shipped, and its file predates
+  // the column: without the migration the first payload-carrying enqueue dies
+  // there with an opaque `SQL logic error`, on the one machine nobody watches.
+  //
+  // The old shape is produced by dropping the column rather than by pasting a
+  // copy of the pre-#711 schema, so the rest of the table stays whatever the
+  // current schema says and this test does not rot when a later slice adds
+  // another column.
+  //
+  // Break-tested: with the `addColumnIfMissing` call deleted, subtests 1, 3
+  // and 4 fail (the missing column, then `SQL logic error` out of `enqueue`).
+  // Subtest 2 passes either way on purpose — it asks whether the existing work
+  // list SURVIVES the migration, which is a different question from whether
+  // the migration happened, and it is the one that would catch a future
+  // migration that dropped rows.
+  function legacyQueueFile() {
+    const file = tmpFile('legacy/queue.db');
+    const q = openQueue(file);
+    q.enqueue(JOB); // a row filed by the old code, before payloads existed
+    q.db.exec('ALTER TABLE jobs DROP COLUMN payload');
+    const columns = q.db.prepare('PRAGMA table_info(jobs)').all().map((c) => String(c.name));
+    // Assert the SETUP, not just the outcome: if a future SQLite refused the
+    // drop, every assertion below would pass for the boring reason and this
+    // test would be guarding nothing.
+    assert.ok(!columns.includes('payload'), 'the fixture must actually be the old shape');
+    q.close();
+    return file;
+  }
+
+  await t.test('opening it adds the column', () => {
+    const q = openQueue(legacyQueueFile());
+    const columns = q.db.prepare('PRAGMA table_info(jobs)').all().map((c) => String(c.name));
+    assert.ok(columns.includes('payload'), 'openQueue must migrate a file it did not create');
+    q.close();
+  });
+
+  await t.test('the row written by the old code still reads back, with no payload', () => {
+    const q = openQueue(legacyQueueFile());
+    const [job] = q.listJobs();
+    assert.equal(job.subjectId, JOB.subjectId, 'the existing work list survives the migration');
+    assert.equal(job.payload, null, 'a row from before the column is roleless, not broken');
+    q.close();
+  });
+
+  await t.test('and an enqueue carrying a payload succeeds on it', () => {
+    const q = openQueue(legacyQueueFile());
+    const { job, created } = q.enqueue({
+      stage: 'probe',
+      subjectKind: 'source',
+      subjectId: 'drive-file-2',
+      payload: { layerRole: 'plate', transcribe: false },
+    });
+    assert.equal(created, true);
+    assert.deepEqual(job.payload, { layerRole: 'plate', transcribe: false });
+    q.close();
+  });
+
+  await t.test('and the legacy subject still dedupes to the job already there', () => {
+    const q = openQueue(legacyQueueFile());
+    const before = q.listJobs();
+    const again = q.enqueue({ ...JOB, payload: { layerRole: 'plate' } });
+    assert.equal(again.created, false, 'the migration must not make old work look new');
+    assert.equal(again.job.id, before[0].id);
+    assert.equal(q.listJobs().length, 1, 'and no second job was filed for it');
+    q.close();
+  });
+});
+
+// ── round 2: two check-then-act races, both of them at boot on the Mini ─────
+//
+// Neither can be reached through `openQueue` from a test: both need two
+// processes hitting the same statement in the same instant. They are tested
+// through the one-line guards directly, because an untested guard is what sent
+// round 1 of this ticket back — and the guard is the whole of the change.
+
+test('the payload migration survives another process winning the same race', () => {
+  // `PRAGMA table_info` then `ALTER TABLE` is two statements. Two workers
+  // opening the same pre-payload queue file both read the column as absent and
+  // both ALTER; the loser used to throw out of `openQueue`, on the one boot
+  // where this migration matters at all.
+  const raced = {
+    prepare: () => ({ all: () => [{ name: 'id' }] }),
+    exec: () => { throw new Error('duplicate column name: payload'); },
+  };
+  assert.equal(
+    addColumnIfMissing(raced, 'jobs', 'payload', "TEXT NOT NULL DEFAULT ''"), false,
+    'the other process did the work — the end state is the one we asked for'
+  );
+
+  // And that is the ONLY error swallowed. A migration that is genuinely broken
+  // must still stop the boot rather than leaving a queue nothing can write to.
+  const broken = {
+    prepare: () => ({ all: () => [{ name: 'id' }] }),
+    exec: () => { throw new Error('no such table: jobs'); },
+  };
+  assert.throws(() => addColumnIfMissing(broken, 'jobs', 'payload', 'TEXT'), /no such table/);
+});
+
+test('a rollback that fails does not replace the error that caused it', () => {
+  // SQLite rolls a transaction back BY ITSELF on a BUSY, FULL or IOERR, so by
+  // the time `block`'s catch runs there is often no transaction left and the
+  // ROLLBACK throws. That secondary error used to be thrown in place of the
+  // disk-full that actually happened, so the caller was told the wrong thing.
+  const alreadyRolledBack = {
+    exec: () => { throw new Error('cannot rollback - no transaction is active'); },
+  };
+  const real = new Error('database or disk is full');
+  let seen = null;
+  try {
+    // Exactly the shape of block()'s catch block.
+    try {
+      throw real;
+    } catch (err) {
+      rollbackQuietly(alreadyRolledBack);
+      throw err;
+    }
+  } catch (err) {
+    seen = err;
+  }
+  assert.equal(seen, real, 'the caller sees what actually went wrong');
+});
+
+test('a rollback that works is still performed', () => {
+  const calls = [];
+  rollbackQuietly({ exec: (sql) => calls.push(sql) });
+  assert.deepEqual(calls, ['ROLLBACK'], 'swallowing the error must not mean skipping the rollback');
 });

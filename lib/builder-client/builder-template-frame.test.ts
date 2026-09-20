@@ -348,3 +348,119 @@ describe('applying a reference-only template', () => {
     expect(applyTemplateFrame(page, template).sections.map((s) => s.title)).toEqual(['Header', 'Hero']);
   });
 });
+
+/**
+ * TWO SECTIONS ON ONE PAGE MAY NOT SHARE AN id — 2026-09-14 round-3 review of
+ * ticket 86bc09db9.
+ *
+ * A template carries its frame sections with the ids they had on the page the
+ * template was made from. Apply it back to that page and an incoming frame
+ * section arrives holding the same id as one of the page's OWN sections.
+ * Nothing rejects the list: it is written, and the damage lands in the
+ * serializer, which keys its lineage map on `id` — one entry per id, so the
+ * frame's `canonical: true` and `savedSectionId` are stamped onto the page's
+ * own section as well. The operator's content is quietly enrolled as a copy of
+ * a saved section, and the next canonical propagation of that master
+ * overwrites it. Measured on a copy of Delray page 1384: four of the page's
+ * own five sections came back carrying the Footer Menu and Copyright masters'
+ * savedSectionId.
+ *
+ * The bulk control refuses such a page outright. The single-page control in
+ * the editor does not, and this is what protects it.
+ */
+describe('section ids stay distinct', () => {
+  const master = (id: string, title: string): { id: string; section: FrameSection } => ({
+    id,
+    section: { id: `master-${id}`, title, canonical: true, savedSectionId: id, modules: [] }
+  });
+
+  it('gives an incoming frame section a fresh id when the page already uses it', () => {
+    const page: FrameSection[] = [
+      { id: 'shared-id', title: 'Our courts' },
+      { id: 'page-b', title: 'Lesson prices' }
+    ];
+    const template: FrameSection[] = [
+      { id: 'shared-id', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'tpl-body', title: 'Body marker' },
+      { id: 'tpl-footer', title: 'Footer Menu', canonical: true, savedSectionId: 'ss-footer' }
+    ];
+    let n = 0;
+    const result = applyTemplateFrame(page, template, {
+      savedSections: [master('ss-header', 'Public Header'), master('ss-footer', 'Footer Menu')],
+      makeId: () => `fresh-${(n += 1)}`
+    });
+
+    const ids = result.sections.map((section) => String(section.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(result.frameIdsRenamed).toBe(1);
+
+    // The PAGE keeps its id. It is the one Page History, the revisions and the
+    // editor's own draft already point at; the arriving section has no history
+    // on this page to lose.
+    const own = result.sections.find((section) => section.title === 'Our courts');
+    expect(own?.id).toBe('shared-id');
+    expect(own?.canonical).toBeUndefined();
+    expect(own?.savedSectionId).toBeUndefined();
+
+    // And the frame section is still the frame section — a new id, the same
+    // savedSectionId, so canonical propagation still finds it.
+    const header = result.sections.find((section) => section.savedSectionId === 'ss-header');
+    expect(header?.id).toBe('fresh-1');
+    expect(header?.canonical).toBe(true);
+  });
+
+  it('leaves ids alone when nothing collides', () => {
+    const page: FrameSection[] = [{ id: 'page-a', title: 'Our courts' }];
+    const template: FrameSection[] = [
+      { id: 'tpl-header', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'tpl-body', title: 'Body marker' }
+    ];
+    const result = applyTemplateFrame(page, template, {
+      savedSections: [master('ss-header', 'Public Header')],
+      makeId: () => 'should-not-be-used'
+    });
+    expect(result.sections.map((section) => section.id)).toEqual(['tpl-header', 'page-a']);
+    expect(result.frameIdsRenamed).toBe(0);
+  });
+
+  it('keeps asking for an id when makeId keeps answering with one already in use', () => {
+    // The bulk caller's makeId is a counter, so it CAN answer with something
+    // the page already holds. A single try would then produce the very
+    // collision this exists to prevent, and silently.
+    const page: FrameSection[] = [
+      { id: 'clash', title: 'Our courts' },
+      { id: 'frame-1', title: 'Lesson prices' }
+    ];
+    const template: FrameSection[] = [
+      { id: 'clash', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'tpl-body', title: 'Body marker' }
+    ];
+    let n = 0;
+    const result = applyTemplateFrame(page, template, {
+      savedSections: [master('ss-header', 'Public Header')],
+      makeId: () => `frame-${(n += 1)}`
+    });
+    const ids = result.sections.map((section) => String(section.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    // frame-1 was taken, so the second answer is the one that stuck.
+    expect(result.sections.find((section) => section.savedSectionId === 'ss-header')?.id).toBe('frame-2');
+  });
+
+  it('two incoming frame sections carrying the SAME id do not collide with each other', () => {
+    // Not hypothetical: a template whose two references were copied from one
+    // section. Nothing downstream would tell them apart.
+    const template: FrameSection[] = [
+      { id: 'dup', title: 'Public Header', canonical: true, savedSectionId: 'ss-header' },
+      { id: 'tpl-body', title: 'Body marker' },
+      { id: 'dup', title: 'Footer Menu', canonical: true, savedSectionId: 'ss-footer' }
+    ];
+    let n = 0;
+    const result = applyTemplateFrame([{ id: 'page-a', title: 'Our courts' }], template, {
+      savedSections: [master('ss-header', 'Public Header'), master('ss-footer', 'Footer Menu')],
+      makeId: () => `fresh-${(n += 1)}`
+    });
+    const ids = result.sections.map((section) => String(section.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(result.frameIdsRenamed).toBe(1);
+  });
+});

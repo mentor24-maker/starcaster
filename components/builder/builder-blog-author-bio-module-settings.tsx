@@ -1,7 +1,9 @@
 "use client";
 
+import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderImagePickerField } from "./builder-image-picker-field";
+import { BuilderModuleField } from "./builder-module-field";
 import {
   BuilderSchemaModuleSettings,
   type BuilderSettingsSchema
@@ -106,47 +108,70 @@ export function BuilderBlogAuthorBioModuleSettings({ module, onUpdateModule }: P
           width: "full",
           control: "custom",
           bare: true,
+          /*
+           * L6a item manager on its own lattice. It was
+           * `.builder-slider-item-card` holding `label.field` boxes — the shape
+           * W0 says to RETIRE rather than style, because it stacks a label
+           * above a full-width box and so runs a SECOND label geometry inside a
+           * panel whose other columns are on the lattice. Measured at 1440
+           * before this change: the panel's own fields sat at label-width 125 /
+           * control-x 125, and this manager's two columns at 0 and 257. It
+           * reuses `.builder-cards-panel-fields` with `data-lattice-pairs="1"`
+           * — the same CSS Feature Cards, Carousel and the Tag Cloud use, in
+           * its `--stacked` variant, because this manager sits inside a narrow
+           * axis column rather than in half a 50/50 editor (see the CSS note).
+           *
+           * The declaration is what makes it CHECKABLE: `check_panels` selects
+           * item managers on `[data-lattice-pairs]` and
+           * `[data-lattice-columns]`, and this one declared neither — and its
+           * old shape, `.builder-slider-item-grid`, is a class `check_panels`
+           * EXPLICITLY EXCLUDES from measurement, so every sweep since the
+           * check was written reported OK here without ever looking inside it.
+           */
           render: () => (
             <>
-              <div className="builder-breadcrumb-items-label" style={{ marginTop: 12 }}>Social links</div>
-              <div className="builder-slider-items">
-                {links.map((link) => {
+              <div className="builder-schema-group-title">Social links</div>
+              <div className="builder-cards-panel-fields builder-cards-panel-fields--stacked" data-lattice-pairs="1">
+                {links.map((link, index) => {
                   const platformLabel = SOCIAL_PLATFORMS.find((p) => p.value === link.platform)?.label ?? link.platform;
                   return (
-                    <div key={link.id} className="builder-slider-item-card">
-                      <div className="builder-slider-item-header">
-                        <strong>{platformLabel}</strong>
-                        <div className="builder-section-actions">
+                    <Fragment key={link.id}>
+                      <div className="builder-card-editor-head">
+                        <span className="builder-card-editor-name">{platformLabel}</span>
+                        <div className="builder-item-grid-actions">
                           <button
                             type="button"
                             className="builder-icon-button builder-icon-button-danger"
                             onClick={() => removeLink(link.id)}
+                            aria-label={`Delete social link ${index + 1}`}
                             title="Remove"
                           >
                             ✕
                           </button>
                         </div>
                       </div>
-                      <div className="builder-slider-item-grid">
-                        <label className="field">
-                          <span>Platform</span>
-                          <select value={link.platform} onChange={(e) => updateLink(link.id, "platform", e.target.value)}>
-                            {SOCIAL_PLATFORMS.map((p) => (
-                              <option key={p.value} value={p.value}>{p.label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>URL</span>
-                          <input
-                            type="text"
-                            value={link.url}
-                            onChange={(e) => updateLink(link.id, "url", e.target.value)}
-                            placeholder="https://..."
-                          />
-                        </label>
-                      </div>
-                    </div>
+
+                      <BuilderModuleField label="Platform" width="select-md" className="builder-card-field--a">
+                        <select
+                          value={link.platform}
+                          onChange={(e) => updateLink(link.id, "platform", e.target.value)}
+                          aria-label={`Social link ${index + 1} platform`}
+                        >
+                          {SOCIAL_PLATFORMS.map((p) => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                      </BuilderModuleField>
+                      <BuilderModuleField label="URL" width="text-md" className="builder-card-field--b">
+                        <input
+                          type="text"
+                          value={link.url}
+                          onChange={(e) => updateLink(link.id, "url", e.target.value)}
+                          placeholder="https://..."
+                          aria-label={`Social link ${index + 1} URL`}
+                        />
+                      </BuilderModuleField>
+                    </Fragment>
                   );
                 })}
               </div>

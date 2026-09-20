@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import type { BackgroundSettings } from "@/lib/builder-template";
 import {
   builderBackgroundParallaxActive,
@@ -10,6 +10,12 @@ import {
 } from "@/lib/builder-template";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
 import { backgroundParallaxGeometry } from "@/lib/background-parallax";
+import {
+  builderBackgroundClipAttrs,
+  builderBackgroundClipStyle,
+  builderBackgroundClipsSurface,
+  builderBackgroundLayerSurface
+} from "@/lib/background-clip";
 
 /**
  * THE ONE BACKGROUND LAYER. Section rows use it today; the page background and
@@ -43,11 +49,17 @@ import { backgroundParallaxGeometry } from "@/lib/background-parallax";
  */
 
 /**
- * Phone width. Matches the breakpoint the generated builder stylesheet already
- * compacts cells at, so "this is a phone" means the same thing in the layout
- * and in the decision to spend someone's cell data on a video.
+ * Phone width. Matches the breakpoint the stylesheet compacts cells at, so
+ * "this is a phone" means the same thing in the layout and in the decision to
+ * spend someone's cell data on a video.
+ *
+ * It was 560px until 2026-09-15 (task 86bc14pgq), which is what the cell rules
+ * used before the device system arrived. Both moved together to the Phone
+ * width the whole Builder now reads from `BUILDER_PHONE_MAX_WIDTH`, and they
+ * have to keep moving together: if they ever disagree, some screen shows a
+ * phone-sized layout playing a video, or a tablet layout that will not.
  */
-export const BUILDER_VIDEO_MOBILE_MAX_WIDTH = 560;
+export const BUILDER_VIDEO_MOBILE_MAX_WIDTH = 767;
 
 /**
  * Blurring an element leaves a soft, semi-transparent rim about twice the blur
@@ -111,9 +123,14 @@ function useBackgroundParallax(
     if (!enabled || !node || typeof window === "undefined") return;
 
     // The layer is absolutely positioned against its section, so the section
-    // is its offset parent — but `parentElement` is the honest question here:
-    // this layer is always a direct child of the surface that mounted it.
-    const section = node.parentElement;
+    // is its offset parent. It is NOT always the layer's parent element: the
+    // surface mounts it inside a clip box (`background-clip.ts`) so that the
+    // layer can be contained without the row itself being clipped, and that
+    // box is `inset: 0` against the padding box rather than the border box.
+    // `builderBackgroundLayerSurface` steps over it; asking for
+    // `parentElement` here would measure the box and shift every bordered
+    // row's parallax by its border width.
+    const section = builderBackgroundLayerSurface(node);
     if (!section) return;
 
     let frame: number | null = null;
@@ -531,11 +548,39 @@ export function BuilderBackgroundLayer({
    * be stripped from the surface, so there is no second code path to keep in
    * step.
    */
+  /*
+   * THE CLIP BOX, mounted HERE rather than by the row or the cell.
+   *
+   * Everything below either renders a layer or returns null, and only this
+   * component knows which — the surfaces know what the operator SET, which is
+   * a different question at phone width and under reduce motion. When the
+   * surfaces wrapped the layer, a phone got an empty box as the row's first
+   * child and the mobile reverse-stack rules (`:nth-child(1..6)`, stopping at
+   * six) put the sixth column fourth (86bbwmp2y, review round 2). So the box
+   * goes around what actually rendered, and a layer that renders nothing adds
+   * no element at all.
+   *
+   * `builderBackgroundLayerSurface` is unaffected: the layer's parent is still
+   * the box wherever there is one, and the box's parent is still the surface.
+   */
+  const inClipBox = (layer: ReactElement): ReactElement =>
+    builderBackgroundClipsSurface(surface) ? (
+      <div
+        aria-hidden
+        {...builderBackgroundClipAttrs(surface)}
+        style={builderBackgroundClipStyle()}
+      >
+        {layer}
+      </div>
+    ) : (
+      layer
+    );
+
   if (background.mode === "image") {
     if (!parallaxLive || !background.imageUrl) {
       return null;
     }
-    return (
+    return inClipBox(
       <div
         aria-hidden
         className={`builder-preview-image-background builder-preview-image-background-${surface}`}
@@ -608,7 +653,7 @@ export function BuilderBackgroundLayer({
     tabIndex: -1
   };
 
-  return (
+  return inClipBox(
     <>
       <video
         {...shared}

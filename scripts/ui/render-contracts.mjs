@@ -72,6 +72,49 @@ const PARALLAX_THEMED_SECTION = {
   themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
 };
 
+/** A row with its own Tablet (30) and Phone (60) top padding over a desktop 18. */
+const DEVICE_STYLED_SECTION = {
+  layout: 'single',
+  paddingTop: '18',
+  // A background of its own, so the theme's band spacing (which replaces a
+  // backgroundless row's padding) stays out of the measurement.
+  background: { mode: 'color', color: '#eeeeee' },
+  deviceOverrides: { tablet: { paddingTop: '30' }, phone: { paddingTop: '60' } },
+  modules: [{ type: 'heading', text: 'A row styled per device', settings: {} }],
+};
+
+/**
+ * THE SAME ROW WITHOUT A BACKGROUND OF ITS OWN — which is the ordinary case.
+ *
+ * `DEVICE_STYLED_SECTION` above gives itself a grey fill on purpose, and the
+ * comment says why: the theme band's spacing "replaces a backgroundless row's
+ * padding". That was true, and it was the bug (86bc14qwy) — the band wrote an
+ * inline `padding-top`, which outranks the stylesheet rule reading the
+ * operator's own number, so Top and Bottom Padding did nothing at all on any
+ * row he had not given a background. A contract that works around a defect
+ * keeps the defect invisible, so this one takes the fill away.
+ */
+const PLAIN_DEVICE_SECTION = { ...DEVICE_STYLED_SECTION, background: undefined };
+
+/**
+ * A row whose ONE column has its own Tablet (20) and Phone (40) top padding
+ * over a desktop 10 (device styles 2 of 4, task 86bc14pey).
+ *
+ * Padding rather than anything prettier because it is measurable to the pixel
+ * from a computed style, and because it is the setting the operator's own
+ * test steps use.
+ */
+const CELL_DEVICE_STYLED_SECTION = {
+  layout: 'single',
+  background: { mode: 'color', color: '#eeeeee' },
+  cellPaddingTop: { main: '10' },
+  cellDeviceOverrides: {
+    tablet: { main: { cellPaddingTop: '20' } },
+    phone: { main: { cellPaddingTop: '40' } },
+  },
+  modules: [{ type: 'heading', text: 'A column styled per device', settings: {} }],
+};
+
 /** How the parallax contracts watch: scroll a fixed step, read, repeat. */
 const PARALLAX_SERIES = {
   count: 14,
@@ -384,6 +427,631 @@ export const RENDER_DIFFERENTIALS = [
 ];
 
 export const RENDER_CONTRACTS = [
+
+  /*
+   * TABLET AND PHONE ROW STYLES (device styles 1 of 6, task 86bc13a6v).
+   *
+   * A row's styles are inline, and an inline style cannot say "on phones
+   * only" — so a row with device settings carries its own <style> of media
+   * rules marked !important. Every one of these asks a real browser at a real
+   * width, because the failure modes are all invisible in the markup: a rule
+   * that loses to the inline style, a query at the wrong width, or a style
+   * element that renumbers the row's columns.
+   */
+  {
+    id: 'device-styles-phone-padding-applies-on-a-phone',
+    why:
+      'The feature itself. A row set to 60px of top padding on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 18px wins and the Phone panel silently does nothing.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `a row with Phone padding-top 60 rendered padding-top ${sample.styles.paddingTop} at 420px — the phone rule is not reaching the row.`;
+    },
+  },
+  {
+    id: 'device-styles-tablet-padding-applies-on-a-tablet-and-not-phone-value',
+    why:
+      'Tablet has its own value (30) and Phone its own (60). At 900px only the tablet rule may match; ' +
+      'getting 60 means the phone query is too wide, getting 18 means the tablet rule is missing.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `a row with Tablet padding-top 30 rendered padding-top ${sample.styles.paddingTop} at 900px.`;
+    },
+  },
+  {
+    id: 'device-styles-leave-desktop-alone',
+    why:
+      'The other direction, so the two contracts above cannot pass by breaking every width: on a ' +
+      'desktop screen the same row keeps its own 18px.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '18px'
+        ? null
+        : `a row whose desktop padding-top is 18 rendered ${sample.styles.paddingTop} on a desktop screen — a device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'device-styles-hide-on-phone-hides-the-row',
+    why: '"Hide on Phone" must take the row out at phone width — and only there (the desktop contract above reads the same row visible).',
+    section: { ...DEVICE_STYLED_SECTION, deviceOverrides: { phone: { hidden: 'true' } } },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'row-padding-applies-on-a-row-with-no-background',
+    why:
+      'Task 86bc14qwy: a row with no background of its own took the theme band\'s spacing as an ' +
+      'INLINE padding, and an inline padding beats the stylesheet rule that reads the operator\'s ' +
+      'Top/Bottom Padding — so his setting did nothing on those rows, on every site. Measured ' +
+      '2026-09-15 at 1440px: --builder-section-padding-top 18px, computed padding-top 0px.',
+    section: { ...PLAIN_DEVICE_SECTION, paddingTop: '40', deviceOverrides: undefined },
+    selector: '.builder-preview-section:not([data-builder-device-scope])',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `a row with no background and Top Padding 40 rendered padding-top ${sample.styles.paddingTop} — the band's spacing is still overriding it.`;
+    },
+  },
+  {
+    id: 'device-styles-phone-padding-applies-on-a-row-with-no-background',
+    why:
+      'The same row at phone width. The device rules write the row\'s padding CUSTOM PROPERTY, so ' +
+      'while the band held an inline padding they could not reach a backgroundless row either — ' +
+      'the Phone panel was dead on exactly the rows most pages are made of.',
+    section: { ...PLAIN_DEVICE_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `a backgroundless row with Phone padding-top 60 rendered padding-top ${sample.styles.paddingTop} at 420px.`;
+    },
+  },
+  {
+    id: 'device-styles-keep-reverse-stack-column-order',
+    why:
+      'The rules element lives INSIDE the row, and the phone Reverse stack rules count the row\'s ' +
+      'children with :nth-child(1..6). Placed first it would renumber every column and show the ' +
+      'sixth one fourth. It is placed last; this holds that.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      deviceOverrides: { phone: { columnGap: '4' } },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section[data-builder-device-scope] > .builder-preview-column:nth-of-type(6)',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return Number(sample.styles.order) === -2
+        ? null
+        : `the sixth column of a Reverse stack row with phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
+    },
+  },
+  /*
+   * PER-DEVICE MODULE STYLES (86bc14pfq), the module half of the row
+   * contracts above. Same reason for reading a browser rather than the
+   * markup: every failure mode here is invisible in the DOM — a rule that
+   * loses to the inline style, a rule that loses to the pre-device mobile
+   * stylesheet, or a query at the wrong width.
+   */
+  {
+    id: 'module-device-styles-phone-margin-applies-on-a-phone',
+    why:
+      'The feature itself. A heading set to 40px of top margin on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 0 wins and the Phone panel silently does nothing.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A module styled per device', settings: { marginTop: '0', 'phone.marginTop': '40' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['marginTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.marginTop === '40px'
+        ? null
+        : `a module with Phone margin-top 40 rendered margin-top ${sample.styles.marginTop} at 420px — the phone rule is not reaching the module.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
+    why:
+      'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +
+      'Desktop declares center/right on the CHILD (`.is-align-center .builder-preview-heading ' +
+      '{ justify-self: center }`), and a child\'s own justify-self beats the parent\'s ' +
+      'justify-items — so a device rule written only on the wrapper moved a module OUT of left ' +
+      'and could never move it back IN. Measured at 420px: center + phone.alignment left rendered ' +
+      'justify-self: center, unmoved.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Left on a phone', settings: { alignment: 'center', 'phone.alignment': 'left' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      if (sample.styles.justifySelf === 'center') {
+        return 'a centred heading set to Phone alignment "left" still rendered justify-self: center at 420px — the device rule is on the wrapper only, and the child\'s own justify-self beats it.';
+      }
+      return sample.styles.textAlign === 'left'
+        ? null
+        : `a centred heading set to Phone alignment "left" rendered text-align ${sample.styles.textAlign} at 420px, not left.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-alignment-can-centre-a-module',
+    why:
+      'The OTHER direction of the contract above, and the direction that already worked — so a ' +
+      'fix cannot buy one by breaking the other. A left heading set to Phone alignment "center" ' +
+      'centres at 420px.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Centred on a phone', settings: { alignment: 'left', 'phone.alignment': 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['justifySelf', 'textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.textAlign === 'center' && sample.styles.justifySelf !== 'auto'
+        ? null
+        : `a left-aligned heading set to Phone alignment "center" rendered justify-self ${sample.styles.justifySelf} / text-align ${sample.styles.textAlign} at 420px. A device alignment must write the SAME declarations desktop writes, on the same element — the wrapper alone happens to centre this one, and that is exactly why the opposite direction silently did nothing.`;
+    },
+  },
+  {
+    id: 'module-device-styles-a-tablet-edit-does-not-move-a-legacy-phone-font-size',
+    why:
+      'REVIEW ROUND 1, finding 4, and the one that would have moved a live client page. The ' +
+      'emit guard was per MODULE, so an unrelated tablet margin let the phone chain re-emit the ' +
+      'pre-device `mobileFontSize` at 767px with !important and a three-repeat selector on it — ' +
+      'at a width it has never applied at. A heading rendering `clamp(1.35rem, 9vw, 2.35rem)` ' +
+      'today would have dropped to 18px because somebody set a tablet margin.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Untouched by a tablet margin',
+          settings: { fontSize: '48', mobileFontSize: '18', 'tablet.marginTop': '12' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] > *',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '18px'
+        ? 'a heading carrying the legacy mobileFontSize and an unrelated tablet margin rendered 18px at 420px — the device rules are emitting a legacy value at a width it never applied at.'
+        : null;
+    },
+  },
+  {
+    id: 'module-device-styles-leave-desktop-alone',
+    why:
+      'The other direction, so the contract above cannot pass by breaking every width: the same ' +
+      'heading keeps its own 0 on a desktop screen.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'A module styled per device', settings: { marginTop: '0', 'phone.marginTop': '40' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['marginTop'],
+    expect(sample) {
+      return sample.styles.marginTop === '0px'
+        ? null
+        : `a module whose desktop margin-top is 0 rendered ${sample.styles.marginTop} on a desktop screen — a device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-font-size-beats-the-desktop-inline-size',
+    why:
+      'A heading paints its font size INLINE on the heading element, not on the wrapper, so the ' +
+      'phone rule has to reach past the wrapper and outrank an inline value. This is the one the ' +
+      'operator asked for by name ("set the font size to something much smaller").',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Smaller on a phone', settings: { fontSize: '48', 'phone.fontSize': '16' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] .builder-preview-heading',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '16px'
+        ? null
+        : `a heading with Phone font size 16 rendered ${sample.styles.fontSize} at 420px.`;
+    },
+  },
+  {
+    id: 'module-device-styles-leave-the-old-mobile-fields-alone',
+    why:
+      'Acceptance criterion: a page using the pre-device `mobileHidden`/`mobileAlignment`/' +
+      '`mobileFontSize` must render EXACTLY as it does today. Those render through stylesheet ' +
+      'classes at 900px, not 767px, so a generator that emitted for them would move every ' +
+      'untouched page by 133px of breakpoint. The selector is the contract: this module must carry ' +
+      'no device scope at all, and if one ever appears nothing matches and the harness says so.\n' +
+      'Do NOT "fix" this by asserting the font size is 18px. Measured 2026-09-15, it is not: ' +
+      '`.builder-react-root .builder-preview-heading:not(.eyebrow)` inside the same 900px block ' +
+      'sets `clamp(1.35rem, 9vw, 2.35rem) !important` at equal specificity and later in the file, ' +
+      'so Mobile Font Size has never reached a real phone — only the preview\'s phone frame, which ' +
+      'has a rule of its own. That is a live defect and it belongs to slice 4 (86bc14pgq), which ' +
+      'owns the old phone rules; this slice deliberately changes nothing about it.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Still the old way',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'false' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module:not([data-builder-module-device-scope])',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect() {
+      return null;
+    },
+  },
+  {
+    id: 'module-device-styles-hide-on-tablet-hides-at-tablet-width',
+    why: '"Hide on Tablet" must take the module out at 900px, where a phone rule must not reach.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Gone on a tablet', settings: { 'tablet.hidden': 'true' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'module-device-styles-hide-on-tablet-also-hides-on-a-phone',
+    why: 'A phone FOLLOWS its tablet. Hiding on Tablet and seeing it on a phone would be the rule broken.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'heading', text: 'Gone on a tablet', settings: { 'tablet.hidden': 'true' } }],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'module-device-styles-a-phone-can-show-a-tablet-hidden-module-again',
+    why:
+      'The half that is easy to get wrong: the tablet hide is confined to the tablet BAND rather ' +
+      'than undone by a second display declaration, because there is no one value to undo it to ' +
+      '(a module in an equal-height row is display:flex, everywhere else block).',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Back on a phone', settings: { 'tablet.hidden': 'true', 'phone.hidden': 'false' } },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.display !== 'none'
+        ? null
+        : 'a module hidden on Tablet and shown again on Phone is still display:none at 420px — the tablet hide is not confined to the tablet band.';
+    },
+  },
+
+  {
+    id: 'device-styles-tablet-padding-applies-at-800px',
+    why:
+      'The Tablet band is 768-1024px and 800px sits near its bottom edge, where the phone query used ' +
+      'to be. Reading 60 here would mean the phone rule reaches above 767px; reading 18 would mean the ' +
+      'tablet rule stops short of 800. The 900px contract above cannot catch either — it is comfortably ' +
+      'inside the band from both sides (device styles 4 of 4, task 86bc14pgq).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 800, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `a row with Tablet padding-top 30 rendered padding-top ${sample.styles.paddingTop} at 800px — the tablet band does not cover 800px, or the phone rule is reaching above 767px.`;
+    },
+  },
+
+  /*
+   * THE LEGACY NARROW-SCREEN RULES, ON THE DEVICE WIDTHS (device styles 4 of
+   * 4, task 86bc14pgq).
+   *
+   * The Builder used to carry two unrelated sets of breakpoints: the device
+   * system at 1024/767, and the older "mobile" rules at 900/560. These three
+   * hold the move of the rule that decides the most — whether a row's columns
+   * sit side by side — onto the tablet width, in both directions, plus the
+   * operator's opt-out. The move shows up nowhere in the markup: the class
+   * list of a stacked row and a side-by-side row are identical, so only a real
+   * browser at a real width can tell them apart.
+   */
+  {
+    id: 'legacy-narrow-rules-stack-a-row-at-the-tablet-width',
+    why:
+      'A two-column row must be ONE column at 1000px. It stacked only below 900px before this task, ' +
+      'so 901-1024px showed two columns on a screen the Builder calls a tablet.',
+    section: {
+      layout: 'two-column',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column',
+    read: ['gridTemplateColumns'],
+    emulate: { viewport: { width: 1000, height: 900 } },
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 1
+        ? null
+        : `a two-column row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) at 1000px, not 1 — the stacking rule is still at the old 900px.`;
+    },
+  },
+  {
+    id: 'legacy-narrow-rules-leave-desktop-alone',
+    why:
+      'The other direction, so the contract above cannot pass by stacking every width: the same row ' +
+      'keeps its two columns on a desktop screen. Widening a breakpoint is only safe while it stops.',
+    section: {
+      layout: 'two-column',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column',
+    read: ['gridTemplateColumns'],
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 2
+        ? null
+        : `a two-column row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) on a desktop screen, not 2 — the tablet stacking rule is leaking upward.`;
+    },
+  },
+  {
+    id: 'legacy-narrow-rules-keep-columns-still-opts-out-at-the-tablet-width',
+    why:
+      'Mobile Layout "Keep columns" is the escape hatch that makes the wider stacking width safe — it ' +
+      'is the only way an operator can say "not this row". If it stopped working at 1000px, the move ' +
+      'would be a one-way change to every client page that relies on it.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'keep',
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-mobile-keep',
+    read: ['gridTemplateColumns'],
+    emulate: { viewport: { width: 1000, height: 900 } },
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      return tracks.length === 2
+        ? null
+        : `a "Keep columns" row rendered ${tracks.length} track(s) (${sample.styles.gridTemplateColumns || 'none'}) at 1000px, not 2 — the opt-out does not reach the tablet width.`;
+    },
+  },
+
+  {
+    id: 'preview-tablet-frame-shows-the-rows-tablet-styles',
+    why:
+      'The Tablet frame is an 820px box inside a 1440px window, so `@media (max-width: 1024px)` is ' +
+      'FALSE inside it. Without a class-keyed copy of every tablet rule the frame shows desktop, and ' +
+      'the operator reads that as the Tablet panel not working (device styles 4 of 4, task 86bc14pgq).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-tablet .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `the Tablet frame rendered padding-top ${sample.styles.paddingTop} for a row whose Tablet padding-top is 30 — the frame is not getting the tablet rules.`;
+    },
+  },
+  {
+    id: 'preview-tablet-frame-does-not-show-phone-styles',
+    why:
+      'The other half, and the easy mistake: the phone rule is the one that already had a frame copy, ' +
+      'so emitting it for both frames is one careless line. A tablet sits ABOVE the phone breakpoint — ' +
+      'reading 60 here means the Tablet frame is showing a phone.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-tablet .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? 'the Tablet frame rendered the PHONE padding-top (60) — a phone-only rule is reaching the tablet frame.'
+        : null;
+    },
+  },
+  {
+    id: 'preview-phone-frame-agrees-with-a-real-phone',
+    why:
+      'Measured 2026-09-15: a row with 90px of Tablet top padding rendered 10px in the phone frame and ' +
+      '90px in a real 420px browser, because the frame took its padding from a flat `padding: 10px` ' +
+      'instead of the row\'s own variables. A preview that disagrees with the device it imitates is ' +
+      'worse than no preview — the phone contract at 420px above reads 60, so this must too.',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-mobile .builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { previewDevice: 'mobile' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `the phone frame rendered padding-top ${sample.styles.paddingTop} for a row whose Phone padding-top is 60 — the frame is not reading the row's own device values.`;
+    },
+  },
+
+  /*
+   * TABLET AND PHONE CELL STYLES (device styles 2 of 4, task 86bc14pey).
+   *
+   * Same three-width shape as the row contracts above, for the same reason:
+   * the failures are all invisible in the markup. What is NEW here is the
+   * scope — the rules are hung off the COLUMN, so a contract reading the row
+   * would pass on a rule that reached the wrong element.
+   */
+  {
+    id: 'device-styles-cell-phone-padding-applies-on-a-phone',
+    why:
+      'The feature itself. A column set to 40px of top padding on Phone must get it at phone width. ' +
+      'Without !important the inline desktop 10px wins and the Phone panel silently does nothing.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `a column with Phone padding-top 40 rendered padding-top ${sample.styles.paddingTop} at 420px — the phone rule is not reaching the column.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-tablet-padding-applies-on-a-tablet-and-not-phone-value',
+    why:
+      'Tablet has its own value (20) and Phone its own (40). At 900px only the tablet rule may match; ' +
+      'getting 40 means the phone query is too wide, getting 10 means the tablet rule is missing.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 900, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '20px'
+        ? null
+        : `a column with Tablet padding-top 20 rendered padding-top ${sample.styles.paddingTop} at 900px.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-leaves-desktop-alone',
+    why:
+      'The other direction, so the two contracts above cannot pass by breaking every width: on a ' +
+      'desktop screen the same column keeps its own 10px.',
+    section: { ...CELL_DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['paddingTop'],
+    expect(sample) {
+      return sample.styles.paddingTop === '10px'
+        ? null
+        : `a column whose desktop padding-top is 10 rendered ${sample.styles.paddingTop} on a desktop screen — a cell device rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-rules-reach-only-their-own-column',
+    why:
+      'The rules are scoped per COLUMN, not per row. TWO columns are given DIFFERENT phone padding ' +
+      'here on purpose: with one scope id shared by the row, both columns would match both rules and ' +
+      'the later one would win everywhere, so the first column would read the second\'s 60. A fixture ' +
+      'where only one column is styled cannot see that at all — the unstyled column carries no scope ' +
+      'attribute, so it passes whatever the ids are.',
+    section: {
+      layout: 'two-column',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellPaddingTop: { left: '10', right: '10' },
+      cellDeviceOverrides: {
+        phone: { left: { cellPaddingTop: '40' }, right: { cellPaddingTop: '60' } },
+      },
+      modules: [
+        { type: 'heading', text: 'Left', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Right', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column > .builder-preview-column:nth-of-type(1)',
+    read: ['paddingTop'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.paddingTop === '40px'
+        ? null
+        : `the first column rendered padding-top ${sample.styles.paddingTop} at 420px, not its own 40 — the second column's phone rules are reaching it.`;
+    },
+  },
+  {
+    id: 'device-styles-cell-hide-on-phone-hides-the-column',
+    why: '"Hide on Phone" must take the column out at phone width — and only there (the desktop contract above reads the same column visible).',
+    section: {
+      ...CELL_DEVICE_STYLED_SECTION,
+      cellDeviceOverrides: { phone: { main: { hidden: 'true' } } },
+    },
+    selector: '.builder-preview-column[data-builder-device-scope]',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'device-styles-cell-legacy-hide-on-mobile-still-hides',
+    why:
+      'Every page saved before this feature hides its columns with the old per-cell "Hide on Mobile" ' +
+      'field. Nothing in this slice may stop that working — a column that reappears on a phone is a ' +
+      'live site changing under a client who asked for nothing.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellMobileHidden: { main: 'true' },
+      modules: [{ type: 'heading', text: 'Hidden the old way', settings: {} }],
+    },
+    selector: '.builder-preview-column-mobile-hidden',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'device-styles-cell-keep-reverse-stack-column-order',
+    why:
+      'The rules element lives INSIDE the row and the phone Reverse stack rules count the row\'s ' +
+      'children with :nth-child(1..6). Every column\'s rules go into that ONE element, placed last; ' +
+      'a per-column element between the columns would renumber them and show the sixth one fourth.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      cellDeviceOverrides: {
+        phone: { left: { cellPaddingTop: '4' }, col6: { cellPaddingTop: '8' } },
+      },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section-mobile-reverse-stack > .builder-preview-column:nth-of-type(6)',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return Number(sample.styles.order) === -2
+        ? null
+        : `the sixth column of a Reverse stack row with per-cell phone settings resolved order ${sample.styles.order}, not -2 — the rules element is renumbering the columns.`;
+    },
+  },
   {
     id: 'tag-cloud-sizes-its-tags-by-count',
     why:
@@ -919,6 +1587,56 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'video-background-is-clipped-without-clipping-the-row',
+    why:
+      'A blurred video is scaled up so its soft rim falls outside the row, and a parallaxing image ' +
+      'layer is taller than the row by the whole travel distance, so both have to be contained or ' +
+      'they spill onto the rows above and below. The row carried that containment itself until ' +
+      '2026-09-14 — and clipped everything else inside it in the same stroke, which is the row half ' +
+      'of 86bbwmp2y: a navigation dropdown in a video row was cut off at the row\'s edge. Two ' +
+      'readings in one contract on purpose, because each alone passes on the other\'s bug: a row ' +
+      'left `overflow: visible` with no clip box leaks the footage, and a row clipped by itself ' +
+      'holds the footage while cutting the menu.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the row's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — a blurred ` +
+          'or drifting layer inside it is free to spill over the rows above and below.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "row's flow rather than laid over it, so it no longer matches the row's bounds.";
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-leaves-the-row-itself-uncontained',
+    why:
+      'The other half of the pair above, and the row half of 86bbwmp2y. `overflow: hidden` on the ' +
+      'ROW cannot tell footage escaping from a dropdown menu that is supposed to escape, so it cut ' +
+      'both. This is the reading that fails if the containment ever moves back onto the row — which ' +
+      'would look completely correct in every other video contract here.',
+    section: { ...VIDEO_SECTION },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow === 'hidden') {
+        return 'the row carrying the video is `overflow: hidden` — anything inside it that is meant ' +
+          'to reach out of the row, a navigation dropdown above all, is cut off at its edge.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so the clip box and the layer inside it size ' +
+          'themselves against the page rather than against the row.';
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-background-sits-behind-the-content',
     why:
       'The columns are grid children and the video is absolutely positioned, so without a stacking ' +
@@ -975,21 +1693,134 @@ export const RENDER_CONTRACTS = [
     id: 'cell-video-background-is-clipped-to-its-own-cell',
     why:
       'THE reason this is a per-cell feature and not a per-row one. The layer is scaled to cover, so ' +
-      'without `overflow: hidden` on the column the footage spills sideways over the column beside ' +
-      'it — one cell\'s background silently painting over its neighbour\'s words. It is invisible to ' +
-      'every other check here: the video renders, the poster is right, the z-index is right, and the ' +
-      'row still looks like a row.',
+      'left uncontained the footage spills sideways over the column beside it — one cell\'s ' +
+      'background silently painting over its neighbour\'s words. It is invisible to every other ' +
+      'check here: the video renders, the poster is right, the z-index is right, and the row still ' +
+      'looks like a row. ' +
+      'The containment moved on 2026-09-14 (86bbwmp2y): it used to be `overflow: hidden` on the ' +
+      'COLUMN, which clipped everything else in the column too — a navigation dropdown was cut off ' +
+      'at the column edge and read as a menu that would not open. So it is now a clip box around ' +
+      'the layer alone, and this contract follows it there rather than being deleted with it.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['overflow', 'position'],
+    expect(sample) {
+      if (sample.styles.overflow !== 'hidden') {
+        return `the cell's clip box is \`overflow: ${sample.styles.overflow || 'visible'}\` — the ` +
+          'footage inside it is free to bleed across the gap into the next column.';
+      }
+      if (sample.styles.position !== 'absolute') {
+        return `the clip box is \`position: ${sample.styles.position}\`, not absolute — it is in the ` +
+          "column's flow rather than laid over it, so it pushes the operator's content down and no " +
+          'longer matches the cell\'s bounds.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-leaves-the-cell-itself-uncontained',
+    why:
+      'THE BUG THIS PAIR WAS SPLIT FOR (86bbwmp2y). Containing the footage by clipping the CELL ' +
+      'contains everything else in the cell as well, and `overflow: hidden` cannot tell footage ' +
+      'escaping from a navigation dropdown that is SUPPOSED to escape. To a visitor the menu reads ' +
+      'as one that will not open: they tap it and nothing appears. The contract above proves the ' +
+      'footage is still held; this one proves it is held by the box and not by the column.',
     section: { ...CELL_VIDEO_SECTION },
     selector: '.builder-preview-column-layered',
     read: ['overflow', 'position'],
     expect(sample) {
-      if (sample.styles.overflow !== 'hidden') {
-        return `the cell carrying the video is \`overflow: ${sample.styles.overflow || 'visible'}\` — its ` +
-          'footage is free to bleed across the gap into the next column.';
+      if (sample.styles.overflow === 'hidden') {
+        return 'the cell carrying the video is `overflow: hidden` — the containment is back on the ' +
+          'column, so a dropdown menu, a floating image or any other thing meant to reach out of ' +
+          'that column is cut off at its edge.';
       }
       if (sample.styles.position === 'static') {
-        return 'the cell is `position: static`, so the absolutely positioned video escapes it entirely ' +
-          'and sizes itself against the row (or the page) instead.';
+        return 'the cell is `position: static`, so the clip box and the video inside it escape the ' +
+          'column entirely and size themselves against the row (or the page) instead.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-overhanging-decor-out-of-the-cell',
+    why:
+      'THE CONTRACT NO STYLE READING COULD HAVE REPLACED, and the one that actually reproduces ' +
+      '86bbwmp2y. `overflow: hidden` on an ancestor does not change a descendant\'s rect at all — ' +
+      'the clipped element still measures exactly where it always was — so every box reading in ' +
+      'this scene is identical whether the dropdown is visible or cut in half. What changes is ' +
+      'whether the browser can HIT it out there. So this hangs a floating image out of a ' +
+      'video-backed cell and asks what is on top where it crosses into the next column: the image ' +
+      'when the containment sits on the layer, the next column when it sits on the cell. ' +
+      'A floating image rather than a navigation dropdown because it overhangs on load with no ' +
+      'interaction — the clipping is identical, and a scene that needs a hover is a scene that can ' +
+      'quietly stop opening.',
+    section: {
+      layout: 'two-column',
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+        // Something solid for the probe to hit when the decor loses, so the
+        // failure is visible to a person in a screenshot and not only here.
+        right: { mode: 'color', color: '#cc0000' },
+      },
+      modules: [
+        // `horizontalOffset: 200` is what carries the image across the gutter
+        // at this harness's viewport; `trigger: on-load` keeps it out of the
+        // inline-z-index path. Both match the overlay contract this is modelled
+        // on, so the two scenes stay comparable.
+        {
+          type: 'floating-image',
+          column: 'left',
+          settings: { ...PICTURE, size: '60', trigger: 'on-load', horizontalOffset: '200' },
+        },
+        { type: 'text', column: 'left', text: '<p>Readable</p>', settings: {} },
+        { type: 'text', column: 'right', text: '<p>Untouched</p>', settings: {} },
+      ],
+    },
+    selector: '.builder-preview-column-layered',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.builder-preview-module-overlay-flow .builder-preview-image-shell',
+        against: '.builder-preview-column:not(.builder-preview-column-layered)',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page, so the elements this ` +
+          'contract compares were never both rendered, and it can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. Clipping does not
+       * move the image's rect, so the overlap is positive in BOTH the working
+       * and the broken scene — but if the image ever stops crossing the gutter
+       * at all, the probe point lands where neither element is and a green run
+       * here would mean nothing.
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the floating image does not overhang into the next column at all in this scene ' +
+          `(image ${probe.subjectBox.left}-${probe.subjectBox.right}, next column starts at ` +
+          `${probe.againstBox.left}), so there is no overlap to probe. Push \`horizontalOffset\` ` +
+          'until it crosses the gutter again — a scene that does not overlap passes forever while ' +
+          'testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the floating image hangs out of the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the image — the ` +
+          'part of it outside the column is not there to be hit. That is the cell clipping its own ' +
+          'contents to contain the footage, which is 86bbwmp2y: on a real page the same clip takes ' +
+          "the bottom off a navigation module's dropdown and a visitor reads the menu as broken.";
       }
       return null;
     },
@@ -1032,21 +1863,266 @@ export const RENDER_CONTRACTS = [
   },
 
   {
-    id: 'cell-video-background-does-not-clip-a-cell-that-has-no-video',
+    id: 'cell-video-background-clip-box-takes-no-clicks-and-stays-at-rung-zero',
     why:
-      'The containment that keeps footage inside its own cell is deliberately conditional, and this ' +
-      'is what holds it that way. Clipping every column unconditionally would pass every other ' +
-      'contract here and silently start cutting off the floating images and overhanging decor that ' +
-      'are SUPPOSED to reach out of their cell — a regression with no error, in a feature nobody was ' +
-      'touching.',
+      'THE TWO PROPERTIES THE CLIP BOX TOOK OVER FROM THE LAYER, and nothing else here holds them. ' +
+      'Until 86bbwmp2y the video was a direct child of the cell and `.builder-preview-video-background` ' +
+      'gave it `pointer-events: none` and `z-index: 0`. The box is now the element the cell\'s siblings ' +
+      'actually see, and it gets both from `builderBackgroundClipStyle()` inline instead — so a rung ' +
+      'or a hit-test that used to be the stylesheet\'s business is now a function\'s. ' +
+      'Both fail silently and expensively. Lose `pointer-events: none` and this full-size element ' +
+      'laid over the column swallows every click in it — the operator\'s links and buttons stop ' +
+      'working in any column with a video behind it, while the page still looks perfect. Move the ' +
+      'rung off 0 and the box paints OVER the modules: `cell-video-background-stays-behind-the-words` ' +
+      'only checks that a module is at 1 or more, so a box at 2 passes that contract with the footage ' +
+      'covering the text. ' +
+      'This contract replaces `cell-video-background-does-not-clip-a-cell-that-has-no-video`, which ' +
+      'read `overflow` on the neighbouring column: that PR deleted the only code that could ever set ' +
+      'it, so nothing in its scene could make it fail, and its own reason described a conditional ' +
+      'mount that no longer exists. The half worth keeping — the cell is not clipped — is asserted ' +
+      'directly by `cell-video-background-leaves-the-cell-itself-uncontained`, on the cell that ' +
+      'actually carries the video rather than on its neighbour. ' +
+      'It reads computed style rather than probing, and that is forced rather than lazy: ' +
+      '`elementFromPoint` skips anything with `pointer-events: none`, so a probe can never see this ' +
+      'box at all while the property is correct. One contract covers the row\'s box too — both ' +
+      'surfaces spread the SAME function, so there is one set of values to be wrong.',
     section: { ...CELL_VIDEO_SECTION },
-    selector: '.builder-preview-column + .builder-preview-column',
-    read: ['overflow'],
+    selector: '[data-builder-background-clip="cell"]',
+    read: ['pointerEvents', 'zIndex'],
+    expect(sample) {
+      if (sample.styles.pointerEvents !== 'none') {
+        return `the clip box is \`pointer-events: ${sample.styles.pointerEvents}\`, not \`none\` — it is a ` +
+          'full-size element laid over the whole column, so it takes every click meant for the links, ' +
+          'buttons and modules inside that column and the page reads as dead while looking correct.';
+      }
+      const zIndex = Number(sample.styles.zIndex);
+      if (!Number.isFinite(zIndex)) {
+        return `the clip box sits at z-index \`${sample.styles.zIndex || 'auto'}\` rather than an explicit ` +
+          '0 — with no rung of its own it stacks in document order against the cell\'s tint screen and ' +
+          "the cell's modules, both of which were measured against the box being at 0.";
+      }
+      if (zIndex !== 0) {
+        return `the clip box sits at z-index ${zIndex}, not 0 — the modules in that cell are only lifted to ` +
+          '1, so the footage inside this box now paints over the operator\'s words. ' +
+          '`cell-video-background-stays-behind-the-words` cannot catch this: it checks the module is at ' +
+          '1 or more and never reads the box.';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * ── A LAYER THAT RENDERS NOTHING MUST ADD NOTHING ─────────────────────
+   *
+   * The clip box was mounted by the row and the cell at first, from the
+   * SETTINGS. The layer itself renders nothing at phone width and nothing
+   * under reduce motion, so a phone visitor got an EMPTY box as the row's
+   * first child — and the row is a grid whose mobile reverse-stack rules count
+   * children: `:nth-child(1..6)`, stopping at six. One extra child pushed the
+   * sixth column out of the last rule, it fell back to `order: 0`, and the
+   * columns came out 5,4,3,6,2,1 on a live page with nothing to see wrong
+   * (86bbwmp2y, review round 2).
+   *
+   * Every contract above this sweeps at 1440px, where the video always mounts,
+   * so not one of them could see the state where the box was empty. These
+   * three ask at the two widths and settings where the layer bows out.
+   */
+  {
+    id: 'video-background-puts-the-columns-in-order-on-a-phone',
+    why:
+      'THE VISIBLE HALF OF THE REGRESSION, measured as a visitor would meet it rather than as an ' +
+      'element count. A six-column row set to Reverse stack must come out 6,5,4,3,2,1 on a phone, ' +
+      'and the rules that do that are `:nth-child(1..6)` — they stop at six, so ANY extra child in ' +
+      'the row silently drops the last column to `order: 0` and shows it fourth. The empty clip box ' +
+      'did exactly that. This reads the order the browser actually resolved on the last column, so ' +
+      'it fails for any cause — a second layer, a stray marker, a wrapper somebody adds next year — ' +
+      'rather than only for the one that happened.',
+    section: {
+      layout: 'six-column',
+      mobileLayout: 'reverse-stack',
+      background: { ...VIDEO_SECTION.background },
+      modules: [
+        { type: 'heading', text: 'One', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Two', settings: {}, column: 'center' },
+        { type: 'heading', text: 'Three', settings: {}, column: 'right' },
+        { type: 'heading', text: 'Four', settings: {}, column: 'col4' },
+        { type: 'heading', text: 'Five', settings: {}, column: 'col5' },
+        { type: 'heading', text: 'Six', settings: {}, column: 'col6' },
+      ],
+    },
+    selector: '.builder-preview-section-layered > .builder-preview-column:last-child',
+    read: ['order'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      const order = Number(sample.styles.order);
+      if (order === 0) {
+        return 'the last column of a six-column Reverse stack row resolved `order: 0`, which is the ' +
+          'initial value and not any of the six rules — so the row has an extra child and every ' +
+          'column is one rule out of step. The sixth column is shown FOURTH. This is what an empty ' +
+          'clip box did on a phone; whatever added a child here, it reaches visitors.';
+      }
+      if (order !== -2) {
+        return `the last column of a six-column Reverse stack row resolved \`order: ${sample.styles.order}\`, ` +
+          'not -2 — the reverse-stack rules are not landing on the columns they were written for.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The mechanism behind the contract above, asked directly so a failure says WHICH extra child. ' +
+      'A row video does not play on a phone (the megabytes are somebody else\'s cell data) and the ' +
+      'layer returns null — so the clip box must not go up either. A box around nothing is still a ' +
+      'child, and the row counts its children.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'video-background-mounts-no-clip-box-under-reduce-motion',
+    why:
+      'The same rule at the other place the layer bows out. A visitor who asked for reduced motion ' +
+      'gets the poster and no <video> at all, so an empty clip box would be an extra child in their ' +
+      'row and nobody else\'s — a layout that differs by an accessibility setting, which is the ' +
+      'hardest kind of bug to be told about.',
+    section: { ...VIDEO_SECTION },
+    selector: '[data-builder-background-clip="section"]',
+    emulate: { reducedMotion: 'reduce' },
+    absent: true,
+  },
+
+  {
+    id: 'cell-video-background-mounts-no-clip-box-on-a-phone',
+    why:
+      'The cell half. A column\'s children are read too — `_builder-react.css` keys a rule off ' +
+      '`> .builder-preview-module:nth-child(2)` to mean "this column has a second module" — so an ' +
+      'empty box in front of a single module satisfies a rule written about two. That one is scoped ' +
+      'to an embed and harms nothing today, which makes it evidence rather than a bug: the shift ' +
+      'has more than one reader, and the way to be safe is to add no element at all.',
+    section: { ...CELL_VIDEO_SECTION },
+    selector: '[data-builder-background-clip="cell"]',
+    emulate: { viewport: { width: 420, height: 900 } },
+    absent: true,
+  },
+
+  {
+    id: 'row-overlay-screen-only-leaves-the-row-uncontained',
+    why:
+      'A row carrying ONLY a tint screen — no video, no parallax — used to be clipped by the same ' +
+      '`overflow: hidden` the video rows had, and 86bbwmp2y removed it from both. Nothing took over ' +
+      'for the tint row and nothing needs to: `.builder-preview-row-overlay-screen` is `inset: 0` ' +
+      'with `border-radius: inherit`, so it is already exactly the row\'s shape and has nothing to ' +
+      'overflow with. Letting the row\'s CONTENT out is the fix rather than a side effect — a ' +
+      'dropdown in a tinted row was cut off for the same reason it was in a video one. This is the ' +
+      'contract that was missing when that behaviour changed, so it changed silently (review round 2).',
+    section: {
+      layout: 'two-column',
+      overlayScreen: { background: { mode: 'color', color: '#101820' }, opacity: 50 },
+      modules: [
+        { type: 'heading', text: 'Text under a tint', settings: {}, column: 'left' },
+        { type: 'heading', text: 'Plain neighbour', settings: {}, column: 'right' },
+      ],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['overflow', 'position'],
     expect(sample) {
       if (sample.styles.overflow === 'hidden') {
-        return 'the cell with NO video of its own is `overflow: hidden` — containment is being applied ' +
-          'to every column rather than only the ones carrying a layer, so overhanging decor elsewhere ' +
-          'on the page is now being clipped.';
+        return 'a row carrying only a tint screen is `overflow: hidden` — a navigation dropdown in ' +
+          'it is cut off at the row\'s edge, which is 86bbwmp2y arriving through the overlay ' +
+          'setting instead of through a video.';
+      }
+      if (sample.styles.position === 'static') {
+        return 'the row is `position: static`, so its tint screen sizes itself against the page ' +
+          'rather than against the row and the tint lands over the whole document.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'cell-video-background-lets-a-dropdown-menu-out-of-the-cell',
+    why:
+      'THE SCENE 86bbwmp2y WAS REPORTED AS, measured rather than reasoned about. A navigation ' +
+      "module's dropdown is supposed to hang below its column; with a video behind that column it " +
+      'was cut off at the column edge, and what a visitor saw was a menu that would not open — they ' +
+      'tap it and a few pixels of white appear. Measured by hand in a browser before the fix: the ' +
+      'menu ran from y=89 to y=255 and the cell ended at y=98, so all three items were inside the ' +
+      'clip. THE RECT NEVER MOVED — clipping does not change a clipped element\'s geometry — which ' +
+      'is why this asks what the browser reports on top over the section below rather than reading ' +
+      'a box or a style. The sibling contract on floating decor covers the same mechanism without a ' +
+      'hover; this one covers the module the operator actually reported.',
+    section: {
+      layout: 'two-column',
+      // A section below for the menu to hang over, and the thing the probe
+      // compares against. Without it the overhang has nothing underneath it and
+      // there is no intersection to ask about.
+      spacers: 1,
+      cellBackgrounds: {
+        left: {
+          mode: 'video',
+          videoUrl: '/images/render-fixture-background.mp4',
+          posterUrl: '/images/render-fixture-background-poster.jpg',
+          videoSpeed: 1,
+          videoLoop: true,
+        },
+      },
+      modules: [
+        {
+          type: 'navigation',
+          column: 'left',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'play', label: 'Programs', href: '/programs' },
+              { id: 'p1', label: 'Junior tennis', href: '/junior', parentId: 'play' },
+              { id: 'p2', label: 'Adult clinics', href: '/adult', parentId: 'play' },
+              { id: 'p3', label: 'Private lessons', href: '/private', parentId: 'play' },
+            ]),
+          },
+        },
+        { type: 'text', column: 'right', text: '<p>Next column</p>', settings: {} },
+      ],
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['overflow'],
+    probes: {
+      overhang: {
+        subject: '.site-nav-dropdown-menu',
+        against: '.builder-preview-section:has(.builder-preview-column-layered) ~ .builder-preview-section',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.overhang;
+      if (!probe) {
+        return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      }
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` on the page. Either the dropdown never ` +
+          'opened on hover, or there is no section below the row for it to hang over — and with ' +
+          'neither of those on the page this contract can no longer fail for the right reason.';
+      }
+      /*
+       * THE UNFALSIFIABILITY GUARD, first rather than last. The menu's rect is
+       * identical whether it is clipped or not, so this is the only thing that
+       * distinguishes "the menu hangs past the row and we are asking about the
+       * overhang" from "the menu now fits inside the row and the probe point
+       * landed nowhere in particular".
+       */
+      if (!(probe.overlap > 0)) {
+        return 'the open dropdown does not hang past the bottom of its row at all in this scene, so ' +
+          'there is no overhang to probe and this contract cannot say anything. Give the menu more ' +
+          'items, or a shorter row — a scene with no overhang passes forever while testing nothing.';
+      }
+      if (!probe.onSubject) {
+        return `where the open dropdown hangs below the video cell, the browser reports \`` +
+          `${probe.hit}\` on top at ${probe.point.x},${probe.point.y} rather than the menu — the ` +
+          'part of the menu outside its column is not there to be hit. That is the cell clipping ' +
+          'its own contents in order to contain the footage (86bbwmp2y). To a visitor the menu ' +
+          'opens as a sliver of white and then nothing: it reads as broken.';
       }
       return null;
     },
@@ -1357,9 +2433,9 @@ export const RENDER_CONTRACTS = [
       'THE CONTRACT ABOVE PASSES ON THIS BUG, measured rather than feared: make the section mount a ' +
       'layer for EVERY image background and it still reports clean, because the layer component ' +
       'itself renders null when parallax is off. What actually changes is the ROW — deciding to ' +
-      'mount a layer is also deciding to make the row `position: relative; overflow: hidden`, and ' +
-      'that would start clipping any overlay module deliberately spilling out of it, on pages ' +
-      'nobody touched. The absence that matters is the containment, not the element.',
+      'mount a layer is also deciding to make the row `position: relative` and to lay a full-size ' +
+      'clip box over it, and that box takes hit-testing decisions and stacking rungs with it, on ' +
+      'pages nobody touched. The absence that matters is the containment, not the element.',
     section: {
       ...PARALLAX_IMAGE_SECTION,
       background: { ...PARALLAX_IMAGE_SECTION.background, parallax: false },

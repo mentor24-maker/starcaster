@@ -214,6 +214,34 @@ npm run --silent stale-answer -- --check || true
 # next clean run. Never allowed to fail the relay, like its neighbours.
 npm run --silent repair -- --check || true
 
+# THE BACKUP, ON THE SAME IDLE WAKE (ticket 86bc1c1zb).
+#
+# Every watchdog above asks whether this machine is WORKING. This one asks the
+# question none of them can: if it stopped existing tonight, what would come
+# back? On 2026-09-15 the answer for the Mini — the machine running the relay,
+# both loop lanes, the pulse, the weekly report and two Pulse pipelines — was
+# "nothing". `tmutil destinationinfo` said "No destinations configured", and no
+# drive had ever been attached.
+#
+# NOT ITS OWN SCHEDULE, DELIBERATELY. A ninth plist is a ninth thing to install
+# on a replacement machine, in the step of the rebuild that is already the
+# weakest — and a job with its own schedule can stop firing quietly, which is
+# the whole failure the heartbeat above exists to catch. Riding a wake that is
+# already watched means the backup cannot silently die without the alarms that
+# are already here noticing.
+#
+# NOT BEHIND THE OWNERSHIP CHECK, also deliberately, and for a different reason
+# from its neighbours: this is not an exclusive job. Each machine backs up
+# ITSELF, into its own folder in the repo, so two machines running it in the
+# same minute touch disjoint paths and there is no race to lose.
+#
+# `--scheduled` makes the stamp decide, not the clock: the relay wakes every ten
+# minutes and a backup is a daily thing, so all but one wake a day exits 0
+# having done nothing and said why. Never allowed to fail the relay — it exits
+# 1 when something could not be captured and 2 when it could not take a reading
+# at all, and both are findings about the backup, not about this script.
+npm run --silent backup:node -- --scheduled || true
+
 npm run --silent clickup -- bus-relay
 status=$?
 echo "=== exit $status"

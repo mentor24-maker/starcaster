@@ -19,6 +19,1163 @@ measures where things sit on screen, not the words inside them — so a blank
 label is precisely the kind of fault it will wave through. A blank row and a
 correctly-drawn row occupy the same space. The guard added here is a different
 kind of test, one that reads the words.
+## 2026-09-15 — The preview gets a Tablet view, and the Builder stops using two different sets of screen widths (#723)
+
+The Builder's page preview had two buttons, Browser and Mobile. It now has
+three: Desktop, Tablet and Mobile, so you can see a page the way a tablet shows
+it without owning one.
+
+The bigger half is underneath. Over the last three pieces of work the Builder
+learned to style a row differently on phones and tablets, and it decides "this
+is a tablet" at 1024px wide and "this is a phone" at 767px. But the Builder
+already had an older, separate idea of a narrow screen, from years before any
+of that, which fired at 900px and 560px. Both sets were live at once — so a
+column you hid on phones disappeared at 767px while the row around it stacked
+at 900px, and there was no screen width where the whole page agreed with
+itself. The rules that decide layout now use the same two widths as everything
+else.
+
+What you will actually see change on a client site: between about 900 and
+1024 pixels wide — a small laptop, an iPad turned sideways — a row with several
+columns now stacks into one, the way it already did on anything narrower. If
+there is a row you want left alone, its Mobile Layout setting has always had a
+"Keep columns" option and that still wins at every width. Mobile Layout itself
+moved into the row's phone panel, where the rest of the phone settings live.
+
+Building the Tablet frame turned up a fault in the phone frame nobody had
+spotted: a row set to 90 pixels of padding on tablets showed 10 pixels in the
+preview's phone frame and 90 on an actual phone. A preview that disagrees with
+the real thing is worse than no preview. That is fixed, and the automated
+checks can now open a preview frame and measure it, which they could not do
+before — which is exactly why it had gone unnoticed.
+
+One piece is deliberately left for later: the old Desktop/Mobile switch on the
+page list is still there. It now duplicates the new Phone/Tablet/Desktop switch
+rather than being the only way to reach three module settings, so taking it
+away is its own small job and is written up separately.
+
+## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
+
+A heading that looks right on a laptop is often far too big on a phone, and
+until now the only way out was to accept it. Expand a module in the Builder and
+its header carries three small icons — phone, tablet, desktop — the same ones
+rows got a few days ago. Click the phone and the settings panel swaps to that
+screen: spacing, alignment, width, font size, and a box to leave the module out
+altogether. Change one and only that one is remembered for phones; everything
+else keeps following the desktop version, so tidying the page later still
+reaches every screen that never asked to be different.
+
+Nothing on an existing page moves. The three older settings — Hide Module on
+Mobile, Mobile Alignment, Mobile Font Size — still work exactly as they did, and
+the new panel shows their values so what you see is what the page is doing.
+
+One thing turned up while building it that is worth knowing: *Mobile Font Size*
+has never actually reached a real phone. Another rule in the same stylesheet
+sizes every heading and beats it, so the setting only ever worked inside the
+Builder's own phone preview. That is a real fault, it is not changed here, and
+it belongs with the next slice of this work, which is about those old phone
+rules.
+
+**Corrected after review.** The first version worked on pages that had never
+had a mobile setting, and quietly failed on the ones that had — which are the
+real client pages. On those, *Hide on Phone* could not be unticked: the box
+sprang straight back, because the old *Hide Module on Mobile* was still sitting
+underneath answering the same question. The same fault made every Phone setting
+refuse to be put back to the desktop value. It is one idea, fixed once: using a
+Phone control now retires the old field it replaced, so only one setting ever
+answers for one screen.
+
+Two more came out of the same review. Phone and Tablet *Alignment* could move a
+module out of centred but never back into it, because the desktop stylesheet
+declares centring on a different element than the new rules were written on.
+And setting a *tablet* margin on a page that carried the old Mobile Font Size
+would have pulled that old size onto phones at a width it has never applied at
+— a live client heading would have shrunk because somebody adjusted a tablet
+margin. Both are fixed, and both are now held by a check that photographs a
+real browser at phone width.
+## 2026-09-15 — Top and Bottom Padding now work on a row with no background (#719)
+
+On a themed page, a row that has no background colour of its own takes one of
+the theme's alternating bands — the pale/slightly-darker stripes that stop a
+page reading as one flat wash. The band also carried its own spacing above and
+below, and it was setting that spacing in a way that could not be argued with:
+whatever you typed into that row's **Top Padding** or **Bottom Padding** was
+read, stored, shown back to you in the panel, and then completely ignored on
+the page. The same was true of the Phone and Tablet padding on those rows.
+
+Because most rows on most pages never get a background of their own, that was
+the ordinary case rather than a corner of it.
+
+The band's spacing is now a *default* rather than an override. A row nobody has
+touched takes the band's number exactly as before — every one of the seven
+before/after page photographs came back pixel-for-pixel identical to what is
+live today — and the moment you set a padding of your own, yours is what the
+page uses.
+
+One honest limit: the page format records "18" for a row whose padding has
+never been changed, so typing 18 by hand on one of these rows is
+indistinguishable from leaving it alone, and that row still takes the band's
+spacing. Any other number works.
+
+## 2026-09-15 — The Studio starts watching Google Drive for new footage (#711)
+
+Third of eight pieces in the Studio work. The first two built the filing
+cabinet and the to-do list; this is the part that notices you have put
+something new in the folder.
+
+Two folders are watched, and they mean different things. `/Studio/Inbox/` is
+footage, which goes through the whole pipeline. `/Studio/Plates/` is
+backgrounds and screen recordings, which are looked at but never sent for
+transcription — a screen capture has nobody talking in it, and transcribing
+them all would spend real money on silence.
+
+The interesting choice is the question it asks Google. The obvious one is
+"what is in this folder?", and it works beautifully until the folder has a few
+thousand files in it, at which point it gets slower every single week and
+eventually stops answering. So it asks the other question instead: "what has
+changed since the last time I asked?" That costs the same whether the folder
+holds ten files or ten thousand. It writes down where it got to, so turning the
+machine off and on again picks up from there rather than re-filing every video
+you have ever shot.
+
+Two things were worth building carefully, because both have bitten this project
+before.
+
+The first is the account muddle. The footage lives on one Google account and
+the login belongs to a different one. When that arrangement breaks, Google's
+answer is "file not found" — which is exactly what it says when a folder has
+genuinely been deleted, and it sends you looking in completely the wrong place.
+So every run now says out loud which account the login belongs to, whether or
+not anything went wrong, and a folder it cannot see raises an alarm that names
+both accounts and the two ways to fix it.
+
+The second is not pestering. An expired login does not start working again
+because you asked it a second time ninety seconds later; it starts working
+when somebody re-mints it. So a broken login raises exactly **one** flagged
+item that keeps its reason, and refreshes it rather than filing another on
+every pass — ten broken hours leave one alarm, not ten. When it starts working
+again the alarm clears itself and says that it has, because an alarm that
+cannot stand down is one everybody learns to ignore.
+
+There is a related trap underneath that. Google reports "your login is dead"
+and "you are asking too fast" with the same error number, and those want
+opposite reactions — one needs a person, the other fixes itself in a minute.
+They are now told apart properly, so nobody gets sent to replace a login that
+was fine.
+
+One more thing, found while looking at what a real run would print rather than
+what the tests print: Google's "what has changed" feed covers the whole
+account, not just the two watched folders. On the real account that is a very
+large archive ticking over, so the first draft's run report would have listed
+a few thousand unrelated holiday videos by name and buried the three lines that
+mattered. Files that have nothing to do with the Studio are now counted by
+category with a few examples kept, and only files genuinely in a watched folder
+are named one by one.
+
+One correction after review, and it is the kind that only shows up on a real
+machine. The Mini has been running the Studio's to-do list since the previous
+piece shipped, so its file is older than the new column this work needed. The
+code adds that column on the way in — one line, exactly right, and nothing was
+checking it. Every test built a brand-new file, which already has the column,
+so deleting that line left all sixty tests green while the Mini itself would
+have stopped dead with an unreadable database error, unattended, at whatever
+hour it next picked up a video. There is now a test that builds the old shape
+on purpose and opens it, so anyone tidying up later finds out immediately
+instead of finding out from the Mini.
+
+A second review found four ways this could go wrong quietly, and quietly is
+the word that matters — all four produced a cheerful green run report while
+something was actually broken. The happy path was fine; nobody had walked the
+unhappy ones.
+
+The worst was losing footage. Google only tells you about a file once, so the
+watcher writes down how far it has got and never looks back. If putting a video
+on the to-do list failed for a moment — the database busy, say — the run said so
+in its report and then moved the bookmark past it anyway. That video was gone:
+nothing would ever mention it again. Now a run that could not file something
+leaves the bookmark where it is and reads that page again next time, which is
+exactly what it already did when Google itself had a bad moment.
+
+The second was an alarm standing itself down on no evidence. A run that could
+not check the folders at all — not "they are broken", but "I could not reach
+them to look" — was counting as a clean run, which cleared a genuine alarm
+raised an hour earlier and told the board Google was readable again. The two
+outcomes are now kept apart: a run says **OK**, **finished with failures**, or
+**could not tell**, and only the first of those is allowed to clear an alarm.
+
+The third was sending you on an errand. A momentary network problem reaching
+Google's login service was being filed as "your login is dead — go and re-mint
+it", which is an afternoon of work on a login that was perfectly fine. The
+comment above that line already said not to do this; the line did it anyway.
+
+The fourth is the account muddle wearing a different hat. Google keeps a
+separate "what has changed" feed for each shared drive, so if the Studio
+folders live on a shared drive rather than in somebody's own My Drive, the
+watcher would be reading the wrong feed entirely — finding nothing, for ever,
+and reporting a clean run every hour while it did. It already had the answer in
+hand and was throwing it away. It now compares the two and refuses to start,
+naming the drive it found and the setting that fixes it.
+
+Three smaller ones went in at the same time: pointing both folder settings at
+the same folder used to silently mark every interview as a background and never
+transcribe any of them (it now refuses, before it calls Google at all); two
+copies of the worker starting at the same instant could collide while adding
+that column to the old to-do list file, and the loser would crash; and an error
+while writing to the database could be replaced by a second, meaningless error
+raised while cleaning up, hiding the real one. Each of the seven fixes has a
+test, and each test was checked by putting the bug back and watching that exact
+test fail.
+
+Nothing downloads yet — that is the next piece.
+
+## 2026-09-15 — One last lock on the tally the test suite was filling up (#715)
+
+This is the tail end of the job **#713** finished — "Running the tests no longer
+eats the real ClickUp budget". Read that one first; this adds one thing to it.
+
+Both pieces of work were started the same day, by two sessions, against the same
+problem, and #713 got to the finish line first with the better answer. So most of
+what this branch carried has been thrown away in favour of what already shipped —
+deliberately, because two slightly different versions of the same rule sitting in
+one codebase is how the rule quietly stops meaning anything.
+
+What survives is the lock at the very bottom. #713 stops a pretend request being
+written into the shared tally on the way in. This says that a test run may never
+write to the machine's real tally file **at all**, no matter which door it comes
+to or what it claims about itself — a test is allowed a scratch tally of its own,
+and nothing else. The first is the rule; this is the bolt behind it, for a write
+that finds a way around the front.
+
+Also folded in: "is this a test run?" was about to exist as two separate
+definitions in two files, one from each branch. There is one, in the file
+furthest down, and everything above reads that.
+
+Checked by deliberately removing the bolt and watching the test that names it
+fail, then putting it back. The whole suite passes as a background job — the
+thing that was broken in the first place — 4,116 of 4,116.
+
+## 2026-09-15 — A column can now look different on a phone and on a tablet (#717)
+
+Last time, a whole ROW could be styled differently on small screens. This does
+the same one level down: each **column** inside a row now carries its own
+padding, margins, border, alignment and "hide this" setting for Tablet and for
+Phone. The controls are the same three little Phone / Tablet / Desktop icons,
+now sitting on each column's own Styles bar — click the phone, change a
+setting, and it changes only on phones.
+
+The rule you set stays the rule. A phone **follows** the desktop until you
+change something on it, and only the differences are stored. So widening a
+column on the desktop later still widens it on a phone, unless you had asked
+that phone to be different — and setting a value back to what it was
+inheriting removes it entirely rather than quietly freezing it at today's
+number. A banner above the settings says in words what this screen is
+following, lists anything you have changed, and gives each one a **reset**
+button.
+
+Tablet means 1024px and below; Phone means 767px and below. Background,
+overlay, opacity, shadow and who can see the column are deliberately the same
+on every screen, so the panel simply does not offer them on a phone — a
+control that looks like it works and silently writes the desktop value is
+worse than no control.
+
+Nothing changes on any existing page: the before/after photographs came back
+pixel-identical, and a column hidden with the old "Hide on Mobile" tickbox
+still hides exactly as it did.
+## 2026-09-15 — Running the tests no longer eats the real ClickUp budget (#713)
+
+Every background job on the Mac Mini — the bus relay, the pipeline pulse, both
+loop lanes — shares one per-minute allowance of requests to ClickUp, and they
+keep a shared tally file so each can see how much of the minute is left and
+stand down politely when a live session needs it. It turned out that simply
+running the test suite filled that tally with requests that never happened.
+
+The tests do not really call ClickUp; they hand the code a stand-in. But they
+keep the real ClickUp web address in the request, and the tally was decided by
+the address alone — so a few hundred imaginary requests piled up in a few
+seconds. Two things came off that. The tests started refusing their own
+requests partway through a run and reported about 22 failures that were not
+real, which matters because that command is a gate every automated build pass
+has to run and believe. And anyone running the tests made the relay, the pulse
+and both loops stand down for the next minute for no reason at all.
+
+A request now counts against the budget only if it is going to ClickUp *and*
+going out over the real network, rather than through a stand-in the caller
+brought with it. Nothing in the live site ever brings one, so real traffic is
+counted exactly as before. The tests for the budget code itself still have to
+drive that path with a stand-in — that is how we prove a background job really
+does stop when it should — so those may still be counted, but only against a
+throwaway tally file of their own. That is what makes it impossible, rather
+than merely unlikely, for invented traffic to reach the shared one.
+
+Two other test files stub the network deeper down, inside a separate process
+the budget code has no way to inspect. Those now hand that process its own
+throwaway tally, and a new guard fails the build if a future test forgets.
+Measured afterwards: the suite gives 4039 passes and no failures whether it is
+run by a background job or by hand, and neither run adds a single line to the
+shared tally.
+
+A check of this work found three loose ends, all now closed. Two were comments
+left saying the opposite of what the code does — one of them in the single
+live file that uses this seam, which is precisely where somebody would later
+have trusted it. The third was a real, if sleeping, hazard: if a caller handed
+the code something that was not a working stand-in at all, it used to fail on
+the spot without contacting anyone, and after the first round of this work it
+would instead have quietly sent a genuine request to ClickUp. Nothing in the
+code does that today, but it is the wrong way round for the one piece of code
+whose whole job is that nothing slips out uncounted, so it now refuses out
+loud and explains what it was handed. The guard that stops a future test
+forgetting its throwaway tally was also tightened: it used to look at a whole
+file at once and only knew one way of starting a second process, so a third
+one added to a file that already looked fine would have slipped through.
+
+A second check then found one more, and it was a good catch: a test added by
+separate work a few hours earlier, on purpose, does the one thing neither of
+the protections above can see. It keeps the real ClickUp address, does *not*
+hand in a stand-in, and replaces the network call inside its own process — so
+to the budget code it looks exactly like a genuine request, and five lines per
+test run were still landing in the shared tally. The two protections were each
+right on their own and quietly cancelled each other out.
+
+So there is now a third condition, and it is about the *process* rather than
+about what the caller handed in: a test run may write to a throwaway tally it
+named for itself, and may never write to the shared one. That closes the whole
+family rather than this one case — a test nobody has written yet, in whatever
+style, cannot reach the shared tally through this door at all. Measured on the
+finished code, with the tally pointed somewhere only this run could touch so
+another job on the machine could not be mistaken for it: the suite gives 4083
+passes and no failures, whether run by a background job or by hand, and the
+shared tally moves by zero lines either way. With the new condition taken back
+out again it moves by five, which is how we know the measurement can see it.
+
+A third check found the two halves had drifted apart again, this time by
+nothing either of them did: the separate work mentioned above went live on the
+main copy of the code while this was waiting to be checked, so the two no
+longer fitted together. Two lines had each gained a different thing and had to
+be joined into one, and then the test that separate work added stopped
+proving what it was written to prove. It forces the budget code to stand down
+on purpose, and standing down is only ever decided for a request that counts
+against the budget at all — which, under the new third condition, a test run's
+request does only when it has named a throwaway tally for itself. It had not,
+so the request sailed through, the stand-in answered as if all were well, and
+the test failed on a success. Naming a throwaway tally inside that one test
+restores it: 18 of 18 pass, and the shared tally still moves by zero. With the
+third condition taken back out, that same file puts five lines into the shared
+tally again, so the zero is a reading rather than an assumption.
+
+## 2026-09-14 — Saving a module on a page template quietly wiped the template's headings, and 31 other things (#703)
+
+A page template is the starting point you build new pages from, and it carries
+its own look — heading sizes, line heights, how bold the headings are. Open one
+in the Builder, save or delete a single module on it, and all of that reverted
+to the plain defaults. No warning, no error; the save reported success. Worse,
+every page you then built from that template started life with the defaults
+too, so the damage spread outward from the template.
+
+The ticket described the headings. Before writing anything I ran the Builder's
+exact save against a copy of the real data to watch what it did, and it was
+doing considerably more than that: the same click also blanked the template's
+summary, blanked its internal id, and changed its *kind* — the field that says
+what sort of template it is — from "starcaster landing" to "modular". Across
+the 44 templates on the live system that is 4 with a custom look, 31 with a
+summary, 44 with an id, and 31 whose kind was being changed out from under
+them. I posted that correction on the ticket before building, because it
+changes what the fix has to be.
+
+The cause is two separate things that each look harmless. All the template's
+sections, its background and its look are stored together in one single field,
+so anything that rewrites part of it rewrites all of it — and the Builder's
+save only ever mentions the sections, so the look was being replaced with a
+blank one. Separately, the code that handles the save filled in a value for
+all 32 fields whether the Builder had sent one or not, which is how the other
+31 got blanked. Fixing either one on its own still leaves the bug, so both are
+fixed here: anything the save does not actually mention is now left exactly as
+it was.
+
+Deliberately changing the look still works, including clearing it back to the
+defaults on purpose — the code now asks "did the save mention this?" rather
+than "does this have a value in it?", which are different questions and only
+the first one is safe.
+
+Checked end to end against a real database rather than from reading the code:
+the Builder's real payload now leaves the look, the kind, the id and all five
+sections untouched, and the old code reproduces the loss in the same harness.
+Each of the six fixes was deliberately broken to watch the matching test fail
+first — which caught one test that could not fail at all, and got replaced with
+one that can.
+## 2026-09-15 — The loops were telling themselves you had taken the deck, and standing down (#712)
+
+For a few hours on the 15th the build and review loops on the Mac Mini refused
+to do anything, and the reason each one printed was **"the pipeline is being
+treated as PAUSED"** — which is the machine's way of saying *Dane has taken the
+deck, so I should keep my hands off.* You had not. The pipeline was running the
+whole time; a different command on the same machine, asked a second later, said
+so plainly.
+
+That is the worst shape a bug can take here, because nothing looked wrong. A
+pass standing down because you are working is completely normal, so the
+messages did not read as trouble — they read as the system behaving itself.
+
+Underneath it was one missed case. Every job that talks to ClickUp goes through
+a single piece of code, and that code can answer in three ways: *here is your
+answer*, *I could not reach them*, or — the third one — *I am a background job,
+the minute's ClickUp allowance is nearly gone, and I am not spending the last of
+it in case you are using it.* That third answer was added deliberately so a
+background job can never slow down a session you are actually sitting in front
+of. It is routine, it fixes itself within a minute, and it happens whenever two
+jobs wake up together.
+
+Five different places in the code ask that question. **Four of them had never
+been taught the third answer exists**, so they crashed on it — and the crash was
+then tidied up, one layer at a time, into "could not reach ClickUp", and then
+into "the pipeline is paused". A one-minute budget hiccup reached the operator
+as a claim about where you were.
+
+All four are fixed, including one nobody had spotted: it sits on the path a
+visitor takes when they report a bug on one of the sites, where the same crash
+would have shown up as an error page.
+
+The message itself now says only what is actually known, which turned out to be
+the fiddly part. The first attempt at this fix swung too far the other way: it
+replaced *"the pipeline is paused"* with *"the operator does not have the
+deck"* — and that is a claim the code is in no position to make, because the
+whole problem is that it never managed to look. If you genuinely had paused the
+line in the same minute a background job ran out of allowance, the new sentence
+would have been flatly false, and the next reader could reasonably have gone to
+work on your deck. So it now names the **cause** (the one-minute allowance, not
+you) and says out loud that whether you have the deck is still unknown and the
+next pass will find out. It also keeps the parts that were already right: that
+nothing is broken, that it clears itself, and that this is specifically not a
+network or password problem, so whoever reads it next does not go hunting for
+one. The pass still stands down for that minute, which is correct: it genuinely
+could not check.
+
+And because four separate authors had each missed the same case, there is now a
+check that fails the build if a fifth one does.
+## 2026-09-14 — A dropdown menu over a video column no longer looks broken to your visitors (#706)
+
+If you put a video behind one column of a row and a menu in that same column,
+the menu's dropdown was cut off at the bottom edge of the column. A visitor
+would tap it, see a thin white sliver appear, and nothing else — a menu that
+looks like it does not work.
+
+The cause was a piece of housekeeping doing more than it was asked. A
+background video is blown up slightly so it always fills the column with no
+gaps at the edges, which means without something holding it in, it would spill
+sideways and paint over the words in the column next door. So the column was
+told to hide anything that reached outside it — and it did exactly that, to the
+video *and* to the menu, because the browser has no way to tell those two
+apart.
+
+Now the video is put in a box of its own, laid exactly over the column, and
+that box does the holding. The video is contained just as tightly as before;
+the column itself is left alone, so anything in it that is meant to reach
+outside — a dropdown, a floating image nudged over the edge — does. Rows with a
+video, and rows with a drifting photo background, had the same fault and are
+fixed in the same stroke.
+
+Four automatic checks were added that drive a real browser, open the menu, and
+ask what the visitor could actually see and click. Each one was deliberately
+broken first and watched to fail, so a future change cannot quietly bring this
+back.
+
+A second round caught something before it ever reached anyone: on a phone a
+background video is not played at all — it would cost the visitor megabytes of
+their own data — and the holding box was still being put on the page around
+nothing. An empty box is still something the page has to lay out, and in a row
+of six columns set to stack in reverse on phones it pushed the last column into
+the middle of the pile. The box is now put up by the video itself, so when
+there is no video there is nothing at all, and the columns come out in the order
+the operator asked for. Five more browser checks cover that, including one that
+simply reads what order a phone actually put the columns in.
+## 2026-09-15 — The Mini's health check now names all its jobs, and a job that comes back says so (#710)
+
+The Mac Mini has a self-check that answers one question without needing a
+password, a network connection or ClickUp: *when did each job I own last
+actually work?* That deliberate simplicity is the point — it still answers on a
+machine that is otherwise having a bad day. Four of the eight jobs it watches
+were missing from the answer entirely. Not listed as healthy, not listed as
+broken, just absent, which reads as "nobody is watching these" — and two of
+them are the Pulse pipeline jobs that went dark for 33 hours last week without
+anybody noticing. The cause was one word. A job is tagged "blocked" when the
+Mini's own setup script cannot install it, and two of these are installed by a
+different project's script instead. The report read "blocked" as "nothing to
+say about this job", which was harmless until those jobs started working. They
+are all listed now, each with a real time, and the setup script says the same
+thing in its own report so the two cannot disagree.
+
+The second half: there are two separate alarms watching for a job going quiet,
+and they measure over different lengths of time. Only one of them ever posted
+"it's back". For jobs that run every hour or so that made no difference,
+because the other alarm always fired first and did the announcing. But the
+nightly librarian job runs once a day, which flips the two windows around — so
+an outage lasting between two days and six days would be announced to the team
+chat as dead and then silently fixed, with nobody ever told. Both alarms
+announce a recovery now.
+
+One more thing turned up while checking the setup script, and it is worth
+knowing because it was quietly wrong for a long time: its "is this schedule
+already installed?" test could only ever answer *no*. Every schedule that was
+in fact installed showed up as missing, and running the script for real tore
+down and rebuilt all three of the Mini's live scheduled jobs every single time.
+Fixed in the same change.
+## 2026-09-15 — The Monday report could not have reached Google Drive at all (#709)
+
+The change above moved the weekly report out of the Mini's code folder and into
+Google Drive. A review pass then went and ran it the way the Monday schedule
+actually runs it, and found it could never have worked.
+
+When the Mac runs a job on a timer, it hands that job almost nothing — no
+settings, no passwords, just enough to find the programs it needs. The report
+was asking for Google straight out, without the step that fetches our stored
+Google sign-in first. Run by hand it worked perfectly, because a person's
+terminal already has all that loaded; run on the timer, it would have failed to
+sign in every single Monday, reported the failure, and left the report sitting
+on the Mini and nowhere else — the exact thing this whole piece of work was
+meant to stop. It now goes through that step, and a test fails if anyone takes
+it back out.
+
+Four smaller things from the same review. **A re-run will no longer wipe out the
+narrative you wrote.** The report puts the figures in Drive and asks Dane to
+write the story on top of them, on the same page, under the same name — and a
+Monday that fails halfway does get run again. The second run would have replaced
+his writing with the bare numbers and called it a success. Now it finds the page
+already there, leaves it exactly as it is, and says so. **The contents page lists
+every edition again**, because it is now built from what is really in the Drive
+folder rather than from whatever the machine that ran it happened to have on
+disk — the old way would have dropped older editions the moment the job moved to
+a different Mac. **And its links work**, which they did not: they were written as
+if the pages sat in a folder, and Google Drive does not work that way, so every
+link on that page was dead. Finally, a duplicate of an internal command was
+removed, and the one path where the report refuses to run at all now speaks up
+instead of exiting in silence.
+
+## 2026-09-14 — The weekly report now goes to Google Drive, and stops jamming the Mac Mini (#709)
+
+The weekly figures report runs on the Mac Mini every Monday at 7am. It was
+saving its three files straight into the Mini's own copy of the Starcaster
+code — and the Mini refuses to pull down new code while there are stray files
+sitting in that copy, in case they are somebody's unfinished work. So every
+report run quietly switched off the Mini's updates, and the machine carried on
+running whatever version of the pipeline it had last Monday.
+
+That is what happened on 14 September: the Mini was seven changes behind,
+including two fixes to the pipeline shipped the day before, and nothing said so.
+An agent session had to move the files out and put the copy back by hand before
+it would update again. There were already two clean-up steps written to stop
+exactly this, and they did not.
+
+The report now writes to a folder that is nowhere near the code — by default
+`Documents/Starcaster/Weekly Reports` — and uploads each edition to Google
+Drive, in Projects → Starcaster → Weekly Reports on the mentor24 account, which
+is where Dane asked for it. It refuses to run at all if anyone ever points it
+back at a code folder. After each upload it asks Drive for the file it just
+wrote and checks the size matches, because "the upload worked" and "the file is
+actually there" are not the same claim. If the upload fails, that is a failed
+run: it posts to the team chat and the Monday job raises it as a job failure,
+rather than the report quietly existing on one machine and nowhere else.
+
+The editions already saved in the repo stay where they are as history. Nothing
+is committed or published as a pull request any more.
+
+**One step is Dane's:** the saved Google sign-in for Drive has expired, and only
+a browser login on the mentor24 account can renew it. Until that happens the
+Monday upload will fail — loudly, with a message saying exactly that.
+
+## 2026-09-14 — Saving a Builder page no longer reverts a row's settings (#698)
+
+**Read this bit first, because the original report was wrong about one thing.**
+This was filed as "set a row to full width, press Save Page, and it goes back
+to being boxed in at the normal page width." That is a real trap in the code
+and it is now closed — but a review pass went looking for a page it actually
+happens on and could not find one, and neither could we. Checked against live
+production: not one of the 133 pages that have rows on them is arranged the way
+it takes to trigger it, and the 359 full-width rows sitting in the database
+today have all stayed full width. So **please do not go looking for this on your
+sites — you will not see it, and you would not have seen it before either.**
+
+What is true is that the trap is *armed*. It fires on a page whose very first
+row has its first item sitting in the fourth, fifth or sixth column of a wide
+layout. No page is arranged that way right now, but 79 pages already use those
+wide columns, so it is one drag of one item away — and from that moment every
+save of that page would quietly reset 35 of its settings. That is worth closing
+before somebody trips it, which is what this change does.
+
+The cause is one line, and it turned out to be much bigger than the full-width
+setting. The older Builder tags every row it saves with two fields that used to
+belong only to pages imported from the old Normie system. The server sees those
+tags and thinks "this is an old imported page, run it through the importer" —
+so every ordinary save was being treated as an import. The importer rebuilds
+each row from a short list of the fields it knows about, and throws away
+anything not on that list. Full width was not on the list. Neither, it turned
+out, were 34 other things: the row's padding and margins, its column widths,
+its minimum height, its borders, how far it was nudged left or right, the
+padding and margins inside each column, and the switches for hiding a row on
+phones or on desktop. All of them silently reset to their defaults every time
+anybody saved the page.
+
+Rather than guess at which fields to rescue, we measured: ran a real row
+through the save and compared what went in against what came out, field by
+field. Then fixed it the other way round — the importer now keeps whatever the
+row already had and only translates the genuinely old-format parts. That means
+a new row setting added next year is protected automatically, instead of
+waiting for someone to remember to add it to a list. Pages genuinely imported
+from Normie still import exactly as before; there is a test holding that down.
+
+A review found that measurement had not gone deep enough, and it is worth
+saying how. It compared the row's own settings — which is where full width
+lives — but a row's background is a bundle of settings tucked inside it, and
+nothing looked in there. Six more were reverting on every save: the angle of a
+gradient, how see-through the background is, which picture was chosen, whether
+the background drifts as you scroll and how fast, and how an overlay tint
+blends. So the second pass measured the whole row recursively, right down into
+every nested setting, and reported its own blind spots as it went: 221 row
+settings and 9 module settings, every one of them actually exercised, none
+skipped. Nothing is lost now.
+
+One of the six is worth calling out, because it is the kind of thing that makes
+people distrust an editor. If you picked a colour for a row and then set the
+background to "none", the colour was thrown away on the next save — so
+switching the background back on later gave you white, not the colour you
+chose. The Builder keeps that colour on purpose; the save was discarding it.
+
+The review also caught the first fix going slightly too far the other way: in
+rescuing everything, it could overwrite the per-column padding the importer had
+just correctly worked out. That is now handled by the one function that has
+always known how to do it properly.
+
+Checked against a real page in the database, saved twice with no edits in
+between, and confirmed every setting survived both times — then deliberately
+removed each fix and watched the settings revert again, which is how we know
+the tests would catch this coming back.
+
+A third review pass found one more thing, and it is the mirror image of the
+colour problem above. In teaching the importer that "none" is a real choice
+rather than a missing one, the fix accidentally broke a much older rule: a
+genuinely old Normie page could say "no background" in its new-style field
+while still carrying a colour in its old-style one, and the importer used to
+show that old colour. After the fix it showed nothing at all. Nobody would
+have noticed, because no part of this app sends that combination — but
+importing old pages is the only job that code has, so it is exactly the wrong
+place to be quietly wrong. It now honours the old colour again, which is also
+what the Builder itself does before it saves, so the two ends agree instead of
+disagreeing. Everything the second pass rescued still comes through untouched.
+
+Two of the tests were also tightened. One of them had been quietly excusing two
+settings from the check meant to catch any setting going missing — so we made
+one of those two go missing on purpose and watched the test pass anyway, which
+proved the excuse was hiding real failures rather than preventing false ones.
+It compares everything now. And the note left in the code for the next reader
+had the mechanism wrong: it blamed the older editor, which does trip the trap
+but has nothing to lose by it. The note now names the arrangement that actually
+causes the loss, with the production numbers beside it.
+## 2026-09-14 — Changing the template on a batch of pages no longer wipes what is on them (#697)
+
+The Builder has two buttons that both say "change template", and until now they
+did opposite things. Open one page in the editor and change its template, and
+the page keeps everything you wrote — only the shared furniture around it, the
+header strip and the footer, gets swapped for the new template's. Tick a batch
+of pages in the list and use Change Template there, and every one of them was
+wiped and refilled with the template's blank starter layout.
+
+That is what happened to the Delray Beach Tennis Center site on 13 September.
+Fifty-seven pages were moved onto the Public Website template in one go, all
+fifty-seven lost their content, and because publishing followed twenty minutes
+later, fifty-one of them sat on the live site reading "Replace this section
+with real content." for about eighteen hours. (The pages were put back the next
+morning from the copies the change itself had banked.)
+
+The batch button now does what the single-page one does: it swaps the shared
+header and footer, pulls them from the current masters so you never get a
+six-week-old menu, and leaves your own content exactly where it was. The
+warning you read before pressing it leads with that, and with the number — "All
+31 content sections on this page are kept exactly as they are" — instead of
+telling you your sections are about to be replaced.
+
+Three things were added underneath, all of them about the same worry: this
+operation has twice done damage while reporting success. If the shared sections
+cannot be read at all, the whole run now stops rather than quietly writing every
+page with its header and footer removed. A page that would come out with less
+content than it went in with is refused instead of written. And after each page
+is saved it is read back and its content counted, not just its total number of
+blocks — swapping content for furniture keeps the total identical, which is
+precisely the kind of loss that would otherwise slip past.
+
+The review pass on this found the same accident waiting on the other side of
+the page, and it is fixed here too. Not every template carries a shared header
+and footer — in a copy of the live database, 36 of the 43 page templates carry
+none at all — and moving pages onto one of those took the header and footer
+*off* every page, put nothing back, and reported all of them confirmed. The
+same loss, from the opposite end. A template with no shared sections of its own
+is now refused before anything is written, the dialog says so and keeps the
+button off rather than letting you walk into it, and each saved page is checked
+for its shared sections as well as its content. A run is also stopped if the
+project's saved sections come back empty when the template needs them — on the
+live server an unreadable list and an empty one look identical, and the
+difference is whether 57 pages keep their header.
+
+The warning before the button now also tells you what *goes*, not only what
+arrives. Pick a template and it names any shared section your pages carry that
+the new one does not — "Old Footer will be removed from 1 of the 2 selected
+pages" — or says outright that nothing is lost, and it re-reads the moment you
+pick a different template. And it no longer states a number when it has not
+actually looked at every page you ticked: asked about five pages it was given no
+layouts for, the old wording answered "these pages have no content sections of
+their own, so there is nothing to lose here", which is the most reassuring
+sentence in the dialog and, in that case, the least supported.
+
+Two last things, from the second review pass. Pressing the button archives every
+page in the project first, because that archive is the only undo this operation
+has — so the browser asks the server "will you accept this?" before paying for
+one. Two of the new refusals above were being made only at the moment of
+writing, after the archive had already been taken: you were told the change was
+fine, a full copy of every page was filed, and then nothing happened. No page
+was ever at risk, but you were left holding a useless archive at the top of the
+list you are told to restore from, which pushes the real ones down it. Both
+questions are now asked before the archive, so a refusal costs you nothing. And
+the sentence naming the shared sections that will be removed used to count them
+by name, so two different untitled ones read as one — it counts the sections
+now, and says "2 shared sections with no title" rather than inventing a single
+name for both.
+
+Three more, from the third review pass — and the first is the one that was live
+on your own site. Some pages carry their own copy of the header and footer
+rather than the shared version: the strip and the menu are sitting on the page
+as ordinary content, not linked to the master. The system counts those as your
+content, so it keeps them — correctly — and then adds the template's real header
+and footer around them. The page ends up showing the contact strip twice, the
+menu twice, the footer twice. Two Delray pages are in exactly that state today
+and one of them is the home page, and the run reported every page confirmed,
+because the totals all added up. Those pages are now refused rather than
+written — the rest of the batch goes through as normal — and the warning names
+them before you press the button, so it is not a surprise afterwards: "All 2 of
+these pages carry their own copies of sections the chosen template also brings…
+open them in the page editor, delete each page's own copies, then run this
+again."
+
+The second: the warning was comparing your pages against the template as it is
+stored, while the server compares them against the shared sections as they are
+now. Those differ whenever a shared section has been deleted since the template
+was made — and in that case the warning promised "no shared section is removed"
+and the server removed one. It now asks the server what the template actually
+resolves to and describes that, so the sentence you read and the change you get
+are the same thing. While proving it, one more small untruth turned up in the
+same sentence: a removed shared section was described as something you "can put
+back at any time", which is not true when its master is the one that was
+deleted. It now says you can add it back as long as it is still on your Saved
+Sections list.
+
+The third is invisible but was quietly corrupting pages. A template remembers
+its header and footer under the same internal names they had on the page it was
+made from — so applying it back to that page handed the page two different
+sections with one name, and the part of the system that saves pages stamped your
+own content as a copy of the shared header. The next time that header was
+edited, your content would have been overwritten with it. Sections are now
+guaranteed distinct names on the way in.
+
+## 2026-09-14 — Taking a page off your site no longer looks like an unfinished job in the code (#696)
+
+When you publish a page, the system saves a complete copy of it — that copy is
+what visitors are actually served, so the site stays fast and stable while you
+keep editing. When you *delete* a page, that saved copy is thrown away too.
+
+But when you merely untick Published, or mark a page private, or rename its
+web address, the saved copy stays where it is. Nobody can reach it: your site
+will not serve a page you have hidden. It is simply still on file.
+
+You were asked which of three things that should mean, and you chose: keep the
+copy, and write down plainly that unpublishing **hides** a page rather than
+erasing it — with erasing being what deleting the page is for. This change is
+that decision being recorded.
+
+**Nothing works differently than it did yesterday.** What was missing was the
+reasoning. Read the code as it stood, "deleting a page throws away its saved
+copy" looks like half a job, and the obvious way to finish it would be to throw
+the copy away on unpublish as well. That would quietly change what the Publish
+button promises: a page you hid and later put back would show your unsaved
+draft edits the moment it went live again, before you had pressed Publish. It
+would also buy very little — checked against the live database, hidden pages
+were holding a single page and 26 kB between them.
+
+So the decision now sits in three places: in the code exactly where someone
+would go to make that change, in the documentation for the table itself, and in
+three tests that fail if the option you did not choose ever gets built by
+mistake. Each of those tests was deliberately broken first and watched to fail,
+so we know they can.
+## 2026-09-14 — Saving a Builder page no longer wipes that page's own heading sizes (#699)
+
+Open any page in the Builder, press **Save Page**, change nothing — and the page
+lost its own typography. Heading sizes, line heights and heading weights all
+reverted to the defaults, with no message and nothing on screen to connect the
+change to the save. 184 pages in this machine's copy of production carry those
+settings, so 184 pages were one ordinary save away from losing them. The page's
+own background was going the same way, by the same route.
+
+Two separate faults, and fixing either one alone left the bug exactly as
+reported.
+
+The first is in the machinery that imports pages from the old Normie system. It
+recognises an old page by two settings objects that the current editor happens
+to attach to every section it saves — so every ordinary save gets treated as an
+import. The importer then rebuilt the page from a list of two things, the
+background and the sections, and the page's typography was simply not on that
+list. It now carries the page's own fields through and translates only the
+genuinely old-format parts. That is the same shape as the fixes for the two
+sibling tickets one level down, and it is written as a carry rather than a
+longer list on purpose: a list only ever protects the fields somebody
+remembered, and this is the third time the same rebuild has dropped something.
+
+The second is that the editor's save never sends the typography at all. The
+sections, the page background and the page theme share one database column, and
+the store rebuilt that whole column whenever a save named any one of them — so a
+save naming only the sections wrote "no theme", and the defaults filled in
+behind it. A save that touches that column now carries forward whatever it did
+not name. A save that *does* name a theme still wins, including one deliberately
+naming an empty theme to reset a page.
+
+Both halves were broken on purpose and measured against every real stored page:
+with either one reverted, 184 pages lose their heading sizes on a save; with
+both in place, none do.
+
+## 2026-09-14 — Three blog settings panels lined up, and the one nobody had ever checked (#692)
+
+A settings panel should read as one neat rectangle: every label starting on the
+same line down the left, every box finishing on the same line down the right.
+Three blog panels were on the list to be brought onto that layout. I measured
+all three in a real browser first, at three screen widths, before changing a
+line — and the ticket was wrong about which ones needed it.
+
+The Category Manager was already correct, so it was left alone and that was
+said plainly rather than given a tidy-looking edit. The Post Manager had one
+real gap: its two "page URL" rows are a dropdown with a text box beside it, and
+the rule that stops any single control getting too wide had never reached that
+pairing, so those two rows ran 286 pixels further right than every row beneath
+them. One column, two right edges. They all finish on the same line now.
+
+The Card Manager is the interesting one, and its problem was not in the file
+the ticket named. That panel's entire contents is the Card Template designer,
+which lives about four hundred lines away in another file. Its controls were
+placed by "put the next one wherever the last one ended", so a group of seven
+settings sat at seven different left edges across three wrapped lines, every
+box a different width. That is precisely the thing Dane pointed at when he
+opened this whole sweep a month ago, still sitting there untouched.
+
+The reason it survived a month is the part worth remembering. The automatic
+layout checker recognises three kinds of form row, and this designer is built
+from a fourth kind it had never been taught. So a run announcing "684 panels,
+all correct" had never once looked at it. It was not passing; it was absent.
+The checker knows that fourth shape now, the panel is measured along with the
+rest, and four separate things were broken on purpose and watched to fail
+before any of the green was believed.
+
+Review sent this back once, and the send-back found something worth having.
+The new guard that stops a fixed width creeping back onto one of these boxes
+only recognised one way of writing it. The other spelling — the commoner one,
+as it happens — walked straight past it. A guard that only catches the spelling
+you already removed is not a guard, so it was widened and then broken on
+purpose in five different spellings, each one watched to fail. Three smaller
+things went the same way: two checks that would have gone quiet instead of
+failing if the code around them were renamed, and a skip in the measuring tool
+that nothing had ever exercised for the case it was added for.
+
+One hole is left open deliberately and is written down rather than quietly
+carried: the checker still cannot see the Post Manager's kind of defect at all,
+and nine other panels have it live today. Closing it would flag all nine at
+once, which belongs to the sweeps that own those panels, not to this one.
+## 2026-09-14 — Saving a Builder page no longer quietly unlinks the shared blocks on it (#695)
+
+A shared block is one you build once and reuse on many pages: change the
+original and every page carrying it follows along. Until now, opening a page in
+the Builder and clicking **Save Page** — changing nothing at all — silently cut
+that link on every shared block on the page. The header flipped from *Following*
+to *Independent*, nothing was said, and the page looked exactly the same. The
+next time the original was updated, that page just did not get it. Which turns
+up much later as "the footer will not update on that page", with no way to guess
+which save did it.
+
+The cause was a piece of machinery for importing pages from the old Normie
+system. It recognises an old-style page by looking for a couple of settings
+objects — and the current page editor happens to attach those same two objects to
+every section it saves. So every ordinary save was being treated as an import,
+rebuilt from a fixed list of fields, and the list did not include the link back
+to the original. There was already a safety net downstream whose whole job is to
+put that link back; it was being handed a page the link had already been stripped
+from, so it had nothing to work with.
+
+The fix carries the link through the rebuild, for blocks and for the individual
+modules inside them, and leaves everything else exactly as it was. The ticket
+suggested a different repair — teaching the importer to recognise old pages more
+narrowly — and that was checked and set aside: the signal it proposed is one
+modern pages also carry, so it would not have fixed this, and tightening it
+further risks a real old page quietly failing to import, which is worse.
+
+Verified in a real browser against a local copy of the live data, both ways: on
+the old code the click wipes the links, on the new code they survive.
+
+A review sent this back once, and the second pass found something worth keeping.
+The safety net mentioned above had in fact been broken since the day it was
+written — it was meant to fall back on the page the browser sent whenever the
+rebuild lost the link, but it always reported an answer even when it had none,
+and that empty answer overwrote the real one every time. So the net had never
+once caught anything. It is repaired here, which means the link now survives in
+two independent ways rather than one. Each half of the fix also now has a test
+that goes red when that half is deleted, checked by deleting it and watching the
+named test fail, so a future tidy-up cannot quietly remove either one.
+
+## 2026-09-13 — Six blog settings panels line up as one block instead of a stack of loose rows (#688)
+
+Six panels in the Builder — the Category Filter, Tag Cloud, Search, Search
+Results, Newsletter Subscribe and New Post Form — had fields that ended at
+different places down the same column, so the form read as a stack of rows
+rather than one tidy rectangle.
+
+Almost all of it came from one control. The "Target Page" box is really two
+controls in one — a dropdown, plus a text box that appears when you choose
+"Custom…" — and because of the way it is built, the rule that keeps every other
+box a sensible width never reached it. Left alone it rendered about 850 pixels
+wide, the column sized itself to that one row, and every other field in the
+column then stopped nearly 300 pixels short of it. Twenty-seven rows across four
+of the six panels were doing that.
+
+The same control was also failing in the opposite direction, which is why only
+capping it would have been half a fix: on the Newsletter panel it has no text
+box, so it was just a short dropdown that nothing stretched, sitting 147 pixels
+short of the edge the fields above and below it reach. It is now bounded *and*
+filled, so it ends where they do whichever mode it is in.
+
+The Category Filter's list of categories was on a private layout of its own —
+each label stacked above a full-width box, lining up with nothing else in the
+panel — and, worse, the automatic layout checker skips that particular shape by
+name, so no sweep had ever measured it. It now uses the same shape the Tag Cloud
+beside it already uses, and the checker sees one more panel than it did before.
+
+Nothing here changes what any setting does or what gets saved.
+## 2026-09-14 — Re-linking a block to its original now actually pulls the original's content in (#693)
+
+A follow-up to the fix directly below this one, from its review.
+
+That fix gave every copy of a shared block a small memory of what the last push
+put into it, so a copy a failed push never reached stops being mistaken for one
+you edited by hand. The right answer — for the push. But the same question was
+being asked in a second place, by the button that re-links a block to its
+original, and there it is a different question: not "is this your edit?" but
+"does this block already show what the original shows?".
+
+Asking the first question in the second place meant a copy the failed push had
+missed was treated as already up to date. Tick "Following" back on and the
+button quietly did nothing at all: the old content stayed on the page, with the
+header saying it was following the original.
+
+The two questions are now named separately. Re-linking compares the content
+itself, and gets one of three answers: it already matches (nothing to do), it is
+stale because a push never reached it (take the original's content, no
+questions — there is nothing of yours to rescue), or you edited it here (ask
+first, exactly as before). The header chip picks up the same reading: a copy the
+last push missed still says "Following", because it is, but the tooltip no
+longer claims it "matches the original" during the one window where it does not.
+
+## 2026-09-14 — A shared-section save that half fails no longer talks you into wiping your own edit (#693)
+
+A shared section is a block you build once — a menu banner, a footer — and drop
+onto many pages. Saving the original pushes the change out to every copy. If one
+page fails to take that push, you used to be told "1 page could not be updated.
+Reload and save again to finish", and nothing more.
+
+What it did not tell you is that the page it failed on was also carrying an edit
+you had made by hand, right there on that page, which the push had deliberately
+left alone. And doing what the message told you to do made it worse: by the time
+you retry, the original has already been saved, so the app compares each copy
+against the new content. The copy on the failed page still held the old content
+— only because nothing was ever written to it — and that looks exactly like
+somebody having edited it. So the page got skipped, and you were offered
+"1 page has local changes and was skipped. Overwrite anyway?" Saying yes
+flattened the hand edit the first push had gone out of its way to protect.
+
+Two fixes. The page that failed is now named in the message, along with whatever
+hand edits are still sitting on it. And each copy now quietly remembers what the
+last push put into it, so a copy that was simply never written is recognised for
+what it is instead of being mistaken for an edit — on the retry it catches up,
+your edit survives, and the overwrite offer never appears for it.
+
+Worth recording how nearly this shipped doing nothing. The first version of that
+memory compared a fingerprint taken before saving with one taken after loading,
+and the database hands things back with their fields in a different order, so
+the two never matched. It failed silently and in the safe direction, which is
+the hardest kind to notice: every test passed, and the whole feature was inert.
+It took running the real thing against a real database to see it.
+## 2026-09-13 — Four settings panels in the Builder now line up as one block (#686)
+
+Open a module's gear icon in the Builder and you get a form. On most panels
+that form reads as one tidy rectangle: every label starts on the same line down
+the left, every box ends on the same line down the right. On the Reminders
+panel it did not. Each reminder card was built as its own little form, so the
+labels in card 1 sat in a different place from the labels in card 2, and inside
+a single card no two rows agreed either — seven different label widths in one
+box. Nothing was broken; it just looked assembled rather than built, which is
+the difference this whole sweep is about.
+
+All four panels in this batch now share one set of columns. Reminders was the
+real work; Current Poll, Messaging Topic List and Messaging Tag List were
+measured and were already correct, and that measurement is written down so a
+later reader can tell "somebody checked" from "nobody looked".
+
+Two things worth knowing about how this was caught, because both were cases of
+a check quietly seeing nothing:
+
+The automatic layout checker had **never once looked at the Reminders panel.**
+Reminder cards stay folded up until you click them, and the checker never
+clicked, so for as long as that check has existed it measured this panel as a
+single field and reported a clean pass. It opens the cards now.
+
+And the checker could not see two kinds of problem it now can. It measured each
+card's criteria block on its own, so criteria in card 1 and card 2 could drift
+any distance apart and both report fine — the blocks now say they belong to one
+shared set of columns, and a deliberate 37px nudge to the second card fails six
+ways where before it passed across 693 panels. Separately, the gap between the
+form's two columns was rendering at 52 pixels where the rule asks for 40, and
+the leftover 12 was being shared out unevenly, leaving two boxes that the
+styling declares identical drawn 19 pixels apart. That is the operator's
+original complaint — "the column width varies arbitrarily" — arriving one level
+up from where it was first fixed. It measures at exactly 40 now.
+
+A second review round found something worth writing down on its own: **the test
+written to protect that 40-pixel gap could not fail.** The styling rule carries
+a long note beside it explaining why the gap is set to zero, and that note
+repeats the setting word for word while explaining it. The test was reading the
+rule and its note together, so it found the words in the explanation and
+reported everything fine — delete the actual setting and the 52-pixel gap comes
+straight back with every check still green. The test now reads the rule with the
+explanation taken out, and the two lines it protects are checked separately,
+because the original break test deleted both at once and the failure it produced
+came from the half that was working.
+
+The same round finished a job that had been done one level too high. The setting
+that closes the gap had been applied to the outer list but not to the three
+boxes nested inside it, which kept the old value from the base styling — so the
+criteria rows inside a reminder card sat five pixels off the column every other
+control in that panel uses, while the styling file said in writing that they
+shared it. They share it now: both start on exactly the same line. The one
+difference that remains is the criteria box's own border and padding, fifteen
+real pixels of box, and that is said plainly rather than left to read as drift.
+## 2026-09-13 — Seven blog settings panels now read as one block instead of loose rows (#687)
+
+When you open a module's gear icon in the Builder you get a panel of settings.
+On 2026-08-13 you pointed at one and said the column width varies arbitrarily
+between the Settings fields and the Layout fields. This is the twelfth of
+fifteen passes fixing that, and it covers the seven blog panels: Blog Post,
+Post Card, Post List, Related Posts, Table of Contents, Author Bio and Post
+Tags.
+
+Nothing about what any setting *does* has changed — no new settings, nothing
+renamed, nothing saved differently. Only where each row sits.
+
+Three of the seven held a repeating editor — the list of related posts, the
+list of headings, the list of social links — built out of an old markup shape
+whose fields the automatic checker **skips by name**. So every panel sweep
+since that checker was written had reported these seven as fine without ever
+having looked inside three of them. Measured in a real browser before the
+change: each panel's own fields started 125 pixels in, and every field in its
+list editor started at zero. The headings list had a third position of its
+own, because each sub-heading card was nudged 16 pixels right to show its
+nesting. Three different left edges in one panel.
+
+Blog Post had the plainest version of the problem. It is one of the few panels
+written by hand rather than generated, so each row of fields was its own little
+grid and the strip below it — Label, Background, Alignment, the margins — was
+another one. One panel, three label widths and three field positions. It is one
+grid now, and the strip is inside it.
+
+Post Tags and Post List share a page-picker that turns into a dropdown plus a
+text box when you type a custom address. That one wide row was setting the
+width of the whole column, so the six rows beside it stopped nearly 300 pixels
+short of it. Bounded now.
+
+Two smaller things went with it. The list editors sit one field per row rather
+than two: two-across is right when the editor owns half the panel, but these
+live in a narrow column, and two-across left the Anchor ID box 52 pixels wide —
+too narrow to read a web address in. And Blog Post's five tabs (Content, Meta,
+Categories & Tags, SEO, Display) were coloured back when panels had a white
+background; against today's blue, four of the five were nearly invisible.
+
+Two signals that had gone missing on the way came back. The SEO description
+counter used to turn green while you were inside the 160-character budget and
+red once you went over; the rewrite kept the red and lost the green, so "you
+are fine" looked like ordinary text. And the headings list used to say, in its
+title, that a sub-heading sits under the nearest heading above it — the one
+sentence explaining what the setting does to the published page. It is back as
+a line under the title, and it now names the Indent H3s switch, because that
+nesting only shows on the page when the switch is on.
+
+Each fix was broken on purpose and watched to fail before the pass was
+believed — including one break that did **not** fail, which is written into
+`docs/UI_RULES.md` rather than left for someone to trip over later: the checker
+compares fields against their neighbours, so a change that moves a whole column
+at once slips past it. That is a limit of the check, not of the rule.
+
+That claim was too broad the first time, and the review caught it. Two of the
+new automatic tests were checking the Blog Post panel while it sat on its first
+tab, and the things they were checking live on the other four — so the tests
+passed with the original problem put straight back. They read the panel's own
+source now, which is the only way to see all five tabs at once in a test, and
+all four of the breaks were re-run and watched to fail.
+
+The review caught a second thing on the next pass, and this one you would have
+seen. In the Related Posts editor, the box holding each post's image path had
+shrunk to 96 pixels — about nine characters, `/images/l` — sitting beside four
+312-pixel boxes. The Choose Image button had been sharing that row, and on the
+new one-per-row layout there was no longer room for both. The button moves to
+its own line underneath now, full width, and the path box is 312 pixels like
+everything around it: the whole filename is readable again.
+
+Worth saying why no check caught that, because the answer is now fixed too. A
+field is measured by the space it is *given*, and that space was correct — it
+reached the right edge like every other row. Nothing was looking at how much of
+it the actual typing box got once a button had taken its share. The panel
+checker measures that now, for the one kind of field it had been skipping, and
+it was proved by putting the 96-pixel box back and watching the check fail at
+all three screen widths.
+
+Three smaller corrections came with it. A note listing which editors still need
+this treatment named one when there are four, which is how these get missed —
+that list is now checked by a test, so it cannot quietly go out of date again. A
+comment above the new styling said the opposite of what the code below it did,
+which would have led the next pass to undo this work. And the sentence under the
+headings list promised something the published page does not do: a table of
+contents does not render on a live site yet, so the note now says so instead of
+implying otherwise.
+
+A third review pass sent it back once more, for three things, all now done. The
+tab bar across the top of the Blog Post panel had been quietly told to announce
+itself to screen-reader software as a "tab list" — which promises that the arrow
+keys move between the tabs and that each one opens a named panel. Neither was
+built, so the announcement was a promise the keyboard did not keep, and it was a
+change in behaviour in a job that was only meant to move rows around. They are
+plain buttons again, as they were before this work, and a test now says that if
+anyone adds those announcements back they have to build the rest of the pattern
+with them.
+
+The second was a comment in the checker that claimed a kind of field was
+"already covered" when nothing was measuring it. That sentence is the sort the
+next pass reads before deciding it need not look, so it has been replaced with
+what is actually true, plus a written list of what the checker still cannot see.
+The third was a test that found a paragraph in the rules document by quoting a
+sentence from it — and that sentence counts something, so the next pass to change
+the count would have broken the test in a way that blamed the wrong thing. It
+looks for a fixed marker now and says so plainly if the marker is missing.
+
+One thing is recorded rather than fixed, deliberately. On the Blog Post panel's
+**Meta** tab, the box holding the featured image path is 207 pixels wide beside
+four 373-pixel boxes — the same complaint as the Related Posts one above, in a
+second place. It was found by measuring this branch and `main` side by side,
+which is also what showed it is new: `main` renders that box at 395 pixels. It
+had been missed three times because it is on a tab the panel does not open on.
+The obvious repair — moving the button to its own line, exactly as was done for
+Related Posts — was tried and measured and taken back out: that button was the
+only thing holding the column open, so the fix shrank every field on the tab
+from 373 to 218 pixels and started cutting off the web address underneath. That
+trades one short field for five, which is the thing you originally complained
+about. What width a column should take when it holds a file path is a genuine
+design question rather than a tidy-up, so it is written down in the rules
+document with both sets of measurements and left for a decision.
 
 ## 2026-09-12 — Pulse's two jobs now report in, so an outage is noticed instead of stumbled upon (#673)
 

@@ -445,3 +445,538 @@ test('migrateLegacyLayoutSections preserves video background mode and videoUrl',
   assert.equal(document.layoutSections[0].background.posterUrl, '/assets/poster.jpg');
 });
 
+
+// ---------------------------------------------------------------------------
+// Task 86bc0bb73 — saving a page must not revert a row's modern settings.
+//
+// public/js/builder.js adds `rowSettings` and `containerSettings` to every
+// section it sends on a save (line 5446), which makes isLegacySectionArray
+// call an ORDINARY SAVE legacy and route it through the Normie import
+// migrator. That migrator rebuilt each section from a fixed field list, so
+// every modern row setting came back at its default: a full-width row boxed
+// itself back in on every save, with no message to the operator.
+//
+// The payloads below are the editor's own shape — the legacy trigger fields
+// sitting alongside the modern ones, which is exactly what a save sends.
+//
+// Task 86bc0d1fg — saving a page must not wipe that page's own typography.
+//
+// public/js/builder.js puts `rowSettings` and `containerSettings` on every
+// section it sends on a save (line 5446), which makes isLegacySectionArray
+// call an ORDINARY SAVE legacy and route it through the Normie import
+// migrator. That migrator rebuilt the DOCUMENT from a two-field list --
+// pageBackground and sections -- so the page's `theme` was dropped and the
+// normalizer downstream supplied the default. Heading sizes, line heights and
+// heading weights all reverted, with nothing said. Measured 2026-09-14:
+// 183 stored pages carry a real theme scale and all 183 lost it on a save.
+//
+// EDITOR_TRIGGER below is the editor's own shape: the two legacy trigger
+// fields sitting alongside the modern ones, which is what a save sends.
+// ---------------------------------------------------------------------------
+
+const EDITOR_TRIGGER = {
+  rowSettings: { margin: '0', padding: '20' },
+  containerSettings: { col1: { padding: '18' } },
+};
+
+test('serializeBuilderDocument keeps a full-width row full width on an ordinary save', () => {
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      title: 'Hero',
+      widthMode: 'full-width',
+      ...EDITOR_TRIGGER,
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].widthMode, 'full-width');
+});
+
+test('a full-width row survives saving the page twice with no edits', () => {
+  // The operator's actual report: it is the SECOND save that was reported,
+  // because the first one is the edit itself. Feed the serializer its own
+  // output, which is what re-opening the page and pressing Save again does.
+  const first = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      widthMode: 'full-width',
+      ...EDITOR_TRIGGER,
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+  const second = serializeBuilderDocument({
+    layoutSections: first.sections.map((section) => ({ ...section, ...EDITOR_TRIGGER })),
+  });
+
+  assert.equal(first.sections[0].widthMode, 'full-width');
+  assert.equal(second.sections[0].widthMode, 'full-width');
+});
+
+test('an ordinary save keeps every modern row setting, not just widthMode', () => {
+  // widthMode is the one a person notices; it was lost with 34 other fields.
+  // Measured 2026-09-14 by diffing one editor-shaped section through
+  // serializeBuilderDocument with and without the legacy trigger.
+  const section = {
+    id: 'section_1',
+    layout: '3-3',
+    title: 'Hero',
+    widthMode: 'full-width',
+    widthPercent: '80',
+    isPrivate: true,
+    alignment: 'center',
+    marginTop: '11',
+    marginBottom: '12',
+    paddingTop: '13',
+    paddingBottom: '14',
+    paddingLeft: '15',
+    paddingRight: '16',
+    marginLeft: '17',
+    marginRight: '18',
+    columnGap: '19',
+    minHeight: '400',
+    columnWidths: { left: '30', right: '70' },
+    equalColumnHeights: 'true',
+    horizontalOffset: '5',
+    verticalOffset: '6',
+    mobileHidden: 'true',
+    desktopHidden: 'true',
+    mobileLayout: 'reverse-stack',
+    cellPaddingTop: { left: '22', right: '22' },
+    cellMarginBottom: { left: '27', right: '27' },
+    cellIsPrivate: { left: 'true', right: 'true' },
+    ...EDITOR_TRIGGER,
+    modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+  };
+
+  const saved = serializeBuilderDocument({ layoutSections: [section] }).sections[0];
+
+  assert.equal(saved.widthMode, 'full-width');
+  assert.equal(saved.widthPercent, '80');
+  assert.equal(saved.isPrivate, true);
+  assert.equal(saved.alignment, 'center');
+  assert.equal(saved.marginTop, '11');
+  assert.equal(saved.marginBottom, '12');
+  assert.equal(saved.paddingTop, '13');
+  assert.equal(saved.paddingBottom, '14');
+  assert.equal(saved.paddingLeft, '15');
+  assert.equal(saved.paddingRight, '16');
+  assert.equal(saved.marginLeft, '17');
+  assert.equal(saved.marginRight, '18');
+  assert.equal(saved.columnGap, '19');
+  assert.equal(saved.minHeight, '400');
+  assert.deepEqual(saved.columnWidths, { left: '30', right: '70' });
+  assert.equal(saved.equalColumnHeights, 'true');
+  assert.equal(saved.horizontalOffset, '5');
+  assert.equal(saved.verticalOffset, '6');
+  assert.equal(saved.mobileHidden, 'true');
+  assert.equal(saved.desktopHidden, 'true');
+  assert.equal(saved.mobileLayout, 'reverse-stack');
+  assert.equal(saved.cellPaddingTop.left, '22');
+  assert.equal(saved.cellMarginBottom.left, '27');
+  assert.equal(saved.cellIsPrivate.left, 'true');
+});
+
+test('a genuine legacy Normie section still migrates, and legacy values still win', () => {
+  // The carry-through must not turn the migrator off. A real import carries
+  // none of the modern fields, so every value below is still derived from
+  // rowSettings/containerSettings and the legacy layout code.
+  const saved = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '2-2-2',
+      title: 'Imported',
+      rowSettings: { margin: '8', padding: '20', backgroundColor: '#eef6ff' },
+      containerSettings: {
+        col1: { padding: '12', borderColor: '#000000', borderThickness: '2', borderRadius: '8' },
+        col2: { padding: '16' },
+        col3: { padding: '16' },
+      },
+      modules: [{ id: 'module_1', type: 'headline', column: 'col1', name: 'Hero', text: 'Hello', settings: {} }],
+    }],
+  }).sections[0];
+
+  assert.equal(normalizeLayout(saved.layout), 'three-column');
+  assert.equal(saved.modules[0].type, 'heading');
+  assert.equal(saved.modules[0].column, 'left');
+  assert.equal(saved.marginTop, '8', 'marginTop still comes from rowSettings.margin');
+  assert.equal(saved.cellPadding.left, '12', 'cell padding still comes from containerSettings');
+  assert.equal(saved.cellBorderWidth.left, '2');
+  assert.equal(saved.cellBorderColor.left, '#000000');
+  assert.equal(saved.background.mode, 'color', 'row background still rebuilt from rowSettings');
+  assert.equal(saved.widthMode, 'contained', 'an import with no widthMode still defaults');
+});
+
+test('an ordinary save keeps a row background\'s own settings', () => {
+  // Round-1 review of task 86bc0bb73: the first measurement compared TOP-LEVEL
+  // section keys, so it could not see inside `background` -- which the
+  // section-level carry deliberately hands to the legacy normalizer. Six
+  // settings were still reverting on every save with no message.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      ...EDITOR_TRIGGER,
+      background: {
+        mode: 'gradient',
+        color: '#112233',
+        color2: '#445566',
+        gradientAngle: 120,
+        opacity: 55,
+        imageAssetId: 'asset_123',
+        parallax: true,
+        parallaxSpeed: 0.7,
+      },
+      overlayScreen: {
+        background: { mode: 'color', color: '#010203' },
+        opacity: 40,
+        blendMode: 'multiply',
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const { background, overlayScreen } = serialized.sections[0];
+  assert.equal(background.gradientAngle, 120, 'gradient angle reverted to 135');
+  assert.equal(background.opacity, 55, 'background opacity reverted to 100');
+  assert.equal(background.imageAssetId, 'asset_123', 'image asset id was blanked');
+  assert.equal(background.parallax, true, 'parallax reverted to off');
+  assert.equal(background.parallaxSpeed, 0.7, 'parallax speed reverted to the default');
+  assert.equal(overlayScreen.blendMode, 'multiply', 'overlay blend mode reverted to normal');
+  assert.equal(overlayScreen.opacity, 40);
+});
+
+test('a row with no background keeps the colour the operator picked', () => {
+  // The Builder's background panel holds the colour, gradient angle and image
+  // it last had while the mode sits at "none", so blanking them here meant the
+  // chosen colour was gone the moment the operator switched the mode back on.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      ...EDITOR_TRIGGER,
+      background: {
+        mode: 'none',
+        color: '#123456',
+        color2: '#654321',
+        gradientAngle: 120,
+        imageUrl: 'https://example.com/a.png',
+        imageAssetId: 'asset_9',
+        opacity: 55,
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const { background } = serialized.sections[0];
+  assert.equal(background.mode, 'none', 'the row still shows no background');
+  assert.equal(background.color, '#123456');
+  assert.equal(background.color2, '#654321');
+  assert.equal(background.gradientAngle, 120);
+  assert.equal(background.imageUrl, 'https://example.com/a.png');
+  assert.equal(background.imageAssetId, 'asset_9');
+  assert.equal(background.opacity, 55);
+});
+
+test('a recognised mode "none" still honours a legacy colour beside it', () => {
+  // Recognising `none` above must not cost a genuine Normie import the
+  // legacy-colour fallback it had before: {mode:'none', color:X} beside a
+  // legacy backgroundColor:Y showed Y, and would otherwise now show nothing.
+  // Measured on main 2026-09-15: mode 'color', colour '#ff0000' at both the
+  // row and the cell. The Builder's own client promotes the same pair before
+  // it sends (public/js/builder.js normalizeBackgroundSettings), so the two
+  // ends have to agree about it or the server is the only reader that renders
+  // it blank. No in-repo client emits the pair, so this guards the import
+  // path, which is the one job this migrator exists for.
+  const legacyNone = { mode: 'none', color: '#123456' };
+  const migrated = migrateLegacyLayoutSections({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      background: { ...legacyNone },
+      rowSettings: { padding: '20', background: { ...legacyNone }, backgroundColor: '#ff0000' },
+      containerSettings: {
+        col1: { padding: '18', background: { ...legacyNone }, backgroundColor: '#ff0000' },
+      },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  const section = migrated.sections[0];
+  assert.equal(section.background.mode, 'color', 'the row shows the legacy colour');
+  assert.equal(section.background.color, '#ff0000');
+
+  // The '3-3' layout's columns are left/right, and the editor's `col1` is the
+  // first of them -- mergeNormieCellFields does that mapping.
+  const cell = section.cellBackgrounds.left;
+  assert.equal(cell.mode, 'color', 'the cell shows the legacy colour too');
+  assert.equal(cell.color, '#ff0000');
+
+  // And the promotion moves only mode and colour — every other modern field
+  // the sender chose still rides along, so the save-path fix is untouched.
+  assert.equal(cell.color2, '#eaf4ff');
+  assert.equal(cell.videoFocalX, 50);
+});
+
+test('a scalar cellPadding does not clobber the map built from containerSettings', () => {
+  // mergeNormieCellFields shape-guards the twelve per-column maps on purpose: a
+  // scalar means the sender is not speaking the per-column shape, and taking it
+  // replaces a real map with one the normalizer reads as "no columns set".
+  // The round-1 carry-through copied anything non-null and undid that guard --
+  // a measured step backwards from main in the PR meant to stop settings being
+  // lost.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      rowSettings: { margin: '0', padding: '20' },
+      containerSettings: { col1: { padding: '40' }, col2: { padding: '40' } },
+      cellPadding: '14',
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].cellPadding.left, '40', 'containerSettings padding was clobbered by a scalar');
+  assert.equal(serialized.sections[0].cellPadding.right, '40');
+});
+
+test('an object cellPadding still wins over containerSettings', () => {
+  const serialized = serializeBuilderDocument({
+    layoutSections: [{
+      id: 'section_1',
+      layout: '3-3',
+      rowSettings: { margin: '0', padding: '20' },
+      containerSettings: { col1: { padding: '40' }, col2: { padding: '40' } },
+      cellPadding: { left: '7', right: '7' },
+      modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    }],
+  });
+
+  assert.equal(serialized.sections[0].cellPadding.left, '7', 'the modern per-column map must still win');
+  assert.equal(serialized.sections[0].cellPadding.right, '7');
+});
+
+test('an ordinary save changes NOTHING a save without the legacy trigger would not', () => {
+  // The whole-loss guard, and the instrument the ticket asked for turned into a
+  // permanent one. A section carrying rowSettings/containerSettings is routed
+  // through the legacy migrator; the same section without them goes straight to
+  // the normalizer. Comparing the two OUTPUTS -- rather than input against
+  // output -- is what separates a real loss from the normalizer's own clamping,
+  // which is what made parallaxSpeed 1.5 -> 1 read as a loss when 1 is simply
+  // the maximum.
+  //
+  // It is a deepEqual rather than a field list on purpose: a list has to be
+  // extended by hand every time builder-template.ts grows a section setting,
+  // and the day somebody forgets is the day a setting starts silently
+  // reverting again -- which is exactly how this bug reached a client.
+  const modules = [{ id: 'module_1', type: 'text', column: 'left', text: '<p>x</p>', settings: {} }];
+  const bare = { id: 'section_1', layout: 'two-column', title: 'Hero', modules };
+
+  // Start from the serializer's own output, so the payload stays in step with
+  // the section shape instead of freezing today's field list into the test.
+  const populated = {
+    ...serializeBuilderDocument({ layoutSections: [bare] }).sections[0],
+    modules,
+    widthMode: 'full-width',
+    alignment: 'center',
+    marginTop: '40',
+    marginBottom: '60',
+    mobileLayout: 'reverse-stack',
+    minHeight: '480',
+    background: {
+      mode: 'gradient',
+      color: '#112233',
+      color2: '#445566',
+      gradientAngle: 120,
+      opacity: 55,
+      imageAssetId: 'asset_123',
+      parallax: true,
+      parallaxSpeed: 0.7,
+    },
+    overlayScreen: {
+      background: { mode: 'color', color: '#010203' },
+      opacity: 40,
+      blendMode: 'multiply',
+    },
+    // A near-white cell fill is discarded whole by
+    // sanitizeCellBackgroundForDrillDown, so this has to be dark to be a test
+    // of anything at all.
+    cellBackgrounds: {
+      left: { mode: 'color', color: '#123456', opacity: 55, gradientAngle: 77 },
+      right: { mode: 'color', color: '#654321' },
+    },
+    cellPadding: { left: '31', right: '32' },
+    cellBorderWidth: { left: '3', right: '4' },
+  };
+
+  const withoutTrigger = serializeBuilderDocument({ layoutSections: [populated] }).sections[0];
+  const withTrigger = serializeBuilderDocument({
+    layoutSections: [{ ...populated, ...EDITOR_TRIGGER }],
+  }).sections[0];
+
+  // Compared whole, with nothing masked out. An earlier version of this test
+  // nulled cellPadding and marginTop before the compare; removing the mask
+  // changed no result, so it was exempting two fields from the one guard
+  // written to be extension-proof and paying for nothing (round-2 review,
+  // 2026-09-15). rowSettings/containerSettings do not appear here at all --
+  // the serializer does not emit them on a section -- so there is nothing the
+  // two runs are entitled to disagree about.
+  assert.deepEqual(
+    withTrigger,
+    withoutTrigger,
+    'an ordinary save lost or changed a setting that a save without the legacy trigger kept'
+  );
+});
+
+const PAGE_THEME = {
+  typography: {
+    scale: {
+      baseSize: 18,
+      ratio: 1.25,
+      baseLineHeight: 1.6,
+      h1: 36,
+      h2: 30,
+      h3: 24,
+      h1Lh: 1.4,
+      h1Fw: 900,
+    },
+  },
+};
+
+function sectionFromEditor(extra = {}) {
+  return {
+    id: 'section_1',
+    layout: '3-3',
+    title: 'Hero',
+    ...EDITOR_TRIGGER,
+    modules: [{ id: 'module_1', type: 'text', column: 'col1', text: '<p>x</p>', settings: {} }],
+    ...extra,
+  };
+}
+
+test('serializeBuilderDocument keeps the page theme on an ordinary save', () => {
+  const serialized = serializeBuilderDocument({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.deepEqual(serialized.theme.typography.scale, PAGE_THEME.typography.scale);
+});
+
+test('the page theme survives saving the page twice with no edits', () => {
+  // The operator sees it on a save that changed nothing, so feed the
+  // serializer its own output — which is what re-opening the page and
+  // pressing Save Page again does.
+  const first = serializeBuilderDocument({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+  const second = serializeBuilderDocument({
+    theme: first.theme,
+    layoutSections: first.sections.map((section) => ({ ...section, ...EDITOR_TRIGGER })),
+  });
+
+  assert.equal(first.theme.typography.scale.h1, 36);
+  assert.equal(second.theme.typography.scale.h1, 36);
+  assert.deepEqual(second.theme.typography.scale, PAGE_THEME.typography.scale);
+});
+
+test('a genuine legacy Normie import carries no theme and still gets the default', () => {
+  // The control for the fix: an import has no theme of its own, so the
+  // carry-through must not invent one, and the default must still arrive.
+  const serialized = serializeBuilderDocument({
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.ok(serialized.theme, 'an import still gets a theme object');
+  assert.equal(serialized.theme.typography.scale.baseSize, 0);
+  assert.equal(serialized.theme.typography.scale.ratio, 0);
+  assert.equal(serialized.theme.typography.scale.baseLineHeight, 0);
+});
+
+test('migrateLegacyLayoutSections leaves one section list, not two', () => {
+  // The carry-through spreads the document, so a payload spelled
+  // `layoutSections` would otherwise come back holding BOTH that raw list and
+  // the migrated `sections` — and the two readers of this document disagree
+  // about which alias wins.
+  const migrated = migrateLegacyLayoutSections({
+    theme: PAGE_THEME,
+    layoutSections: [sectionFromEditor()],
+  });
+
+  assert.ok(Array.isArray(migrated.sections));
+  assert.equal(migrated.layoutSections, undefined);
+  assert.deepEqual(migrated.theme, PAGE_THEME);
+});
+
+// Tablet/phone row styles (device styles 1 of 6, task 86bc13a6v). Saving a
+// page, saving a shared section and pushing a shared section to its copies all
+// run through this serializer, and a field the normalizer does not list is
+// silently dropped — which would lose every phone setting on the next save.
+test('serializeBuilderDocument keeps a row\'s tablet and phone settings, and adds nothing to a row without them', () => {
+  const { normalizeBuilderSection } = require('../../lib/builder/template');
+  const { sectionContentHash } = require('../../lib/builder/document');
+  const base = { id: 'section-1', layout: 'single', title: '', modules: [] };
+  const withDevices = {
+    ...base,
+    deviceOverrides: { tablet: { paddingTop: '30' }, phone: { hidden: 'true', columnGap: '4' } },
+  };
+
+  const serialized = serializeBuilderDocument({ layoutSections: [withDevices, { ...base, id: 'section-2' }] });
+  assert.deepEqual(serialized.sections[0].deviceOverrides, withDevices.deviceOverrides);
+  assert.equal('deviceOverrides' in serialized.sections[1], false);
+
+  const restored = normalizeBuilderDocument(serialized).layoutSections[0];
+  assert.deepEqual(restored.deviceOverrides, withDevices.deviceOverrides);
+
+  // The saved-sections store normalizes through this function.
+  assert.deepEqual(normalizeBuilderSection(withDevices).deviceOverrides, withDevices.deviceOverrides);
+
+  // A phone-only change is a content change, so a shared section's copies
+  // are seen as different from a master that lacks it.
+  assert.notEqual(sectionContentHash(restored), sectionContentHash(normalizeBuilderDocument(serialized).layoutSections[1]));
+});
+
+// Tablet/phone CELL styles (device styles 2 of 4, task 86bc14pey). Same
+// serializer, same failure if it is missed — a column's phone padding would
+// survive one edit and vanish on the next save, with nothing reporting it.
+test('serializeBuilderDocument keeps a cell\'s tablet and phone settings, and adds nothing to a row without them', () => {
+  const { normalizeBuilderSection } = require('../../lib/builder/template');
+  const { sectionContentHash } = require('../../lib/builder/document');
+  const base = { id: 'section-1', layout: 'two-column', title: '', modules: [] };
+  const withCellDevices = {
+    ...base,
+    cellDeviceOverrides: {
+      tablet: { left: { cellPaddingTop: '20' } },
+      phone: { left: { cellPaddingTop: '40' }, right: { hidden: 'true' } },
+    },
+  };
+
+  const serialized = serializeBuilderDocument({ layoutSections: [withCellDevices, { ...base, id: 'section-2' }] });
+  assert.deepEqual(serialized.sections[0].cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+  assert.equal('cellDeviceOverrides' in serialized.sections[1], false);
+
+  const restored = normalizeBuilderDocument(serialized).layoutSections[0];
+  assert.deepEqual(restored.cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+
+  // The saved-sections store normalizes through this function.
+  assert.deepEqual(normalizeBuilderSection(withCellDevices).cellDeviceOverrides, withCellDevices.cellDeviceOverrides);
+
+  // A cell's phone-only change is a content change, so a shared section's
+  // copies are seen as different from a master that lacks it — which is what
+  // makes the push in `docs/SAVED_SECTIONS.md` carry it.
+  assert.notEqual(
+    sectionContentHash(restored),
+    sectionContentHash(normalizeBuilderDocument(serialized).layoutSections[1])
+  );
+
+  // A column the layout does not have is dropped rather than stored, the same
+  // way every other cell map on a row is keyed by the layout's own columns.
+  const narrowed = normalizeBuilderSection({
+    ...withCellDevices,
+    layout: 'single',
+  });
+  assert.equal(narrowed.cellDeviceOverrides, undefined);
+});

@@ -4,6 +4,10 @@ import { createPortal } from "react-dom";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
+import { BuilderDeviceSwitch } from "./builder-device-switch";
+import { BuilderModuleDeviceControls } from "./builder-module-device-controls";
+import { listModuleDeviceOverrideKeys } from "@/lib/builder-module-device-overrides";
+import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import {
   BuilderModuleChromeSlotProvider,
   type BuilderModuleChromeSlotRegistrar
@@ -91,6 +95,8 @@ import { BuilderBlogAuthorBioModuleSettings, parseSocialLinks } from "./builder-
 import { BuilderBlogTocModuleSettings, parseTocItems } from "./builder-blog-toc-module-settings";
 import { BuilderBlogNewsletterSubscribeModuleSettings } from "./builder-blog-newsletter-subscribe-module-settings";
 import { BuilderBlogRelatedPostsModuleSettings, parseRelatedPosts } from "./builder-blog-related-posts-module-settings";
+import { BuilderBlogLatestPostsModuleSettings } from "./builder-blog-latest-posts-module-settings";
+import { resolveLatestPostsSettings } from "@/lib/blog-latest-posts";
 import { BuilderBlogCategoryFilterModuleSettings, parseFilterCategories } from "./builder-blog-category-filter-module-settings";
 import { BuilderBlogPostModuleSettings } from "./builder-blog-post-module-settings";
 import { BuilderBlogTagCloudModuleSettings, parseCloudTags } from "./builder-blog-tag-cloud-module-settings";
@@ -242,6 +248,14 @@ type BuilderModuleCardProps = {
   onClone: () => void;
   onSaveModule?: () => void;
   hideHeaderActions?: boolean;
+  /**
+   * Whether this card offers the Phone / Tablet / Desktop switch.
+   * False inside the module repository and the saved-section modal: a
+   * master there is a template, not a placed module, and its device
+   * settings would be copied onto every page that follows it with no
+   * screen to check them on (86bc14pfq, non-goals).
+   */
+  deviceStylesEnabled?: boolean;
   isEmailTemplate?: boolean;
   moduleClassOverride?: string;
   onModuleDragStart?: (event: DragEvent<HTMLDivElement>) => void;
@@ -1479,6 +1493,30 @@ function renderModulePreview(module: BuilderTemplateModule) {
             </div>
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (module.type === "blog-latest-posts") {
+    // A summary, not the real cards: the collapsed card has no post data.
+    const latest = resolveLatestPostsSettings(module.settings);
+    const filterWords = latest.latest
+      ? "newest published posts"
+      : [
+          latest.tags.length ? `${latest.tags.length} tag${latest.tags.length === 1 ? "" : "s"}` : "",
+          latest.categoryIds.length
+            ? `${latest.categoryIds.length} categor${latest.categoryIds.length === 1 ? "y" : "ies"}`
+            : ""
+        ].filter(Boolean).join(" + ") || "no filter chosen";
+    return (
+      <div style={{ padding: "8px 10px", fontSize: 12, color: "#35526e" }}>
+        {latest.title ? <div style={{ fontWeight: 700, marginBottom: 6 }}>{latest.title}</div> : null}
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${latest.columns}, 1fr)`, gap: 6, marginBottom: 6 }}>
+          {Array.from({ length: latest.columns }).map((_, i) => (
+            <div key={i} style={{ height: 34, borderRadius: 4, background: "#e6eef5" }} />
+          ))}
+        </div>
+        <div>Latest Blog Posts · {latest.count} post{latest.count === 1 ? "" : "s"} · {filterWords}</div>
       </div>
     );
   }
@@ -3190,6 +3228,7 @@ export function BuilderModuleCard({
   pages = [],
   products = [],
   hideHeaderActions = false,
+  deviceStylesEnabled = true,
   isEmailTemplate = false,
   moduleClassOverride,
   onModuleDragStart,
@@ -3207,6 +3246,14 @@ export function BuilderModuleCard({
      * margins. See builder-module-chrome-slot.tsx for why it is a slot.
      */
     const [chromeSlot, setChromeSlot] = useState<HTMLElement | null>(null);
+    /**
+     * Which screen this module's styles are being edited for (86bc14pfq).
+     * Desktop is the module's own settings; Tablet and Phone swap the panel
+     * for the device panel, which stores only what differs.
+     */
+    const [styleDevice, setStyleDevice] = useState<BuilderEditorStyleDevice>("desktop");
+    /** Tablet or Phone: the panel shows ONLY what a device may change. */
+    const isDeviceStyleMode = deviceStylesEnabled && editorDevice === "browser" && styleDevice !== "desktop";
     const chromeSlotsRef = useRef<HTMLElement[]>([]);
     /*
      * A card can end up holding more than one slot — a table module renders a
@@ -3269,6 +3316,7 @@ export function BuilderModuleCard({
     const isBlogTocModule = module.type === "blog-toc";
     const isBlogNewsletterModule = module.type === "blog-newsletter-subscribe";
     const isBlogRelatedPostsModule = module.type === "blog-related-posts";
+    const isBlogLatestPostsModule = module.type === "blog-latest-posts";
     const isBlogCategoryFilterModule = module.type === "blog-category-filter";
     const isBlogPostModule = module.type === "blog-post";
     const isBlogTagCloudModule = module.type === "blog-tag-cloud";
@@ -3340,6 +3388,7 @@ export function BuilderModuleCard({
       isBlogTocModule ||
       isBlogNewsletterModule ||
       isBlogRelatedPostsModule ||
+      isBlogLatestPostsModule ||
       isBlogCategoryFilterModule ||
       isBlogPostModule ||
       isBlogTagCloudModule ||
@@ -3561,6 +3610,8 @@ export function BuilderModuleCard({
               <BuilderBlogNewsletterSubscribeModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogRelatedPostsModule ? (
               <BuilderBlogRelatedPostsModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isBlogLatestPostsModule ? (
+              <BuilderBlogLatestPostsModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogCategoryFilterModule ? (
               <BuilderBlogCategoryFilterModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostModule ? (
@@ -3692,6 +3743,7 @@ export function BuilderModuleCard({
      */
     const showsSharedChrome =
       editorDevice !== "mobile" &&
+      !isDeviceStyleMode &&
       (moduleSettingsEditor === sharedModuleChrome || needsRestoredChrome);
 
   return (
@@ -3775,10 +3827,38 @@ export function BuilderModuleCard({
         </div>
         {hideHeaderActions ? (
           <div className="builder-section-actions">
+            {/* The Styles bar's three icons (Dane's screenshot, 2026-09-15) —
+                the same control rows got in slice 1, so the operator learns
+                it once. Only in the normal editor: the old page-list Mobile
+                mode has its own pane below and the switch would only confuse
+                it, and a collapsed card has no panel to swap. */}
+            {isExpanded && deviceStylesEnabled && editorDevice === "browser" ? (
+              <BuilderDeviceSwitch
+                value={styleDevice}
+                changedDevices={(["tablet", "phone"] as const).filter(
+                  (device) => listModuleDeviceOverrideKeys(module.settings, device).length > 0
+                )}
+                onChange={setStyleDevice}
+              />
+            ) : null}
             <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
           </div>
         ) : (
           <div className="builder-section-actions">
+            {/* The Styles bar's three icons (Dane's screenshot, 2026-09-15) —
+                the same control rows got in slice 1, so the operator learns
+                it once. Only in the normal editor: the old page-list Mobile
+                mode has its own pane below and the switch would only confuse
+                it, and a collapsed card has no panel to swap. */}
+            {isExpanded && deviceStylesEnabled && editorDevice === "browser" ? (
+              <BuilderDeviceSwitch
+                value={styleDevice}
+                changedDevices={(["tablet", "phone"] as const).filter(
+                  (device) => listModuleDeviceOverrideKeys(module.settings, device).length > 0
+                )}
+                onChange={setStyleDevice}
+              />
+            ) : null}
             <button aria-label={isExpanded ? "Collapse module" : "Expand module"} className="builder-icon-button" onClick={onToggleExpanded} title={isExpanded ? "Collapse module" : "Expand module"} type="button"><BuilderCollapseIcon expanded={isExpanded} /></button>
             <button aria-label="Move module up" className="builder-icon-button" onClick={onMoveUp} title="Move module up" type="button">↑</button>
             <button aria-label="Move module down" className="builder-icon-button" onClick={onMoveDown} title="Move module down" type="button">↓</button>
@@ -3846,11 +3926,20 @@ export function BuilderModuleCard({
               so it shares that grid's tracks instead of measuring its own.
               Content-sized, not full-panel — this row tops every module, so
               master rule W1 applies here with maximum leverage. */}
-          {showsLabelField && !showsSharedChrome ? (
+          {/* ...and never in device mode. A Label is one name for the module on
+              every screen, so a box for it beside the Phone banner would read
+              as a phone-only name and write a global one. */}
+          {showsLabelField && !showsSharedChrome && !isDeviceStyleMode ? (
             <BuilderModuleFieldStrip>{moduleLabelField}</BuilderModuleFieldStrip>
           ) : null}
 
-          {editorDevice === "mobile" ? (
+          {/* Tablet or Phone: the device panel REPLACES the editor rather than
+              sitting beside it, exactly as the row editor does — one panel is
+              one screen's settings, so there is never a question of which
+              screen a field you can see belongs to. */}
+          {isDeviceStyleMode ? (
+            <BuilderModuleDeviceControls device={styleDevice} module={module} onUpdateModule={onUpdateModule} />
+          ) : editorDevice === "mobile" ? (
             <div
               className={
                 module.type === "heading"
@@ -4279,6 +4368,8 @@ export function BuilderModuleCard({
           module.type !== "button" &&
           module.type !== "heading" &&
           module.type !== "blog-post-list" &&
+          // Latest Blog Posts draws from post data alone; nothing reads its text.
+          module.type !== "blog-latest-posts" &&
           /* Nothing reads `module.text` on a carousel — `CarouselPreview`
              renders from `settings.items` alone — so this was an empty box
              sitting under the Settings column with no effect on anything

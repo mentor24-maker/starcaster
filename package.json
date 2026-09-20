@@ -95,7 +95,7 @@
     "node:whoami": "node scripts/node_role.mjs whoami",
     "node:owns": "node scripts/node_role.mjs owns",
     "preflight": "node scripts/preflight.mjs",
-    "report:weekly": "node scripts/weekly_report.mjs",
+    "report:weekly": "doppler run --project starcaster --config dev --no-check-version -- node scripts/weekly_report.mjs",
     "doctor:node": "node scripts/doctor_node.mjs",
     "node:verify": "node scripts/verify_node_roles.mjs",
     "heartbeat": "doppler run --project starcaster --config dev --no-check-version -- node scripts/node_heartbeat.mjs",
@@ -115,7 +115,9 @@
     "check:vault-drift": "node scripts/check_vault_drift.cjs",
     "pulse": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse.cjs",
     "pulse:publish": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse_publish.mjs",
-    "checkout:current": "doppler run --project starcaster --config dev --no-check-version -- node scripts/checkout_currency.mjs"
+    "checkout:current": "doppler run --project starcaster --config dev --no-check-version -- node scripts/checkout_currency.mjs",
+    "backup:node": "node scripts/backup_node.mjs",
+    "restore:node": "node scripts/restore_node.mjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

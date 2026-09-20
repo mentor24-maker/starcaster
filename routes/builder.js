@@ -16,6 +16,94 @@ function deriveTemplateId(body, name, { unique = false } = {}) {
 }
 
 /**
+ * Build the updatePageTemplate input for PATCH /api/builder/page-templates/:id.
+ *
+ * Exported for scripts/builder/pageTemplateLayoutColumnCarry.test.js. The
+ * store's carry cannot do this job alone, and that is the whole point of
+ * having this as its own function: the store asks whether a field was NAMED,
+ * and an object literal names every key it lists whether the caller sent one
+ * or not. So a route that builds a fixed 32-field literal defeats the carry
+ * from above -- the theme key is present with value undefined, the carry
+ * stands aside, and the serializer writes its default (task 86bc0kq2u).
+ */
+function buildPageTemplatePatch(body, name) {
+  // This used to build a full object literal -- `theme: body.theme`,
+  // `formId: String(body.formId || '').trim()`, and so on for 32 fields --
+  // which names every key whether the caller sent it or not. An object
+  // literal's key is PRESENT even when its value is undefined, so the store
+  // could not tell "reset this" from "the caller said nothing", and a patch
+  // naming three fields arrived as a patch naming all 32.
+  //
+  // The Builder's module save (`saveCreatedModule` / `deleteCreatedModule`,
+  // components/admin-builder-editor.tsx) sends exactly
+  // `{name, pageBackground, layoutSections}`. Through the old literal that
+  // reset the template's theme, blanked its summary and template_id, and
+  // flipped template_kind from `starcaster_landing` to `modular` -- measured
+  // 2026-09-14 against 44 production templates, of which 31 carry a summary,
+  // 44 a template_id, 31 a non-modular kind, and 4 a theme of their own.
+  //
+  // The template settings dialog DOES send `theme`, and still wins: this
+  // asks whether the BODY named the field, so an explicit value -- including
+  // `{}` or `null`, which is how a template is deliberately reset -- is
+  // passed straight through.
+  const input = {};
+  const named = (...keys) => keys.some((key) => Object.prototype.hasOwnProperty.call(body, key));
+  const pass = (field, value, ...keys) => {
+    if (named(field, ...keys)) input[field] = value;
+  };
+  const text = (field, ...keys) => pass(field, String(body[field] || '').trim(), ...keys);
+
+  input.name = name;
+  pass('templateKind', body.templateKind || body.template_kind, 'template_kind');
+  // Only when the caller is actually setting identity. This used to be
+  // re-derived from the name on EVERY patch, so a module save rewrote
+  // template_id -- harmless on the 38 of 44 production templates whose id is
+  // already the slugified name, a silent change of a reference key on the
+  // other 6 (measured 2026-09-14).
+  if (named('templateId', 'template_id', 'slug', 'emailSlug', 'email_slug')) {
+    input.templateId = deriveTemplateId(body, name);
+  }
+  pass('emailFunction', body.emailFunction || body.email_function, 'email_function');
+  text('primaryColor');
+  text('backgroundColor');
+  text('accentColor');
+  text('formId');
+  text('leadMagnetId');
+  text('headlineId');
+  text('pitchId');
+  text('ctaId');
+  text('websiteBannerImageId');
+  text('backgroundImageId');
+  text('featureImageId');
+  text('highlightImageId');
+  text('featureHeadlineId');
+  text('featureSubheadingId');
+  text('featureTitle');
+  text('featureCopy');
+  text('highlightHeadlineId');
+  text('highlightPitchId');
+  text('highlightTitle');
+  text('highlightCopy');
+  text('bodyHeadlineId');
+  text('bodySubheadingId');
+  text('bodyPitchId');
+  text('logoWideId');
+  text('logoSquareId');
+  pass('theme', body.theme);
+  pass('pageBackground', body.pageBackground || body.page_background, 'page_background');
+  if (named('layoutSections', 'layout_sections')) {
+    const sections = body.layoutSections || body.layout_sections;
+    input.layoutSections = Array.isArray(sections) ? sections : [];
+  }
+  pass(
+    'contentOverrides',
+    body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
+    'content_overrides',
+  );
+  return input;
+}
+
+/**
  * Build the createPage input for POST /api/builder/landing-pages.
  *
  * This is a WHITELIST, exactly like buildLandingPagePatch, and it fails the
@@ -645,15 +733,19 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, result.data, { results: result.data }), true;
   }
 
-  // Move a whole selection of pages onto one page template, replacing each
-  // page's sections with that template's.
+  // Move a whole selection of pages onto one page template: the template's
+  // shared header/footer frame replaces each page's, and each page's own
+  // content is kept (2026-09-14, ticket 86bc09db9 — before that it replaced the
+  // sections wholesale, which emptied 57 Delray pages and left 51 of them live
+  // to visitors reading "Replace this section with real content." for about
+  // eighteen hours).
   //
-  // `snapshotId` is REQUIRED and is checked before a single page is touched.
-  // The archive is the only undo this operation has — the operator chose the
-  // destructive re-pour on 2026-09-01 having been shown the 2026-08-14 incident
-  // where it emptied 35 sections off a live page — and a guard that lives only
-  // in the browser is not a guard: a stale bundle, a retried request or a
-  // direct API call all reach this route with no archive behind them.
+  // `snapshotId` is still REQUIRED and is still checked before a single page is
+  // touched. Keeping the body removes the way this operation lost work; it does
+  // not make the operation reversible — the frame really is replaced, and the
+  // archive is the only undo for that. A guard that lives only in the browser
+  // is not a guard: a stale bundle, a retried request or a direct API call all
+  // reach this route with no archive behind them.
   // WOULD this change be refused? Asked before the browser takes an archive.
   //
   // A separate path rather than a flag on the route below, deliberately: a
@@ -2192,43 +2284,9 @@ async function handle(req, res, pathname, method) {
     const name = String(body.name || '').trim();
 
     if (!name) return sendErr(res, 400, 'name is required', { code: 'VALIDATION_ERROR' }), true;
-    const templateId = deriveTemplateId(body, name);
 
-    const result = await updatePageTemplate(pageTemplateId, {
-      name,
-      templateKind: body.templateKind || body.template_kind,
-      templateId,
-      primaryColor: String(body.primaryColor || '').trim(),
-      backgroundColor: String(body.backgroundColor || '').trim(),
-      accentColor: String(body.accentColor || '').trim(),
-      formId: String(body.formId || '').trim(),
-      leadMagnetId: String(body.leadMagnetId || '').trim(),
-      headlineId: String(body.headlineId || '').trim(),
-      pitchId: String(body.pitchId || '').trim(),
-      ctaId: String(body.ctaId || '').trim(),
-      websiteBannerImageId: String(body.websiteBannerImageId || '').trim(),
-      backgroundImageId: String(body.backgroundImageId || '').trim(),
-      featureImageId: String(body.featureImageId || '').trim(),
-      highlightImageId: String(body.highlightImageId || '').trim(),
-      featureHeadlineId: String(body.featureHeadlineId || '').trim(),
-      featureSubheadingId: String(body.featureSubheadingId || '').trim(),
-      featureTitle: String(body.featureTitle || '').trim(),
-      featureCopy: String(body.featureCopy || '').trim(),
-      highlightHeadlineId: String(body.highlightHeadlineId || '').trim(),
-      highlightPitchId: String(body.highlightPitchId || '').trim(),
-      highlightTitle: String(body.highlightTitle || '').trim(),
-      highlightCopy: String(body.highlightCopy || '').trim(),
-      bodyHeadlineId: String(body.bodyHeadlineId || '').trim(),
-      bodySubheadingId: String(body.bodySubheadingId || '').trim(),
-      bodyPitchId: String(body.bodyPitchId || '').trim(),
-      logoWideId: String(body.logoWideId || '').trim(),
-      logoSquareId: String(body.logoSquareId || '').trim(),
-      theme: body.theme,
-      layoutSections: Array.isArray(body.layoutSections || body.layout_sections)
-        ? (body.layoutSections || body.layout_sections)
-        : [],
-      contentOverrides: body && typeof body.contentOverrides === 'object' ? body.contentOverrides : {},
-    }, scope);
+    const input = buildPageTemplatePatch(body, name);
+    const result = await updatePageTemplate(pageTemplateId, input, scope);
     if (!result.ok) {
       return sendErr(
         res,
@@ -2485,6 +2543,7 @@ module.exports = {
   handle,
   manifest,
   buildLandingPagePatch,
+  buildPageTemplatePatch,
   buildLandingPageCreateInput,
   buildBulkCreatePageInput,
   // Exported for scripts/builder/bulkSetPageTemplate.test.js: the archive-first
