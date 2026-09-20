@@ -1,3 +1,36 @@
+## 2026-09-20 — The Studio pipeline finally has something that runs it (#729)
+
+The Studio work has had a queue and five kinds of job since August, and nothing
+that actually does them — every piece so far was a function somebody had to
+call by hand. This is the process that sits on the Mac Mini and just keeps
+going: wake up, ask the queue whether anything is waiting, do one job, say
+"still alive", sleep, repeat.
+
+Three things go wrong on a machine nobody is watching, and each one now has an
+answer. If a piece of work blows up, the daemon catches it, writes down what
+happened against that specific job, and carries on — one bad video does not
+stop the line. If the whole process dies, macOS starts it again, and the job it
+was holding comes back on its own a minute later, without anybody noticing it
+was gone. And if the daemon stops running altogether — the quiet failure, the
+one that looks exactly like a slow week — it goes six hours without checking in
+and that silence raises an alarm by itself.
+
+The other half of this is about keeping all of it OFF the live website's
+servers. The Studio code drives video tools over files that are gigabytes each;
+it has no business in the bundle that serves starcaster.pro, which is already
+too big and is part of why pages sometimes take a few seconds to wake up. There
+is now a file telling the host to leave that folder behind — and, more to the
+point, a check that runs on every change and fails if that file quietly stops
+working. Both of the realistic ways it stops working were tried on purpose:
+commenting the rule out, and adding a line that undoes it lower down. Both read
+perfectly fine to a human eye and both now fail the build.
+
+One thing is NOT done and is worth knowing: the daemon is not switched on
+anywhere yet. Turning it on needs a shell on the Mac Mini, and that machine
+cannot be reached until Dane is home at the start of October. Until then the
+job roster will honestly report the Studio worker as not running, which it is
+not.
+
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 
 Expand a column's Styles bar in the Builder and there is a Border Style
