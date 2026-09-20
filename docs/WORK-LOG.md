@@ -1,3 +1,130 @@
+## 2026-09-20 — The Studio notices when a video in Drive has been swapped out (#720)
+
+If you re-export a clip and save it over the original in Google Drive, Drive
+keeps the same file id — as far as it is concerned, it is still the same file,
+just with different contents inside it. The Studio was going by that id alone.
+It would look at the note saying "fetch this one", see that it already had a
+video with that id in the catalog, and stop there without ever looking at what
+was actually in Drive now. The catalog kept pointing at the old version, the
+run reported that everything was fine, and the pieces further down the line
+went on to analyse and make preview copies of footage that no longer existed
+anywhere.
+
+So now it asks Drive what the file is BEFORE it checks its own records, and it
+keeps Drive's fingerprint of the file alongside each catalog entry so there is
+something to compare against. Three answers rather than two: same fingerprint
+means it really is the same file and nothing is downloaded; a different one
+means the clip was replaced, so the new version comes down and updates the
+entry that is already there rather than making a second one; and an entry
+saved before we started keeping fingerprints cannot answer the question at
+all, so that one is checked properly once and the answer written down.
+
+Two smaller things in the same pass. A clip you started downloading and then
+deleted in Drive used to leave its half-finished download sitting on the disk
+for ever, with nothing left that would ever finish it — up to three and a half
+gigabytes per clip, on the one disk the Studio is careful about filling. That
+gets cleared up now. And when Google or the database is simply unreachable,
+that is no longer counted against the video: a file used to get five tries and
+then be set aside as a problem, so about eight minutes of a database being down
+was enough to park a perfectly good clip and need a hand to un-park it. An
+outage now puts the work back on the pile to try again later, and the run says
+plainly that a service was down rather than blaming the footage.
+
+## 2026-09-15 — The Studio now downloads the footage it spotted (#720)
+
+Fourth of eight pieces in the Studio work. The watcher that shipped yesterday
+notices a new video in your Drive folder and writes a note saying "fetch this
+one". Nothing was reading those notes. This is the part that reads them.
+
+Downloading a video does not sound like it needs much explaining, until you
+look at the size. A 54-minute recording off the iPhone is about three and a
+half gigabytes. That takes a while, and the Mac Mini is a machine that goes to
+sleep, loses its wifi, and gets restarted. A download that starts over from the
+beginning every time something interrupts it is a download that, for a file
+that big, may genuinely never finish. So it keeps whatever it already got and
+asks Google for only the part that is missing.
+
+The other half is not trusting what arrived. Google tells us how big the file
+is and gives us a fingerprint of its contents, so before the video is written
+into the catalog at all, the downloaded copy is measured and fingerprinted and
+the two are compared. If they do not match, the copy is deleted and that file
+stops with both numbers written down — rather than being quietly filed as a
+good video that is actually half a video. If Google gives us no fingerprint to
+check against, that stops too: "we could not check" is not the same as "we
+checked and it was fine", and the whole rest of the Studio treats the catalog
+as the truth.
+
+It also refuses to fill the disk. If free space is under the line, it does not
+start — and it does not start rather than getting half way and dying, because a
+half-written three-gigabyte file is the worst of both. A video turned away for
+lack of room goes back on the to-do list instead of being marked as failed: the
+disk being full is the machine's problem, not that video's, and five full disks
+in a row should not add up to a perfectly good recording being given up on.
+
+And the same video only ever gets one entry, whether it turns up twice because
+somebody renamed it, or arrives once by AirDrop and again through a Photos
+sync under a completely different Drive name. The second one is recognised by
+what the bytes actually are, not by what the file is called.
+
+One thing deliberately left undecided: which recording *session* a file belongs
+to. Working out that this wide shot and that close-up are one shoot needs the
+next two pieces. So for now everything lands in a clearly-labelled holding pen —
+"Unsorted — inbox — 2026-09-15" — which a later piece can sort out and which
+reads, to a person looking at it, as exactly what it is.
+
+**Sent back once, and two of the things it found were worth the round trip.**
+The first: a video that was turned away — a bad copy, say — was correctly
+reported as stopped, while the job telling the machine to fetch it was quietly
+left running. Nobody was working it, so five minutes later the machine assumed
+the worker had died and handed it out again, and again, up to twenty times,
+re-downloading the whole three and a half gigabytes each round before giving up
+with a reason that had nothing to do with what actually went wrong. About
+seventy gigabytes of pointless downloading for one bad file. The second: a disk
+too full to take any video at all said "finished cleanly" in the morning log.
+It was doing the right thing — putting the videos back rather than failing them
+— and then reporting a completely empty morning as a good one, every fifteen
+minutes, for ever. Nothing gets to look healthy while shipping nothing.
+
+Four smaller things came back with them. If the external drive the cache lives
+on is not plugged in, it now says so instead of quietly measuring the Mac's own
+disk and putting three gigabytes of video on it. A Google connection that goes
+silent without hanging up is given two minutes and then abandoned, rather than
+being waited on for ever. A duplicate copy the database rejected at the last
+moment is deleted rather than left on the disk with nothing pointing at it. And
+the half-finished download is no longer filed under the video's name, so
+renaming the file in Drive part-way through no longer throws the progress away
+— which is the one thing this whole piece exists to prevent.
+
+**Sent back a second time, for the same sentence one pass later.** Fixing "a
+full disk reports finished cleanly" fixed the pass that hits a full disk. It did
+not fix the pass fifteen minutes afterwards. A video turned away for lack of
+room is put back on the to-do list and held there for a quarter of an hour, so
+the next pass finds nothing it is allowed to pick up — and from the inside,
+"everything is held back" and "there is nothing to do" looked identical. So it
+said "finished cleanly" over a disk exactly as full as before, wrote "no videos
+were waiting" when one was, and then deleted its own alarm on the way out. The
+alarm was the only lasting record that anything was wrong; it survived about as
+long as the hold, and a pass that did nothing at all erased it.
+
+The fix is to stop asking "did anything happen to me?" and start asking "what
+is actually true?". The to-do list can now be asked what it is holding back and
+for how long, the alarm itself remembers which videos are stuck behind it, and
+an alarm is only stood down by a pass that can show the problem is over — never
+by one that simply did nothing. So a quiet morning now reads "one video is
+waiting for disk room, next attempt in ten minutes" with the alarm printed
+above it, rather than a clean bill of health.
+
+Two smaller things came back with it. Two settings the code's own notes told
+you about — how long to wait on Google, and how long a silent download is given
+before it is abandoned — were never actually read from anywhere, so an operator
+could have spent an hour setting something that did nothing; they are read now,
+and a value that is not a number is refused out loud rather than swapped back
+for the default behind your back. And the *finished* video file was still filed
+under its Drive name, so renaming a clip in the moment between the download
+finishing and the catalog entry being written meant the next attempt could not
+find the three and a half gigabytes already sitting on the disk and fetched the
+whole thing again, leaving the first copy stranded with nothing pointing at it.
+It now recognises its own file whatever it has since been called.
 ## 2026-09-16 — The Studio makes small working copies of your footage (#725)
 
 Sixth of eight pieces in the Studio work. The earlier pieces built the filing

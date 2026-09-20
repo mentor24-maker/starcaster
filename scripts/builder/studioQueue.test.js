@@ -687,3 +687,162 @@ test('a rollback that works is still performed', () => {
   rollbackQuietly({ exec: (sql) => calls.push(sql) });
   assert.deepEqual(calls, ['ROLLBACK'], 'swallowing the error must not mean skipping the rollback');
 });
+
+// ── blocking never leaves a live job behind (review round 1, 2026-09-16) ────
+
+/**
+ * The defect, reproduced exactly as the review reproduced it.
+ *
+ * `jobs_live_subject_idx` covers only `pending`/`running`, so a blocked row and
+ * a fresh pending row for the same subject coexist by design. `block()`'s
+ * lookup preferred the already-blocked row — correctly, it is the record of
+ * when the subject first became impossible — and then never touched the job the
+ * caller was holding. The caller reported the file blocked; the job sat in
+ * `running` with nobody working it, `reap` returned it after the lease, and the
+ * cycle ran to the recovery ceiling before going terminal with the WRONG
+ * reason. On the ingest checksum path every round re-downloaded the whole file.
+ */
+test('blocking a subject that is ALREADY blocked still takes the live job out of the running', () => {
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock });
+
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1' });
+  const first = queue.claim('w1', { stages: ['ingest'] });
+  queue.block({
+    stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1',
+    reason: 'checksum mismatch', jobId: first.id,
+  });
+  assert.equal(queue.listJobs({ state: STATES.RUNNING }).length, 0, 'the first block is the easy case');
+
+  // The blocked row stays, and the same Drive file is queued again — which is
+  // precisely what the blocked reason tells the operator to bring about.
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1' });
+  assert.equal(queue.listJobs({ state: STATES.BLOCKED }).length, 1);
+  assert.equal(queue.listJobs({ state: STATES.PENDING }).length, 1);
+
+  const second = queue.claim('w2', { stages: ['ingest'] });
+  assert.equal(second.id !== first.id, true, 'a genuinely different job, as the index allows');
+  const result = queue.block({
+    stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1',
+    reason: 'checksum mismatch, again', jobId: second.id,
+  });
+
+  assert.deepEqual(
+    queue.listJobs({ state: STATES.RUNNING }), [],
+    'NOTHING may be left running when the caller has been told the file is blocked'
+  );
+  assert.deepEqual(queue.listJobs({ state: STATES.PENDING }), [], 'and nothing pending either');
+  const blocked = queue.listJobs({ state: STATES.BLOCKED });
+  assert.equal(blocked.length, 1, 'still exactly one blocked row — not one more per re-queue, for ever');
+  assert.equal(blocked[0].id, first.id, 'and it is the original record of when this subject went bad');
+  assert.equal(blocked[0].lastError, 'checksum mismatch, again', 'carrying the newest reason');
+  assert.deepEqual(result.absorbedJobIds, [second.id], 'the caller can say what happened to its own job');
+  queue.close();
+});
+
+test('a job left running that way used to survive reap — now there is nothing to reap', () => {
+  // The cost of the bug was not the stray row, it was what happened next: reap
+  // put it back, ingest claimed it, blocked it, left it running, twenty times.
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock, leaseMs: 1000 });
+
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1' });
+  const first = queue.claim('w1', { stages: ['ingest'] });
+  queue.block({
+    stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1', reason: 'no md5', jobId: first.id,
+  });
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1' });
+  const second = queue.claim('w2', { stages: ['ingest'] });
+  queue.block({
+    stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_1', reason: 'no md5', jobId: second.id,
+  });
+
+  clock.advance(60_000);
+  assert.deepEqual(
+    queue.reap(), { recovered: 0, blocked: 0 },
+    'no lease to expire, so no round two, so no re-download of 3.57 GB'
+  );
+  queue.close();
+});
+
+test('blocking with no live job at all is unchanged — idempotent, one row, newest reason', () => {
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock });
+
+  const one = queue.block({
+    stage: 'drive.watch', subjectKind: 'watch', subjectId: 'inbox', reason: 'the token expired',
+  });
+  const two = queue.block({
+    stage: 'drive.watch', subjectKind: 'watch', subjectId: 'inbox', reason: 'the token is still expired',
+  });
+
+  assert.equal(one.created, true);
+  assert.equal(two.created, false);
+  assert.equal(two.job.id, one.job.id);
+  assert.deepEqual(two.absorbedJobIds, [], 'there was no live job to absorb');
+  assert.equal(queue.listJobs({ state: STATES.BLOCKED }).length, 1);
+  queue.close();
+});
+
+test('a caller holding a job for a DIFFERENT subject still has it taken out', () => {
+  // Belt and braces: ingest reads its subject from the payload and falls back
+  // to the job's own, so the two can in principle differ. Naming the job you
+  // hold is what makes the guarantee unconditional rather than usual.
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock });
+
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_odd' });
+  const held = queue.claim('w1', { stages: ['ingest'] });
+  const result = queue.block({
+    stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file_other',
+    reason: 'this job carries no Drive file id', jobId: held.id,
+  });
+
+  assert.deepEqual(queue.listJobs({ state: STATES.RUNNING }), [], 'the held job is out of the running');
+  assert.deepEqual(result.absorbedJobIds, [], 'it is not a duplicate of the subject being blocked');
+  assert.deepEqual(result.blockedJobIds, [held.id], 'so it keeps its own record, blocked in place');
+  assert.equal(result.job.subjectId, 'file_other', 'and the block was filed against the subject asked for');
+  assert.equal(queue.getJob(held.id).subjectId, 'file_odd', 'the held job still says what it was for');
+  assert.equal(queue.getJob(held.id).state, STATES.BLOCKED);
+  queue.close();
+});
+
+test('waiting() separates work that is DUE from work that is merely pending', () => {
+  // `listJobs({ state: 'pending' })` cannot tell those apart, and a caller
+  // that treats "claim returned nothing" as "the queue is empty" reports a
+  // held-off job as no job at all — which is how ingest came to print
+  // "finished cleanly" over a full disk and delete its own alarm (86bbjv686,
+  // round 2). It is answered HERE, by the queue's own clock, because "is this
+  // due?" has to be decided by the same clock `claim` decides it with.
+  const clock = fakeClock();
+  const queue = openQueue(tmpFile(), { clock });
+
+  // Enqueued first, so it is the one `claim` hands out and the one released.
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'held' });
+  queue.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'ready' });
+  queue.enqueue({ stage: 'probe', subjectKind: 'source', subjectId: 'elsewhere' });
+
+  const held = queue.claim('w1', { stages: ['ingest'] });
+  queue.release(held.id, 'w1', { reason: 'no room on the disk', runAfterMs: 15 * 60 * 1000 });
+
+  const ingest = queue.waiting({ stage: 'ingest' });
+  assert.equal(ingest.pending, 2);
+  assert.equal(ingest.dueNow, 1);
+  assert.equal(ingest.heldOff, 1);
+  assert.equal(ingest.nextDueInMs, 15 * 60 * 1000);
+  assert.equal(ingest.nextDueAt, clock() + 15 * 60 * 1000);
+  assert.equal(queue.waiting().pending, 3, 'and without a stage it answers for the whole queue');
+
+  // The clock agreement is the property that matters: what `waiting` calls
+  // held off is exactly what `claim` refuses.
+  assert.equal(queue.claim('w2', { stages: ['ingest'] }).subjectId, 'ready');
+  assert.equal(queue.claim('w3', { stages: ['ingest'] }), null, 'the held one is not handed out');
+
+  clock.advance(15 * 60 * 1000 + 1);
+  const later = queue.waiting({ stage: 'ingest' });
+  assert.equal(later.heldOff, 0);
+  assert.equal(later.dueNow, 1);
+  assert.equal(later.nextDueInMs, 0);
+  assert.equal(queue.claim('w4', { stages: ['ingest'] }).subjectId, 'held', 'and claim agrees');
+  queue.close();
+});

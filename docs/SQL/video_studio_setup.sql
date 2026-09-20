@@ -87,6 +87,23 @@ create table if not exists public.video_sources (
   -- same footage handed to two projects is two rows, and re-ingesting the same
   -- file into one project is rejected rather than duplicated.
   content_hash   text,
+  -- What DRIVE said the file's md5 was when we ingested it, stored verbatim.
+  --
+  -- This is not a second content hash and it is never compared against
+  -- `content_hash` — that one is a sha256 of the bytes on disk, and the two
+  -- algorithms cannot be compared. It exists for exactly one question, which
+  -- nothing else on this row can answer: *is the file sitting at this Drive
+  -- file id still the same file we ingested?* Drive keeps the id across a
+  -- re-upload, a "Manage versions" replacement and a Drive Desktop overwrite,
+  -- so the id alone says nothing about the bytes.
+  --
+  -- Without it, ingest deduped on the id and kept the OLD bytes for ever while
+  -- reporting a clean pass — 5/8 then probed the wrong footage and 6/8 made a
+  -- proxy of it (review round 3 on 86bbjv686, reproduced).
+  --
+  -- NULL means "ingested before this column existed", which is a third answer
+  -- and not "unchanged" — see how ingest.js treats it.
+  drive_md5      text,
   duration_s     numeric,
   width          integer,
   height         integer,
@@ -126,5 +143,12 @@ create index if not exists idx_video_sources_project_state
 -- will not revisit a table that is there.
 alter table public.video_sources alter column sync_offset_ms drop not null;
 alter table public.video_sources alter column sync_offset_ms drop default;
+
+-- Added 2026-09-20 (86bbjv686, review round 3). Same reason as the two lines
+-- above: the column is declared in the `create table` up there for a fresh
+-- database, and `create table if not exists` will not revisit a table that
+-- already exists — so every database this SQL has already been applied to
+-- needs this line, or ingest writes `drive_md5` to a column that is not there.
+alter table public.video_sources add column if not exists drive_md5 text;
 
 alter table public.video_sources enable row level security;
