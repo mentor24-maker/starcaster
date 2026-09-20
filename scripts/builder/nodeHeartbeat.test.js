@@ -1711,8 +1711,8 @@ test('a stand-down DOES close the alarms that mean it stopped firing — it plai
 test('the stale-check headline does not call a stood-down lane a job that stopped beating', () => {
   const cli = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
-  assert.match(cli, /const down = report\.quiet\.filter\(\(q\) => q\.standDown\)/,
-    'the two findings are separated before either is summarised');
+  assert.match(cli, /const down = report\.quiet\.filter\(\(q\) => q\.standDown && !q\.blocked\)/,
+    'the findings are separated before any is summarised — and a blocked row is not a stand-down (round 3)');
   assert.match(cli, /firing on time and doing no work/);
   // The summary line is the one sentence most readers take away; stating the
   // wrong fault there would be this fix reintroducing its own bug.
@@ -1906,4 +1906,140 @@ test('the blocked bus post does NOT tell the reader to wait', () => {
   assert.doesNotMatch(text, /comes back on its own/);
   assert.match(text, /waiting does not help/i);
   assert.match(text, /sign in on/i, 'it names the action, on the machine that needs it');
+});
+
+// ---------------------------------------------------------------------------
+// ROUND 3 — the LOCAL alarm said the round-1 story about a blocked row.
+//
+// The shared roll call's blocked branch was built properly, and every break
+// test went through it. The local stale alarm — the one that fires on a machine
+// that is awake, which is the one 2026-09-18 would have tripped — reused the
+// stand-down paragraph, because a blocked row also carries `standDown`. So one
+// message said "it needs a human" and, a sentence later, "every pass stood down
+// and exited cleanly", with a threshold nobody should wait for. These tests
+// render THAT path with a blocked row, which no test did.
+// ---------------------------------------------------------------------------
+
+const blockedLocalEntry = (role, sinceIso) => ({
+  role,
+  owner: 'mac-mini',
+  beat: {
+    found: true,
+    readable: true,
+    file: '/dev/null',
+    beat: {
+      role,
+      node: 'mac-mini',
+      at: new Date(NOW - 5 * 60 * 1000).toISOString(),
+      kind: hb.BEAT_BLOCKED,
+      why: 'the pass exited 1 without authenticating — a login has expired',
+      standingDownSince: sinceIso,
+    },
+  },
+});
+
+test('the LOCAL stale post about a blocked lane says sign in, not wait — and quotes no threshold', () => {
+  const r = hb.recencyReport({ entries: [blockedLocalEntry('bus-relay', agoHours(62))], now: NOW });
+  assert.equal(r.quiet.length, 1);
+  const post = hb.renderStalePost({ quiet: r.quiet, node: 'mac-mini', now: NOW });
+  assert.doesNotMatch(post, /stood down and exited cleanly/, 'the usage-limit story, under a row that says a human is needed');
+  assert.doesNotMatch(post, /threshold/, 'a blocked row has no threshold, and quoting one invites waiting for it');
+  assert.match(post, /waiting does not help/i, 'the same sentence the shared bus post carries');
+  assert.match(post, /cannot work at all/);
+  // The first remedy line is signing in, not doctor:node — that answers a
+  // different question.
+  const where = post.slice(post.indexOf('Where to look:'));
+  assert.match(where.split('\n')[2], /sign Claude Code in again on mac-mini/);
+  assert.doesNotMatch(where, /doctor:node/);
+});
+
+test('one wording for a blocked lane — the stale post and the bus post share it', () => {
+  for (const line of hb.BLOCKED_NOT_WAITING) {
+    const stale = hb.renderStalePost({
+      quiet: hb.recencyReport({ entries: [blockedLocalEntry('bus-relay', agoHours(3))], now: NOW }).quiet,
+      node: 'mac-mini',
+      now: NOW,
+    });
+    const bus = hb.renderBlockedPost({
+      blocked: [{ role: 'bus-relay', owner: 'mac-mini', at: agoHours(1), reason: 'x' }],
+      now: NOW,
+    });
+    assert.ok(stale.includes(line), `stale post carries: ${line}`);
+    assert.ok(bus.includes(line), `bus post carries: ${line}`);
+  }
+});
+
+test('a MIXED local post keeps each row honest: the stopped row keeps its threshold, the blocked one has none', () => {
+  const r = hb.recencyReport({
+    entries: [
+      blockedLocalEntry('loop-review', agoHours(10)),
+      { role: 'bus-relay', owner: 'mac-mini', beat: beatAt(agoHours(12)) },
+    ],
+    now: NOW,
+  });
+  assert.equal(r.quiet.length, 2);
+  const post = hb.renderStalePost({ quiet: r.quiet, node: 'mac-mini', now: NOW });
+  const rows = post.split('\n').filter((l) => l.startsWith('- **'));
+  const blockedLine = rows.find((l) => l.includes('loop-review'));
+  const stoppedLine = rows.find((l) => l.includes('bus-relay'));
+  assert.doesNotMatch(blockedLine, /threshold/);
+  assert.doesNotMatch(blockedLine, /stood down/);
+  assert.match(stoppedLine, /threshold/);
+  assert.doesNotMatch(stoppedLine, /exited with an error/);
+});
+
+test('the stand-down local post is unchanged by the blocked branch', () => {
+  // The other direction of the break test: a real stand-down still gets its
+  // own paragraph, so the fix did not just delete the sentence for everybody.
+  const r = hb.recencyReport({
+    entries: [{
+      role: 'bus-relay',
+      owner: 'mac-mini',
+      beat: {
+        found: true, readable: true, file: '/dev/null',
+        beat: {
+          role: 'bus-relay', node: 'mac-mini', at: agoHours(0.1), kind: hb.BEAT_STOOD_DOWN,
+          why: 'a usage limit closed this pass', standingDownSince: agoHours(10),
+        },
+      },
+    }],
+    now: NOW,
+  });
+  assert.equal(r.quiet.length, 1);
+  const post = hb.renderStalePost({ quiet: r.quiet, node: 'mac-mini', now: NOW });
+  assert.match(post, /stood down and exited cleanly/);
+  assert.match(post, /threshold/);
+  assert.doesNotMatch(post, /waiting does not help/i);
+});
+
+test('the --stale-check TERMINAL summary names a blocked lane as a login, not a usage limit', () => {
+  // Rendered by actually running the command on an isolated home directory,
+  // which is how the round-2 review saw it — reading the source did not.
+  const { spawnSync } = require('node:child_process');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-stale-'));
+  try {
+    fs.writeFileSync(path.join(home, '.alphire-node'), 'macbook-pro\n');
+    const dir = hb.heartbeatDir(home);
+    fs.mkdirSync(dir, { recursive: true });
+    const at = new Date().toISOString();
+    fs.writeFileSync(hb.beatFile('loop-build', home), JSON.stringify({
+      role: 'loop-build', node: 'macbook-pro', at, kind: hb.BEAT_BLOCKED,
+      why: 'the pass exited 1 without authenticating — a login has expired',
+      standingDownSince: new Date(Date.now() - 62 * HOUR).toISOString(),
+    }));
+    const run = spawnSync(process.execPath, [path.join(__dirname, '..', 'node_heartbeat.mjs'), '--stale-check'], {
+      env: { ...process.env, HOME: home, NO_COLOR: '1' },
+      encoding: 'utf8',
+    });
+    // Only meaningful where macbook-pro owns loop-build; if the role table
+    // moves, say so rather than pass on an empty reading.
+    assert.match(run.stdout, /QUIET loop-build/, `the blocked stamp must be read at all:\n${run.stdout}${run.stderr}`);
+    assert.equal(run.status, 1);
+    assert.match(run.stdout, /cannot work at all/);
+    assert.match(run.stdout, /signs in on that machine/);
+    assert.doesNotMatch(run.stdout, /usage limit, most likely/, 'the disproven story, printed under the row that refutes it');
+    assert.match(run.stdout, /no threshold/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

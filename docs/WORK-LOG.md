@@ -48,6 +48,14 @@ Dane's ClickUp "Assigned to me" list when an alarm lands on it, which reaches
 him without going anywhere near the chat that was broken. It stays there until
 he unassigns himself.
 
+One more alarm had the old story in it. The check that watches each machine
+every ten minutes, the one most likely to go off first, did say an expired
+login needs somebody to sign in. The very next sentence then said the passes
+had "stood down cleanly" and blamed a usage limit, and it gave a wait time.
+That is the explanation the Mini's logs proved wrong. That alarm now says the
+same thing as the others: waiting will not help. Its first instruction is to
+sign Claude in again on that machine.
+
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 
 Expand a column's Styles bar in the Builder and there is a Border Style

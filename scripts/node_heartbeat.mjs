@@ -368,8 +368,7 @@ function printReport(state) {
   // line here that names something a human has to go and do.
   if (stuck.length > 0) {
     out.push(bold(red(`${stuck.length} job${stuck.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
-    out.push(dim('This is not a machine problem, not a schedule problem, and not something that clears with time —'));
-    out.push(dim('an expired login, most likely. Nothing comes out of these lanes until somebody signs in on that machine.'));
+    for (const line of heartbeat.BLOCKED_SUMMARY) out.push(dim(line));
     for (const b of stuck) out.push(dim(`  ${b.role} on ${b.owner}: ${b.why}`));
     if (alarming.length > 0) out.push(bold(red(`${alarming.length} more ${alarming.length === 1 ? 'is' : 'are'} standing down.`)));
     if (overdue.length > 0) out.push(bold(red(`${overdue.length} more ${overdue.length === 1 ? 'has' : 'have'} gone quiet altogether.`)));
@@ -575,7 +574,11 @@ async function doStaleCheck({ post }) {
   }
   for (const q of report.quiet) {
     out.push(`  ${red('QUIET')} ${q.role} on ${NODE.name} — ${q.reason}.`);
-    out.push(`        ${dim(`threshold ${heartbeat.ageText(q.thresholdMs).replace(' ago', '')}; last beat ${q.at}`)}`);
+    // A blocked row has no threshold by design — quoting one invites the
+    // reader to wait for it (round 3).
+    out.push(`        ${dim(q.blocked
+      ? `no threshold — this does not clear with time; last beat ${q.at}`
+      : `threshold ${heartbeat.ageText(q.thresholdMs).replace(' ago', '')}; last beat ${q.at}`)}`);
   }
   for (const u of report.unknown) {
     out.push(`  ${yellow('????')}  ${u.role} — cannot judge.`);
@@ -635,8 +638,19 @@ async function doStaleCheck({ post }) {
     // wrongly in the summary line would be the fix reintroducing the bug in the
     // one sentence most people read. Caught by running the command rather than
     // by reading it.
-    const down = report.quiet.filter((q) => q.standDown);
+    //
+    // And THREE, since round 3: a blocked row also carries `standDown`, so the
+    // stand-down bucket used to swallow it and print "a usage limit, most
+    // likely... until it clears" under a row that had just said somebody has to
+    // sign in. Blocked is split out first and stated first, the way the shared
+    // roll call does, because it is the only line here that needs a human.
+    const blocked = report.quiet.filter((q) => q.blocked);
+    const down = report.quiet.filter((q) => q.standDown && !q.blocked);
     const stopped = report.quiet.filter((q) => !q.standDown);
+    if (blocked.length > 0) {
+      out.push(bold(red(`${blocked.length} job${blocked.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
+      for (const line of heartbeat.BLOCKED_SUMMARY) out.push(dim(line));
+    }
     if (stopped.length > 0) {
       out.push(bold(red(`${stopped.length} job${stopped.length === 1 ? ' has' : 's have'} stopped beating on this machine.`)));
     }
