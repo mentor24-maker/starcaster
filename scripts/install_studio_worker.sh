@@ -58,9 +58,22 @@ ROLE="studio-worker"
 # --print-plist)` is the whole verification, and it needs no launchd, no
 # install and no privileges, so CI and a review pass can both run it.
 render_plist() {
-  # The daemon rotates its OWN log (workers/studio/daemon.js, rotateLog). This
-  # launchd log only catches what escapes it — a startup refusal, a PATH
-  # disaster, a stack trace on the way out.
+  # The daemon opens and writes its OWN log (workers/studio/daemon.js,
+  # openLogWriter) and rotates it at a size cap, reopening the handle each time.
+  # It echoes a line to stdout only when stdout is a terminal, so under launchd
+  # this file really does catch nothing but what escapes — a startup refusal, a
+  # PATH disaster, a stack trace on the way out.
+  #
+  # THAT IS WHY StandardOutPath IS NOT daemon.log. launchd opens this file once
+  # and holds the handle; a rename does not move an open handle, so pointing it
+  # at the rotated file would work exactly once and then grow forever inside
+  # daemon.log.1 with nothing capping it. The daemon owning its own handle is
+  # what makes the rotation real.
+  #
+  # Nothing rotates THIS file, and it does not need it: the only writer is a
+  # crash, and ThrottleInterval below caps a crash loop at one stack trace a
+  # minute — a few megabytes a week at the very worst, against a daemon log
+  # capped at 48 MB. --status prints its size so it is never a blind spot.
   local LLOG="$HOME/Library/Logs/$LABEL.launchd.log"
   local NODE_BIN
   NODE_BIN="$(command -v node || echo /usr/local/bin/node)"
@@ -117,11 +130,33 @@ status() {
     echo "loaded:   no"
   fi
 
+  # AN EMPTY READING THAT DOES NOT SAY WHY READS AS A BROKEN ONE (DOCTRINE 5.31).
+  # "nothing written yet" was printed on every healthy daemon in the world,
+  # because until this was fixed nothing ever wrote to this file at all. Now its
+  # absence means something specific, so say the specific thing.
   local log="${STUDIO_LOG_DIR:-$HOME/Studio/logs}/daemon.log"
+  local llog="$HOME/Library/Logs/$LABEL.launchd.log"
   if [ -f "$log" ]; then
-    echo "log:      $log (last modified $(date -r "$log" '+%Y-%m-%d %H:%M'))"
+    local rolled=0 f
+    # `|| continue`, not `&&`: with `set -e`, a body whose last command is a
+    # failed test kills the script, and an unmatched glob leaves "$log".* as a
+    # literal — which is the ordinary case before the first rotation.
+    for f in "$log".*; do [ -f "$f" ] || continue; rolled=$((rolled + 1)); done
+    echo "log:      $log"
+    echo "          $(wc -c < "$log" | tr -d ' ') bytes, last written $(date -r "$log" '+%Y-%m-%d %H:%M'), $rolled rotated copy/copies kept beside it"
   else
-    echo "log:      $log (nothing written yet)"
+    echo "log:      $log — NOT THERE, and the daemon creates it the moment it starts."
+    if launchctl list | grep -q "$LABEL"; then
+      echo "          launchd says it is loaded, so this means it is failing before its first line."
+      echo "          Read $llog — the refusal is in there."
+    else
+      echo "          Nothing is loaded here, so this is expected: the daemon has never run on this machine."
+    fi
+  fi
+  if [ -f "$llog" ]; then
+    echo "launchd:  $llog ($(wc -c < "$llog" | tr -d ' ') bytes — crashes and startup failures only)"
+  else
+    echo "launchd:  $llog — not there, which means launchd has never started the job here"
   fi
 
   # THE BEAT IS THE ONLY ANSWER THAT SURVIVES A LIE. launchd can report a live

@@ -30,12 +30,16 @@
  *                        released on exit is exactly the thing a `kill -9` does
  *                        not do.
  *   the daemon stops   — and stopping is SILENT, which is the worst of the
- *   firing              three. It beats (lib/nodeHeartbeat.js, role
- *                        `studio-worker`), and `npm run heartbeat --
- *                        --stale-check` on the relay's ten-minute wake turns
- *                        six hours of silence into a bus post. Degrade to
- *                        silence being noticed, never to a false negative
- *                        (DOCTRINE 3.3).
+ *   firing              three. It beats below, every five minutes, whatever
+ *                        the tick concluded. The ALARM on that silence is
+ *                        parked until the daemon is actually installed on the
+ *                        Mini (lib/nodeHeartbeat.js, NOT_REPORTING_WHY ->
+ *                        `studio-worker`, unblocking ~2026-10-01): an alarm
+ *                        about a daemon nobody can start is an alarm nobody
+ *                        can clear. Parked WITH THE REASON, never as healthy —
+ *                        degrade to silence being noticed, not to a false
+ *                        negative (DOCTRINE 3.3). The beat itself runs now, so
+ *                        graduating it is one entry and no new behaviour.
  *
  * NO `setInterval` AT MODULE SCOPE (DOCTRINE 5.2 — it hangs every test).
  * Nothing in this file schedules anything until `runDaemon` is called, and
@@ -171,6 +175,80 @@ function rotateLog(file, { maxBytes = DEFAULT_LOG_MAX_BYTES, keep = DEFAULT_LOG_
 }
 
 /**
+ * THE DAEMON'S OWN LOG FILE — opened for append, and REOPENED AFTER A ROTATION.
+ *
+ * This is the half that was missing when slice 7 first shipped, and the failure
+ * had the exact shape the rotation was written to prevent. `rotateLog` watched
+ * ~/Studio/logs/daemon.log; nothing ever wrote to it, because the daemon's only
+ * output was `process.stdout.write` and launchd sends that to
+ * ~/Library/Logs/com.starcaster.studio-worker.launchd.log. So the file with the
+ * cap was never created — `statSync` returned ENOENT on every tick for the life
+ * of the machine, and `rotations` was structurally always 0 — while the file
+ * that actually grew had no cap at all.
+ *
+ * WHY THE DAEMON OPENS THE FILE RATHER THAN LAUNCHD. Pointing StandardOutPath
+ * at daemon.log fixes nothing: launchd opens that file once at launch and holds
+ * the handle, and a rename does not move an open handle. The writes would keep
+ * going into daemon.log.1, which then grows without a cap, while daemon.log no
+ * longer exists so rotation goes back to "no log file yet" forever. One
+ * rotation, then unbounded growth — the same bug wearing a different hat. The
+ * daemon owning the handle is what makes `reopen()` possible, and `reopen()` is
+ * the whole fix.
+ *
+ * AND IT DOES NOT ECHO TO STDOUT UNDER LAUNCHD. If every line went to both, the
+ * launchd log would be a second, uncapped copy of the one being capped. stdout
+ * gets the line only when it is a terminal — i.e. when a person is running this
+ * by hand and wants to see it — which is what makes the plist's claim that the
+ * launchd log "only catches what escapes" actually true.
+ *
+ * Every failure here degrades to stdout and is reported. A daemon that refuses
+ * to work because it cannot write its own diary is worse than one whose diary
+ * is missing.
+ */
+function openLogWriter(file, { io = fs, stdout = process.stdout } = {}) {
+  const writer = { file, problem: null };
+  let fd = null;
+
+  function open() {
+    try {
+      io.mkdirSync(path.dirname(file), { recursive: true });
+      fd = io.openSync(file, 'a');
+      writer.problem = null;
+    } catch (err) {
+      fd = null;
+      writer.problem = `could not open the log ${file}: ${err.message} — log lines are going to stdout instead, where launchd will catch them`;
+    }
+  }
+
+  function close() {
+    if (fd === null) return;
+    try { io.closeSync(fd); } catch (_) { /* a handle we cannot close is a handle we are done with */ }
+    fd = null;
+  }
+
+  open();
+
+  writer.write = (line) => {
+    let landed = false;
+    if (fd !== null) {
+      try {
+        io.writeSync(fd, `${line}\n`);
+        landed = true;
+      } catch (err) {
+        close();
+        writer.problem = `could not write to the log ${file}: ${err.message} — log lines are going to stdout instead`;
+      }
+    }
+    // Not `else`: a TTY gets the line as well as the file, so a hand-run shows
+    // its work. Under launchd `isTTY` is undefined and this writes nothing.
+    if (!landed || (stdout && stdout.isTTY)) stdout.write(`${line}\n`);
+  };
+  writer.reopen = () => { close(); open(); };
+  writer.close = close;
+  return writer;
+}
+
+/**
  * ONE TICK. Reap, find a stage with work due, run one job of it, report.
  *
  * Pure of timers and of process state, so the tests drive it directly rather
@@ -277,10 +355,12 @@ async function runDaemon(options = {}) {
     busyMs = DEFAULT_BUSY_MS,
     reapEveryMs = DEFAULT_REAP_EVERY_MS,
     beatEveryMs = DEFAULT_BEAT_EVERY_MS,
+    logMaxBytes = DEFAULT_LOG_MAX_BYTES,
+    logKeep = DEFAULT_LOG_KEEP,
     stopAfterTicks = 0,
     clock = Date.now,
     sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    write = (line) => process.stdout.write(`${line}\n`),
+    write: writeOption = null,
     recordBeat = null,
     node = os.hostname(),
   } = options;
@@ -289,6 +369,13 @@ async function runDaemon(options = {}) {
   const queueFile = resolveQueueFile(options, env);
   const logFile = resolveLogFile(options, env);
   const queue = options.queue || openQueue(queueFile);
+
+  // The default writer IS the file `rotateLog` watches — that wiring is the
+  // defect this slice was sent back for, so it is not an option with a
+  // fallback. A caller that passes its own `write` (the tests, a smoke run)
+  // opts out of the file entirely and out of rotating it.
+  const writer = writeOption ? null : openLogWriter(logFile);
+  const write = writeOption || ((line) => writer.write(line));
 
   let stopping = false;
   const stop = () => { stopping = true; };
@@ -299,6 +386,7 @@ async function runDaemon(options = {}) {
   }
 
   write(`[studio-daemon] starting as ${owner} — queue ${queueFile}, log ${logFile}`);
+  if (writer && writer.problem) write(`[studio-daemon] ${writer.problem}`);
 
   let lastReap = 0;
   let lastBeat = 0;
@@ -307,8 +395,14 @@ async function runDaemon(options = {}) {
 
   while (!stopping) {
     const now = clock();
-    const rotation = rotateLog(logFile);
+    const rotation = rotateLog(logFile, { maxBytes: logMaxBytes, keep: logKeep });
     if (rotation.rotated) {
+      // REOPEN BEFORE THE NEXT LINE IS WRITTEN. The rename moved the file, not
+      // our open handle: without this, every line from here on lands in
+      // daemon.log.1, daemon.log never comes back, and nothing is ever capped
+      // again. The rotation message below is itself the first line of the new
+      // file, so a log always says why it starts where it does.
+      if (writer) writer.reopen();
       summary.rotations += 1;
       write(`[studio-daemon] rotated the log — ${rotation.why}`);
     }
@@ -353,6 +447,7 @@ async function runDaemon(options = {}) {
     if (!options.queue) queue.close();
   }
   write(`[studio-daemon] stopped after ${summary.ticks} tick(s): ${summary.worked} job(s) run, ${summary.errors} stage error(s), ${summary.beats} beat(s).`);
+  if (writer) writer.close();
   return summary;
 }
 
@@ -364,6 +459,7 @@ module.exports = {
   // own, and driving a whole daemon loop to check one boundary is how a test
   // ends up asserting nothing in particular.
   rotateLog,
+  openLogWriter,
   ownerId,
   resolveQueueFile,
   resolveLogFile,

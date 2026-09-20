@@ -8,7 +8,7 @@ const path = require('node:path');
 
 const { openQueue, STATES } = require('../../workers/studio/queue.js');
 const {
-  runDaemon, tickOnce, formatTick, rotateLog, ownerId,
+  runDaemon, tickOnce, formatTick, rotateLog, openLogWriter, ownerId,
   resolveQueueFile, resolveLogFile, DEFAULT_LOG_KEEP,
 } = require('../../workers/studio/daemon.js');
 
@@ -207,6 +207,110 @@ test('the log rotates at the size cap and keeps the configured number of copies'
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+// ── THE WIRING, which is what round 1 actually got wrong ────────────────────
+//
+// Every test above this line calls `rotateLog` on a file the test itself wrote,
+// so they prove the arithmetic and say nothing about whether the daemon's own
+// output ever reaches the file being rotated. It did not: `rotateLog` watched
+// ~/Studio/logs/daemon.log while every line went to stdout and thence to the
+// launchd log, so the capped file was never created and the growing one had no
+// cap. Deleting the `rotateLog` call out of `runDaemon` left all 21 tests
+// passing, which is how it shipped green. These four drive `runDaemon` itself.
+
+test('runDaemon WRITES ITS LINES INTO THE FILE rotateLog WATCHES', async () => {
+  const dir = tmpdir('wiring');
+  const logFile = path.join(dir, 'daemon.log');
+  const q = openQueue(':memory:');
+
+  await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: {},
+    stopAfterTicks: 2,
+    sleep: async () => {},
+    recordBeat: () => {},
+    logFile,
+    // No `write`: the default writer is the thing under test.
+  });
+
+  assert.ok(fs.existsSync(logFile),
+    'the log directory and file are created by the daemon, not by a person remembering to');
+  const body = fs.readFileSync(logFile, 'utf8');
+  assert.match(body, /starting as studio-test-1/, 'the startup line landed in the file');
+  assert.match(body, /nothing due/, 'and so did the tick lines');
+  assert.match(body, /stopped after 2 tick\(s\)/, 'and the closing line');
+  q.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('after a rotation the daemon REOPENS the log — the next line is not written into daemon.log.1', async () => {
+  // The obvious fix — point launchd's StandardOutPath at daemon.log — fails
+  // exactly here and fails quietly: the rename does not move the open handle,
+  // so writing continues into daemon.log.1, which then grows with no cap, while
+  // daemon.log never comes back so rotation reports "no log file yet" forever.
+  // One rotation, then unbounded growth. This is the test for that.
+  const dir = tmpdir('reopen');
+  const logFile = path.join(dir, 'daemon.log');
+  const q = openQueue(':memory:');
+
+  await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: {},
+    stopAfterTicks: 4,
+    sleep: async () => {},
+    recordBeat: () => {},
+    logFile,
+    logMaxBytes: 1,   // every tick is over the cap, so every tick rolls
+    logKeep: 3,
+  });
+
+  assert.ok(fs.existsSync(logFile), 'a live daemon.log exists after rotating, not only rolled copies');
+  const live = fs.readFileSync(logFile, 'utf8');
+  assert.match(live, /stopped after 4 tick\(s\)/,
+    'the LAST line written is in the live file — if the handle were stale it would be in daemon.log.1');
+  assert.ok(fs.existsSync(path.join(dir, 'daemon.log.1')), 'and it really did rotate');
+  q.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the writer does not echo to a non-TTY, so the launchd log is not a second uncapped copy', () => {
+  const dir = tmpdir('tty');
+  const seen = [];
+  const writer = openLogWriter(path.join(dir, 'daemon.log'), {
+    stdout: { isTTY: undefined, write: (l) => seen.push(l) },
+  });
+  writer.write('hello');
+  writer.close();
+  assert.equal(seen.length, 0, 'under launchd nothing is echoed — that file is the crash catcher only');
+  assert.match(fs.readFileSync(path.join(dir, 'daemon.log'), 'utf8'), /hello/);
+
+  // A terminal DOES get it, or a hand-run shows nothing and reads as hung.
+  const tty = [];
+  const w2 = openLogWriter(path.join(dir, 'other.log'), {
+    stdout: { isTTY: true, write: (l) => tty.push(l) },
+  });
+  w2.write('visible');
+  w2.close();
+  assert.deepEqual(tty, ['visible\n']);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a log file that cannot be opened degrades to stdout and SAYS SO', () => {
+  // A daemon that refuses to work because it cannot write its diary is worse
+  // than one whose diary is missing (DOCTRINE 3.3: degrade to silence, never to
+  // a false negative). /dev/null/... can never be a directory.
+  const seen = [];
+  const writer = openLogWriter('/dev/null/nope/daemon.log', {
+    stdout: { isTTY: undefined, write: (l) => seen.push(l) },
+  });
+  assert.ok(writer.problem, 'the failure is reported rather than swallowed');
+  assert.match(writer.problem, /could not open the log/);
+  writer.write('still working');
+  assert.deepEqual(seen, ['still working\n'], 'and the line still gets out, via stdout');
+  writer.close();
+});
+
 test('a log that does not exist yet is not a fault', () => {
   const dir = tmpdir('nolog');
   const out = rotateLog(path.join(dir, 'daemon.log'));
@@ -343,21 +447,41 @@ test('the beat is throttled — twenty ticks in a minute do not write twenty sta
   q.close();
 });
 
-test('studio-worker is registered as a role AND as a beat emitter', () => {
-  // Both halves are required and they are in different files. A role with no
-  // emitter reports NOT REPORTING forever; an emitter with no role is a beat
-  // nothing judges. This is the pairing the daemon's whole silence alarm rests
-  // on, so it is asserted rather than assumed.
+test('studio-worker is a role, and is PARKED with a reason rather than silently missing', () => {
+  // The daemon emits a beat every five minutes (the four tests above prove it),
+  // but the launchd job it would beat from cannot be installed yet: the role is
+  // owned by mac-mini and that machine is unreachable until ~2026-10-01. So it
+  // is registered as NOT REPORTING WITH THE REASON — the same shelf db-refresh,
+  // youtube-media and weekly-report sit on — rather than as an emitter, which
+  // would put a QUIET alarm on the bus every six hours for eleven days about a
+  // daemon nobody can start and nobody can clear.
+  //
+  // WHAT THIS TEST IS REALLY GUARDING is that it is never BOTH and never
+  // NEITHER. Neither reads as a bug in the tool rather than a gap in the
+  // instrumentation; both makes the roll call carry two answers for one role.
   const { ROLES } = require('../../lib/nodeRoles.js');
   const heartbeat = require('../../lib/nodeHeartbeat.js');
   assert.equal(ROLES['studio-worker'].owner, 'mac-mini');
-  // Unconditional on purpose. An `if (exported)` guard around this would make
-  // the assertion silently stop running the day somebody stops exporting it,
-  // which is a test that cannot fail (DOCTRINE: break-test both directions).
+  assert.equal(heartbeat.BEAT_EMITTERS['studio-worker'], undefined,
+    'not an emitter while there is nothing installed to beat from');
+  assert.ok(heartbeat.NOT_REPORTING_WHY['studio-worker'],
+    'but never silently absent — a role in neither column reports a generic "no emitter" line');
+  assert.match(heartbeat.NOT_REPORTING_WHY['studio-worker'], /2026-10-01/,
+    'and the reason names the unblocking condition, so the row removes itself rather than becoming furniture');
+
+  // The number the acceptance criterion asked for, asserted where it will still
+  // be read when this graduates: six hours of silence. quietAfterFor floors at
+  // three hours and otherwise takes six intervals, so the hourly cadence named
+  // in the parked note produces exactly that.
   assert.equal(typeof heartbeat.quietAfterFor, 'function');
-  assert.equal(heartbeat.quietAfterFor('studio-worker'), 6 * 60 * 60 * 1000,
-    'six hours of silence is what Studio 7/8 asked for, and it is derived from the declared cadence');
-  assert.equal(heartbeat.BEAT_EMITTERS['studio-worker'].beatMeans, 'liveness');
+  // The second argument IS the emitter map — quietAfterFor(role, emitters) —
+  // so this asks the real function the real question with the cadence the
+  // parked note commits to, rather than restating the arithmetic here.
+  const asIfInstalled = { 'studio-worker': { intervalMs: 60 * 60 * 1000, beatMeans: 'liveness' } };
+  assert.equal(heartbeat.quietAfterFor('studio-worker', asIfInstalled), 6 * 60 * 60 * 1000,
+    'six hours of silence is what Studio 7/8 asked for, derived from the hourly cadence it graduates with');
+  assert.equal(heartbeat.quietAfterFor('studio-worker'), null,
+    'and TODAY it is null: nothing is installed, so there is no silence to measure yet');
 });
 
 test('the whole loop: claim, run, complete, beat, and report', async () => {
