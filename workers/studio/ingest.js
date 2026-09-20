@@ -861,6 +861,35 @@ async function ingestJob({
     queue.fail(job.id, owner, reason);
     return { ...base, outcome: 'failed', jobAction: 'failed', reason };
   };
+  /**
+   * "This work is fine, the conditions are not."
+   *
+   * An outage of Supabase or Drive is a fact about the MACHINE, exactly as a
+   * full disk is, and the disk floor already treats it that way. Charging it
+   * to the FILE was the third finding of review round 3, and taken in the same
+   * round while the reasoning is fresh: with DEFAULT_MAX_ATTEMPTS = 5 and a
+   * 30s-doubling backoff, roughly eight minutes of database trouble sent
+   * perfectly good footage to terminal `blocked` carrying a reason about
+   * somebody else's outage, needing a hand to clear it.
+   *
+   * `release` spends no attempt, so a passing outage costs a wait rather than
+   * a file. The 15 minutes is the same hold-off the disk floor uses.
+   *
+   * It falls back to `fail` on a queue with no `release` for the same reason
+   * the floor's call does: a job put back by nothing at all is a job lost.
+   */
+  const releaseIt = (reason) => {
+    const released = typeof queue.release === 'function'
+      ? queue.release(job.id, owner, { reason, runAfterMs: 15 * 60 * 1000 })
+      : false;
+    if (!released) queue.fail(job.id, owner, reason);
+    return {
+      ...base,
+      outcome: released ? 'outage' : 'failed',
+      jobAction: released ? 'released' : 'failed',
+      reason,
+    };
+  };
 
   if (!facts.driveFileId) {
     return blockIt(
@@ -879,27 +908,26 @@ async function ingestJob({
     );
   }
 
-  // ── Is it already in the catalog? ────────────────────────────────────────
-  // Asked BEFORE a byte moves, because the cheapest 3.57 GB download is the
-  // one that does not happen. This catches the same Drive file being watched
-  // again after a rename or a move; the content-hash check further down
-  // catches the same BYTES arriving as a different Drive file.
-  const already = await catalog.findSourceByDriveFileId(facts.driveFileId, scope);
-  if (!already.ok) {
-    return failIt(`the catalog could not be asked whether this file is already in it: ${already.error}`);
-  }
-  if (already.data) {
-    queue.complete(job.id, owner);
-    return {
-      ...base,
-      outcome: 'deduped',
-      jobAction: 'completed',
-      sourceId: already.data.id,
-      reason: `this Drive file is already in the catalog as source ${already.data.id}, so nothing was downloaded`,
-    };
-  }
-
   // ── What does Drive say the file is, right now? ──────────────────────────
+  //
+  // This runs BEFORE the catalog is asked, and the order is the fix for review
+  // round 3. It used to be the other way round — a known Drive file id
+  // completed the job as "already in the catalog" without a single byte of it
+  // ever being compared to anything. Drive keeps the file id across a
+  // re-upload, a "Manage versions" replacement and a Drive Desktop overwrite,
+  // so that path kept the OLD content hash and the OLD local_path pointing at
+  // the OLD bytes and reported a CLEAN pass. 5/8 then probed footage that is
+  // not in Drive any more and 6/8 made a proxy of it, with no alarm anywhere.
+  //
+  // 3/8 re-enqueues on every Drive change on purpose and says so
+  // (workers/studio/drive.js): "a file that has genuinely changed should be
+  // re-ingested, and the watcher cannot tell a rename from a re-upload. Cheap
+  // duplicate work is 4/8's to refuse, on the md5Checksum this payload already
+  // carries." This is 4/8 doing that refusing.
+  //
+  // The cost of the swap is one metadata call — a header read, not a download
+  // — on a file that turns out to be a duplicate. The cost of the old order
+  // was a catalog that silently disagreed with Drive.
   const meta = await drive.getMetadata(facts.driveFileId, { timeoutMs: timeouts.value.timeoutMs });
   if (!meta.ok) {
     if (meta.status === 404) {
@@ -910,13 +938,30 @@ async function ingestJob({
         + `Drive said: ${meta.error}`
       );
     }
-    return failIt(`Drive would not describe file ${facts.driveFileId}: ${meta.error}`);
+    return releaseIt(`Drive would not describe file ${facts.driveFileId}: ${meta.error}`);
   }
   const expectedBytes = Number(meta.data.size) || 0;
   const expectedMd5 = text(meta.data.md5Checksum);
   const driveName = text(meta.data.name) || facts.name;
 
+  // Where this file's bytes live on disk. Computed HERE, above the trashed
+  // check, rather than further down with the disk-room question — because the
+  // trashed path needs it (review round 3).
+  const paths = cachePathsFor({ cacheDir, lane: facts.lane, driveFileId: facts.driveFileId, name: driveName });
+
   if (meta.data.trashed) {
+    // A previous attempt's partial download is kept on purpose — the partial
+    // bytes ARE the progress, and resuming is the whole point of this slice.
+    // But once the clip is trashed in Drive, nothing will ever resume them:
+    // the job completes, no catalog row points at them, and 3/8 skips trashed
+    // files so nothing re-enqueues. They are stranded, and at this slice's
+    // real scale that is up to 3.57 GB per trashed clip sitting for ever on
+    // the one disk the floor exists to protect — which the floor cannot see,
+    // because it measures free space and never asks what is using it.
+    //
+    // Third instance of this cache-leak class on this branch (the 409 path and
+    // the wrong-length strays were the first two), same treatment.
+    await removeQuietly(paths.partPath);
     queue.complete(job.id, owner);
     return {
       ...base,
@@ -945,6 +990,52 @@ async function ingestJob({
     );
   }
 
+  // ── Is it already in the catalog, and is it still the SAME file? ─────────
+  //
+  // Two questions, not one. The Drive file id answers "have we seen this id?";
+  // only the md5 answers "are these the bytes we ingested?". Asking the first
+  // alone is what review round 3 sent this back for.
+  //
+  // Three outcomes, never two (DOCTRINE 3.2):
+  //
+  //   same id, same md5      → dedupe. Nothing to do, nothing downloaded.
+  //   same id, different md5 → the file was REPLACED in Drive. Re-ingest and
+  //                            update the row in place, so one Drive file
+  //                            stays one catalog row.
+  //   same id, no stored md5 → cannot tell. The row predates the drive_md5
+  //                            column. "Could not verify" is not "verified"
+  //                            (DOCTRINE 3.11), so re-ingest and say why —
+  //                            it costs one download, once, and it is the only
+  //                            answer that cannot leave a wrong row standing.
+  //
+  // Note what is NOT compared: `content_hash` is a sha256 of the bytes on disk
+  // and Drive's is an md5. They are different algorithms and comparing them
+  // would be nonsense; `drive_md5` exists precisely so there is something on
+  // the row that CAN be compared with what Drive says.
+  const already = await catalog.findSourceByDriveFileId(facts.driveFileId, scope);
+  if (!already.ok) {
+    return releaseIt(
+      `the catalog could not be asked whether this file is already in it: ${already.error}`
+    );
+  }
+  let replacing = null;
+  if (already.data) {
+    const storedMd5 = text(already.data.driveMd5);
+    if (storedMd5 && storedMd5 === expectedMd5) {
+      queue.complete(job.id, owner);
+      return {
+        ...base,
+        outcome: 'deduped',
+        jobAction: 'completed',
+        sourceId: already.data.id,
+        reason: `this Drive file is already in the catalog as source ${already.data.id} `
+          + 'and Drive reports the same md5, so it is the same file and nothing was downloaded',
+      };
+    }
+    replacing = already.data;
+    base.replacingSourceId = already.data.id;
+  }
+
   // ── Is there room? ───────────────────────────────────────────────────────
   // The floor was already checked for the pass; this asks the narrower
   // question the pass could not: does THIS file fit and still leave the floor
@@ -953,14 +1044,29 @@ async function ingestJob({
   if (!floor.ok) return blockIt(floor.error);
   const free = freeBytesFor(cacheDir, statfs);
   if (!free.ok) {
-    return failIt(`${free.error} — so whether there is room for ${humanBytes(expectedBytes)} could not be decided`);
+    return releaseIt(`${free.error} — so whether there is room for ${humanBytes(expectedBytes)} could not be decided`);
   }
-  const paths = cachePathsFor({ cacheDir, lane: facts.lane, driveFileId: facts.driveFileId, name: driveName });
+  // `paths` is computed above, with the trashed check that needs it.
   // Whatever is finished in this Drive file's folder counts towards what is
   // already here, WHATEVER IT IS CALLED — see findCachedFiles. Asking only
   // about `finalPath` made a renamed clip look like a file nobody had started.
+  // And a half-finished download of the OLD bytes cannot be resumed into the
+  // new ones — resuming would splice two different files together and produce
+  // a hash that matches nothing. Drop it before anything counts it.
+  if (replacing) await removeQuietly(paths.partPath);
   const cached = await findCachedFiles(paths.dir);
-  const usable = cached.find((file) => file.size === expectedBytes) || null;
+  // A REPLACED file adopts nothing. Normally a finished file of the right
+  // length in this folder is this file, and adopting it saves a 3.57 GB
+  // download. But when the catalog says this Drive id used to hold different
+  // bytes, anything already in the folder is the OLD version — and a
+  // same-length re-upload (a re-export at the same settings; a one-frame trim
+  // is not) would be adopted as if nothing had changed. Then the md5 check
+  // would refuse it and the file would go to `blocked` with a checksum error
+  // that reads like corruption rather than like a replacement.
+  //
+  // So on a replacement the folder is treated as empty: every stray is swept
+  // below (nothing is in `usable`), and the new bytes are fetched.
+  const usable = replacing ? null : (cached.find((file) => file.size === expectedBytes) || null);
   const alreadyOnDisk = (await sizeOnDisk(paths.partPath)) + (usable ? usable.size : 0);
   const stillNeeded = Math.max(0, expectedBytes - alreadyOnDisk);
   if (free.value - stillNeeded < floor.value) {
@@ -1090,7 +1196,48 @@ async function ingestJob({
   // check is the cheap one that keeps the ordinary case off the error path.
   const sameBytes = await catalog.findSourceByContentHash(digests.sha256, scope);
   if (!sameBytes.ok) {
-    return failIt(`the catalog could not be asked whether these bytes are already in it: ${sameBytes.error}`);
+    return releaseIt(`the catalog could not be asked whether these bytes are already in it: ${sameBytes.error}`);
+  }
+  if (sameBytes.data && replacing && sameBytes.data.id === replacing.id) {
+    // We came down this path because the row carried NO stored md5 and "could
+    // not verify" is not "verified" — so we re-fetched to find out. The bytes
+    // hash to exactly what the row already says. Nothing changed; the row was
+    // simply written before `drive_md5` existed. Backfill it so this costs one
+    // download once rather than one on every pass, and complete.
+    const backfilled = await catalog.updateSource(replacing.id, { driveMd5: expectedMd5 }, scope);
+    if (!backfilled.ok) {
+      return releaseIt(`the source row's Drive md5 could not be recorded: ${backfilled.error}`);
+    }
+    await removeQuietly(verifyPath);
+    queue.complete(job.id, owner);
+    return {
+      ...base,
+      outcome: 'deduped',
+      jobAction: 'completed',
+      sourceId: replacing.id,
+      contentHash: digests.sha256,
+      reason: `source ${replacing.id} carried no Drive md5, so this file was fetched to find out whether it `
+        + 'had been replaced. It had not — the bytes are unchanged — and the md5 is now on the row, '
+        + 'so no later pass has to ask again',
+    };
+  }
+  if (sameBytes.data && replacing) {
+    // The Drive file was replaced, and its new bytes are bytes the catalog
+    // ALREADY holds under a different source. Two rows would now describe the
+    // same footage and one of them (the old row for this Drive id) points at
+    // bytes that no longer exist anywhere. There is no guess to make here that
+    // is not somebody's editing decision, so this stops and says exactly what
+    // it found rather than quietly picking one.
+    await removeQuietly(verifyPath);
+    return blockIt(
+      `Drive file ${facts.driveFileId}${driveName ? ` ("${driveName}")` : ''} was replaced, and its new bytes `
+      + `are already in the catalog as source ${sameBytes.data.id}`
+      + `${sameBytes.data.driveFileId ? ` (Drive file ${sameBytes.data.driveFileId})` : ''}. `
+      + `Source ${replacing.id} still points at the bytes this file used to hold, which are now nowhere in Drive. `
+      + 'Nothing was changed. '
+      + `Fix: decide which row should survive — keep ${sameBytes.data.id} and delete ${replacing.id} if the old `
+      + 'take is finished with, or restore the previous version in Drive if the replacement was a mistake.'
+    );
   }
   if (sameBytes.data) {
     await removeQuietly(verifyPath);
@@ -1116,6 +1263,62 @@ async function ingestJob({
     await fsp.rename(verifyPath, paths.finalPath);
   }
 
+  // ── The replacement writes back to the row that is already there ─────────
+  // One Drive file is one catalog row. A replaced file that made a SECOND row
+  // would leave the first pointing at bytes that no longer exist, and every
+  // screen showing both. The session, the layer role and anything 5/8 or 6/8
+  // has already written are left alone — the file changed, not its place in
+  // the edit — and `state` goes back to `downloaded` so the later slices know
+  // to re-probe and re-proxy the new bytes.
+  if (replacing) {
+    const updated = await catalog.updateSource(replacing.id, {
+      state: STATE_DOWNLOADED,
+      contentHash: digests.sha256,
+      driveMd5: expectedMd5,
+      localPath: paths.finalPath,
+    }, scope);
+    if (!updated.ok) {
+      return releaseIt(`the replaced file's source row could not be updated: ${updated.error}`);
+    }
+    // The same read-back the create path does, and for the same reason
+    // (landmine 12): the write reporting 200 is not the evidence, the row is.
+    const readBackUpdated = await catalog.getSourceById(replacing.id, scope);
+    if (!readBackUpdated.ok) {
+      return releaseIt(
+        `source ${replacing.id} was updated but could not be read back to check it: ${readBackUpdated.error}`
+      );
+    }
+    if (!text(readBackUpdated.data.projectId)) {
+      return blockIt(
+        `source ${replacing.id} has NO project id, so it belongs to nobody and no screen will ever show it `
+        + '(CLAUDE.md landmine 12). Fix: check video_sources has both project_id and owner_user_id, '
+        + `then repair row ${replacing.id} and delete this blocked job.`
+      );
+    }
+    if (text(readBackUpdated.data.contentHash) !== digests.sha256) {
+      return blockIt(
+        `source ${replacing.id} still reads back with the OLD content hash after being updated, so the catalog `
+        + 'and the file on disk disagree about what this footage is. Nothing downstream should trust it. '
+        + `Fix: inspect row ${replacing.id} by hand, then delete this blocked job.`
+      );
+    }
+    queue.complete(job.id, owner);
+    return {
+      ...base,
+      outcome: 'ingested',
+      jobAction: 'completed',
+      sourceId: replacing.id,
+      contentHash: digests.sha256,
+      bytes: expectedBytes,
+      resumedFrom,
+      restarted,
+      reason: `this Drive file had been REPLACED since it was last ingested — Drive reports a different md5 `
+        + `from the one on source ${replacing.id}${replacing.driveMd5 ? '' : ' (the row carried none, so it '
+        + 'could not be ruled out)'} — so the new bytes were downloaded and the existing row was updated `
+        + 'in place rather than a second row being made',
+    };
+  }
+
   let sessionId = '';
   if (typeof resolveSessionId === 'function') {
     sessionId = text(await resolveSessionId({ facts, meta: meta.data, scope }));
@@ -1139,6 +1342,10 @@ async function ingestJob({
     state: STATE_DOWNLOADED,
     driveFileId: facts.driveFileId,
     contentHash: digests.sha256,
+    // What Drive said this file's md5 was at the moment we took these bytes.
+    // Stored so a later pass can ask whether the file at this Drive id is
+    // still the same file — the question that has no answer without it.
+    driveMd5: expectedMd5,
     localPath: paths.finalPath,
     recordedAt: text(meta.data.createdTime) || facts.recordedAt || null,
   }, scope);
@@ -1169,7 +1376,7 @@ async function ingestJob({
           + 'and no second row was made',
       };
     }
-    return failIt(`the source row could not be written: ${created.error}`);
+    return releaseIt(`the source row could not be written: ${created.error}`);
   }
 
   // ── Read the row back ────────────────────────────────────────────────────
@@ -1292,6 +1499,13 @@ async function runIngest(options = {}) {
     failed: [],
     blocked: [],
     released: [],
+    // Work put back because a SERVICE was down, kept separate from `released`
+    // on purpose. Both are "the work is fine, the conditions are not", but the
+    // disk alarm reads `released` to decide whether files are stuck for want
+    // of room — and a Supabase outage filed in there would raise an alarm
+    // saying the disk is full when it is not, which is the class of lie this
+    // ticket has been sent back for three times.
+    outages: [],
     unchecked: [],
     health: null,
     healthCleared: false,
@@ -1383,10 +1597,12 @@ async function runIngest(options = {}) {
       failed: report.failed,
       blocked: report.blocked,
       no_room: report.released,
+      outage: report.outages,
       lease_lost: report.unchecked,
     }[result.outcome] || report.failed;
     bucket.push(result);
     if (result.outcome === 'no_room') break; // the disk will not have got bigger
+    if (result.outcome === 'outage') break;  // nor will the service have come back
   }
 
   // ── The verdict, and the alarm ───────────────────────────────────────────
@@ -1463,6 +1679,7 @@ async function runIngest(options = {}) {
     && report.blocked.length === 0
     && report.unchecked.length === 0
     && report.released.length === 0
+    && report.outages.length === 0
     && !report.healthStanding
     && (!waiting || waiting.heldOff === 0);
 

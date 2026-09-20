@@ -1,3 +1,35 @@
+## 2026-09-20 — The Studio notices when a video in Drive has been swapped out (#720)
+
+If you re-export a clip and save it over the original in Google Drive, Drive
+keeps the same file id — as far as it is concerned, it is still the same file,
+just with different contents inside it. The Studio was going by that id alone.
+It would look at the note saying "fetch this one", see that it already had a
+video with that id in the catalog, and stop there without ever looking at what
+was actually in Drive now. The catalog kept pointing at the old version, the
+run reported that everything was fine, and the pieces further down the line
+went on to analyse and make preview copies of footage that no longer existed
+anywhere.
+
+So now it asks Drive what the file is BEFORE it checks its own records, and it
+keeps Drive's fingerprint of the file alongside each catalog entry so there is
+something to compare against. Three answers rather than two: same fingerprint
+means it really is the same file and nothing is downloaded; a different one
+means the clip was replaced, so the new version comes down and updates the
+entry that is already there rather than making a second one; and an entry
+saved before we started keeping fingerprints cannot answer the question at
+all, so that one is checked properly once and the answer written down.
+
+Two smaller things in the same pass. A clip you started downloading and then
+deleted in Drive used to leave its half-finished download sitting on the disk
+for ever, with nothing left that would ever finish it — up to three and a half
+gigabytes per clip, on the one disk the Studio is careful about filling. That
+gets cleared up now. And when Google or the database is simply unreachable,
+that is no longer counted against the video: a file used to get five tries and
+then be set aside as a problem, so about eight minutes of a database being down
+was enough to park a perfectly good clip and need a hand to un-park it. An
+outage now puts the work back on the pile to try again later, and the run says
+plainly that a service was down rather than blaming the footage.
+
 ## 2026-09-15 — The Studio now downloads the footage it spotted (#720)
 
 Fourth of eight pieces in the Studio work. The watcher that shipped yesterday

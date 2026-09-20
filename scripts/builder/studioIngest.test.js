@@ -122,6 +122,10 @@ function fakeCatalog({ projectIdOnInsert = PROJECT } = {}) {
   // two are different questions and the interesting assertions are about the
   // first: a row always HAS a layerRole, because the column has a default.
   const createInputs = [];
+  // What a REPLACEMENT wrote back. A re-uploaded Drive file updates its own
+  // row rather than making a second one, so the interesting assertion is what
+  // landed in the patch.
+  const updateInputs = [];
   let n = 0;
   return {
     sources,
@@ -156,6 +160,14 @@ function fakeCatalog({ projectIdOnInsert = PROJECT } = {}) {
       return found
         ? { ok: true, status: 200, data: found }
         : { ok: false, status: 404, error: 'Source not found' };
+    },
+    updateInputs,
+    updateSource: async (id, patch) => {
+      updateInputs.push({ id, patch });
+      const found = sources.find((s) => s.id === id);
+      if (!found) return { ok: false, status: 404, error: 'Source not found' };
+      Object.assign(found, patch);
+      return { ok: true, status: 200, data: found };
     },
     findSessionByTitle: async (title) => ({
       ok: true,
@@ -1247,16 +1259,21 @@ test('a rename between the DOWNLOAD and the registration does not refetch the fi
   const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
   queueIngestJob(queue);
   const first = await runIngest({ queue, owner: OWNER, ...opts });
-  assert.equal(first.failed.length, 1, 'the row could not be written, so the job retries');
+  // An unreachable database is an OUTAGE, not this file's fault — it is put
+  // back without spending an attempt (round 3's third finding). It used to be
+  // `failed`, which is why eight minutes of database trouble could send good
+  // footage to terminal `blocked` with somebody else's error on it.
+  assert.equal(first.outages.length, 1, 'the row could not be written, so the job is put back');
+  assert.equal(first.failed.length, 0, 'and it is NOT charged to the file');
 
   const oldPaths = cachePathsFor({
     cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov',
   });
   assert.equal(fs.statSync(oldPaths.finalPath).size, bytes.length, 'the finished file is on disk');
 
-  // Now the clip is renamed in Drive, and the job comes round again (`fail`
-  // holds a retry off with a backoff, so wind the clock rather than sleep).
-  at.now += 10 * 60 * 1000;
+  // Now the clip is renamed in Drive, and the job comes round again (`release`
+  // holds it off for fifteen minutes, so wind the clock rather than sleep).
+  at.now += 20 * 60 * 1000;
   const renamed = fakeDrive(bytes, { name: 'Wedding — take 2.mov' });
   const second = await runIngest({
     queue, owner: OWNER, ...opts, drive: renamed, catalog,
@@ -1432,4 +1449,212 @@ test('a hung Drive metadata call is abandoned with a timeout, not left hanging',
   assert.equal(res.status, 504);
   assert.match(res.error, /did not answer within/);
   assert.match(res.error, /abandoned rather than left hanging/);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review round 3: a clip REPLACED in Drive, keeping its file id.
+//
+// Drive keeps the file id across a re-export saved over the original, a
+// "Manage versions" replacement and a Drive Desktop overwrite. Ingest used to
+// ask `findSourceByDriveFileId` before it ever called `getMetadata`, so a hit
+// completed the job as "already in the catalog" with nothing ever comparing a
+// checksum — the row kept the OLD hash and the OLD local_path, and the pass
+// reported CLEAN. 5/8 then probed footage that is not in Drive any more and
+// 6/8 made a proxy of it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('a clip REPLACED in Drive under the same file id is re-ingested, not deduped', async (t) => {
+  const original = crypto.randomBytes(4_096);
+  const replacement = crypto.randomBytes(8_192);
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(original) });
+
+  queueIngestJob(queue);
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.ingested.length, 1, formatIngestReport(first));
+  const rowId = first.ingested[0].sourceId;
+  assert.equal(
+    catalog.sources[0].driveMd5, crypto.createHash('md5').update(original).digest('hex'),
+    'the row records what Drive said the md5 was — without it nothing can ask this question later'
+  );
+
+  // Same Drive file id, different bytes. This is the whole case.
+  at.now += 60 * 1000;
+  queueIngestJob(queue);
+  const second = await runIngest({
+    queue, owner: OWNER, ...opts, catalog, drive: fakeDrive(replacement),
+  });
+
+  assert.equal(second.deduped.length, 0, `it must NOT dedupe:\n${formatIngestReport(second)}`);
+  assert.equal(second.ingested.length, 1, formatIngestReport(second));
+  assert.equal(second.ingested[0].sourceId, rowId, 'one Drive file is still ONE catalog row');
+  assert.equal(catalog.sources.length, 1, 'no second row was made');
+  assert.equal(
+    catalog.sources[0].contentHash, crypto.createHash('sha256').update(replacement).digest('hex'),
+    'and the row now describes the NEW bytes'
+  );
+  assert.equal(
+    catalog.sources[0].driveMd5, crypto.createHash('md5').update(replacement).digest('hex'),
+    'including the new md5, so a third pass can ask the question again'
+  );
+  assert.equal(
+    fs.statSync(catalog.sources[0].localPath).size, replacement.length,
+    'the bytes on disk are the new bytes, at the path the row points at'
+  );
+  assert.equal(second.ok, true, formatIngestReport(second));
+});
+
+test('a clip that has NOT been replaced is still deduped without downloading', async (t) => {
+  // The other side of the same fix: the cheap case must stay cheap. One extra
+  // metadata call is the price; a second download is not.
+  const bytes = crypto.randomBytes(4_096);
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+
+  at.now += 60 * 1000;
+  queueIngestJob(queue);
+  const again = fakeDrive(bytes);
+  const second = await runIngest({ queue, owner: OWNER, ...opts, catalog, drive: again });
+
+  assert.equal(second.deduped.length, 1, formatIngestReport(second));
+  assert.deepEqual(again.calls, [], 'NOT ONE BYTE was fetched again');
+  assert.equal(catalog.sources.length, 1, 'and still one row');
+});
+
+test('a row with NO stored md5 is re-checked rather than trusted, and the md5 backfilled', async (t) => {
+  // Rows written before `drive_md5` existed cannot answer "is this still the
+  // same file?". "Could not verify" is not "verified" (DOCTRINE 3.11), so the
+  // third outcome is to go and find out — once, and then record the answer.
+  const bytes = crypto.randomBytes(4_096);
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+  // Make it look like a row from before the column existed.
+  delete catalog.sources[0].driveMd5;
+
+  at.now += 60 * 1000;
+  queueIngestJob(queue);
+  const again = fakeDrive(bytes);
+  const second = await runIngest({ queue, owner: OWNER, ...opts, catalog, drive: again });
+
+  assert.equal(second.deduped.length, 1, formatIngestReport(second));
+  assert.equal(again.calls.length, 1, 'it did have to fetch, because it could not tell from the row');
+  assert.equal(catalog.sources.length, 1, 'the bytes were unchanged, so no second row');
+  assert.equal(
+    catalog.sources[0].driveMd5, crypto.createHash('md5').update(bytes).digest('hex'),
+    'and the md5 is on the row now, so the NEXT pass can answer it for free'
+  );
+  assert.match(second.deduped[0].reason, /carried no Drive md5/, second.deduped[0].reason);
+});
+
+test('a clip trashed in Drive does not strand its half-finished download', async (t) => {
+  // The partial bytes are kept on purpose between attempts — they ARE the
+  // progress. But once the clip is trashed, nothing will ever resume them:
+  // the job completes, no catalog row points at them, and 3/8 skips trashed
+  // files so nothing re-enqueues. At this slice's scale that is up to 3.57 GB
+  // per trashed clip on the one disk the floor exists to protect.
+  const bytes = crypto.randomBytes(9_000);
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+
+  // First pass: the connection is cut mid-body, leaving a part file.
+  const cut = fakeDrive(bytes, { cutAfter: 2_048 });
+  const opts = passOptions(t, { catalog, drive: cut });
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+
+  const paths = cachePathsFor({
+    cacheDir: opts.cacheDir, lane: 'inbox', driveFileId: 'file_1', name: 'clip.mov',
+  });
+  assert.ok(fs.existsSync(paths.partPath), 'the partial download is kept between attempts');
+  const strandedBytes = fs.statSync(paths.partPath).size;
+  assert.ok(strandedBytes > 0, 'and it is not empty');
+
+  // Now the clip is trashed in Drive and the job comes round again.
+  at.now += 30 * 60 * 1000;
+  const trashed = fakeDrive(bytes, { meta: { trashed: true } });
+  const second = await runIngest({ queue, owner: OWNER, ...opts, catalog, drive: trashed });
+
+  assert.equal(second.skipped.length, 1, formatIngestReport(second));
+  assert.equal(
+    fs.existsSync(paths.partPath), false,
+    `the ${strandedBytes} stranded bytes were cleared up — nothing will ever resume them`
+  );
+});
+
+test('a database outage is charged to the machine, not to the file', async (t) => {
+  // Round 3's third finding, taken. `failIt` spends an attempt, and with five
+  // attempts on a 30s-doubling backoff roughly eight minutes of database
+  // trouble sent perfectly good footage to terminal `blocked` carrying a
+  // reason about somebody else's outage. `release` spends none.
+  const bytes = crypto.randomBytes(4_096);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  catalog.findSourceByDriveFileId = async () => ({ ok: false, status: 503, error: 'the database was unreachable' });
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+
+  queueIngestJob(queue);
+  const report = await runIngest({ queue, owner: OWNER, ...opts });
+
+  assert.equal(report.outages.length, 1, formatIngestReport(report));
+  assert.equal(report.failed.length, 0, 'it is not the file that failed');
+  assert.equal(report.ok, false, 'and a pass that shipped nothing is NOT clean');
+  const job = queue.listJobs({ stage: STAGE_INGEST })[0];
+  assert.equal(job.attempts, 0, 'no attempt was spent on somebody else\'s outage');
+  assert.equal(job.state, 'pending', 'the work is still there to do');
+  // And it must not raise the DISK alarm — the disk is fine.
+  assert.equal(report.healthStanding, false, formatIngestReport(report));
+  assert.equal(report.awaitingRoom.length, 0, 'nothing is waiting for room; a service was down');
+});
+
+test('a replacement of the SAME LENGTH is not adopted from the cache', async (t) => {
+  // The nastiest shape of the round-3 defect, and the one the length check
+  // cannot see: a re-export at the same settings can be byte-for-byte a
+  // different file of exactly the same size. A finished file of the right
+  // length in this Drive id's folder is normally this file and is adopted to
+  // save the download — but on a replacement it is the OLD version, and
+  // adopting it would either register the wrong bytes or fail the md5 check
+  // with an error that reads like corruption rather than like a replacement.
+  const original = crypto.randomBytes(4_096);
+  const replacement = crypto.randomBytes(4_096);
+  assert.equal(original.length, replacement.length, 'the whole point: identical length');
+  assert.notDeepEqual(original, replacement, 'different bytes');
+
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(original) });
+
+  queueIngestJob(queue);
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.ingested.length, 1, formatIngestReport(first));
+
+  at.now += 60 * 1000;
+  queueIngestJob(queue);
+  const second = await runIngest({
+    queue, owner: OWNER, ...opts, catalog, drive: fakeDrive(replacement),
+  });
+
+  assert.equal(second.blocked.length, 0, `it must not block:\n${formatIngestReport(second)}`);
+  assert.equal(second.ingested.length, 1, formatIngestReport(second));
+  assert.equal(
+    catalog.sources[0].contentHash, crypto.createHash('sha256').update(replacement).digest('hex'),
+    'the row describes the NEW bytes, not the same-length old ones'
+  );
+  assert.deepEqual(
+    fs.readFileSync(catalog.sources[0].localPath), replacement,
+    'and the file on disk really is the replacement, byte for byte'
+  );
 });
