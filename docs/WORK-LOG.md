@@ -51,6 +51,27 @@ good footage.
 Every claim here is checked against real video files, built fresh each time the
 tests run and thrown away afterwards — no video is stored in the code, where it
 would sit forever.
+## 2026-09-14 — A page with no name no longer shows up as a blank line when you link to it (#694)
+
+In the Builder you can drop an image into a cell of a table, and give that image
+a link. The link box offers a dropdown of your own pages to pick from. If one of
+your pages had not been given a name yet, it showed up in that list as an empty
+line — a gap you could click, with nothing written on it and no way to tell
+which page it was.
+
+Now it falls back to the page's web address instead, so the row reads something
+like `empty-name-row`. That is what every other page dropdown in the product
+already did; this one had been missed. Picking a page still links to exactly the
+same address as before — only what you see in the list changed.
+
+One thing worth writing down, because it explains why this survived so long. The
+ticket assumed the automatic layout checker had never been able to open this
+dropdown, and asked for test content to be added so it could. The test content
+was already there and had been for a month. The real reason is that the checker
+measures where things sit on screen, not the words inside them — so a blank
+label is precisely the kind of fault it will wave through. A blank row and a
+correctly-drawn row occupy the same space. The guard added here is a different
+kind of test, one that reads the words.
 ## 2026-09-15 — The preview gets a Tablet view, and the Builder stops using two different sets of screen widths (#723)
 
 The Builder's page preview had two buttons, Browser and Mobile. It now has
