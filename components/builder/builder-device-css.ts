@@ -25,9 +25,20 @@ import {
  * `!important` is required, not a shortcut: without it the inline desktop
  * value outranks every rule here and nothing changes on a phone.
  *
- * Phone rules are emitted twice — under a media query for the live site, and
- * under `.builder-preview-device-mobile` for the preview's phone frame, which
- * is a narrow box on a wide screen and so never matches a media query.
+ * Every rule is emitted twice — under a media query for the live site, and
+ * under the preview frame's own class for the Builder's preview page. A frame
+ * is a narrow box on a WIDE window, so a media query inside it never matches
+ * however narrow the frame is drawn; the class is the only thing that can
+ * reach it.
+ *
+ * Phone rules go to `.builder-preview-device-mobile` and tablet rules to
+ * `.builder-preview-device-tablet`, and that split is not symmetrical by
+ * accident. The phone rule is computed from the row as a PHONE sees it, which
+ * already has tablet's settings folded in (the chain is Desktop → Tablet →
+ * Phone), so the phone frame needs no tablet rule of its own. The tablet frame
+ * must NOT receive the phone rule: a tablet sits above the phone breakpoint,
+ * and a phone-only setting showing up in the Tablet frame is the frame lying
+ * about the device it is named after.
  *
  * ROWS AND CELLS SHARE ALL OF THAT, which is why the cell slice generalized
  * this file rather than copying it (task 86bc14pey). The only things that
@@ -148,6 +159,7 @@ function buildDeviceCss(
     );
     if (declarations.length) {
       rules.push(`@media (max-width:${BUILDER_TABLET_MAX_WIDTH}px){${selector}{${declarations.join(";")}}}`);
+      rules.push(`.builder-preview-device-tablet ${selector}{${declarations.join(";")}}`);
     }
   }
 

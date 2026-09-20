@@ -51,6 +51,40 @@ good footage.
 Every claim here is checked against real video files, built fresh each time the
 tests run and thrown away afterwards — no video is stored in the code, where it
 would sit forever.
+## 2026-09-15 — The preview gets a Tablet view, and the Builder stops using two different sets of screen widths (#723)
+
+The Builder's page preview had two buttons, Browser and Mobile. It now has
+three: Desktop, Tablet and Mobile, so you can see a page the way a tablet shows
+it without owning one.
+
+The bigger half is underneath. Over the last three pieces of work the Builder
+learned to style a row differently on phones and tablets, and it decides "this
+is a tablet" at 1024px wide and "this is a phone" at 767px. But the Builder
+already had an older, separate idea of a narrow screen, from years before any
+of that, which fired at 900px and 560px. Both sets were live at once — so a
+column you hid on phones disappeared at 767px while the row around it stacked
+at 900px, and there was no screen width where the whole page agreed with
+itself. The rules that decide layout now use the same two widths as everything
+else.
+
+What you will actually see change on a client site: between about 900 and
+1024 pixels wide — a small laptop, an iPad turned sideways — a row with several
+columns now stacks into one, the way it already did on anything narrower. If
+there is a row you want left alone, its Mobile Layout setting has always had a
+"Keep columns" option and that still wins at every width. Mobile Layout itself
+moved into the row's phone panel, where the rest of the phone settings live.
+
+Building the Tablet frame turned up a fault in the phone frame nobody had
+spotted: a row set to 90 pixels of padding on tablets showed 10 pixels in the
+preview's phone frame and 90 on an actual phone. A preview that disagrees with
+the real thing is worse than no preview. That is fixed, and the automated
+checks can now open a preview frame and measure it, which they could not do
+before — which is exactly why it had gone unnoticed.
+
+One piece is deliberately left for later: the old Desktop/Mobile switch on the
+page list is still there. It now duplicates the new Phone/Tablet/Desktop switch
+rather than being the only way to reach three module settings, so taking it
+away is its own small job and is written up separately.
 
 ## 2026-09-15 — A module can be spaced and sized differently on a phone (#718)
 

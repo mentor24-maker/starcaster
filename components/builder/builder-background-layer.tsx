@@ -49,11 +49,17 @@ import {
  */
 
 /**
- * Phone width. Matches the breakpoint the generated builder stylesheet already
- * compacts cells at, so "this is a phone" means the same thing in the layout
- * and in the decision to spend someone's cell data on a video.
+ * Phone width. Matches the breakpoint the stylesheet compacts cells at, so
+ * "this is a phone" means the same thing in the layout and in the decision to
+ * spend someone's cell data on a video.
+ *
+ * It was 560px until 2026-09-15 (task 86bc14pgq), which is what the cell rules
+ * used before the device system arrived. Both moved together to the Phone
+ * width the whole Builder now reads from `BUILDER_PHONE_MAX_WIDTH`, and they
+ * have to keep moving together: if they ever disagree, some screen shows a
+ * phone-sized layout playing a video, or a tablet layout that will not.
  */
-export const BUILDER_VIDEO_MOBILE_MAX_WIDTH = 560;
+export const BUILDER_VIDEO_MOBILE_MAX_WIDTH = 767;
 
 /**
  * Blurring an element leaves a soft, semi-transparent rim about twice the blur
