@@ -133,7 +133,7 @@ test('a pass runs pull -> claude -> limit reading -> beat -> sleep decision, in 
   assert.ok(pace > beat, 'the usage limit outranks the pacing curve');
 });
 
-test('a pass that stood down STILL beats, and says that is what it did', () => {
+test('a pass that stood down or was blocked STILL beats, and says which it was', () => {
   const sh = shellWithoutComments(read('scripts/loop_runner.sh'));
   // Both halves matter and they pull in opposite directions. The runner IS
   // alive on a limited pass, so withholding the beat would report a dead
@@ -144,8 +144,29 @@ test('a pass that stood down STILL beats, and says that is what it did', () => {
     'the limited branch beats, with the stand-down flag');
   assert.match(sh, /--stood-down "a usage limit closed this pass/,
     'and the reason is recorded, because "it stood down" with no cause is not actionable');
-  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 2,
-    'exactly two beat calls: one for a pass that worked, one for a pass that could not');
+  // ROUND 2: the third branch. A pass that exits non-zero naming no cause that
+  // clears itself — an expired login above all — is neither a run nor a
+  // stand-down, and the 90 hours were three days of exactly this beating as a
+  // run.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--blocked /,
+    'the blocked branch beats, with the blocked flag');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 3,
+    'exactly three beat calls: a pass that worked, one a limit closed, one that could not work at all');
+});
+
+test('THE ROUND-2 DEFECT: the runner consults the EXIT CODE, and only asks the guard when it is non-zero', () => {
+  const sh = shellWithoutComments(read('scripts/loop_runner.sh'));
+  const guardCall = sh.indexOf('loop_runner_delay.mjs');
+  assert.ok(guardCall > 0, 'the guard is still called');
+  // The guard call must sit INSIDE a non-zero test on $CODE. A pass that
+  // exited 0 produced its report and did its work; on 2026-09-20 the review
+  // pass quoted LIMIT_LINE in that report, the regex matched its own sentence,
+  // and the review lane slept half an hour for nothing.
+  const gate = sh.lastIndexOf('[ "$CODE" -ne 0 ]', guardCall);
+  assert.ok(gate > 0 && gate < guardCall,
+    'the guard is only asked about a pass that exited non-zero — otherwise a pass WRITING about limits backs the lane off');
+  assert.match(sh, /--exit "\$CODE"/,
+    'and the exit code is handed forward as a fact rather than re-derived from the prose');
 });
 
 test('the lock records its pid and a stale lock is cleared, not obeyed forever', () => {
@@ -203,10 +224,19 @@ test('the installer speaks bash 3.2 — the bash every Mac actually ships', () =
   }
 });
 
-test('the delay CLI can only ever answer a number, and scopes to the last pass', () => {
+test('the delay CLI answers "<kind> <seconds>", scopes to the last pass, and never kills the runner', () => {
   const src = withoutComments(read('scripts/loop_runner_delay.mjs'));
   assert.match(src, /scopeToLastPass/, 'unscoped, a stale limit line backs off every healthy pass forever');
-  assert.match(src, /console\.log\(0\)/, 'every failure path answers 0 — a guard may not kill the loop it guards');
+  assert.match(src, /console\.log\(`\$\{kind\} \$\{seconds\}`\)/,
+    'two fields: the runner has to record WHAT the pass did, not only how long to sleep');
+  // Every failure path answers, and answers `blocked 0` — the runner keeps its
+  // normal pacing, and a pass this script could not read about is never
+  // recorded as a healthy one.
+  for (const m of src.match(/say\(guard\.PASS_\w+, \d+\)/g) || []) {
+    assert.ok(/PASS_BLOCKED, 0/.test(m) || /PASS_RAN|PASS_STOOD_DOWN/.test(m), `unexpected answer shape: ${m}`);
+  }
+  assert.ok((src.match(/catch \(err\)[\s\S]*?PASS_BLOCKED/) || [])[0],
+    'the catch-all answers blocked, not ran — an unreadable pass is not a healthy pass');
   assert.doesNotMatch(src, /process\.exit\((?!0)/, 'and never exits non-zero');
 });
 
@@ -220,4 +250,108 @@ test('loop-build and loop-review are beat emitters, and only that', () => {
     assert.ok(hb.BEAT_EMITTERS[role], `${role} must be expected to beat — the runner records one per pass`);
     assert.ok(!hb.NOT_REPORTING_WHY[role], `${role} must leave the not-reporting column, or the roll call carries both answers`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// ROUND 2 — the defect stated once: a pass's fate was decided by grepping its
+// prose, and that failed in BOTH directions, live, within three days of each
+// other. These tests use the REAL log shapes, copied from the Mini's own
+// loop-build.log (recovered 2026-09-20 from the nightly node backup) and from
+// the review lane's log on this machine — not paraphrases.
+// ---------------------------------------------------------------------------
+
+/** Verbatim from mac-mini:~/loop-logs/loop-build.log, 185 occurrences. */
+const REAL_AUTH_FAILURE_PASS = [
+  '',
+  '===== 2026-09-20 01:08:57 START /loop-build =====',
+  'Failed to authenticate: OAuth session expired and could not be refreshed',
+  '===== 2026-09-20 01:08:58 END /loop-build (exit 1 — not a verdict; the pass\'s report above is) =====',
+].join('\n');
+
+/** The real weekly limit, as it read at 02:08 on 2026-09-18 before the login died. */
+const REAL_LIMIT_PASS = [
+  '',
+  '===== 2026-09-18 02:08:11 START /loop-build =====',
+  "You've hit your weekly limit · resets Sep 19 at 5pm (America/Denver)",
+  '===== 2026-09-18 02:08:12 END /loop-build (exit 1 — not a verdict; the pass\'s report above is) =====',
+].join('\n');
+
+/**
+ * A pass that WORKED and wrote about limits — the 2026-09-20 review pass, which
+ * quoted the guard's own regex in its report. `node scripts/loop_runner_delay.mjs
+ * ~/loop-logs/loop-review.log` answered 1800 and the lane slept for nothing.
+ */
+const REAL_PASS_DISCUSSING_LIMITS = [
+  '',
+  '===== 2026-09-20 14:24:00 START /loop-review =====',
+  'REVIEW: sent back to Rework.',
+  'the guard only recognises the words "hit your … limit", so an authentication failure falls through',
+  'LIMIT_LINE = /hit your .{0,20}limit/i',
+  '===== 2026-09-20 14:26:00 END /loop-review (exit 0 — not a verdict; the pass\'s report above is) =====',
+].join('\n');
+
+test('DIRECTION ONE: the real authentication failure is BLOCKED, never a run', () => {
+  const scoped = guard.scopeToLastPass(REAL_AUTH_FAILURE_PASS);
+  const out = guard.passOutcome({ text: scoped, exitCode: 1, nowMs: Date.parse('2026-09-20T07:09:00.000Z') });
+  assert.equal(out.kind, guard.PASS_BLOCKED,
+    'this exact line beat as a healthy working pass 278 times, and the pipeline read as fine for 90 hours');
+  assert.equal(out.sleepSeconds, 0,
+    'and it must NOT back off — a dead login does not clear with time, and 48 half-hour sleeps a day proved it');
+  assert.match(out.why, /login/i, 'the beat carries a reason a reader can act on');
+});
+
+test('DIRECTION TWO: a pass that merely WRITES about limits does not back the lane off', () => {
+  const scoped = guard.scopeToLastPass(REAL_PASS_DISCUSSING_LIMITS);
+  // The old guard's answer, kept here as the proof the text really does match —
+  // so this test cannot pass by accident on a fixture that never triggered it.
+  assert.notEqual(guard.limitDelay({ text: scoped, nowMs: Date.now() }), null,
+    'the fixture must still match LIMIT_LINE, or this test proves nothing');
+  const out = guard.passOutcome({ text: scoped, exitCode: 0, nowMs: Date.now() });
+  assert.equal(out.kind, guard.PASS_RAN, 'it exited 0 — it did its work');
+  assert.equal(out.sleepSeconds, 0, 'the review lane slept 1800s for this on 2026-09-20');
+  assert.match(out.reason, /WRITING about one/,
+    'and it says so out loud, so a real limit that ever exits 0 shows up on its first occurrence');
+});
+
+test('a real usage limit still stands down and still sleeps to its stated reset', () => {
+  const scoped = guard.scopeToLastPass(REAL_LIMIT_PASS);
+  const out = guard.passOutcome({ text: scoped, exitCode: 1, nowMs: Date.parse('2026-09-18T08:08:12.000Z') });
+  assert.equal(out.kind, guard.PASS_STOOD_DOWN, 'a limit clears itself, so it is not a block');
+  assert.ok(out.sleepSeconds > 0, 'and it sleeps rather than retrying into the same closed window');
+});
+
+test('authentication OUTRANKS a limit when a pass names both — which is what 09-18 was', () => {
+  // The real sequence: a weekly limit, then ten minutes later the login died
+  // and never came back. A tail carrying both must answer with the one that
+  // needs a human, or the lane sleeps its way through three days.
+  const both = [
+    '===== 2026-09-18 02:38:00 START /loop-build =====',
+    "You've hit your weekly limit · resets Sep 19 at 5pm (America/Denver)",
+    'Failed to authenticate: OAuth session expired and could not be refreshed',
+    '===== 2026-09-18 02:38:01 END /loop-build (exit 1) =====',
+  ].join('\n');
+  const out = guard.passOutcome({ text: guard.scopeToLastPass(both), exitCode: 1, nowMs: Date.now() });
+  assert.equal(out.kind, guard.PASS_BLOCKED);
+  assert.equal(out.sleepSeconds, 0);
+});
+
+test('an exit code that cannot be established is BLOCKED — never rounded down to zero', () => {
+  const out = guard.passOutcome({ text: 'anything at all', exitCode: null, nowMs: Date.now() });
+  assert.equal(out.kind, guard.PASS_BLOCKED, 'a reading that could not be taken never renders as healthy');
+  assert.equal(out.sleepSeconds, 0);
+});
+
+test('a non-zero pass naming no known cause is blocked, and paced normally', () => {
+  const out = guard.passOutcome({
+    text: 'Error: ENOSPC: no space left on device', exitCode: 2, nowMs: Date.now(),
+  });
+  assert.equal(out.kind, guard.PASS_BLOCKED, 'it did no work; calling that a run is the 90-hour defect');
+  assert.equal(out.sleepSeconds, 0, 'but a one-off crash costs one interval, not a night');
+});
+
+test('the exit code is read back off the runner\'s own END banner when none is given', () => {
+  assert.equal(guard.exitCodeFromLog(REAL_AUTH_FAILURE_PASS), 1);
+  assert.equal(guard.exitCodeFromLog(REAL_PASS_DISCUSSING_LIMITS), 0);
+  assert.equal(guard.exitCodeFromLog('a log with no banner in it'), null,
+    'and "no banner" is its own answer, not a zero');
 });

@@ -1,24 +1,47 @@
 ## 2026-09-20 — A dead pipeline can no longer look like a healthy one (#728)
 
 Between the 16th and the 19th of September nothing reached Live for 90 hours.
-Both build lanes were firing every hour the whole time — each pass started, hit
-the usage limit, stopped in a few seconds and exited cleanly, and recorded a
-successful run on its way out, because that is all a "heartbeat" has ever
-meant: the job fired and came back. So every status screen said everything was
-fine, truthfully, while twenty tickets piled up. It was found because Dane
-asked whether the pipeline needed restarting.
+Both build lanes were firing the whole time. What stopped them was two
+different things in a row, and telling them apart is the entire fix.
 
-A heartbeat now records what the pass actually did — real work, or stood down
-because it could not work — and, when it stood down, how long that has been
-going on without a break. That last part is the whole trick: one stand-down is
-ordinary and clears itself within the hour, and without a start time hour 90
-looks exactly like hour 1. A lane that has been standing down longer than it
-should now shows up as its own thing on the roll call: not healthy, and not
-"stopped firing" either, because the schedule is working perfectly and saying
-otherwise would send somebody hunting a fault that is not there. It raises an
-alarm on its own, and clears when a pass does real work again.
+At ten past two on the morning of the 18th the machine hit a real usage limit —
+the kind that resets on a stated schedule. Ten minutes later the message
+changed to *"Failed to authenticate: OAuth session expired and could not be
+refreshed"* and never changed back: the sign-in had expired. The usage limit
+reset the next evening exactly as promised and nothing improved, because by
+then the lanes were not being held back by a limit at all. Every pass after
+that started, failed to sign in, and stopped again about a second later —
+nearly three hundred of them.
 
-The second half was delivery. The one check that got the answer right did post
+And every single one recorded a successful run on its way out, because that is
+all a "heartbeat" had ever meant: the job fired and came back. So every status
+screen said everything was fine, truthfully, while twenty tickets piled up. It
+was found because Dane asked whether the pipeline needed restarting.
+
+A heartbeat now records what the pass actually **did**, and there are three
+answers rather than two. It **ran** — real work. It **stood down** — it could
+not work, for a reason that fixes itself, like a usage limit; that gets a
+waiting period, because one of them is ordinary, and the record carries how
+long the lane has been standing down without a break so that hour 90 does not
+look like hour 1. Or it is **blocked** — it could not work and nothing is
+going to change without somebody at the keyboard. That last one raises the
+alarm on the very first pass, with no waiting period at all, because waiting is
+precisely the wrong response to an expired login, and the alarm says in plain
+words that somebody has to go and sign in rather than that the lane will come
+back on its own.
+
+The other half of the fix was deciding **from the right thing**. A pass's fate
+used to be worked out by searching its own written output for the words "hit
+your … limit", and that failed in both directions on the same day. An
+authentication failure contains none of those words, so it read as a healthy
+working pass — the 90 hours. And a pass that merely *wrote about* limits
+matched: on the 20th a review pass quoted that exact phrase in its report, and
+the lane put itself to sleep for half an hour over its own sentence. The
+deciding fact is now the pass's exit code, which the runner has had in its hand
+the whole time; the written output is consulted afterwards, only to say which
+kind of failure it was and when a limit says it resets.
+
+The last piece was delivery. The one check that got the answer right did post
 it — into a chat channel that was refusing every message that week, so it was
 saved to a holding ticket nobody watches. That ticket now puts itself on
 Dane's ClickUp "Assigned to me" list when an alarm lands on it, which reaches

@@ -1718,3 +1718,192 @@ test('the stale-check headline does not call a stood-down lane a job that stoppe
   // wrong fault there would be this fix reintroducing its own bug.
   assert.match(cli, /stopped\.length > 0/, 'the "stopped beating" headline is gated on the roles that actually stopped');
 });
+
+// ---------------------------------------------------------------------------
+// ROUND 2 — the third kind: BLOCKED.
+//
+// `stood-down` was built for a usage limit, which is a clock running down, so
+// its alarm waits out the role's own window before calling it a failure. The
+// outage this ticket is named after was not that: at 02:08 on 2026-09-18 a real
+// weekly limit was replaced ten minutes later by `Failed to authenticate: OAuth
+// session expired and could not be refreshed`, which never cleared. Quota reset
+// the next evening and nothing improved. Waiting is the wrong answer to a
+// locked door — so a block alarms on the first one.
+// ---------------------------------------------------------------------------
+
+const blockedRow = (overrides = {}) => ({
+  node: 'mac-mini',
+  role: 'bus-relay',
+  at: agoHours(1),
+  kind: hb.BEAT_BLOCKED,
+  why: 'the pass exited 1 without authenticating — a login has expired',
+  standingDownSince: agoHours(1),
+  ...overrides,
+});
+
+test('a BLOCKED row alarms on the FIRST one — no window, unlike a stand-down', () => {
+  const r = hb.rollCallReport({ rows: [blockedRow()], now: NOW, roles: ROLES });
+  assert.equal(r.blocked.length, 1, 'it has its own bucket: the response is different from a stand-down\'s');
+  assert.equal(r.blocked[0].alarming, true, 'one hour in, and it already alarms');
+  assert.equal(r.beating.length, 0, 'and it is NEVER beating — that is the 90 hours');
+  assert.equal(r.stoodDown.length, 0, 'nor folded into stand-down, whose bucket says "one of these is ordinary"');
+  assert.equal(r.silent, true, 'the headline verdict must not read as healthy');
+  assert.match(r.blocked[0].reason, /will not clear\s+on its own/);
+});
+
+test('and the SAME age as a stand-down that is still within its window', () => {
+  // The contrast is the whole point, so it is asserted side by side: identical
+  // rows, identical clocks, opposite verdicts — because one cause clears itself
+  // and the other does not.
+  const stood = hb.rollCallReport({
+    rows: [blockedRow({ kind: hb.BEAT_STOOD_DOWN, why: 'a usage limit closed this pass' })],
+    now: NOW,
+    roles: ROLES,
+  });
+  assert.equal(stood.stoodDown[0].alarming, false, 'an hour into a usage limit is ordinary');
+  const stuck = hb.rollCallReport({ rows: [blockedRow()], now: NOW, roles: ROLES });
+  assert.equal(stuck.blocked[0].alarming, true, 'an hour into a dead login is not');
+});
+
+test('a blocked run that has gone on for days says how long, in its own sentence', () => {
+  const r = hb.rollCallReport({
+    rows: [blockedRow({ at: agoHours(1), standingDownSince: agoHours(72) })],
+    now: NOW,
+    roles: ROLES,
+  });
+  // The row is FRESH — the runner fired an hour ago — and the lane has been
+  // dead for three days. Both facts in one line, which is what nobody had.
+  assert.match(r.blocked[0].reason, /3d/, 'the duration is reported, so a one-off crash reads as minutes');
+});
+
+test('a block start instant that cannot be read still alarms, and says it cannot tell how long', () => {
+  const r = hb.rollCallReport({
+    rows: [blockedRow({ standingDownSince: 'not a date' })],
+    now: NOW,
+    roles: ROLES,
+  });
+  assert.equal(r.blocked[0].alarming, true, 'a reading we could not take never renders as healthy');
+  assert.match(r.blocked[0].reason, /does not read as a date/);
+});
+
+test('the kind carries forward only while it is the SAME kind', () => {
+  // A lane that stood down on a limit and is now blocked on a dead login has
+  // begun a NEW condition. Carrying the limit's start instant into it would
+  // date the login failure to before it happened — which is exactly what
+  // 2026-09-18 looked like from the outside.
+  const prior = {
+    found: true,
+    readable: true,
+    beat: { kind: hb.BEAT_STOOD_DOWN, standingDownSince: agoHours(50) },
+  };
+  const at = new Date(NOW).toISOString();
+  assert.equal(hb.standDownSince({ prior, kind: hb.BEAT_BLOCKED, at }).since, at,
+    'a change of kind starts the clock over');
+  assert.equal(hb.standDownSince({ prior, kind: hb.BEAT_STOOD_DOWN, at }).since, agoHours(50),
+    'and an unbroken run of the same kind keeps its start instant');
+});
+
+test('a blocked beat is recorded with its reason and its start instant', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-blocked-'));
+  const out = hb.recordBeat({
+    role: 'bus-relay',
+    node: 'mac-mini',
+    at: new Date(NOW).toISOString(),
+    kind: hb.BEAT_BLOCKED,
+    why: 'a login has expired',
+    standingDownSince: agoHours(3),
+    homedir: dir,
+  });
+  assert.equal(out.ok, true);
+  const back = hb.readBeat({ role: 'bus-relay', homedir: dir });
+  assert.equal(back.beat.kind, hb.BEAT_BLOCKED, 'the kind survives the round trip, or the roll call cannot tell');
+  assert.equal(back.beat.why, 'a login has expired');
+  assert.equal(back.beat.standingDownSince, agoHours(3));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the LOCAL recency alarm calls a blocked role quiet at once, with no threshold', () => {
+  const fiveMinutesAgo = new Date(NOW - 5 * 60 * 1000).toISOString();
+  const r = hb.recencyReport({
+    entries: [{
+      role: 'bus-relay',
+      owner: 'mac-mini',
+      beat: {
+        found: true,
+        readable: true,
+        file: '/dev/null',
+        beat: {
+          role: 'bus-relay',
+          node: 'mac-mini',
+          at: fiveMinutesAgo,
+          kind: hb.BEAT_BLOCKED,
+          why: 'the pass exited 1 without authenticating',
+          standingDownSince: fiveMinutesAgo,
+        },
+      },
+    }],
+    now: NOW,
+  });
+  const found = r.quiet.find((q) => q.role === 'bus-relay');
+  assert.ok(found, 'five minutes in — far inside any threshold — and it is already reported');
+  assert.equal(found.blocked, true);
+  assert.match(found.reason, /needs a human/);
+  assert.equal(r.fresh.find((f) => f.role === 'bus-relay'), undefined, 'never fresh');
+  // BREAK TEST, the other direction: the SAME row as a stand-down is fresh at
+  // five minutes, which is what proves the blocked branch is doing the work.
+  const asStandDown = hb.recencyReport({
+    entries: [{
+      role: 'bus-relay',
+      owner: 'mac-mini',
+      beat: {
+        found: true,
+        readable: true,
+        file: '/dev/null',
+        beat: {
+          role: 'bus-relay',
+          node: 'mac-mini',
+          at: fiveMinutesAgo,
+          kind: hb.BEAT_STOOD_DOWN,
+          why: 'a usage limit closed this pass',
+          standingDownSince: fiveMinutesAgo,
+        },
+      },
+    }],
+    now: NOW,
+  });
+  assert.ok(asStandDown.fresh.find((f) => f.role === 'bus-relay'),
+    'five minutes into a usage limit is ordinary — the two kinds must not answer alike');
+});
+
+test('a blocked beat does NOT close the stand-down alarm — it IS what that alarm is about', () => {
+  const plan = hb.alarmCloseoutPlan({
+    fresh: [{
+      role: 'bus-relay',
+      beatAt: new Date(NOW).toISOString(),
+      beatKind: hb.BEAT_BLOCKED,
+      stamps: { standdown: new Date(NOW - HOUR).toISOString() },
+    }],
+  });
+  const standdown = (plan.keep || []).find((k) => k.kind === 'standdown');
+  assert.ok(standdown, 'a recovery notice for a lane whose login is still expired is a false all-clear');
+  assert.match(standdown.why, /was blocked/);
+});
+
+test('the blocked bus post does NOT tell the reader to wait', () => {
+  const text = hb.renderBlockedPost({
+    blocked: [{
+      role: 'loop-build', owner: 'mac-mini', at: agoHours(1), since: agoHours(72),
+      reason: 'it has fired and done no work for 3d 0h',
+      why: 'a login has expired',
+    }],
+    now: NOW,
+    reportedBy: 'macbook-pro',
+  });
+  // The stand-down post ends "the lane comes back on its own when that clears".
+  // True of a usage limit; catastrophically false of an expired login, and
+  // posting it here would tell whoever read it to do nothing — which is what
+  // everybody did, for three days.
+  assert.doesNotMatch(text, /comes back on its own/);
+  assert.match(text, /waiting does not help/i);
+  assert.match(text, /sign in on/i, 'it names the action, on the machine that needs it');
+});

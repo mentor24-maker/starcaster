@@ -117,39 +117,85 @@ while true; do
   # verdict there is.
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") END /$SKILL (exit $CODE — not a verdict; the pass's report above is) =====" >> "$LOG"
 
-  # ── 2. Did this pass hit a usage limit? ────────────────────────────────────
+  # ── 2. What did this pass actually DO? ────────────────────────────────────
   # ASKED BEFORE THE BEAT, AND THAT ORDER IS THE POINT (task 86bc3t0n1). This
   # used to run after, so the beat could only ever say "a pass happened" — and
-  # from 2026-09-16 to 2026-09-19 both lanes fired hourly, died on a limit in
-  # seconds, exited cleanly and beat every time. 90 hours, 20 tickets open, and
-  # the roll call showed all six jobs healthy, because every one of those
-  # statements was true. Reading the limit first is what lets the beat below
-  # say WHICH of the two kinds of pass this was.
+  # from 2026-09-16 to 2026-09-19 both lanes fired every fifteen minutes, died
+  # in about a second, and beat every time. 90 hours, 20 tickets open, and the
+  # roll call showed all six jobs healthy, because every one of those
+  # statements was true.
   #
-  # A usage limit also outranks the pacing curve: the limit message names its
-  # own reset time, and retrying before it is a pass spent discovering the same
-  # closed window (2:05am, 2:23am, 2:38am on 2026-09-02). The decision is
-  # scripts/builder/loopRunnerGuard.js — pure and tested; this call may answer
-  # 0 ("no limit") and may never fail the runner.
-  LIMIT_SLEEP=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" 2>> "$LOG")
+  # THE EXIT CODE IS A FACT; THE LOG TEXT IS A GUESS ABOUT A FACT (round 2).
+  # $CODE is right here and was never consulted, so the kind was decided by
+  # grepping the pass's prose — which failed in both directions, live:
+  #
+  #   - `Failed to authenticate: OAuth session expired and could not be
+  #     refreshed` contains none of the expected words, so 278 dead passes beat
+  #     as healthy working ones. That is the 90-hour outage.
+  #   - A pass that merely WROTE about limits matched the pattern: on
+  #     2026-09-20 the review pass quoted the guard's own regex in its report
+  #     and the review lane slept half an hour for nothing.
+  #
+  # So a pass that exited 0 is a pass that ran, full stop — no sentence inside
+  # its own report can change that — and only a non-zero pass is handed to the
+  # guard, which says WHICH kind of failure it was. The guard is pure and
+  # tested (scripts/builder/loopRunnerGuard.js); it may never fail the runner.
+  #
+  #   ran         it worked. Pace normally.
+  #   stood-down  a usage limit closed it. Sleep until the stated reset — the
+  #               limit names its own, and retrying before it is a pass spent
+  #               rediscovering the same closed window (2:05, 2:23, 2:38am on
+  #               2026-09-02).
+  #   blocked     it could not work and nothing will change that without a
+  #               human — an expired login, or a failure naming no cause that
+  #               clears itself. Never slept on: sleeping in front of a locked
+  #               door 48 times a day is what the 90 hours were.
+  PASS_KIND=ran
+  LIMIT_SLEEP=0
+  if [ "$CODE" -ne 0 ]; then
+    GUARD_ANSWER=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" --exit "$CODE" 2>> "$LOG")
+    # Two fields, "<kind> <seconds>". Anything else means the guard did not
+    # answer, and a pass that exited non-zero is not called healthy on the
+    # strength of a broken reading — it is `blocked`, paced normally.
+    read -r ANSWER_KIND ANSWER_SLEEP <<< "$GUARD_ANSWER"
+    case "$ANSWER_KIND" in
+      ran|stood-down|blocked) PASS_KIND="$ANSWER_KIND" ;;
+      *)
+        echo "[loop-runner] the pass guard gave no usable answer ('$GUARD_ANSWER') for a pass that exited $CODE — recording it as blocked" >> "$LOG"
+        PASS_KIND=blocked
+        ;;
+    esac
+    if [[ "$ANSWER_SLEEP" =~ ^[0-9]+$ ]]; then LIMIT_SLEEP="$ANSWER_SLEEP"; fi
+    # Only a stand-down sleeps. A `blocked` pass waiting half an hour is the
+    # wrong answer to a locked door, and `ran` never reaches here anyway.
+    if [ "$PASS_KIND" != "stood-down" ]; then LIMIT_SLEEP=0; fi
+  fi
 
   # ── 3. The beat: this runner fired a pass, and what that pass could do ─────
   # LIVENESS, not quality — recorded whatever the pass concluded, because what
   # the heartbeat exists to catch is the runner going quiet (a dead Mini, a
   # dead screen, a stale lock), and pass QUALITY is throughput's question.
   #
-  # A STAND-DOWN IS STILL A BEAT, marked as one. The runner IS alive, and
-  # saying otherwise would send somebody to launchd over a working schedule —
-  # so it beats, and the beat carries the kind so nothing downstream has to
-  # read this log to find out. `--beat` never fails its caller by contract
-  # (scripts/node_heartbeat.mjs).
-  if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
-    npm run --silent heartbeat -- --beat --role "$SKILL" \
-      --stood-down "a usage limit closed this pass; the runner is sleeping ${LIMIT_SLEEP}s until it resets" \
-      >> "$LOG" 2>&1 || true
-  else
-    npm run --silent heartbeat -- --beat --role "$SKILL" >> "$LOG" 2>&1 || true
-  fi
+  # A STAND-DOWN AND A BLOCK ARE STILL BEATS, marked as what they are. The
+  # runner IS alive, and saying otherwise would send somebody to launchd over a
+  # working schedule — so it beats, and the beat carries the kind so nothing
+  # downstream has to read this log to find out. `--beat` never fails its
+  # caller by contract (scripts/node_heartbeat.mjs).
+  case "$PASS_KIND" in
+    stood-down)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --stood-down "a usage limit closed this pass; the runner is sleeping ${LIMIT_SLEEP}s until it resets" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    blocked)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --blocked "the pass exited $CODE having done no work; see $LOG for the reason the guard read" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    *)
+      npm run --silent heartbeat -- --beat --role "$SKILL" >> "$LOG" 2>&1 || true
+      ;;
+  esac
 
   # ── 4. How long to sleep ───────────────────────────────────────────────────
   if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then

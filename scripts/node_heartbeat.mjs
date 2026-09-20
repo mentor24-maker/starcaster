@@ -12,9 +12,15 @@
  *   npm run heartbeat -- --check            the same, and post to the bus if a job is quiet
  *   npm run heartbeat -- --beat --role X    record a successful run of X (jobs call this)
  *   npm run heartbeat -- --beat --role X --stood-down "<why>"
- *                                           the pass FIRED but did no work (a usage limit).
- *                                           Recorded distinctly, because 90 hours of these read
- *                                           as 90 hours of health on 2026-09-16 (task 86bc3t0n1)
+ *                                           the pass FIRED but did no work, for a reason that CLEARS
+ *                                           ITSELF (a usage limit). Recorded distinctly, because 90
+ *                                           hours of these read as 90 hours of health on 2026-09-16
+ *   npm run heartbeat -- --beat --role X --blocked "<why>"
+ *                                           the pass FIRED, did no work, and the reason will NOT clear
+ *                                           itself — an expired login. Alarms on the first one, because
+ *                                           waiting is the wrong answer to a locked door: the 09-16
+ *                                           outage was a limit for two hours and a dead OAuth session
+ *                                           for the next three days (task 86bc3t0n1)
  *   npm run heartbeat -- --stale-check      the LOCAL recency alarm, read-only, no ClickUp read
  *   npm run heartbeat -- --stale-check --check   the same, and post to the bus
  *   npm run heartbeat -- --push-owned       relay this machine's local stamps onto the shared row
@@ -308,7 +314,7 @@ function printReport(state) {
     return 2;
   }
 
-  const { beating, overdue, stoodDown, notReporting } = state.report;
+  const { beating, overdue, stoodDown, blocked, notReporting } = state.report;
 
   for (const b of beating) {
     out.push(`  ${green('BEAT')}  ${b.role} on ${b.owner} — last succeeded ${heartbeat.ageText(b.ageMs)}.`);
@@ -335,6 +341,15 @@ function printReport(state) {
       out.push(`        ${dim('The schedule is fine and the machine is awake. No work is coming out of this lane.')}`);
     }
   }
+  // BLOCKED is louder than STOOD DOWN and is never window-gated: the lane is
+  // firing on time, doing nothing, and nothing about that will change until a
+  // human acts. The 2026-09-18 expired login sat in this state for three days
+  // wearing a BEAT label.
+  for (const b of (blocked || [])) {
+    out.push(`  ${red('BLOCKED')} ${b.role} on ${b.owner} — ${b.reason}.`);
+    out.push(`        ${dim(`last beat ${b.at}; doing no work since ${b.since}`)}`);
+    out.push(`        ${dim('The schedule is fine and the machine is awake. This needs a human on that machine.')}`);
+  }
   for (const n of notReporting) {
     out.push(`  ${yellow('????')}  ${n.role} on ${n.owner} — not reporting.`);
     out.push(`        ${dim(`cannot tell: ${n.why}`)}`);
@@ -344,11 +359,21 @@ function printReport(state) {
   else out.push('', dim('  No roll-call ticket exists yet — the first beat creates it.'));
 
   const alarming = (stoodDown || []).filter((sd) => sd.alarming);
+  const stuck = blocked || [];
   out.push('');
   // A STAND-DOWN IS NEVER FOLDED INTO THE HEADLINE VERDICT. "Everything that
   // reports, reports" was a true sentence on every one of the 90 hours from
-  // 2026-09-16, and it is the sentence Dane read.
-  if (alarming.length > 0) {
+  // 2026-09-16, and it is the sentence Dane read. A BLOCK is the same rule with
+  // the waiting period removed, and it is stated FIRST because it is the only
+  // line here that names something a human has to go and do.
+  if (stuck.length > 0) {
+    out.push(bold(red(`${stuck.length} job${stuck.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
+    out.push(dim('This is not a machine problem, not a schedule problem, and not something that clears with time —'));
+    out.push(dim('an expired login, most likely. Nothing comes out of these lanes until somebody signs in on that machine.'));
+    for (const b of stuck) out.push(dim(`  ${b.role} on ${b.owner}: ${b.why}`));
+    if (alarming.length > 0) out.push(bold(red(`${alarming.length} more ${alarming.length === 1 ? 'is' : 'are'} standing down.`)));
+    if (overdue.length > 0) out.push(bold(red(`${overdue.length} more ${overdue.length === 1 ? 'has' : 'have'} gone quiet altogether.`)));
+  } else if (alarming.length > 0) {
     out.push(bold(red(`${alarming.length} job${alarming.length === 1 ? '' : 's'} ${alarming.length === 1 ? 'is' : 'are'} firing on time and doing no work.`)));
     out.push(dim('This is not a machine problem and not a schedule problem. The passes cannot work — a usage'));
     out.push(dim('limit, most likely. Nothing will come out of these lanes until that clears.'));
@@ -366,34 +391,44 @@ function printReport(state) {
   }
   out.push('');
   console.log(out.join('\n'));
-  return (overdue.length > 0 || alarming.length > 0) ? 1 : 0;
+  return (overdue.length > 0 || alarming.length > 0 || stuck.length > 0) ? 1 : 0;
 }
 
 // --- recording a beat -------------------------------------------------------
 
-async function doBeat(role, { standDownWhy = '' } = {}) {
+async function doBeat(role, { standDownWhy = '', blockedWhy = '' } = {}) {
   if (!role) {
     console.error(`--beat needs --role <role>. Known roles: ${Object.keys(nodeRoles.ROLES).join(', ')}`);
     return 0;
   }
   const at = new Date(NOW).toISOString();
-  const kind = standDownWhy ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN;
+  // BLOCKED OUTRANKS A STAND-DOWN when a caller somehow sends both. The two
+  // differ only in whether anything changes without a human, and the safe way
+  // to be wrong is to say a human is needed when one is not — the other way
+  // round is the 90 hours.
+  const kind = blockedWhy
+    ? heartbeat.BEAT_BLOCKED
+    : (standDownWhy ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN);
+  const idleWhy = blockedWhy || standDownWhy;
 
   // HOW LONG HAS THIS BEEN GOING ON? Read the PREVIOUS stamp before overwriting
   // it, so an unbroken run of stand-downs keeps one start instant instead of
   // resetting to "just now" on every pass — which would make hour 90 read
   // exactly like hour 1, the whole of the 2026-09-16 failure.
-  const prior = kind === heartbeat.BEAT_STOOD_DOWN ? heartbeat.readBeat({ role }) : null;
+  const prior = heartbeat.isIdleKind(kind) ? heartbeat.readBeat({ role }) : null;
   const since = heartbeat.standDownSince({ prior, kind, at });
   if (since.note) console.error(`heartbeat: ${since.note}.`);
 
   // 1. The local stamp, every time. Free, offline, and the precise answer to
   //    "when did this last work on this machine".
   const local = heartbeat.recordBeat({
-    role, node: NODE.name, at, kind, why: standDownWhy, standingDownSince: since.since,
+    role, node: NODE.name, at, kind, why: idleWhy, standingDownSince: since.since,
   });
   if (!local.ok) console.error(`heartbeat: could not write the local beat (${local.why}) — carrying on.`);
-  else if (kind === heartbeat.BEAT_STOOD_DOWN) {
+  else if (kind === heartbeat.BEAT_BLOCKED) {
+    console.error(`heartbeat: ${role} BLOCKED at ${at} (${blockedWhy}) — recorded as blocked, not as a run.`);
+    console.error(`heartbeat: it has done no work since ${since.since}, and this one does not clear itself — it needs a human here.`);
+  } else if (kind === heartbeat.BEAT_STOOD_DOWN) {
     console.error(`heartbeat: ${role} STOOD DOWN at ${at} (${standDownWhy}) — recorded as a stand-down, not as a run.`);
     console.error(`heartbeat: it has been standing down since ${since.since}.`);
   } else console.error(`heartbeat: ${role} beat recorded locally at ${at}.`);
@@ -422,8 +457,8 @@ async function doBeat(role, { standDownWhy = '' } = {}) {
   const pushedKind = readStamp(`push-kind-${role}`);
   const kindChanged = Boolean(pushedKind) && pushedKind !== kind;
   if (kindChanged) {
-    console.error(`heartbeat: this pass ${kind === heartbeat.BEAT_STOOD_DOWN ? 'stood down' : 'ran'} where the roll call says it `
-      + `${pushedKind === heartbeat.BEAT_STOOD_DOWN ? 'stood down' : 'ran'} — pushing now rather than waiting for the daily slot.`);
+    console.error(`heartbeat: this pass ${heartbeat.kindWord(kind)} where the roll call says it `
+      + `${heartbeat.kindWord(pushedKind)} — pushing now rather than waiting for the daily slot.`);
   }
   if (!kindChanged && !heartbeat.dueAgain({ lastAt: readStamp(`push-${role}`), now: NOW, everyMs: heartbeat.PUSH_EVERY_MS })) {
     console.error('heartbeat: shared row already pushed within the last day — not pushing again.');
@@ -474,8 +509,8 @@ async function doBeat(role, { standDownWhy = '' } = {}) {
     role,
     at,
     kind,
-    ...(kind === heartbeat.BEAT_STOOD_DOWN
-      ? { why: standDownWhy, standingDownSince: since.since }
+    ...(heartbeat.isIdleKind(kind)
+      ? { why: idleWhy, standingDownSince: since.since }
       : {}),
   }]);
   if (!existing.parsed) {
@@ -809,8 +844,8 @@ async function pushOwnedPass(out) {
     node: NODE.name,
     role: item.role,
     at: item.at,
-    kind: item.kind || heartbeat.BEAT_RAN,
-    ...(item.kind === heartbeat.BEAT_STOOD_DOWN
+    kind: heartbeat.normalizeKind(item.kind),
+    ...(heartbeat.isIdleKind(item.kind)
       ? { why: item.standDownWhy, standingDownSince: item.standingDownSince }
       : {}),
   }));
@@ -834,7 +869,7 @@ async function pushOwnedPass(out) {
   // than being recorded as done — the same discipline the bus posts above use.
   for (const item of plan.push) {
     writeStamp(`push-${item.role}`, item.at);
-    writeStamp(`push-kind-${item.role}`, item.kind || heartbeat.BEAT_RAN);
+    writeStamp(`push-kind-${item.role}`, heartbeat.normalizeKind(item.kind));
   }
   const verdict = heartbeat.relayVerdict({
     ownedEmitters: entries.length, pushed: plan.push.length, unknown: plan.unknown.length,
@@ -859,6 +894,9 @@ async function pushOwnedPass(out) {
 // announcement was gated on the OTHER channel's stamp. Both announce now.
 async function doCheck(state) {
   if (!state.readable) return; // printReport has already said CANNOT TELL.
+  // Blocked first: it is the only one of the three that names something a
+  // human has to go and do, and it must not queue behind the others.
+  await announceBlocked(state);
   await announceStandDowns(state);
   const quiet = state.report.overdue;
   if (quiet.length === 0) return;
@@ -888,6 +926,52 @@ async function doCheck(state) {
     // The bus was down for sixteen hours on 2026-08-23. A failed announcement
     // must be loud and must NOT be recorded as sent, so the next pass retries.
     console.error(`heartbeat: could NOT post to the bus (${String(err && err.message).slice(0, 200)}).`);
+    console.error('heartbeat: not stamping it as announced, so the next pass tries again.');
+  }
+}
+
+/**
+ * The alarm for a lane that keeps beating and CANNOT work — an expired login,
+ * or any failure naming no cause that clears itself (task 86bc3t0n1, round 2).
+ *
+ * It shares the `standdown-<role>` suppression stamp on purpose: a role is in
+ * one bucket at a time, the two findings are the same sentence to a reader
+ * ("this lane is producing nothing"), and separate stamps would post twice
+ * about one lane whose cause merely got worse. The stamp is cleared by the
+ * first pass that actually RUNS — `closeAlarms`, which neither a stand-down nor
+ * a block calls.
+ *
+ * NO `alarming` FILTER HERE, and that is the point of the whole round: every
+ * blocked row alarms, from the first one. The stand-down alarm waits out the
+ * role's window because a usage limit is a clock running down; a locked door is
+ * not, and waiting is what made 2026-09-18 last three days.
+ */
+async function announceBlocked(state) {
+  const stuck = state.report.blocked || [];
+  if (stuck.length === 0) return;
+
+  const toAnnounce = stuck.filter((b) => heartbeat.dueAgain({
+    lastAt: readStamp(`standdown-${b.role}`), now: NOW, everyMs: heartbeat.REPOST_EVERY_MS,
+  }));
+  if (toAnnounce.length === 0) {
+    console.error('heartbeat: the block was already announced within the suppression window — not posting again.');
+    return;
+  }
+
+  const text = heartbeat.renderBlockedPost({
+    blocked: toAnnounce,
+    now: NOW,
+    reportedBy: NODE.name || 'an unnamed machine',
+  });
+  try {
+    clickup.postBusMessage(BUS_CHANNEL, text);
+    const at = new Date(NOW).toISOString();
+    for (const b of toAnnounce) writeStamp(`standdown-${b.role}`, at);
+    console.error(`heartbeat: posted to the bus — ${toAnnounce.map((b) => b.role).join(', ')} firing and unable to work at all.`);
+  } catch (err) {
+    // NOT stamped as announced, so the next pass retries. Same discipline as
+    // the silence alarm, and for the same 2026-08-23 reason.
+    console.error(`heartbeat: could NOT post the blocked alarm to the bus (${String(err && err.message).slice(0, 200)}).`);
     console.error('heartbeat: not stamping it as announced, so the next pass tries again.');
   }
 }
@@ -934,7 +1018,10 @@ async function announceStandDowns(state) {
 // --- main -------------------------------------------------------------------
 
 if (flag('beat')) {
-  process.exit(await doBeat(arg('role'), { standDownWhy: arg('stood-down') }));
+  process.exit(await doBeat(arg('role'), {
+    standDownWhy: arg('stood-down'),
+    blockedWhy: arg('blocked'),
+  }));
 }
 
 if (flag('stale-check')) {
