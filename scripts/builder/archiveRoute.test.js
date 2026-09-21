@@ -92,11 +92,17 @@ test('resolveClashes: two uploads to one path get distinct names', () => {
     { action: 'UPLOAD', dest: { remote: 'm24:', rootId: '', path: 'R/a.pdf' } },
     { action: 'UPLOAD', dest: { remote: 'm24:', rootId: '', path: 'R/A.pdf' } },
     { action: 'UPLOAD', dest: { remote: 'gdrive:', rootId: '', path: 'R/a.pdf' } },
+    { action: 'UPLOAD', dest: { remote: 'm24:', rootId: '', path: 'R/a.pdf' } },
+    { action: 'UPLOAD', dest: { remote: 'm24:', rootId: '', path: 'S/b.pdf' } },
+    { action: 'UPLOAD', dest: { remote: 'm24:', rootId: '', path: 'S/b.pdf' } },
   ];
   route.resolveClashes(rows);
   assert.equal(rows[0].dest.path, 'R/a.pdf');
   assert.equal(rows[1].dest.path, 'R/A (from MaxOne 2).pdf');
   assert.equal(rows[2].dest.path, 'R/a.pdf');
+  // Numbered per name, not across the whole plan.
+  assert.equal(rows[3].dest.path, 'R/a (from MaxOne 3).pdf');
+  assert.equal(rows[5].dest.path, 'S/b (from MaxOne 2).pdf');
   assert.equal(route.destinationClashes(rows).length, 0);
 });
 
