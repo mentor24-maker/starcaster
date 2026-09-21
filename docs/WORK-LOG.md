@@ -1,3 +1,18 @@
+## 2026-09-21 — A list of which archive files are copies of each other, matched by content (#738)
+
+The first step of clearing up the archive spread across MaxOne, the MacBook and
+the two Google Drives. A new command, `npm run archive:index`, looks at all four
+places and works out which files are the same file — by a fingerprint computed
+from every byte, never by name, because this material has been renamed on every
+trip between places. It looks inside MaxOne's zips without unpacking them, and
+it uses the fingerprints Google Drive already keeps, so nothing is downloaded.
+It moves and deletes nothing: it writes a report saying which zips are already
+fully on a Drive, which hold files found nowhere else, and which loose copies are
+extras, all as proposals for Dane to approve before slice 2 touches anything.
+Anything it could not read is listed with the reason rather than quietly left
+out. It was checked both ways: a renamed copy is paired, and a same-named file
+that differs by one byte is not.
+
 ## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
 
 On a phone, the paragraph under the Delray home page's big headline ran off the
