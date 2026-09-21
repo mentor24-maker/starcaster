@@ -13,6 +13,46 @@ Anything it could not read is listed with the reason rather than quietly left
 out. It was checked both ways: a renamed copy is paired, and a same-named file
 that differs by one byte is not.
 
+## 2026-09-20 — Settings panels stop leaving a wide empty strip on the right (#732)
+
+Open a module's settings in the Builder and the fields are arranged in
+columns. Each column works out exactly how wide it needs to be — but its box
+was left to whatever container it sat in, and most containers stretch their
+contents to fill the space. So a column needing 645px sat in a 1292px box with
+647px of nothing beside it, and the form read as loose rows floating in a
+rectangle rather than one block.
+
+The same disagreement showed up a second way. Most fields are capped at a
+readable width, but the "pick a page" control is really two controls side by
+side — a dropdown plus a text box — and the cap did not apply to the pair. At
+846px it decided how wide that column's whole field slot was, so every
+properly capped field in the column stopped 286px short of it. Four earlier
+panel sweeps had each fixed that for their own panels, as four lists naming
+fifteen module editors between them; every one of those lists said in its own
+comment that the defect was still live on panels belonging to sweeps yet to
+come. Those sweeps ran out. Site Search was the last one left carrying it.
+
+Both are now said once, for every panel including the ones not written yet,
+rather than per panel. The visible win is Site Search: its Content column now
+ends where its fields end, and the Text and Frame columns move up beside it
+instead of being pushed below. Before and after pictures are on the ticket.
+
+The panel check gains the reading that was missing. Everything it measured
+before compared a column's rows to each other — and in all of these the rows
+were correct, same widths, same offsets — so every affected panel had been
+passing for weeks. It now also measures the column's box against the width its
+contents actually need, at all three screen widths.
+## 2026-09-20 — Preview now asks which screen: Phone, Tablet or Desktop (#734)
+
+The blue Preview button in a page's Page Details used to open one new tab, and
+which screen it showed depended on an easy-to-miss Desktop/Mobile switch
+elsewhere in the page list. Now clicking Preview opens a small menu. Desktop
+still opens a tab. Phone and Tablet open a pop-up over the editor, and the page
+inside it is shown in a window that really is a phone's width (390px) or a
+tablet's (820px). That matters because the old preview only imitated a phone,
+and the Delray headline that split "Champions" in half only showed up at a real
+phone's width. Now you see what a visitor's phone sees. Preview still saves
+nothing, and email templates are unchanged.
 ## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
 
 On a phone, the paragraph under the Delray home page's big headline ran off the
