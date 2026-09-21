@@ -13,6 +13,21 @@ Anything it could not read is listed with the reason rather than quietly left
 out. It was checked both ways: a renamed copy is paired, and a same-named file
 that differs by one byte is not.
 
+## 2026-09-21 — The machine check now says when the laptop was last really backed up (#737)
+
+The MacBook's last finished Time Machine backup was in November 2024. One
+attempt stopped at 16% battery, the drive never went back in, and for almost
+two years System Settings kept saying backups were on. Nothing ever asked
+"when did one last actually finish?" `npm run doctor:node` now does. It reads
+Time Machine's own record of finished backups (which works with the drive
+unplugged), and gives one of three answers: fine, if one finished in the last
+two weeks; a failure, if the newest is older than that (naming why when the
+machine can say, like "can't find the drive" or "battery too low"); or "can't
+tell", if the laptop is asleep and the Mini can't reach it. An unplugged drive
+on its own is not treated as a problem, because a laptop's drive usually lives
+in a drawer. Two weeks isn't a guess: it comes from how often the laptop
+actually backed up when the habit was working (the longest gap was just over
+nine days). Today it reads, correctly, as a failure: 22 months.
 ## 2026-09-20 — Settings panels stop leaving a wide empty strip on the right (#732)
 
 Open a module's settings in the Builder and the fields are arranged in
