@@ -18,6 +18,8 @@
     "check:assets": "node scripts/check_asset_versions.cjs",
     "check:syntax": "node scripts/check_syntax.cjs",
     "check:automerge-reach": "node scripts/check_automerge_reach.cjs",
+    "check:vercel-bundle": "node scripts/check_vercel_bundle.cjs",
+    "studio:worker": "node workers/studio/daemon.js",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",

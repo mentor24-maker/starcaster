@@ -27,6 +27,13 @@
  *                            limited, we do not know until when" — where
  *                            pretending no limit exists would burn the next
  *                            three passes discovering it again.
+ *
+ * SINCE 2026-09-20 (task 86bc3t0n1, round 2) `limitDelay` IS NO LONGER THE
+ * RUNNER'S QUESTION. It answers "does this text name a usage limit, and when
+ * does it reset" — a text question, and the only one text can honestly answer.
+ * The runner asks `passOutcome` instead, which decides from the pass's EXIT
+ * CODE first and consults this function only afterwards. See its header for
+ * the two live failures that forced the split.
  */
 
 /** Sleep this long on a limit whose reset time cannot be parsed. */
@@ -53,6 +60,42 @@ const CAP_SECONDS = 8 * 60 * 60;
  *  because a wording change must degrade to the backoff, never to a crash. */
 const LIMIT_LINE = /hit your .{0,20}limit/i;
 const RESET_TIME = /resets\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?:\s*\(([^)]+)\))?/i;
+
+/**
+ * THE OTHER WAY A PASS DIES, AND IT NEVER CLEARS ITSELF (task 86bc3t0n1,
+ * round 2). On 2026-09-18 at 02:08 MDT the Mini hit a real weekly limit. Ten
+ * minutes later the message changed to
+ *
+ *   Failed to authenticate: OAuth session expired and could not be refreshed
+ *
+ * and never changed back — 185 times in loop-build.log, 93 in loop-review.log.
+ * The quota reset on schedule the next evening and nothing improved, because by
+ * then the login was gone. 90 hours, 20 tickets open, found because Dane asked.
+ *
+ * A usage limit is a clock running down. A dead login is a door that is locked
+ * until a human unlocks it, and sleeping half an hour in front of it is the
+ * wrong answer 48 times a day. So it gets its OWN answer — no backoff, and a
+ * beat that alarms at once rather than waiting out a window.
+ */
+const AUTH_FAILURE_LINE = /(failed to authenticate|oauth session (?:has )?expired|session expired and could not be refreshed|please run .{0,12}login|invalid api key|authentication_error)/i;
+
+/**
+ * The END banner this runner writes for every pass:
+ *
+ *   ===== 2026-09-20 01:08:58 END /loop-build (exit 1 — not a verdict; ...) =====
+ *
+ * This is NOT prose-grepping in the sense this ticket is about. The runner
+ * wrote this line itself, in a fixed shape, recording a number the kernel gave
+ * it — it is the exit code, written down. Reading it back is what lets the
+ * by-hand test in the ticket ("feed it the real log") answer the same way the
+ * runner does, without the caller having to know the code already.
+ */
+const END_BANNER_EXIT = /\bEND \/\S+ \(exit (\d+)/;
+
+/** What a pass turned out to be. Three, never two — and never a boolean. */
+const PASS_RAN = 'ran';
+const PASS_STOOD_DOWN = 'stood-down';
+const PASS_BLOCKED = 'blocked';
 
 const DEFAULT_ZONE = 'America/Denver';
 
@@ -158,11 +201,137 @@ function limitDelay({ text, nowMs } = {}) {
   };
 }
 
+/**
+ * The exit code this pass reported, read back off the runner's own END banner.
+ *
+ * Returns a number, or null when there is no banner to read — which is a
+ * DIFFERENT answer from zero and is never rounded down to one. A pass whose
+ * exit code cannot be established has produced no evidence that it did any
+ * work, and `passOutcome` treats it accordingly.
+ */
+function exitCodeFromLog(text) {
+  const m = END_BANNER_EXIT.exec(String(text || ''));
+  if (!m) return null;
+  const code = Number(m[1]);
+  return Number.isFinite(code) ? code : null;
+}
+
+/**
+ * WHAT DID THIS PASS ACTUALLY DO? (task 86bc3t0n1, round 2.)
+ *
+ * THE DEFECT, STATED ONCE: a pass's fate used to be decided by grepping its
+ * prose, and that cuts both ways. Both have now been observed live.
+ *
+ *   - An authentication failure contains none of the expected words, so it fell
+ *     through to the ordinary path and beat as a healthy working pass. 278
+ *     consecutive failures wrote 278 healthy marks; the pipeline was dead for 90
+ *     hours and every status screen said it was fine.
+ *   - A pass that merely wrote ABOUT limits matched the pattern. On 2026-09-20
+ *     the review pass quoted `LIMIT_LINE` in its own report, the regex matched
+ *     that sentence in the log, and the review lane slept half an hour for
+ *     nothing.
+ *
+ * AN EXIT CODE IS A FACT. LOG TEXT IS A GUESS ABOUT A FACT. So the exit code
+ * decides first and the text is only ever consulted afterwards, for the one
+ * thing it genuinely knows — WHICH kind of failure this was, and when a limit
+ * says it resets. A pass that exited 0 produced its report and did its work; no
+ * sentence inside that report can make it a stand-down.
+ *
+ * THREE ANSWERS, NEVER TWO, and they are not interchangeable:
+ *
+ *   ran         the pass worked (or honestly found nothing to do). Pace normally.
+ *   stood-down  it could not work, and the thing stopping it clears ITSELF —
+ *               a usage limit runs down. Sleep until it does.
+ *   blocked     it could not work, and nothing will change that without a human
+ *               at a keyboard — an expired login, or a failure naming no cause
+ *               that clears itself. Do NOT sleep on it: sleeping half an hour in
+ *               front of a locked door 48 times a day is what the 90 hours were.
+ *
+ * @param {object} opts
+ * @param {string} opts.text      this pass's output (already scoped to the pass)
+ * @param {number|null} opts.exitCode  what the pass exited with; null = unknown
+ * @param {number} opts.nowMs     the clock, injected so tests own it
+ */
+function passOutcome({ text, exitCode, nowMs } = {}) {
+  const body = String(text || '');
+  const raw = exitCode === null || exitCode === undefined || exitCode === '' ? null : Number(exitCode);
+  const code = Number.isFinite(raw) ? raw : null;
+
+  if (code === 0) {
+    // A limit or authentication phrase in the output of a pass that EXITED 0 is
+    // the pass writing about one — which is exactly what a pass working on this
+    // ticket does. Named in the reason rather than swallowed, so that if a real
+    // limit ever does exit 0 the log says so on the very first occurrence
+    // instead of the backoff quietly never firing again.
+    const mentioned = LIMIT_LINE.test(body) || AUTH_FAILURE_LINE.test(body);
+    return {
+      kind: PASS_RAN,
+      sleepSeconds: 0,
+      why: '',
+      reason: mentioned
+        ? 'this pass exited 0, so it did its work. A limit or authentication phrase appears in its own '
+          + 'output — that is a pass WRITING about one, not a pass stopped by one — so it is not backing off.'
+        : '',
+    };
+  }
+
+  if (code === null) {
+    return {
+      kind: PASS_BLOCKED,
+      sleepSeconds: 0,
+      why: "this pass's exit code could not be established, so there is no evidence it did any work",
+      reason: 'no exit code could be read for this pass. A reading that could not be taken is never '
+        + 'rendered as a healthy pass — recording it as blocked, and not backing off.',
+    };
+  }
+
+  // Non-zero from here down. AUTHENTICATION OUTRANKS A LIMIT, and the order
+  // matters because the real outage was both: a genuine weekly limit at 02:08
+  // followed ten minutes later by an expired login that never cleared. A log
+  // tail carrying both lines must answer with the one that needs a human.
+  if (AUTH_FAILURE_LINE.test(body)) {
+    return {
+      kind: PASS_BLOCKED,
+      sleepSeconds: 0,
+      why: `the pass exited ${code} without authenticating — a login has expired, and that never clears `
+        + 'on its own; it needs a human at a keyboard on the machine that runs this lane',
+      reason: 'this pass could not authenticate. That is not a usage limit and waiting will not fix it — '
+        + 'not backing off, and recording it as blocked so the roll call alarms now rather than after a window.',
+    };
+  }
+
+  const limit = limitDelay({ text: body, nowMs });
+  if (limit) {
+    return {
+      kind: PASS_STOOD_DOWN,
+      sleepSeconds: limit.seconds,
+      why: `a usage limit closed this pass; the runner is sleeping ${limit.seconds}s until it resets`,
+      reason: limit.reason,
+    };
+  }
+
+  return {
+    kind: PASS_BLOCKED,
+    sleepSeconds: 0,
+    why: `the pass exited ${code} having done no work, and its output names no cause that clears itself`,
+    reason: `this pass exited ${code} and named neither a usage limit nor an authentication failure. `
+      + 'It did not work, and nothing here says it will next hour — recording it as blocked rather than '
+      + 'as a run, and pacing normally so a one-off crash costs one interval and not a night.',
+  };
+}
+
 module.exports = {
   PASS_START_MARKER,
   scopeToLastPass,
   DEFAULT_BACKOFF_SECONDS,
   MARGIN_SECONDS,
   CAP_SECONDS,
+  AUTH_FAILURE_LINE,
+  END_BANNER_EXIT,
+  PASS_RAN,
+  PASS_STOOD_DOWN,
+  PASS_BLOCKED,
+  exitCodeFromLog,
+  passOutcome,
   limitDelay,
 };

@@ -43,10 +43,18 @@ import {
   floatingImageModule,
   imageEffectClassMapFromSource,
   imageEffectOptionsFromSource,
+  previewDeviceFramesFromSource,
 } from './render-contracts.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
+
+// The Builder's Phone/Tablet pop-up sizes (86bc3yyn0), read from the component
+// that draws the pop-up so the check measures the same phone it shows.
+const PREVIEW_DEVICE_SOURCE = 'components/builder/builder-device-preview.tsx';
+const PREVIEW_DEVICE_FRAMES = previewDeviceFramesFromSource(
+  await readFile(path.join(ROOT, PREVIEW_DEVICE_SOURCE), 'utf8').catch(() => '')
+);
 const { chromium } = require('playwright');
 
 // lib/builder/template.js is a GENERATED artifact and a fresh worktree has
@@ -135,6 +143,12 @@ function documentForSection({
   // desktop padding they differ from, and the legacy per-cell "Hide on
   // Mobile" they had to keep working (device styles 2 of 4, task 86bc14pey).
   cellPaddingTop,
+  /*
+   * The legacy all-sides column padding, which is the one a stacked column
+   * needs to overflow: a column with no side padding fits its track whatever
+   * its box-sizing, so a fixture without this cannot see 86bc3y0ue at all.
+   */
+  cellPadding,
   cellDeviceOverrides,
   cellMobileHidden,
   /*
@@ -193,6 +207,7 @@ function documentForSection({
     ...(paddingTop ? { paddingTop } : {}),
     ...(deviceOverrides ? { deviceOverrides } : {}),
     ...(cellPaddingTop ? { cellPaddingTop } : {}),
+    ...(cellPadding ? { cellPadding } : {}),
     ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
     ...(cellMobileHidden ? { cellMobileHidden } : {}),
     ...(cellBorderWidth ? { cellBorderWidth } : {}),
@@ -711,8 +726,52 @@ try {
     await render(
       page,
       contract.section ? documentForSection(contract.section) : documentFor(contract.module),
-      contract.emulate?.previewDevice || 'desktop'
+      contract.emulate?.storedDevice || contract.emulate?.previewDevice || 'desktop'
     );
+
+    /*
+     * Optional EMBED FRAME — the Builder's Phone/Tablet pop-up (86bc3yyn0).
+     * The pop-up is an iframe of `builder-preview.html?embed=1` at the
+     * device's real width, so its media queries are the real ones. Reproduce
+     * exactly that here: host the embed page in an iframe of the size the
+     * pop-up uses (read from its source, never typed twice) and measure
+     * INSIDE it. `storedDevice` lets a contract leave a frame device in
+     * localStorage, to prove the embed ignores it.
+     */
+    let target = page;
+    let embedError = null;
+    if (contract.emulate?.embedFrame) {
+      const size = PREVIEW_DEVICE_FRAMES[contract.emulate.embedFrame];
+      if (!size) {
+        embedError = `${contract.id}: no size for the "${contract.emulate.embedFrame}" pop-up could be read out of ` +
+          `${PREVIEW_DEVICE_SOURCE} (PREVIEW_DEVICE_FRAMES). Nothing was measured — refusing to guess a width.`;
+      } else {
+        try {
+          const handle = await page.evaluateHandle(({ width, height }) => {
+            document.getElementById('__check_render_embed')?.remove();
+            const frame = document.createElement('iframe');
+            frame.id = '__check_render_embed';
+            frame.src = '/builder-preview.html?embed=1';
+            frame.style.cssText = `position:fixed;top:0;left:0;z-index:2147483647;border:0;width:${width}px;height:${height}px;background:#fff`;
+            document.body.appendChild(frame);
+            return frame;
+          }, size);
+          const frame = await handle.asElement().contentFrame();
+          await frame.waitForLoadState('domcontentloaded');
+          await frame.waitForSelector('.builder-preview-module', { timeout: 20000 });
+          await page.waitForTimeout(1200);
+          const innerWidth = await frame.evaluate(() => window.innerWidth);
+          if (innerWidth !== size.width) {
+            embedError = `${contract.id}: the embed iframe reports a ${innerWidth}px viewport, not ${size.width}px — ` +
+              'the measurement would not be at the pop-up\'s width.';
+          }
+          target = frame;
+        } catch (err) {
+          embedError = `${contract.id}: the embed page did not render inside a ${size.width}px iframe — ` +
+            String(err && err.message || err).split('\n')[0];
+        }
+      }
+    }
 
     /*
      * Optional HOVER, for behaviour that only exists while the pointer is on
@@ -740,8 +799,8 @@ try {
       }
     }
 
-    const result = hoverError ? null : await sample(
-      page,
+    const result = hoverError || embedError ? null : await sample(
+      target,
       contract.selector,
       contract.read || [],
       SETTLE_MS,
@@ -757,6 +816,10 @@ try {
 
     if (hoverError) {
       failures.push(hoverError);
+      continue;
+    }
+    if (embedError) {
+      failures.push(embedError);
       continue;
     }
 

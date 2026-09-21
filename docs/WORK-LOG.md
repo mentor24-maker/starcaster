@@ -27,6 +27,191 @@ before compared a column's rows to each other — and in all of these the rows
 were correct, same widths, same offsets — so every affected panel had been
 passing for weeks. It now also measures the column's box against the width its
 contents actually need, at all three screen widths.
+## 2026-09-20 — Preview now asks which screen: Phone, Tablet or Desktop (#734)
+
+The blue Preview button in a page's Page Details used to open one new tab, and
+which screen it showed depended on an easy-to-miss Desktop/Mobile switch
+elsewhere in the page list. Now clicking Preview opens a small menu. Desktop
+still opens a tab. Phone and Tablet open a pop-up over the editor, and the page
+inside it is shown in a window that really is a phone's width (390px) or a
+tablet's (820px). That matters because the old preview only imitated a phone,
+and the Delray headline that split "Champions" in half only showed up at a real
+phone's width. Now you see what a visitor's phone sees. Preview still saves
+nothing, and email templates are unchanged.
+## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
+
+On a phone, the paragraph under the Delray home page's big headline ran off the
+right edge of the screen. The ticket suspected the wide button table in the
+column beside it. That was not it: the table already scrolls sideways in its own
+box. The real cause was an old sizing rule. When a two-column row stacks on a
+phone, each column is told to be the full width of the screen, and the column's
+own padding was then added **on top** of that. So a column with 18px of padding
+on each side came out 36px wider than the phone, on every site and not only
+Delray. The fix makes the padding count inside the column's width. Desktop is
+unchanged (the before/after screenshots of every desktop test scene are
+identical), and a new automatic check measures a padded column at phone and
+tablet widths. It was checked on purpose: with the fix taken out, the check fails.
+
+A review pass sent it back once: the Builder's own Phone preview — the exact
+place the ticket said to look — still showed the text cut off. That preview is
+a phone-sized box drawn inside a full-size window, so the phone-width rule
+never reaches it and it has its own copy of the column rule, which the first
+round missed. That copy now gets the same fix, and a second automatic check
+measures a padded column inside the Phone preview itself.
+
+## 2026-09-20 — The Studio pipeline finally has something that runs it (#729)
+
+The Studio work has had a queue and five kinds of job since August, and nothing
+that actually does them — every piece so far was a function somebody had to
+call by hand. This is the process that sits on the Mac Mini and just keeps
+going: wake up, ask the queue whether anything is waiting, do one job, say
+"still alive", sleep, repeat.
+
+Three things go wrong on a machine nobody is watching, and each one now has an
+answer. If a piece of work blows up, the daemon catches it, writes down what
+happened against that specific job, and carries on — one bad video does not
+stop the line. If the whole process dies, macOS starts it again, and the job it
+was holding comes back on its own a minute later, without anybody noticing it
+was gone. And if the daemon stops running altogether — the quiet failure, the
+one that looks exactly like a slow week — it checks in every five minutes, so
+its silence is something a watchdog can see. That watchdog is deliberately left
+switched OFF for now, with the reason written down, because the daemon cannot
+be installed until the Mac Mini is reachable and an alarm nobody can clear for
+eleven days just teaches everyone to ignore alarms. The roster says "not
+reporting, and here is why" — never "healthy".
+
+It also keeps its own diary, and that part had to be fixed before this could
+ship. The first version capped the size of one file and wrote everything into a
+different one, so the file being watched was never created at all and the file
+that grew had no limit on it. It now writes the same file it caps, and — the
+part that is easy to get wrong — it reopens that file every time it rolls it
+over, or everything after the first rollover would quietly pour into the
+archived copy instead. The status command used to say "nothing written yet" on
+a perfectly healthy machine forever; it now says which of the two real reasons
+applies.
+
+The other half of this is about keeping all of it OFF the live website's
+servers. The Studio code drives video tools over files that are gigabytes each;
+it has no business in the bundle that serves starcaster.pro, which is already
+too big and is part of why pages sometimes take a few seconds to wake up. There
+is now a file telling the host to leave that folder behind — and, more to the
+point, a check that runs on every change and fails if that file quietly stops
+working. Both of the realistic ways it stops working were tried on purpose:
+commenting the rule out, and adding a line that undoes it lower down. Both read
+perfectly fine to a human eye and both now fail the build.
+
+A second review round caught two more things, both of which would only have
+shown up on the Mac Mini, and one of which would have been ugly. The daemon
+decided "I did a job" from whether the ingest step finished without crashing —
+not from whether any work actually happened. The ingest step has five reasons
+it can decline to start at all, and the most likely one of those is a piece of
+configuration that is missing until somebody sets it up on that machine. So on
+the very first run on the Mini, the daemon would have declined the work,
+congratulated itself on having done it, and gone straight back round: four
+times a second, forever, writing four cheerful lies a second into the very log
+this round just taught it to cap — which would have wiped the whole log history
+in minutes. It now asks the queue whether anything moved, and if nothing did it
+says so plainly, says how many jobs are still waiting, and takes the long nap
+instead of the short one.
+
+The other one: the status command asks macOS whether the job is loaded, and the
+way it asked was wrong every single time — it reported a running daemon as not
+running. Worse, it then printed a confident sentence saying the daemon had
+never run on this machine. That is the same kind of untrue-but-reassuring
+reading this ticket was sent back for once already, so it was worth catching.
+It asks a different way now, and there is a test that proves a genuinely
+running job reports as running.
+
+One thing is NOT done and is worth knowing: the daemon is not switched on
+anywhere yet. Turning it on needs a shell on the Mac Mini, and that machine
+cannot be reached until Dane is home at the start of October. Until then the
+job roster will honestly report the Studio worker as not running, which it is
+not.
+## 2026-09-20 — Every video you own, in one list: Assets › Footage (#730)
+
+The Studio pipeline has been collecting footage into a catalog since the first
+Studio slice, but there was nowhere to see it. Now there is: **Assets ›
+Footage** in the admin app lists every file, grouped by recording session with
+the newest shoot at the top, and inside each shoot the files in the order they
+were recorded. Each one shows a small preview, which device made it, what it
+is for in an edit, how long it is, its picture size, when it was recorded and
+how far through the pipeline it has got. You can search session names and
+filter by device and by date.
+
+The previews are Google Drive's own, because nothing in the pipeline draws
+one and the edit copies live on the Mac Mini where the website cannot reach
+them. A file Drive has not drawn a preview for yet says "No preview yet" rather
+than showing a broken picture. And where a file has not been read for its own
+recording date yet, the date shown is marked with a star and says which date
+it really is — a "recorded" date that is secretly an "added" date would be a
+confident wrong answer.
+
+Alongside it, `docs/STUDIO.md` is the plain-language guide: what happens to a
+video step by step, what every column means, how to tell whether the pipeline
+is running, and what to do when it stops.
+
+A review pass caught two things before this went live, both fixed: switching
+to another client left the first client's footage on screen under the new
+client's name, and the Refresh button never asked again for a preview that
+had not been ready the first time — so "wait a few minutes, then Refresh", the
+very advice in the guide, did nothing until the whole page was reloaded.
+## 2026-09-20 — A dead pipeline can no longer look like a healthy one (#728)
+
+Between the 16th and the 19th of September nothing reached Live for 90 hours.
+Both build lanes were firing the whole time. What stopped them was two
+different things in a row, and telling them apart is the entire fix.
+
+At ten past two on the morning of the 18th the machine hit a real usage limit —
+the kind that resets on a stated schedule. Ten minutes later the message
+changed to *"Failed to authenticate: OAuth session expired and could not be
+refreshed"* and never changed back: the sign-in had expired. The usage limit
+reset the next evening exactly as promised and nothing improved, because by
+then the lanes were not being held back by a limit at all. Every pass after
+that started, failed to sign in, and stopped again about a second later —
+nearly three hundred of them.
+
+And every single one recorded a successful run on its way out, because that is
+all a "heartbeat" had ever meant: the job fired and came back. So every status
+screen said everything was fine, truthfully, while twenty tickets piled up. It
+was found because Dane asked whether the pipeline needed restarting.
+
+A heartbeat now records what the pass actually **did**, and there are three
+answers rather than two. It **ran** — real work. It **stood down** — it could
+not work, for a reason that fixes itself, like a usage limit; that gets a
+waiting period, because one of them is ordinary, and the record carries how
+long the lane has been standing down without a break so that hour 90 does not
+look like hour 1. Or it is **blocked** — it could not work and nothing is
+going to change without somebody at the keyboard. That last one raises the
+alarm on the very first pass, with no waiting period at all, because waiting is
+precisely the wrong response to an expired login, and the alarm says in plain
+words that somebody has to go and sign in rather than that the lane will come
+back on its own.
+
+The other half of the fix was deciding **from the right thing**. A pass's fate
+used to be worked out by searching its own written output for the words "hit
+your … limit", and that failed in both directions on the same day. An
+authentication failure contains none of those words, so it read as a healthy
+working pass — the 90 hours. And a pass that merely *wrote about* limits
+matched: on the 20th a review pass quoted that exact phrase in its report, and
+the lane put itself to sleep for half an hour over its own sentence. The
+deciding fact is now the pass's exit code, which the runner has had in its hand
+the whole time; the written output is consulted afterwards, only to say which
+kind of failure it was and when a limit says it resets.
+
+The last piece was delivery. The one check that got the answer right did post
+it — into a chat channel that was refusing every message that week, so it was
+saved to a holding ticket nobody watches. That ticket now puts itself on
+Dane's ClickUp "Assigned to me" list when an alarm lands on it, which reaches
+him without going anywhere near the chat that was broken. It stays there until
+he unassigns himself.
+
+One more alarm had the old story in it. The check that watches each machine
+every ten minutes, the one most likely to go off first, did say an expired
+login needs somebody to sign in. The very next sentence then said the passes
+had "stood down cleanly" and blamed a usage limit, and it gave a wait time.
+That is the explanation the Mini's logs proved wrong. That alarm now says the
+same thing as the others: waiting will not help. Its first instruction is to
+sign Claude in again on that machine.
 
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 

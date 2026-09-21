@@ -850,7 +850,16 @@ async function postOrSaveToBus(channel, text) {
   if (bus && bus.ok) return { ok: true, via: 'chat', why: '' };
   const why = String(bus?.why || 'the party line refused it');
   const saved = await saveUndeliveredAlarm({ text, channel, why });
-  if (saved.ok) return { ok: true, via: 'ticket', why, url: saved.url };
+  if (saved.ok) {
+    return {
+      ok: true,
+      via: 'ticket',
+      why,
+      url: saved.url,
+      assignedToOperator: Boolean(saved.assignedToOperator),
+      assignWhy: saved.assignWhy || '',
+    };
+  }
   return { ok: false, via: '', why: `${why}; the "${busFallback.FALLBACK_TASK_NAME}" ticket refused it too (${saved.why})` };
 }
 
@@ -985,7 +994,50 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
   const stuck = Boolean(comments && comments.some((c) => String(c.id) === String(id)));
   if (!stuck) return { ok: false, why: 'the comment was accepted but could not be read back' };
 
-  return { ok: true, url: task.url || `https://app.clickup.com/t/${task.id}` };
+  // ── THE SECOND ROUTE (task 86bc3t0n1) ─────────────────────────────────────
+  // Saving the alarm is not the same as delivering it. From 2026-09-16 to
+  // 2026-09-19 the pipeline was dead for 90 hours; `throughput --check` got the
+  // answer right and posted STALLED — into a chat channel that was refusing
+  // every write, so it landed here, on a ticket sitting in `Live` with nobody
+  // assigned, which nobody watches. The one alarm that worked was invisible.
+  //
+  // Dane's "what needs me" is ClickUp's own *Assigned to me* — not a filtered
+  // view, which cannot span the two spaces (CLAUDE.md, the handoff rule). So an
+  // alarm that could not reach the bus puts this ticket in that list. It does
+  // not depend on the chat API at all: task writes are the one call that kept
+  // working through both chat outages, 2026-08-23 and 2026-09-07.
+  //
+  // IDEMPOTENT BY CONSTRUCTION: assigning someone already assigned changes
+  // nothing, so a hundred dropped alarms are one entry in his list, and it
+  // leaves when he unassigns himself. And it is BEST EFFORT — the alarm is
+  // already durably saved and read back by this line, so a failure here is
+  // reported and never downgrades a delivered alarm to a lost one.
+  const url = task.url || `https://app.clickup.com/t/${task.id}`;
+  const already = (task.assignees || []).some((a) => Number(a.id) === OPERATOR_ID);
+  if (already) return { ok: true, url, assignedToOperator: true };
+
+  const assign = await call('PUT', `/api/v2/task/${task.id}`, { assignees: { add: [OPERATOR_ID], rem: [] } });
+  if (stoppedAtReserve(assign)) {
+    return { ok: true, url, assignedToOperator: false, assignWhy: 'it stopped at the ClickUp reserve before the ticket could be put on Dane\'s list' };
+  }
+  // VERIFIED FROM THE WRITE RESPONSE, like every other assignee write in this
+  // file: a 200 with the assignee half silently dropped is the failure shape
+  // `status` was taught to catch, and an unverified claim that Dane can see
+  // this is worse than saying plainly that he may not be able to.
+  const landed = assign.res.ok
+    && assign.json
+    && (assign.json.assignees || []).some((a) => Number(a.id) === OPERATOR_ID);
+  if (!landed) {
+    return {
+      ok: true,
+      url,
+      assignedToOperator: false,
+      assignWhy: assign.res.ok
+        ? 'ClickUp accepted the write but the assignee did not come back on the response, so it cannot be confirmed'
+        : `ClickUp refused the write (HTTP ${assign.res.status})`,
+    };
+  }
+  return { ok: true, url, assignedToOperator: true, assignedNow: true };
 }
 
 /**
@@ -3025,7 +3077,14 @@ if (cmd === 'whoami') {
       console.error('Nothing was delivered. This alarm is lost unless the caller retries.');
       process.exit(1);
     }
-    console.log(busFallback.renderRouteLine({ via: 'ticket', channel, why, url: saved.url }));
+    console.log(busFallback.renderRouteLine({
+      via: 'ticket',
+      channel,
+      why,
+      url: saved.url,
+      assignedToOperator: saved.assignedToOperator,
+      assignWhy: saved.assignWhy,
+    }));
   }
 
 } else if (cmd === 'pass-reconcile') {

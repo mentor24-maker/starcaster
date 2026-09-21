@@ -162,11 +162,20 @@ export function BuilderPreviewPage() {
   const [loaded, setLoaded] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("desktop");
   const [targetSlug, setTargetSlug] = useState("");
+  // `?embed=1`: this page is inside the Builder's Phone/Tablet pop-up
+  // (86bc3yyn0). The iframe's own width IS the device, so it shows no strip
+  // and no frame — a frame in there would be a phone inside a phone, and would
+  // swap the real phone media rules for the frame's mirror CSS.
+  const [isEmbedded] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("embed") === "1"
+  );
   const isEmailPreview = previewDevice === "email";
 
   useEffect(() => {
     const storedDevice = window.localStorage.getItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY);
-    if (isPreviewDevice(storedDevice)) {
+    if (isEmbedded) {
+      setPreviewDevice("desktop");
+    } else if (isPreviewDevice(storedDevice)) {
       setPreviewDevice(storedDevice);
     }
 
@@ -310,45 +319,47 @@ export function BuilderPreviewPage() {
 
   return (
     <>
-      <div className="builder-preview-strip" role="banner">
-        <span className="builder-preview-strip-label">
-          PREVIEW · {draft?.name || "Unsaved draft"}
-          {isEmailPreview ? " · Email 600px" : ""}
-        </span>
-        <span className="builder-preview-strip-actions">
-          {isEmailPreview ? null : (
-            <span className="builder-preview-strip-toggle" role="group" aria-label="Preview device">
-              <button
-                aria-pressed={previewDevice === "desktop"}
-                className={previewDevice === "desktop" ? "is-active" : ""}
-                onClick={() => setDevice("desktop")}
-                type="button"
-              >
-                Desktop
-              </button>
-              <button
-                aria-pressed={previewDevice === "tablet"}
-                className={previewDevice === "tablet" ? "is-active" : ""}
-                onClick={() => setDevice("tablet")}
-                type="button"
-              >
-                Tablet
-              </button>
-              <button
-                aria-pressed={previewDevice === "mobile"}
-                className={previewDevice === "mobile" ? "is-active" : ""}
-                onClick={() => setDevice("mobile")}
-                type="button"
-              >
-                Mobile
-              </button>
-            </span>
-          )}
-          <button className="builder-preview-strip-close" onClick={() => window.close()} type="button">
-            Close
-          </button>
-        </span>
-      </div>
+      {isEmbedded ? null : (
+        <div className="builder-preview-strip" role="banner">
+          <span className="builder-preview-strip-label">
+            PREVIEW · {draft?.name || "Unsaved draft"}
+            {isEmailPreview ? " · Email 600px" : ""}
+          </span>
+          <span className="builder-preview-strip-actions">
+            {isEmailPreview ? null : (
+              <span className="builder-preview-strip-toggle" role="group" aria-label="Preview device">
+                <button
+                  aria-pressed={previewDevice === "desktop"}
+                  className={previewDevice === "desktop" ? "is-active" : ""}
+                  onClick={() => setDevice("desktop")}
+                  type="button"
+                >
+                  Desktop
+                </button>
+                <button
+                  aria-pressed={previewDevice === "tablet"}
+                  className={previewDevice === "tablet" ? "is-active" : ""}
+                  onClick={() => setDevice("tablet")}
+                  type="button"
+                >
+                  Tablet
+                </button>
+                <button
+                  aria-pressed={previewDevice === "mobile"}
+                  className={previewDevice === "mobile" ? "is-active" : ""}
+                  onClick={() => setDevice("mobile")}
+                  type="button"
+                >
+                  Mobile
+                </button>
+              </span>
+            )}
+            <button className="builder-preview-strip-close" onClick={() => window.close()} type="button">
+              Close
+            </button>
+          </span>
+        </div>
+      )}
 
       {loaded && draft && draft.layoutSections.length > 0 ? (
         isEmailPreview ? (
