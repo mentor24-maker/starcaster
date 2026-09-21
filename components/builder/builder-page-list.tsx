@@ -2,6 +2,8 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderPreviewDeviceMenu } from "./builder-device-preview";
+import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import { PAGE_SEARCH_PRIORITIES } from "@/lib/page-search-priority";
 import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars, getThemeShellBackgroundSeedColor } from "./builder-utils";
 
@@ -75,7 +77,8 @@ type BuilderPageListProps = {
   onApplyTheme: (themeId: string) => void;
   onNewPage: () => void;
   onBulkCreate: () => void;
-  onPreviewDraft: () => void;
+  /** Phone and Tablet open a pop-up at the real width; Desktop opens a tab (86bc3yyn0). */
+  onPreviewDraft: (device: BuilderEditorStyleDevice) => void;
   onMakeTemplate: () => void;
   onPageEditorFocus: (focused: boolean) => void;
   onSavePage: () => void;
@@ -853,13 +856,7 @@ export function BuilderPageList({
           <div className="builder-pages-crud-heading-actions">
             {/* Blue: Preview saves nothing — see the note in
                 builder-publish-panel.tsx (task 86bbq5jvz). */}
-            <button
-              className="submit-button builder-panel-heading-button"
-              onClick={onPreviewDraft}
-              type="button"
-            >
-              Preview
-            </button>
+            <BuilderPreviewDeviceMenu onChoose={onPreviewDraft} />
             <button
               className="submit-button admin-blog-add-button builder-panel-heading-button"
               disabled={isSaving}

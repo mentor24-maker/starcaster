@@ -2,6 +2,8 @@
 
 import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import type { CSSProperties } from "react";
+import { useEffect } from "react";
+import { installStackedColumnAlignment } from "@/lib/builder-stacked-columns";
 import type {
   BackgroundSettings,
   BuilderOverlayBlendMode,
@@ -163,6 +165,8 @@ export function BuilderSectionControls({
   themePrimaryColor,
   themeColors = []
 }: BuilderSectionControlsProps) {
+  // A column that wraps under another shares its field edge (86bbzzv49).
+  useEffect(() => installStackedColumnAlignment(), []);
   // On Tablet or Phone every control below reads the row as that screen sees
   // it, and every edit is routed through `writeSectionDeviceEdit`, which keeps
   // only what differs. So the controls themselves do not know devices exist.

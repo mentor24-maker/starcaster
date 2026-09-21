@@ -1038,6 +1038,109 @@ function assertSeam(seams, width, baseline) {
   };
 }
 
+/* ---------------------------------------------------------------------------
+ * THE STACK — an axis column that wrapped under another (ticket 86bbzzv49).
+ *
+ * `.is-lattice .builder-schema-panel-columns` wraps: on a narrow panel a
+ * column drops to a second line and lands flush left, directly under the
+ * first. Each column is measured above as its OWN group, and a group always
+ * agrees with itself — so a Frame column starting its fields 57px left of the
+ * Content column above it (Messaging Topic List at 1440) passed this check on
+ * every run. The seam check has the same blind spot one level over: it holds
+ * the chrome to a column, never a column to a column.
+ *
+ * So this reads geometry, like the seam: columns are grouped into lines by
+ * their top edge, and a column is stacked with the one on the line above that
+ * shares its left edge. Those two must start their fields — the first row
+ * that occupies the control track — at the same x. Columns on one line are
+ * separate lattices by rule and are never compared.
+ * ------------------------------------------------------------------------ */
+function measureStacks(page) {
+  return page.evaluate(() => {
+    const EDGE = 2;
+    function controlX(column) {
+      const rows = [...column.querySelectorAll('.builder-module-field, .builder-setting-row, .builder-setting-row-full')]
+        .filter((el) => !el.closest('[data-lattice-pairs]'))
+        .filter((el) => el.closest('.builder-schema-panel-column') === column);
+      for (const f of rows) {
+        if (f.classList.contains('builder-module-field--full')) continue;
+        const label = f.querySelector('.builder-module-field-label, .builder-setting-label');
+        if (!label || !label.getBoundingClientRect().width) continue;
+        let control = f.querySelector('.builder-module-field-control, .builder-setting-value');
+        while (control && control.getBoundingClientRect().width === 0 && control.firstElementChild) {
+          control = control.firstElementChild;
+        }
+        if (!control || control.getBoundingClientRect().width === 0) continue;
+        return {
+          name: (label.textContent || '').trim() || '(unlabelled)',
+          x: Math.round(control.getBoundingClientRect().left)
+        };
+      }
+      return null;
+    }
+    const title = (column) =>
+      ((column.querySelector(':scope > .builder-schema-group-title') || {}).textContent || '').trim() || '(untitled column)';
+
+    const out = [];
+    for (const container of document.querySelectorAll('.is-lattice .builder-schema-panel-columns')) {
+      const panel = container.closest('.is-lattice');
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
+      const columns = [...container.children]
+        .filter((el) => el.classList.contains('builder-schema-panel-column'))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter((c) => c.r.width && c.r.height);
+      const tops = [];
+      for (const t of columns.map((c) => c.r.top).sort((a, b) => a - b)) {
+        if (!tops.length || t - tops[tops.length - 1] > EDGE) tops.push(t);
+      }
+      const line = (c) => tops.findIndex((t) => Math.abs(c.r.top - t) <= EDGE);
+      for (const lower of columns) {
+        const li = line(lower);
+        if (li <= 0) continue;
+        const upper = columns.find((c) => line(c) === li - 1 && Math.abs(c.r.left - lower.r.left) <= EDGE);
+        if (!upper) continue;
+        const a = controlX(upper.el);
+        const b = controlX(lower.el);
+        out.push({
+          panelName,
+          upper: title(upper.el),
+          lower: title(lower.el),
+          upperControl: a,
+          lowerControl: b,
+          off: a && b ? b.x - a.x : null
+        });
+      }
+    }
+    return out;
+  });
+}
+
+function assertStacks(stacks, width) {
+  const failures = [];
+  for (const s of stacks) {
+    if (s.off === null || Math.abs(s.off) <= 1) continue;
+    failures.push(
+      `${width}px (${s.panelName || 'panel'}): the "${s.lower}" column wrapped under "${s.upper}" and starts its `
+      + `fields ${Math.abs(s.off)}px ${s.off > 0 ? 'right' : 'left'} of it — "${s.upper}"'s "${s.upperControl.name}" `
+      + `at x=${s.upperControl.x}, "${s.lower}"'s "${s.lowerControl.name}" at x=${s.lowerControl.x}. `
+      + 'L8: a column stacked under another shares its field edge. The mechanism is '
+      + 'lib/builder-client/builder-stacked-columns.ts, which floors the narrower label track '
+      + '(`--lattice-stack-label`); check it is installed on this panel and that the rule reading it '
+      + 'in src/css/_builder-react-overrides.css still matches.'
+    );
+  }
+  return {
+    failures,
+    compared: stacks.filter((s) => s.off !== null).length,
+    uncomparable: stacks.filter((s) => s.off === null)
+  };
+}
+
 function assertLattice(panels, width) {
   const failures = [];
 
@@ -1825,6 +1928,130 @@ function assertColumnGrids(managers, width) {
  * baseline is the instrument's own calibration, and a check that cannot read
  * its calibration has not measured anything.
  */
+/* ---------------------------------------------------------------------------
+ * THE STRIP — dead space between a column's content and the column's edge
+ * (ticket 86bbzux9m, 2026-09-20)
+ *
+ * Everything above measures a column's rows against EACH OTHER. A column
+ * whose rows all agree, all stop at the same x, and all sit inside a box that
+ * is 647px wider than they are passes every one of those assertions — and
+ * reads as loose rows floating in a rectangle, which is the complaint that
+ * opened the panel sweep in the first place (Dane, 2026-08-13).
+ *
+ * WHY THE SLOT MEASUREMENTS ABOVE CANNOT SEE IT. They compare a field's slot
+ * to the other slots in the same column, and in all 19 panels reported on
+ * 2026-09-13 the slots were correct — identical widths, identical offsets.
+ * The defect is one level out: the column BOX against the tracks it resolved.
+ * That is why every one of those panels had been passing this check for weeks.
+ *
+ * TWO NUMBERS, because the same fight between W9 and L8 surfaces two ways and
+ * a check that asked only one of them would call the other a pass:
+ *
+ *   · STRIP — the column box minus the sum of its tracks. A grid item
+ *     stretches to its area and a child of a column-flex box stretches to the
+ *     container, both by default, so a column in either lands wider than its
+ *     content with a hairline drawn the full width. Measured on `main` at
+ *     1440: Motion 679px, Video 647px, Slideshow Format 120px.
+ *
+ *   · CONTROL TRACK OVER THE CEILING — the other half. `.builder-project-data-picker`
+ *     is a select plus an input, so W9's per-control 560px cap does not bound
+ *     the pair; at 846px the composite SIZES the `max-content` track and every
+ *     correctly-capped control in the column ends 286px short of it. Here the
+ *     dead space is inside the rows rather than beside them, and the strip
+ *     number alone reads 0.
+ *
+ * SUBGRID COLUMNS ARE EXCLUDED, and that is a real exclusion rather than a
+ * convenience: a `grid-template-columns: subgrid` column takes its tracks
+ * from the area it occupies, so it MUST fill that area — Feature Cards and
+ * Program List share the chrome's lattice exactly that way. `getComputedStyle`
+ * reports the literal keyword for them, with no track lengths to sum, so a
+ * strip computed from it would be the whole column width: a fabricated
+ * failure on the two panels that are most correct. They are counted and named
+ * in the run note rather than dropped in silence.
+ *
+ * TOLERANCE. 40px — `--builder-field-room`, the gap the lattice already puts
+ * between a label and its control, and the number the ticket's acceptance
+ * criteria name. Sub-pixel track rounding is a fraction of a pixel, so
+ * nothing sits near this boundary: the smallest real defect measured was 65px
+ * and the largest non-defect 0.
+ * ------------------------------------------------------------------------ */
+const STRIP_TOLERANCE = 40;
+
+function measureColumnStrips(page) {
+  return page.evaluate(() => {
+    const cap = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--builder-field-long-max')
+    ) || 560;
+    const panels = [...document.querySelectorAll('.is-lattice')]
+      .filter((el) => !el.parentElement?.closest('.is-lattice'));
+
+    return panels.flatMap((panel, index) => {
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))
+          ?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
+      return [...panel.querySelectorAll('.builder-schema-panel-column')].map((col) => {
+        const box = col.getBoundingClientRect();
+        // A collapsed or hidden column measured nothing; saying so is the
+        // difference between this and a pass over what it could not see.
+        if (box.width < 5) return { index, panelName, shape: 'boxless', title: '' };
+        const declared = getComputedStyle(col).gridTemplateColumns;
+        if (declared.includes('subgrid')) return { index, panelName, shape: 'subgrid', title: '' };
+        const tracks = declared.split(' ').map(parseFloat).filter((n) => !Number.isNaN(n));
+        if (!tracks.length) return { index, panelName, shape: 'trackless', title: '' };
+        const title = (
+          col.querySelector(':scope > .builder-schema-group-title, :scope > .builder-cards-panel-heading')
+            ?.textContent || ''
+        ).trim().slice(0, 40);
+        const sum = tracks.reduce((a, b) => a + b, 0);
+        return {
+          index,
+          panelName,
+          shape: 'measured',
+          title,
+          columnWidth: Math.round(box.width),
+          trackSum: Math.round(sum),
+          strip: Math.round(box.width - sum),
+          controlTrack: Math.round(tracks[tracks.length - 1]),
+          cap,
+        };
+      });
+    });
+  });
+}
+
+function assertColumnStrips(columns, width) {
+  const failures = [];
+  for (const c of columns.filter((c) => c.shape === 'measured')) {
+    const where = `${width}px panel #${c.index}${c.panelName ? ` (${c.panelName})` : ''}` +
+      `${c.title ? `, column "${c.title}"` : ''}`;
+    if (c.strip > STRIP_TOLERANCE) {
+      failures.push(
+        `${where}: the column box is ${c.columnWidth}px but its tracks resolve to ` +
+        `${c.trackSum}px — ${c.strip}px of dead space to the right of every row in it ` +
+        `(tolerance ${STRIP_TOLERANCE}px).\n` +
+        'The column is being STRETCHED by whatever box holds it — a grid item stretches to\n' +
+        'its area, a child of a column-flex box to the container. Bound the block: give the\n' +
+        'column `justify-self: start` / `align-self: start` where it sits, never a width of\n' +
+        'its own (W0), and never by widening the controls to fill it (W9).'
+      );
+    }
+    if (c.controlTrack > c.cap) {
+      failures.push(
+        `${where}: the control track is ${c.controlTrack}px, over the ${c.cap}px ceiling (W9).\n` +
+        'Every control capped at the ceiling therefore stops short of the one row that set\n' +
+        'the track, which is the notch L8 names. The usual cause is a COMPOSITE control —\n' +
+        '`.builder-project-data-picker` is a select plus an input, and the per-control cap\n' +
+        'does not bound the pair. Bound the composite, do not raise the ceiling.'
+      );
+    }
+  }
+  return failures;
+}
+
 const SEAM_BASELINE_PATH = path.join(ROOT, 'scripts', 'ui', 'panel-seam-baseline.json');
 let SEAM_BASELINE;
 try {
@@ -1864,7 +2091,17 @@ let cardsSeen = 0;
 // has to be able to say whether ITS assertion found anything, and an
 // unrelated W0 or W9 violation must not answer that question for it.
 let seamFailureCount = 0;
+/*
+ * Stacked axis columns (86bbzzv49): how many pairs were compared at each
+ * width, and which could not be (a side with no row in the control track).
+ * Wrapping is width-dependent, so zero at 1920 is normal; zero everywhere
+ * the fixture is known to wrap (1440) is a blind run.
+ */
+const stackByWidth = new Map();    // width -> pairs compared
+const stackUncomparable = new Map(); // "panel: lower under upper" -> widths
 let columnGridsSeen = 0;
+const stripsByWidth = new Map();      // width -> columns actually measured for dead space
+const stripUnmeasured = new Map();    // "<panel> (<shape>)" -> the widths it could not be measured at
 /*
  * Titled-column managers built as ONE flat grid (breadcrumb's trail items).
  *
@@ -1964,6 +2201,15 @@ for (const width of WIDTHS) {
       seamHalfMeasured.get(name).push(width);
     }
 
+    const stacks = assertStacks(await measureStacks(page), width);
+    allFailures.push(...stacks.failures);
+    stackByWidth.set(width, stacks.compared);
+    for (const u of stacks.uncomparable) {
+      const key = `${u.panelName}: "${u.lower}" under "${u.upper}"`;
+      if (!stackUncomparable.has(key)) stackUncomparable.set(key, []);
+      stackUncomparable.get(key).push(width);
+    }
+
     const columnGrids = await measureColumnGrids(page);
     columnGridsSeen += columnGrids.length;
     // Keyed by name, not summed over the widths — the same lesson the
@@ -1983,6 +2229,15 @@ for (const width of WIDTHS) {
       boxlessManagers.get(g.name).push(width);
     }
     allFailures.push(...assertColumnGrids(columnGrids, width));
+
+    const columnStrips = await measureColumnStrips(page);
+    stripsByWidth.set(width, columnStrips.filter((c) => c.shape === 'measured').length);
+    for (const c of columnStrips.filter((c) => c.shape !== 'measured')) {
+      const key = `${c.panelName || `panel #${c.index}`} (${c.shape})`;
+      if (!stripUnmeasured.has(key)) stripUnmeasured.set(key, []);
+      if (!stripUnmeasured.get(key).includes(width)) stripUnmeasured.get(key).push(width);
+    }
+    allFailures.push(...assertColumnStrips(columnStrips, width));
   } finally {
     await browser.close();
   }
@@ -2050,6 +2305,24 @@ if (panelsSeen === 0) {
  * because a future width-dependent rule would show up at one of them only, so
  * a run that could not look at one of them has not run the assertion it claims.
  */
+/*
+ * THE SAME QUESTION FOR THE STRIP, PER WIDTH. A width at which no column
+ * could be measured has not run this assertion, whatever the other two did —
+ * and what it looks for is a stretched BOX, exactly the kind of thing a
+ * width-dependent rule changes. Reporting that as a pass is the shape
+ * DOCTRINE §5.33 was written against.
+ */
+const stripBlindWidths = WIDTHS.filter((w) => !(stripsByWidth.get(w) > 0));
+
+if (stripBlindWidths.length) {
+  blind.push(
+    'No lattice column could be measured for dead space at ' +
+    `${stripBlindWidths.join('/')}px.\n` +
+    'Every column was hidden, collapsed, subgrid or trackless, so the strip assertion\n' +
+    'ran against nothing. Zero assertions is not a pass — open the fixture page and\n' +
+    'check the panels are expanded before believing this run.');
+}
+
 const seamBlindWidths = WIDTHS.filter((w) => !(seamByWidth.get(w)?.compared > 0));
 
 if (seamBlindWidths.length) {
@@ -2068,6 +2341,19 @@ if (seamBlindWidths.length) {
     'landed beside its chrome rather than stacked with it; or that width never opened its\n' +
     'panels at all. The seam note below lists what was skipped and why. An instrument problem\n' +
     'in every case, which is why this is a 2 rather than a 1.');
+}
+
+/*
+ * A STACK CHECK THAT SAW NO STACK AT 1440 IS BLIND, NOT GREEN (86bbzzv49).
+ * The fixture wraps 22 panels at 1440; finding none there means the selector
+ * or the fixture moved, and the assertion above compared nothing.
+ */
+if (WIDTHS.includes(1440) && !(stackByWidth.get(1440) > 0)) {
+  blind.push(
+    'No axis column was found WRAPPED UNDER another at 1440px, so the stacked-column\n' +
+    'check compared nothing. The fixture wraps ~22 panels at that width (Messaging Topic\n' +
+    'List among them); zero means the fixture changed or `.builder-schema-panel-columns`\n' +
+    'stopped matching. An instrument problem, which is why this is a 2 rather than a 1.');
 }
 
 /*
@@ -2132,6 +2418,30 @@ if (seamUnreached.size) {
  * the opposite of its code is worse than no comment, because it is read as
  * evidence. Zero now says so out loud.
  */
+/*
+ * WHAT THE STRIP ASSERTION MEASURED, AND WHAT IT COULD NOT.
+ *
+ * A count, per width, and the columns it had to skip with the reason —
+ * because "0 failures" and "0 columns looked at" print the same headline
+ * otherwise, and the subgrid exclusion is deliberate enough that a reader
+ * should be able to see it was applied rather than take it on trust.
+ */
+function stripNote() {
+  const measured = WIDTHS.map((w) => `${stripsByWidth.get(w) || 0} at ${w}px`).join(', ');
+  const lines = [`[check:panels] Dead space: ${measured} — column box against resolved tracks, ` +
+    `tolerance ${STRIP_TOLERANCE}px.`];
+  if (stripUnmeasured.size) {
+    lines.push('  Not measured for dead space, and the reason is not "it passed":');
+    for (const [key, widths] of stripUnmeasured) {
+      lines.push(`      \u00b7 ${key} [${widths.join('/')}px]` +
+        (key.includes('subgrid')
+          ? ' — a subgrid column takes its tracks from its area and MUST fill it'
+          : ''));
+    }
+  }
+  return lines.join('\n');
+}
+
 function uncomparableNote() {
   if (!uncomparableManagers.size) {
     return '[check:panels] NOTE — every declared item manager rendered at least two label/field\n'
@@ -2228,6 +2538,16 @@ function blindVerdictSentence(code) {
   }
   return '    This run exited 0, which it should NOT have — a blind spot has to move the exit code.\n'
     + '    Read that as a defect in check:panels itself, not as a clean sweep.';
+}
+
+function stackNote() {
+  const counts = WIDTHS.map((w) => `${stackByWidth.get(w) ?? 0} at ${w}px`).join(', ');
+  const lines = [`[check:panels] NOTE — stacked axis columns (one wrapped under another) compared: ${counts}.`];
+  if (stackUncomparable.size) {
+    lines.push(`  ${stackUncomparable.size} stacked pair(s) could NOT be compared — one side has no row in the control track:`);
+    for (const [key, widths] of stackUncomparable) lines.push(`      \u00b7 ${key} [${widths.join('/')}px]`);
+  }
+  return lines.join('\n');
 }
 
 function seamNote(code) {
@@ -2345,6 +2665,7 @@ if (code === EXIT_FAIL) {
   }
   console.error(`\n${uncomparableNote()}`);
   if (flatGridNote()) console.error(flatGridNote());
+  console.error(stackNote());
   console.error(`${seamNote(code)}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
@@ -2362,6 +2683,7 @@ if (code === EXIT_CANNOT_TELL) {
   // of its code, which this file has already paid for once.
   console.error(`\n${uncomparableNote()}`);
   if (flatGridNote()) console.error(flatGridNote());
+  console.error(stackNote());
   console.error(seamNote(code));
   cannotTell('check:panels', blind.join('\n\n'));
 }
@@ -2371,6 +2693,8 @@ console.log(
   + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
 );
 
+console.log(stripNote());
 console.log(uncomparableNote());
 if (flatGridNote()) console.log(flatGridNote());
+console.log(stackNote());
 console.log(seamNote(code));

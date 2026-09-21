@@ -51,6 +51,9 @@ const provision = require('../lib/nodeProvision.js');
 const nodeBackup = require('../lib/nodeBackup.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const rebootTest = require('../lib/nodeRebootTest.js');
+const timeMachine = require('../lib/nodeTimeMachine.js');
+const remoteProbe = require('./builder/remoteProbe.js');
+const { sshRoutedMachines } = require('./builder/strandedLocalWork.js');
 const { mainCheckoutDir } = await import('./lib/main_checkout.mjs');
 
 const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -674,7 +677,63 @@ heading('BACKUP — would anything survive this machine dying?');
     + 'The rebuild route, end to end, is docs/NODE_RECOVERY.md.');
 }
 
-// --- 8. the steps that are Dane's -------------------------------------------
+// --- 8. whole-disk backups: when did Time Machine last FINISH one? -----------
+
+heading('TIME MACHINE — when did a whole-disk backup last actually finish?');
+
+// WHY (ticket 86bbvr110). The section above is the few files only a node has.
+// This is the rest of the disk, and on the MacBook the last completed Time
+// Machine backup was 2024-11-15 while every surface said backups were ON for
+// twenty-two months. The verdict and all of its reasoning live in
+// lib/nodeTimeMachine.js; this only gathers the text and prints the answer.
+//
+// It is the one section that looks beyond this machine, because the machine
+// it most needs to see is a laptop that is often shut — so the Mini asks it
+// over ssh, through the same executor and the same inventory routes the
+// stranded sweep uses. A laptop that does not answer is CANNOT TELL, never
+// FAIL: asleep is not evidence of anything.
+{
+  const run = (cmd, args, timeoutMs) => {
+    try {
+      return { ok: true, out: execFileSync(cmd, args, { encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'pipe'] }) };
+    } catch (error) {
+      return {
+        ok: false,
+        missing: error?.code === 'ENOENT',
+        timedOut: remoteProbe.isTimeout(error),
+        code: typeof error?.status === 'number' ? error.status : null,
+      };
+    }
+  };
+  const hereId = knownNode ? node.name : null;
+  const exec = remoteProbe.createExecutor({ run, hereId });
+
+  let routes = { known: false, machines: [] };
+  try {
+    routes = sshRoutedMachines(fs.readFileSync(path.join(HERE, 'docs', 'ecosystem', 'inventory.yaml'), 'utf8'));
+  } catch (_) {
+    // Unreadable inventory: every expected machine is tried, and an ssh
+    // failure becomes an honest CANNOT TELL.
+  }
+
+  const machines = [hereId, ...Object.keys(timeMachine.TIME_MACHINE_NODES).filter((m) => m !== hereId)];
+  for (const machine of machines) {
+    const expected = Boolean(machine && timeMachine.TIME_MACHINE_NODES[machine]);
+    const isHere = machine === hereId;
+    const probe = !isHere && routes.known && !routes.machines.includes(machine)
+      ? { ran: false, why: 'no ssh route to it is declared in docs/ecosystem/inventory.yaml, so it cannot be asked from here.' }
+      : exec.shell(machine, timeMachine.PROBE_COMMAND, 30000);
+    const report = timeMachine.timeMachineReport({ machine: machine || 'this machine', probe, expected });
+    if (report.state === 'PASS') pass(report.headline, report.why);
+    else if (report.state === 'FAIL') fail(report.headline, report.fix, report.why);
+    else if (report.state === 'NOT EXPECTED') note(report.headline);
+    else unknown(report.headline, report.why, report.fix);
+  }
+  note(`Graded on the age of the last COMPLETED backup (over ${Math.round(timeMachine.STALE_AFTER_MS / 86400000)} days is a FAIL). `
+    + 'A drive that is simply unplugged is fine inside that window; "backups are on" in System Settings is not evidence of one.');
+}
+
+// --- 9. the steps that are Dane's -------------------------------------------
 
 heading("WAITING ON DANE — steps no script may perform");
 
