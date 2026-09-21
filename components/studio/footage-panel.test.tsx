@@ -69,7 +69,7 @@ async function flush() {
   // A few turns of the microtask queue: api() → setData → Thumbnail effect → fetch → blob.
   for (let i = 0; i < 6; i += 1) {
     // eslint-disable-next-line no-await-in-loop
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   }
 }
 
@@ -104,14 +104,18 @@ beforeEach(() => {
     projectContext: { getSessionProjectId: () => activeProject },
     getSessionToken: () => "tok",
   };
+  // A hand-made reply rather than `new Response(blob)`: Node's Response does not
+  // read jsdom's Blob the same way on every Node version, and CI (Node 22)
+  // never produced an image from it while Node 24 did.
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     thumbnailRequests.push(String(url));
-    if (!thumbnailsWork) {
-      return new Response(JSON.stringify({ ok: false }), { status: 404, headers: { "content-type": "application/json" } });
-    }
-    return new Response(new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" }), {
-      status: 200, headers: { "content-type": "image/jpeg" },
-    });
+    const type = thumbnailsWork ? "image/jpeg" : "application/json";
+    return {
+      ok: thumbnailsWork,
+      status: thumbnailsWork ? 200 : 404,
+      headers: { get: (name: string) => (name.toLowerCase() === "content-type" ? type : null) },
+      blob: async () => ({ size: 3, type }),
+    };
   }));
   URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
