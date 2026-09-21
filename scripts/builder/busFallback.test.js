@@ -293,3 +293,60 @@ test('an absent `at` or `channel` still drops out, which is what the filter was 
   assert.ok(body.includes('The alarm itself, unchanged:\n\n---\n\n'), 'and the separators still survive');
   assert.ok(!/\n\n\n/.test(body), 'dropping an optional field must not leave a double gap behind it');
 });
+
+// --- SAVED IS NOT DELIVERED (task 86bc3t0n1) --------------------------------
+//
+// From 2026-09-16 to 2026-09-19 the pipeline shipped nothing for 90 hours.
+// `npm run throughput --check` got the answer right and raised STALLED; the
+// party line refused it; the fallback saved it here, correctly and durably —
+// onto a ticket sitting in `Live` with nobody assigned, which appears in no
+// view anyone opens. The one alarm in the system that worked was invisible.
+//
+// Dane's "what needs me" is ClickUp's own *Assigned to me*, which spans both
+// spaces where a filtered view cannot. That is the second route, and it does
+// not touch the chat API at all.
+
+test('a dropped alarm puts the holding ticket on the operator\'s own list', () => {
+  const start = src.indexOf('async function saveUndeliveredAlarm(');
+  assert.ok(start > -1, 'saveUndeliveredAlarm is gone — re-point this test');
+  const body = src.slice(start, src.indexOf('\n}\n', start));
+  assert.match(body, /assignees: \{ add: \[OPERATOR_ID\], rem: \[\] \}/,
+    'the alarm reaches him through assignment, not through the chat API that was refusing writes');
+  assert.match(body, /assign\.json\.assignees \|\| \[\]\)\.some\(\(a\) => Number\(a\.id\) === OPERATOR_ID\)/,
+    'VERIFIED from the write response — a 200 with the assignee half dropped is a known ClickUp shape');
+});
+
+test('the assignment never turns a delivered alarm into a lost one', () => {
+  const start = src.indexOf('async function saveUndeliveredAlarm(');
+  const body = src.slice(start, src.indexOf('\n}\n', start));
+  const afterReadBack = body.slice(body.indexOf('could not be read back'));
+  // Every exit after the comment has been read back returns ok:true. The alarm
+  // IS delivered by then; downgrading it because a convenience write failed
+  // would make the caller re-post it for ever.
+  const falseExits = afterReadBack.match(/ok: false/g) || [];
+  assert.deepEqual(falseExits, [],
+    'once the comment is read back the alarm is saved — nothing after that may report it lost');
+  assert.match(afterReadBack, /assignedToOperator: false/,
+    'and a failed assignment is REPORTED rather than swallowed');
+});
+
+test('the route line distinguishes saved-and-seen from merely saved', () => {
+  const seen = busFallback.renderRouteLine({
+    via: 'ticket', channel: 'c', why: 'chat 400', url: 'https://t/1', assignedToOperator: true,
+  });
+  assert.match(seen, /Assigned to me/);
+
+  const unseen = busFallback.renderRouteLine({
+    via: 'ticket', channel: 'c', why: 'chat 400', url: 'https://t/1', assignedToOperator: false, assignWhy: 'ClickUp refused the write (HTTP 500)',
+  });
+  assert.match(unseen, /NOBODY HAS BEEN PUT ON IT/);
+  assert.match(unseen, /HTTP 500/, 'the reason travels with the finding, or it cannot be acted on');
+  assert.doesNotMatch(unseen, /Assigned to me/);
+});
+
+test('the holding ticket says why it assigns itself, so nobody quietly unbuilds it', () => {
+  const seed = busFallback.renderFallbackSeed();
+  assert.match(seed, /Assigned to me/);
+  assert.match(seed, /90\s*\n?hours|90 hours/, 'the incident is named, so the reason survives the next reader');
+  assert.match(seed, /Unassign yourself/);
+});

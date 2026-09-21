@@ -1,16 +1,36 @@
 #!/usr/bin/env node
 /**
- * The IO half of loopRunnerGuard: read the tail of a pass log, print ONE
- * integer — the seconds the runner should sleep because of a usage limit, or
- * 0 for "no limit; pace normally". The reason goes to stderr, which the
- * runner appends to the same log, so the sleep is never a mystery.
+ * The IO half of loopRunnerGuard: read the tail of a pass log, print ONE line —
  *
- *   node scripts/loop_runner_delay.mjs <log-file>
+ *   <kind> <seconds>
+ *
+ * `kind` is `ran`, `stood-down` or `blocked`; `seconds` is how long the runner
+ * should sleep because of a usage limit, or 0 for "pace normally". The reason
+ * goes to stderr, which the runner appends to the same log, so neither the
+ * sleep nor the kind is ever a mystery.
+ *
+ *   node scripts/loop_runner_delay.mjs <log-file> [--exit <code>]
+ *
+ * TWO FIELDS, NOT ONE, SINCE 2026-09-20 (task 86bc3t0n1, round 2). This used to
+ * print only the seconds, so the runner had nothing to record about a pass
+ * except "it came back" — and from 2026-09-18 both lanes came back 278 times
+ * having failed to authenticate, beat as healthy every time, and the pipeline
+ * read as fine for 90 hours. The kind is the half that was missing.
+ *
+ * `--exit` IS THE FACT AND IT COMES FIRST. A pass's exit code decides what it
+ * was; the log text is consulted only afterwards, for which kind of failure and
+ * when a limit resets. When `--exit` is not given — running this by hand
+ * against a log, which is how the ticket's own test steps read — the code is
+ * read back off the runner's own END banner in that log. No banner and no flag
+ * means the code is UNKNOWN, which is a third answer and is never rounded down
+ * to zero.
  *
  * NOTHING HERE MAY FAIL THE RUNNER. Every problem — missing file, unreadable
- * tail, a bug in this script — prints 0 and a line saying why, and exits 0.
- * A guard that can kill the loop it guards is the one outcome worse than the
- * blind retries it was written to stop (task 86bbtuje2).
+ * tail, a bug in this script — prints a line and exits 0. A guard that can kill
+ * the loop it guards is the one outcome worse than the blind retries it was
+ * written to stop (task 86bbtuje2). On an internal failure it answers
+ * `blocked 0`: the runner keeps its normal pacing, and a pass this script could
+ * not read about is not recorded as a healthy one.
  *
  * Only THIS pass's output is scanned (`scopeToLastPass`): the log tail still
  * carries the previous pass's lines, and a 2:38am "resets 2:50am" sitting
@@ -39,23 +59,54 @@ function tailOf(file) {
   }
 }
 
-try {
-  const file = process.argv[2];
-  if (!file) {
-    console.error('[loop_runner_delay] no log file given — answering 0 (normal pacing)');
-    console.log(0);
-    process.exit(0);
+/**
+ * One pass over the arguments: the log file, and `--exit <code>` if given.
+ *
+ * `exitCode` is null when the flag is absent OR unparseable — a malformed flag
+ * is a code we do not have, and the one thing it must never become is a zero.
+ */
+function parseArgs(argv) {
+  let file = '';
+  let exitCode = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--exit') {
+      const raw = Number(argv[i + 1]);
+      if (Number.isFinite(raw)) exitCode = raw;
+      i += 1;
+      continue;
+    }
+    if (!argv[i].startsWith('--') && !file) file = argv[i];
   }
-  const scoped = guard.scopeToLastPass(tailOf(file));
-  const decision = guard.limitDelay({ text: scoped, nowMs: Date.now() });
-  if (!decision) {
-    console.log(0);
-    process.exit(0);
-  }
-  console.error(`[loop_runner_delay] ${decision.reason}`);
-  console.log(decision.seconds);
-} catch (err) {
-  console.error(`[loop_runner_delay] could not read the log (${err?.message || err}) — answering 0 (normal pacing)`);
-  console.log(0);
+  return { file, exitCode };
 }
-process.exit(0);
+
+function say(kind, seconds) {
+  console.log(`${kind} ${seconds}`);
+  process.exit(0);
+}
+
+try {
+  const { file, exitCode: fromFlag } = parseArgs(process.argv.slice(2));
+  if (!file) {
+    console.error('[loop_runner_delay] no log file given — answering "blocked 0": no pass was read, so none can be called healthy');
+    say(guard.PASS_BLOCKED, 0);
+  }
+
+  const scoped = guard.scopeToLastPass(tailOf(file));
+  // The flag if the runner gave one; otherwise the END banner this same runner
+  // wrote into the log. Both are the exit code — one passed forward, one read
+  // back — and neither is a guess about the text.
+  const exitCode = fromFlag === null ? guard.exitCodeFromLog(scoped) : fromFlag;
+  if (fromFlag === null) {
+    console.error(exitCode === null
+      ? '[loop_runner_delay] no --exit given and no END banner in this pass — the exit code is unknown'
+      : `[loop_runner_delay] no --exit given; read exit ${exitCode} back off this pass's own END banner`);
+  }
+
+  const outcome = guard.passOutcome({ text: scoped, exitCode, nowMs: Date.now() });
+  if (outcome.reason) console.error(`[loop_runner_delay] ${outcome.reason}`);
+  say(outcome.kind, outcome.sleepSeconds);
+} catch (err) {
+  console.error(`[loop_runner_delay] could not read the log (${err?.message || err}) — answering "blocked 0" (normal pacing, and not recorded as a healthy pass)`);
+  say(guard.PASS_BLOCKED, 0);
+}
