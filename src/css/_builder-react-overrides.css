@@ -4378,30 +4378,6 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--muted, #445465);
 }
 
-/*
- * A RUNTIME NOTE IS A SENTENCE TOO — the offset hint's rule, for the other
- * species of prose in a panel (task 86bbzux9m).
- *
- * `.builder-module-runtime-note` is the "Put a Site Search Results module on
- * the page you point this at" kind of line. It spans the tracks like the hint
- * does, but nothing held its contribution down, so a `max-content` control
- * track grew to fit the SENTENCE: measured at 1440 on Site Search, the
- * control track was 846px — 286px past the `--builder-field-long-max` ceiling
- * W9 sets — and every control in that column was stretched to match.
- *
- * That is W9 and L8 fighting again, and `docs/UI_RULES.md` names the winner:
- * bound the block, never widen the control. Same two lines as the hint —
- * `min-content` holds the intrinsic contribution to the longest word, and
- * `min-width: 100%` lets the note fill its row once the tracks have resolved.
- */
-.builder-react-root .is-lattice .builder-schema-panel-column .builder-module-runtime-note,
-.builder-react-root .is-lattice .builder-schema-panel-column
-  > .builder-schema-bare:has(> .builder-module-runtime-note) {
-  grid-column: 1 / -1;
-  width: min-content;
-  min-width: 100%;
-}
-
 /* Neither title is a row of the lattice — both span the tracks. The
    sub-heading keeps its rule above it, now drawn across the whole column
    rather than around a nested box.
