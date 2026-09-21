@@ -12,6 +12,34 @@ unchanged (the before/after screenshots of every desktop test scene are
 identical), and a new automatic check measures a padded column at phone and
 tablet widths. It was checked on purpose: with the fix taken out, the check fails.
 
+## 2026-09-20 — Every video you own, in one list: Assets › Footage (#730)
+
+The Studio pipeline has been collecting footage into a catalog since the first
+Studio slice, but there was nowhere to see it. Now there is: **Assets ›
+Footage** in the admin app lists every file, grouped by recording session with
+the newest shoot at the top, and inside each shoot the files in the order they
+were recorded. Each one shows a small preview, which device made it, what it
+is for in an edit, how long it is, its picture size, when it was recorded and
+how far through the pipeline it has got. You can search session names and
+filter by device and by date.
+
+The previews are Google Drive's own, because nothing in the pipeline draws
+one and the edit copies live on the Mac Mini where the website cannot reach
+them. A file Drive has not drawn a preview for yet says "No preview yet" rather
+than showing a broken picture. And where a file has not been read for its own
+recording date yet, the date shown is marked with a star and says which date
+it really is — a "recorded" date that is secretly an "added" date would be a
+confident wrong answer.
+
+Alongside it, `docs/STUDIO.md` is the plain-language guide: what happens to a
+video step by step, what every column means, how to tell whether the pipeline
+is running, and what to do when it stops.
+
+A review pass caught two things before this went live, both fixed: switching
+to another client left the first client's footage on screen under the new
+client's name, and the Refresh button never asked again for a preview that
+had not been ready the first time — so "wait a few minutes, then Refresh", the
+very advice in the guide, did nothing until the whole page was reloaded.
 ## 2026-09-20 — A dead pipeline can no longer look like a healthy one (#728)
 
 Between the 16th and the 19th of September nothing reached Live for 90 hours.
