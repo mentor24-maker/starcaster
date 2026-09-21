@@ -400,6 +400,26 @@ as a rule first, then gets a checker where one is possible.
       chrome-seam fix (86bbq065f) does not cover. It is not fixable inside one
       panel: which column lands under which depends on the width, and holding
       wrapped columns to a shared lattice is a generator change across all 22.
+      **Fixed 2026-09-20 (ticket 86bbzzv49) — see the rule below.**
+
+  **L8a — a column that wraps under another shares its field edge**
+  (2026-09-20, ticket 86bbzzv49). When an axis column drops to a second line
+  and lands under another, the two start their fields at the same x. Columns
+  side by side on one line are still separate lattices (W0, per column); only
+  a column STACKED under another — the line above, the same left edge — is
+  held to it. Subgrid cannot do this, because a flex line break is not a grid
+  row and which column lands where depends on the width, so it is measured:
+  `lib/builder-client/builder-stacked-columns.ts` clears, measures the natural
+  layout, and stamps `--lattice-stack-label` on the column with the narrower
+  label track, which the lattice rule turns into a floor
+  (`minmax(floor, max-content)` — it can only widen). It never breaks a line to
+  line a column up: if a floor would wrap one more column, the upper column
+  gives its floor back, and if even that reflows, nothing is floored.
+  `check_panels` measures it (`measureStacks`): every stacked pair's first
+  control-track row must start at the same x, and a run that finds no stacked
+  pair at 1440 is a 2, not a pass. Before the fix it reported 23 stacked pairs
+  off by 5–101px across 1440/1600/1920 — Messaging Topic List's Frame 57px
+  left of Content, exactly as the ticket measured; after it, none.
   **How it is built, and how it is checked (rewritten 8/13).** The first
   cut got the shape right and the mechanism wrong — a fixed `11ch` label
   track, `1fr` fields, an `11rem` button — which is the per-field width W0
