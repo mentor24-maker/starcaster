@@ -42,10 +42,19 @@ function sourceFiles(dir) {
 // ---------------------------------------------------------------------------
 
 test('all four standing tickets are registered', () => {
+  // Five names for four tickets: the team chat is registered under its old
+  // name too (task 86bc0mmyu). Until the first post from new code renames it,
+  // the ticket still reads "Undelivered alarms", and dropping that name here
+  // would make throughput count saving a message as a ticket that shipped.
   assert.deepEqual(
     [...noticeboards.NOTICEBOARD_NAMES].sort(),
-    ['Node roll call', 'Pipeline pause switch', 'Pipeline pulse', 'Undelivered alarms'],
+    ['Node roll call', 'Pipeline pause switch', 'Pipeline pulse', 'Team chat', 'Undelivered alarms'],
   );
+});
+
+test('the team chat is a noticeboard under its new name and its old one', () => {
+  assert.equal(noticeboards.isNoticeboard({ name: 'Team chat' }), true);
+  assert.equal(noticeboards.isNoticeboard({ name: 'Undelivered alarms' }), true);
 });
 
 test('a noticeboard is recognised however ClickUp cases or pads the name', () => {

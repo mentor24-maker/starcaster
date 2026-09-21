@@ -1207,14 +1207,14 @@ test('notify-only watch: saved on the Undelivered alarms ticket IS delivery', ()
   const v = deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: true });
   assert.equal(v.ok, true);
   assert.equal(v.via, 'alarm-ticket');
-  assert.match(relayMarkerText({ ...v, channel: 'c', at: AT }), /^\[bus-relay\] chat unavailable, saved on the "Undelivered alarms" ticket at /,
+  assert.match(relayMarkerText({ ...v, channel: 'c', at: AT }), /^\[bus-relay\] chat unavailable, saved on the "Team chat" ticket at /,
     'the marker must keep the [bus-relay] prefix, or the "already relayed" check retries it forever');
 });
 
 test('notify-only watch: a double refusal is still NOT delivered, says why, and writes no marker', () => {
   const v = deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: false, alarmTicketWhy: 'HTTP 429' });
   assert.equal(v.ok, false);
-  assert.match(v.why, /"Undelivered alarms" ticket refused it too \(HTTP 429\)/);
+  assert.match(v.why, /"Team chat" ticket refused it too \(HTTP 429\)/);
   assert.equal(relayMarkerText({ ...v, channel: 'c', at: AT }), null);
 });
 
@@ -1234,6 +1234,6 @@ test('the relay attempts the alarm ticket on a notify-only watch and reports it 
 
 test('a rehearsal names the alarm-ticket delivery', () => {
   const line = simulationLine({ verdict: { ok: true, via: 'alarm-ticket' }, target: null });
-  assert.match(line, /Undelivered alarms/);
+  assert.match(line, /Team chat/);
   assert.doesNotMatch(line, /INVALID|NOT delivered/);
 });

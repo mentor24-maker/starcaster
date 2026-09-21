@@ -835,7 +835,7 @@ async function postToBus(channel, content, { simulate } = {}) {
  */
 /**
  * Post to the party line, and when it refuses, save the message to the
- * "Undelivered alarms" ticket instead (task 86bbzwxrw). Returns
+ * team chat ticket (busFallback.FALLBACK_TASK_NAME) instead (task 86bbzwxrw). Returns
  * { ok, via: 'chat' | 'ticket' | '', why }.
  *
  * The relay's daily digest and its latch reminder posted with `postToBus`
@@ -899,9 +899,10 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
     // below), `find()` would hand each caller whichever copy its paging turned
     // up first and the record would go on splitting for good. Choosing by
     // creation date is an answer every machine reaches independently.
-    const matches = listed.tasks.filter(
-      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
-    );
+    // Matched under every name it has had (busFallback.isTeamChatTask), so the
+    // ticket that was "Undelivered alarms" is found and renamed below rather
+    // than a second "Team chat" being created beside it (task 86bc0mmyu).
+    const matches = listed.tasks.filter((t) => busFallback.isTeamChatTask(t));
     task = matches.length
       ? matches.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b))
       : null;
@@ -951,9 +952,7 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
     // one call earlier and leaves no ClickUp call in this function that can
     // return a yield dressed as a refusal.
     if (stoppedAtReserve(again)) return stop(again);
-    const all = (again.tasks || []).filter(
-      (t) => String(t.name || '').trim().toLowerCase() === busFallback.FALLBACK_TASK_NAME.toLowerCase(),
-    );
+    const all = (again.tasks || []).filter((t) => busFallback.isTeamChatTask(t));
     if (all.length > 1) {
       const oldest = all.reduce((a, b) => (Number(a.date_created || 0) <= Number(b.date_created || 0) ? a : b));
       console.error(`Two "${busFallback.FALLBACK_TASK_NAME}" tickets exist — two machines fell back at once.`);
@@ -962,9 +961,35 @@ async function saveUndeliveredAlarm({ text, channel, why }) {
     }
   }
 
+  // ── THE RENAME (task 86bc0mmyu) ───────────────────────────────────────────
+  // Dane chose the free plan on 2026-09-21, so this ticket is the team chat now
+  // rather than a holding pen for refused alarms. The first post from new code
+  // renames it and rewrites its description; after that `needsRename` is false
+  // and this costs nothing. Done HERE, not by hand, because a machine still on
+  // the old code finds the ticket by its old name — renamed by hand before
+  // every machine had updated, that machine would create a second one.
+  //
+  // BEST EFFORT: the message is what matters. A rename that fails is reported
+  // on stderr and retried by the next post; it never costs the delivery.
+  if (busFallback.needsRename(task)) {
+    const renamed = await call('PUT', `/api/v2/task/${task.id}`, {
+      name: busFallback.FALLBACK_TASK_NAME,
+      // `markdown_content` on an UPDATE; `markdown_description` is the CREATE
+      // field and PUT ignores it (the `describe` command writes the same way).
+      markdown_content: busFallback.renderFallbackSeed(),
+    });
+    if (stoppedAtReserve(renamed)) return stop(renamed);
+    if (renamed.res.ok) {
+      console.error(`Renamed ticket ${task.id} from "${task.name}" to "${busFallback.FALLBACK_TASK_NAME}".`);
+      task = { ...task, ...(renamed.json && renamed.json.id ? renamed.json : {}), name: busFallback.FALLBACK_TASK_NAME };
+    } else {
+      console.error(`Could not rename ticket ${task.id} to "${busFallback.FALLBACK_TASK_NAME}" (HTTP ${renamed.res.status}); the next post tries again.`);
+    }
+  }
+
   const at = new Date().toISOString();
   const body = busFallback.renderFallbackComment({
-    text, channel, why, node: nodeRoles.thisNode().name, at,
+    text, node: nodeRoles.thisNode().name, at,
   });
   const out = await call('POST', `/api/v2/task/${task.id}/comment`, { comment_text: body, notify_all: false });
   if (stoppedAtReserve(out)) return stop(out);
@@ -1067,10 +1092,10 @@ async function deliverToBus(channel, content, { taskId, target, receipted, simul
   const handsBack = Boolean(taskId && target);
   if (!handsBack) {
     // Not a receipt on this ticket (nothing reads it) — the message itself,
-    // kept whole on the standing "Undelivered alarms" ticket, which is read.
+    // kept whole on the standing team chat ticket (busFallback.FALLBACK_TASK_NAME), which is read.
     // busRelayPlan.deliveryVerdict carries the reasoning (task 86bc0mxv0).
     if (simulate) {
-      console.error('  SIMULATION — would save this on the "Undelivered alarms" ticket (not sent)');
+      console.error(`  SIMULATION — would save this on the "${busFallback.FALLBACK_TASK_NAME}" ticket (not sent)`);
       return answer(deliveryVerdict({ chatOk: false, handsBack: false, alarmTicketAttempted: true, alarmTicketOk: true }));
     }
     const saved = await saveUndeliveredAlarm({ text: content, channel, why: chat.why });
@@ -5059,7 +5084,7 @@ if (cmd === 'whoami') {
           reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — receipted on the ticket instead` });
         }
         if (delivery.via === 'alarm-ticket') {
-          reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — saved on the "Undelivered alarms" ticket instead` });
+          reportBusFailure({ delivered: true, unchecked, busSkipped, line: `${t.id} comment ${c.id}: party line unavailable (${delivery.why}) — saved on the "${busFallback.FALLBACK_TASK_NAME}" ticket instead` });
         }
 
         // Mark relayed by replying on Dane's own comment. Deliberately AFTER
