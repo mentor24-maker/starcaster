@@ -1038,6 +1038,109 @@ function assertSeam(seams, width, baseline) {
   };
 }
 
+/* ---------------------------------------------------------------------------
+ * THE STACK — an axis column that wrapped under another (ticket 86bbzzv49).
+ *
+ * `.is-lattice .builder-schema-panel-columns` wraps: on a narrow panel a
+ * column drops to a second line and lands flush left, directly under the
+ * first. Each column is measured above as its OWN group, and a group always
+ * agrees with itself — so a Frame column starting its fields 57px left of the
+ * Content column above it (Messaging Topic List at 1440) passed this check on
+ * every run. The seam check has the same blind spot one level over: it holds
+ * the chrome to a column, never a column to a column.
+ *
+ * So this reads geometry, like the seam: columns are grouped into lines by
+ * their top edge, and a column is stacked with the one on the line above that
+ * shares its left edge. Those two must start their fields — the first row
+ * that occupies the control track — at the same x. Columns on one line are
+ * separate lattices by rule and are never compared.
+ * ------------------------------------------------------------------------ */
+function measureStacks(page) {
+  return page.evaluate(() => {
+    const EDGE = 2;
+    function controlX(column) {
+      const rows = [...column.querySelectorAll('.builder-module-field, .builder-setting-row, .builder-setting-row-full')]
+        .filter((el) => !el.closest('[data-lattice-pairs]'))
+        .filter((el) => el.closest('.builder-schema-panel-column') === column);
+      for (const f of rows) {
+        if (f.classList.contains('builder-module-field--full')) continue;
+        const label = f.querySelector('.builder-module-field-label, .builder-setting-label');
+        if (!label || !label.getBoundingClientRect().width) continue;
+        let control = f.querySelector('.builder-module-field-control, .builder-setting-value');
+        while (control && control.getBoundingClientRect().width === 0 && control.firstElementChild) {
+          control = control.firstElementChild;
+        }
+        if (!control || control.getBoundingClientRect().width === 0) continue;
+        return {
+          name: (label.textContent || '').trim() || '(unlabelled)',
+          x: Math.round(control.getBoundingClientRect().left)
+        };
+      }
+      return null;
+    }
+    const title = (column) =>
+      ((column.querySelector(':scope > .builder-schema-group-title') || {}).textContent || '').trim() || '(untitled column)';
+
+    const out = [];
+    for (const container of document.querySelectorAll('.is-lattice .builder-schema-panel-columns')) {
+      const panel = container.closest('.is-lattice');
+      const panelName = (
+        [...panel.classList].find((c) => c.startsWith('builder-module-editor--'))?.replace('builder-module-editor--', '')
+        || [...panel.classList].find((c) => c !== 'is-lattice' && c.endsWith('-settings'))
+        || [...panel.classList].find((c) => c !== 'is-lattice')
+        || ''
+      );
+      const columns = [...container.children]
+        .filter((el) => el.classList.contains('builder-schema-panel-column'))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter((c) => c.r.width && c.r.height);
+      const tops = [];
+      for (const t of columns.map((c) => c.r.top).sort((a, b) => a - b)) {
+        if (!tops.length || t - tops[tops.length - 1] > EDGE) tops.push(t);
+      }
+      const line = (c) => tops.findIndex((t) => Math.abs(c.r.top - t) <= EDGE);
+      for (const lower of columns) {
+        const li = line(lower);
+        if (li <= 0) continue;
+        const upper = columns.find((c) => line(c) === li - 1 && Math.abs(c.r.left - lower.r.left) <= EDGE);
+        if (!upper) continue;
+        const a = controlX(upper.el);
+        const b = controlX(lower.el);
+        out.push({
+          panelName,
+          upper: title(upper.el),
+          lower: title(lower.el),
+          upperControl: a,
+          lowerControl: b,
+          off: a && b ? b.x - a.x : null
+        });
+      }
+    }
+    return out;
+  });
+}
+
+function assertStacks(stacks, width) {
+  const failures = [];
+  for (const s of stacks) {
+    if (s.off === null || Math.abs(s.off) <= 1) continue;
+    failures.push(
+      `${width}px (${s.panelName || 'panel'}): the "${s.lower}" column wrapped under "${s.upper}" and starts its `
+      + `fields ${Math.abs(s.off)}px ${s.off > 0 ? 'right' : 'left'} of it — "${s.upper}"'s "${s.upperControl.name}" `
+      + `at x=${s.upperControl.x}, "${s.lower}"'s "${s.lowerControl.name}" at x=${s.lowerControl.x}. `
+      + 'L8: a column stacked under another shares its field edge. The mechanism is '
+      + 'lib/builder-client/builder-stacked-columns.ts, which floors the narrower label track '
+      + '(`--lattice-stack-label`); check it is installed on this panel and that the rule reading it '
+      + 'in src/css/_builder-react-overrides.css still matches.'
+    );
+  }
+  return {
+    failures,
+    compared: stacks.filter((s) => s.off !== null).length,
+    uncomparable: stacks.filter((s) => s.off === null)
+  };
+}
+
 function assertLattice(panels, width) {
   const failures = [];
 
@@ -1864,6 +1967,14 @@ let cardsSeen = 0;
 // has to be able to say whether ITS assertion found anything, and an
 // unrelated W0 or W9 violation must not answer that question for it.
 let seamFailureCount = 0;
+/*
+ * Stacked axis columns (86bbzzv49): how many pairs were compared at each
+ * width, and which could not be (a side with no row in the control track).
+ * Wrapping is width-dependent, so zero at 1920 is normal; zero everywhere
+ * the fixture is known to wrap (1440) is a blind run.
+ */
+const stackByWidth = new Map();    // width -> pairs compared
+const stackUncomparable = new Map(); // "panel: lower under upper" -> widths
 let columnGridsSeen = 0;
 /*
  * Titled-column managers built as ONE flat grid (breadcrumb's trail items).
@@ -1962,6 +2073,15 @@ for (const width of WIDTHS) {
     for (const name of seam.recordedHalfMeasured) {
       if (!seamHalfMeasured.has(name)) seamHalfMeasured.set(name, []);
       seamHalfMeasured.get(name).push(width);
+    }
+
+    const stacks = assertStacks(await measureStacks(page), width);
+    allFailures.push(...stacks.failures);
+    stackByWidth.set(width, stacks.compared);
+    for (const u of stacks.uncomparable) {
+      const key = `${u.panelName}: "${u.lower}" under "${u.upper}"`;
+      if (!stackUncomparable.has(key)) stackUncomparable.set(key, []);
+      stackUncomparable.get(key).push(width);
     }
 
     const columnGrids = await measureColumnGrids(page);
@@ -2068,6 +2188,19 @@ if (seamBlindWidths.length) {
     'landed beside its chrome rather than stacked with it; or that width never opened its\n' +
     'panels at all. The seam note below lists what was skipped and why. An instrument problem\n' +
     'in every case, which is why this is a 2 rather than a 1.');
+}
+
+/*
+ * A STACK CHECK THAT SAW NO STACK AT 1440 IS BLIND, NOT GREEN (86bbzzv49).
+ * The fixture wraps 22 panels at 1440; finding none there means the selector
+ * or the fixture moved, and the assertion above compared nothing.
+ */
+if (WIDTHS.includes(1440) && !(stackByWidth.get(1440) > 0)) {
+  blind.push(
+    'No axis column was found WRAPPED UNDER another at 1440px, so the stacked-column\n' +
+    'check compared nothing. The fixture wraps ~22 panels at that width (Messaging Topic\n' +
+    'List among them); zero means the fixture changed or `.builder-schema-panel-columns`\n' +
+    'stopped matching. An instrument problem, which is why this is a 2 rather than a 1.');
 }
 
 /*
@@ -2230,6 +2363,16 @@ function blindVerdictSentence(code) {
     + '    Read that as a defect in check:panels itself, not as a clean sweep.';
 }
 
+function stackNote() {
+  const counts = WIDTHS.map((w) => `${stackByWidth.get(w) ?? 0} at ${w}px`).join(', ');
+  const lines = [`[check:panels] NOTE — stacked axis columns (one wrapped under another) compared: ${counts}.`];
+  if (stackUncomparable.size) {
+    lines.push(`  ${stackUncomparable.size} stacked pair(s) could NOT be compared — one side has no row in the control track:`);
+    for (const [key, widths] of stackUncomparable) lines.push(`      \u00b7 ${key} [${widths.join('/')}px]`);
+  }
+  return lines.join('\n');
+}
+
 function seamNote(code) {
   const lines = [];
   const recorded = SEAM_BASELINE.length;
@@ -2345,6 +2488,7 @@ if (code === EXIT_FAIL) {
   }
   console.error(`\n${uncomparableNote()}`);
   if (flatGridNote()) console.error(flatGridNote());
+  console.error(stackNote());
   console.error(`${seamNote(code)}\n`);
   console.error(
     '\nW0: one label width and one field width per panel. The two numbers live in\n' +
@@ -2362,6 +2506,7 @@ if (code === EXIT_CANNOT_TELL) {
   // of its code, which this file has already paid for once.
   console.error(`\n${uncomparableNote()}`);
   if (flatGridNote()) console.error(flatGridNote());
+  console.error(stackNote());
   console.error(seamNote(code));
   cannotTell('check:panels', blind.join('\n\n'));
 }
@@ -2373,4 +2518,5 @@ console.log(
 
 console.log(uncomparableNote());
 if (flatGridNote()) console.log(flatGridNote());
+console.log(stackNote());
 console.log(seamNote(code));

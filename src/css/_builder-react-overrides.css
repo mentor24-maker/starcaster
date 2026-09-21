@@ -4654,6 +4654,26 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   flex: 0 0 auto;
 }
 
+/*
+ * A column that wraps under another shares its field edge (ticket 86bbzzv49).
+ *
+ * When the row above wraps, the column that drops lands flush left under the
+ * first column — and each sizes its label track to its own longest label, so
+ * the two put their fields on different vertical lines (Messaging Topic List
+ * at 1440: 57px apart). Which column lands under which depends on the width,
+ * so no selector can name the pair; `lib/builder-client/builder-stacked-columns.ts`
+ * measures it and stamps `--lattice-stack-label` on the column with the
+ * narrower track. Only then does this rule apply, giving that track a floor
+ * equal to its partner's. `minmax(floor, max-content)` can only ever WIDEN
+ * the track, so a column that is never stacked renders exactly as before.
+ *
+ * Matched on the inline style, not inherited: a column nested inside a column
+ * (the video sub-panel) subgrids onto its parent and must not pick it up.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-columns > .builder-schema-panel-column[style*="--lattice-stack-label"] {
+  grid-template-columns: minmax(var(--lattice-stack-label), max-content) max-content;
+}
+
 /* ============================================================== */
 /* AXIS COLUMNS INSIDE A CENTERED MODAL                            */
 /* ============================================================== */
