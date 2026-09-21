@@ -432,12 +432,16 @@ async function runDaemon(options = {}) {
     write: writeOption = null,
     recordBeat = null,
     node = os.hostname(),
+    // A seam, so a test can watch the handle this function OPENS get closed.
+    // "the queue was left open" is otherwise invisible from outside the
+    // process, which is how the leak below survived a review.
+    open = openQueue,
   } = options;
 
   const owner = text(options.owner) || ownerId({ node });
   const queueFile = resolveQueueFile(options, env);
   const logFile = resolveLogFile(options, env);
-  const queue = options.queue || openQueue(queueFile);
+  const queue = options.queue || open(queueFile);
 
   // The default writer IS the file `rotateLog` watches — that wiring is the
   // defect this slice was sent back for, so it is not an option with a

@@ -637,6 +637,90 @@ test('a job merely CLAIMED and left running is work too — the queue moved', as
   q.close();
 });
 
+// ── The two smaller things round 2 named ────────────────────────────────────
+
+test('the queue runDaemon OPENED is the queue runDaemon closes — even with stopAfterTicks set', async () => {
+  // `queue.close()` was nested inside `if (ownsSignals)`, and `ownsSignals` is
+  // false whenever `stopAfterTicks` is set — so the hand-run smoke check this
+  // file's own comment describes opened ~/Studio/queue.sqlite and walked away
+  // from the handle.
+  let closed = 0;
+  const real = openQueue(':memory:');
+  const watched = { ...real, close: () => { closed += 1; real.close(); } };
+
+  await runDaemon({
+    owner: OWNER,
+    runners: {},
+    stopAfterTicks: 1,
+    open: () => watched,
+    queueFile: path.join(tmpdir('close'), 'queue.sqlite'),
+    sleep: async () => {},
+    write: () => {},
+    recordBeat: () => {},
+    logFile: path.join(tmpdir('close2'), 'daemon.log'),
+  });
+
+  assert.equal(closed, 1, 'it opened the queue, so it closes the queue');
+});
+
+test('a queue passed IN is left alone — the caller owns what the caller opened', async () => {
+  let closed = 0;
+  const real = openQueue(':memory:');
+  const passed = { ...real, close: () => { closed += 1; real.close(); } };
+  await runDaemon({
+    queue: passed,
+    owner: OWNER,
+    runners: {},
+    stopAfterTicks: 1,
+    sleep: async () => {},
+    write: () => {},
+    recordBeat: () => {},
+    logFile: path.join(tmpdir('noclose'), 'daemon.log'),
+  });
+  assert.equal(closed, 0, 'closing a handle you were handed pulls it out from under its owner');
+  real.close();
+});
+
+test('the beat is stamped AFTER the tick, so a long job cannot write an already-stale beat', async () => {
+  // A two-hour encode is an ordinary Tuesday here. Stamping with the instant
+  // the tick STARTED writes a beat that is already as old as the job that just
+  // finished — which is the one reading a staleness check must never be given.
+  const q = openQueue(':memory:');
+  q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file-a' });
+  const beats = [];
+  let now = 1_000_000;
+  const TICK_MS = 2 * 60 * 60 * 1000; // the encode
+
+  await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: {
+      ingest: {
+        label: 'ingest',
+        run: async ({ queue, owner }) => {
+          const job = queue.claim(owner, { stages: ['ingest'] });
+          now += TICK_MS; // time passes INSIDE the job
+          if (job) queue.complete(job.id, owner);
+          return { claimed: job ? job.id : null };
+        },
+      },
+    },
+    stopAfterTicks: 1,
+    clock: () => now,
+    sleep: async () => {},
+    write: () => {},
+    recordBeat: (b) => beats.push(b),
+    logFile: path.join(tmpdir('beatafter'), 'daemon.log'),
+  });
+
+  assert.equal(beats.length, 1);
+  assert.equal(beats[0].at, new Date(1_000_000 + TICK_MS).toISOString(),
+    'the beat carries the instant the tick FINISHED, not the instant it began');
+  assert.notEqual(beats[0].at, new Date(1_000_000).toISOString(),
+    'stamping the start would file a beat two hours old the moment it was written');
+  q.close();
+});
+
 test('DEFAULT_LOG_KEEP is a number the installer and the daemon can both rely on', () => {
   assert.ok(Number.isInteger(DEFAULT_LOG_KEEP) && DEFAULT_LOG_KEEP > 0);
 });
