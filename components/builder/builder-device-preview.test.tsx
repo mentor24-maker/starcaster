@@ -8,7 +8,7 @@ import {
   BuilderPreviewDeviceModal,
   PREVIEW_DEVICE_FRAMES,
   previewFrameScale
-} from "./builder-preview-device";
+} from "./builder-device-preview";
 
 /**
  * Preview → Phone / Tablet / Desktop (86bc3yyn0). What the browser check

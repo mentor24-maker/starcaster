@@ -225,7 +225,7 @@ export function imageEffectOptionsFromSource(text) {
 
 /**
  * The Builder's Phone/Tablet preview pop-up sizes, read out of
- * `components/builder/builder-preview-device.tsx` rather than copied here, so
+ * `components/builder/builder-device-preview.tsx` rather than copied here, so
  * the check and the pop-up can never measure two different phones
  * (86bc3yyn0). Returns {} when the block cannot be found — the harness then
  * FAILS the embed contracts rather than measuring at a guessed width.
@@ -1054,7 +1054,7 @@ export const RENDER_CONTRACTS = [
    * (86bc3xrhz) only showed at real phone width.
    *
    * `emulate.embedFrame` names a device; the harness reads its size out of
-   * builder-preview-device.tsx, hosts the embed page in an iframe that size,
+   * builder-device-preview.tsx, hosts the embed page in an iframe that size,
    * and measures INSIDE it. Selectors deliberately carry no frame class:
    * inside the embed there must be no frame, so these pass only on the real
    * media rules.

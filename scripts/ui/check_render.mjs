@@ -51,7 +51,7 @@ const require = createRequire(path.join(ROOT, 'package.json'));
 
 // The Builder's Phone/Tablet pop-up sizes (86bc3yyn0), read from the component
 // that draws the pop-up so the check measures the same phone it shows.
-const PREVIEW_DEVICE_SOURCE = 'components/builder/builder-preview-device.tsx';
+const PREVIEW_DEVICE_SOURCE = 'components/builder/builder-device-preview.tsx';
 const PREVIEW_DEVICE_FRAMES = previewDeviceFramesFromSource(
   await readFile(path.join(ROOT, PREVIEW_DEVICE_SOURCE), 'utf8').catch(() => '')
 );

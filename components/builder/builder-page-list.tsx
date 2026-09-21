@@ -2,7 +2,7 @@ import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary,
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
-import { BuilderPreviewDeviceMenu } from "./builder-preview-device";
+import { BuilderPreviewDeviceMenu } from "./builder-device-preview";
 import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import { PAGE_SEARCH_PRIORITIES } from "@/lib/page-search-priority";
 import { buildBuilderThemePaletteColors, builderThemeToCrmPalette, formatTemplateTimestamp, getThemeFormControlVars, getThemeShellBackgroundSeedColor } from "./builder-utils";

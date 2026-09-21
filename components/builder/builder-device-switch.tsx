@@ -16,7 +16,7 @@ import {
  */
 const DEVICE_ORDER: BuilderEditorStyleDevice[] = ["phone", "tablet", "desktop"];
 
-/** Exported so the Preview menu (builder-preview-device.tsx) draws the same pictures. */
+/** Exported so the Preview menu (builder-device-preview.tsx) draws the same pictures. */
 export function DeviceIcon({ device }: { device: BuilderEditorStyleDevice }) {
   if (device === "phone") {
     return (

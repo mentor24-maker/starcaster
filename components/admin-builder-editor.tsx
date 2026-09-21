@@ -112,7 +112,7 @@ import {
   type SharedBlockSaveChoice
 } from "./builder/builder-shared-block-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
-import { BuilderPreviewDeviceModal, type BuilderPreviewFrameDevice } from "./builder/builder-preview-device";
+import { BuilderPreviewDeviceModal, type BuilderPreviewFrameDevice } from "./builder/builder-device-preview";
 import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import {
   BuilderModulePaletteModal,
