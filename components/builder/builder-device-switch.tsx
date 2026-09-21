@@ -16,7 +16,8 @@ import {
  */
 const DEVICE_ORDER: BuilderEditorStyleDevice[] = ["phone", "tablet", "desktop"];
 
-function DeviceIcon({ device }: { device: BuilderEditorStyleDevice }) {
+/** Exported so the Preview menu (builder-preview-device.tsx) draws the same pictures. */
+export function DeviceIcon({ device }: { device: BuilderEditorStyleDevice }) {
   if (device === "phone") {
     return (
       <svg aria-hidden="true" viewBox="0 0 16 16" width="11" height="15">

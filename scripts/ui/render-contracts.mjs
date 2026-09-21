@@ -223,6 +223,23 @@ export function imageEffectOptionsFromSource(text) {
     .filter((value) => value !== 'none');
 }
 
+/**
+ * The Builder's Phone/Tablet preview pop-up sizes, read out of
+ * `components/builder/builder-preview-device.tsx` rather than copied here, so
+ * the check and the pop-up can never measure two different phones
+ * (86bc3yyn0). Returns {} when the block cannot be found — the harness then
+ * FAILS the embed contracts rather than measuring at a guessed width.
+ */
+export function previewDeviceFramesFromSource(text) {
+  const block = text.match(/PREVIEW_DEVICE_FRAMES[^=]*=\s*\{([\s\S]*?)\n\};/);
+  if (!block) return {};
+  const frames = {};
+  for (const m of block[1].matchAll(/(\w+):\s*\{\s*width:\s*(\d+),\s*height:\s*(\d+)\s*\}/g)) {
+    frames[m[1]] = { width: Number(m[2]), height: Number(m[3]) };
+  }
+  return frames;
+}
+
 /** Structural wrappers, not effects — they carry no `starcaster-effect-<name>` meaning. */
 const EFFECT_STRUCTURE_CLASSES = new Set(['motion-clip', 'motion-stage', 'hop-stage']);
 
@@ -1024,6 +1041,77 @@ export const RENDER_CONTRACTS = [
         ? null
         : `the phone frame rendered padding-top ${sample.styles.paddingTop} for a row whose Phone padding-top is 60 — the frame is not reading the row's own device values.`;
     },
+  },
+
+  /*
+   * THE BUILDER'S PHONE / TABLET POP-UP (86bc3yyn0).
+   *
+   * The pop-up is an iframe of `builder-preview.html?embed=1` whose width IS
+   * the device, instead of the preview page's phone frame. That is the whole
+   * point of it: a frame is a narrow box in a wide window and only gets the
+   * mirror CSS, while an iframe 390px wide gets the real phone media rules —
+   * the ones a visitor's phone gets. The Delray headline that split mid-word
+   * (86bc3xrhz) only showed at real phone width.
+   *
+   * `emulate.embedFrame` names a device; the harness reads its size out of
+   * builder-preview-device.tsx, hosts the embed page in an iframe that size,
+   * and measures INSIDE it. Selectors deliberately carry no frame class:
+   * inside the embed there must be no frame, so these pass only on the real
+   * media rules.
+   */
+  {
+    id: 'preview-embed-phone-width-gets-phone-rules',
+    why:
+      'The Phone pop-up must show what a phone shows. A row with Phone top padding 60 has to read 60 ' +
+      'inside a 390px embed with NO phone frame around it — i.e. from the real `max-width` media rule. ' +
+      'If the embed page ever drew its own frame again, or the pop-up width drifted above the phone ' +
+      'breakpoint, this reads 18 or 30 (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { embedFrame: 'phone' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `inside the Phone pop-up's iframe the row rendered padding-top ${sample.styles.paddingTop}, not its Phone value 60 — the pop-up is not getting the real phone rules.`;
+    },
+  },
+  {
+    id: 'preview-embed-tablet-width-gets-tablet-rules',
+    why:
+      'Same for Tablet: inside the 820px embed the row must read its Tablet padding 30 — not the ' +
+      'desktop 18, and not the phone 60 (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { embedFrame: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `inside the Tablet pop-up's iframe the row rendered padding-top ${sample.styles.paddingTop}, not its Tablet value 30.`;
+    },
+  },
+  {
+    id: 'preview-embed-has-no-frame',
+    why:
+      'The embed must not wrap the page in the preview\'s own phone frame — a frame inside the pop-up ' +
+      'is a phone inside a phone, and swaps the real media rules for the mirror CSS. Paired with the ' +
+      'two presence contracts above, which prove the embed rendered at all (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-frame',
+    absent: true,
+    emulate: { embedFrame: 'phone', storedDevice: 'mobile' },
+  },
+  {
+    id: 'preview-embed-has-no-strip',
+    why:
+      'The embed hides the preview page\'s own yellow strip (Desktop/Tablet/Mobile buttons and Close); ' +
+      'the pop-up has its own header, and a second set of device buttons inside it would contradict ' +
+      'the one the operator just chose (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-strip',
+    absent: true,
+    emulate: { embedFrame: 'phone' },
   },
 
   /*

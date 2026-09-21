@@ -7392,6 +7392,122 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: 24px 12px;
 }
 
+/* ------------------------------------------------------------------ *
+ * Preview → Phone / Tablet / Desktop (86bc3yyn0)
+ *
+ * The menu under Page Details' Preview button, and the pop-up that shows a
+ * phone or tablet over the editor. The pop-up holds an iframe whose WIDTH is
+ * the device (set inline from PREVIEW_DEVICE_FRAMES), so the page inside gets
+ * the real phone/tablet media rules. Only its picture is scaled to fit a short
+ * window — never its layout width.
+ * ------------------------------------------------------------------ */
+.builder-react-root .builder-preview-device-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.builder-react-root .builder-preview-device-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-device-menu-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-primary, #1a1a1a);
+  font: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-device-menu-item:hover,
+.builder-react-root .builder-preview-device-menu-item:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.builder-react-root .builder-preview-device-menu-icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 20px;
+}
+
+.builder-react-root .builder-preview-device-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 20, 0.72);
+}
+
+.builder-react-root .builder-preview-device-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.builder-react-root .builder-preview-device-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--ink-primary, #1a1a1a);
+  font-size: var(--text-base);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-preview-device-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-preview-device-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-preview-device-stage {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-preview-device-iframe {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
+}
+
 .builder-react-root .builder-preview-empty {
   max-width: 640px;
   margin: 15vh auto;
