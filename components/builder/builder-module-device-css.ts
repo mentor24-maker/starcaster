@@ -73,7 +73,23 @@ function declarations(style: CSSProperties): string[] {
 }
 
 /** Where each group of declarations goes, relative to the module's scope. */
-type TargetSuffix = "" | " > *" | " > *, SCOPE > * *" | " .builder-preview-poll-category-list-items";
+type TargetSuffix =
+  | ""
+  | " > *"
+  | " > *, SCOPE > * *"
+  | " .builder-preview-poll-category-list-items"
+  | typeof HEADING_INLINE_SIZED;
+
+/**
+ * The pieces of a heading that carry a size of their OWN — a word the rich
+ * text toolbar sized, which it writes as `<span style="font-size: 88px">`.
+ * An inline style beats a size set on the heading, so a device font size that
+ * lands only on the heading changes nothing a visitor can see: Delray's hero
+ * headline had every word sized that way, and its Phone Font Size did nothing
+ * while "Champions" split mid-word on a phone (86bc3xrhz). They follow the
+ * heading instead. Colour and weight on the same span are untouched.
+ */
+const HEADING_INLINE_SIZED = ' > * [style*="font-size"]';
 
 /** Font size lands on a different element for each of the three types. */
 function fontSizeTarget(type: string): TargetSuffix | null {
@@ -161,6 +177,10 @@ function deviceDeclarations(
       root.marginBottom = transform && offsetY > 0 ? `-${offsetY}px` : "0px";
     }
   }
+  if (type === "heading") {
+    if (changed.has("lineHeight")) root.lineHeight = values.lineHeight;
+    if (changed.has("letterSpacing")) root.letterSpacing = `${values.letterSpacing}px`;
+  }
   if (changed.has("size")) {
     const width = getTextModuleWidthStyle(resolved);
     Object.assign(root, {
@@ -175,6 +195,7 @@ function deviceDeclarations(
   if (changed.has("fontSize")) {
     const target = fontSizeTarget(type);
     if (target) add(target, { fontSize: `${values.fontSize}px` });
+    if (type === "heading") add(HEADING_INLINE_SIZED, { fontSize: "inherit" });
   }
 
   // `changed` already carries both halves: desktop `hidden` is always "false",
@@ -208,7 +229,14 @@ export function buildModuleDeviceCss(module: BuilderTemplateModule, scope: strin
   const rules: string[] = [];
 
   const tabletBlock = ruleBlock(scope, tablet.byTarget);
-  if (tabletBlock) rules.push(`@media (max-width:${BUILDER_TABLET_MAX_WIDTH}px){${tabletBlock}}`);
+  if (tabletBlock) {
+    rules.push(`@media (max-width:${BUILDER_TABLET_MAX_WIDTH}px){${tabletBlock}}`);
+    // The preview's Tablet frame is a box on a wide screen, like the phone
+    // frame, so it needs its own copy — rows already emit one
+    // (`builder-device-css.ts`). Without it a module's Tablet setting showed
+    // nowhere the operator could look before publishing.
+    rules.push(ruleBlock(scope, tablet.byTarget, ".builder-preview-device-tablet "));
+  }
   if (tablet.hidden) {
     // A tablet hide normally applies at phone width too, because a phone
     // follows its tablet. When the phone shows the module again the hide is
@@ -219,6 +247,7 @@ export function buildModuleDeviceCss(module: BuilderTemplateModule, scope: strin
       ? `(max-width:${BUILDER_TABLET_MAX_WIDTH}px)`
       : `(min-width:${BUILDER_PHONE_MAX_WIDTH + 1}px) and (max-width:${BUILDER_TABLET_MAX_WIDTH}px)`;
     rules.push(`@media ${query}{${selector}{display:none !important}}`);
+    rules.push(`.builder-preview-device-tablet ${selector}{display:none !important}`);
   }
 
   const frame = ".builder-preview-device-mobile ";
