@@ -1,3 +1,17 @@
+## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
+
+On a phone, the paragraph under the Delray home page's big headline ran off the
+right edge of the screen. The ticket suspected the wide button table in the
+column beside it. That was not it: the table already scrolls sideways in its own
+box. The real cause was an old sizing rule. When a two-column row stacks on a
+phone, each column is told to be the full width of the screen, and the column's
+own padding was then added **on top** of that. So a column with 18px of padding
+on each side came out 36px wider than the phone, on every site and not only
+Delray. The fix makes the padding count inside the column's width. Desktop is
+unchanged (the before/after screenshots of every desktop test scene are
+identical), and a new automatic check measures a padded column at phone and
+tablet widths. It was checked on purpose: with the fix taken out, the check fails.
+
 ## 2026-09-20 — A dead pipeline can no longer look like a healthy one (#728)
 
 Between the 16th and the 19th of September nothing reached Live for 90 hours.
