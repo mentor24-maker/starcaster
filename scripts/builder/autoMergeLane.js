@@ -172,6 +172,13 @@ const GOVERNANCE_STEMS = [
   'pipelinePauseStore',
   'loopStatuses',
   'taskRepo',
+  // The matcher a gate's verdict is computed from. `check_vercel_bundle` is
+  // already governance by the `scripts/check_` prefix, and it decides whether
+  // `workers/` can reach the Vercel bundle entirely by asking this module
+  // whether a path is excluded — so a lane that could carry this file without
+  // Dane could weaken that gate to a permanent pass while the gate itself
+  // stayed untouched and green.
+  'vercelIgnore',
   // The referee: what counts as a review PASS, and what a send-back is.
   'reviewGate',
   'review_gate',

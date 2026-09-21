@@ -19,6 +19,74 @@ never reaches it and it has its own copy of the column rule, which the first
 round missed. That copy now gets the same fix, and a second automatic check
 measures a padded column inside the Phone preview itself.
 
+## 2026-09-20 — The Studio pipeline finally has something that runs it (#729)
+
+The Studio work has had a queue and five kinds of job since August, and nothing
+that actually does them — every piece so far was a function somebody had to
+call by hand. This is the process that sits on the Mac Mini and just keeps
+going: wake up, ask the queue whether anything is waiting, do one job, say
+"still alive", sleep, repeat.
+
+Three things go wrong on a machine nobody is watching, and each one now has an
+answer. If a piece of work blows up, the daemon catches it, writes down what
+happened against that specific job, and carries on — one bad video does not
+stop the line. If the whole process dies, macOS starts it again, and the job it
+was holding comes back on its own a minute later, without anybody noticing it
+was gone. And if the daemon stops running altogether — the quiet failure, the
+one that looks exactly like a slow week — it checks in every five minutes, so
+its silence is something a watchdog can see. That watchdog is deliberately left
+switched OFF for now, with the reason written down, because the daemon cannot
+be installed until the Mac Mini is reachable and an alarm nobody can clear for
+eleven days just teaches everyone to ignore alarms. The roster says "not
+reporting, and here is why" — never "healthy".
+
+It also keeps its own diary, and that part had to be fixed before this could
+ship. The first version capped the size of one file and wrote everything into a
+different one, so the file being watched was never created at all and the file
+that grew had no limit on it. It now writes the same file it caps, and — the
+part that is easy to get wrong — it reopens that file every time it rolls it
+over, or everything after the first rollover would quietly pour into the
+archived copy instead. The status command used to say "nothing written yet" on
+a perfectly healthy machine forever; it now says which of the two real reasons
+applies.
+
+The other half of this is about keeping all of it OFF the live website's
+servers. The Studio code drives video tools over files that are gigabytes each;
+it has no business in the bundle that serves starcaster.pro, which is already
+too big and is part of why pages sometimes take a few seconds to wake up. There
+is now a file telling the host to leave that folder behind — and, more to the
+point, a check that runs on every change and fails if that file quietly stops
+working. Both of the realistic ways it stops working were tried on purpose:
+commenting the rule out, and adding a line that undoes it lower down. Both read
+perfectly fine to a human eye and both now fail the build.
+
+A second review round caught two more things, both of which would only have
+shown up on the Mac Mini, and one of which would have been ugly. The daemon
+decided "I did a job" from whether the ingest step finished without crashing —
+not from whether any work actually happened. The ingest step has five reasons
+it can decline to start at all, and the most likely one of those is a piece of
+configuration that is missing until somebody sets it up on that machine. So on
+the very first run on the Mini, the daemon would have declined the work,
+congratulated itself on having done it, and gone straight back round: four
+times a second, forever, writing four cheerful lies a second into the very log
+this round just taught it to cap — which would have wiped the whole log history
+in minutes. It now asks the queue whether anything moved, and if nothing did it
+says so plainly, says how many jobs are still waiting, and takes the long nap
+instead of the short one.
+
+The other one: the status command asks macOS whether the job is loaded, and the
+way it asked was wrong every single time — it reported a running daemon as not
+running. Worse, it then printed a confident sentence saying the daemon had
+never run on this machine. That is the same kind of untrue-but-reassuring
+reading this ticket was sent back for once already, so it was worth catching.
+It asks a different way now, and there is a test that proves a genuinely
+running job reports as running.
+
+One thing is NOT done and is worth knowing: the daemon is not switched on
+anywhere yet. Turning it on needs a shell on the Mac Mini, and that machine
+cannot be reached until Dane is home at the start of October. Until then the
+job roster will honestly report the Studio worker as not running, which it is
+not.
 ## 2026-09-20 — Every video you own, in one list: Assets › Footage (#730)
 
 The Studio pipeline has been collecting footage into a catalog since the first
