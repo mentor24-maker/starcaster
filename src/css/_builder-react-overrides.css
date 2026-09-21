@@ -7495,6 +7495,8 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-preview-device-stage {
+  /* The header can be wider than a phone; keep the phone centred under it. */
+  align-self: center;
   position: relative;
   overflow: hidden;
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.15));
