@@ -446,6 +446,109 @@ export const RENDER_DIFFERENTIALS = [
 export const RENDER_CONTRACTS = [
 
   /*
+   * A PADDED COLUMN IN A STACKED ROW FITS THE SCREEN (task 86bc3y0ue).
+   *
+   * Stacked columns get `width: 100%` below 1024px. As content-box, the
+   * column's own padding went on top of that, so every padded column was
+   * twice its side padding wider than the phone — the Delray home hero's
+   * paragraph ran off the right edge at 390px. The wide table beside it was
+   * the obvious suspect and was innocent: it already scrolls in its own
+   * wrapper. It rides along here so that stays true.
+   */
+  ...[390, 900].map((width) => ({
+    id: `stacked-padded-column-fits-the-screen-at-${width}`,
+    why:
+      'A two-column row stacks below 1024px and each column fills the width. With 24px of column ' +
+      'padding the column must still be no wider than the screen, or its text runs off the edge.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'stack',
+      cellPadding: { left: '24', right: '24' },
+      modules: [
+        {
+          type: 'text',
+          column: 'left',
+          text: '<p>Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.</p>',
+          settings: {},
+        },
+        { type: 'table', column: 'right', settings: { columns: '6', columnsCount: '6' } },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column > .builder-preview-column',
+    read: ['boxSizing'],
+    emulate: { viewport: { width, height: 900 } },
+    expect(sample) {
+      const { clientWidth, scrollWidth } = sample.page;
+      if (sample.box.width > clientWidth) {
+        return `a stacked column with 24px padding measured ${sample.box.width}px on a ${clientWidth}px screen ` +
+          `(box-sizing ${sample.styles.boxSizing}) — its padding is being added on top of the full width.`;
+      }
+      return scrollWidth > clientWidth
+        ? `the page is ${scrollWidth}px wide on a ${clientWidth}px screen — something in the stacked row is wider than the phone.`
+        : null;
+    },
+  })),
+
+  /*
+   * THE SAME, INSIDE THE BUILDER'S PHONE FRAME (round 2 of 86bc3y0ue).
+   *
+   * The Phone frame is a 390px box in a WIDE window, so the media query the
+   * contracts above exercise is false inside it and the frame has its own
+   * class-keyed column rule. Round 1 fixed the media-query path only; the
+   * frame still measured a 394px column in a 390px box, and the frame is
+   * exactly where the ticket told Dane to look. The window is left at its
+   * default desktop width on purpose — that is the case being tested.
+   */
+  {
+    id: 'stacked-padded-column-fits-the-phone-frame',
+    why:
+      'The Builder\'s Phone preview is a class-keyed frame in a desktop-width window. A padded ' +
+      'stacked column inside it must fit the frame, or the preview shows text running off the edge ' +
+      'that the live phone site no longer has.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'stack',
+      cellPadding: { left: '24', right: '24' },
+      modules: [
+        {
+          type: 'text',
+          column: 'left',
+          text: '<p>Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.</p>',
+          settings: {},
+        },
+        { type: 'table', column: 'right', settings: { columns: '6', columnsCount: '6' } },
+      ],
+    },
+    selector: '.builder-preview-device-mobile .builder-preview-section-layout-two-column > .builder-preview-column',
+    read: ['boxSizing'],
+    emulate: { previewDevice: 'mobile' },
+    probes: {
+      fit: {
+        subject: '.builder-preview-device-mobile .builder-preview-section-layout-two-column > .builder-preview-column',
+        against: '.builder-preview-device-mobile .builder-preview-section-layout-two-column',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.fit;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` — the Phone frame did not render the stacked row, ` +
+          'so this contract can no longer fail for the right reason.';
+      }
+      if (!(probe.overlap > 0)) {
+        return 'the column and its row do not overlap at all, so the comparison below would mean nothing.';
+      }
+      const over = probe.subjectBox.right - probe.againstBox.right;
+      return over > 0
+        ? `a stacked column with 24px padding reaches ${over}px past the right edge of its row in the Phone ` +
+          `frame (column ${probe.subjectBox.left}-${probe.subjectBox.right}, row ${probe.againstBox.left}-` +
+          `${probe.againstBox.right}, box-sizing ${sample.styles.boxSizing}) — the frame's column rule is adding ` +
+          'its padding on top of the full width.'
+        : null;
+    },
+  },
+
+  /*
    * TABLET AND PHONE ROW STYLES (device styles 1 of 6, task 86bc13a6v).
    *
    * A row's styles are inline, and an inline style cannot say "on phones

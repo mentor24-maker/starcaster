@@ -143,6 +143,12 @@ function documentForSection({
   // desktop padding they differ from, and the legacy per-cell "Hide on
   // Mobile" they had to keep working (device styles 2 of 4, task 86bc14pey).
   cellPaddingTop,
+  /*
+   * The legacy all-sides column padding, which is the one a stacked column
+   * needs to overflow: a column with no side padding fits its track whatever
+   * its box-sizing, so a fixture without this cannot see 86bc3y0ue at all.
+   */
+  cellPadding,
   cellDeviceOverrides,
   cellMobileHidden,
   /*
@@ -201,6 +207,7 @@ function documentForSection({
     ...(paddingTop ? { paddingTop } : {}),
     ...(deviceOverrides ? { deviceOverrides } : {}),
     ...(cellPaddingTop ? { cellPaddingTop } : {}),
+    ...(cellPadding ? { cellPadding } : {}),
     ...(cellDeviceOverrides ? { cellDeviceOverrides } : {}),
     ...(cellMobileHidden ? { cellMobileHidden } : {}),
     ...(cellBorderWidth ? { cellBorderWidth } : {}),
