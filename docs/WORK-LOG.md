@@ -12,6 +12,13 @@ unchanged (the before/after screenshots of every desktop test scene are
 identical), and a new automatic check measures a padded column at phone and
 tablet widths. It was checked on purpose: with the fix taken out, the check fails.
 
+A review pass sent it back once: the Builder's own Phone preview — the exact
+place the ticket said to look — still showed the text cut off. That preview is
+a phone-sized box drawn inside a full-size window, so the phone-width rule
+never reaches it and it has its own copy of the column rule, which the first
+round missed. That copy now gets the same fix, and a second automatic check
+measures a padded column inside the Phone preview itself.
+
 ## 2026-09-20 — Every video you own, in one list: Assets › Footage (#730)
 
 The Studio pipeline has been collecting footage into a catalog since the first
