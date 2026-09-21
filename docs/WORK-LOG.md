@@ -39,6 +39,28 @@ working. Both of the realistic ways it stops working were tried on purpose:
 commenting the rule out, and adding a line that undoes it lower down. Both read
 perfectly fine to a human eye and both now fail the build.
 
+A second review round caught two more things, both of which would only have
+shown up on the Mac Mini, and one of which would have been ugly. The daemon
+decided "I did a job" from whether the ingest step finished without crashing —
+not from whether any work actually happened. The ingest step has five reasons
+it can decline to start at all, and the most likely one of those is a piece of
+configuration that is missing until somebody sets it up on that machine. So on
+the very first run on the Mini, the daemon would have declined the work,
+congratulated itself on having done it, and gone straight back round: four
+times a second, forever, writing four cheerful lies a second into the very log
+this round just taught it to cap — which would have wiped the whole log history
+in minutes. It now asks the queue whether anything moved, and if nothing did it
+says so plainly, says how many jobs are still waiting, and takes the long nap
+instead of the short one.
+
+The other one: the status command asks macOS whether the job is loaded, and the
+way it asked was wrong every single time — it reported a running daemon as not
+running. Worse, it then printed a confident sentence saying the daemon had
+never run on this machine. That is the same kind of untrue-but-reassuring
+reading this ticket was sent back for once already, so it was worth catching.
+It asks a different way now, and there is a test that proves a genuinely
+running job reports as running.
+
 One thing is NOT done and is worth knowing: the daemon is not switched on
 anywhere yet. Turning it on needs a shell on the Mac Mini, and that machine
 cannot be reached until Dane is home at the start of October. Until then the
