@@ -63,11 +63,20 @@ const DEFAULT_REAP_EVERY_MS = 60 * 1000;
  * How often a beat is written.
  *
  * Five minutes, against a declared cadence of one hour in lib/nodeHeartbeat.js
- * and therefore a six-hour silence threshold. The gap is deliberate and it is
- * the same shape the loop lanes use: beating far oftener than the threshold
- * means a single slow job — a two-hour encode of a wedding video is an ordinary
- * Tuesday here — can never be mistaken for a dead daemon. It is a file write to
- * the local disk, so the cost of the margin is nothing.
+ * and therefore a six-hour silence threshold. The margin is deliberate, and it
+ * covers tick JITTER — a tick that took longer than usual, a machine briefly
+ * busy — for the cost of a local file write, which is nothing.
+ *
+ * WHAT IT DOES NOT COVER, and an earlier version of this comment claimed it
+ * did: a single slow job. The beat is written BETWEEN ticks, so nothing at all
+ * is written while the loop is inside a stage — and a two-hour encode of a
+ * wedding video is an ordinary Tuesday here. Beating oftener cannot help with
+ * that; only beating from inside the job can, which is a stage-level change
+ * this slice does not make. It costs nothing today because the role is parked
+ * (NOT_REPORTING_WHY -> `studio-worker`) and no alarm reads these beats yet.
+ * IT IS THE CONDITION TO SETTLE BEFORE THE ROLE GRADUATES: with the encode
+ * stage wired in, a healthy daemon doing exactly its job would breach a
+ * six-hour threshold, which is a false alarm and the far side of DOCTRINE 3.3.
  */
 const DEFAULT_BEAT_EVERY_MS = 5 * 60 * 1000;
 
@@ -249,6 +258,44 @@ function openLogWriter(file, { io = fs, stdout = process.stdout } = {}) {
 }
 
 /**
+ * WHAT THE QUEUE SAYS ABOUT ONE STAGE, in a form two readings can be compared by.
+ *
+ * This exists because "the runner returned without throwing" is NOT the same
+ * question as "a unit of work happened", and the daemon used to treat them as
+ * one. `runIngest` has five early returns that file a health row and return a
+ * report — no throw — leaving the pending job pending and immediately due:
+ * `STUDIO_PROJECT_ID` unset, a junk disk floor, junk Drive timeouts, a cache
+ * disk `statfs` cannot read, and free space under the floor. The first of those
+ * is the likeliest state of the Mini the first time this daemon is installed.
+ * On that reading the daemon logged "ran one ingest job", slept the BUSY 250ms
+ * and came straight back — four ticks a second, forever, each one writing a
+ * `queue.block` row, pegging a core on the machine that is meant to be encoding
+ * video, and rolling the whole log history away in minutes while every line
+ * claimed work that never happened. Found by review round 2 of 86bbjv68y.
+ *
+ * So the verdict is taken from the QUEUE, which cannot be fooled by a return
+ * value. Non-terminal jobs are fingerprinted individually — a claim, a settle,
+ * a retry and a backoff all move one of these fields — and terminal ones are
+ * counted, so a job completing during the tick changes the reading too.
+ *
+ * SCOPED TO THE STAGE THAT RAN, deliberately. `stopThePass` writes its health
+ * row under a DIFFERENT stage, so a whole-queue reading would see that write
+ * and call it work — which is the very hot loop this is here to stop.
+ */
+function stageFingerprint(queue, stage) {
+  const live = [];
+  let settled = 0;
+  for (const job of queue.listJobs({ stage })) {
+    if (job.state === STATES.PENDING || job.state === STATES.RUNNING) {
+      live.push(`${job.id}:${job.state}:${job.attempts}:${job.recoveries}:${job.runAfter}:${job.leaseOwner}`);
+    } else {
+      settled += 1;
+    }
+  }
+  return `${settled}|${live.join(',')}`;
+}
+
+/**
  * ONE TICK. Reap, find a stage with work due, run one job of it, report.
  *
  * Pure of timers and of process state, so the tests drive it directly rather
@@ -269,7 +316,11 @@ async function tickOnce({
     owner,
     reaped: null,
     stage: null,
+    // `ranStage` is "a runner was called"; `worked` is "the queue moved". They
+    // are different questions and conflating them is defect 1 above.
+    ranStage: false,
     worked: false,
+    stillDue: 0,
     result: null,
     error: null,
     failedJobs: [],
@@ -295,9 +346,13 @@ async function tickOnce({
     const due = queue.waiting({ stage });
     if (!due || due.dueNow <= 0) continue;
     report.stage = stage;
+    report.ranStage = true;
+    const before = stageFingerprint(queue, stage);
     try {
       report.result = await runners[stage].run({ queue, owner, env, now });
-      report.worked = true;
+      // NOT `true`. See stageFingerprint above: a runner that returns having
+      // claimed nothing has not worked, and saying it did costs the busy sleep.
+      report.worked = stageFingerprint(queue, stage) !== before;
     } catch (err) {
       // A STAGE THAT THREW IS NOT A LANE THAT STOPS. The pass owns settling its
       // own job and did not get to; anything still leased to THIS daemon is
@@ -315,6 +370,12 @@ async function tickOnce({
     break; // one unit of work per tick; the loop comes straight back round
   }
 
+  // Asked AFTER the runner, so a tick that ran a stage and moved nothing can
+  // say how much is still sitting there rather than printing "nothing due",
+  // which would be flatly false (DOCTRINE 5.31 — an empty reading that does
+  // not say why reads as a broken one).
+  if (report.stage) report.stillDue = queue.waiting({ stage: report.stage }).dueNow;
+
   return report;
 }
 
@@ -331,6 +392,14 @@ function formatTick(report) {
       : 'no job was left leased to this daemon, so nothing needed failing — the daemon is still running');
   } else if (report.worked) {
     parts.push(`ran one ${report.stage} job`);
+  } else if (report.ranStage) {
+    // THE THIRD OUTCOME, and the one that used to be invisible. The stage had
+    // work due and its runner declined it without throwing — the shape
+    // `runIngest` takes when it cannot start at all. "nothing due" here would
+    // be a lie about a queue with jobs in it, and "ran one job" was the lie it
+    // actually told, so say the true thing and name where the reason is.
+    parts.push(`the ${report.stage} stage ran and claimed nothing — ${report.stillDue} job(s) still due`);
+    parts.push('nothing moved, so the reason is on the queue, not here: read the blocked rows for this stage (the ingest health row names a missing STUDIO_PROJECT_ID, an unreadable cache disk or a full one)');
   } else if (!report.unhandled.length) {
     parts.push('nothing due');
   }
@@ -423,11 +492,17 @@ async function runDaemon(options = {}) {
     // work is any good is the queue's own `blocked` column, which a person can
     // read. A beat that only fired on a successful job would report a healthy
     // idle machine as dead every quiet weekend.
-    if (now - lastBeat >= beatEveryMs) {
-      lastBeat = now;
+    // THE CLOCK IS READ AGAIN HERE, after the tick rather than before it. `now`
+    // is the instant the tick STARTED, so beating with it stamped a beat that
+    // was already as old as the job that had just run — on a two-hour encode,
+    // two hours old the moment it was written, which is the one reading a
+    // staleness check must never be given.
+    const beatAt = clock();
+    if (beatAt - lastBeat >= beatEveryMs) {
+      lastBeat = beatAt;
       try {
         const beat = recordBeat || require('../../lib/nodeHeartbeat.js').recordBeat;
-        beat({ role: ROLE, node, at: new Date(now).toISOString() });
+        beat({ role: ROLE, node, at: new Date(beatAt).toISOString() });
         summary.beats += 1;
       } catch (err) {
         // A beat that could not be written must never stop the work. The
@@ -444,8 +519,13 @@ async function runDaemon(options = {}) {
   if (ownsSignals) {
     process.off('SIGTERM', stop);
     process.off('SIGINT', stop);
-    if (!options.queue) queue.close();
   }
+  // CLOSING IS ABOUT WHO OPENED IT, NOT ABOUT WHO OWNED THE SIGNALS. These were
+  // nested, and `ownsSignals` is false whenever `stopAfterTicks` is set — so the
+  // hand-run smoke check this file's own comment describes opened
+  // ~/Studio/queue.sqlite and walked away from the handle. A caller that passed
+  // its own queue still closes its own queue.
+  if (!options.queue) queue.close();
   write(`[studio-daemon] stopped after ${summary.ticks} tick(s): ${summary.worked} job(s) run, ${summary.errors} stage error(s), ${summary.beats} beat(s).`);
   if (writer) writer.close();
   return summary;

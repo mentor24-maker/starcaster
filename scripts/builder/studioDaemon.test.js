@@ -508,6 +508,135 @@ test('the whole loop: claim, run, complete, beat, and report', async () => {
   q.close();
 });
 
+// ── A runner that returns having done nothing has NOT worked ────────────────
+//
+// `runIngest` has five early returns that file a health row and return a report
+// without throwing — a missing STUDIO_PROJECT_ID is the likeliest one on a
+// freshly installed Mini. The daemon read "returned without throwing" as "a job
+// ran", logged "ran one ingest job", and slept the BUSY 250ms with the job
+// still pending and still due: four ticks a second forever, a sqlite write each
+// time, and a log history rolled away in minutes by lines claiming work that
+// never happened. Round 2 of 86bbjv68y.
+
+/** A runner in the shape `runIngest`'s early returns take: files a health row, claims nothing, throws nothing. */
+function runnerThatDeclines(stage = 'ingest') {
+  return {
+    [stage]: {
+      label: stage,
+      run: async ({ queue }) => {
+        // The health row goes under its own stage, exactly as `stopThePass` writes it.
+        queue.block({
+          stage: `${stage}_health`,
+          subjectKind: `${stage}_health`,
+          subjectId: '/tmp/studio-cache',
+          reason: 'STUDIO_PROJECT_ID is not set, so nothing was ingested',
+        });
+        return { ok: false, ingested: [] };
+      },
+    },
+  };
+}
+
+test('a runner that claims nothing did NOT work, so the daemon sleeps the IDLE interval', async () => {
+  const q = openQueue(':memory:');
+  q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file-a' });
+  const sleeps = [];
+  const lines = [];
+
+  const summary = await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: runnerThatDeclines(),
+    stopAfterTicks: 3,
+    idleMs: 30_000,
+    busyMs: 250,
+    sleep: async (ms) => { sleeps.push(ms); },
+    write: (l) => lines.push(l),
+    recordBeat: () => {},
+    logFile: path.join(tmpdir('hotloop'), 'daemon.log'),
+  });
+
+  assert.equal(summary.worked, 0,
+    'three ticks, nothing claimed, nothing settled — no work happened and the summary must not say it did');
+  // Two sleeps, not three: the loop breaks on the tick count BEFORE sleeping.
+  assert.deepEqual(sleeps, [30_000, 30_000],
+    'every sleep is the idle one; a 250ms busy sleep here is the hot loop, four ticks a second forever');
+
+  // And the job really is exactly where it started, which is what makes the
+  // busy sleep indefensible rather than merely optimistic.
+  assert.equal(q.counts().pending, 1, 'the job it "ran" is still pending');
+  assert.equal(q.counts().done, 0);
+  q.close();
+});
+
+test('the tick line does not claim a job ran, and says how many are still due', async () => {
+  const q = openQueue(':memory:');
+  for (const id of ['a', 'b']) q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: id });
+  const lines = [];
+
+  await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: runnerThatDeclines(),
+    stopAfterTicks: 1,
+    sleep: async () => {},
+    write: (l) => lines.push(l),
+    recordBeat: () => {},
+    logFile: path.join(tmpdir('hotline'), 'daemon.log'),
+  });
+
+  const tick = lines.find((l) => /studio-daemon\] 20/.test(l));
+  assert.ok(tick, 'there is a tick line');
+  assert.doesNotMatch(tick, /ran one ingest job/,
+    'the lie: six of these a second, every one naming work that did not happen');
+  // "nothing due" would be just as false — two jobs ARE due (DOCTRINE 5.31).
+  assert.doesNotMatch(tick, /nothing due/,
+    'and the opposite lie: the queue is not empty, the runner declined it');
+  assert.match(tick, /claimed nothing/);
+  assert.match(tick, /2 job\(s\) still due/, 'it names the number, so an empty reading says why it is not empty');
+  q.close();
+});
+
+test('a job that IS claimed and completed still counts as work, and gets the busy sleep', async () => {
+  // The other direction — the fix must not make a working daemon crawl. Without
+  // this, "worked = false" always would pass the test above and be a worse bug.
+  const q = openQueue(':memory:');
+  q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file-a' });
+  const sleeps = [];
+
+  const summary = await runDaemon({
+    queue: q,
+    owner: OWNER,
+    runners: runnerThat('complete'),
+    // Two ticks so the sleep after the working one is actually taken — the loop
+    // breaks on the count before sleeping, so a 1-tick run sleeps not at all.
+    stopAfterTicks: 2,
+    idleMs: 30_000,
+    busyMs: 250,
+    sleep: async (ms) => { sleeps.push(ms); },
+    write: () => {},
+    recordBeat: () => {},
+    logFile: path.join(tmpdir('busy'), 'daemon.log'),
+  });
+
+  assert.equal(summary.worked, 1);
+  assert.deepEqual(sleeps, [250], 'a real unit of work goes straight back round');
+  assert.equal(q.counts().done, 1);
+  q.close();
+});
+
+test('a job merely CLAIMED and left running is work too — the queue moved', async () => {
+  // `runnerThat(undefined)` claims and returns without settling, which is what a
+  // long job looks like from here. Fingerprinting only terminal states would
+  // read this as idle and sleep 30s on a daemon that is mid-job.
+  const q = openQueue(':memory:');
+  q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'file-a' });
+  const report = await tickOnce({ queue: q, owner: OWNER, runners: runnerThat('leave-running') });
+  assert.equal(report.worked, true, 'the job went pending -> running, which is a unit of work started');
+  assert.equal(q.counts().running, 1);
+  q.close();
+});
+
 test('DEFAULT_LOG_KEEP is a number the installer and the daemon can both rely on', () => {
   assert.ok(Number.isInteger(DEFAULT_LOG_KEEP) && DEFAULT_LOG_KEEP > 0);
 });

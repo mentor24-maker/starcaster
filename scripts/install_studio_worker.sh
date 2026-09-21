@@ -113,6 +113,37 @@ render_plist() {
 PLIST_BODY
 }
 
+# IS THE JOB LOADED? — and `launchctl list | grep -q "$LABEL"` IS NOT HOW.
+#
+# It is not flaky, it is wrong 10 times out of 10 on this machine. `grep -q`
+# exits the instant it matches; `launchctl list` is still writing its several
+# hundred lines, so it takes SIGPIPE and exits 141 — and under `set -o pipefail`
+# (line 48) that 141 becomes the pipeline's status, so the `if` takes the ELSE
+# branch about a label that is loaded. Probed against a genuinely loaded system
+# label: the pipe said "not loaded" 10/10, `launchctl list "$LABEL"` said
+# "loaded" 10/10.
+#
+# What that cost: the `loaded: yes — PID` line could never print, which is the
+# line the restart-proof procedure in this file tells you to read the PID from;
+# and the status then said, confidently, "the daemon has never run on this
+# machine" about a running daemon — the same class of false reading round 1 of
+# this ticket was sent back for.
+#
+# `launchctl list` takes a label and exits non-zero when it is absent. No pipe,
+# no race to lose.
+is_loaded() {
+  launchctl list "$LABEL" >/dev/null 2>&1
+}
+
+# The one-line summary row, for when it IS loaded. `launchctl list` is captured
+# WHOLE into a variable first — grepping a variable cannot SIGPIPE the producer,
+# because by then there is no producer left to signal.
+loaded_row() {
+  local all
+  all="$(launchctl list 2>/dev/null || true)"
+  printf '%s\n' "$all" | grep -F "$LABEL" || true
+}
+
 status() {
   node -e '
     const { thisNode, checkRole } = require(process.argv[1] + "/lib/nodeRoles.js");
@@ -123,8 +154,8 @@ status() {
   ' "$REPO"
 
   if [ -f "$PLIST" ]; then echo "schedule: INSTALLED at $PLIST"; else echo "schedule: not installed on this machine"; fi
-  if launchctl list | grep -q "$LABEL"; then
-    echo "loaded:   yes — $(launchctl list | grep "$LABEL")"
+  if is_loaded; then
+    echo "loaded:   yes — $(loaded_row)"
     echo "          (columns: PID, last exit code, label. A PID here means the daemon is alive right now.)"
   else
     echo "loaded:   no"
@@ -146,7 +177,7 @@ status() {
     echo "          $(wc -c < "$log" | tr -d ' ') bytes, last written $(date -r "$log" '+%Y-%m-%d %H:%M'), $rolled rotated copy/copies kept beside it"
   else
     echo "log:      $log — NOT THERE, and the daemon creates it the moment it starts."
-    if launchctl list | grep -q "$LABEL"; then
+    if is_loaded; then
       echo "          launchd says it is loaded, so this means it is failing before its first line."
       echo "          Read $llog — the refusal is in there."
     else
