@@ -137,6 +137,17 @@ test('the NEWEST completed backup decides, whatever order the record lists them 
   assert.equal(r.state, 'PASS');
 });
 
+test('with two drives, ONE fresh copy is a backup — the newest across destinations decides', () => {
+  const second = prefsXml({ snapshots: [iso(NOW - 2 * DAY)], error: null })
+    .match(/<dict>\s*<key>AttemptDates[\s\S]*?<\/dict>/)[0]
+    .replace('Blue Passport', 'MaxOne');
+  const prefs = prefsXml().replace('\t</array>\n\t<key>LastBackupActivity', `${second}\n\t</array>\n\t<key>LastBackupActivity`);
+  assert.equal(destinationsFrom(parsePlist(prefs)).length, 2, 'fixture really has two destinations');
+  const r = report(reached(probeOut({ prefs })));
+  assert.equal(r.state, 'PASS');
+  assert.match(r.headline, /to MaxOne/);
+});
+
 test('a destination that has never completed a backup is FAIL', () => {
   const r = report(reached(probeOut({ prefs: prefsXml({ snapshots: [] }) })));
   assert.equal(r.state, 'FAIL');
