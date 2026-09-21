@@ -111,7 +111,7 @@ function walk(location, root, entries, source) {
       items = fs.readdirSync(abs, { withFileTypes: true });
     } catch (err) {
       if (rel === '') throw err;
-      entries.push({ location, path: rel, size: 0, error: `folder could not be listed: ${err.code || err.message}` });
+      entries.push({ location, path: rel, size: 0, error: `folder could not be listed: ${idx.readErrorReason(err)}` });
       continue;
     }
     for (const d of items) {
@@ -123,7 +123,7 @@ function walk(location, root, entries, source) {
       if (!d.isFile()) continue;
       let st;
       try { st = fs.statSync(path.join(root, childRel)); } catch (err) {
-        entries.push({ location, path: childRel, size: 0, error: `could not stat: ${err.code || err.message}` });
+        entries.push({ location, path: childRel, size: 0, error: idx.readErrorReason(err) });
         continue;
       }
       const e = { location, path: childRel, size: st.size, mtime: Math.floor(st.mtimeMs), abs: path.join(root, childRel) };
@@ -159,14 +159,7 @@ function listRemote(location, remote, entries, source) {
     const why = idx.skipReason(f.Path);
     if (why) { source.skipped[why] = (source.skipped[why] || 0) + 1; continue; }
     source.files += 1;
-    const md5 = f.Hashes && f.Hashes.md5;
-    if (String(f.MimeType || '').startsWith('application/vnd.google-apps.')) {
-      entries.push({ location, path: f.Path, size: 0, native: true });
-    } else if (md5) {
-      entries.push({ location, path: f.Path, size: f.Size, hash: md5 });
-    } else {
-      entries.push({ location, path: f.Path, size: f.Size, error: 'Drive supplied no checksum' });
-    }
+    entries.push({ location, path: f.Path, ...idx.classifyDriveRow(f) });
     if (f.Path.toLowerCase().endsWith('.zip')) {
       source.skipped['zips on Drive (contents not opened — would mean downloading them)'] = (source.skipped['zips on Drive (contents not opened — would mean downloading them)'] || 0) + 1;
     }
@@ -211,7 +204,7 @@ async function hashEverything(entries) {
   let done = 0;
   let lastSave = Date.now();
   for (const e of loose) {
-    try { e.hash = await md5File(e.abs); cache[cacheKey(e)] = e.hash; } catch (err) { e.error = `could not read: ${err.code || err.message}`; }
+    try { e.hash = await md5File(e.abs); cache[cacheKey(e)] = e.hash; } catch (err) { e.error = idx.readErrorReason(err); }
     done += 1;
     if (Date.now() - lastSave > 60000) { saveCache(); lastSave = Date.now(); log(`  loose files: ${done}/${loose.length}`); }
   }

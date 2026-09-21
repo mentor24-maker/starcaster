@@ -219,3 +219,21 @@ test('end to end: a location that is not there is CANNOT TELL (exit 2), not an e
   assert.ok(!fs.existsSync(path.join(tmp, 'out', 'report.md')));
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('a Google Doc that rclone presents as a .docx with Size -1 is native, not unreadable', () => {
+  // The shape the first real run met 1,199 times (2026-09-21).
+  assert.deepEqual(
+    idx.classifyDriveRow({ Path: 'Alphire Agency System.docx', Size: -1, MimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }),
+    { size: 0, native: true },
+  );
+  assert.deepEqual(idx.classifyDriveRow({ Path: 'a.jpg', Size: 5, Hashes: { md5: 'abc' } }), { size: 5, hash: 'abc' });
+  // A real file with bytes and no checksum is still a could-not-read.
+  assert.equal(idx.classifyDriveRow({ Path: 'b.mov', Size: 5 }).error, 'Drive supplied no checksum');
+});
+
+test('an iCloud-only file (error -11) is named as such, not as "Unknown system error"', () => {
+  const err = Object.assign(new Error('Unknown system error -11: Unknown system error -11, read'), { errno: -11, code: 'Unknown system error -11' });
+  assert.match(idx.readErrorReason(err), /^in iCloud only/);
+  assert.match(idx.readErrorReason({ code: 'EACCES' }), /refused access/);
+  assert.equal(idx.readErrorReason({ code: 'EIO' }), 'could not read: EIO');
+});
