@@ -8,10 +8,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * by react-entry.js. Read-only: the pipeline on the Mac Mini writes the
  * catalog, this screen only shows it. Data: GET /api/studio/footage.
  *
- * It (re)loads whenever its page is SHOWN rather than once at boot. The island
- * mounts on DOMContentLoaded, before a project is necessarily chosen, and the
- * operator can switch projects without a reload; a panel that read once at
- * boot would keep showing the first project's footage under the second's name.
+ * It (re)loads whenever its page is SHOWN, and whenever the project is
+ * SWITCHED (the window event `projectContext:session-changed`). The island
+ * mounts on DOMContentLoaded, before a project is necessarily chosen, and a
+ * project switch neither reloads nor hides the page — so the show-hook alone
+ * left the first client's footage on screen under the second's name (review
+ * round 1, task 86bbjv68z). A reply that lands after a newer request was sent
+ * is dropped, so a slow read for the old project cannot overwrite the new one.
  *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17). "No footage yet", "no
  * file matches these filters" and "the read failed" are three different
@@ -135,22 +138,35 @@ function dayBoundary(day: string, end: boolean): string {
   return at.toISOString();
 }
 
+/** The window event public/js/projectContext.js emits on every project switch. */
+export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
+
 /**
  * The file's preview, fetched only when its row scrolls into view. Anything
  * short of an image — no Drive file, no preview drawn yet, Drive unreachable —
  * shows the placeholder, never a broken-image icon.
+ *
+ * `attempt` is the panel's load generation. A preview that has not arrived is
+ * asked for again each time it changes, which is what makes Refresh work:
+ * docs/STUDIO.md tells the operator a Drive preview takes a few minutes after
+ * an upload, so "wait, then Refresh" has to re-ask. Without it the failure was
+ * remembered for the life of the row and Refresh sent no request at all. A
+ * preview already on screen is kept, not fetched again.
  */
-function Thumbnail({ source }: { source: SourceRow }): React.ReactElement {
+function Thumbnail({ source, attempt }: { source: SourceRow; attempt: number }): React.ReactElement {
   const [url, setUrl] = useState('');
-  const [failed, setFailed] = useState(!source.hasDriveFile);
+  const [failed, setFailed] = useState(false);
   const holder = useRef<HTMLDivElement | null>(null);
+  const loaded = url !== '';
+
+  // The object URL lives exactly as long as it is the one on screen.
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   useEffect(() => {
-    if (!source.hasDriveFile) return undefined;
+    if (!source.hasDriveFile || loaded) return undefined;
     const el = holder.current;
     if (!el) return undefined;
     let cancelled = false;
-    let objectUrl = '';
     const load = async () => {
       try {
         const res = await fetch(`/api/studio/sources/${encodeURIComponent(source.id)}/thumbnail`, {
@@ -160,15 +176,15 @@ function Thumbnail({ source }: { source: SourceRow }): React.ReactElement {
         if (!res.ok || !type.startsWith('image/')) throw new Error(String(res.status));
         const blob = await res.blob();
         if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
+        setUrl(URL.createObjectURL(blob));
+        setFailed(false);
       } catch {
         if (!cancelled) setFailed(true);
       }
     };
     if (typeof IntersectionObserver === 'undefined') {
       void load();
-      return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+      return () => { cancelled = true; };
     }
     const observer = new IntersectionObserver((entries) => {
       if (entries.some((e) => e.isIntersecting)) {
@@ -180,17 +196,17 @@ function Thumbnail({ source }: { source: SourceRow }): React.ReactElement {
     return () => {
       cancelled = true;
       observer.disconnect();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [source.id, source.hasDriveFile]);
+  }, [source.id, source.hasDriveFile, attempt, loaded]);
 
+  const showPlaceholderText = failed || !source.hasDriveFile;
   return (
     <div className="studio-footage-thumb" ref={holder}>
-      {url && !failed ? (
-        <img src={url} alt="" onError={() => setFailed(true)} />
+      {url ? (
+        <img src={url} alt="" onError={() => { setUrl(''); setFailed(true); }} />
       ) : (
         <span className="studio-footage-thumb-placeholder" data-testid="studio-thumb-placeholder">
-          {failed ? 'No preview yet' : ''}
+          {showPlaceholderText ? 'No preview yet' : ''}
         </span>
       )}
     </div>
@@ -216,6 +232,8 @@ export default function FootagePanel(): React.ReactElement {
   const [fromDay, setFromDay] = useState('');
   const [toDay, setToDay] = useState('');
   const [search, setSearch] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
     const api = getApp()?.api;
@@ -230,21 +248,25 @@ export default function FootagePanel(): React.ReactElement {
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     const query = params.toString();
+    const seq = ++requestSeq.current;
     setLoading(true);
     try {
       const body = await api(`${FOOTAGE_PATH}${query ? `?${query}` : ''}`);
+      if (seq !== requestSeq.current) return;
       if (!body?.ok) {
         setError(body?.error?.message || 'The footage list could not be read.');
         setData(null);
       } else {
         setError('');
         setData(body.data as Footage);
+        setAttempt((n) => n + 1);
       }
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err instanceof Error ? err.message : 'The footage list could not be read.');
       setData(null);
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
   }, [lane, fromDay, toDay]);
 
@@ -263,6 +285,23 @@ export default function FootagePanel(): React.ReactElement {
     observer.observe(page, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, [load]);
+
+  // A project switch: drop the old client's rows at once, and read the new
+  // client's now if the page is on screen (the show-hook covers it otherwise).
+  // The device filter names the old client's devices, so it goes too.
+  useEffect(() => {
+    const onSwitch = () => {
+      requestSeq.current += 1;
+      setData(null);
+      setError('');
+      setLoading(false);
+      if (lane) { setLane(''); return; } // the lane change re-runs load via the show effect
+      const page = hostRef.current?.closest('.app-page');
+      if (!page || !page.classList.contains('hidden')) void load();
+    };
+    window.addEventListener(PROJECT_SWITCH_EVENT, onSwitch);
+    return () => window.removeEventListener(PROJECT_SWITCH_EVENT, onSwitch);
+  }, [load, lane]);
 
   const sessions = useMemo(() => {
     const all = data?.sessions || [];
@@ -346,8 +385,12 @@ export default function FootagePanel(): React.ReactElement {
           {filtered
             ? `Showing ${shownFiles} of ${data.totalSources} file(s) in ${sessions.length} session(s).`
             : `${data.totalSources} file(s) in ${sessions.length} session(s).`}
-          {data.newestAddedAt ? ` Newest file added ${fullDate(data.newestAddedAt)}.` : ''}
-          {Object.keys(data.stateCounts).length ? ` Stages: ${stateSummary(data.stateCounts)}.` : ''}
+          {/* These two count the WHOLE catalog, not what the filters left, so
+              they say so (landmine 17: two counts of one thing say what each counts). */}
+          {data.newestAddedAt ? ` Whole catalog: newest file added ${fullDate(data.newestAddedAt)}.` : ''}
+          {Object.keys(data.stateCounts).length
+            ? ` ${data.newestAddedAt ? 'Stages' : 'Whole catalog stages'}: ${stateSummary(data.stateCounts)}.`
+            : ''}
           {data.truncated ? ` Only the newest ${data.readLimit} rows were read, so these counts are a minimum.` : ''}
           {anyStandInDate ? ' A date marked * is not the file\'s own recording date yet — hover it to see which date it is.' : ''}
         </p>
@@ -385,7 +428,7 @@ export default function FootagePanel(): React.ReactElement {
                   const note = DATE_SOURCE_NOTE[source.dateSource];
                   return (
                     <tr key={source.id}>
-                      <td className="studio-footage-thumb-cell"><Thumbnail source={source} /></td>
+                      <td className="studio-footage-thumb-cell"><Thumbnail source={source} attempt={attempt} /></td>
                       <td>{laneLabel(source.lane)}</td>
                       <td>{source.layerRole}</td>
                       <td>{duration(source.durationS)}</td>

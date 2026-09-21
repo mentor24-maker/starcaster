@@ -13,7 +13,7 @@ const path = require('path');
  * boundary is tested through the real stores rather than asserted about them.
  */
 
-const { buildFootage, readFilters, effectiveDate, NO_SESSION_TITLE, UNKNOWN_LANE } = require('../../lib/studioFootage');
+const { buildFootage, readFilters, effectiveDate, NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE } = require('../../lib/studioFootage');
 
 const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'video_studio_setup.sql');
 const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
@@ -49,15 +49,22 @@ test('sessions come newest first; files inside a session in recording order', ()
   assert.equal(view.shownSources, 3);
 });
 
-test('a file with no session, or a session that is gone, is still shown — last', () => {
+test('a file with no session, or whose session was not read, is still shown — last, and named apart', () => {
   const view = buildFootage({
     sessions: [S1],
     sources: [src('a'), src('orphan', { sessionId: '' }), src('lost', { sessionId: 'missing' })],
   });
-  const last = view.sessions[view.sessions.length - 1];
-  assert.equal(last.title, NO_SESSION_TITLE);
-  assert.deepEqual(last.sources.map((s) => s.id).sort(), ['lost', 'orphan']);
   assert.equal(view.shownSources, 3);
+  assert.deepEqual(view.sessions.map((s) => s.id).slice(0, 1), ['s1']);
+  const unread = view.sessions[view.sessions.length - 2];
+  const none = view.sessions[view.sessions.length - 1];
+  // A session id that matches nothing read is a session PAST THE READ (the
+  // foreign key cascades on delete), never a file with no session — saying
+  // "Not in a session yet" for it was a false claim (review round 1).
+  assert.equal(unread.title, UNREAD_SESSION_TITLE);
+  assert.deepEqual(unread.sources.map((s) => s.id), ['lost']);
+  assert.equal(none.title, NO_SESSION_TITLE);
+  assert.deepEqual(none.sources.map((s) => s.id), ['orphan']);
 });
 
 test('the date a file is filed under says which clock it came from', () => {
@@ -284,6 +291,56 @@ test('thumbnail: Drive\'s preview is passed through as an image; no preview yet 
     const none = (await call(route, url, SCOPE_A)).res;
     assert.equal(none.statusCode, 404);
     assert.equal(json(none).error.code, 'NO_THUMBNAIL');
+  } finally {
+    global.fetch = realFetch;
+    restore();
+  }
+});
+
+test('thumbnail: previews arriving together share ONE token refresh', async () => {
+  let minted = 0;
+  const drive = { getAccessToken: async () => {
+    minted += 1;
+    await new Promise((r) => setTimeout(r, 5));
+    return { ok: true, data: { accessToken: `tok-${minted}` } };
+  } };
+  const stores = withRoute({ drive });
+  const { route, restore } = stores;
+  const realFetch = global.fetch;
+  global.fetch = async (url) => (String(url).includes('/drive/v3/files/')
+    ? new Response(JSON.stringify({ hasThumbnail: true, thumbnailLink: 'https://lh3.example/t' }), { status: 200 })
+    : new Response(Buffer.from([1]), { status: 200, headers: { 'content-type': 'image/png' } }));
+  try {
+    const ids = [];
+    for (let i = 0; i < 4; i += 1) ids.push((await sourceIn(stores, SCOPE_A, { driveFileId: `drv-${i}` })).id);
+    const results = await Promise.all(ids.map((id) => call(route, `/api/studio/sources/${id}/thumbnail`, SCOPE_A)));
+    assert.deepEqual(results.map((r) => r.res.statusCode), [200, 200, 200, 200]);
+    assert.equal(minted, 1, 'four previews at once must not mint four tokens');
+  } finally {
+    global.fetch = realFetch;
+    restore();
+  }
+});
+
+test('thumbnail: an expired token is replaced and the SAME request succeeds', async () => {
+  let minted = 0;
+  const drive = { getAccessToken: async () => { minted += 1; return { ok: true, data: { accessToken: `tok-${minted}` } }; } };
+  const stores = withRoute({ drive });
+  const { route, restore } = stores;
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const auth = opts?.headers?.Authorization;
+    if (auth === 'Bearer tok-1') return new Response(JSON.stringify({ error: { message: 'expired' } }), { status: 401 });
+    if (String(url).includes('/drive/v3/files/')) {
+      return new Response(JSON.stringify({ hasThumbnail: true, thumbnailLink: 'https://lh3.example/t' }), { status: 200 });
+    }
+    return new Response(Buffer.from([1]), { status: 200, headers: { 'content-type': 'image/png' } });
+  };
+  try {
+    const made = await sourceIn(stores, SCOPE_A, { driveFileId: 'drv-x' });
+    const { res } = await call(route, `/api/studio/sources/${made.id}/thumbnail`, SCOPE_A);
+    assert.equal(res.statusCode, 200, 'the request that discovers the expiry must not be the one that fails');
+    assert.equal(minted, 2);
   } finally {
     global.fetch = realFetch;
     restore();

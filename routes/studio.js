@@ -49,22 +49,31 @@ function requestScope(req) {
 /**
  * Reused across thumbnail requests in one warm process. Without it, a screen
  * of forty pictures is forty OAuth refreshes against Google before a single
- * image is fetched.
+ * image is fetched. `pending` is the refresh already in flight: previews
+ * arrive together, so without it every request that found the cache empty
+ * minted its own token anyway — the cost this cache exists to prevent.
  */
 let cachedToken = { value: '', at: 0 };
+let pendingToken = null;
 
 async function driveToken() {
   if (cachedToken.value && Date.now() - cachedToken.at < TOKEN_REUSE_MS) {
     return { ok: true, token: cachedToken.value };
   }
-  const res = await googleDrive.getAccessToken();
-  if (!res.ok) return res;
-  cachedToken = { value: res.data.accessToken, at: Date.now() };
-  return { ok: true, token: cachedToken.value };
+  if (!pendingToken) {
+    pendingToken = (async () => {
+      const res = await googleDrive.getAccessToken();
+      if (!res.ok) return res;
+      cachedToken = { value: res.data.accessToken, at: Date.now() };
+      return { ok: true, token: cachedToken.value };
+    })().finally(() => { pendingToken = null; });
+  }
+  return pendingToken;
 }
 
-function forgetToken() {
-  cachedToken = { value: '', at: 0 };
+function forgetToken(stale) {
+  // Only forget the token that was refused — a newer one minted meanwhile stays.
+  if (!stale || cachedToken.value === stale) cachedToken = { value: '', at: 0 };
 }
 
 async function sendFootage(req, res, urlObj) {
@@ -104,14 +113,24 @@ async function sendThumbnail(req, res, sourceId) {
     return sendErr(res, 404, 'This file did not come from Drive, so there is no preview for it.', { code: 'NO_THUMBNAIL' });
   }
 
-  const token = await driveToken();
+  let token = await driveToken();
   if (!token.ok) {
     return sendErr(res, 503, `Drive is not reachable for previews: ${token.error}`, { code: 'DRIVE_UNAVAILABLE' });
   }
 
-  const meta = await googleDriveMeta(token.token, driveFileId);
+  let meta = await googleDriveMeta(token.token, driveFileId);
+  if (!meta.ok && meta.status === 401) {
+    // The cached token expired or was revoked. Mint a fresh one and ask once
+    // more, so the request that discovers the expiry is not the one that fails.
+    forgetToken(token.token);
+    token = await driveToken();
+    if (!token.ok) {
+      return sendErr(res, 503, `Drive is not reachable for previews: ${token.error}`, { code: 'DRIVE_UNAVAILABLE' });
+    }
+    meta = await googleDriveMeta(token.token, driveFileId);
+  }
   if (!meta.ok) {
-    if (meta.status === 401) forgetToken();
+    if (meta.status === 401) forgetToken(token.token);
     const status = meta.status === 404 ? 404 : 502;
     return sendErr(res, status, `Drive would not describe this file: ${meta.error}`, { code: 'NO_THUMBNAIL' });
   }
@@ -128,7 +147,7 @@ async function sendThumbnail(req, res, sourceId) {
   }
   const contentType = String(image.headers.get('content-type') || '');
   if (!image.ok || !contentType.startsWith('image/')) {
-    if (image.status === 401) forgetToken();
+    if (image.status === 401) forgetToken(token.token);
     return sendErr(res, 502, `Drive answered ${image.status} for the preview.`, { code: 'NO_THUMBNAIL' });
   }
   const body = Buffer.from(await image.arrayBuffer());
