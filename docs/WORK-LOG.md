@@ -13,6 +13,66 @@ on its own is not treated as a problem, because a laptop's drive usually lives
 in a drawer. Two weeks isn't a guess: it comes from how often the laptop
 actually backed up when the habit was working (the longest gap was just over
 nine days). Today it reads, correctly, as a failure: 22 months.
+## 2026-09-20 — Settings panels stop leaving a wide empty strip on the right (#732)
+
+Open a module's settings in the Builder and the fields are arranged in
+columns. Each column works out exactly how wide it needs to be — but its box
+was left to whatever container it sat in, and most containers stretch their
+contents to fill the space. So a column needing 645px sat in a 1292px box with
+647px of nothing beside it, and the form read as loose rows floating in a
+rectangle rather than one block.
+
+The same disagreement showed up a second way. Most fields are capped at a
+readable width, but the "pick a page" control is really two controls side by
+side — a dropdown plus a text box — and the cap did not apply to the pair. At
+846px it decided how wide that column's whole field slot was, so every
+properly capped field in the column stopped 286px short of it. Four earlier
+panel sweeps had each fixed that for their own panels, as four lists naming
+fifteen module editors between them; every one of those lists said in its own
+comment that the defect was still live on panels belonging to sweeps yet to
+come. Those sweeps ran out. Site Search was the last one left carrying it.
+
+Both are now said once, for every panel including the ones not written yet,
+rather than per panel. The visible win is Site Search: its Content column now
+ends where its fields end, and the Text and Frame columns move up beside it
+instead of being pushed below. Before and after pictures are on the ticket.
+
+The panel check gains the reading that was missing. Everything it measured
+before compared a column's rows to each other — and in all of these the rows
+were correct, same widths, same offsets — so every affected panel had been
+passing for weeks. It now also measures the column's box against the width its
+contents actually need, at all three screen widths.
+## 2026-09-20 — Preview now asks which screen: Phone, Tablet or Desktop (#734)
+
+The blue Preview button in a page's Page Details used to open one new tab, and
+which screen it showed depended on an easy-to-miss Desktop/Mobile switch
+elsewhere in the page list. Now clicking Preview opens a small menu. Desktop
+still opens a tab. Phone and Tablet open a pop-up over the editor, and the page
+inside it is shown in a window that really is a phone's width (390px) or a
+tablet's (820px). That matters because the old preview only imitated a phone,
+and the Delray headline that split "Champions" in half only showed up at a real
+phone's width. Now you see what a visitor's phone sees. Preview still saves
+nothing, and email templates are unchanged.
+## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
+
+On a phone, the paragraph under the Delray home page's big headline ran off the
+right edge of the screen. The ticket suspected the wide button table in the
+column beside it. That was not it: the table already scrolls sideways in its own
+box. The real cause was an old sizing rule. When a two-column row stacks on a
+phone, each column is told to be the full width of the screen, and the column's
+own padding was then added **on top** of that. So a column with 18px of padding
+on each side came out 36px wider than the phone, on every site and not only
+Delray. The fix makes the padding count inside the column's width. Desktop is
+unchanged (the before/after screenshots of every desktop test scene are
+identical), and a new automatic check measures a padded column at phone and
+tablet widths. It was checked on purpose: with the fix taken out, the check fails.
+
+A review pass sent it back once: the Builder's own Phone preview — the exact
+place the ticket said to look — still showed the text cut off. That preview is
+a phone-sized box drawn inside a full-size window, so the phone-width rule
+never reaches it and it has its own copy of the column rule, which the first
+round missed. That copy now gets the same fix, and a second automatic check
+measures a padded column inside the Phone preview itself.
 
 ## 2026-09-20 — The Studio pipeline finally has something that runs it (#729)
 

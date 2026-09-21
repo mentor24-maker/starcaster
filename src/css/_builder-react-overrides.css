@@ -4167,6 +4167,65 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * A LATTICE COLUMN IS SIZED BY ITS CONTENT — NEVER STRETCHED BY ITS BOX
+ * (task 86bbzux9m).
+ *
+ * The tracks above are `max-content`, so a column knows exactly how wide it
+ * needs to be. Its BOX does not: a grid item stretches to its area and a
+ * child of a `flex-direction: column` box stretches to the container, both by
+ * default, and the difference between the stretched box and the resolved
+ * tracks is dead space with a hairline drawn across it — the panel then reads
+ * as loose rows rather than one block, which is the complaint that opened the
+ * panel sweep (Dane, 2026-08-13).
+ *
+ * `flex: 0 0 auto` below already says this for the axis columns, which are
+ * direct children of `.builder-schema-panel-columns`. Every OTHER box that
+ * holds a lattice column was left to chance, and measured at 1440 three were
+ * stretching:
+ *
+ *   679px  Motion  }  `.builder-background-controls-horizontal` is a grid
+ *   647px  Video   }  with one full-width track; both columns resolve their
+ *                     own tracks at ~613-645 and were stretched to 1292.
+ *   120px  Slideshow Format, inside `.builder-cards-panel-items`
+ *   105px  Social Frame / 65px Image Border, `.builder-cards-panel-settings`
+ *
+ * Stated once, for the container that has not been written yet as much as for
+ * these — the per-container fix is the special case the next sweep has to
+ * undo, and the Trigger block (2026-08-29) was already this same defect found
+ * on one block and not looked for anywhere else.
+ *
+ * `justify-self` covers the grid parents and `align-self` the column-flex
+ * ones. In a ROW flex container — the axis wrapper — `align-self: start` is
+ * the vertical axis, and that wrapper already sets `align-items: flex-start`,
+ * so nothing moves there.
+ */
+.builder-react-root .is-lattice .builder-schema-panel-column {
+  justify-self: start;
+  align-self: start;
+}
+
+/*
+ * THE ONE EXCEPTION: a SUBGRID column must fill its area.
+ *
+ * Feature Cards and Program List put their settings column on the editor's
+ * own `lattice-start / lattice-end` tracks with `grid-template-columns:
+ * subgrid`, which is what lines their fields up with the chrome above. A
+ * subgrid takes its tracks from the area it occupies, so shrinking the box to
+ * its content is not "no dead space" — it is the column and the chrome no
+ * longer sharing a lattice, which is the defect W0 exists to prevent. Both
+ * measured 0px of strip already; they are not what this ticket is about.
+ *
+ * `.is-lattice` is in the selector to win on specificity rather than on
+ * source order, so moving either rule cannot silently re-break it.
+ */
+.builder-react-root .is-lattice .builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .is-lattice .builder-module-editor--program-list .builder-cards-panel-settings,
+.builder-react-root .is-lattice.builder-module-editor--feature-cards .builder-cards-panel-settings,
+.builder-react-root .is-lattice.builder-module-editor--program-list .builder-cards-panel-settings {
+  justify-self: stretch;
+}
+
+/*
  * Flatten everything between the column and its labels/controls so they all
  * land in the column's grid. Without this each strip would be its own
  * formatting context and the tracks could not be shared.
@@ -4871,9 +4930,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* The Phone frame is a class on a narrow box in a WIDE window, so the
+   max-width media query that makes stacked columns border-box never fires
+   inside it. Without this line the frame's own 12px padding went on top of
+   `width: 100%` and the column overflowed the phone box — the exact route
+   the Delray hero ticket (86bc3y0ue) told Dane to check. */
 .builder-react-root .builder-preview-device-mobile .builder-preview-column {
   padding: var(--builder-cell-padding-box, 12px) !important;
   border-radius: var(--builder-cell-radius, 16px) !important;
+  box-sizing: border-box;
 }
 
 /* Menu cells and overlay slots publish 0px, so they stay flush by their
@@ -7390,6 +7455,124 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 
 .builder-react-root.builder-public-site .builder-preview-device-email {
   padding: 24px 12px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Preview → Phone / Tablet / Desktop (86bc3yyn0)
+ *
+ * The menu under Page Details' Preview button, and the pop-up that shows a
+ * phone or tablet over the editor. The pop-up holds an iframe whose WIDTH is
+ * the device (set inline from PREVIEW_DEVICE_FRAMES), so the page inside gets
+ * the real phone/tablet media rules. Only its picture is scaled to fit a short
+ * window — never its layout width.
+ * ------------------------------------------------------------------ */
+.builder-react-root .builder-preview-device-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.builder-react-root .builder-preview-device-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.15));
+  border-radius: 8px;
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.builder-react-root .builder-preview-device-menu-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-primary, #1a1a1a);
+  font: inherit;
+  font-size: var(--text-base);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-preview-device-menu-item:hover,
+.builder-react-root .builder-preview-device-menu-item:focus-visible {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.builder-react-root .builder-preview-device-menu-icon {
+  display: inline-flex;
+  justify-content: center;
+  width: 20px;
+}
+
+.builder-react-root .builder-preview-device-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 20, 0.72);
+}
+
+.builder-react-root .builder-preview-device-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+
+.builder-react-root .builder-preview-device-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--ink-primary, #1a1a1a);
+  font-size: var(--text-base);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-preview-device-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-preview-device-modal-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.builder-react-root .builder-preview-device-stage {
+  /* The header can be wider than a phone; keep the phone centred under it. */
+  align-self: center;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.15));
+  border-radius: 6px;
+  background: var(--bg-surface);
+}
+
+.builder-react-root .builder-preview-device-iframe {
+  display: block;
+  border: 0;
+  transform-origin: 0 0;
 }
 
 .builder-react-root .builder-preview-empty {
@@ -9928,14 +10111,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  *
  * Panel sweep 15/15, ticket 86bbjt1bg.
  */
-.builder-react-root .is-lattice.builder-module-editor--admin-login .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--admin-modules .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--admin-nav-link .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--admin-site-settings .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--admin-support-form .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--admin-team-users .builder-module-field-control > .builder-project-data-picker {
-  max-width: var(--builder-field-long-max, 560px);
-}
+/* The per-panel list that used to stand here was generalised on 2026-09-20
+ * (task 86bbzux9m) — the ceiling is now stated once for every lattice panel,
+ * under THE PICKER'S CEILING BELONGS TO EVERY PANEL at the end of this file.
+ * The comment above is kept for the measurements and incidents behind it. */
 
 /*
  * The same composite-picker escape, on the Blog Post Manager panel.
@@ -9961,9 +10140,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * family per PR — and are left for sweeps 11-13/15. Naming them is the point:
  * an undocumented omission is indistinguishable from an oversight.
  */
-.builder-react-root .is-lattice.builder-module-editor--blog-post-manager .builder-module-field-control > .builder-project-data-picker {
-  max-width: var(--builder-field-long-max, 560px);
-}
+/* The per-panel list that used to stand here was generalised on 2026-09-20
+ * (task 86bbzux9m) — the ceiling is now stated once for every lattice panel,
+ * under THE PICKER'S CEILING BELONGS TO EVERY PANEL at the end of this file.
+ * The comment above is kept for the measurements and incidents behind it. */
 
 /* --------------------------------------------------------------------------
  * PANEL SWEEP 12/15 — the blog reading panels (ticket 86bbjt1bc)
@@ -10162,10 +10342,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * a custom value so the check can see it, which is the only reason this line
  * is here rather than being asserted from reading the code.
  */
-.builder-react-root .is-lattice.builder-module-editor--blog-post-tags .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-post-list .builder-module-field-control > .builder-project-data-picker {
-  max-width: var(--builder-field-long-max, 560px);
-}
+/* The per-panel list that used to stand here was generalised on 2026-09-20
+ * (task 86bbzux9m) — the ceiling is now stated once for every lattice panel,
+ * under THE PICKER'S CEILING BELONGS TO EVERY PANEL at the end of this file.
+ * The comment above is kept for the measurements and incidents behind it. */
 
 /* ==================================================================== */
 /* FLAT ADMIN BUTTONS — one colour, no gradient, grey when disabled      */
@@ -10693,15 +10873,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * event-detail; widening this selector is the one-line fix each of those
  * tickets can reach for.
  * ------------------------------------------------------------------------ */
-.builder-react-root .is-lattice.builder-module-editor--blog-category-filter .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-tag-cloud .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-search .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-search-results .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > .builder-project-data-picker,
-.builder-react-root .is-lattice.builder-module-editor--blog-post-create .builder-module-field-control > .builder-project-data-picker {
-  width: 100%;
-  max-width: var(--builder-field-long-max, 560px);
-}
+/* The per-panel list that used to stand here was generalised on 2026-09-20
+ * (task 86bbzux9m) — the ceiling is now stated once for every lattice panel,
+ * under THE PICKER'S CEILING BELONGS TO EVERY PANEL at the end of this file.
+ * The comment above is kept for the measurements and incidents behind it. */
 
 /*
  * The select takes the slack inside that bounded block, and the "Custom…"
@@ -10712,15 +10887,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * notch"). `min-width: 0` is what lets it shrink in Custom mode instead of
  * pushing the input past the ceiling.
  */
-.builder-react-root .is-lattice.builder-module-editor--blog-category-filter .builder-module-field-control > .builder-project-data-picker > select,
-.builder-react-root .is-lattice.builder-module-editor--blog-tag-cloud .builder-module-field-control > .builder-project-data-picker > select,
-.builder-react-root .is-lattice.builder-module-editor--blog-search .builder-module-field-control > .builder-project-data-picker > select,
-.builder-react-root .is-lattice.builder-module-editor--blog-search-results .builder-module-field-control > .builder-project-data-picker > select,
-.builder-react-root .is-lattice.builder-module-editor--blog-newsletter-subscribe .builder-module-field-control > .builder-project-data-picker > select,
-.builder-react-root .is-lattice.builder-module-editor--blog-post-create .builder-module-field-control > .builder-project-data-picker > select {
-  flex: 1 1 auto;
-  min-width: 0;
-}
+/* The per-panel list that used to stand here was generalised on 2026-09-20
+ * (task 86bbzux9m) — the ceiling is now stated once for every lattice panel,
+ * under THE PICKER'S CEILING BELONGS TO EVERY PANEL at the end of this file.
+ * The comment above is kept for the measurements and incidents behind it. */
 
 /*
  * THE MANAGER'S RIGHT EDGE IS THE COLUMN'S. `.builder-cards-panel-fields`
@@ -11043,9 +11213,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
     order: 1;
   }
 
+  /* border-box: a stacked column fills its track INCLUDING its own padding.
+     As content-box, `width: 100%` put the column's padding on top of the
+     screen width, so every padded column on a phone was 2x its padding
+     wider than the screen and its text ran off the right edge (Delray home
+     hero, 86bc3y0ue). */
   .builder-react-root .builder-preview-column {
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
   }
 
   .builder-react-root .builder-columns-2,
@@ -11138,6 +11314,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-device-tablet .builder-preview-column {
   width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .builder-react-root .builder-preview-device-tablet .builder-columns-2,
@@ -11218,4 +11395,47 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6),
 .builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6) * {
   overflow-wrap: break-word;
+}
+
+/* ==============================================================
+ * THE PICKER'S CEILING BELONGS TO EVERY PANEL (task 86bbzux9m)
+ * ==============================================================
+ *
+ * `.builder-project-data-picker` is a COMPOSITE control — a select for the
+ * page, plus a text input for "Custom…" — so the 560px ceiling W9 puts on
+ * each `input`/`select` individually does not bound the pair: measured at
+ * 1440 the wrapper comes to 846px (560 + gap + 280). The column's control
+ * track is `max-content`, so the picker SIZES the track, and every other
+ * control in that column — each correctly stopping at 560 — then ends 286px
+ * short of the one row that set it. One column, two right edges: the notch
+ * L8 names.
+ *
+ * That was fixed four times, once per panel sweep, as four allowlists naming
+ * fifteen module editors between them. Each list said in its own comment that
+ * the identical defect was still live on the panels belonging to sweeps yet
+ * to come, and named them — a per-panel special case waiting on a sweep that
+ * might not arrive. It did not: measured on `main` at 1440 on 2026-09-20,
+ * site-search was the last 846px track in the app and its sweep never ran.
+ *
+ * So the ceiling is stated ONCE, for any lattice panel that renders a picker,
+ * including the ones not written yet. `max-width` can only ever lower a used
+ * width, so folding the four lists into this rule is a no-change for all
+ * fifteen panels they named and a fix for the ones they did not.
+ *
+ * `width: 100%` and the select's `flex: 1 1 auto` come from the newest of the
+ * four (sweep 13/15) and generalise with it: without them the picker keeps
+ * its own content width inside the bounded block, and filling the span only
+ * moves the notch INWARD — the block reaches the edge with dead space inside
+ * it, which reads exactly the same to the eye. `min-width: 0` is what lets
+ * the select shrink in Custom mode instead of pushing the input past the
+ * ceiling.
+ */
+.builder-react-root .is-lattice .builder-module-field-control > .builder-project-data-picker {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+.builder-react-root .is-lattice .builder-module-field-control > .builder-project-data-picker > select {
+  flex: 1 1 auto;
+  min-width: 0;
 }
