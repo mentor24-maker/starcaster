@@ -179,6 +179,30 @@ export function BuilderModuleDeviceControls({
             />
           </BuilderModuleField>
         ) : null}
+        {keys.includes("lineHeight") ? (
+          <BuilderModuleField label={mark("Line Height", "lineHeight")} width="num">
+            <input
+              type="number"
+              min={0.8}
+              max={3}
+              step={0.05}
+              value={values.lineHeight}
+              onChange={(event) => writeSettings((current) => ({ ...current, lineHeight: event.target.value }))}
+            />
+          </BuilderModuleField>
+        ) : null}
+        {keys.includes("letterSpacing") ? (
+          <BuilderModuleField label={mark("Letter Spacing", "letterSpacing")} width="num">
+            <input
+              type="number"
+              min={-5}
+              max={20}
+              step={0.5}
+              value={values.letterSpacing}
+              onChange={(event) => writeSettings((current) => ({ ...current, letterSpacing: event.target.value }))}
+            />
+          </BuilderModuleField>
+        ) : null}
         <BuilderModuleField label={mark(`Hide on ${label}`, "hidden")} width="check">
           <input
             type="checkbox"

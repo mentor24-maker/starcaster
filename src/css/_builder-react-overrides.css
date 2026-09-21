@@ -11166,3 +11166,56 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-device-tablet .builder-preview-video-background-page {
   display: none;
 }
+
+/*
+ * A HEADLINE ON A PHONE SHRINKS AS A WHOLE, AND NEVER SPLITS A WORD
+ * (86bc3xrhz). Delray's hero headline had every word sized in the rich text
+ * toolbar (an inline 88-pixel size on a span) and the phone cap above
+ * (the 2.35rem clamp) lands on the heading element only, so the
+ * words stayed 88px on a phone. Then `overflow-wrap: anywhere` let the browser
+ * break "Champions" at any letter rather than let it overflow. So, on a phone:
+ *
+ * - a piece of a heading carrying its own size follows the heading's size
+ *   (its colour and weight are left alone);
+ * - headings wrap with `break-word`, which breaks a word only when it cannot
+ *   fit on a line by itself. `anywhere` also shrinks the heading's minimum
+ *   width, so a narrow grid column squeezed it until words split with room to
+ *   spare — the difference between the two is exactly that;
+ * - the old Mobile Font Size beats the cap. At equal specificity the cap came
+ *   later in the file and won, so that field never reached a real phone
+ *   (measured 2026-09-15, docs/DEVICE_STYLES.md).
+ *
+ * Each selector matches the specificity of the rule it answers — this file
+ * loads after `_builder-react.css`, so at equal weight it wins.
+ *
+ * The phone preview frame gets the first two, because it is a narrow box on
+ * a wide screen and matches no media query. It needs no third: its own Mobile
+ * Font Size rule already comes after its cap.
+ */
+@media (max-width: 560px) {
+  .builder-react-root .builder-preview-heading:not(.builder-preview-heading-eyebrow) [style*="font-size"] {
+    font-size: inherit !important;
+  }
+  .builder-react-root .builder-preview-heading:not(.builder-preview-heading-eyebrow),
+  .builder-react-root .builder-preview-heading-eyebrow,
+  .builder-react-root .builder-preview-headline-rotator,
+  .builder-react-root .builder-preview-text :is(h1, h2, h3, h4, h5, h6),
+  .builder-react-root .builder-preview-text :is(h1, h2, h3, h4, h5, h6) * {
+    overflow-wrap: break-word;
+  }
+  .builder-react-root .builder-preview-module-mobile-font-size .builder-preview-heading:not(.builder-preview-heading-eyebrow) {
+    font-size: var(--builder-mobile-font-size) !important;
+  }
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-heading:not(.builder-preview-heading-eyebrow) [style*="font-size"] {
+  font-size: inherit !important;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-heading:not(.builder-preview-heading-eyebrow),
+.builder-react-root .builder-preview-device-mobile .builder-preview-heading-eyebrow,
+.builder-react-root .builder-preview-device-mobile .builder-preview-headline-rotator,
+.builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6),
+.builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6) * {
+  overflow-wrap: break-word;
+}
