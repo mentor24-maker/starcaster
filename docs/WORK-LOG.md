@@ -1,3 +1,24 @@
+## 2026-09-20 — Padded columns no longer run off the side of a phone (#733)
+
+On a phone, the paragraph under the Delray home page's big headline ran off the
+right edge of the screen. The ticket suspected the wide button table in the
+column beside it. That was not it: the table already scrolls sideways in its own
+box. The real cause was an old sizing rule. When a two-column row stacks on a
+phone, each column is told to be the full width of the screen, and the column's
+own padding was then added **on top** of that. So a column with 18px of padding
+on each side came out 36px wider than the phone, on every site and not only
+Delray. The fix makes the padding count inside the column's width. Desktop is
+unchanged (the before/after screenshots of every desktop test scene are
+identical), and a new automatic check measures a padded column at phone and
+tablet widths. It was checked on purpose: with the fix taken out, the check fails.
+
+A review pass sent it back once: the Builder's own Phone preview — the exact
+place the ticket said to look — still showed the text cut off. That preview is
+a phone-sized box drawn inside a full-size window, so the phone-width rule
+never reaches it and it has its own copy of the column rule, which the first
+round missed. That copy now gets the same fix, and a second automatic check
+measures a padded column inside the Phone preview itself.
+
 ## 2026-09-20 — The Studio pipeline finally has something that runs it (#729)
 
 The Studio work has had a queue and five kinds of job since August, and nothing

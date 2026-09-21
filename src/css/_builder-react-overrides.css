@@ -4871,9 +4871,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* The Phone frame is a class on a narrow box in a WIDE window, so the
+   max-width media query that makes stacked columns border-box never fires
+   inside it. Without this line the frame's own 12px padding went on top of
+   `width: 100%` and the column overflowed the phone box — the exact route
+   the Delray hero ticket (86bc3y0ue) told Dane to check. */
 .builder-react-root .builder-preview-device-mobile .builder-preview-column {
   padding: var(--builder-cell-padding-box, 12px) !important;
   border-radius: var(--builder-cell-radius, 16px) !important;
+  box-sizing: border-box;
 }
 
 /* Menu cells and overlay slots publish 0px, so they stay flush by their
@@ -11043,9 +11049,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
     order: 1;
   }
 
+  /* border-box: a stacked column fills its track INCLUDING its own padding.
+     As content-box, `width: 100%` put the column's padding on top of the
+     screen width, so every padded column on a phone was 2x its padding
+     wider than the screen and its text ran off the right edge (Delray home
+     hero, 86bc3y0ue). */
   .builder-react-root .builder-preview-column {
     width: 100%;
     min-width: 0;
+    box-sizing: border-box;
   }
 
   .builder-react-root .builder-columns-2,
@@ -11138,6 +11150,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-device-tablet .builder-preview-column {
   width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .builder-react-root .builder-preview-device-tablet .builder-columns-2,
