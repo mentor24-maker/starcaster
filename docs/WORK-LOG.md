@@ -21,6 +21,12 @@ Alongside it, `docs/STUDIO.md` is the plain-language guide: what happens to a
 video step by step, what every column means, how to tell whether the pipeline
 is running, and what to do when it stops.
 
+A review pass caught two things before this went live, both fixed: switching
+to another client left the first client's footage on screen under the new
+client's name, and the Refresh button never asked again for a preview that
+had not been ready the first time — so "wait a few minutes, then Refresh", the
+very advice in the guide, did nothing until the whole page was reloaded.
+
 ## 2026-09-20 — A column's Border Style now does what it says (#TBD)
 
 Expand a column's Styles bar in the Builder and there is a Border Style
