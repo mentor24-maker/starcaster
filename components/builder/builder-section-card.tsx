@@ -45,7 +45,6 @@ import {
 type BuilderSectionCardProps = {
   section: BuilderTemplateSection;
   sectionIndex: number;
-  editorDevice: "browser" | "mobile";
   isEmailTemplate?: boolean;
   isCollapsed: boolean;
   expandedModuleIds: string[];
@@ -133,7 +132,6 @@ function getModulePaletteAnchorFromButton(button: HTMLButtonElement) {
 export function BuilderSectionCard({
   section,
   sectionIndex,
-  editorDevice,
   isEmailTemplate = false,
   isCollapsed,
   expandedModuleIds,
@@ -704,20 +702,16 @@ export function BuilderSectionCard({
               panelName="Section Settings and Styles"
               title="Section Settings and Styles"
               trailingActions={
-                // The old page-list Mobile mode has its own panel; the switch
-                // would only confuse it, so it is shown in the normal mode.
-                editorDevice === "browser" ? (
-                  <BuilderDeviceSwitch
-                    value={sectionStyleDevice}
-                    changedDevices={(["tablet", "phone"] as const).filter(
-                      (device) => listSectionDeviceOverrideKeys(section, device).length > 0
-                    )}
-                    onChange={(device) => {
-                      setSectionStyleDevice(device);
-                      setIsSectionSettingsCollapsed(false);
-                    }}
-                  />
-                ) : null
+                <BuilderDeviceSwitch
+                  value={sectionStyleDevice}
+                  changedDevices={(["tablet", "phone"] as const).filter(
+                    (device) => listSectionDeviceOverrideKeys(section, device).length > 0
+                  )}
+                  onChange={(device) => {
+                    setSectionStyleDevice(device);
+                    setIsSectionSettingsCollapsed(false);
+                  }}
+                />
               }
             />
 
@@ -725,7 +719,6 @@ export function BuilderSectionCard({
               <BuilderSectionControls
                 section={section}
                 canJoinPrevious={sectionIndex > 0}
-                editorDevice={editorDevice}
                 styleDevice={sectionStyleDevice}
                 onUpdateSection={onUpdateSection}
                 onOpenSectionBackgroundGallery={onOpenSectionBackgroundGallery}
@@ -763,24 +756,19 @@ export function BuilderSectionCard({
                     <BuilderCellPanelHeader
                       isCollapsed={cellPanels.styles}
                       onToggle={() => toggleCellPanel(column, "styles")}
-                      panelName={editorDevice === "mobile" ? "Mobile styles" : "Styles"}
-                      title={editorDevice === "mobile" ? "Mobile" : "Styles"}
+                      panelName="Styles"
+                      title="Styles"
                       trailingActions={
-                        // Same reasoning as the row's switch above: the old
-                        // page-list Mobile mode has a panel of its own, so the
-                        // switch would only confuse it.
-                        editorDevice === "browser" ? (
-                          <BuilderDeviceSwitch
-                            value={cellStyleDevice(column)}
-                            changedDevices={(["tablet", "phone"] as const).filter(
-                              (device) => listCellDeviceOverrideKeys(section, column, device).length > 0
-                            )}
-                            onChange={(device) => {
-                              setCellStyleDevices((current) => ({ ...current, [column]: device }));
-                              setCellPanelOpen(column, "styles");
-                            }}
-                          />
-                        ) : null
+                        <BuilderDeviceSwitch
+                          value={cellStyleDevice(column)}
+                          changedDevices={(["tablet", "phone"] as const).filter(
+                            (device) => listCellDeviceOverrideKeys(section, column, device).length > 0
+                          )}
+                          onChange={(device) => {
+                            setCellStyleDevices((current) => ({ ...current, [column]: device }));
+                            setCellPanelOpen(column, "styles");
+                          }}
+                        />
                       }
                     />
 
@@ -801,7 +789,6 @@ export function BuilderSectionCard({
                             ? section
                             : resolveSectionForCellDevice(section, cellStyleDevice(column))
                         }
-                        editorDevice={editorDevice}
                         styleDevice={cellStyleDevice(column)}
                         onUpdateSection={onUpdateSection}
                         onUpdateCellBackground={onUpdateCellBackground}
@@ -941,7 +928,6 @@ export function BuilderSectionCard({
                                   pages={pages}
                                   products={products}
                                   sectionId={section.id}
-                                  editorDevice={editorDevice}
                                   isExpanded={expandedModuleIds.includes(module.id)}
                                   onToggleExpanded={() => onToggleModuleExpanded(module.id)}
                                   onUpdateModule={(updater) => onUpdateModule(module.id, updater)}

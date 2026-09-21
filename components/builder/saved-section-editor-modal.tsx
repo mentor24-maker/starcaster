@@ -506,7 +506,6 @@ export function SavedSectionEditorModal({
                 sectionIndex={0}
                 isCanonicalMaster
                 canonicalUsage={usage}
-                editorDevice="browser"
                 isCollapsed={isCollapsed}
                 expandedModuleIds={expandedModuleIds}
                 cellModules={cellModules}

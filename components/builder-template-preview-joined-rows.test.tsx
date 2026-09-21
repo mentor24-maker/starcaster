@@ -73,7 +73,6 @@ describe("the control that turns joining on", () => {
       <BuilderSectionControls
         section={makeRows(false)[1]}
         canJoinPrevious={canJoinPrevious}
-        editorDevice="browser"
         onUpdateSection={() => {}}
       />
     );

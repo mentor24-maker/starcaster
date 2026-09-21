@@ -75,7 +75,6 @@ function renderCard(props: Record<string, unknown>) {
       <BuilderSectionCard
         section={SECTION}
         sectionIndex={0}
-        editorDevice="browser"
         isCollapsed
         expandedModuleIds={[]}
         cellModules={[]}

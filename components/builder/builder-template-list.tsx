@@ -18,7 +18,6 @@ type BuilderTemplateListProps = {
   emailFunction: BuilderEmailFunction | "";
   pageBackground: BackgroundSettings;
   theme: BuilderTheme;
-  previewDevice: "desktop" | "mobile";
   isSaving: boolean;
   onSelectTemplate: (templateId: string) => void;
   onPreviewTemplate: (template: BuilderTemplateRecord) => void;
@@ -28,7 +27,6 @@ type BuilderTemplateListProps = {
   onSetEmailFunction: (value: BuilderEmailFunction | "") => void;
   onUpdatePageBackground: (updater: (background: BackgroundSettings) => BackgroundSettings) => void;
   onUpdateTheme: (updater: (theme: BuilderTheme) => BuilderTheme) => void;
-  onSetPreviewDevice: (device: "desktop" | "mobile") => void;
   onPreviewDraft: () => void;
   onNewTemplate: () => void;
   onTemplateEditorFocus: (focused: boolean) => void;
@@ -44,7 +42,6 @@ export function BuilderTemplateList({
   templateKind,
   emailFunction,
   pageBackground,
-  previewDevice,
   isSaving,
   onSelectTemplate,
   onPreviewTemplate,
@@ -53,7 +50,6 @@ export function BuilderTemplateList({
   onSetTemplateKind,
   onSetEmailFunction,
   onUpdatePageBackground,
-  onSetPreviewDevice,
   onPreviewDraft,
   onNewTemplate,
   onTemplateEditorFocus,
@@ -304,41 +300,16 @@ export function BuilderTemplateList({
                 {isEmailTemplate ? (
                   <>
                     <p className="builder-email-preview-note">
-                      Email templates render in a fixed 600px pod below. Desktop and Mobile preview modes apply to page templates only.
+                      Email templates render in a fixed 600px pod below.
                     </p>
                     <button className="submit-button" onClick={onPreviewDraft} type="button">
                       Preview Email
                     </button>
                   </>
                 ) : (
-                  <>
-                    <fieldset className="builder-preview-radio-group" aria-label="Preview device">
-                      <legend className="builder-template-format-legend">Preview device</legend>
-                      <div className="builder-template-format-options">
-                        <label>
-                          <input
-                            checked={previewDevice === "desktop"}
-                            name="template-preview-device"
-                            onChange={() => onSetPreviewDevice("desktop")}
-                            type="radio"
-                          />
-                          <span>Desktop</span>
-                        </label>
-                        <label>
-                          <input
-                            checked={previewDevice === "mobile"}
-                            name="template-preview-device"
-                            onChange={() => onSetPreviewDevice("mobile")}
-                            type="radio"
-                          />
-                          <span>Mobile</span>
-                        </label>
-                      </div>
-                    </fieldset>
-                    <button className="submit-button" onClick={onPreviewDraft} type="button">
-                      Preview
-                    </button>
-                  </>
+                  <button className="submit-button" onClick={onPreviewDraft} type="button">
+                    Preview
+                  </button>
                 )}
               </div>
             </div>

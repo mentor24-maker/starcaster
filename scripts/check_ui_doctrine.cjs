@@ -35,9 +35,9 @@ const SETTINGS_GLOB = /components\/builder\/.*-module-settings\.tsx$/;
 // Every entry needs a reason. "It was already like that" is not a reason.
 // ---------------------------------------------------------------------------
 const R1_ALLOW = new Map([
-  ['.builder-react-root .builder-preview-column-mobile-hidden',
-    'the class exists only to hide a column on mobile — a base rule would hide it everywhere'],
-  ['.builder-react-root .builder-preview-module-mobile-hidden',
+  ['.builder-react-root .builder-preview-column-phone-hidden',
+    'the class exists only to hide a column on a phone — a base rule would hide it everywhere'],
+  ['.builder-react-root .builder-preview-module-phone-hidden',
     'same: mobile-only visibility toggle, meaningless above the breakpoint'],
   ['.site-nav:not(.site-nav--vertical)',
     'Top Menu hamburger collapse — the collapsed nav is a state that only exists below the breakpoint'],

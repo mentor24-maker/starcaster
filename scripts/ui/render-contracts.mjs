@@ -1131,10 +1131,143 @@ export const RENDER_CONTRACTS = [
       cellMobileHidden: { main: 'true' },
       modules: [{ type: 'heading', text: 'Hidden the old way', settings: {} }],
     },
-    selector: '.builder-preview-column-mobile-hidden',
+    selector: '.builder-preview-column-phone-hidden',
     read: ['display'],
     emulate: { viewport: { width: 420, height: 900 } },
     hidden: true,
+  },
+  {
+    id: 'device-styles-cell-legacy-hide-on-mobile-waits-for-the-phone-width',
+    why:
+      '86bc1ecxx. The old "Hide on Mobile" fired at 900px while "Hide on Phone" fired at 767px, so ' +
+      'the two disagreed from 768 to 900px. The old field now fires at the Phone width too: at ' +
+      '800px the column is still there. Paired with the 420px contract above, so neither can pass ' +
+      'by hiding everywhere or nowhere.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellMobileHidden: { main: 'true' },
+      modules: [{ type: 'heading', text: 'Hidden the old way', settings: {} }],
+    },
+    selector: '.builder-preview-column-phone-hidden',
+    read: ['display'],
+    emulate: { viewport: { width: 800, height: 900 } },
+    expect(sample) {
+      return sample.styles.display !== 'none'
+        ? null
+        : 'a column hidden with the old "Hide on Mobile" was hidden at 800px — it must wait for the Phone width (767px), the same as "Hide on Phone".';
+    },
+  },
+  {
+    id: 'device-styles-cell-legacy-hide-on-mobile-hides-in-the-phone-frame',
+    why:
+      'The Builder preview\'s Mobile frame is a narrow box on a wide screen and matches no media ' +
+      'query, so the renamed class needs its own frame rule — without it the operator would see ' +
+      'the column in the preview that a phone does not show.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#eeeeee' },
+      cellMobileHidden: { main: 'true' },
+      modules: [{ type: 'heading', text: 'Hidden the old way', settings: {} }],
+    },
+    selector: '.builder-preview-column-phone-hidden',
+    read: ['display'],
+    emulate: { previewDevice: 'mobile' },
+    hidden: true,
+  },
+  {
+    id: 'module-legacy-phone-fields-fire-at-the-phone-width',
+    why:
+      '86bc1ecxx. "Hide Module on Mobile" must take the module out at phone width, now from the ' +
+      'Phone-width rule rather than the old 900px one.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'The old phone fields',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'true' },
+        },
+        { type: 'heading', text: 'Aligned the old way', settings: { fontSize: '48', mobileAlignment: 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module-phone-hidden',
+    read: ['display'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    hidden: true,
+  },
+  {
+    id: 'module-legacy-phone-fields-leave-768-to-900-alone',
+    why:
+      '86bc1ecxx. Between 768 and 900px the old module fields used to apply while every Phone ' +
+      'setting did not. At 800px the module is visible and keeps its desktop size — the pair of ' +
+      'the 420px contracts, so none of them can pass by applying at every width.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'The old phone fields',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'true' },
+        },
+        { type: 'heading', text: 'Aligned the old way', settings: { fontSize: '48', mobileAlignment: 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module-phone-hidden .builder-preview-heading',
+    read: ['display', 'fontSize'],
+    emulate: { viewport: { width: 800, height: 900 } },
+    expect(sample) {
+      if (sample.styles.display === 'none') return 'a module with the old "Hide Module on Mobile" was hidden at 800px — it must wait for the Phone width (767px).';
+      return sample.styles.fontSize === '48px'
+        ? null
+        : `a heading with the old Mobile Font Size 18 rendered ${sample.styles.fontSize} at 800px, not its desktop 48 — the old field is still firing above the Phone width.`;
+    },
+  },
+  {
+    id: 'module-legacy-phone-alignment-fires-at-the-phone-width',
+    why: '86bc1ecxx. The old "Mobile Alignment" field, renamed onto the Phone-width rule, still centres at 420px.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'The old phone fields',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'true' },
+        },
+        { type: 'heading', text: 'Aligned the old way', settings: { fontSize: '48', mobileAlignment: 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module-phone-align-center:not(.builder-preview-module-phone-hidden)',
+    read: ['textAlign'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.textAlign === 'center'
+        ? null
+        : `a module with the old Mobile Alignment "center" rendered text-align ${sample.styles.textAlign} at 420px.`;
+    },
+  },
+  {
+    id: 'module-legacy-phone-alignment-waits-for-the-phone-width',
+    why: 'The pair of the contract above: at 800px the old Mobile Alignment no longer applies.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'The old phone fields',
+          settings: { fontSize: '48', mobileFontSize: '18', mobileAlignment: 'center', mobileHidden: 'true' },
+        },
+        { type: 'heading', text: 'Aligned the old way', settings: { fontSize: '48', mobileAlignment: 'center' } },
+      ],
+    },
+    selector: '.builder-preview-module-phone-align-center:not(.builder-preview-module-phone-hidden)',
+    read: ['textAlign'],
+    emulate: { viewport: { width: 800, height: 900 } },
+    expect(sample) {
+      return sample.styles.textAlign !== 'center'
+        ? null
+        : 'a module with the old Mobile Alignment "center" was centred at 800px — it must wait for the Phone width (767px).';
+    },
   },
   {
     id: 'device-styles-cell-keep-reverse-stack-column-order',

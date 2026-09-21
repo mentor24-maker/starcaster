@@ -861,7 +861,6 @@ function CreatedModulesTable({
                           <div className="builder-saved-module-column-pod">
                             <BuilderModuleCard
                               deviceStylesEnabled={false}
-                              editorDevice="browser"
                               hideHeaderActions
                               isExpanded={editingCreatedExpanded}
                               module={editingCreatedModule}
@@ -1247,7 +1246,6 @@ function RepositoryTable({
                             {editingModules.map((module) => (
                               <BuilderModuleCard
                                 deviceStylesEnabled={false}
-                                editorDevice="browser"
                                 hideHeaderActions
                                 isExpanded={editingExpandedModuleIds.includes(module.id)}
                                 key={module.id}
@@ -1537,7 +1535,6 @@ function SavedSectionsTable({
                           <div className="builder-rows-pod">
                             <BuilderSectionCard
                             cellModules={cellModules}
-                            editorDevice="browser"
                             expandedModuleIds={editingSectionExpandedModuleIds}
                             isCanonicalMaster
                             // `?? EMPTY_USAGE` because the index only creates an

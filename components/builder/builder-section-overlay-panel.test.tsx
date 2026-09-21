@@ -45,7 +45,6 @@ function mount(section: BuilderTemplateSection): Mounted {
     root.render(
       <BuilderSectionControls
         section={section}
-        editorDevice="browser"
         onUpdateSection={(updater) => {
           latest = updater(latest);
         }}

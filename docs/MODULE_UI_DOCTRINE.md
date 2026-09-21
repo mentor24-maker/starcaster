@@ -489,7 +489,7 @@ it will fail the first time it appears alone.
 **Checked by:** `check_ui_doctrine.cjs` parses all of `src/css/` as one corpus
 (rules for a selector may legitimately be split across files) and fails any
 selector that sets a layout property inside a media query and nowhere outside
-one. Genuinely breakpoint-scoped selectors — `.builder-preview-*-mobile-hidden`
+one. Genuinely breakpoint-scoped selectors — `.builder-preview-*-phone-hidden`
 — are allowlisted **in the script, with their reason**, because
 `_builder-react.css` is regenerated wholesale and a comment marker there would
 not survive.
