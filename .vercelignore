@@ -1,0 +1,22 @@
+# What must NOT be uploaded to Vercel.
+#
+# THE ONE THAT MATTERS IS `workers/`. The serverless bundle is already about
+# 97 MB and is implicated in the cold-start 502s; the Studio workers exist to
+# drive ffmpeg over multi-gigabyte video on a Mac Mini, and nothing in that
+# tree can run on a read-only serverless filesystem or finish inside a function
+# timeout. Media tooling and model weights must never enter this bundle.
+#
+# AN IGNORE FILE NOBODY VERIFIES IS AN IGNORE FILE THAT STOPS WORKING SILENTLY,
+# so this file is not the guard on its own — `npm run check:vercel-bundle`
+# (scripts/check_vercel_bundle.cjs, a CI gate) fails the build if these rules
+# stop excluding `workers/`, or if anything Vercel actually serves starts
+# requiring a file in there. Exclusion and unreachability are two different
+# claims and both are checked.
+workers/
+
+# Agent worktrees and CI definitions. Neither is reachable from a served route
+# and neither has any business in a function bundle. Kept to these two on
+# purpose: this file is a SAFETY guard, and a speculative exclusion that turns
+# out to be wrong fails in production rather than in CI.
+.claude/
+.github/
