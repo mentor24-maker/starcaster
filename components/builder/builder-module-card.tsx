@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { installStackedColumnAlignment } from "@/lib/builder-stacked-columns";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { BuilderCenteredModal } from "./builder-centered-modal";
@@ -3192,6 +3193,8 @@ function ModuleEditorWrapper({
   children: ReactNode;
 }) {
   const className = `builder-module-editor is-lattice builder-module-editor--${moduleType}`;
+  // A column that wraps under another shares its field edge (86bbzzv49).
+  useEffect(() => installStackedColumnAlignment(), []);
 
   // No width cap: popping a module out is how the operator escapes a narrow
   // column, so the editor takes the room its panel needs (D7).

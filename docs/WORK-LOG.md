@@ -1,3 +1,18 @@
+## 2026-09-20 — Settings panels: a column that drops to a second line now lines up with the one above it (#735)
+
+On a laptop-width screen, a module's settings columns (Content, Structure,
+Text, Frame) don't all fit on one line, so the last one drops to a second line,
+right under the first. The two columns started their boxes at different
+distances from the left, and the result was a visible step, one under the
+other. It's the same untidy look Dane pointed out on 13 August, reached by a
+different route. On Messaging Topic List the gap was 57px, and 22 panels
+wrapped this way at 1440px. Now, whenever one column lands under another, the
+builder measures both and widens the narrower label column just enough that
+both columns' boxes start at the same place. It never makes a column wrap that
+wouldn't have wrapped anyway. The automatic panel checker couldn't see this
+kind of misalignment before, because it only compared each column with itself.
+It now compares stacked columns with each other. With the fix switched off it
+flags 23 misaligned pairs, and with the fix on it flags none.
 ## 2026-09-21 — A list of which archive files are copies of each other, matched by content (#738)
 
 The first step of clearing up the archive spread across MaxOne, the MacBook and

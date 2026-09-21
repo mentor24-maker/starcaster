@@ -2,6 +2,8 @@
 
 import type { BackgroundUploadTarget } from "@/lib/background-uploaded-media";
 import type { CSSProperties, ReactNode } from "react";
+import { useEffect } from "react";
+import { installStackedColumnAlignment } from "@/lib/builder-stacked-columns";
 import type { BackgroundSettings, BuilderTemplateSection } from "@/lib/builder-template";
 import { createDefaultBackgroundSettings, normalizeRowOverlayScreenSettings } from "@/lib/builder-template";
 import {
@@ -161,6 +163,8 @@ export function BuilderCellStyleSettings({
   themePrimaryColor,
   themeColors = []
 }: BuilderCellStyleSettingsProps) {
+  // A column that wraps under another shares its field edge (86bbzzv49).
+  useEffect(() => installStackedColumnAlignment(), []);
   if (editorDevice === "mobile") {
     return (
       <div className="builder-cell-style-settings is-lattice">
