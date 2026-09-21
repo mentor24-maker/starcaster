@@ -140,6 +140,25 @@ describe("module device overrides", () => {
     expect(listModuleDeviceKeys("heading")).not.toContain("size");
   });
 
+  it("offers line height and letter spacing to the Heading only, as on desktop", () => {
+    expect(listModuleDeviceKeys("heading")).toEqual(expect.arrayContaining(["lineHeight", "letterSpacing"]));
+    expect(listModuleDeviceKeys("text")).not.toContain("lineHeight");
+    expect(listModuleDeviceKeys("headline-rotator")).not.toContain("letterSpacing");
+  });
+
+  it("stores a phone line height and letter spacing, clamped to the desktop ranges", () => {
+    const next = writeModuleDeviceEdit(heading({ lineHeight: "1.2" }), "heading", "phone", (c) => ({
+      ...c,
+      lineHeight: "0.95",
+      letterSpacing: "99"
+    }));
+    expect(next["phone.lineHeight"]).toBe("0.95");
+    expect(next["phone.letterSpacing"]).toBe("20");
+    // Put back to desktop's value, the override goes away rather than pinning.
+    const back = writeModuleDeviceEdit(next, "heading", "phone", (c) => ({ ...c, lineHeight: "1.2" }));
+    expect(back["phone.lineHeight"]).toBeUndefined();
+  });
+
   it("takes each type's own font-size default as desktop's value", () => {
     expect(resolveModuleDeviceValues({}, "heading", "desktop").fontSize).toBe("32");
     expect(resolveModuleDeviceValues({}, "headline-rotator", "desktop").fontSize).toBe("32");
