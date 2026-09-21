@@ -119,6 +119,7 @@
     "pulse:publish": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pulse_publish.mjs",
     "checkout:current": "doppler run --project starcaster --config dev --no-check-version -- node scripts/checkout_currency.mjs",
     "archive:index": "node scripts/archive_index.mjs",
+    "archive:route": "node scripts/archive_route.mjs",
     "backup:node": "node scripts/backup_node.mjs",
     "restore:node": "node scripts/restore_node.mjs"
   },
