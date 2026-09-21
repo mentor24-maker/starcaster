@@ -66,7 +66,6 @@ function mount(options: { withUploadHandler?: boolean } = {}): Mounted {
       <BuilderSectionCard
         section={latest}
         sectionIndex={0}
-        editorDevice="browser"
         isCollapsed={false}
         expandedModuleIds={[]}
         cellModules={[]}

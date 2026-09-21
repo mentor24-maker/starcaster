@@ -26,7 +26,6 @@ describe("spacing rows outside a module panel (E4b)", () => {
     const html = renderToStaticMarkup(
       <BuilderSectionControls
         section={createEmptySection("single")}
-        editorDevice="browser"
         onUpdateSection={() => {}}
       />
     );
@@ -40,7 +39,6 @@ describe("spacing rows outside a module panel (E4b)", () => {
       <BuilderCellStyleSettings
         column="main"
         section={section}
-        editorDevice="browser"
         onUpdateCellBackground={() => {}}
         onUpdateCellBorderWidth={() => {}}
         onUpdateCellBorderColor={() => {}}
@@ -62,7 +60,6 @@ describe("spacing rows outside a module panel (E4b)", () => {
       <BuilderCellStyleSettings
         column="main"
         section={section}
-        editorDevice="browser"
         onUpdateCellBackground={() => {}}
         onUpdateCellBorderWidth={() => {}}
         onUpdateCellBorderColor={() => {}}

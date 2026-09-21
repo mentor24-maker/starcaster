@@ -172,7 +172,6 @@ type AdminBuilderEditorProps = {
 
 export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }: AdminBuilderEditorProps = {}) {
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewModalDevice, setPreviewModalDevice] = useState<BuilderPreviewFrameDevice | null>(null);
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
   const [acquireRuns, setAcquireRuns] = useState<AcquireRunSummary[]>([]);
@@ -2777,7 +2776,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     );
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
-      isEmailTemplateDraft ? "email" : previewDevice
+      isEmailTemplateDraft ? "email" : "desktop"
     );
     window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
@@ -2821,7 +2820,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     );
     window.localStorage.setItem(
       BUILDER_PREVIEW_DEVICE_STORAGE_KEY,
-      template.templateKind === "email" ? "email" : previewDevice
+      template.templateKind === "email" ? "email" : "desktop"
     );
     window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
@@ -2842,7 +2841,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         })
       )
     );
-    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, previewDevice);
+    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, "desktop");
     window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
 
@@ -3144,7 +3143,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           emailFunction={draft.emailFunction}
           pageBackground={draft.pageBackground}
           theme={draft.theme}
-          previewDevice={previewDevice}
           isSaving={isSaving}
           onSelectTemplate={setSelectedTemplateId}
           onPreviewTemplate={openTemplatePreview}
@@ -3154,7 +3152,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onSetEmailFunction={setEmailFunction}
           onUpdatePageBackground={updatePageBackground}
           onUpdateTheme={updateTheme}
-          onSetPreviewDevice={setPreviewDevice}
           onPreviewDraft={openPreviewPage}
           onNewTemplate={startNewTemplate}
           onTemplateEditorFocus={setTemplateEditorFocused}
@@ -3358,7 +3355,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                             isEmailTemplate
                             section={section}
                             sectionIndex={sectionIndex}
-                            editorDevice="browser"
                             autoOpenFirstCellContent={newSectionOpenFocusId === section.id}
                             onAutoOpenFirstCellContentHandled={() => {
                               setNewSectionOpenFocusId((current) => (current === section.id ? null : current));
@@ -3450,7 +3446,6 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
                         isEmailTemplate={isEmailTemplateDraft}
                         section={section}
                         sectionIndex={sectionIndex}
-                        editorDevice={previewDevice === "mobile" ? "mobile" : "browser"}
                         autoOpenFirstCellContent={newSectionOpenFocusId === section.id}
                         onAutoOpenFirstCellContentHandled={() => {
                           setNewSectionOpenFocusId((current) => (current === section.id ? null : current));

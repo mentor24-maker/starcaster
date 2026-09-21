@@ -231,7 +231,6 @@ type BuilderModuleCardProps = {
   pages?: BuilderPageRecord[];
   products?: BuilderProductRecord[];
   sectionId: string;
-  editorDevice: "browser" | "mobile";
   isExpanded: boolean;
   onToggleExpanded: () => void;
   onUpdateModule: (updater: (current: BuilderTemplateModule) => BuilderTemplateModule) => void;
@@ -3211,7 +3210,6 @@ function ModuleEditorWrapper({
 export function BuilderModuleCard({
   module,
   sectionId,
-  editorDevice,
   isExpanded,
   onToggleExpanded,
   onUpdateModule,
@@ -3256,7 +3254,7 @@ export function BuilderModuleCard({
      */
     const [styleDevice, setStyleDevice] = useState<BuilderEditorStyleDevice>("desktop");
     /** Tablet or Phone: the panel shows ONLY what a device may change. */
-    const isDeviceStyleMode = deviceStylesEnabled && editorDevice === "browser" && styleDevice !== "desktop";
+    const isDeviceStyleMode = deviceStylesEnabled && styleDevice !== "desktop";
     const chromeSlotsRef = useRef<HTMLElement[]>([]);
     /*
      * A card can end up holding more than one slot — a table module renders a
@@ -3298,7 +3296,6 @@ export function BuilderModuleCard({
       onUploadGalleryImage: onUploadRichTextGalleryImage
     };
     const moduleAlignment = getModuleAlignment(module.settings);
-    const mobileAlignment = module.settings.mobileAlignment ?? "";
     const isVideoModule = module.type === "video" || (module.type === "image" && module.settings.variant === "video");
     const isStandardImage = module.type === "image" && !isVideoModule;
     const isCarouselModule = module.type === "carousel";
@@ -3742,10 +3739,8 @@ export function BuilderModuleCard({
     /**
      * Whether the shared chrome is on the panel — inline as this module's
      * whole editor, or restored underneath one that swallowed it (F13).
-     * Never in the mobile pane, which renders its own overrides instead.
      */
     const showsSharedChrome =
-      editorDevice !== "mobile" &&
       !isDeviceStyleMode &&
       (moduleSettingsEditor === sharedModuleChrome || needsRestoredChrome);
 
@@ -3832,10 +3827,8 @@ export function BuilderModuleCard({
           <div className="builder-section-actions">
             {/* The Styles bar's three icons (Dane's screenshot, 2026-09-15) —
                 the same control rows got in slice 1, so the operator learns
-                it once. Only in the normal editor: the old page-list Mobile
-                mode has its own pane below and the switch would only confuse
-                it, and a collapsed card has no panel to swap. */}
-            {isExpanded && deviceStylesEnabled && editorDevice === "browser" ? (
+                it once. Not on a collapsed card: it has no panel to swap. */}
+            {isExpanded && deviceStylesEnabled ? (
               <BuilderDeviceSwitch
                 value={styleDevice}
                 changedDevices={(["tablet", "phone"] as const).filter(
@@ -3850,10 +3843,8 @@ export function BuilderModuleCard({
           <div className="builder-section-actions">
             {/* The Styles bar's three icons (Dane's screenshot, 2026-09-15) —
                 the same control rows got in slice 1, so the operator learns
-                it once. Only in the normal editor: the old page-list Mobile
-                mode has its own pane below and the switch would only confuse
-                it, and a collapsed card has no panel to swap. */}
-            {isExpanded && deviceStylesEnabled && editorDevice === "browser" ? (
+                it once. Not on a collapsed card: it has no panel to swap. */}
+            {isExpanded && deviceStylesEnabled ? (
               <BuilderDeviceSwitch
                 value={styleDevice}
                 changedDevices={(["tablet", "phone"] as const).filter(
@@ -3942,66 +3933,6 @@ export function BuilderModuleCard({
               screen a field you can see belongs to. */}
           {isDeviceStyleMode ? (
             <BuilderModuleDeviceControls device={styleDevice} module={module} onUpdateModule={onUpdateModule} />
-          ) : editorDevice === "mobile" ? (
-            <div
-              className={
-                module.type === "heading"
-                  ? "builder-heading-module-settings"
-                  : "builder-module-settings-row builder-module-settings-row-mobile"
-              }
-            >
-              <BuilderSettingRow label="Hide Module on Mobile">
-                <input
-                  type="checkbox"
-                  checked={module.settings.mobileHidden === "true"}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      settings: { ...current.settings, mobileHidden: event.target.checked ? "true" : "false" }
-                    }))
-                  }
-                />
-              </BuilderSettingRow>
-              <BuilderSettingRow label="Mobile Alignment">
-                <select
-                  value={mobileAlignment}
-                  onChange={(event) =>
-                    onUpdateModule((current) => ({
-                      ...current,
-                      settings: { ...current.settings, mobileAlignment: event.target.value }
-                    }))
-                  }
-                >
-                  <option value="">Use browser setting</option>
-                  <option value="left">Left</option>
-                  <option value="center">Center</option>
-                  <option value="right">Right</option>
-                </select>
-              </BuilderSettingRow>
-              {(module.type === "heading" ||
-                module.type === "headline-rotator" ||
-                module.type === "poll-category-list") ? (
-                <BuilderSettingRow label="Mobile Font Size">
-                  <input
-                    type="number"
-                    min="10"
-                    max="120"
-                    step="1"
-                    value={module.settings.mobileFontSize ?? ""}
-                    onChange={(event) =>
-                      onUpdateModule((current) => ({
-                        ...current,
-                        settings: { ...current.settings, mobileFontSize: event.target.value }
-                      }))
-                    }
-                    placeholder="Auto"
-                  />
-                </BuilderSettingRow>
-              ) : null}
-              <div className="builder-mobile-context-note">
-                Mobile overrides are kept separate from browser settings.
-              </div>
-            </div>
           ) : (
           <BuilderModuleChromeSlotProvider value={registerChromeSlot}>
           {showModuleTriggerSettings ? (

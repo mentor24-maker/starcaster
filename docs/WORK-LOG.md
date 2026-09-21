@@ -1,3 +1,16 @@
+## 2026-09-21 — The Builder's old Desktop/Mobile switch is gone (#736)
+
+The page list had a leftover **Desktop / Mobile** switch from before every row,
+column and module got its own Phone / Tablet / Desktop icons. Flipping it to
+Mobile showed a second set of small "Mobile" panels. Now there is one way to
+set phone-only settings, not two. Every setting from the old panels was checked
+in a running Builder first, and each one is on a Phone panel now: Mobile Layout,
+Hide on Mobile, and a module's hide, alignment and font size. Pages that already
+use those settings keep them. One difference visitors could notice: those old
+settings used to switch on at screens 900px wide and narrower, while the new
+Phone controls switch on at 767px. They now both use 767px, so a small tablet
+or a narrow browser window no longer gets half the phone settings and not the
+rest. On an actual phone nothing changes.
 ## 2026-09-20 — Settings panels: a column that drops to a second line now lines up with the one above it (#735)
 
 On a laptop-width screen, a module's settings columns (Content, Structure,

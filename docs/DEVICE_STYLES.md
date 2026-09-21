@@ -8,8 +8,9 @@ and where the `<style>` element is allowed to sit.
 Slices: rows shipped as 86bc13a6v (PR #716), cells as 86bc14pey (PR #717).
 Modules are slice 3 (86bc14pfq, PR #718). Slice 4 (86bc14pgq) added the
 preview's **Tablet frame** and moved the layout half of the old 900px/560px
-rules onto these breakpoints; retiring the page list's Desktop/Mobile toggle
-is what remains of it, and is filed on its own as 86bc1ecxx.
+rules onto these breakpoints. 86bc1ecxx finished it: the page list's
+Desktop/Mobile toggle and its three Mobile panels are gone, and the old
+per-field phone rules fire at the Phone width with everything else.
 
 ## The model — a device FOLLOWS until it is changed
 
@@ -108,16 +109,26 @@ worth reading before moving it:
 
 | Still at the old width | Why |
 |---|---|
-| `.builder-preview-column-mobile-hidden`, `.builder-preview-module-mobile-hidden` | Widening makes content VANISH on tablets that show it today. Narrowing cannot be written at all: the rule is `display: none !important` and the element's real display lives in an inline style, which a stylesheet cannot hand back. These move when the legacy fields are read through the device chain. |
-| the module's legacy Mobile Font Size and Mobile Alignment | The module slice shipped and deliberately left them: a module carrying ONLY legacy fields emits no device CSS at all, so these stylesheet classes are still what renders it. `mobileFontSize` also loses to a heading rule inside the same 900px block — see "The legacy fields underneath" below. |
 | every `.site-nav*` rule at 900/720/560px | The hamburger breakpoint that turns the menu into a drawer lives in `legacy.css`. Moving the nav's sizing without it leaves a drawer-shaped menu beside a desktop nav. |
 | `gap: 18px !important` on a stacked row | No desktop value to return to, and at 901-1024px the row's own Column Gap is the better answer. |
 | everything admin-only | Those are screens in the app, not a visitor's page. |
 
-So a column hidden with the old **Hide on Mobile** field still hides at ≤900px,
-while one hidden with **Hide on Phone** hides at ≤767px. The two disagree
-between 768 and 900px, and that is a known, written-down gap rather than an
-oversight.
+**The old per-field phone rules moved to 767px** (86bc1ecxx): a column's
+**Hide on Mobile**, and a module's **Hide Module on Mobile**, **Mobile
+Alignment** and **Mobile Font Size**. Those rules live in the regenerated
+`_builder-react.css` at 900px, and narrowing a `display: none !important`
+cannot be written as an override — the element's real display is inline, so
+there is no value to hand back between 768 and 900px. So the renderer stopped
+emitting the old `-mobile-*` class names and emits `-phone-*` ones
+(`builder-preview-column-phone-hidden`, `builder-preview-module-phone-hidden`,
+`-module-phone-align-*`, `-module-phone-font-size`), whose rules are written
+at 767px in `_builder-react-overrides.css`, "THE OLD PHONE FIELDS". The 900px
+rules still exist and match nothing. The stored fields are unchanged.
+
+What an operator sees: an old-style hidden column or module, an old Mobile
+Alignment and an old Mobile Font Size now apply from 767px down rather than
+900px down — the same width as the Phone panel, so the old field and the
+new control can no longer disagree between 768 and 900px.
 
 ### The preview frames cannot see a media query
 
@@ -285,7 +296,8 @@ Rows have their own pair (`mobileHidden` / `desktopHidden`) and slice 1 left
 them alone; they are slice 4's to reconcile.
 
 A module that carries **only** legacy fields emits no device CSS at all — it
-goes on rendering through the stylesheet classes it always did, at 900px.
+goes on rendering through its stylesheet classes, which fire at 767px since
+86bc1ecxx (see "The breakpoints").
 The guard for that is per DEVICE AND KEY rather than per module: an unrelated
 tablet margin must not drag a module's `mobileFontSize` into a 767px rule with
 `!important` on it, which would change a live client page that nobody had
@@ -339,9 +351,10 @@ Every control in it reads the object as that screen sees it and writes through
 **the controls themselves do not know devices exist**. That is what makes
 adding a key cheap.
 
-The switch is deliberately absent in three places: the old page-list Mobile
-mode (it has its own pane), the **module repository**, and the
-**saved-section modal**. A master in those two is a template rather than a
+The switch is deliberately absent in two places: the **module repository**
+and the **saved-section modal**. (A third, the page list's old Desktop/Mobile
+mode, was removed in 86bc1ecxx along with its Mobile panels — every setting
+those panels held is on a Phone panel.) A master in those two is a template rather than a
 placed module, and its device settings would be copied onto every page that
 follows it with no screen to check them on.
 

@@ -39,7 +39,6 @@ import {
 
 type BuilderSectionControlsProps = {
   section: BuilderTemplateSection;
-  editorDevice: "browser" | "mobile";
   /**
    * Which screen the panel edits. Desktop edits the row itself; Tablet and
    * Phone show the row as that screen sees it and store only what differs.
@@ -157,7 +156,6 @@ const DEVICE_SETTING_NAMES: Record<string, string> = {
 
 export function BuilderSectionControls({
   section: storedSection,
-  editorDevice,
   styleDevice = "desktop",
   canJoinPrevious = false,
   onUpdateSection: updateStoredSection,
@@ -169,33 +167,6 @@ export function BuilderSectionControls({
 }: BuilderSectionControlsProps) {
   // A column that wraps under another shares its field edge (86bbzzv49).
   useEffect(() => installStackedColumnAlignment(), []);
-  if (editorDevice === "mobile") {
-    const section = storedSection;
-    const onUpdateSection = updateStoredSection;
-    return (
-      <div className="builder-section-settings is-lattice">
-        <BuilderSettingRow label="Mobile Layout" fullWidth>
-          <select
-            value={section.mobileLayout ?? "stack"}
-            onChange={(event) =>
-              onUpdateSection((current) => ({
-                ...current,
-                mobileLayout: event.target.value as BuilderTemplateSection["mobileLayout"]
-              }))
-            }
-          >
-            <option value="stack">Stack columns</option>
-            <option value="keep">Keep columns</option>
-            <option value="reverse-stack">Reverse stack</option>
-          </select>
-        </BuilderSettingRow>
-        <div className="builder-mobile-context-note">
-          Mobile mode only changes mobile-specific row, cell, and module overrides.
-        </div>
-      </div>
-    );
-  }
-
   // On Tablet or Phone every control below reads the row as that screen sees
   // it, and every edit is routed through `writeSectionDeviceEdit`, which keeps
   // only what differs. So the controls themselves do not know devices exist.

@@ -218,9 +218,8 @@ function ruleBlock(scope: string, byTarget: Map<TargetSuffix, string[]>, prefix 
 
 export function buildModuleDeviceCss(module: BuilderTemplateModule, scope: string): string {
   // Legacy-only pages emit nothing: `mobileHidden`/`mobileAlignment`/
-  // `mobileFontSize` are still rendered by the stylesheet classes they always
-  // were, at the width they always were. Slice 4 harmonises those widths; a
-  // module nobody has opened on a phone must not move before then.
+  // `mobileFontSize` are rendered by their own stylesheet classes, which fire
+  // at the Phone width like these rules (`-phone-*`, 86bc1ecxx).
   if (!hasModuleDeviceOverrides(module.settings)) return "";
 
   const selector = scopeSelector(scope);

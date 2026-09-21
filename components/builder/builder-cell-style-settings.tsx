@@ -23,7 +23,6 @@ import { BuilderThemeColorField } from "./builder-theme-color-field";
 type BuilderCellStyleSettingsProps = {
   column: string;
   section: BuilderTemplateSection;
-  editorDevice: "browser" | "mobile";
   /**
    * Which screen this panel is editing. On Tablet or Phone the cell's own
    * writers below are already routed through `writeCellDeviceEdit` by the
@@ -146,7 +145,6 @@ const CELL_DEVICE_SETTING_NAMES: Record<string, string> = {
 export function BuilderCellStyleSettings({
   column,
   section,
-  editorDevice,
   styleDevice = "desktop",
   onUpdateSection,
   onUpdateCellBackground,
@@ -165,27 +163,6 @@ export function BuilderCellStyleSettings({
 }: BuilderCellStyleSettingsProps) {
   // A column that wraps under another shares its field edge (86bbzzv49).
   useEffect(() => installStackedColumnAlignment(), []);
-  if (editorDevice === "mobile") {
-    return (
-      <div className="builder-cell-style-settings is-lattice">
-        <div className="builder-schema-panel-columns" style={{ "--builder-axis-count": "1" } as CSSProperties}>
-          <div className="builder-schema-panel-column">
-            <div className="builder-schema-group-title">Visibility</div>
-            <BuilderSettingRow label="Hide on Mobile">
-              <input
-                type="checkbox"
-                checked={getCellExtra(column, "cellMobileHidden", "false") === "true"}
-                onChange={(event) =>
-                  onSetCellExtra(column, "cellMobileHidden", event.target.checked ? "true" : "false")
-                }
-              />
-            </BuilderSettingRow>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   /*
    * Through the normalizer, never off the section: `cellOverlayScreens` is
    * optional and a row saved before 2026-09-03 carries nothing at all, so

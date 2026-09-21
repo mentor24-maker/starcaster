@@ -2098,11 +2098,16 @@ function BuilderSectionPreview({
             : null;
         const columnStyle = buildBuilderColumnStyle(section, columnKey);
 
+        // `-phone-hidden` (and the module's `-phone-align-*` / `-phone-font-size`
+        // below) are the old Hide on Mobile / Mobile Alignment / Mobile Font Size
+        // fields. They were `-mobile-*` and fired at 900px from the regenerated
+        // stylesheet; renamed so they fire at the Phone width with everything
+        // else — `_builder-react-overrides.css`, "THE OLD PHONE FIELDS" (86bc1ecxx).
         return (
           <div
             key={columnKey}
             className={`builder-preview-column ${
-              section.cellMobileHidden?.[columnKey] === "true" ? "builder-preview-column-mobile-hidden" : ""
+              section.cellMobileHidden?.[columnKey] === "true" ? "builder-preview-column-phone-hidden" : ""
             } ${isNavigationColumn ? "builder-preview-column-navigation" : ""}${
               isPageOverlayFlowColumn ? " builder-preview-column-overlay-flow" : ""
             } ${isSectionOverlayColumn ? " builder-preview-column-overlay-slot" : ""}${
@@ -2167,11 +2172,11 @@ function BuilderSectionPreview({
                 <div
                   key={module.id}
                   className={`builder-preview-module ${module.type !== "table" ? getAlignmentClass(getModuleAlignment(module.settings)) : ""} ${
-                    module.settings.mobileHidden === "true" ? "builder-preview-module-mobile-hidden" : ""
+                    module.settings.mobileHidden === "true" ? "builder-preview-module-phone-hidden" : ""
                   } ${
-                    module.settings.mobileAlignment ? `builder-preview-module-mobile-align-${module.settings.mobileAlignment}` : ""
+                    module.settings.mobileAlignment ? `builder-preview-module-phone-align-${module.settings.mobileAlignment}` : ""
                   } ${
-                    module.settings.mobileFontSize ? "builder-preview-module-mobile-font-size" : ""
+                    module.settings.mobileFontSize ? "builder-preview-module-phone-font-size" : ""
                   }${isPageOverlayFlowModule ? " builder-preview-module-overlay-flow" : ""}${
                     isSectionOverlayModule ? " builder-preview-module-overlay-slot" : ""
                   }${isCurrentPollModule ? " builder-preview-module-current-poll" : ""}`}

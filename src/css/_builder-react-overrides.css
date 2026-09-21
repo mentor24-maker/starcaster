@@ -11195,13 +11195,11 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
  * WHAT DELIBERATELY DID NOT MOVE, because each would change a live client
  * page in a way no acceptance criterion asked for:
  *
- *   - `.builder-preview-column-mobile-hidden` / `-module-mobile-hidden`.
- *     Widening these makes content DISAPPEAR on tablets that can see it
- *     today, and narrowing them cannot be expressed in CSS at all (see
- *     above). They move when the legacy fields are read through the device
- *     chain, which is the module half of this work.
- *   - the module's legacy Mobile Font Size and Mobile Alignment rules, for
- *     the same reason and in the same company.
+ *   - `.builder-preview-column-mobile-hidden` / `-module-mobile-hidden` and
+ *     the module's legacy Mobile Font Size and Mobile Alignment rules. These
+ *     DID move later, the other way — narrowed to the Phone width by
+ *     renaming the classes (86bc1ecxx). See "THE OLD PHONE FIELDS" at the
+ *     end of this file.
  *   - every `.site-nav*` rule at 900px / 720px / 560px. The hamburger
  *     breakpoint that decides when the menu becomes a drawer lives in
  *     `legacy.css`, which this task does not own; moving the nav's sizing
@@ -11400,7 +11398,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   .builder-react-root .builder-preview-text :is(h1, h2, h3, h4, h5, h6) * {
     overflow-wrap: break-word;
   }
-  .builder-react-root .builder-preview-module-mobile-font-size .builder-preview-heading:not(.builder-preview-heading-eyebrow) {
+  .builder-react-root .builder-preview-module-phone-font-size .builder-preview-heading:not(.builder-preview-heading-eyebrow) {
     font-size: var(--builder-mobile-font-size) !important;
   }
 }
@@ -11415,6 +11413,88 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6),
 .builder-react-root .builder-preview-device-mobile .builder-preview-text :is(h1, h2, h3, h4, h5, h6) * {
   overflow-wrap: break-word;
+}
+
+/* ==============================================================
+   THE OLD PHONE FIELDS fire at the Phone width (86bc1ecxx)
+
+   A column's "Hide on Mobile" and a module's "Hide Module on Mobile",
+   "Mobile Alignment" and "Mobile Font Size" predate the device panels.
+   Their rules live in the regenerated `_builder-react.css` at 900px, so a
+   column hidden the old way vanished at 900px while one hidden with "Hide on
+   Phone" vanished at 767px, and the two disagreed from 768 to 900px.
+
+   That file may not be edited, and narrowing a `display: none !important`
+   cannot be written as an override (there is no value to hand back — the
+   element's real display is inline). So the renderer stopped emitting the
+   old `-mobile-*` class names and emits `-phone-*` ones instead; the 900px
+   rules still exist but nothing carries their classes any more, and the
+   same declarations are written here at 767px, the Phone width
+   (`BUILDER_PHONE_MAX_WIDTH`).
+
+   The stored fields are unchanged, and the device panels read them as the
+   Phone value (`builder-device-overrides.ts`,
+   `builder-module-device-overrides.ts`), so the Phone panel shows exactly
+   what this renders.
+
+   The font-size rules come after the heading cap above and after the 560px
+   cap in `_builder-react.css` at equal specificity, which is what lets the
+   operator's size win over the cap — the same ordering the old rule relied
+   on. The phone frame gets its own copy because it is a narrow box on a
+   wide screen and matches no media query.
+   ============================================================== */
+@media (max-width: 767px) {
+  .builder-react-root .builder-preview-column-phone-hidden,
+  .builder-react-root .builder-preview-module-phone-hidden {
+    display: none !important;
+  }
+
+  .builder-react-root .builder-preview-module-phone-font-size .builder-preview-heading,
+  .builder-react-root .builder-preview-module-phone-font-size .builder-preview-headline-rotator,
+  .builder-react-root .builder-preview-module-phone-font-size .builder-preview-headline-rotator * {
+    font-size: var(--builder-mobile-font-size) !important;
+  }
+
+  .builder-react-root .builder-preview-module-phone-align-left {
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .builder-react-root .builder-preview-module-phone-align-center {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .builder-react-root .builder-preview-module-phone-align-right {
+    justify-items: end;
+    text-align: right;
+  }
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-column-phone-hidden,
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-hidden {
+  display: none !important;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-font-size .builder-preview-heading,
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-font-size .builder-preview-headline-rotator,
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-font-size .builder-preview-headline-rotator * {
+  font-size: var(--builder-mobile-font-size) !important;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-align-left {
+  justify-items: stretch;
+  text-align: left;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-align-center {
+  justify-items: center;
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-device-mobile .builder-preview-module-phone-align-right {
+  justify-items: end;
+  text-align: right;
 }
 
 /* ==============================================================
