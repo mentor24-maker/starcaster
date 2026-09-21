@@ -32,7 +32,13 @@ test('a message saved on the fallback ticket counts as delivered; a double refus
   const body = SRC.slice(start, SRC.indexOf('\n}\n', start));
   assert.match(body, /if \(bus && bus\.ok\) return \{ ok: true, via: 'chat'/);
   assert.match(body, /await saveUndeliveredAlarm\(\{ text, channel, why \}\)/);
-  assert.match(body, /if \(saved\.ok\) return \{ ok: true, via: 'ticket'/);
+  // Anchored on the STRUCTURE — the `saved.ok` branch answering `via: 'ticket'`
+  // — rather than on one line's exact formatting. Task 86bc3t0n1 added an
+  // `assignedToOperator` field to that return and the old single-line pattern
+  // failed on the reflow alone, which is a test reporting a defect that is not
+  // there.
+  assert.match(body, /if \(saved\.ok\)[\s\S]{0,240}?via: 'ticket'/);
+  assert.match(body, /if \(saved\.ok\)[\s\S]{0,240}?ok: true/);
   assert.match(body, /return \{ ok: false,/);
 });
 

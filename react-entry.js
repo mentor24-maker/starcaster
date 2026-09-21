@@ -8,6 +8,7 @@ import InvitationsPanel from './components/invitations/invitations-panel';
 import ConnectionsPanel from './components/connections/connections-panel';
 import AiSpendPanel from './components/observe/ai-spend-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
+import FootagePanel from './components/studio/footage-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -47,6 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (connectionsHost) {
     createRoot(connectionsHost).render(<ConnectionsPanel />);
+  }
+
+  const footageHost = document.getElementById('studioFootageReactRoot');
+
+  if (footageHost) {
+    createRoot(footageHost).render(<FootagePanel />);
   }
 
   const noWorkspaceHost = document.getElementById('noWorkspaceReactRoot');

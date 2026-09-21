@@ -48,6 +48,7 @@ const SCREENS = [
   // in this sweep; add screens here only when they own a table.
   { id: 'contactsPersonasPage', label: 'Contacts: Personas' },
   { id: 'assetsPage', label: 'Assets' },
+  { id: 'assetsFootagePage', label: 'Assets: Footage' },
   { id: 'contactsPage', label: 'Contacts' },
   { id: 'acquireYoutubePage', label: 'Acquire: YouTube' },
   { id: 'acquireWebPage', label: 'Acquire: Web' },

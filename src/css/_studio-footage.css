@@ -1,0 +1,141 @@
+/* Assets › Footage — the React island at #studioFootageReactRoot
+   (components/studio/footage-panel.tsx). Studio Phase 1 · 8 of 8.
+
+   Width: every flex/grid box here sets min-width: 0 (UI_RULES T8), the table
+   wrapper scrolls inside itself if it ever must (T7 rung 12, via .table-wrap),
+   and nothing carries a pixel min-width (T9) — so the page body never scrolls
+   sideways (T0). */
+
+.studio-footage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.studio-footage-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1rem;
+  min-width: 0;
+}
+
+.studio-footage-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+}
+
+.studio-footage-filter input,
+.studio-footage-filter select {
+  max-width: 100%;
+}
+
+.studio-footage-filter input[type='search'] {
+  width: 16rem;
+}
+
+.studio-footage-filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.studio-footage-summary,
+.studio-footage-empty,
+.studio-footage-error {
+  margin: 0;
+}
+
+.studio-footage-empty {
+  padding: 1rem;
+  border: 1px dashed var(--border-light);
+  border-radius: 10px;
+}
+
+.studio-footage-error {
+  color: var(--danger, #c0392b);
+}
+
+.studio-footage-session {
+  min-width: 0;
+}
+
+.studio-footage-session-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  min-width: 0;
+}
+
+.studio-footage-session-head h3 {
+  margin: 0;
+  /* A session name is what the block is FOR — wrap it, never clip it (T-1). */
+  overflow-wrap: anywhere;
+}
+
+.studio-footage-session-meta {
+  color: var(--muted, #6b7280);
+}
+
+.studio-footage-table-wrap {
+  margin-top: 0.5rem;
+}
+
+.studio-footage-table td {
+  white-space: nowrap;
+}
+
+/* The table is read-only and unsorted; the shared header styling assumes a
+   clickable, sortable column, so turn that affordance off here. */
+table.studio-footage-table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr th {
+  cursor: default;
+}
+
+/* The shared rule centres the last header because it is normally an Actions
+   column. Here the last column is Stage, a value, so it reads left like the
+   cells under it. Same selector shape as the shared rule, plus the class, so
+   it wins on specificity rather than on file order. */
+table.studio-footage-table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:last-child {
+  text-align: left;
+}
+
+.studio-footage-thumb-cell {
+  width: 1%;
+}
+
+.studio-footage-thumb {
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-page, #f3f4f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-footage-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.studio-footage-thumb-placeholder {
+  font-size: var(--text-xs);
+  color: var(--muted, #6b7280);
+  text-align: center;
+  white-space: normal;
+  padding: 0 0.25rem;
+}
+
+.studio-footage-date-note {
+  color: var(--muted, #6b7280);
+}
