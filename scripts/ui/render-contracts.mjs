@@ -645,10 +645,17 @@ export const RENDER_CONTRACTS = [
     selector: '.builder-preview-module[data-builder-module-device-scope] > *',
     read: ['fontSize'],
     emulate: { viewport: { width: 420, height: 900 } },
+    // Until 2026-09-20 this asserted NOT 18px, which only worked because the
+    // legacy field never reached a real phone (the 560px cap beat it). Since
+    // 86bc3xrhz the field wins on its own, so 18px is now right from BOTH
+    // paths and a browser cannot tell them apart. The emit guard itself is
+    // pinned where it can be seen, in builder-module-device-css.test.ts ("keeps
+    // a legacy field out of the rules when ANOTHER key is set"); what is left
+    // for a browser is that a tablet edit leaves the old field working.
     expect(sample) {
       return sample.styles.fontSize === '18px'
-        ? 'a heading carrying the legacy mobileFontSize and an unrelated tablet margin rendered 18px at 420px — the device rules are emitting a legacy value at a width it never applied at.'
-        : null;
+        ? null
+        : `a heading carrying the legacy mobileFontSize 18 and an unrelated tablet margin rendered ${sample.styles.fontSize} at 420px — the tablet edit broke the old phone size.`;
     },
   },
   {
@@ -691,16 +698,12 @@ export const RENDER_CONTRACTS = [
     id: 'module-device-styles-leave-the-old-mobile-fields-alone',
     why:
       'Acceptance criterion: a page using the pre-device `mobileHidden`/`mobileAlignment`/' +
-      '`mobileFontSize` must render EXACTLY as it does today. Those render through stylesheet ' +
-      'classes at 900px, not 767px, so a generator that emitted for them would move every ' +
-      'untouched page by 133px of breakpoint. The selector is the contract: this module must carry ' +
-      'no device scope at all, and if one ever appears nothing matches and the harness says so.\n' +
-      'Do NOT "fix" this by asserting the font size is 18px. Measured 2026-09-15, it is not: ' +
-      '`.builder-react-root .builder-preview-heading:not(.eyebrow)` inside the same 900px block ' +
-      'sets `clamp(1.35rem, 9vw, 2.35rem) !important` at equal specificity and later in the file, ' +
-      'so Mobile Font Size has never reached a real phone — only the preview\'s phone frame, which ' +
-      'has a rule of its own. That is a live defect and it belongs to slice 4 (86bc14pgq), which ' +
-      'owns the old phone rules; this slice deliberately changes nothing about it.',
+      '`mobileFontSize` must go on rendering through the stylesheet classes, not the device ' +
+      'rules. The selector is half the contract: this module must carry no device scope at all, ' +
+      'and if one ever appears nothing matches and the harness says so.\n' +
+      'The other half changed on 2026-09-20 (86bc3xrhz). Until then Mobile Font Size had never ' +
+      'reached a real phone: the phone cap `clamp(1.35rem, 9vw, 2.35rem) !important` sat at equal ' +
+      'specificity later in the file and won. The field now beats the cap, so 18 means 18.',
     section: {
       layout: 'single',
       modules: [
@@ -711,11 +714,122 @@ export const RENDER_CONTRACTS = [
         },
       ],
     },
-    selector: '.builder-preview-module:not([data-builder-module-device-scope])',
+    selector: '.builder-preview-module:not([data-builder-module-device-scope]) .builder-preview-heading',
     read: ['fontSize'],
     emulate: { viewport: { width: 420, height: 900 } },
-    expect() {
-      return null;
+    expect(sample) {
+      return sample.styles.fontSize === '18px'
+        ? null
+        : `a heading with the old Mobile Font Size 18 rendered ${sample.styles.fontSize} at 420px — the phone cap is beating the field again, which is how it never reached a real phone.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-font-size-reaches-words-the-toolbar-sized',
+    why:
+      '86bc3xrhz, Delray\'s home page. The hero headline was styled in the rich text toolbar, so ' +
+      'every word sat in `<span style="font-size: 88px">`. Phone Font Size landed on the heading ' +
+      'and lost to those inline sizes: the control did nothing, and "Champions" split mid-word on ' +
+      'a phone. The contract above cannot see this — its heading has no inline sizes.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: '<span style="font-size: 88px;">Play Where </span><span style="font-size: 88px; color: rgb(146, 210, 80);">Champions</span>',
+          settings: { fontSize: '60', level: 'h1', variant: 'hero', 'phone.fontSize': '30' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] .builder-preview-heading span',
+    read: ['fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      return sample.styles.fontSize === '30px'
+        ? null
+        : `a word the toolbar sized at 88px, in a heading with Phone font size 30, rendered ${sample.styles.fontSize} at 420px — the phone size is not reaching it.`;
+    },
+  },
+  {
+    id: 'phone-cap-reaches-words-the-toolbar-sized-and-never-splits-them',
+    why:
+      '86bc3xrhz, the same headline with NO phone size set — the state Delray was actually in. ' +
+      'The built-in phone cap landed on the heading only, so the words stayed 88px, and ' +
+      '`overflow-wrap: anywhere` broke "Champions" at any letter instead. On a phone the word ' +
+      'follows the heading\'s capped size and wraps only between words.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: '<span style="font-size: 88px;">Play Where </span><span style="font-size: 88px;">Champions</span>',
+          settings: { fontSize: '60', level: 'h1', variant: 'hero' },
+        },
+      ],
+    },
+    selector: '.builder-preview-heading span',
+    read: ['fontSize', 'overflowWrap'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      const size = Number.parseFloat(sample.styles.fontSize);
+      if (!(size <= 2.35 * 16 + 0.5)) {
+        return `a word the toolbar sized at 88px rendered ${sample.styles.fontSize} at 420px — the phone cap (2.35rem) is not reaching it.`;
+      }
+      return sample.styles.overflowWrap === 'anywhere'
+        ? 'a heading word at 420px carries overflow-wrap: anywhere, which splits a word at any letter ("Champ-ions").'
+        : null;
+    },
+  },
+  {
+    id: 'words-the-toolbar-sized-keep-their-size-on-desktop',
+    why:
+      'The other direction, so the two contracts above cannot pass by shrinking every width: on a ' +
+      'desktop screen the toolbar\'s 88px is what the operator drew, and it stays.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: '<span style="font-size: 88px;">Champions</span>',
+          settings: { fontSize: '60', level: 'h1', variant: 'hero', 'phone.fontSize': '30' },
+        },
+      ],
+    },
+    selector: '.builder-preview-heading span',
+    read: ['fontSize'],
+    expect(sample) {
+      return sample.styles.fontSize === '88px'
+        ? null
+        : `a word the toolbar sized at 88px rendered ${sample.styles.fontSize} on a desktop screen — a phone rule is leaking to desktop.`;
+    },
+  },
+  {
+    id: 'module-device-styles-phone-line-height-and-letter-spacing',
+    why:
+      '86bc3xrhz: the Phone panel offers a heading\'s Line Height and Letter Spacing, because both ' +
+      'decide whether a big headline fits a narrow screen. The heading writes both INLINE, so the ' +
+      'phone rule has to outrank an inline value, exactly as font size does.',
+    section: {
+      layout: 'single',
+      modules: [
+        {
+          type: 'heading',
+          text: 'Tighter on a phone',
+          settings: { lineHeight: '1.6', letterSpacing: '4', 'phone.lineHeight': '1', 'phone.letterSpacing': '0' },
+        },
+      ],
+    },
+    selector: '.builder-preview-module[data-builder-module-device-scope] .builder-preview-heading',
+    read: ['lineHeight', 'letterSpacing', 'fontSize'],
+    emulate: { viewport: { width: 420, height: 900 } },
+    expect(sample) {
+      const lineHeight = Number.parseFloat(sample.styles.lineHeight);
+      const fontSize = Number.parseFloat(sample.styles.fontSize);
+      if (Math.abs(lineHeight - fontSize) > 0.5) {
+        return `a heading with Phone line height 1 rendered line-height ${sample.styles.lineHeight} over font-size ${sample.styles.fontSize} at 420px.`;
+      }
+      return sample.styles.letterSpacing === '0px' || sample.styles.letterSpacing === 'normal'
+        ? null
+        : `a heading with Phone letter spacing 0 rendered letter-spacing ${sample.styles.letterSpacing} at 420px.`;
     },
   },
   {

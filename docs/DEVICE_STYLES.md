@@ -77,7 +77,7 @@ helpers below them) and `builder-module-device-overrides.ts`.
 | Spacing | margin and padding, four sides each | padding, four sides | margin, four sides |
 | Size | Width mode, Width %, min height, column gap | — | Width % (Simple/Rich Text) |
 | Nudge | horizontal / vertical offset | — | horizontal / vertical offset |
-| Type | — | — | font size (heading, headline-rotator, poll-category-list) |
+| Type | — | — | font size (heading, headline-rotator, poll-category-list); line height and letter spacing (heading) |
 | Other | alignment, border width/style/colour/radius | border width/style/colour/radius | alignment |
 | Visibility | Hide on this screen | Hide on this screen | Hide on this screen |
 
@@ -291,13 +291,36 @@ tablet margin must not drag a module's `mobileFontSize` into a 767px rule with
 `!important` on it, which would change a live client page that nobody had
 touched. (It did, before review round 1 caught it.)
 
-> Measured 2026-09-15: `mobileFontSize` on a heading has in fact never reached
-> a real phone. Inside the same 900px block,
-> `.builder-react-root .builder-preview-heading:not(.builder-preview-heading-eyebrow)`
-> sets `font-size: clamp(1.35rem, 9vw, 2.35rem) !important` at equal
-> specificity and later in the file, so it wins. Mobile Font Size works only
-> inside the preview's phone frame, which has a rule of its own. That is a real
-> defect and it belongs to 86bc14pgq, which owns the old phone rules.
+> Measured 2026-09-15: `mobileFontSize` on a heading had in fact never reached
+> a real phone — the 560px phone cap
+> (`clamp(1.35rem, 9vw, 2.35rem) !important`) sat at equal specificity later in
+> the file and won. **Fixed 2026-09-20 (86bc3xrhz):** a rule in
+> `_builder-react-overrides.css` now lets the field beat the cap, and the render
+> contract `module-device-styles-leave-the-old-mobile-fields-alone` asserts 18px.
+
+### A heading whose words carry their own size
+
+A heading styled in the rich text toolbar stores each word as
+`<span style="font-size: 88px">`. An inline size beats anything set on the
+heading element, so until 86bc3xrhz a heading's Phone/Tablet font size — and the
+built-in phone cap — changed nothing a visitor could see. Delray's hero headline
+was exactly that, and on a phone "Champions" split mid-word.
+
+Two rules now hold, and both are what the operator would expect:
+
+- **A device font size resizes the whole headline.** Every piece of the heading
+  that carries its own size follows it (`font-size: inherit`), keeping its own
+  colour and weight. Emitted beside the heading's own font-size rule in
+  `builder-module-device-css.ts`.
+- **With no device size, the phone cap reaches those pieces too**, at 560px and
+  in the preview's phone frame. Headings wrap with `overflow-wrap: break-word`
+  rather than `anywhere`, so a word breaks only when it cannot fit a line on its
+  own.
+
+On desktop, a toolbar size is still exactly what was drawn.
+
+Module Tablet rules are also copied under `.builder-preview-device-tablet`, as
+row rules already were, so a Tablet setting shows in the preview's Tablet frame.
 
 ## The editor
 

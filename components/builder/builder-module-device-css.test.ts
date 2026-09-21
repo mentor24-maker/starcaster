@@ -140,6 +140,34 @@ describe("buildModuleDeviceCss", () => {
     expect(repeats).toBeGreaterThanOrEqual(6); // three per selector, two selectors
   });
 
+  it("makes the words a heading's toolbar sized follow a device font size", () => {
+    /*
+     * 86bc3xrhz: Delray's hero headline wraps every word in
+     * `<span style="font-size: 88px">`. A size set only on the heading lost to
+     * those inline styles, so its Phone Font Size did nothing at all.
+     */
+    const css = buildModuleDeviceCss(edit(moduleOf("heading", { fontSize: "60" }), "phone", { fontSize: "40" }), "m1");
+    expect(css).toContain(' > * [style*="font-size"]{font-size:inherit !important}');
+    // No device font size, no inheritance rule: desktop sizes stay as drawn.
+    const margin = buildModuleDeviceCss(edit(moduleOf("heading"), "phone", { marginTop: "4" }), "m1");
+    expect(margin).not.toContain("font-size");
+  });
+
+  it("writes a heading's device line height and letter spacing on the heading itself", () => {
+    const css = buildModuleDeviceCss(
+      edit(moduleOf("heading", { lineHeight: "1.2", letterSpacing: "2" }), "phone", { lineHeight: "1", letterSpacing: "0" }),
+      "m1"
+    );
+    expect(css).toContain("> *{line-height:1 !important;letter-spacing:0px !important}");
+  });
+
+  it("shows a tablet setting in the preview's Tablet frame too", () => {
+    const css = buildModuleDeviceCss(edit(moduleOf("heading"), "tablet", { fontSize: "40" }), "m1");
+    expect(css).toContain('.builder-preview-device-tablet [data-builder-module-device-scope="m1"]');
+    const hidden = buildModuleDeviceCss(moduleOf("heading", setModuleHiddenOnDevice({}, "heading", "tablet", true)), "m1");
+    expect(hidden).toMatch(/\.builder-preview-device-tablet \[[^{]+\{display:none !important\}/);
+  });
+
   it("cannot be broken out of its selector by the scope string", () => {
     const module = moduleOf("heading", setModuleHiddenOnDevice({}, "heading", "phone", true));
     expect(buildModuleDeviceCss(module, '"]</style><script>')).not.toMatch(/<|"\]"/);
