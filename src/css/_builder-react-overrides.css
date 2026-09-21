@@ -4871,9 +4871,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   }
 }
 
+/* The Phone frame is a class on a narrow box in a WIDE window, so the
+   max-width media query that makes stacked columns border-box never fires
+   inside it. Without this line the frame's own 12px padding went on top of
+   `width: 100%` and the column overflowed the phone box — the exact route
+   the Delray hero ticket (86bc3y0ue) told Dane to check. */
 .builder-react-root .builder-preview-device-mobile .builder-preview-column {
   padding: var(--builder-cell-padding-box, 12px) !important;
   border-radius: var(--builder-cell-radius, 16px) !important;
+  box-sizing: border-box;
 }
 
 /* Menu cells and overlay slots publish 0px, so they stay flush by their
