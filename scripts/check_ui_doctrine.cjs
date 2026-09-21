@@ -39,6 +39,14 @@ const R1_ALLOW = new Map([
     'the class exists only to hide a column on a phone — a base rule would hide it everywhere'],
   ['.builder-react-root .builder-preview-module-phone-hidden',
     'same: mobile-only visibility toggle, meaningless above the breakpoint'],
+  // The retired 900px pair. The renderer writes the -phone- names above since
+  // 86bc1ecxx, so these match nothing — but they live in the regenerated
+  // _builder-react.css, which may not be edited, so they stay until the
+  // extractor stops emitting them.
+  ['.builder-react-root .builder-preview-column-mobile-hidden',
+    'retired 900px phone-hide rule, still emitted by the extractor; matches no markup'],
+  ['.builder-react-root .builder-preview-module-mobile-hidden',
+    'same: retired 900px phone-hide rule; matches no markup'],
   ['.site-nav:not(.site-nav--vertical)',
     'Top Menu hamburger collapse — the collapsed nav is a state that only exists below the breakpoint'],
   ['.site-nav:not(.site-nav--vertical) .site-nav-toggle',
