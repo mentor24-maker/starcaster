@@ -40,6 +40,7 @@ import { POLL_CATEGORY_LIST_DEFAULT_FONT_SIZE } from "./poll-category-list";
 import {
   BUILDER_STYLE_DEVICES,
   normalizeBooleanText,
+  normalizeDecimalValue,
   normalizeSignedOffsetValue,
   normalizeSpacingValue,
   type BuilderStyleDevice,
@@ -69,6 +70,11 @@ export const BUILDER_MODULE_DEVICE_KEY_NORMALIZERS: Record<string, (value: unkno
   verticalOffset: (value) => normalizeSignedOffsetValue(value, "0"),
   size: (value) => normalizeSpacingValue(value, "100", 25, 100),
   fontSize: (value) => normalizeSpacingValue(value, "32", 10, 120),
+  // The same ranges the heading's desktop fields normalize to. A big headline
+  // that fits a phone needs more than a smaller size: tight line height and
+  // letter spacing are what decide whether it wraps sensibly (86bc3xrhz).
+  lineHeight: (value) => normalizeDecimalValue(value, "1.2", 0.8, 3),
+  letterSpacing: (value) => normalizeDecimalValue(value, "0", -5, 20),
   hidden: (value) => normalizeBooleanText(value)
 };
 
@@ -85,6 +91,8 @@ export const BUILDER_MODULE_DEVICE_SETTING_NAMES: Record<string, string> = {
   verticalOffset: "Vertical offset",
   size: "Width",
   fontSize: "Font size",
+  lineHeight: "Line height",
+  letterSpacing: "Letter spacing",
   hidden: "Hidden"
 };
 
@@ -92,6 +100,8 @@ export const BUILDER_MODULE_DEVICE_SETTING_NAMES: Record<string, string> = {
 const FONT_SIZE_TYPES = new Set<string>(["heading", "headline-rotator", "poll-category-list"]);
 /** Width % is offered on the Simple/Rich Text module only, as on desktop. */
 const WIDTH_TYPES = new Set<string>(["text"]);
+/** Line height and letter spacing: the Heading module's own desktop fields. */
+const TYPE_SPACING_TYPES = new Set<string>(["heading"]);
 
 /** Each type's own desktop default for a key that has one. */
 function fontSizeDefault(type: string) {
@@ -105,6 +115,7 @@ export function listModuleDeviceKeys(type: BuilderTemplateModuleType | string): 
   return BUILDER_MODULE_DEVICE_KEYS.filter((key) => {
     if (key === "fontSize") return FONT_SIZE_TYPES.has(String(type));
     if (key === "size") return WIDTH_TYPES.has(String(type));
+    if (key === "lineHeight" || key === "letterSpacing") return TYPE_SPACING_TYPES.has(String(type));
     return true;
   });
 }
@@ -145,6 +156,8 @@ function desktopValues(settings: BuilderModuleSettings, type: string): Record<st
     verticalOffset: normalize.verticalOffset(settings.verticalOffset ?? "0"),
     size: normalize.size(settings.size ?? "100"),
     fontSize: normalize.fontSize(settings.fontSize || fontSizeDefault(type)),
+    lineHeight: normalize.lineHeight(settings.lineHeight || "1.2"),
+    letterSpacing: normalize.letterSpacing(settings.letterSpacing || "0"),
     hidden: "false"
   };
 }
