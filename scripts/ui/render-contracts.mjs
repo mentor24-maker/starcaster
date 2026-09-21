@@ -223,6 +223,23 @@ export function imageEffectOptionsFromSource(text) {
     .filter((value) => value !== 'none');
 }
 
+/**
+ * The Builder's Phone/Tablet preview pop-up sizes, read out of
+ * `components/builder/builder-device-preview.tsx` rather than copied here, so
+ * the check and the pop-up can never measure two different phones
+ * (86bc3yyn0). Returns {} when the block cannot be found — the harness then
+ * FAILS the embed contracts rather than measuring at a guessed width.
+ */
+export function previewDeviceFramesFromSource(text) {
+  const block = text.match(/PREVIEW_DEVICE_FRAMES[^=]*=\s*\{([\s\S]*?)\n\};/);
+  if (!block) return {};
+  const frames = {};
+  for (const m of block[1].matchAll(/(\w+):\s*\{\s*width:\s*(\d+),\s*height:\s*(\d+)\s*\}/g)) {
+    frames[m[1]] = { width: Number(m[2]), height: Number(m[3]) };
+  }
+  return frames;
+}
+
 /** Structural wrappers, not effects — they carry no `starcaster-effect-<name>` meaning. */
 const EFFECT_STRUCTURE_CLASSES = new Set(['motion-clip', 'motion-stage', 'hop-stage']);
 
@@ -427,6 +444,109 @@ export const RENDER_DIFFERENTIALS = [
 ];
 
 export const RENDER_CONTRACTS = [
+
+  /*
+   * A PADDED COLUMN IN A STACKED ROW FITS THE SCREEN (task 86bc3y0ue).
+   *
+   * Stacked columns get `width: 100%` below 1024px. As content-box, the
+   * column's own padding went on top of that, so every padded column was
+   * twice its side padding wider than the phone — the Delray home hero's
+   * paragraph ran off the right edge at 390px. The wide table beside it was
+   * the obvious suspect and was innocent: it already scrolls in its own
+   * wrapper. It rides along here so that stays true.
+   */
+  ...[390, 900].map((width) => ({
+    id: `stacked-padded-column-fits-the-screen-at-${width}`,
+    why:
+      'A two-column row stacks below 1024px and each column fills the width. With 24px of column ' +
+      'padding the column must still be no wider than the screen, or its text runs off the edge.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'stack',
+      cellPadding: { left: '24', right: '24' },
+      modules: [
+        {
+          type: 'text',
+          column: 'left',
+          text: '<p>Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.</p>',
+          settings: {},
+        },
+        { type: 'table', column: 'right', settings: { columns: '6', columnsCount: '6' } },
+      ],
+    },
+    selector: '.builder-preview-section-layout-two-column > .builder-preview-column',
+    read: ['boxSizing'],
+    emulate: { viewport: { width, height: 900 } },
+    expect(sample) {
+      const { clientWidth, scrollWidth } = sample.page;
+      if (sample.box.width > clientWidth) {
+        return `a stacked column with 24px padding measured ${sample.box.width}px on a ${clientWidth}px screen ` +
+          `(box-sizing ${sample.styles.boxSizing}) — its padding is being added on top of the full width.`;
+      }
+      return scrollWidth > clientWidth
+        ? `the page is ${scrollWidth}px wide on a ${clientWidth}px screen — something in the stacked row is wider than the phone.`
+        : null;
+    },
+  })),
+
+  /*
+   * THE SAME, INSIDE THE BUILDER'S PHONE FRAME (round 2 of 86bc3y0ue).
+   *
+   * The Phone frame is a 390px box in a WIDE window, so the media query the
+   * contracts above exercise is false inside it and the frame has its own
+   * class-keyed column rule. Round 1 fixed the media-query path only; the
+   * frame still measured a 394px column in a 390px box, and the frame is
+   * exactly where the ticket told Dane to look. The window is left at its
+   * default desktop width on purpose — that is the case being tested.
+   */
+  {
+    id: 'stacked-padded-column-fits-the-phone-frame',
+    why:
+      'The Builder\'s Phone preview is a class-keyed frame in a desktop-width window. A padded ' +
+      'stacked column inside it must fit the frame, or the preview shows text running off the edge ' +
+      'that the live phone site no longer has.',
+    section: {
+      layout: 'two-column',
+      mobileLayout: 'stack',
+      cellPadding: { left: '24', right: '24' },
+      modules: [
+        {
+          type: 'text',
+          column: 'left',
+          text: '<p>Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.</p>',
+          settings: {},
+        },
+        { type: 'table', column: 'right', settings: { columns: '6', columnsCount: '6' } },
+      ],
+    },
+    selector: '.builder-preview-device-mobile .builder-preview-section-layout-two-column > .builder-preview-column',
+    read: ['boxSizing'],
+    emulate: { previewDevice: 'mobile' },
+    probes: {
+      fit: {
+        subject: '.builder-preview-device-mobile .builder-preview-section-layout-two-column > .builder-preview-column',
+        against: '.builder-preview-device-mobile .builder-preview-section-layout-two-column',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.fit;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) {
+        return `the probe could not find \`${probe.missing}\` — the Phone frame did not render the stacked row, ` +
+          'so this contract can no longer fail for the right reason.';
+      }
+      if (!(probe.overlap > 0)) {
+        return 'the column and its row do not overlap at all, so the comparison below would mean nothing.';
+      }
+      const over = probe.subjectBox.right - probe.againstBox.right;
+      return over > 0
+        ? `a stacked column with 24px padding reaches ${over}px past the right edge of its row in the Phone ` +
+          `frame (column ${probe.subjectBox.left}-${probe.subjectBox.right}, row ${probe.againstBox.left}-` +
+          `${probe.againstBox.right}, box-sizing ${sample.styles.boxSizing}) — the frame's column rule is adding ` +
+          'its padding on top of the full width.'
+        : null;
+    },
+  },
 
   /*
    * TABLET AND PHONE ROW STYLES (device styles 1 of 6, task 86bc13a6v).
@@ -1024,6 +1144,77 @@ export const RENDER_CONTRACTS = [
         ? null
         : `the phone frame rendered padding-top ${sample.styles.paddingTop} for a row whose Phone padding-top is 60 — the frame is not reading the row's own device values.`;
     },
+  },
+
+  /*
+   * THE BUILDER'S PHONE / TABLET POP-UP (86bc3yyn0).
+   *
+   * The pop-up is an iframe of `builder-preview.html?embed=1` whose width IS
+   * the device, instead of the preview page's phone frame. That is the whole
+   * point of it: a frame is a narrow box in a wide window and only gets the
+   * mirror CSS, while an iframe 390px wide gets the real phone media rules —
+   * the ones a visitor's phone gets. The Delray headline that split mid-word
+   * (86bc3xrhz) only showed at real phone width.
+   *
+   * `emulate.embedFrame` names a device; the harness reads its size out of
+   * builder-device-preview.tsx, hosts the embed page in an iframe that size,
+   * and measures INSIDE it. Selectors deliberately carry no frame class:
+   * inside the embed there must be no frame, so these pass only on the real
+   * media rules.
+   */
+  {
+    id: 'preview-embed-phone-width-gets-phone-rules',
+    why:
+      'The Phone pop-up must show what a phone shows. A row with Phone top padding 60 has to read 60 ' +
+      'inside a 390px embed with NO phone frame around it — i.e. from the real `max-width` media rule. ' +
+      'If the embed page ever drew its own frame again, or the pop-up width drifted above the phone ' +
+      'breakpoint, this reads 18 or 30 (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { embedFrame: 'phone' },
+    expect(sample) {
+      return sample.styles.paddingTop === '60px'
+        ? null
+        : `inside the Phone pop-up's iframe the row rendered padding-top ${sample.styles.paddingTop}, not its Phone value 60 — the pop-up is not getting the real phone rules.`;
+    },
+  },
+  {
+    id: 'preview-embed-tablet-width-gets-tablet-rules',
+    why:
+      'Same for Tablet: inside the 820px embed the row must read its Tablet padding 30 — not the ' +
+      'desktop 18, and not the phone 60 (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-section[data-builder-device-scope]',
+    read: ['paddingTop'],
+    emulate: { embedFrame: 'tablet' },
+    expect(sample) {
+      return sample.styles.paddingTop === '30px'
+        ? null
+        : `inside the Tablet pop-up's iframe the row rendered padding-top ${sample.styles.paddingTop}, not its Tablet value 30.`;
+    },
+  },
+  {
+    id: 'preview-embed-has-no-frame',
+    why:
+      'The embed must not wrap the page in the preview\'s own phone frame — a frame inside the pop-up ' +
+      'is a phone inside a phone, and swaps the real media rules for the mirror CSS. Paired with the ' +
+      'two presence contracts above, which prove the embed rendered at all (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-device-frame',
+    absent: true,
+    emulate: { embedFrame: 'phone', storedDevice: 'mobile' },
+  },
+  {
+    id: 'preview-embed-has-no-strip',
+    why:
+      'The embed hides the preview page\'s own yellow strip (Desktop/Tablet/Mobile buttons and Close); ' +
+      'the pop-up has its own header, and a second set of device buttons inside it would contradict ' +
+      'the one the operator just chose (86bc3yyn0).',
+    section: { ...DEVICE_STYLED_SECTION },
+    selector: '.builder-preview-strip',
+    absent: true,
+    emulate: { embedFrame: 'phone' },
   },
 
   /*

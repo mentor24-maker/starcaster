@@ -112,6 +112,8 @@ import {
   type SharedBlockSaveChoice
 } from "./builder/builder-shared-block-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
+import { BuilderPreviewDeviceModal, type BuilderPreviewFrameDevice } from "./builder/builder-device-preview";
+import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import {
   BuilderModulePaletteModal,
   type ModulePaletteAnchor
@@ -171,6 +173,7 @@ type AdminBuilderEditorProps = {
 export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }: AdminBuilderEditorProps = {}) {
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const [previewModalDevice, setPreviewModalDevice] = useState<BuilderPreviewFrameDevice | null>(null);
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
   const [acquireRuns, setAcquireRuns] = useState<AcquireRunSummary[]>([]);
   const [builderThemes, setBuilderThemes] = useState<BuilderThemeSummary[]>([]);
@@ -2779,6 +2782,38 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     window.open(`${window.location.origin}/builder-preview.html`, "_blank");
   }
 
+  /**
+   * Page Details' Preview menu (86bc3yyn0). The draft travels exactly as
+   * before — through localStorage, saving nothing. Desktop opens a tab; Phone
+   * and Tablet open a pop-up whose iframe is the device's real width.
+   */
+  function writeDraftPreview(device: "desktop" | "tablet" | "mobile") {
+    window.localStorage.setItem(
+      BUILDER_PREVIEW_STORAGE_KEY,
+      JSON.stringify(buildPreviewStoragePayload(draft))
+    );
+    window.localStorage.setItem(BUILDER_PREVIEW_DEVICE_STORAGE_KEY, device);
+  }
+
+  function previewDraftOn(device: BuilderEditorStyleDevice) {
+    if (device === "desktop") {
+      writeDraftPreview("desktop");
+      window.open(`${window.location.origin}/builder-preview.html`, "_blank");
+      return;
+    }
+    // The iframe ignores the device key (embed mode is always full width), so
+    // desktop here only matters to a tab opened later without choosing.
+    writeDraftPreview("desktop");
+    setPreviewModalDevice(device);
+  }
+
+  function openPreviewModalInNewTab() {
+    if (!previewModalDevice) return;
+    // The preview page calls a phone "mobile".
+    writeDraftPreview(previewModalDevice === "phone" ? "mobile" : "tablet");
+    window.open(`${window.location.origin}/builder-preview.html`, "_blank");
+  }
+
   function openTemplatePreview(template: BuilderTemplateRecord) {
     window.localStorage.setItem(
       BUILDER_PREVIEW_STORAGE_KEY,
@@ -3190,7 +3225,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           onNewPage={startNewPage}
           onBulkCreate={() => setShowBulkCreate(true)}
 
-          onPreviewDraft={openPreviewPage}
+          onPreviewDraft={previewDraftOn}
           onMakeTemplate={() => void makeTemplateFromPage()}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
@@ -3571,6 +3606,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
         selectedTemplateId={selectedTemplateId}
         templateEditorFocused={templateEditorFocused}
       />
+      {previewModalDevice ? (
+        <BuilderPreviewDeviceModal
+          device={previewModalDevice}
+          onClose={() => setPreviewModalDevice(null)}
+          onOpenInNewTab={openPreviewModalInNewTab}
+        />
+      ) : null}
     </section>
   );
 }
