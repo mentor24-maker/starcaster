@@ -1,3 +1,17 @@
+## 2026-09-21 — MaxOne's zip files are being unpacked back onto Google Drive, and checked file by file (#739)
+
+Half of the MaxOne USB drive is zip files holding old downloads from Google
+Drive. A new command, `npm run archive:route`, unpacks only the files that are
+not already on a Google Drive and uploads them: videos to mentorofaio,
+everything else to mentor24, and the Personal-folder downloads back to their
+original Personal folder. It then reads each uploaded file back from Drive and
+compares its fingerprint, so a file counts as saved only once Drive holds the
+exact same bytes. That comes to 2,972 files, 77 GB. The upload started at
+3:20 PM and runs on its own overnight; if it is interrupted it picks up where
+it stopped. Nothing is deleted yet. The last step removes a zip from MaxOne
+only when every file inside it is confirmed on a Drive at that moment. That
+step comes after review, and it is what frees MaxOne to become the encrypted
+backup drive.
 ## 2026-09-21 — The "Undelivered alarms" ticket is now the team chat (#740)
 
 ClickUp's chat channel isn't part of the free plan, so since 7 September every
