@@ -14,6 +14,7 @@
  *   --index <file>        slice 1's index.jsonl       (default ~/archive-index/index.jsonl)
  *   --state <dir>         plan, ledger, logs, record  (default ~/archive-index/route)
  *   --maxone <dir>        where MaxOne is mounted     (default /Volumes/maxone)
+ *   --staging <dir>       where each zip is unpacked  (default <state>/staging, on the Mac)
  *   --remote m24=<target> --remote gdrive=<target>    use another rclone target for a Drive
  *
  * RESUMABLE. Every verified file is appended to <state>/ledger.jsonl the moment
@@ -50,7 +51,16 @@ const has = (flag) => argv.includes(flag);
 const INDEX = path.resolve(argValues('--index')[0] || path.join(HOME, 'archive-index', 'index.jsonl'));
 const STATE = path.resolve(argValues('--state')[0] || path.join(HOME, 'archive-index', 'route'));
 const MAXONE = path.resolve(argValues('--maxone')[0] || '/Volumes/maxone');
-const STAGING = path.join(MAXONE, '.archive-route-staging');
+// Unpacked on the Mac, never on MaxOne. MaxOne is ExFAT, and macOS lists names
+// there in a different Unicode form from the one it will open them by: a file
+// written as "…ΓÇ»PM.png" is listed decomposed, and opening or deleting it by
+// the listed name fails. rclone reads by the listed name, so it uploaded none
+// of 284 screenshots, and even `rm -rf` could not clear the folder, which
+// crashed the run one zip from the end (ticket 86bc4x5wh, 2026-09-22).
+const STAGING = path.resolve(argValues('--staging')[0] || path.join(STATE, 'staging'));
+const LEGACY_STAGING = path.join(MAXONE, '.archive-route-staging');
+// Headroom kept free on the Mac beyond the zip being unpacked.
+const STAGING_SPARE_BYTES = 5 * 1024 ** 3;
 const OVERRIDES = Object.fromEntries(argValues('--remote').map((s) => [s.slice(0, s.indexOf('=')) + ':', s.slice(s.indexOf('=') + 1)]));
 
 const PLAN_JSON = path.join(STATE, 'plan.json');
@@ -63,6 +73,27 @@ function log(s) {
   process.stderr.write(`${line}\n`);
   try { fs.appendFileSync(LOG, `${line}\n`); } catch { /* state dir not made yet */ }
 }
+// Clearing scratch space is never worth ending the run over: a folder that will
+// not go is logged, and the next zip unpacks into a fresh one beside it.
+function clearStaging(dir) {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return true;
+  } catch (e) {
+    log(`  could not clear the unpack folder ${dir} (${e.code || e.message}); carrying on without it`);
+    return false;
+  }
+}
+
+function freeBytes(dir) {
+  try {
+    const st = fs.statfsSync(dir);
+    return st.bavail * st.bsize;
+  } catch {
+    return null;
+  }
+}
+
 function cannotTell(msg) {
   console.error(`CANNOT TELL — ${msg}`);
   process.exit(2);
@@ -164,6 +195,10 @@ function cmdRun() {
   }
   log(`run: ${pending.length} file(s) still to upload from ${byZip.size} zip(s), ${idx.humanBytes(pending.reduce((s, r) => s + r.size, 0))}`);
 
+  fs.mkdirSync(STAGING, { recursive: true });
+  // A run from before the fix may have left its unpack folder on MaxOne.
+  if (fs.existsSync(LEGACY_STAGING)) clearStaging(LEGACY_STAGING);
+
   let failed = 0;
   let z = 0;
   for (const [zipPath, zipRows] of byZip) {
@@ -178,11 +213,17 @@ function cmdRun() {
     };
     if (!fs.existsSync(zipAbs)) { for (const r of zipRows) record(r, { verified: false, error: 'the zip is no longer on MaxOne' }); continue; }
 
-    fs.rmSync(STAGING, { recursive: true, force: true });
+    const zipBytes = zipRows.reduce((s, r) => s + r.size, 0);
+    const room = freeBytes(STAGING);
+    if (room !== null && room < zipBytes + STAGING_SPARE_BYTES) {
+      for (const r of zipRows) record(r, { verified: false, error: `not enough free space on this Mac to unpack it (needs ${idx.humanBytes(zipBytes)} plus ${idx.humanBytes(STAGING_SPARE_BYTES)} spare, has ${idx.humanBytes(room)})` });
+      continue;
+    }
+    const zipStage = fs.mkdtempSync(path.join(STAGING, 'zip-'));
     const groups = new Map();
     for (const r of zipRows) {
       const k = groupKey(r.dest);
-      if (!groups.has(k)) groups.set(k, { dest: r.dest, rows: [], dir: path.join(STAGING, String(groups.size)) });
+      if (!groups.has(k)) groups.set(k, { dest: r.dest, rows: [], dir: path.join(zipStage, String(groups.size)) });
       groups.get(k).rows.push(r);
     }
     const byId = new Map(zipRows.map((r) => [route.rowId(r), r]));
@@ -212,9 +253,9 @@ function cmdRun() {
       // for the MD5 and size of every file it now holds at those paths.
       const seen = rclone(['lsjson', t.spec, ...t.flags, '-R', '--files-only', '--hash', '--hash-type', 'md5', '--files-from-raw', list]);
       if (!seen.ok) { for (const r of g.rows) record(r, { verified: false, error: `could not read back from Drive: ${seen.err}` }); continue; }
-      const there = new Map(JSON.parse(seen.out).map((f) => [f.Path, f]));
+      const there = new Map(JSON.parse(seen.out).map((f) => [route.nameKey(f.Path), f]));
       for (const r of g.rows) {
-        const f = there.get(r.dest.path);
+        const f = there.get(route.nameKey(r.dest.path));
         const want = md5.get(route.rowId(r));
         if (!f) record(r, { verified: false, md5: want, error: 'not on Drive after the upload' });
         else if (f.Size !== r.size) record(r, { verified: false, md5: want, error: `Drive holds ${f.Size} bytes, expected ${r.size} — a different file may already sit at that path` });
@@ -222,7 +263,7 @@ function cmdRun() {
         else record(r, { verified: true, md5: want });
       }
     }
-    fs.rmSync(STAGING, { recursive: true, force: true });
+    clearStaging(zipStage);
     const s = route.summarize(rows, ledger);
     log(`  progress: ${s.verified}/${s.upload} verified (${idx.humanBytes(s.verifiedBytes)} of ${idx.humanBytes(s.uploadBytes)}), ${s.failed} failed`);
   }
@@ -308,7 +349,7 @@ function cmdClear() {
   }
   fs.mkdirSync(STATE, { recursive: true });
   fs.writeFileSync(path.join(STATE, 'record.tsv'), tsv(record));
-  if (apply) fs.rmSync(STAGING, { recursive: true, force: true });
+  if (apply) { clearStaging(STAGING); if (fs.existsSync(LEGACY_STAGING)) clearStaging(LEGACY_STAGING); }
   console.log(`${apply ? 'Deleted' : 'Would delete'} ${cleared} zip(s), ${idx.humanBytes(freed)}; ${blocked} kept because something in them is not on a Drive. Record: ${path.join(STATE, 'record.tsv')}`);
   if (!apply) console.log('Dry run — nothing deleted. Add --apply to delete exactly the zips marked WOULD DELETE.');
   return blocked ? 1 : 0;

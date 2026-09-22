@@ -213,3 +213,55 @@ test('run refuses to guess when MaxOne is not there', () => {
   assert.match(r.stderr, /CANNOT TELL — MaxOne is not mounted/);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test('nameKey: the two Unicode spellings of one name compare equal', () => {
+  // "Ç" as one code point (how the plan holds it) and as "C" plus a combining
+  // cedilla (how MaxOne lists it) — ticket 86bc4x5wh.
+  const composed = 'Screenshot 2025-08-23 at 11.37.08ΓÇ»PM.png';
+  const decomposed = 'Screenshot 2025-08-23 at 11.37.08ΓÇ»PM.png';
+  assert.notEqual(composed, decomposed);
+  assert.equal(route.nameKey(composed), route.nameKey(decomposed));
+  assert.equal(route.nameKey('plain.jpg'), 'plain.jpg');
+});
+
+test('run unpacks on the Mac, not MaxOne, and a scratch folder that will not clear does not stop it', { skip: !haveTools && 'rclone or python3 not installed' }, () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-route-'));
+  const maxone = path.join(tmp, 'maxone');
+  const m24 = path.join(tmp, 'm24');
+  const gdrive = path.join(tmp, 'gdrive');
+  const state = path.join(tmp, 'state');
+  for (const d of [maxone, m24, gdrive]) fs.mkdirSync(d, { recursive: true });
+
+  // A name carrying the character that broke the 2026-09-22 run.
+  const name = 'Screenshots/Screenshot 2025-08-23 at 11.37.08ΓÇ»PM.png';
+  const zipRel = 'Screenshots.zip';
+  const zipAbs = path.join(maxone, zipRel);
+  const py = spawnSync('python3', ['-c', 'import sys,zipfile\nz=zipfile.ZipFile(sys.argv[1],"w")\nz.writestr(sys.argv[2],"png bytes")\nz.close()', zipAbs, name]);
+  assert.equal(py.status, 0, String(py.stderr));
+  fs.writeFileSync(path.join(tmp, 'index.jsonl'), [
+    { location: 'maxone', path: zipRel, size: fs.statSync(zipAbs).size, hash: 'z' },
+    { location: 'maxone', container: zipRel, path: name, size: Buffer.byteLength('png bytes'), hash: md5('png bytes') },
+  ].map((e) => JSON.stringify(e)).join('\n') + '\n');
+
+  // The old run's unpack folder, left on MaxOne and refusing removal.
+  const stuck = path.join(maxone, '.archive-route-staging', 'stuck');
+  fs.mkdirSync(stuck, { recursive: true });
+  fs.writeFileSync(path.join(stuck, 'f'), 'x');
+  fs.chmodSync(stuck, 0o555);
+
+  const run = (...args) => spawnSync('node', [path.join(ROOT, 'scripts', 'archive_route.mjs'), ...args,
+    '--index', path.join(tmp, 'index.jsonl'), '--state', state, '--maxone', maxone,
+    '--remote', `m24=${m24}`, '--remote', `gdrive=${gdrive}`], { encoding: 'utf8' });
+  try {
+    assert.equal(run('plan').status, 0);
+    const r = run('run');
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.match(r.stderr, /could not clear the unpack folder .*carrying on/);
+    assert.match(r.stderr, /1\/1 verified, 0 failed/);
+    assert.deepEqual(fs.readdirSync(path.join(maxone, '.archive-route-staging')), ['stuck'], 'unpacked onto MaxOne');
+    assert.deepEqual(fs.readdirSync(path.join(state, 'staging')), [], 'the Mac-side unpack folder was not cleared');
+  } finally {
+    fs.chmodSync(stuck, 0o755);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
