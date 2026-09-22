@@ -2,17 +2,17 @@
 
 The MacBook has to come down from about 725 GB to under 400 GB before the MaxOne
 drive can hold its backup. Most of what is left is in three folders: Desktop,
-Downloads, and the old "Desktop - Dane's MacBook Pro (2)" folder, about 190 GB
-together. A new command, `npm run archive:mac`, fingerprints every file in
+Downloads, and the old "Desktop - Dane's MacBook Pro (2)" folder: 32,824 files,
+205 GB together. A new command, `npm run archive:mac`, fingerprints every file in
 them and uploads only what neither Google Drive already has: videos to
 mentorofaio, everything else to mentor24, in folders named after where each
 file sat on the Mac. It reads every upload back from Drive to confirm the
 bytes match, and it will not start if a Drive is too full to take it all.
 Nothing leaves the Mac during the upload. The last step moves a file into the
 Trash only if a matching copy is on a Drive at that moment, and it waits for
-Dane to approve the list. Emptying the Trash is his. About 56,000 old files
-on the Desktop whose contents live in the cloud are never opened, because
-opening one would start a download.
+Dane to approve the list. Emptying the Trash is his. 574 files in one Desktop
+folder, ISITAS, are left alone — 314 MB in all, whose contents live in the
+cloud rather than on the Mac, and opening one would start a download.
 
 ## 2026-09-22 — The archive upload now handles file names with special characters (#741)
 
