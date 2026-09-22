@@ -36,24 +36,34 @@ test('the alarm text is reproduced verbatim, not summarised', () => {
   assert.ok(body.includes(alarm), 'the alarm itself must survive the wrapper intact');
 });
 
-test('the comment says which machine raised it, and why the bus refused it', () => {
+test('the comment says which machine posted it and when', () => {
   const body = busFallback.renderFallbackComment({
     text: 'something is wrong', channel: '2kydhxeu-474', why: 'HTTP 400 Invalid Request', node: 'mac-mini', at: '2026-09-08T12:00:00.000Z',
   });
-  assert.match(body, /mac-mini/);
-  assert.match(body, /HTTP 400 Invalid Request/);
-  assert.match(body, /2026-09-08T12:00:00\.000Z/);
+  assert.match(body, /^\*\*From mac-mini\*\* · 2026-09-08T12:00:00\.000Z\n\nsomething is wrong$/);
+});
+
+// THE TEAM CHAT IS NOT AN ERROR LOG (task 86bc0mmyu). Dane chose the free plan
+// on 2026-09-21, so the chat channel refuses every post with the same HTTP 400
+// for good. Printing that refusal and a warning banner on every comment is what
+// made the ticket read as a list of failures rather than as the team chat.
+test('a post does not arrive dressed as an error', () => {
+  const body = busFallback.renderFallbackComment({
+    text: 'pass report', channel: '2kydhxeu-474', why: 'HTTP 400 Invalid Request', node: 'mac-mini', at: 'x',
+  });
+  assert.doesNotMatch(body, /HTTP 400/, 'the chat refusal belongs in the calling job\'s log, not on every post');
+  assert.doesNotMatch(body, /could not reach|refused|⚠️/i);
 });
 
 test('a missing node name reads as unnamed rather than as an empty gap', () => {
   const body = busFallback.renderFallbackComment({ text: 'x', why: 'HTTP 500' });
   assert.match(body, /an unnamed machine/);
-  assert.ok(!/raised by: \*\*\*\*/.test(body), 'an empty bold is a blank the reader cannot interpret');
+  assert.ok(!/From \*\*\*\*/.test(body) && !/\*\*From \*\*/.test(body), 'an empty bold is a blank the reader cannot interpret');
 });
 
-test('the reason is bounded, so a giant error body cannot bury the alarm', () => {
+test('a giant error body cannot bury the message, because it is not on the comment', () => {
   const body = busFallback.renderFallbackComment({ text: 'the alarm', why: 'x'.repeat(5000) });
-  assert.ok(body.length < 1200, `the wrapper grew to ${body.length} characters`);
+  assert.ok(body.length < 200, `the wrapper grew to ${body.length} characters`);
   assert.ok(body.includes('the alarm'));
 });
 
@@ -66,10 +76,12 @@ test('a fallback delivery never reads like an ordinary bus post', () => {
   const normal = busFallback.renderRouteLine({ via: 'chat', channel: '2kydhxeu-474' });
   const fell = busFallback.renderRouteLine({ via: 'ticket', channel: '2kydhxeu-474', why: 'HTTP 400', url: 'https://app.clickup.com/t/abc' });
   assert.match(normal, /Posted to channel/);
-  assert.match(fell, /REFUSED/);
-  assert.match(fell, /NOT lost/);
-  assert.ok(!/^Posted to channel/.test(fell));
+  assert.match(fell, new RegExp(`Posted to the "${busFallback.FALLBACK_TASK_NAME}" ticket`));
+  assert.ok(!/Posted to channel/.test(fell));
   assert.match(fell, /https:\/\/app\.clickup\.com\/t\/abc/);
+  // The chat refusal still reaches the job's own log — one place, not every post.
+  assert.match(fell, /HTTP 400/);
+  assert.doesNotMatch(fell, /REFUSED THIS MESSAGE/, 'an expected route is not shouted as a failure');
 });
 
 test('the standing ticket tells a reader not to build or close it', () => {
@@ -275,23 +287,54 @@ test('two machines creating two noticeboards converge on one, oldest first', () 
   );
 });
 
-test('the deliberate blank lines survive, so the alarm keeps its horizontal rule', () => {
+test('the header is its own paragraph, so Markdown does not run it into the message', () => {
   const body = busFallback.renderFallbackComment({
     text: 'ALARM', channel: 'c', why: 'HTTP 400', node: 'mac-mini', at: '2026-09-08T12:00:00.000Z',
   });
-  assert.ok(
-    body.includes('The alarm itself, unchanged:\n\n---\n\n'),
-    'without the blank line Markdown reads `---` as a setext underline: the rule disappears and the line above it becomes a heading',
-  );
-  assert.ok(body.includes('**\n\n*   raised by:'), 'the header keeps its blank line too');
+  assert.equal(body, '**From mac-mini** · 2026-09-08T12:00:00.000Z\n\nALARM', 'a blank line between the header and the message');
 });
 
-test('an absent `at` or `channel` still drops out, which is what the filter was for', () => {
-  const body = busFallback.renderFallbackComment({ text: 'ALARM', why: 'HTTP 400' });
-  assert.ok(!body.includes('*   at:'), 'no timestamp, no line');
-  assert.ok(!body.includes('*   channel:'), 'no channel, no line');
-  assert.ok(body.includes('The alarm itself, unchanged:\n\n---\n\n'), 'and the separators still survive');
-  assert.ok(!/\n\n\n/.test(body), 'dropping an optional field must not leave a double gap behind it');
+test('an absent `at` drops out without leaving a dangling separator', () => {
+  const body = busFallback.renderFallbackComment({ text: 'ALARM', node: 'mac-mini' });
+  assert.equal(body, '**From mac-mini**\n\nALARM');
+});
+
+// ---------------------------------------------------------------------------
+// THE RENAME (task 86bc0mmyu). The ticket was "Undelivered alarms"; it is the
+// team chat now. A machine still on the old code finds it by the old name, so
+// the new code must recognise both and rename it itself — a hand rename before
+// every machine updated would make the old code create a second ticket.
+// ---------------------------------------------------------------------------
+
+test('the team chat is found under its old name as well as its new one', () => {
+  assert.equal(busFallback.FALLBACK_TASK_NAME, 'Team chat');
+  assert.ok(busFallback.isTeamChatTask({ name: 'Team chat' }));
+  assert.ok(busFallback.isTeamChatTask({ name: '  undelivered ALARMS ' }), 'the ticket as it exists today');
+  assert.ok(!busFallback.isTeamChatTask({ name: 'Node roll call' }));
+  assert.ok(!busFallback.isTeamChatTask({ name: '' }));
+  assert.ok(!busFallback.isTeamChatTask(null));
+});
+
+test('only a ticket under an old name needs renaming', () => {
+  assert.ok(busFallback.needsRename({ name: 'Undelivered alarms' }));
+  assert.ok(!busFallback.needsRename({ name: 'Team chat' }));
+  assert.ok(!busFallback.needsRename({ name: 'team chat ' }), 'case and spacing are not a rename');
+  assert.ok(!busFallback.needsRename({ name: 'Something else' }), 'never rename a ticket that is not the team chat');
+});
+
+test('the lookup matches every name, and the rename runs before the post', () => {
+  const start = src.indexOf('async function saveUndeliveredAlarm(');
+  const fn = src.slice(start, src.indexOf('\n}\n', start));
+  assert.equal((fn.match(/busFallback\.isTeamChatTask\(t\)/g) || []).length, 2,
+    'both lookups (the first find and the post-create re-read) must know the old name, or a second ticket is created beside it');
+  const renameAt = fn.indexOf('if (busFallback.needsRename(task))');
+  const commentAt = fn.indexOf('/comment`, { comment_text: body');
+  assert.ok(renameAt > -1 && commentAt > renameAt, 'rename first, so the post lands on a ticket already carrying the right name');
+  const rename = fn.slice(renameAt, commentAt);
+  assert.match(rename, /name: busFallback\.FALLBACK_TASK_NAME/);
+  assert.match(rename, /markdown_content: busFallback\.renderFallbackSeed\(\)/,
+    'an UPDATE takes markdown_content; markdown_description is the create field and would be ignored');
+  assert.doesNotMatch(rename, /return \{ ok: false/, 'a failed rename must never cost the delivery');
 });
 
 // --- SAVED IS NOT DELIVERED (task 86bc3t0n1) --------------------------------
