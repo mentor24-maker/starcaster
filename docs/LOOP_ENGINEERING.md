@@ -2895,6 +2895,24 @@ text verbatim, which machine raised it, and the reason the bus refused it.
 **Do not close it and do not delete it** — a comment on it means something else
 is broken, so read the alarm, not the ticket.
 
+**Since 2026-09-21 that ticket is called "Team chat", and it is the chat on
+purpose** (task 86bc0mmyu). The ClickUp app finally said in words what the API
+reduces to `400 Invalid Request`: *"Chat Messages isn't available on your
+current plan."* Offered an upgrade or the ticket, Dane answered *"(B) Stay on
+the free plan"*. So a post there is no longer a failure: each comment opens
+with `**From <machine>** · <time>` and then the message, with no warning banner
+and no refusal code (the calling job's own log still prints the refusal, once).
+The chat channel is still tried first, so an upgrade later needs no code change.
+The rename happens **in code, on the first post** — `saveUndeliveredAlarm`
+finds the ticket under either name (`busFallback.isTeamChatTask`) and renames
+an old one — because a machine still on the old code looks it up by the old
+name, and a rename by hand before every machine had updated would have made
+that machine create a second ticket. Both names stay in the noticeboard
+registry for the same reason. **Following the ticket does not notify Dane**:
+every script posts as him, and ClickUp does not notify anyone about their own
+comments. The ticket putting itself in his *Assigned to me* list is the
+notification.
+
 The fallback lives in the `chat` command itself
 (`saveUndeliveredAlarm`, `lib/busFallback.js`), not in each of the seven
 callers. `postBusMessage` shells out to exactly that command, and every calling

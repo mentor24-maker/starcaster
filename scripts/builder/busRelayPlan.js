@@ -2,6 +2,7 @@
 
 const { BANNER_LABEL } = require('./operatorCard.js');
 const { normalizeCommand } = require('./mergeOnComment');
+const { FALLBACK_TASK_NAME } = require('../../lib/busFallback.js');
 
 /**
  * bus-relay's decision table: which lists it watches, and what a fresh
@@ -707,7 +708,7 @@ function deliveryVerdict({
       return {
         ok: false,
         via: 'none',
-        why: `the "Undelivered alarms" ticket refused it too (${alarmTicketWhy || 'reason unknown'})`,
+        why: `the "${FALLBACK_TASK_NAME}" ticket refused it too (${alarmTicketWhy || 'reason unknown'})`,
       };
     }
     return {
@@ -735,7 +736,7 @@ function deliveryVerdict({
 function relayMarkerText({ via, channel, at } = {}) {
   if (via === 'chat') return `${BUS_RELAY_MARKER} sent to channel ${channel} at ${at}`;
   if (via === 'ticket') return `${BUS_RELAY_MARKER} chat unavailable, receipted on the ticket at ${at}`;
-  if (via === 'alarm-ticket') return `${BUS_RELAY_MARKER} chat unavailable, saved on the "Undelivered alarms" ticket at ${at}`;
+  if (via === 'alarm-ticket') return `${BUS_RELAY_MARKER} chat unavailable, saved on the "${FALLBACK_TASK_NAME}" ticket at ${at}`;
   return null;
 }
 
@@ -867,7 +868,7 @@ function simulationLine({ verdict, target } = {}) {
     return `  SIMULATION — party line down: delivered by receipt on the ticket; hand-back to "${target}" WOULD fire`;
   }
   if (v.ok && v.via === 'alarm-ticket') {
-    return '  SIMULATION — party line down: delivered by saving it on the "Undelivered alarms" ticket; no hand-back (this watch hands nothing back)';
+    return `  SIMULATION — party line down: delivered by saving it on the "${FALLBACK_TASK_NAME}" ticket; no hand-back (this watch hands nothing back)`;
   }
   if (v.ok && v.via === 'chat') {
     // Unreachable while simulating (chat always fails), but a verdict of

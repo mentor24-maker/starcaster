@@ -12,6 +12,20 @@ it stopped. Nothing is deleted yet. The last step removes a zip from MaxOne
 only when every file inside it is confirmed on a Drive at that moment. That
 step comes after review, and it is what frees MaxOne to become the encrypted
 backup drive.
+## 2026-09-21 — The "Undelivered alarms" ticket is now the team chat (#740)
+
+ClickUp's chat channel isn't part of the free plan, so since 7 September every
+message the machines tried to post there was refused and landed on a ticket
+called "Undelivered alarms" instead. Dane chose to stay on the free plan rather
+than pay to upgrade, so that ticket is now the team chat on purpose. It is
+renamed "Team chat", its description explains what it is, and each post reads
+like a chat message ("From mac-mini · time", then the message) instead of
+opening with a warning that something failed. The rename happens by itself the
+first time the new code posts, because renaming it by hand while the Mini was
+still on the old code would have made the Mini create a second copy. Dane still
+finds out about new posts the same way: the ticket puts itself in his
+"Assigned to me" list. Following the ticket wouldn't notify him, because every
+script posts as him and ClickUp doesn't notify you about your own comments.
 ## 2026-09-21 — The Builder's old Desktop/Mobile switch is gone (#736)
 
 The page list had a leftover **Desktop / Mobile** switch from before every row,
