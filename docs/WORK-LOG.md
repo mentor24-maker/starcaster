@@ -1,3 +1,16 @@
+## 2026-09-22 — The archive upload now handles file names with special characters (#741)
+
+Overnight, the MaxOne-to-Google-Drive upload stopped one zip short of the end.
+284 Mac screenshots were never uploaded, because their names contain a special
+space character that MaxOne's drive format lists in one spelling and will only
+open in another, so the upload tool could not read them. Nothing was lost: the
+files are still inside their zip on MaxOne, and no zip is deleted until
+everything in it is confirmed on Drive. The fix unpacks each zip onto the
+Mac's own disk instead of onto MaxOne, compares names in a spelling-independent
+way, and makes sure a scratch folder that will not delete can never stop the
+run again. The same problem would have hit the Desktop archive in slice 3,
+since every Mac screenshot name carries that character.
+
 ## 2026-09-21 — MaxOne's zip files are being unpacked back onto Google Drive, and checked file by file (#739)
 
 Half of the MaxOne USB drive is zip files holding old downloads from Google
