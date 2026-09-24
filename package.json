@@ -121,6 +121,7 @@
     "archive:index": "node scripts/archive_index.mjs",
     "archive:route": "node scripts/archive_route.mjs",
     "archive:mac": "node scripts/archive_mac.mjs",
+    "archive:loose": "node scripts/archive_loose.mjs",
     "backup:node": "node scripts/backup_node.mjs",
     "restore:node": "node scripts/restore_node.mjs"
   },

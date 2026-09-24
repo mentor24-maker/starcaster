@@ -281,6 +281,9 @@ function cmdStatus() {
     const l = ledger.get(route.rowId(r));
     if (l && !l.verified) console.log(`  FAILED  ${r.zip} → ${r.member}: ${l.error}`);
   }
+  // This counts zip contents only. The loose files on MaxOne (never zipped —
+  // 22,000 of them, the family videos among them) are ticket 86bc75y9r's:
+  console.log('Zips only. For the loose files on MaxOne: npm run archive:loose -- status');
   return s.verified === s.upload && !s.failed ? 0 : 1;
 }
 
