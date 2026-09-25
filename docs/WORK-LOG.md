@@ -1,3 +1,22 @@
+## 2026-09-24 — Family videos on MaxOne have no backup copy anywhere, and the next step erases the drive (#743)
+
+While checking the guard before MaxOne gets erased, it turned out the archive
+tool from slice 2 only ever looked at zip files. MaxOne also holds about
+22,000 loose files that were never inside a zip, and nobody had asked whether
+those were backed up. A fresh index of the drive found that 21,359 of them
+already have a byte-identical copy on a Google Drive from years ago, but 118
+did not — 21.7 GB, nearly all of it family video, including the only copies
+of "Dane Social Air - FINAL" and "Dane's Life Story 1". A new command,
+`npm run archive:loose`, fingerprints each of those, uploads them (video to
+mentorofaio, everything else to mentor24, in folders named after where each
+sat on MaxOne), then reads every one back off Drive and compares the
+fingerprint and size before it counts. Its `status` command is the number the
+erase is gated on: it lists both Drives at that moment and asks, for every
+loose file on MaxOne, whether an identical copy is there right now, and it
+names each one that is not. Nothing is deleted by any of this; that is still
+slice 4's job and it waits for Dane. The ticket's own numbers (275 missing,
+157 unjudgeable) did not reproduce and are corrected on the ticket.
+
 ## 2026-09-22 — A new command archives the Mac's Desktop and Downloads to Google Drive before anything leaves the Mac (#742)
 
 The MacBook has to come down from about 725 GB to under 400 GB before the MaxOne
