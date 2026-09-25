@@ -1,3 +1,23 @@
+## 2026-09-25 — Galaxy module 1/6 — the star-field engine: seeded layout, spin and 3D rotation as pure, tested arithmetic (#745)
+
+The Galaxy module is a spinning spiral of stars for a page background, built
+in six slices. This first slice draws nothing yet: it is the arithmetic that
+decides where every star goes, how fast each one turns (inner stars faster
+than the rim), how they drift slowly toward the centre along their arm, and
+how the whole disc tilts when it is later dragged. It lives in a file with no
+screen code in it at all, the same way TractorNav's ring geometry does, so
+tests can check it. There are 51 of them: the same seed number always draws
+the same galaxy, the star count asked for is the count you get, every star
+stays inside its arm even after a minute of drifting inward, tilting the disc
+never moves a star off its circle, and a frame of animation creates no new
+memory (which is what keeps it smooth). Nine of those checks were broken on
+purpose to prove they can fail, and one of them could not: it stayed green
+with the spin difference switched off, because the numbers are stored at a
+precision where two equal values can read as unequal. It now demands a real
+margin. The Window Center / In Place placement helpers also moved into their
+own small file so the Galaxy module can share them without touching
+TractorNav. Nothing on any page changes until slice 2.
+
 ## 2026-09-24 — Family videos on MaxOne have no backup copy anywhere, and the next step erases the drive (#743)
 
 While checking the guard before MaxOne gets erased, it turned out the archive
