@@ -238,7 +238,12 @@ describe("stepGalaxyField", () => {
     const outerDelta = field.angle[outer] - outerBefore;
     expect(innerDelta).toBeGreaterThan(0);
     expect(outerDelta).toBeGreaterThan(0);
-    expect(innerDelta).toBeGreaterThan(outerDelta);
+    // A real margin, not a bare "greater than": angles live in float32, so
+    // two EQUAL deltas read back unequal by rounding, and a bare comparison
+    // passed with the differential forced to zero (found by break-testing).
+    // At differential 50 the innermost arm star (r ≈ 0.03) turns about five
+    // times as fast as the rim; twice is the bar.
+    expect(innerDelta).toBeGreaterThan(outerDelta * 2);
   });
 
   it("spins every star through the same angle when differential is 0", () => {
