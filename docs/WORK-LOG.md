@@ -1,3 +1,20 @@
+## 2026-09-25 — The MaxOne erase guard would say 'all backed up' over a folder it could not open — an unreadable folder is counted as empty, not as missing (#744)
+
+The count that decides whether MaxOne may be erased had a hole. When the
+indexer meets a folder or file it is not allowed to open, it writes it down
+as zero bytes with a note saying why. The guard then checked the size before
+it checked the note, so every unreadable item was filed under "empty, needs
+no copy" and vanished from the missing list. On a bad day — a folder macOS
+refuses to open, a failing disk sector — a whole folder of family videos could
+have read as backed up, and the guard would have printed "Slice 4's guard is
+met" over files nobody had ever seen. The order is now flipped in both the
+plan and the count: the note is read first, so an unreadable item is held in
+the plan and named as MISSING with its reason, and `status` exits 1 instead
+of 0. A test row shaped like a locked folder proves it, and the fix was
+reverted on purpose to confirm the test catches it. Today's real index has no
+rows of that shape, so nothing on MaxOne was ever mis-counted; this closes
+the door before it matters.
+
 ## 2026-09-24 — Family videos on MaxOne have no backup copy anywhere, and the next step erases the drive (#743)
 
 While checking the guard before MaxOne gets erased, it turned out the archive
