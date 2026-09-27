@@ -128,6 +128,17 @@ function radialHistogram(field: GalaxyField): number[] {
   return bins;
 }
 
+function meanArmRadius(field: GalaxyField): number {
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < field.count; i++) {
+    if (!isArmStar(field, i)) continue;
+    sum += field.radius[i];
+    n += 1;
+  }
+  return n ? sum / n : 0;
+}
+
 describe("mulberry32", () => {
   it("repeats the same sequence for the same seed, and a different one for a different seed", () => {
     const a = mulberry32(27);
@@ -408,7 +419,7 @@ describe("stepGalaxyField", () => {
     for (let frame = 0; frame < 60 * 120; frame++) stepGalaxyField(field, FRAME, settings);
     expect(field.spin).toBeGreaterThan(0);
     expect(shareOnArm(field, settings)).toBeGreaterThanOrEqual(0.9);
-  });
+  }, 30_000); // runs for seconds; the default 5 s limit cut it off under a loaded full-suite run
 
   it("carries arm stars inward along their arm, so the spiral survives a minute of full-speed flow", () => {
     const settings = settingsWith({ flowSpeed: "100", spinSpeed: "0", particleCount: "3000", arms: "2" });
@@ -429,22 +440,32 @@ describe("stepGalaxyField", () => {
     expect(shareOnArm(field, settings)).toBeGreaterThanOrEqual(0.9);
   });
 
-  it("keeps the same radial density after five minutes of flow — the still frame and the running page are one galaxy", () => {
+  it("keeps the same radial density through five minutes of flow — the still frame and the running page are one galaxy", () => {
     // Round 1 measured the centre-packed layout sloshing into a hollow disc
     // (mean radius 0.39 → 0.57 → 0.47). Stars now stream at the inverse of
     // the layout's density, so the layout is the flow's own steady state.
-    const settings = settingsWith();
+    //
+    // Sampled EVERY five seconds, not once at the end: under constant-speed
+    // flow the profile circulates with a ~41 s period, and a single sample
+    // at 300 s landed within 15% of frame 0 by coincidence (break-tested).
+    // 8,000 stars so that the sampling noise in the smallest band stays
+    // well inside the bar; the seed is fixed, so the reading is repeatable.
+    const settings = settingsWith({ particleCount: "8000" });
     const field = generateGalaxyField(settings);
     const atStart = radialHistogram(field);
+    const meanAtStart = meanArmRadius(field);
     // The inner bands hold more stars than the outer — the shape being kept.
     expect(atStart[0]).toBeGreaterThan(atStart[4] * 1.5);
-    // 50 ms is the frame-time clamp slice 2 applies; 6,000 of them is 300 s.
-    for (let frame = 0; frame < 6000; frame++) stepGalaxyField(field, 0.05, settings);
-    const atEnd = radialHistogram(field);
-    for (let bin = 0; bin < 5; bin++) {
-      expect(Math.abs(atEnd[bin] - atStart[bin]) / atStart[bin], `band ${bin}: ${atStart[bin]} → ${atEnd[bin]}`).toBeLessThanOrEqual(0.15);
+    // 50 ms is the frame-time clamp slice 2 applies; 100 of them is 5 s, 60 samples is 300 s.
+    for (let sample = 1; sample <= 60; sample++) {
+      for (let frame = 0; frame < 100; frame++) stepGalaxyField(field, 0.05, settings);
+      const now = radialHistogram(field);
+      for (let bin = 0; bin < 5; bin++) {
+        expect(Math.abs(now[bin] - atStart[bin]) / atStart[bin], `band ${bin} at ${sample * 5} s: ${atStart[bin]} → ${now[bin]}`).toBeLessThanOrEqual(0.15);
+      }
+      expect(Math.abs(meanArmRadius(field) - meanAtStart), `mean radius at ${sample * 5} s`).toBeLessThan(0.03);
     }
-  });
+  }, 30_000); // runs for seconds; the default 5 s limit cut it off under a loaded full-suite run
 
   it("re-seeds a star that reaches the core at the rim of the same arm, deterministically", () => {
     const settings = settingsWith({ flowSpeed: "100", spinSpeed: "0", particleCount: "1000" });
