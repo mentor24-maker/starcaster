@@ -13,14 +13,39 @@
  *   1. `generateGalaxyField(settings)` lays the stars out along logarithmic
  *      spiral arms from a SEEDED random source, so the same seed draws the
  *      same galaxy on every load (and every screenshot).
- *   2. `stepGalaxyField(field, dt, settings)` moves them one frame: spin
- *      (inner faster than outer), a slow inward drift along the arm, and the
- *      twinkle phase.
+ *   2. `stepGalaxyField(field, dt, settings)` moves them one frame: the
+ *      pattern turns, stars stream inward along their arm (faster the
+ *      further in), and the twinkle phase advances.
  *   3. `projectGalaxyField(field, yaw, pitch, w, h, out)` rotates the flat
  *      disc in 3D and projects it to screen pixels — into arrays the caller
  *      owns, allocating nothing, because it runs sixty times a second.
  *   4. `readGalaxySettings` / `scaleGalaxyCount` / `readDeviceTier` turn the
  *      module's string settings and the visitor's device into clamped numbers.
+ *
+ * THE SHAPE HOLDS. A spiral whose inner stars simply rotate faster than its
+ * outer ones winds itself up: at the default settings the arms were gone in
+ * a minute (round-1 review, task 86bc7f5hf). So the motion here is built
+ * from the only two movements that leave a spiral's shape alone:
+ *
+ *   - the whole PATTERN turns rigidly at `spinSpeed` — one number, `spin`,
+ *     shared by every star; and
+ *   - stars stream INWARD ALONG THEIR ARM. A star sliding along a
+ *     logarithmic spiral sweeps more angle per second the further in it is,
+ *     which is what the eye reads as "the inside turns faster". `flowSpeed`
+ *     sets that streaming directly; `differential` adds more of it in
+ *     proportion to the spin.
+ *
+ * The spiral's handedness follows `spinDirection`, so the arms always trail
+ * and inward streaming always moves WITH the spin. (With a fixed handedness
+ * the inside would look faster in one direction and slower in the other.)
+ *
+ * And the streaming does not change the picture over time: arm stars are
+ * laid out with a density that falls with radius, and the along-arm speed
+ * is the inverse of that density, so the layout is the flow's own steady
+ * state — a star re-seeded at the rim for every one that reaches the core,
+ * and the count in every radius band constant up to sampling noise. The
+ * Builder's still frame and the visitor's page a minute later are the same
+ * galaxy.
  *
  * Units: the field lives in a unit disc — radius 1 is the rim, and angles are
  * radians measured the way a canvas does (y down, so a growing angle turns
@@ -103,6 +128,12 @@ function readNumber(bag: Record<string, string | undefined>, key: string): numbe
   return range.integer ? Math.round(value) : value;
 }
 
+function readSpinDirection(value: string | undefined): GalaxySpinDirection {
+  return (GALAXY_SPIN_DIRECTIONS as readonly string[]).includes(value ?? "")
+    ? (value as GalaxySpinDirection)
+    : (GALAXY_SETTING_DEFAULTS.spinDirection as GalaxySpinDirection);
+}
+
 /**
  * String bag in, clamped numbers out. An empty bag is the defaults; a value
  * that does not parse is its default; a value outside its range is pulled to
@@ -110,7 +141,6 @@ function readNumber(bag: Record<string, string | undefined>, key: string): numbe
  * because one NaN in a per-frame loop paints nothing and says nothing.
  */
 export function readGalaxySettings(bag: Record<string, string | undefined> = {}): GalaxySettings {
-  const direction = bag.spinDirection;
   return {
     seed: readNumber(bag, "seed"),
     particleCount: readNumber(bag, "particleCount"),
@@ -122,7 +152,7 @@ export function readGalaxySettings(bag: Record<string, string | undefined> = {})
     flareStars: readNumber(bag, "flareStars"),
     starSize: readNumber(bag, "starSize"),
     spinSpeed: readNumber(bag, "spinSpeed"),
-    spinDirection: direction === "counterclockwise" ? "counterclockwise" : "clockwise",
+    spinDirection: readSpinDirection(bag.spinDirection),
     differential: readNumber(bag, "differential"),
     flowSpeed: readNumber(bag, "flowSpeed"),
     twinkle: readNumber(bag, "twinkle")
@@ -163,14 +193,29 @@ function gaussian(random: () => number): number {
 // Layout constants — the shape of the galaxy in unit-disc terms
 // ---------------------------------------------------------------------------
 
-/** Smallest radius an arm star is laid at; ln(r) needs r above zero. */
+/** The spiral is anchored here: ln(r) needs r above zero, and `turns` counts from this radius to the rim. */
 export const GALAXY_RADIUS_MIN = 0.03;
-/** Radii are drawn as u^bias, so a bias above 1 packs stars toward the centre. */
-const RADIUS_BIAS = 1.7;
+/**
+ * Arm stars are laid out with a density per unit radius proportional to
+ * r^-EXPONENT (denser toward the centre), and they stream inward at a speed
+ * proportional to r^+EXPONENT — the inverse. Those two facts are one
+ * constant on purpose: the layout is the streaming's steady state only while
+ * they agree, and `galaxyArmRadius` and `radialSpeedProfile` are the two
+ * places that read it.
+ */
+const RADIAL_DENSITY_EXPONENT = 0.5;
 /** Angular width of an arm at armWidth 100, as one standard deviation, in radians. */
 export const GALAXY_ARM_SIGMA_MAX = 0.55;
 /** At most this share of the stars belongs to the centre cluster (at coreStrength 100). */
 const CORE_SHARE_MAX = 0.35;
+/**
+ * Below this core size the cluster loses stars in proportion, so a shrinking
+ * core thins out rather than packing the same crowd into a smaller ball —
+ * at coreSize 0 it has no stars at all. At and above it the count is
+ * coreStrength's alone. Equal to the default coreSize, so the default
+ * picture is unaffected.
+ */
+const CORE_COUNT_FULL_AT_SIZE = 12;
 /** Half-thickness of the disc (one standard deviation) in unit-disc terms. */
 const DISC_THICKNESS = 0.02;
 /** The core is a puffier ball than the arms. */
@@ -181,8 +226,10 @@ const EDGE_SIZE_FALLOFF = 0.45;
 export const GALAXY_FLARE_SIZE_SCALE = 2.6;
 /**
  * Where along the arm each flare star is pinned, as a fraction of the way
- * from the rim inward. Fixed on purpose: flare stars are the landmarks the
- * eye anchors on, and landmarks that move with the seed are not landmarks.
+ * from the rim in to the core's edge. Fixed on purpose: flare stars are the
+ * landmarks the eye anchors on, and landmarks that move with the seed are
+ * not landmarks. Measured from the core's edge, never the disc's centre, so
+ * no flare lands inside the core whatever `coreSize` is.
  */
 export const GALAXY_FLARE_FRACTIONS = [0.18, 0.31, 0.44, 0.57, 0.7, 0.83, 0.96, 0.25, 0.5, 0.75, 0.38, 0.62];
 
@@ -201,15 +248,25 @@ export const GALAXY_DEFAULT_PALETTE: { hex: string; weight: number }[] = [
   { hex: "#F87915", weight: 7 },
   { hex: "#FA994C", weight: 8 }
 ];
+const PALETTE_TOTAL_WEIGHT = GALAXY_DEFAULT_PALETTE.reduce((sum, entry) => sum + entry.weight, 0);
 
 // ---------------------------------------------------------------------------
 // Motion constants
 // ---------------------------------------------------------------------------
 
-/** spinSpeed 100 turns the rim once every ten seconds. */
+/** spinSpeed 100 turns the pattern once every ten seconds. */
 const SPIN_RADIANS_PER_SECOND_AT_MAX = (2 * Math.PI) / 10;
-/** flowSpeed 100 carries a star from the rim to the centre in twenty seconds. */
-const FLOW_UNITS_PER_SECOND_AT_MAX = 1 / 20;
+/** flowSpeed 100 carries a star from the rim to the core's edge in twenty seconds. */
+const FLOW_TRIP_SECONDS_AT_MAX = 20;
+/**
+ * differential 100 adds along-arm streaming worth this many times the rigid
+ * spin rate at the RIM; further in it is 1/√r times that (r^-EXPONENT), so
+ * at the default core edge the innermost stars turn about four times as
+ * fast as the rim on top of the spin. Scaled by the spin on purpose: a
+ * differential is a property of rotation, and a galaxy that does not spin
+ * has none.
+ */
+const DIFFERENTIAL_RIM_GAIN = 2;
 /** twinkle 100 cycles a star's twinkle phase once per second. */
 const TWINKLE_RADIANS_PER_SECOND_AT_MAX = 2 * Math.PI;
 const TWO_PI = 2 * Math.PI;
@@ -222,11 +279,13 @@ const TWO_PI = 2 * Math.PI;
  * Star state as parallel typed arrays — never an array of objects — so a
  * frame reads and writes memory in order and allocates nothing.
  *
- * `radius`, `angle` and `arm` are the canonical position (polar, per arm);
- * `x`/`y` are derived from them after every step. `jitter` is the star's
- * fixed offset from its arm's spine in standard deviations, kept because size
- * and brightness fall off toward the arm edges and the step needs it back
- * when a star is re-seeded.
+ * `radius`, `arm` and `jitter` are an arm star's canonical position: its
+ * `angle` is derived from them (the arm's spine at that radius, plus the
+ * jitter in arm widths) and rewritten whenever the radius changes, so it
+ * never drifts from the arm by accumulated rounding. A core star's `angle`
+ * is fixed at generation; a flare star's is the spine at its pinned radius.
+ * None of them include the pattern's spin: a star's on-screen angle is
+ * `angle[i] + spin`, and `x`/`y` are derived from that after every step.
  */
 export interface GalaxyField {
   count: number;
@@ -235,7 +294,9 @@ export interface GalaxyField {
   y: Float32Array;
   z: Float32Array;
   radius: Float32Array;
+  /** Angle in the pattern's own frame — without `spin`. */
   angle: Float32Array;
+  /** An arm star's offset from its arm's spine in standard deviations; 0 for core and flare stars. */
   jitter: Float32Array;
   size: Float32Array;
   brightness: Float32Array;
@@ -243,8 +304,8 @@ export interface GalaxyField {
   colour: Uint8Array;
   arm: Uint8Array;
   flare: Uint8Array;
-  /** How far the RIM has spun since generation; a re-seeded star starts here so it lands beside its neighbours. */
-  rimSpin: number;
+  /** How far the whole pattern has turned since generation, radians, folded into [0, 2π). */
+  spin: number;
   /** The field's own random source, so re-seeding inside `step` stays deterministic. */
   random: () => number;
 }
@@ -252,6 +313,10 @@ export interface GalaxyField {
 /** The angular offset between neighbouring arms. */
 function armSpacing(arms: number): number {
   return TWO_PI / Math.max(1, arms);
+}
+
+function spinSign(direction: GalaxySpinDirection): number {
+  return direction === "counterclockwise" ? -1 : 1;
 }
 
 /**
@@ -262,14 +327,48 @@ export function galaxyTwist(turns: number): number {
   return (turns * TWO_PI) / Math.log(1 / GALAXY_RADIUS_MIN);
 }
 
-/**
- * The angle of an arm's spine at a radius: the logarithmic spiral itself.
- * A star's own angle is this plus its jitter plus whatever spin it has
- * accumulated. This is the "twist term" the arm-band test subtracts.
- */
-export function galaxySpineAngle(radius: number, arm: number, settings: Pick<GalaxySettings, "turns" | "arms">): number {
+/** The arm geometry a step or a layout reads once rather than per star. */
+interface ArmGeometry {
+  twist: number;
+  spacing: number;
+  sigma: number;
+  /** +1 clockwise, -1 counterclockwise: the spiral's handedness and the spin's sign. */
+  direction: number;
+}
+
+function armGeometry(settings: GalaxySettings): ArmGeometry {
+  return {
+    twist: galaxyTwist(settings.turns),
+    spacing: armSpacing(Math.max(1, Math.round(settings.arms))),
+    sigma: galaxyArmSigma(settings.armWidth),
+    direction: spinSign(settings.spinDirection)
+  };
+}
+
+function spineAngle(radius: number, arm: number, geo: ArmGeometry): number {
   const r = Math.max(GALAXY_RADIUS_MIN, radius);
-  return galaxyTwist(settings.turns) * Math.log(r / GALAXY_RADIUS_MIN) + armSpacing(settings.arms) * arm;
+  // The sign makes the arms TRAIL: going inward the spine turns in the spin
+  // direction, so a star streaming inward along it moves with the spin.
+  return geo.spacing * arm - geo.direction * geo.twist * Math.log(r / GALAXY_RADIUS_MIN);
+}
+
+/**
+ * The angle of an arm's spine at a radius, in the pattern's frame: the
+ * logarithmic spiral itself. A star's own angle is this plus its jitter, and
+ * its on-screen angle adds the field's `spin`. This is the "twist term" the
+ * arm-band test subtracts.
+ */
+export function galaxySpineAngle(
+  radius: number,
+  arm: number,
+  settings: Pick<GalaxySettings, "turns" | "arms" | "spinDirection">
+): number {
+  return spineAngle(radius, arm, {
+    twist: galaxyTwist(settings.turns),
+    spacing: armSpacing(Math.max(1, Math.round(settings.arms))),
+    sigma: 0,
+    direction: spinSign(settings.spinDirection)
+  });
 }
 
 /** One standard deviation of arm jitter, in radians, for an armWidth setting. */
@@ -282,15 +381,54 @@ export function galaxyCoreRadius(coreSize: number): number {
   return (clamp(coreSize, 0, 100) / 100) * 0.5;
 }
 
+/**
+ * The innermost radius an arm star lives at: the core's edge (or the
+ * spiral's anchor, whichever is further out). ONE definition, read by the
+ * layout and by the step: a star laid out inside the radius the step
+ * re-seeds at would jump to the rim on the first frame — one in eight of
+ * them did (round-1 review).
+ */
+export function galaxyArmFloor(settings: Pick<GalaxySettings, "coreSize">): number {
+  return Math.max(GALAXY_RADIUS_MIN, galaxyCoreRadius(settings.coreSize));
+}
+
 /** The number of stars the centre cluster takes out of the total. */
-export function galaxyCoreCount(settings: Pick<GalaxySettings, "particleCount" | "coreStrength" | "flareStars">): number {
+export function galaxyCoreCount(
+  settings: Pick<GalaxySettings, "particleCount" | "coreStrength" | "coreSize" | "flareStars">
+): number {
   const available = Math.max(0, settings.particleCount - settings.flareStars);
-  return Math.min(available, Math.round(settings.particleCount * (clamp(settings.coreStrength, 0, 100) / 100) * CORE_SHARE_MAX));
+  const strength = clamp(settings.coreStrength, 0, 100) / 100;
+  const sizeFactor = clamp(settings.coreSize / CORE_COUNT_FULL_AT_SIZE, 0, 1);
+  return Math.min(available, Math.round(settings.particleCount * strength * CORE_SHARE_MAX * sizeFactor));
+}
+
+/**
+ * An arm star's radius from a uniform draw u in [0, 1): the inverse of the
+ * r^-EXPONENT density over [floor, 1]. `radialSpeedProfile` is its partner.
+ */
+export function galaxyArmRadius(u: number, floor: number): number {
+  const p = 1 - RADIAL_DENSITY_EXPONENT;
+  const lo = Math.pow(floor, p);
+  return Math.pow(lo + u * (1 - lo), 1 / p);
+}
+
+/** The along-arm speed at a radius, relative to the rim: r^EXPONENT, the inverse of the layout density. */
+function radialSpeedProfile(radius: number): number {
+  return Math.pow(radius, RADIAL_DENSITY_EXPONENT);
+}
+
+/**
+ * The rim speed (unit-disc radii per second) at which a star streaming under
+ * `radialSpeedProfile` takes `FLOW_TRIP_SECONDS_AT_MAX` seconds from the rim
+ * to the floor — flowSpeed 100's speed.
+ */
+function flowRimSpeedAtMax(floor: number): number {
+  const p = 1 - RADIAL_DENSITY_EXPONENT;
+  return (1 - Math.pow(floor, p)) / (p * FLOW_TRIP_SECONDS_AT_MAX);
 }
 
 function pickColour(random: () => number): number {
-  const total = GALAXY_DEFAULT_PALETTE.reduce((sum, entry) => sum + entry.weight, 0);
-  let roll = random() * total;
+  let roll = random() * PALETTE_TOTAL_WEIGHT;
   for (let i = 0; i < GALAXY_DEFAULT_PALETTE.length; i++) {
     roll -= GALAXY_DEFAULT_PALETTE[i].weight;
     if (roll < 0) return i;
@@ -304,15 +442,15 @@ function edgeFactor(jitterSigmas: number): number {
 }
 
 /** Write one arm star at index i, given its radius and arm; everything else is drawn from the field's random source. */
-function seedArmStar(field: GalaxyField, i: number, radius: number, arm: number, settings: GalaxySettings, spinOffset: number): void {
+function seedArmStar(field: GalaxyField, i: number, radius: number, arm: number, starSize: number, geo: ArmGeometry): void {
   const random = field.random;
   const jitter = gaussian(random);
   field.radius[i] = radius;
   field.arm[i] = arm;
   field.jitter[i] = jitter;
-  field.angle[i] = galaxySpineAngle(radius, arm, settings) + jitter * galaxyArmSigma(settings.armWidth) + spinOffset;
+  field.angle[i] = spineAngle(radius, arm, geo) + jitter * geo.sigma;
   field.z[i] = gaussian(random) * DISC_THICKNESS;
-  field.size[i] = settings.starSize * edgeFactor(jitter) * (0.7 + 0.6 * random());
+  field.size[i] = starSize * edgeFactor(jitter) * (0.7 + 0.6 * random());
   field.brightness[i] = (0.55 + 0.45 * random()) * edgeFactor(jitter);
   field.twinklePhase[i] = random() * TWO_PI;
   field.colour[i] = pickColour(random);
@@ -324,11 +462,16 @@ function seedArmStar(field: GalaxyField, i: number, radius: number, arm: number,
  *
  *   [0, flareStars)              flare stars, pinned on the spine at fixed fractions
  *   [flareStars, +coreCount)     the centre cluster — a soft ball, no arm
- *   the rest                     arm stars, radius weighted toward the centre
+ *   the rest                     arm stars, from the core's edge to the rim, denser inward
  *
  * `particleCount` is honoured exactly: the three populations always sum to it.
+ * A non-finite count is refused out loud — a typed array of length NaN is
+ * silently empty, and a galaxy with no stars says nothing about why.
  */
 export function generateGalaxyField(settings: GalaxySettings): GalaxyField {
+  if (!Number.isFinite(settings.particleCount)) {
+    throw new RangeError(`generateGalaxyField: particleCount must be a finite number, got ${String(settings.particleCount)}`);
+  }
   const count = Math.max(0, Math.round(settings.particleCount));
   const field: GalaxyField = {
     count,
@@ -345,24 +488,26 @@ export function generateGalaxyField(settings: GalaxySettings): GalaxyField {
     colour: new Uint8Array(count),
     arm: new Uint8Array(count),
     flare: new Uint8Array(count),
-    rimSpin: 0,
+    spin: 0,
     random: mulberry32(settings.seed)
   };
   const random = field.random;
+  const geo = armGeometry(settings);
   const flareCount = Math.min(count, Math.max(0, Math.round(settings.flareStars)));
   const coreCount = Math.min(count - flareCount, galaxyCoreCount({ ...settings, particleCount: count }));
   const coreRadius = galaxyCoreRadius(settings.coreSize);
+  const floor = galaxyArmFloor(settings);
   const arms = Math.max(1, Math.round(settings.arms));
 
   let i = 0;
   for (let f = 0; f < flareCount; f++, i++) {
     const fraction = GALAXY_FLARE_FRACTIONS[f % GALAXY_FLARE_FRACTIONS.length];
-    const radius = 1 - fraction * (1 - GALAXY_RADIUS_MIN);
+    const radius = 1 - fraction * (1 - floor);
     const arm = f % arms;
     field.radius[i] = radius;
     field.arm[i] = arm;
     field.jitter[i] = 0;
-    field.angle[i] = galaxySpineAngle(radius, arm, settings);
+    field.angle[i] = spineAngle(radius, arm, geo);
     field.z[i] = 0;
     field.size[i] = settings.starSize * GALAXY_FLARE_SIZE_SCALE;
     field.brightness[i] = 1;
@@ -385,19 +530,26 @@ export function generateGalaxyField(settings: GalaxySettings): GalaxyField {
     field.flare[i] = 0;
   }
   for (; i < count; i++) {
-    const radius = GALAXY_RADIUS_MIN + (1 - GALAXY_RADIUS_MIN) * Math.pow(random(), RADIUS_BIAS);
-    seedArmStar(field, i, radius, Math.floor(random() * arms) % arms, settings, 0);
+    const radius = galaxyArmRadius(random(), floor);
+    seedArmStar(field, i, radius, Math.floor(random() * arms) % arms, settings.starSize, geo);
   }
   writeCartesian(field);
   return field;
 }
 
 function writeCartesian(field: GalaxyField): void {
-  const { count, x, y, radius, angle } = field;
+  const { count, x, y, radius, angle, spin } = field;
   for (let i = 0; i < count; i++) {
-    x[i] = radius[i] * Math.cos(angle[i]);
-    y[i] = radius[i] * Math.sin(angle[i]);
+    const a = angle[i] + spin;
+    x[i] = radius[i] * Math.cos(a);
+    y[i] = radius[i] * Math.sin(a);
   }
+}
+
+/** Fold an angle into [0, 2π) with a modulo, so ANY step — a tab back from the background included — lands inside one turn. */
+function foldTurn(angle: number): number {
+  const folded = angle % TWO_PI;
+  return folded < 0 ? folded + TWO_PI : folded;
 }
 
 // ---------------------------------------------------------------------------
@@ -407,23 +559,25 @@ function writeCartesian(field: GalaxyField): void {
 /**
  * Advance the field by `dtSeconds`, in place. Returns the same field object.
  *
- * Spin: every star's angle grows by spinSpeed × dt ÷ r^(differential/100),
- * so at differential 0 the disc turns as one piece and at 100 the innermost
- * star turns 1/r times as fast as the rim. Clockwise means a growing angle,
- * which is clockwise on a canvas (y down).
+ * Spin: the whole pattern turns by spinSpeed × dt — one scalar, `spin`,
+ * folded into [0, 2π) as it is updated so a kiosk page running for a day
+ * keeps float32 precision. Clockwise means a growing angle, which is
+ * clockwise on a canvas (y down).
  *
- * Flow: arm stars drift toward the centre at flowSpeed, and they drift ALONG
- * their arm — the angle takes the spine's own change over that radius as
- * well, so an arm stays an arm. Without that the stars would keep their
- * angle while the spine under them swung through several radians on the way
- * in, and a minute of flow would smear the spiral into a plain disc. A star
- * that reaches the core is re-seeded at the outer end of the same arm, with
- * fresh jitter, starting at the rim's accumulated spin so it lands among its
- * neighbours rather than a lap behind them. Flare stars are pinned and the
- * core cluster is already home, so neither flows.
+ * Streaming: arm stars slide inward ALONG their arm at a speed that falls
+ * toward the centre as r^EXPONENT — the inverse of the layout's density, so
+ * the density never changes — and their angle is recomputed from the spine
+ * at the new radius, so an arm stays an arm. Sliding along a logarithmic
+ * spiral sweeps angle at twist × speed ÷ r, so the innermost stars visibly
+ * turn fastest; `flowSpeed` sets the speed directly and `differential` adds
+ * to it in proportion to the spin. A star that reaches the core's edge is
+ * re-seeded at the rim of the same arm, with fresh jitter, from the field's
+ * own seeded source — two fields with the same seed stay byte-identical.
+ * Flare stars are pinned and the core cluster is already home, so neither
+ * streams; both turn with the pattern.
  *
- * Twinkle: the phase advances at twinkle × 1 Hz and wraps, so it never grows
- * past what a float32 can hold precisely.
+ * Twinkle: the phase advances at twinkle × 1 Hz and is folded by a modulo,
+ * so a large dt cannot carry it past one turn.
  *
  * The caller clamps `dt` (plan rule 5, 50 ms); this function only refuses a
  * non-finite or negative one.
@@ -431,49 +585,38 @@ function writeCartesian(field: GalaxyField): void {
 export function stepGalaxyField(field: GalaxyField, dtSeconds: number, settings: GalaxySettings): GalaxyField {
   const dt = Number.isFinite(dtSeconds) && dtSeconds > 0 ? dtSeconds : 0;
   if (dt === 0) return field;
-  const { count, radius, angle, arm, flare, twinklePhase } = field;
-  const direction = settings.spinDirection === "counterclockwise" ? -1 : 1;
-  const spinRate = direction * (clamp(settings.spinSpeed, 0, 100) / 100) * SPIN_RADIANS_PER_SECOND_AT_MAX;
-  const exponent = clamp(settings.differential, 0, 100) / 100;
-  const flow = (clamp(settings.flowSpeed, 0, 100) / 100) * FLOW_UNITS_PER_SECOND_AT_MAX * dt;
+  const { count, x, y, radius, angle, jitter, arm, flare, twinklePhase } = field;
+  const geo = armGeometry(settings);
+  const spinRate = geo.direction * (clamp(settings.spinSpeed, 0, 100) / 100) * SPIN_RADIANS_PER_SECOND_AT_MAX;
+  const floor = galaxyArmFloor(settings);
+  // Rim speed of the streaming, in radii per second: the flow setting's own
+  // share, plus the differential's share, which is an angular rate at the rim
+  // (a multiple of the spin) converted to a radial speed through the twist.
+  const flowRim = (clamp(settings.flowSpeed, 0, 100) / 100) * flowRimSpeedAtMax(floor);
+  const differentialRim = (clamp(settings.differential, 0, 100) / 100) * DIFFERENTIAL_RIM_GAIN * Math.abs(spinRate) / geo.twist;
+  const slide = (flowRim + differentialRim) * dt;
   const twinkleStep = (clamp(settings.twinkle, 0, 100) / 100) * TWINKLE_RADIANS_PER_SECOND_AT_MAX * dt;
-  const twist = galaxyTwist(settings.turns);
-  const sigma = galaxyArmSigma(settings.armWidth);
-  const coreEdge = Math.max(GALAXY_RADIUS_MIN, galaxyCoreRadius(settings.coreSize));
 
-  field.rimSpin += spinRate * dt;
+  field.spin = foldTurn(field.spin + spinRate * dt);
+  const spin = field.spin;
 
   for (let i = 0; i < count; i++) {
-    const r = radius[i];
-    // Spin — the differential is a power of the radius, and r is never below
-    // GALAXY_RADIUS_MIN for arm stars; core stars at tiny radii are held at
-    // that floor so a star at the exact centre does not spin infinitely fast.
-    const rForSpin = Math.max(GALAXY_RADIUS_MIN, r);
-    angle[i] += (spinRate * dt) / (exponent === 0 ? 1 : Math.pow(rForSpin, exponent));
-
-    // Flow — arm stars only, along the arm.
-    if (flow > 0 && arm[i] !== GALAXY_CORE_ARM && flare[i] === 0) {
-      const next = r - flow;
-      if (next <= coreEdge) {
-        seedArmStar(field, i, 1, arm[i], settings, field.rimSpin);
-        // seedArmStar rewrote angle/jitter/size/brightness/phase/colour; z is fresh too.
+    if (slide > 0 && arm[i] !== GALAXY_CORE_ARM && flare[i] === 0) {
+      const r = radius[i];
+      const next = r - slide * radialSpeedProfile(r);
+      if (next <= floor) {
+        seedArmStar(field, i, 1, arm[i], settings.starSize, geo);
       } else {
-        angle[i] += twist * Math.log(next / r);
         radius[i] = next;
+        angle[i] = spineAngle(next, arm[i], geo) + jitter[i] * geo.sigma;
       }
     }
-
-    // Twinkle.
-    let phase = twinklePhase[i] + twinkleStep;
-    if (phase >= TWO_PI) phase -= TWO_PI;
-    twinklePhase[i] = phase;
+    const a = angle[i] + spin;
+    const rr = radius[i];
+    x[i] = rr * Math.cos(a);
+    y[i] = rr * Math.sin(a);
+    twinklePhase[i] = foldTurn(twinklePhase[i] + twinkleStep);
   }
-  // Angles grow without bound under spin; fold them so float32 keeps its
-  // precision over a long visit. (A wrap does not change cos/sin.)
-  for (let i = 0; i < count; i++) {
-    if (angle[i] > TWO_PI * 64 || angle[i] < -TWO_PI * 64) angle[i] %= TWO_PI;
-  }
-  writeCartesian(field);
   return field;
 }
 
@@ -489,6 +632,13 @@ export interface GalaxyProjection {
   depth: Float32Array;
   /** The pixel radius the unit disc was drawn at, so a caller can turn field units back into pixels. */
   scale: number;
+  /**
+   * How many entries the last projection wrote — the field's count, or the
+   * arrays' length if that is smaller. A renderer loops to THIS, not to the
+   * arrays' length: a buffer reused after the field shrank keeps stale stars
+   * in its tail.
+   */
+  count: number;
 }
 
 /** The unit disc fills this fraction of the shorter viewport side. */
@@ -496,7 +646,7 @@ export const GALAXY_VIEWPORT_FILL = 0.92;
 
 export function createGalaxyProjection(count: number): GalaxyProjection {
   const n = Math.max(0, Math.round(count));
-  return { x: new Float32Array(n), y: new Float32Array(n), depth: new Float32Array(n), scale: 0 };
+  return { x: new Float32Array(n), y: new Float32Array(n), depth: new Float32Array(n), scale: 0, count: 0 };
 }
 
 /**
@@ -510,7 +660,8 @@ export function createGalaxyProjection(count: number): GalaxyProjection {
  * lets a test hold the projection still. Perspective, if a renderer wants
  * it, is a size tweak off `depth`, not a change to where a star lands.
  *
- * A star past the end of `out` is dropped rather than written out of bounds.
+ * A star past the end of `out` is dropped rather than written out of bounds,
+ * and `out.count` says how many were written.
  */
 export function projectGalaxyField(
   field: GalaxyField,
@@ -549,6 +700,7 @@ export function projectGalaxyField(
     od[i] = z2;
   }
   out.scale = scale;
+  out.count = n;
   return out;
 }
 
@@ -560,9 +712,11 @@ export type GalaxyDeviceTier = "high" | "mid" | "low";
 
 /**
  * Which class of machine is looking, from what a browser will admit to.
- * `saveData` is the visitor asking for less, and wins outright. A browser
- * that reports nothing (Safari hides `deviceMemory`) is treated as mid, not
- * high: guessing high on an old phone is the guess that stutters.
+ * `saveData` is the visitor asking for less, and wins outright. `high`
+ * needs BOTH cores and memory reported and both generous: a browser that
+ * hides either (Safari hides `deviceMemory` on every device, an eight-core
+ * iPhone included) is capped at mid, because guessing high on an old phone
+ * is the guess that stutters.
  */
 export function readDeviceTier(input: {
   hardwareConcurrency?: number | null;
@@ -573,8 +727,7 @@ export function readDeviceTier(input: {
   const cores = Number.isFinite(input.hardwareConcurrency as number) ? (input.hardwareConcurrency as number) : null;
   const memory = Number.isFinite(input.deviceMemory as number) ? (input.deviceMemory as number) : null;
   if ((cores !== null && cores <= 2) || (memory !== null && memory <= 2)) return "low";
-  if ((cores !== null && cores <= 4) || (memory !== null && memory <= 4)) return "mid";
-  if (cores === null && memory === null) return "mid";
+  if (cores === null || memory === null || cores <= 4 || memory <= 4) return "mid";
   return "high";
 }
 
