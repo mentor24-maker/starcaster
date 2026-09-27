@@ -45,6 +45,9 @@ function entries() {
     { location: 'maxone', path: 'A/empty.txt', size: 0 },
     { location: 'maxone', path: 'A/.DS_Store', size: 5, hash: 'h4' },
     { location: 'maxone', path: 'A/broken.jpg', size: 14, error: 'EIO' },
+    // What the indexer actually writes for a folder it could not open: size 0
+    // AND an error. Size-first ordering filed this as "empty" (ticket 86bc7eh7m).
+    { location: 'maxone', path: 'A/Locked Videos', size: 0, error: 'folder could not be listed: EPERM' },
     { location: 'maxone', path: 'A/same-name.pdf', size: 15, hash: 'h5' },
     // Zips and their members are slice 2's, never planned here.
     { location: 'maxone', path: 'A/Z.zip', size: 100, hash: 'zipA' },
@@ -74,15 +77,18 @@ test('plan: every loose MaxOne file lands in exactly one state, with a reason', 
   assert.equal(by['A/empty.txt'].action, 'SKIP');
   assert.equal(by['A/.DS_Store'].action, 'SKIP');
   assert.equal(by['A/broken.jpg'].action, 'HOLD');
+  // An unreadable folder is size 0 with an error: HELD, never "empty".
+  assert.equal(by['A/Locked Videos'].action, 'HOLD');
+  assert.match(by['A/Locked Videos'].reason, /could not be read: folder could not be listed/);
   // A different file already sits where this one would land: renamed, never overwritten or skipped.
   assert.equal(by['A/same-name.pdf'].action, 'UPLOAD');
   assert.equal(by['A/same-name.pdf'].dest.path, 'Restored from MaxOne/A/same-name (from MaxOne 2).pdf');
   assert.match(by['A/same-name.pdf'].dest.reason, /renamed because a different file/);
   // Zips, zip members and the Mac are other slices'.
   assert.ok(!by['A/Z.zip'] && !by['inside.pdf'] && !by['mac-only.pdf']);
-  assert.equal(rows.length, 9);
+  assert.equal(rows.length, 10);
   const s = loose.summarize(rows);
-  assert.deepEqual([s.upload, s.onDrive, s.hold, s.video], [3, 2, 2, 1]);
+  assert.deepEqual([s.upload, s.onDrive, s.hold, s.video], [3, 2, 3, 1]);
 });
 
 test('batches: one Drive per batch, capped by count and bytes', () => {
@@ -114,11 +120,14 @@ test('verdict: backed up means the bytes are on a Drive NOW, and every miss has 
   const present = new Set(['h1:10', 'h2:11', 'h3:12', 'hU:13', 'h5:15']);
   const hashOf = (e) => (e.path === 'A/unhashed.mov' ? 'hU' : '');
   const v = loose.verdict(all, hashOf, (h, s) => present.has(`${h}:${s}`));
-  assert.equal(v.total, 9);
+  assert.equal(v.total, 10);
   assert.equal(v.noCopyNeeded, 2);
   assert.equal(v.backedUp, 6);
-  assert.deepEqual(v.missing.map((m) => m.path), ['A/broken.jpg']);
+  assert.deepEqual(v.missing.map((m) => m.path), ['A/broken.jpg', 'A/Locked Videos']);
   assert.match(v.missing[0].reason, /could not be read/);
+  // The unreadable FOLDER (size 0 + error) is named as missing with its error,
+  // not counted as "needs no copy" — that was the green light over unseen files.
+  assert.match(v.missing[1].reason, /could not be read on MaxOne: folder could not be listed: EPERM/);
   assert.equal(v.ok, false);
   // One file vanished from Drive: it is named, whatever the ledger remembers.
   const gone = loose.verdict(all, hashOf, (h, s) => present.has(`${h}:${s}`) && h !== 'h3');
