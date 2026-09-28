@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  GALAXY_ARM_FLOOR_MAX,
   GALAXY_CORE_ARM,
   GALAXY_COUNT_FLOOR,
   GALAXY_REFERENCE_AREA_PX,
@@ -10,6 +11,7 @@ import {
   galaxyArmSigma,
   galaxyCoreRadius,
   galaxySpineAngle,
+  galaxyTwist,
   generateGalaxyField,
   mulberry32,
   projectGalaxyField,
@@ -35,6 +37,33 @@ import {
 const TWO_PI = 2 * Math.PI;
 const FRAME = 1 / 60;
 
+/**
+ * One limit for the whole file. Four of these tests step thousands of
+ * frames over thousands of stars; two of them were given 30 s by hand and
+ * two neighbours of the same cost were left on vitest's default 5 s, which
+ * a loaded CI runner can cross (round-2 review, item 3). A per-test guess
+ * is how the next one gets missed.
+ */
+vi.setConfig({ testTimeout: 30_000 });
+
+/**
+ * The seeds and star counts the first-frame and differential guards are
+ * proven over. Round 2 found both passing only for seed 27 at exactly
+ * 4,000 stars — red on 823 of 1,200 seed × count pairs — and slice 2 will
+ * spread a scaled count (2,800 on a mid-tier device) into the settings, at
+ * which point a seed-lucky bar goes red on correct code and gets loosened.
+ * Seeds 2, 3, 4, 6, 7 and 145 are the ones the review named.
+ */
+const SEED_SWEEP = [...Array.from({ length: 20 }, (_, i) => i + 1), 27, 145];
+const COUNT_SWEEP = ["2000", "2800", "4000", "8000"];
+/**
+ * Further than one frame carries any star at the defaults. flowSpeed 100 is
+ * a 20 s rim-to-core trip; at the defaults one frame at the rim is about
+ * 6e-4 of the disc, and at the floor a quarter of that. Round 1's defect was
+ * stars born 0.03 BELOW the floor — fifteen times this margin.
+ */
+const ONE_FRAME_REACH = 0.002;
+
 function settingsWith(overrides: Record<string, string> = {}): GalaxySettings {
   return readGalaxySettings({ ...GALAXY_SETTING_DEFAULTS, ...overrides });
 }
@@ -48,26 +77,15 @@ function wrap(angle: number): number {
 }
 
 /**
- * EVERY array the field owns, in one place. The byte comparison, the length
- * check and the no-allocation test all read this list, so a new array added
- * to the field is covered by all three or by none — the round-1 review found
- * `bytesOf` silently skipping three of twelve.
+ * EVERY array the field owns, discovered rather than listed. The byte
+ * comparison, the length check and the same-arrays test all read this, so a
+ * thirteenth array added to the field is covered by all three the moment it
+ * exists — the round-1 review found `bytesOf` silently skipping three of
+ * twelve, and round 2 pointed out that a hand-typed list would skip the
+ * next one the same way.
  */
 function fieldArrays(field: GalaxyField): (Float32Array | Uint8Array)[] {
-  return [
-    field.x,
-    field.y,
-    field.z,
-    field.radius,
-    field.angle,
-    field.jitter,
-    field.size,
-    field.brightness,
-    field.twinklePhase,
-    field.colour,
-    field.arm,
-    field.flare
-  ];
+  return Object.values(field).filter((value): value is Float32Array | Uint8Array => ArrayBuffer.isView(value));
 }
 
 function bytesOf(field: GalaxyField): Buffer {
@@ -83,12 +101,22 @@ function screenAngle(field: GalaxyField, i: number): number {
   return Math.atan2(field.y[i], field.x[i]);
 }
 
-function indexOfExtremeRadius(field: GalaxyField, pick: "min" | "max"): number {
+/**
+ * The innermost or outermost ARM star — and for "min", the innermost one
+ * that one frame's slide cannot carry past the floor. The very innermost
+ * star is by definition the one closest to the floor, so with any streaming
+ * on it is the likeliest star in the field to be re-seeded during the one
+ * frame being measured, and its "advance" is then a jump to the rim (round-2
+ * review: 44 of 200 seeds). A star measured for streaming must be one that
+ * streams.
+ */
+function indexOfExtremeRadius(field: GalaxyField, pick: "min" | "max", settings: GalaxySettings): number {
+  const minimum = pick === "min" ? galaxyArmFloor(settings) + ONE_FRAME_REACH : 0;
   let index = -1;
   for (let i = 0; i < field.count; i++) {
     // Arm stars only: the core does not flow and its tiny radii are held at a
     // floor for spin, which would make "smallest radius" a different question.
-    if (!isArmStar(field, i)) continue;
+    if (!isArmStar(field, i) || field.radius[i] < minimum) continue;
     if (index < 0) {
       index = i;
       continue;
@@ -97,6 +125,15 @@ function indexOfExtremeRadius(field: GalaxyField, pick: "min" | "max"): number {
     if (better) index = i;
   }
   return index;
+}
+
+/** Arm stars that went OUTWARD in a step — the only way that happens is a re-seed at the rim. */
+function reseededIndexes(before: Float32Array, field: GalaxyField): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < field.count; i++) {
+    if (isArmStar(field, i) && field.radius[i] > before[i]) out.push(i);
+  }
+  return out;
 }
 
 /**
@@ -336,73 +373,138 @@ describe("generateGalaxyField", () => {
       }
     }
   });
+
+  it("wraps the visible arm band — floor to rim — exactly `turns` times, whatever the core size", () => {
+    // The twist used to be anchored at the spiral's mathematical origin
+    // (0.03), so a fifth of the turns lay inside the core where no arm star
+    // is: 1.89 visible wraps at the default core, 0.46 at coreSize 100,
+    // while the setting said 2.35 (round-2 review, item 7). Anchored at the
+    // floor, the Turns setting describes the spiral a visitor can see.
+    for (const coreSize of ["0", "12", "60", "100"]) {
+      for (const turns of ["0.5", "2.35", "4"]) {
+        const settings = settingsWith({ coreSize, turns });
+        const floor = galaxyArmFloor(settings);
+        expect(floor).toBeLessThanOrEqual(GALAXY_ARM_FLOOR_MAX);
+        const sweep = Math.abs(galaxySpineAngle(1, 0, settings) - galaxySpineAngle(floor, 0, settings));
+        expect(sweep, `coreSize ${coreSize}, turns ${turns}`).toBeCloseTo(Number(turns) * TWO_PI, 6);
+      }
+    }
+  });
 });
 
 describe("stepGalaxyField", () => {
-  it("spins the innermost star through a larger angle than the outermost when differential > 0", () => {
+  it("spins the innermost star through a larger angle than the outermost when differential > 0 — on every seed and count", () => {
     // flowSpeed 0 so the only things moving a star are the pattern's spin
     // and the differential; the angle is read as drawn (from x/y), because
     // that is what "advanced by an angle" means on screen.
-    const settings = settingsWith({ differential: "50", flowSpeed: "0", particleCount: "2000" });
-    const field = generateGalaxyField(settings);
-    const inner = indexOfExtremeRadius(field, "min");
-    const outer = indexOfExtremeRadius(field, "max");
-    const innerBefore = screenAngle(field, inner);
-    const outerBefore = screenAngle(field, outer);
-    stepGalaxyField(field, FRAME, settings);
-    const innerDelta = wrap(screenAngle(field, inner) - innerBefore);
-    const outerDelta = wrap(screenAngle(field, outer) - outerBefore);
-    expect(innerDelta).toBeGreaterThan(0);
-    expect(outerDelta).toBeGreaterThan(0);
-    // A real margin, not a bare "greater than": angles live in float32, so
-    // two EQUAL deltas read back unequal by rounding, and a bare comparison
-    // passed with the differential forced to zero (found by break-testing).
-    // At differential 50 the innermost arm star turns about two and a half
-    // times as fast as the rim, spin included; twice is the bar.
-    expect(innerDelta).toBeGreaterThan(outerDelta * 2);
+    //
+    // Round 2: this picked the star of minimum radius, and with differential
+    // 50 the slide is > 0 even at flowSpeed 0 — so on 44 of 200 seeds that
+    // exact star was re-seeded to the rim during the measured frame and
+    // `innerDelta` was a random jump (seed 145 read −0.072). The picker now
+    // skips stars within one frame of the floor, the step is checked to have
+    // streamed the chosen star rather than re-seeded it, and the bar is
+    // proven over the sweep rather than one lucky seed.
+    for (const count of COUNT_SWEEP) {
+      for (const seed of SEED_SWEEP) {
+        const label = `seed ${seed}, ${count} stars`;
+        const settings = settingsWith({ seed: String(seed), differential: "50", flowSpeed: "0", particleCount: count });
+        const field = generateGalaxyField(settings);
+        const inner = indexOfExtremeRadius(field, "min", settings);
+        const outer = indexOfExtremeRadius(field, "max", settings);
+        const innerRadiusBefore = field.radius[inner];
+        const innerBefore = screenAngle(field, inner);
+        const outerBefore = screenAngle(field, outer);
+        stepGalaxyField(field, FRAME, settings);
+        // The measured star streamed inward; it was not re-seeded.
+        expect(field.radius[inner], `${label}: the innermost star streamed`).toBeLessThan(innerRadiusBefore);
+        const innerDelta = wrap(screenAngle(field, inner) - innerBefore);
+        const outerDelta = wrap(screenAngle(field, outer) - outerBefore);
+        expect(innerDelta, `${label}: inner advance`).toBeGreaterThan(0);
+        expect(outerDelta, `${label}: outer advance`).toBeGreaterThan(0);
+        // A real margin, not a bare "greater than": angles live in float32, so
+        // two EQUAL deltas read back unequal by rounding, and a bare comparison
+        // passed with the differential forced to zero (found by break-testing).
+        // At differential 50 the innermost arm star turns about two and a half
+        // times as fast as the rim, spin included; twice is the bar.
+        expect(innerDelta, `${label}: inner turns at least twice the rim`).toBeGreaterThan(outerDelta * 2);
+      }
+    }
   });
 
-  it("spins every star through the same angle when differential is 0", () => {
-    const settings = settingsWith({ differential: "0", flowSpeed: "0", particleCount: "2000" });
-    const field = generateGalaxyField(settings);
-    const inner = indexOfExtremeRadius(field, "min");
-    const outer = indexOfExtremeRadius(field, "max");
-    const innerBefore = screenAngle(field, inner);
-    const outerBefore = screenAngle(field, outer);
-    stepGalaxyField(field, FRAME, settings);
-    const innerDelta = wrap(screenAngle(field, inner) - innerBefore);
-    const outerDelta = wrap(screenAngle(field, outer) - outerBefore);
-    expect(innerDelta).toBeGreaterThan(0);
-    expect(innerDelta).toBeCloseTo(outerDelta, 5);
+  it("spins every star through the same angle when differential is 0 — on every seed and count", () => {
+    for (const count of COUNT_SWEEP) {
+      for (const seed of SEED_SWEEP) {
+        const label = `seed ${seed}, ${count} stars`;
+        const settings = settingsWith({ seed: String(seed), differential: "0", flowSpeed: "0", particleCount: count });
+        const field = generateGalaxyField(settings);
+        const inner = indexOfExtremeRadius(field, "min", settings);
+        const outer = indexOfExtremeRadius(field, "max", settings);
+        const innerBefore = screenAngle(field, inner);
+        const outerBefore = screenAngle(field, outer);
+        stepGalaxyField(field, FRAME, settings);
+        const innerDelta = wrap(screenAngle(field, inner) - innerBefore);
+        const outerDelta = wrap(screenAngle(field, outer) - outerBefore);
+        expect(innerDelta, `${label}: inner advance`).toBeGreaterThan(0);
+        expect(innerDelta, `${label}: inner equals outer`).toBeCloseTo(outerDelta, 5);
+      }
+    }
   });
 
   it("turns the other way for counterclockwise", () => {
     const settings = settingsWith({ spinDirection: "counterclockwise", flowSpeed: "0", particleCount: "1000" });
     const field = generateGalaxyField(settings);
-    const i = indexOfExtremeRadius(field, "max");
+    const i = indexOfExtremeRadius(field, "max", settings);
     const before = screenAngle(field, i);
     stepGalaxyField(field, FRAME, settings);
     expect(wrap(screenAngle(field, i) - before)).toBeLessThan(0);
   });
 
-  it("moves no arm star more than one frame's flow on the first step — nothing jumps to the rim", () => {
-    // The round-1 defect: 374 arm stars sat at exactly radius 1 after one step.
-    const settings = settingsWith();
-    const field = generateGalaxyField(settings);
-    const before = Float32Array.from(field.radius);
-    stepGalaxyField(field, FRAME, settings);
-    // flowSpeed 100 is a 20 s rim-to-core trip; at 30, one frame at the rim
-    // is well under a thousandth of the disc.
-    const oneFrameAtMost = 0.002;
-    let atRim = 0;
-    for (let i = 0; i < field.count; i++) {
-      if (!isArmStar(field, i)) continue;
-      const moved = before[i] - field.radius[i];
-      expect(moved, `star ${i} moved inward`).toBeGreaterThan(0);
-      expect(moved, `star ${i} moved one frame's worth`).toBeLessThan(oneFrameAtMost);
-      if (field.radius[i] >= 1) atRim += 1;
+  it("re-seeds on the first step only a star one frame's flow carries past the floor — nothing born inside it jumps to the rim, on any seed or count", () => {
+    // The round-1 defect: 374 arm stars sat at exactly radius 1 after one
+    // step, because they were BORN 0.03 below the floor the step re-seeds at.
+    //
+    // Round 2: the guard demanded ZERO stars at the rim and passed only for
+    // seed 27 at 4,000 stars. The engine's own design re-seeds a star the
+    // moment it crosses the floor, and there is almost always one sitting
+    // within a frame's slide of it at t=0 — measured red on 823 of 1,200
+    // seed × count pairs. So the test tells the two cases apart: a star that
+    // went outward must have started AT OR ABOVE the floor and within one
+    // frame's reach of it (round 1's stars were fifteen reaches below); every
+    // other star moved inward by less than a frame. Violations are collected
+    // as plain strings and asserted once per sweep entry, so a sweep of
+    // 88 fields is fast and a failure names the star.
+    for (const count of COUNT_SWEEP) {
+      for (const seed of SEED_SWEEP) {
+        const label = `seed ${seed}, ${count} stars`;
+        const settings = settingsWith({ seed: String(seed), particleCount: count });
+        const field = generateGalaxyField(settings);
+        const floor = galaxyArmFloor(settings);
+        const before = Float32Array.from(field.radius);
+        stepGalaxyField(field, FRAME, settings);
+        const violations: string[] = [];
+        let armStars = 0;
+        let reseeded = 0;
+        for (let i = 0; i < field.count; i++) {
+          if (!isArmStar(field, i)) continue;
+          armStars += 1;
+          if (field.radius[i] > before[i]) {
+            reseeded += 1;
+            if (field.radius[i] !== 1) violations.push(`star ${i} went outward to ${field.radius[i]}, not to the rim`);
+            if (before[i] < floor) violations.push(`star ${i} was born at ${before[i]}, inside the floor ${floor}`);
+            if (before[i] - floor >= ONE_FRAME_REACH) violations.push(`star ${i} re-seeded from ${before[i]}, more than a frame above the floor`);
+          } else {
+            const moved = before[i] - field.radius[i];
+            if (!(moved > 0)) violations.push(`star ${i} did not move inward (${moved})`);
+            if (!(moved < ONE_FRAME_REACH)) violations.push(`star ${i} moved ${moved}, more than one frame's worth`);
+          }
+        }
+        expect(violations, label).toEqual([]);
+        expect(armStars, label).toBeGreaterThan(Number(count) * 0.5);
+        // The steady-state trickle is a star or two a frame; hundreds is the defect.
+        expect(reseeded, `${label}: re-seeded on the first frame`).toBeLessThan(armStars * 0.01);
+      }
     }
-    expect(atRim).toBe(0);
   });
 
   it("keeps the spiral's shape for two minutes at the DEFAULT settings — spin, flow and differential all on", () => {
@@ -419,7 +521,7 @@ describe("stepGalaxyField", () => {
     for (let frame = 0; frame < 60 * 120; frame++) stepGalaxyField(field, FRAME, settings);
     expect(field.spin).toBeGreaterThan(0);
     expect(shareOnArm(field, settings)).toBeGreaterThanOrEqual(0.9);
-  }, 30_000); // runs for seconds; the default 5 s limit cut it off under a loaded full-suite run
+  });
 
   it("carries arm stars inward along their arm, so the spiral survives a minute of full-speed flow", () => {
     const settings = settingsWith({ flowSpeed: "100", spinSpeed: "0", particleCount: "3000", arms: "2" });
@@ -465,7 +567,7 @@ describe("stepGalaxyField", () => {
       }
       expect(Math.abs(meanArmRadius(field) - meanAtStart), `mean radius at ${sample * 5} s`).toBeLessThan(0.03);
     }
-  }, 30_000); // runs for seconds; the default 5 s limit cut it off under a loaded full-suite run
+  });
 
   it("re-seeds a star that reaches the core at the rim of the same arm, deterministically", () => {
     const settings = settingsWith({ flowSpeed: "100", spinSpeed: "0", particleCount: "1000" });
@@ -509,7 +611,67 @@ describe("stepGalaxyField", () => {
       expect(field.twinklePhase[i]).toBeGreaterThanOrEqual(0);
       expect(field.twinklePhase[i]).toBeLessThan(TWO_PI);
     }
-    expect(changed).toBeGreaterThan(field.count * 0.99);
+    // Every star, not "most": measured, 0 of 500 phases are unchanged at dt
+    // 2.6, and a 99% bar would let 80 stars in an 8,000-star field stop
+    // twinkling while the test named for it stayed green (round-2 review).
+    expect(changed).toBe(field.count);
+  });
+
+  it("clamps a hand-built turns of 0 instead of dividing the differential by it — flow neither explodes nor dies", () => {
+    // Settings built by hand skip readGalaxySettings, and `turns` is the
+    // divisor under the differential. Unclamped, turns 0 made the slide
+    // Infinity (3,069 of 4,000 arm stars re-seeded in ONE frame) and, with
+    // the spin off, 0/0 — a NaN that quietly stopped every star.
+    const floor = galaxyArmFloor(settingsWith());
+    expect(galaxyTwist(0, floor)).toBe(galaxyTwist(GALAXY_SETTING_RANGES.turns.min, floor));
+    expect(galaxyTwist(Number.NaN, floor)).toBe(galaxyTwist(2.35, floor));
+
+    const explosive = { ...settingsWith({ spinSpeed: "100", differential: "100", flowSpeed: "0" }), turns: 0 };
+    const field = generateGalaxyField(explosive);
+    const before = Float32Array.from(field.radius);
+    stepGalaxyField(field, FRAME, explosive);
+    let armStars = 0;
+    for (let i = 0; i < field.count; i++) if (isArmStar(field, i)) armStars += 1;
+    expect(reseededIndexes(before, field).length).toBeLessThan(armStars * 0.01);
+
+    const dead = { ...settingsWith({ spinSpeed: "0", differential: "0", flowSpeed: "50" }), turns: 0 };
+    const still = generateGalaxyField(dead);
+    const radiiBefore = Float32Array.from(still.radius);
+    stepGalaxyField(still, FRAME, dead);
+    for (let i = 0; i < still.count; i++) {
+      if (!isArmStar(still, i)) continue;
+      expect(Number.isFinite(still.x[i])).toBe(true);
+      expect(still.radius[i]).toBeLessThan(radiiBefore[i]);
+    }
+  });
+
+  it("never streams faster than flowSpeed 100 — the slider extremes cannot beat the twenty-second trip", () => {
+    // The differential is scaled by 1/twist so its ANGULAR gain at the rim
+    // is stable, which makes its RADIAL speed swing 8× with `turns`: at
+    // turns 0.5, spin 100, differential 100 and flowSpeed 0 the rim-to-core
+    // trip was 1.08 s — every arm star popping in at the rim more than once
+    // a second (round-2 review, item 8). The total slide is now capped at the
+    // flow knob's own maximum. Same seed and count, so the star of largest
+    // radius — the one that moves furthest per frame — is the same star.
+    const ceiling = settingsWith({ flowSpeed: "100", spinSpeed: "0", differential: "0", particleCount: "2000" });
+    const extreme = settingsWith({ flowSpeed: "0", spinSpeed: "100", differential: "100", turns: "0.5", particleCount: "2000" });
+    const largestMove = (settings: GalaxySettings): number => {
+      const field = generateGalaxyField(settings);
+      const before = Float32Array.from(field.radius);
+      stepGalaxyField(field, FRAME, settings);
+      let largest = 0;
+      for (let i = 0; i < field.count; i++) {
+        if (isArmStar(field, i) && field.radius[i] < before[i]) largest = Math.max(largest, before[i] - field.radius[i]);
+      }
+      return largest;
+    };
+    const ceilingMove = largestMove(ceiling);
+    expect(ceilingMove).toBeGreaterThan(0);
+    expect(largestMove(extreme)).toBeLessThanOrEqual(ceilingMove * (1 + 1e-5));
+    // And the cap is a cap, not a switch: at the defaults the differential still adds to the flow.
+    expect(largestMove(settingsWith({ spinSpeed: "10", differential: "50", flowSpeed: "30" }))).toBeGreaterThan(
+      largestMove(settingsWith({ spinSpeed: "10", differential: "0", flowSpeed: "30" }))
+    );
   });
 
   it("folds the pattern's spin into one turn, so a page left running for a day keeps its precision", () => {
@@ -595,9 +757,20 @@ describe("projectGalaxyField", () => {
     expect(large.x[500]).toBe(-1);
     expect(large.x[499]).not.toBe(-1);
   });
+
+  it("refuses a non-finite count out loud rather than handing back empty arrays", () => {
+    // Same hole as generateGalaxyField's: a typed array of length NaN is
+    // silently empty, and `out.count` 0 looks like a field with no stars.
+    expect(() => createGalaxyProjection(Number.NaN)).toThrow(RangeError);
+    expect(() => createGalaxyProjection(Number.POSITIVE_INFINITY)).toThrow(RangeError);
+  });
 });
 
-describe("a frame allocates nothing", () => {
+describe("a frame keeps its arrays", () => {
+  // What this proves is IDENTITY: step and project write into the arrays
+  // they were given and hand the same objects back, so a renderer can hold
+  // references. It cannot see a scratch allocation inside a step; slice 2
+  // measures the heap over real frames (round 2 measured 18 bytes a frame).
   it("step and project hand back the same arrays on every one of 1,000 calls over a 4,000-star field", () => {
     const settings = settingsWith({ particleCount: "4000" });
     const field = generateGalaxyField(settings);

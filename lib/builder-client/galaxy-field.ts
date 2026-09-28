@@ -47,6 +47,23 @@
  * Builder's still frame and the visitor's page a minute later are the same
  * galaxy.
  *
+ * TWO SLIDERS, ONE MOTION (round-2 review, item 8). `differential` is more
+ * inward streaming, scaled by the spin and by 1/twist so its ANGULAR gain at
+ * the rim is stable — but the radial speed the visitor sees then swings with
+ * `turns`, and at turns 0.5, spin 100 and differential 100 the rim-to-core
+ * trip was 1.08 s: every arm star popping in at the rim more than once a
+ * second. So the total streaming is CAPPED at flowSpeed 100's own speed
+ * (`flowRimSpeedAtMax`): no slider combination beats the twenty-second trip.
+ * Decision (i) of the two the review offered; the alternative was to leave
+ * it for slice 2's measurement.
+ *
+ * `turns` COUNTS THE ARM BAND. The twist is anchored at the arm floor (the
+ * core's edge), not at the spiral's mathematical origin, so the spiral a
+ * visitor can see — floor to rim — wraps exactly `turns` times whatever the
+ * core size. Anchored at 0.03 it wrapped 1.89 times at the default core and
+ * 0.46 at coreSize 100 while the panel would have said 2.35 (round-2 review,
+ * item 7). The trade, accepted: moving Core Size re-twists the spiral.
+ *
  * Units: the field lives in a unit disc — radius 1 is the rim, and angles are
  * radians measured the way a canvas does (y down, so a growing angle turns
  * CLOCKWISE on screen). Nothing here knows about pixels until `project`.
@@ -195,6 +212,8 @@ function gaussian(random: () => number): number {
 
 /** The spiral is anchored here: ln(r) needs r above zero, and `turns` counts from this radius to the rim. */
 export const GALAXY_RADIUS_MIN = 0.03;
+/** The core radius at coreSize 100, and so the furthest out the arm floor can sit. */
+export const GALAXY_ARM_FLOOR_MAX = 0.5;
 /**
  * Arm stars are laid out with a density per unit radius proportional to
  * r^-EXPONENT (denser toward the centre), and they stream inward at a speed
@@ -320,11 +339,21 @@ function spinSign(direction: GalaxySpinDirection): number {
 }
 
 /**
- * How many radians the spiral turns per unit of ln(r). Chosen so the whole
- * disc, from `GALAXY_RADIUS_MIN` to the rim, wraps exactly `turns` times.
+ * How many radians the spiral turns per unit of ln(r). Chosen so the ARM
+ * BAND — from `floor` (the core's edge, `galaxyArmFloor`) to the rim — wraps
+ * exactly `turns` times: that band is the only spiral a visitor can see, so
+ * it is the one the Turns setting describes. `turns` is clamped to its
+ * stated range here, not trusted: this is the divisor under the differential
+ * in `stepGalaxyField`, and hand-built settings with `turns: 0` (the shape
+ * this file's own tests use) made it Infinity — 3,069 of 4,000 arm stars
+ * re-seeded at the rim in ONE frame — or 0/0 with the spin off, which is a
+ * NaN that silently stops every star (round-2 review, item 5).
  */
-export function galaxyTwist(turns: number): number {
-  return (turns * TWO_PI) / Math.log(1 / GALAXY_RADIUS_MIN);
+export function galaxyTwist(turns: number, floor: number): number {
+  const range = GALAXY_SETTING_RANGES.turns;
+  const t = clamp(Number.isFinite(turns) ? turns : Number.parseFloat(GALAXY_SETTING_DEFAULTS.turns), range.min, range.max);
+  const f = clamp(Number.isFinite(floor) ? floor : GALAXY_RADIUS_MIN, GALAXY_RADIUS_MIN, GALAXY_ARM_FLOOR_MAX);
+  return (t * TWO_PI) / Math.log(1 / f);
 }
 
 /** The arm geometry a step or a layout reads once rather than per star. */
@@ -334,41 +363,48 @@ interface ArmGeometry {
   sigma: number;
   /** +1 clockwise, -1 counterclockwise: the spiral's handedness and the spin's sign. */
   direction: number;
+  /** The innermost arm radius, where the twist is anchored. */
+  floor: number;
 }
 
-function armGeometry(settings: GalaxySettings): ArmGeometry {
+/**
+ * ONE builder for the geometry, read by the layout, the step and the
+ * exported `galaxySpineAngle`. `armWidth` is optional because the spine
+ * helper has no use for the band's width; everything else is required, so
+ * the anchor (`coreSize` → floor) cannot be left out by a caller and drift.
+ */
+function armGeometry(
+  settings: Pick<GalaxySettings, "turns" | "arms" | "spinDirection" | "coreSize"> & { armWidth?: number }
+): ArmGeometry {
+  const floor = galaxyArmFloor(settings);
   return {
-    twist: galaxyTwist(settings.turns),
+    twist: galaxyTwist(settings.turns, floor),
     spacing: armSpacing(Math.max(1, Math.round(settings.arms))),
-    sigma: galaxyArmSigma(settings.armWidth),
-    direction: spinSign(settings.spinDirection)
+    sigma: galaxyArmSigma(settings.armWidth ?? 0),
+    direction: spinSign(settings.spinDirection),
+    floor
   };
 }
 
 function spineAngle(radius: number, arm: number, geo: ArmGeometry): number {
-  const r = Math.max(GALAXY_RADIUS_MIN, radius);
+  const r = Math.max(geo.floor, radius);
   // The sign makes the arms TRAIL: going inward the spine turns in the spin
   // direction, so a star streaming inward along it moves with the spin.
-  return geo.spacing * arm - geo.direction * geo.twist * Math.log(r / GALAXY_RADIUS_MIN);
+  return geo.spacing * arm - geo.direction * geo.twist * Math.log(r / geo.floor);
 }
 
 /**
  * The angle of an arm's spine at a radius, in the pattern's frame: the
- * logarithmic spiral itself. A star's own angle is this plus its jitter, and
- * its on-screen angle adds the field's `spin`. This is the "twist term" the
- * arm-band test subtracts.
+ * logarithmic spiral itself, anchored at the arm floor. A star's own angle
+ * is this plus its jitter, and its on-screen angle adds the field's `spin`.
+ * This is the "twist term" the arm-band test subtracts.
  */
 export function galaxySpineAngle(
   radius: number,
   arm: number,
-  settings: Pick<GalaxySettings, "turns" | "arms" | "spinDirection">
+  settings: Pick<GalaxySettings, "turns" | "arms" | "spinDirection" | "coreSize">
 ): number {
-  return spineAngle(radius, arm, {
-    twist: galaxyTwist(settings.turns),
-    spacing: armSpacing(Math.max(1, Math.round(settings.arms))),
-    sigma: 0,
-    direction: spinSign(settings.spinDirection)
-  });
+  return spineAngle(radius, arm, armGeometry(settings));
 }
 
 /** One standard deviation of arm jitter, in radians, for an armWidth setting. */
@@ -378,7 +414,7 @@ export function galaxyArmSigma(armWidth: number): number {
 
 /** The radius of the centre cluster in unit-disc terms. */
 export function galaxyCoreRadius(coreSize: number): number {
-  return (clamp(coreSize, 0, 100) / 100) * 0.5;
+  return (clamp(coreSize, 0, 100) / 100) * GALAXY_ARM_FLOOR_MAX;
 }
 
 /**
@@ -592,9 +628,13 @@ export function stepGalaxyField(field: GalaxyField, dtSeconds: number, settings:
   // Rim speed of the streaming, in radii per second: the flow setting's own
   // share, plus the differential's share, which is an angular rate at the rim
   // (a multiple of the spin) converted to a radial speed through the twist.
-  const flowRim = (clamp(settings.flowSpeed, 0, 100) / 100) * flowRimSpeedAtMax(floor);
+  // The sum is CAPPED at flowSpeed 100's speed — the differential's radial
+  // speed swings 8× with `turns`, and uncapped, the slider extremes recycled
+  // every arm star rim-to-core in about a second (header, "two sliders").
+  const flowCeiling = flowRimSpeedAtMax(floor);
+  const flowRim = (clamp(settings.flowSpeed, 0, 100) / 100) * flowCeiling;
   const differentialRim = (clamp(settings.differential, 0, 100) / 100) * DIFFERENTIAL_RIM_GAIN * Math.abs(spinRate) / geo.twist;
-  const slide = (flowRim + differentialRim) * dt;
+  const slide = Math.min(flowCeiling, flowRim + differentialRim) * dt;
   const twinkleStep = (clamp(settings.twinkle, 0, 100) / 100) * TWINKLE_RADIANS_PER_SECOND_AT_MAX * dt;
 
   field.spin = foldTurn(field.spin + spinRate * dt);
@@ -645,6 +685,11 @@ export interface GalaxyProjection {
 export const GALAXY_VIEWPORT_FILL = 0.92;
 
 export function createGalaxyProjection(count: number): GalaxyProjection {
+  // The same refusal `generateGalaxyField` makes: a typed array of length
+  // NaN is silently empty, and a projection that writes nothing says nothing.
+  if (!Number.isFinite(count)) {
+    throw new RangeError(`createGalaxyProjection: count must be a finite number, got ${String(count)}`);
+  }
   const n = Math.max(0, Math.round(count));
   return { x: new Float32Array(n), y: new Float32Array(n), depth: new Float32Array(n), scale: 0, count: 0 };
 }
