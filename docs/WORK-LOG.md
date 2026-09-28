@@ -17,17 +17,25 @@ are fixed with it: one star in eight used to be born inside the centre and
 jump to the rim on the first frame, and the slow inward drift used to turn
 the centre-packed layout into a hollow disc within a minute, so what the
 operator saw in the Builder was not what a visitor saw a minute later. There
-are 36 checks on the galaxy itself (59 with the placement helpers' own): the
+are 40 checks on the galaxy itself, plus the five placement tests: the
 same seed number always draws the same galaxy, the star count asked for is
 the count you get, the spiral holds its shape for two minutes at the default
 settings, the density stays the same through five minutes, tilting the disc
-never moves a star off its circle, and a frame of animation creates no new
-memory (which is what keeps it smooth). Thirteen of those checks were broken
-on purpose to prove they can fail, and one of them could not — a single
-reading at five minutes happened to line up with the start — so it now
-samples every five seconds. The Window Center / In Place placement helpers
-also moved into their own small file so the Galaxy module can share them
-without touching TractorNav. Nothing on any page changes until slice 2.
+never moves a star off its circle, and a frame of animation hands back the
+same arrays it was given (which is what keeps it smooth). Twenty-one of those
+checks were broken on purpose to prove they can fail, and two turned out to
+pass only by luck: a single density reading at five minutes happened to line
+up with the start, so it now samples every five seconds; and the check that
+nothing jumps to the rim on the first frame held for the default seed and
+star count only, because the engine correctly recycles the one or two stars
+that were about to reach the centre anyway. That check, and the one that the
+inner stars turn faster, are now proven across 22 seeds and four star counts.
+Two settings were also pinned down: "Turns" now counts the spiral you can see
+(it used to count part of a turn hidden inside the centre), and no combination
+of sliders can stream stars inward faster than the flow slider's own maximum.
+The Window Center / In Place placement helpers also moved into their own
+small file so the Galaxy module can share them without touching TractorNav.
+Nothing on any page changes until slice 2.
 ## 2026-09-25 — The MaxOne erase guard would say 'all backed up' over a folder it could not open — an unreadable folder is counted as empty, not as missing (#744)
 
 The count that decides whether MaxOne may be erased had a hole. When the
