@@ -1,3 +1,18 @@
+## 2026-10-03 — A ticket Dane is working on by hand gets sent back to the build loop whenever anything comments on it (#752)
+
+On 3 October Dane was erasing and re-setting-up his MaxOne backup drive by hand,
+and the ticket for it kept getting put back in the build loop's queue — once
+because he typed "Done(?)" halfway through, once more because he answered a
+question on it. An automatic build pass then grabbed it, while the drive was in
+the middle of being scanned. Nothing was lost, but a ticket with an
+irreversible step should never land in the robots' queue while a person is
+holding it. Three fixes. A cleanup script's notes now carry the "a machine
+wrote this" tag, so they cannot be mistaken for Dane's words. A ticket can now
+be marked **held by hand**: his comments still get passed along, but the ticket
+stays put until he moves it. And the relay's "this ticket is being returned to
+the queue" note now only appears when that is actually happening — one of the
+morning's alarming notes described a move that never took place.
+
 ## 2026-10-03 — Both loop lanes home on the Mac Mini now that its scheduled passes can sign in again (#749)
 
 The build and review loops are the two jobs that drain the ticket queue
