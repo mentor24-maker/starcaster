@@ -159,6 +159,7 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "event-manager",
   "navigation",
   "tractor-nav",
+  "galaxy",
   "breadcrumb",
   "blog-toc",
   "social",

@@ -109,6 +109,7 @@ export const BUILDER_MODULE_TYPES = [
   "poll-category-list",
   "confetti",
   "tractor-nav",
+  "galaxy",
   "breadcrumb",
   "blog-post-list",
   "blog-post-card",
@@ -2492,6 +2493,7 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "poll-category-list" ||
     type === "confetti" ||
     type === "tractor-nav" ||
+    type === "galaxy" ||
     type === "breadcrumb" ||
     type === "blog-post-list" ||
     type === "blog-post-card" ||
@@ -2856,6 +2858,28 @@ export function normalizeBuilderModuleSettingsForType(
     if (!settings.posX)         settings.posX         = "0";
     if (!settings.posY)         settings.posY         = "0";
     if (!settings.zIndex)       settings.zIndex       = "-9999";
+  }
+
+  if (type === "galaxy") {
+    /* Galaxy module 2/6 (task 86bc7f5hg). Fills only keys whose ABSENCE
+       carries no meaning (DOCTRINE §5.27): every number the engine and the
+       placement read. Deliberately NOT filled: c1..c5 and haze (empty means
+       "follow the default colour", the theme-colour control's reset — a
+       backfill here would undo every reset on the next load) and posterUrl
+       (empty means "no poster"). The values match GALAXY_SETTING_DEFAULTS in
+       galaxy-field.ts and GALAXY_LOOK_DEFAULTS in galaxy-render.ts; they are
+       written out rather than imported so this server bundle stays small. */
+    const galaxyDefaults: Record<string, string> = {
+      seed: "27", particleCount: "4000", arms: "2", turns: "2.35", armWidth: "40",
+      coreSize: "12", coreStrength: "66", flareStars: "7", starSize: "2",
+      spinSpeed: "10", spinDirection: "clockwise", differential: "50", flowSpeed: "30", twinkle: "60",
+      placement: "window", height: "480", posX: "0", posY: "0", zIndex: "-9999",
+      glow: "70", opacity: "100", hazeStrength: "55",
+      w1: "52", w2: "15", w3: "18", w4: "7", w5: "8"
+    };
+    for (const [key, fallback] of Object.entries(galaxyDefaults)) {
+      if (!settings[key]) settings[key] = fallback;
+    }
   }
 
   if (type === "navigation") {

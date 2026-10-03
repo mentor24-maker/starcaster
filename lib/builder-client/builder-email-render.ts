@@ -63,6 +63,9 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     module.type === "current-poll" ||
     module.type === "previous-results" ||
     module.type === "confetti" ||
+    // An animated canvas: an email client runs no JavaScript and draws no
+    // canvas, so there is nothing a reader could be shown (task 86bc7f5hg).
+    module.type === "galaxy" ||
     module.type === "headline-rotator" ||
     module.type === "poll-category-list" ||
     // Both formats of the carousel, for the reason the two modules it merged

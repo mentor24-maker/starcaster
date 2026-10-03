@@ -108,6 +108,7 @@ import {
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
+import { GalaxyRuntime } from "@/components/builder-galaxy-module";
 import { BuilderPollModuleRuntime, BuilderSocialShareRuntime } from "@/components/builder-poll-runtime";
 import { PollCategoryListPreview } from "@/components/builder/poll-category-list-preview";
 import {
@@ -2751,6 +2752,20 @@ function BuilderModulePreview({
 
   if (module.type === "tractor-nav") {
     return <TractorNavRuntime settings={module.settings} />;
+  }
+
+  if (module.type === "galaxy") {
+    return (
+      <GalaxyRuntime
+        settings={module.settings}
+        liveSite={liveSite}
+        builderNote={(shown, asked) => (
+          <BuilderOnlyNote liveSite={liveSite}>
+            Showing {shown} of {asked} stars on this device.
+          </BuilderOnlyNote>
+        )}
+      />
+    );
   }
 
   if (module.type === "blog-post-list") {

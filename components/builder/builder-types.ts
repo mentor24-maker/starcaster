@@ -767,6 +767,58 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     }
   },
   {
+    // Galaxy module 2/6 (task 86bc7f5hg). The description carries the words
+    // people would SEARCH for — stars, spiral, space, nebula, particles —
+    // because scoreModuleMatch reads it as well as the label.
+    id: "special-effects-galaxy",
+    type: "galaxy",
+    group: "special-effects",
+    label: "Galaxy",
+    icon: "✦",
+    description: "Animated spiral galaxy: a star field of particles that slowly turns, twinkles, and can be dragged to rotate. Space, stars, nebula, particles.",
+    name: "",
+    text: "",
+    settings: {
+      // The engine defaults (GALAXY_SETTING_DEFAULTS in galaxy-field.ts) …
+      seed: "27",
+      particleCount: "4000",
+      arms: "2",
+      turns: "2.35",
+      armWidth: "40",
+      coreSize: "12",
+      coreStrength: "66",
+      flareStars: "7",
+      starSize: "2",
+      spinSpeed: "10",
+      spinDirection: "clockwise",
+      differential: "50",
+      flowSpeed: "30",
+      twinkle: "60",
+      // … placement, as TractorNav does it …
+      placement: "window",
+      height: "480",
+      posX: "0",
+      posY: "0",
+      zIndex: "-9999",
+      // … and the reference picture's look.
+      glow: "70",
+      opacity: "100",
+      haze: "#23435F",
+      hazeStrength: "55",
+      c1: "#F5F6FB",
+      c2: "#6DCBF4",
+      c3: "#7AB1FE",
+      c4: "#F87915",
+      c5: "#FA994C",
+      w1: "52",
+      w2: "15",
+      w3: "18",
+      w4: "7",
+      w5: "8",
+      posterUrl: ""
+    }
+  },
+  {
     id: "blog-post-create-standard",
     type: "blog-post-create",
     group: "blog",
