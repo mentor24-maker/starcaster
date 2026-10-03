@@ -5,9 +5,14 @@
  * stays at / or /{slug}. Must use .mjs (ESM) — see docs/CUSTOM_DOMAIN_PUBLIC_SITES.md.
  *
  * SYSTEM_HOST_RE must stay in sync with lib/publicSiteHosts.js
+ *
+ * Addresses carried over from a tenant's previous site are redirected here
+ * rather than in vercel.json: that file uses `routes`, and Vercel rejects a
+ * config carrying both `routes` and `redirects`. See lib/siteRedirects.mjs.
  */
 
 import { rewrite } from '@vercel/functions';
+import { resolveSiteRedirect } from './lib/siteRedirects.mjs';
 
 // Apex only (www. is normalized away): other starcaster.pro subdomains are
 // tenant staging hosts. Keep in sync with lib/publicSiteHosts.js.
@@ -34,6 +39,14 @@ export default async function middleware(request) {
     request.headers.get('x-forwarded-host') || request.headers.get('host')
   );
   if (!host || SYSTEM_HOST_RE.test(host)) return;
+
+  // An address from the tenant's previous site redirects to where that page
+  // lives now. This runs BEFORE the rewrite on purpose: once rewritten, the
+  // request is a blank 200 render and there is nothing left to redirect.
+  const moved = resolveSiteRedirect(host, pathname);
+  if (moved) {
+    return Response.redirect(new URL(moved, url.origin), 301);
+  }
 
   const target = new URL(request.url);
   target.pathname = pathname === '/' ? '/api/index' : `/api${pathname}`;
