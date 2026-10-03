@@ -139,6 +139,15 @@ const server = http.createServer(async (req, res) => {
     const pagePath = normalizeApiPathname(pageUrl.pathname);
     const host = getClientHost(req);
     if (!isSystemHost(host) && !/\.[a-z0-9]+$/i.test(pagePath)) {
+      // Mirror the edge middleware's previous-site redirects, so a local run
+      // against a tenant host behaves the way production does.
+      const { resolveSiteRedirect } = await import('./lib/siteRedirects.mjs');
+      const moved = resolveSiteRedirect(host, pagePath);
+      if (moved) {
+        res.writeHead(301, { Location: moved });
+        res.end();
+        return;
+      }
       await handleRequest(req, res);
       return;
     }

@@ -114,3 +114,22 @@ test('the middleware redirects permanently, not temporarily', () => {
   const source = fs.readFileSync(MIDDLEWARE, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   assert.match(source, /Response\.redirect\([\s\S]*?,\s*301\s*\)/);
 });
+
+test('the host matches with www., a port, or capitals', async () => {
+  const { resolveSiteRedirect } = await import(MODULE_URL);
+  // www.delraytennis.com serves the site too, and the local dev server passes
+  // a host carrying a port. Both must find the same table.
+  assert.equal(resolveSiteRedirect('www.delraytennis.com', '/programs/junior'), '/programs-junior');
+  assert.equal(resolveSiteRedirect('DelrayTennis.com', '/programs/junior'), '/programs-junior');
+  assert.equal(resolveSiteRedirect('delraytennis.com:3057', '/programs/junior'), '/programs-junior');
+});
+
+test('the local dev server applies the same redirects as the edge', () => {
+  // server.js mirrors the middleware for custom-domain paths. If it skips the
+  // table, a local check against a tenant host disagrees with production and
+  // the difference looks like a bug in the change being tested.
+  const source = fs
+    .readFileSync(path.join(__dirname, '..', '..', 'server.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+  assert.match(source, /resolveSiteRedirect\(/);
+});
