@@ -18,14 +18,15 @@ not evidence; the only evidence is a scheduled pass in the Mini's own log that
 actually read the queue. By that test it works: the last sign-in failure was
 at 1:55am and every pass from 2:05am onward reads the queue normally.
 
-This pass also removed a claim nobody had checked. The branch had recorded
-that the fix was deleting a stale saved password on the Mini — that was the
-prescription on the ticket, and it was never carried out: the entry is still
-sitting there, checked on the machine at 10:30am. Something else fixed the
-sign-in and we do not know what, so the file now says that plainly instead of
-crediting a cure that did not happen. Recording the wrong cause is worse than
-recording none, because next time it sends whoever reads it at the wrong
-command first.
+The file also now carries a trap this pass walked straight into, which is why
+it is written down. The fix was Dane deleting a stale saved password on the
+Mini, and checking the machine this morning showed that password sitting
+right there — which reads exactly like the fix was never done. It is not the
+same one. Its creation date is 5:47am, three hours after the loops came back,
+so the sign-in wrote itself a fresh copy once it had a good one to save.
+Whether that password exists tells you nothing; its date does. Half an hour
+went into a correction that had to be taken back, so the note now says to ask
+for the date and compare it with the log.
 
 ## 2026-09-26 — Galaxy module 1/6 — the star-field engine: seeded layout, spin and 3D rotation as pure, tested arithmetic (#745)
 
