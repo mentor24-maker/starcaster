@@ -1,3 +1,23 @@
+## 2026-10-02 — Pipeline pulse report has not been saved for 12 days — it misreads every loop pass as hung and the report got too big for ClickUp (#746)
+
+The hourly Pipeline pulse on the Mini is the one place that says whether the
+loops are healthy, and for twelve days it could not save its report at all.
+Every run ended with ClickUp refusing the write as too large. The reason was a
+small mismatch between two scripts: the loop runner closes each pass with a
+line that reads "(exit 1 — not a verdict; the pass's report above is)", but
+the pulse was still looking for the older, shorter "(exit 1)". No closing
+line matched, so every pass looked like it had started and never finished.
+One "hung pass" alarm per pass piled up to 1,276, which made the report far
+bigger than ClickUp accepts. The pulse now reads the current closing line
+(on this MacBook's log, matched passes went from 0 to 227, which is every
+one), and its test reads the line's format straight out of the runner script
+so the two cannot drift apart again without a test going red. As a second
+guard, the report is now capped: it lists the first forty findings and counts
+the rest, trims the middle of the long section while keeping the headline and
+the closing "PULSE COMPLETE" line, and says plainly how many lines it cut. The
+full reading always stays in the run log. Both fixes were broken on purpose
+and the named tests went red.
+
 ## 2026-09-25 — The MaxOne erase guard would say 'all backed up' over a folder it could not open — an unreadable folder is counted as empty, not as missing (#744)
 
 The count that decides whether MaxOne may be erased had a hole. When the
