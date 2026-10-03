@@ -317,7 +317,15 @@ async function writeDigest(body) {
     return { ok: false, why: `writing ${found.task.url}: ${String(err?.message || err).slice(0, 300)}` };
   }
   if (!wrote.ok) {
-    return { ok: false, why: `HTTP ${wrote.status} writing ${found.task.url}` };
+    // 413 is "too large", and from 2026-09-20 to 2026-10-02 it was the only
+    // thing this job said, hourly, while the record stayed twelve days stale
+    // (task 86bcc9dp8). renderDigest caps the body now, so a 413 here means
+    // the cap itself is above what ClickUp takes — say so, with the size.
+    const tooLarge = wrote.status === 413
+      ? ` — the record is TOO LARGE for ClickUp even after capping (${body.length} characters sent;`
+        + ` the cap is ${digest.DIGEST_MAX_CHARS}). Lower DIGEST_MAX_CHARS in lib/pulseDigest.js.`
+      : '';
+    return { ok: false, why: `HTTP ${wrote.status} writing ${found.task.url}${tooLarge}` };
   }
   const check = await readDigestBack(found.task.id, body);
   if (!check.ok) return { ok: false, why: `${check.why} (${found.task.url})` };
