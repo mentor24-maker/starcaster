@@ -557,8 +557,9 @@ function usage(code = 2) {
   console.error('      [--hand-held [--by NAME]]               Dane is driving this ticket from his own session: post a HELD BY');
   console.error('                                             HAND marker after the card, so the relay passes his answer on');
   console.error('                                             but never puts the ticket back in the queue.');
-  console.error('  hold-by-hand --task <id> [--by NAME]      the same marker on its own, after an existing card. A newer');
-  console.error('                                             question card from a loop ends the hold.');
+  console.error('  hold-by-hand --task <id> [--by NAME]      the same marker on its own — after an existing card, or on a');
+  console.error('                                             ticket parked with --no-card. A newer question card from a');
+  console.error('                                             loop ends the hold.');
   console.error('  waiting [--task <id>]                     is anything ACTUALLY waiting on Dane? Live reads only.');
   console.error('                                             With --task: status, assignee, newest-comment author, verdict.');
   console.error('                                             With no arguments: every open ticket in Agent Response + the');

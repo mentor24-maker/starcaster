@@ -2030,6 +2030,26 @@ it skips is the queue position.
    their numbers, what was probed live, and what was break-tested;
    `npm run tidy` (ship already did); one line on the bus.
 
+### Parking a ticket on Dane while he drives it — mark it held by hand
+
+If the lane stops for Dane mid-way — a password, a decision, a step only his
+hands can do — and the ticket goes to `Needs your input` while **his own
+session is still working it**, park it with the hold:
+
+```
+npm run clickup -- ask --task <id> --status "Needs your input" --hand-held --body-file -
+npm run clickup -- hold-by-hand --task <id>     # on a ticket already parked, card or no card
+```
+
+Without it, the bus relay reads any comment he leaves there as his answer and
+puts the ticket back in `Queued`, where a build pass can claim it out from
+under him. On 2026-10-03 that happened twice in one morning to the MaxOne
+erase ticket (86bbvr0zf) — once on a mid-task "Done(?)" — and a build pass
+claimed it four minutes after his session started scanning the drive (task
+86bccgp8q). With the hold, his comments still reach the bus; only the move is
+withheld, and he or his session moves the ticket when the work is done. A
+newer question card from a loop ends the hold.
+
 ### When the ticket is already In review
 
 "Fast track" on a ticket whose PR is already open and green is the **review

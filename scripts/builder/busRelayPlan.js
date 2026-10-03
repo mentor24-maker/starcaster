@@ -295,7 +295,7 @@ function commentAt(comment) {
  *                   that does is spent, so a ticket re-parked by hand is left
  *                   where he put it.
  * @returns { state, answer, answerAt, questionAt, delivered }
- *          state: 'answered' | 'handled' | 'none' | 'no-question'
+ *          state: 'answered' | 'handled' | 'hand-held' | 'none' | 'no-question'
  *          delivered: true/false, or null when no test was supplied
  */
 function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, handled } = {}) {
@@ -310,10 +310,6 @@ function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, ha
     .filter((c) => isEscalationCard(c && c.comment_text) && machine(c && c.comment_text))
     .reduce((newest, c) => Math.max(newest, commentAt(c)), 0);
 
-  if (!questionAt) {
-    return { state: 'no-question', answer: null, answerAt: 0, questionAt: 0, delivered: null };
-  }
-
   const answers = operatorComments(all, { operatorId, isMachine })
     .filter((c) => commentAt(c) > questionAt);
 
@@ -322,14 +318,24 @@ function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, ha
   // answer to the card is a step in HIS work, not a release to the loops. His
   // words are still relayed; only the move is withheld. Scoped to the card it
   // follows: a later ordinary `ask` posts a newer card and the hold lapses.
+  //
+  // Read BEFORE the no-card return (round-1 review): a ticket parked by hand
+  // with `status --no-card` carries no card at all, and it is the hold's main
+  // customer. Checked after, the hold was ignored there and the relay fell
+  // back to its fresh-comment rule — re-queuing on his next word while
+  // `hold-by-hand` had just printed that it would not.
   const heldAt = all
     .filter((c) => isHandHeldMarker(c && c.comment_text) && machine(c && c.comment_text))
     .reduce((newest, c) => Math.max(newest, commentAt(c)), 0);
-  if (heldAt >= questionAt) {
+  if (heldAt && heldAt >= questionAt) {
     const answer = answers.length
       ? answers.reduce((newest, c) => (commentAt(c) > commentAt(newest) ? c : newest))
       : null;
     return { state: 'hand-held', answer, answerAt: answer ? commentAt(answer) : 0, questionAt, delivered: null };
+  }
+
+  if (!questionAt) {
+    return { state: 'no-question', answer: null, answerAt: 0, questionAt: 0, delivered: null };
   }
 
   if (!answers.length) {

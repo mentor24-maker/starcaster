@@ -714,6 +714,14 @@ incidents behind each step: `docs/LOOP_ENGINEERING.md`, "The fast-track lane".
 8. Ticket to Live with the closing note (gates, live probe, what was
    break-tested); `npm run tidy`; one line on the bus.
 
+**Parking it on Dane mid-lane while his session still drives it?** Add
+`--hand-held` to the `ask` (or run `npm run clickup -- hold-by-hand --task <id>`
+on a ticket already parked, card or no card). Otherwise the bus relay reads his
+next comment there — even a mid-task "Done(?)" — as the answer and puts the
+ticket back in `Queued` for a build pass to claim out from under him (2026-10-03,
+86bbvr0zf; task 86bccgp8q). `docs/LOOP_ENGINEERING.md`, "Parking a ticket on
+Dane while he drives it".
+
 A ticket in **Rework** is a send-back: step 4 will find its branch, and the
 review notes on the ticket ARE the job. A ticket already **In review** with an
 open PR is the review half of this lane: skip the claim in step 3 (never drag

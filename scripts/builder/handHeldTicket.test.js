@@ -129,6 +129,24 @@ test('Dane quoting the hold text is not a hold — only a machine-written marker
   assert.equal(answerAwaitingHandback({ ...opts, comments }).state, 'answered');
 });
 
+test('held by hand with NO card on the trail: his comment does not release it (round-1 review)', () => {
+  // A ticket parked with `status --needs-input --no-card` and then
+  // `hold-by-hand` — the hold's main customer. Before the fix the no-card
+  // return ran first, so the relay fell back to its fresh-comment rule and
+  // re-queued on his next word while `hold-by-hand` had said it would not.
+  const comments = [hold('h', '2026-10-03T16:28:30Z'), his('d', '2026-10-03T17:34:03Z', 'Done(?)')];
+  const verdict = answerAwaitingHandback({ ...opts, comments, delivered: () => true });
+  assert.equal(verdict.state, 'hand-held');
+  assert.equal(verdict.answer.id, 'd', 'his comment is still identified, so it is still relayed');
+  assert.equal(receiptTargetFor({ verdict, commentId: 'd', target: 'Queued' }), null,
+    'and the receipt does not claim a move');
+});
+
+test('with no card and no hold, the old fresh-comment rule is untouched', () => {
+  const verdict = answerAwaitingHandback({ ...opts, comments: [his('d', '2026-10-03T17:34:03Z', 'go')] });
+  assert.equal(verdict.state, 'no-question');
+});
+
 test('a hold OLDER than the newest card has lapsed', () => {
   const comments = [hold('h', '2026-10-01T00:00:00Z'), card('c', '2026-10-03T16:28:26Z'), his('a', '2026-10-03T17:00:00Z', 'go')];
   assert.equal(answerAwaitingHandback({ ...opts, comments }).state, 'answered');
