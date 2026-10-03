@@ -1,3 +1,41 @@
+## 2026-09-26 — Galaxy module 1/6 — the star-field engine: seeded layout, spin and 3D rotation as pure, tested arithmetic (#745)
+
+The Galaxy module is a spinning spiral of stars for a page background, built
+in six slices. This first slice draws nothing yet: it is the arithmetic that
+decides where every star goes, how the disc turns, how stars drift slowly
+toward the centre along their arm, and how the whole disc tilts when it is
+later dragged. It lives in a file with no screen code in it at all, the same
+way TractorNav's ring geometry does, so tests can check it. The first version
+had a flaw the review caught by measuring rather than reading: making the
+inner stars simply turn faster than the outer ones winds the spiral up, and
+at the default settings the arms were gone within a minute. The disc now
+turns as one piece, and "inner faster" comes from stars streaming inward
+along their arm, which sweeps more angle the closer in they are, so the
+picture keeps its shape indefinitely (measured: 96% of stars still on their
+arm after two minutes, where it had been 39%). Two more found the same way
+are fixed with it: one star in eight used to be born inside the centre and
+jump to the rim on the first frame, and the slow inward drift used to turn
+the centre-packed layout into a hollow disc within a minute, so what the
+operator saw in the Builder was not what a visitor saw a minute later. There
+are 40 checks on the galaxy itself, plus the five placement tests: the
+same seed number always draws the same galaxy, the star count asked for is
+the count you get, the spiral holds its shape for two minutes at the default
+settings, the density stays the same through five minutes, tilting the disc
+never moves a star off its circle, and a frame of animation hands back the
+same arrays it was given (which is what keeps it smooth). Twenty-one of those
+checks were broken on purpose to prove they can fail, and two turned out to
+pass only by luck: a single density reading at five minutes happened to line
+up with the start, so it now samples every five seconds; and the check that
+nothing jumps to the rim on the first frame held for the default seed and
+star count only, because the engine correctly recycles the one or two stars
+that were about to reach the centre anyway. That check, and the one that the
+inner stars turn faster, are now proven across 22 seeds and four star counts.
+Two settings were also pinned down: "Turns" now counts the spiral you can see
+(it used to count part of a turn hidden inside the centre), and no combination
+of sliders can stream stars inward faster than the flow slider's own maximum.
+The Window Center / In Place placement helpers also moved into their own
+small file so the Galaxy module can share them without touching TractorNav.
+Nothing on any page changes until slice 2.
 ## 2026-09-25 — The MaxOne erase guard would say 'all backed up' over a folder it could not open — an unreadable folder is counted as empty, not as missing (#744)
 
 The count that decides whether MaxOne may be erased had a hole. When the
