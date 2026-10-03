@@ -270,6 +270,92 @@ test('a clean run still writes a record — silence is never an all-clear (rule 
   assert.match(body, /rewritten in place/);
 });
 
+/**
+ * The 2026-10-02 shape (task 86bcc9dp8): every END banner since PR #537
+ * unmatched, so every pass over four hours old read as hung — 1,276 alarms on
+ * the Mini, a record ClickUp refused with HTTP 413, twelve days with no record
+ * written. The parser fix in pulse.js stops the alarms; this is the second
+ * guard, so a flood of REAL findings can never again take the whole record
+ * down with it.
+ */
+function floodResult(hungCount) {
+  const unterminated = [];
+  for (let i = 0; i < hungCount; i++) {
+    const h = String(Math.floor(i / 60)).padStart(3, '0');
+    const start = `2026-09-${String(2 + Math.floor(i / 24)).padStart(2, '0')} ${String(i % 24).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00`;
+    unterminated.push({
+      start, state: 'hung',
+      message: `a pass started ${start} and never printed an END banner ${h}h later — it hung or was killed (a pass takes 10-15 minutes; anything past 4h is dead)`,
+    });
+  }
+  return cleanResult({ noOp: { verdict: 'clear', message: 'fine', passesRead: 0, unterminated } });
+}
+
+test('a record carrying 1,276 hung-pass alarms fits under the ClickUp cap and SAYS what it cut', () => {
+  const result = floodResult(1276);
+  const report = pulse.formatReport(result);
+  assert.ok(report.length > digest.DIGEST_MAX_CHARS, 'the fixture really is the oversize case');
+  const { items } = digest.announcements(result);
+  assert.equal(items.length, 1276);
+  const body = digest.renderDigest({ result, report, items, node: 'mac-mini', now: NOW, everyMs: 6 * HOUR });
+
+  assert.ok(body.length <= digest.DIGEST_MAX_CHARS,
+    `the body is ${body.length} characters; the cap is ${digest.DIGEST_MAX_CHARS} — this is the 413`);
+  assert.match(body, /### 1276 alarm\(s\), 0 notice\(s\), 0 could-not-tell/, 'the headline is the WHOLE count');
+  assert.match(body, new RegExp(`…and \\*\\*${1276 - digest.DIGEST_ITEM_LIMIT} more\\*\\* not listed here \\(${1276 - digest.DIGEST_ITEM_LIMIT} alarm\\(s\\), 0 could-not-tell\\)`),
+    'the list says how many it left out, by kind');
+  assert.match(body, /on mac-mini holds every one/, 'and where the rest are');
+  assert.match(body, /\*\*Cut to fit:\*\* \d+ line\(s\) of the report below were removed/, 'the report cut is stated in numbers');
+  assert.ok(body.includes('PULSE COMPLETE'), 'the completion marker survives the cut — its absence is the alert');
+  assert.ok(body.includes('PIPELINE PULSE —'), 'and so does the head of the report');
+  assert.ok(body.includes("… line(s) of this report cut") || /… \d+ line\(s\) of this report cut/.test(body),
+    'the fence itself marks where the cut is');
+});
+
+test('a normal record is written whole — no cut note, no "more" line, the report untouched', () => {
+  const result = cleanResult({
+    drift: { findings: [{ shape: 'shape-4', severity: 'alarm', taskId: '86bb1', pr: 449, message: 'PR #449 one-way link' }], cannotTell: [] },
+  });
+  const report = pulse.formatReport(result);
+  const { items } = digest.announcements(result);
+  const body = digest.renderDigest({ result, report, items, node: 'mac-mini', now: NOW, everyMs: 6 * HOUR });
+  assert.ok(!/Cut to fit/.test(body), 'nothing was cut');
+  assert.ok(!/more\*\* not listed/.test(body), 'nothing was left off the list');
+  assert.ok(body.includes(report.trimEnd()), 'the report is in the record verbatim');
+});
+
+test('BREAK-TEST: it is the cap that cuts — the same flood under a huge cap is written whole', () => {
+  const result = floodResult(1276);
+  const report = pulse.formatReport(result);
+  const { items } = digest.announcements(result);
+  const body = digest.renderDigest({
+    result, report, items, node: 'mac-mini', now: NOW, everyMs: 6 * HOUR, maxChars: 10_000_000, itemLimit: 10_000,
+  });
+  assert.ok(!/Cut to fit/.test(body));
+  assert.ok(body.includes(report.trimEnd()));
+  assert.equal((body.match(/- \*\*ALARM\*\*/g) || []).length, 1276, 'every alarm listed when there is room');
+});
+
+test('fitReport keeps the head and the tail and counts what it removed from the middle', () => {
+  const lines = [];
+  for (let i = 0; i < 500; i++) lines.push(`line ${String(i).padStart(3, '0')} ${'x'.repeat(40)}`);
+  lines.push('='.repeat(72), '  summary', 'PULSE COMPLETE 2026-10-02 — if a scheduled run does not print this line, that absence IS the alert');
+  const report = lines.join('\n');
+  const max = 4000;
+  const out = digest.fitReport(report, max);
+  assert.ok(out.text.length <= max, `${out.text.length} > ${max}`);
+  assert.ok(out.cutLines > 0);
+  assert.ok(out.text.startsWith('line 000'), 'the head is kept');
+  assert.ok(out.text.endsWith('that absence IS the alert'), 'the tail — the completion marker — is kept');
+  assert.match(out.text, new RegExp(`… ${out.cutLines} line\\(s\\) of this report cut`), 'the count in the marker is the count removed');
+  const kept = (out.text.match(/^line \d{3}/gm) || []).length;
+  assert.equal(kept + out.cutLines, 500, 'kept plus cut is every head line — nothing vanished uncounted');
+  // And a report that fits is returned untouched, cut 0.
+  const small = digest.fitReport('short\nPULSE COMPLETE', max);
+  assert.equal(small.cutLines, 0);
+  assert.equal(small.text, 'short\nPULSE COMPLETE');
+});
+
 test('the bus post separates alarms from could-not-tells and says the window', () => {
   const text = digest.renderPulsePost({
     items: [
