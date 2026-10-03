@@ -250,6 +250,46 @@ export interface GalaxySprites {
 }
 
 /**
+ * A radial gradient, or null when the context cannot actually make one.
+ *
+ * The method EXISTING is not the same as the method WORKING: jsdom (and any
+ * degraded or stubbed 2D context) exposes `createRadialGradient` and returns
+ * `undefined` from it, so a `typeof ctx.createRadialGradient === "function"`
+ * guard passes and the very next `.addColorStop` throws. A throw inside the
+ * runtime's effect unmounts the React tree the module sits in, which on a
+ * published tenant page is a blank screen for a visitor. So every gradient in
+ * this file comes through here, and callers treat null as "paint without it".
+ */
+export function galaxyRadialGradient(
+  ctx: { createRadialGradient?: unknown },
+  x0: number,
+  y0: number,
+  r0: number,
+  x1: number,
+  y1: number,
+  r1: number
+): CanvasGradient | null {
+  const make = ctx.createRadialGradient;
+  if (typeof make !== "function") return null;
+  let gradient: unknown;
+  try {
+    gradient = (make as CanvasRenderingContext2D["createRadialGradient"]).call(
+      ctx as CanvasRenderingContext2D,
+      x0,
+      y0,
+      r0,
+      x1,
+      y1,
+      r1
+    );
+  } catch {
+    return null;
+  }
+  if (!gradient || typeof (gradient as CanvasGradient).addColorStop !== "function") return null;
+  return gradient as CanvasGradient;
+}
+
+/**
  * Paint one sprite per colour × size class. `makeCanvas` is injected so a test
  * can count what was built without a real canvas; the runtime passes
  * `document.createElement("canvas")`.
@@ -266,9 +306,10 @@ export function buildGalaxySprites(
       const side = Math.max(4, Math.ceil(radius * reach * 2 * ratio));
       const canvas = makeCanvas(side, side);
       const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
-      if (!ctx || typeof ctx.createRadialGradient !== "function") return null;
+      if (!ctx) return null;
       const centre = side / 2;
-      const gradient = ctx.createRadialGradient(centre, centre, 0, centre, centre, centre);
+      const gradient = galaxyRadialGradient(ctx, centre, centre, 0, centre, centre, centre);
+      if (!gradient) return null;
       // The core: solid out to one core radius (1 / reach of the sprite), then
       // the halo falls away to nothing at the sprite's edge.
       const core = 1 / reach;
@@ -356,12 +397,14 @@ export function drawGalaxyFrame(
   const hazeRadius = Math.max(1, projection.scale * 1.15);
   if (look.hazeStrength > 0 && projection.scale > 0) {
     const [hr, hg, hb] = look.haze;
-    const haze = ctx.createRadialGradient(cx, cy, 0, cx, cy, hazeRadius);
-    haze.addColorStop(0, `rgba(${hr},${hg},${hb},${(0.6 * look.hazeStrength).toFixed(3)})`);
-    haze.addColorStop(0.5, `rgba(${hr},${hg},${hb},${(0.25 * look.hazeStrength).toFixed(3)})`);
-    haze.addColorStop(1, `rgba(${hr},${hg},${hb},0)`);
-    ctx.fillStyle = haze;
-    ctx.fillRect(0, 0, width, height);
+    const haze = galaxyRadialGradient(ctx, cx, cy, 0, cx, cy, hazeRadius);
+    if (haze) {
+      haze.addColorStop(0, `rgba(${hr},${hg},${hb},${(0.6 * look.hazeStrength).toFixed(3)})`);
+      haze.addColorStop(0.5, `rgba(${hr},${hg},${hb},${(0.25 * look.hazeStrength).toFixed(3)})`);
+      haze.addColorStop(1, `rgba(${hr},${hg},${hb},0)`);
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, 0, width, height);
+    }
   }
 
   if (look.opacity <= 0) return 0;

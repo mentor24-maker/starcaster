@@ -196,3 +196,85 @@ describe("drawGalaxyFrame", () => {
     expect(drawn).toBe(300);
   });
 });
+
+// A context whose gradient methods EXIST and do not work is the shape jsdom
+// has, and the shape any degraded 2D context has. Before the guard in
+// galaxyRadialGradient, both call sites read `.addColorStop` off the
+// `undefined` these return and threw — which, inside the runtime's effect,
+// unmounts the React tree the module sits in and leaves a visitor on a
+// published tenant page looking at a blank screen.
+describe("a 2D context that cannot actually make a gradient", () => {
+  /** `createRadialGradient` is a function and returns nothing, like jsdom's. */
+  function gradientlessCanvas(width: number, height: number): GalaxySpriteCanvas {
+    const ctx = {
+      createRadialGradient: () => undefined,
+      fillRect: () => undefined,
+      fillStyle: ""
+    };
+    return { width, height, getContext: () => ctx };
+  }
+
+  it("builds no sprites instead of throwing", () => {
+    expect(() => buildGalaxySprites(readGalaxyLook({}), 2, gradientlessCanvas)).not.toThrow();
+    const sprites = buildGalaxySprites(readGalaxyLook({}), 2, gradientlessCanvas);
+    expect(sprites.canvases.flat().every((c) => c === null)).toBe(true);
+    // The reach is still reported, so a caller can lay out without a sprite.
+    expect(sprites.reach).toBeGreaterThan(0);
+  });
+
+  it("still draws a frame — it skips the haze and reports 0 stars drawn", () => {
+    const frame = frameFor(600);
+    const sprites = buildGalaxySprites(frame.look, 2, gradientlessCanvas);
+    const calls: string[] = [];
+    const ctx = {
+      createRadialGradient: () => undefined,
+      fillRect: () => calls.push("fillRect"),
+      drawImage: () => calls.push("drawImage"),
+      fillStyle: "",
+      globalAlpha: 1,
+      globalCompositeOperation: "source-over"
+    } as unknown as GalaxyDrawContext;
+
+    let drawn = -1;
+    expect(() => {
+      drawn = drawGalaxyFrame(ctx, frame, frame.look, sprites);
+    }).not.toThrow();
+    // No sprite could be built, so no star is drawn — but the backdrop was.
+    expect(drawn).toBe(0);
+    expect(calls).toContain("fillRect");
+    expect(calls).not.toContain("drawImage");
+  });
+
+  it("rejects a truthy value that is not a gradient", () => {
+    // A stub can return an object rather than nothing. `!gradient` is false
+    // for `{}`, so only the addColorStop check in galaxyRadialGradient
+    // catches this one.
+    const stubbed = (width: number, height: number): GalaxySpriteCanvas => ({
+      width,
+      height,
+      getContext: () => ({
+        createRadialGradient: () => ({}),
+        fillRect: () => undefined,
+        fillStyle: ""
+      })
+    });
+    expect(() => buildGalaxySprites(readGalaxyLook({}), 2, stubbed)).not.toThrow();
+    const sprites = buildGalaxySprites(readGalaxyLook({}), 2, stubbed);
+    expect(sprites.canvases.flat().every((c) => c === null)).toBe(true);
+  });
+
+  it("throws nothing when createRadialGradient itself throws", () => {
+    const throwing = (width: number, height: number): GalaxySpriteCanvas => ({
+      width,
+      height,
+      getContext: () => ({
+        createRadialGradient: () => {
+          throw new Error("context lost");
+        },
+        fillRect: () => undefined,
+        fillStyle: ""
+      })
+    });
+    expect(() => buildGalaxySprites(readGalaxyLook({}), 2, throwing)).not.toThrow();
+  });
+});

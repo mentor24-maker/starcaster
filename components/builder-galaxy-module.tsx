@@ -252,7 +252,11 @@ export function GalaxyRuntime({
     }
 
     measure();
-    raf = window.requestAnimationFrame(tick); // BREAK E
+    // Reduced motion gets ONE frame and no loop. This goes through start(),
+    // never a bare requestAnimationFrame: start() is where the reduced-motion
+    // and hidden-tab guards live, and a direct call silently bypasses both.
+    if (reduced) draw();
+    else start();
 
     const observer = typeof ResizeObserver === "function"
       ? new ResizeObserver(() => {

@@ -163,3 +163,19 @@ Window and one In Place, because Height is only visible In Place.
   thing per run.
 - **`:nth-child(n of S)`** is how the star-count contract tells two identical
   modules apart, because the rendered DOM carries no module id.
+- **A context method EXISTING is not that method WORKING.** jsdom — and any
+  degraded or stubbed 2D context — exposes `createRadialGradient` and returns
+  `undefined` from it, so a `typeof ctx.createRadialGradient === "function"`
+  guard passes and the very next `.addColorStop` throws. Inside the runtime's
+  effect, a throw unmounts the React tree the module sits in, which on a
+  published tenant page is a blank screen for a visitor — not a missing
+  galaxy. Every gradient here therefore comes through
+  `galaxyRadialGradient()`, which checks the RETURNED value and catches, and
+  both callers treat null as "paint without it": no sprites, or a frame with
+  no haze. This is what `check_live_placeholders.cjs` caught, reported as
+  three failing modules.
+- **Start the loop through `start()`, never a bare `requestAnimationFrame`.**
+  `start()` is where the reduced-motion and hidden-tab guards live, so a
+  direct call silently bypasses both and animates for a visitor who asked for
+  less motion. The reduced-motion contract is the only thing that sees it —
+  nothing in vitest does, because the loop needs a real browser clock.
