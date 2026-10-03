@@ -22,8 +22,8 @@ The file also now carries a trap this pass walked straight into, which is why
 it is written down. The fix was Dane deleting a stale saved password on the
 Mini, and checking the machine this morning showed that password sitting
 right there — which reads exactly like the fix was never done. It is not the
-same one. Its creation date is 5:47am, three hours after the loops came back,
-so the sign-in wrote itself a fresh copy once it had a good one to save.
+same one. Its creation date is 5:47am MDT, three hours after the loops came
+back, so the sign-in wrote itself a fresh copy once it had a good one to save.
 Whether that password exists tells you nothing; its date does. Half an hour
 went into a correction that had to be taken back, so the note now says to ask
 for the date and compare it with the log.
