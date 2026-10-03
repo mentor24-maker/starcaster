@@ -42,6 +42,7 @@ import buildStart from './builder/buildStart.js';
 import pipelineSweep from './builder/pipelineSweep.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import localWorkReading from './builder/localWorkReading.js';
+import machineComment from './builder/machineComment.js';
 // The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
 import clickupLib from './lib/clickup.cjs';
 
@@ -56,6 +57,7 @@ const {
 } = pipelinePause;
 const { resolveBuildStart, prLookupArgs } = buildStart;
 const { sweepStranded: runSweep } = pipelineSweep;
+const { stampCommentBody, isCommentPostPath } = machineComment;
 const { workProbe, workInProgressFor, thisNodeName } = localWorkReading;
 // The switch is READ in exactly one place, shared with bus-relay, so the two
 // can never hold different ideas of where the flag is or what counts as
@@ -143,6 +145,11 @@ if (!TOKEN) {
 const requestsThisPass = () => getBudget().requests;
 
 async function call(method, path, body) {
+  // Every comment this script posts goes on under Dane's token, so it is
+  // stamped here the way clickup_direct.mjs's `callOnce` stamps its own —
+  // without it the bus relay reads a sweep note as his answer (task
+  // 86bccgp8q). Idempotent, so a body the caller already stamped is unchanged.
+  if (method === 'POST' && isCommentPostPath(path)) body = stampCommentBody(body);
   // Through the one door. It never throws — a transport failure comes back as
   // `transportError` — but this file's contract is that `call` DOES throw and
   // `tryCall` below catches it, so the rejection is re-raised here and nowhere

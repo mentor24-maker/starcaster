@@ -52,6 +52,7 @@ const {
 } = require('./pipelinePause.js');
 const { loopNoteOf, whyOf } = require('./pipelinePauseStore.js');
 const { preservedLine, describeUnlooked } = require('./strandedLocalWork.js');
+const { stampMachineComment } = require('./machineComment.js');
 
 /**
  * Sweep the stranded tickets out of a queue reading.
@@ -198,10 +199,13 @@ async function sweepStranded({
         continue;
       }
       const note = await tryCall('POST', `/api/v2/task/${s.id}/comment`, {
-        comment_text: sweptTicketNote({
+        // Stamped HERE, not only at pipeline.mjs's door: this note lands under
+        // Dane's token on a ticket the relay watches, and unstamped it reads
+        // as his answer (task 86bccgp8q — 86bbvr0zf, 2026-10-03 10:37am).
+        comment_text: stampMachineComment(sweptTicketNote({
           at: new Date().toISOString(), by, kind: s.kind, command,
           destination: plan?.status, why: plan?.why,
-        }),
+        })),
         notify_all: false,
       });
       if (!note.ok) {
