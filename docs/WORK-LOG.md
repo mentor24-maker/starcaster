@@ -1,3 +1,32 @@
+## 2026-10-03 — Both loop lanes home on the Mac Mini now that its scheduled passes can sign in again (#749)
+
+The build and review loops are the two jobs that drain the ticket queue
+overnight, and they only ever run on one machine at a time so two of them
+cannot grab the same ticket. They belong on the Mini because the Mini stays
+awake — a laptop closes, and a queue on a sleeping machine stops moving until
+morning. They had been parked on the MacBook since 20 September because the
+Mini could not sign in to Claude at all: every pass quit after about a second,
+278 times in a row. This moves them home.
+
+The thing worth keeping from it is how we decide the Mini is fixed, because we
+got that wrong once already. On 2 October the sign-in was repaired over a
+remote shell, the lanes were moved home on that evidence, and the Mini's
+scheduled passes went on failing all night anyway — a scheduled job runs in
+the machine's own desktop session and cannot see what a remote shell wrote.
+They were moved straight back a few hours later. So "somebody signed in" is
+not evidence; the only evidence is a scheduled pass in the Mini's own log that
+actually read the queue. By that test it works: the last sign-in failure was
+at 1:55am and every pass from 2:05am onward reads the queue normally.
+
+This pass also removed a claim nobody had checked. The branch had recorded
+that the fix was deleting a stale saved password on the Mini — that was the
+prescription on the ticket, and it was never carried out: the entry is still
+sitting there, checked on the machine at 10:30am. Something else fixed the
+sign-in and we do not know what, so the file now says that plainly instead of
+crediting a cure that did not happen. Recording the wrong cause is worse than
+recording none, because next time it sends whoever reads it at the wrong
+command first.
+
 ## 2026-09-26 — Galaxy module 1/6 — the star-field engine: seeded layout, spin and 3D rotation as pure, tested arithmetic (#745)
 
 The Galaxy module is a spinning spiral of stars for a page background, built
