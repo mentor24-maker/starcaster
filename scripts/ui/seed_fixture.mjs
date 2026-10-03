@@ -754,6 +754,21 @@ const buildTuned = (ids) => ({
     },
   },
 
+  // Galaxy (task 86bc7f5hg). This one is WINDOW placement, so Height is
+  // hidden (`visibleWhen` In Place); the second galaxy below is In Place, so
+  // Height is measured too — the TractorNav trap of a panel checked two
+  // fields short while reporting clean. A poster is set so the Content
+  // axis's image picker has something in it.
+  galaxy: {
+    name: 'Galaxy (Window)',
+    settings: {
+      placement: 'window', posX: '40', posY: '-20', zIndex: '-9999',
+      particleCount: '3000', arms: '3', turns: '2', spinDirection: 'counterclockwise',
+      c1: '#FFFFFF', c3: '#88AAFF', haze: '#335577', hazeStrength: '40',
+      posterUrl: '/images/Gemini_Generated_starcaster_banner.png',
+    },
+  },
+
   'headline-rotator': {
     name: 'Headline Rotator',
     text: [LONG, 'Eight clay courts, open to the public', 'Junior camps all summer'].join('\n'),
@@ -1151,6 +1166,23 @@ const buildPanelCheckSection = (ids) => {
           effect: 'glow',
           reach: '460',
           falloff: '2',
+        },
+      };
+    })(),
+    // A SECOND galaxy, In Place. Height is `visibleWhen` In Place, so the
+    // Window galaxy above never renders it and the check would measure the
+    // Placement axis one field short (the TractorNav trap, task 86bc7f5hg).
+    (() => {
+      const base = createEmptyModule('galaxy', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-galaxy-inline',
+        name: 'Galaxy (In Place)',
+        settings: {
+          ...base.settings,
+          placement: 'inline',
+          height: '360',
+          particleCount: '2000',
         },
       };
     })(),

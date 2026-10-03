@@ -367,6 +367,14 @@ function sample(page, selector, read, settleMs, series, probes) {
           const box = node.getBoundingClientRect();
           frame[name] = {
             ...Object.fromEntries(series.read.map((prop) => [prop, style[prop]])),
+            /*
+             * `attrs` reads ATTRIBUTES, for state a renderer publishes on the
+             * element rather than in a style — a canvas draws pixels no
+             * computed style can see, so the Galaxy module counts its frames
+             * in `data-galaxy-frame` and this is how a contract watches the
+             * count move (task 86bc7f5hg). Absent means null, never "".
+             */
+            ...Object.fromEntries((series.attrs || []).map((attr) => [attr, node.getAttribute(attr)])),
             top: box.top,
             height: box.height,
           };

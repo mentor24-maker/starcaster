@@ -173,6 +173,18 @@ Six traps, and none of them announced itself:
   module's `position: fixed` — see DOCTRINE §5.17, which is a platform trap,
   not a module one.
 
+## Galaxy — read `docs/GALAXY.md` first
+
+The `galaxy` module (Special Effects): a canvas spiral of stars. Three files,
+three jobs — `lib/builder-client/galaxy-field.ts` moves the stars (pure, no
+DOM), `lib/builder-client/galaxy-render.ts` paints them through ONE function,
+`drawGalaxyFrame`, and `components/builder-galaxy-module.tsx` decides when.
+The card and the page share that painter on purpose, for TractorNav's reason
+above. A canvas is invisible to computed style, so the runtime publishes
+`data-galaxy-count` and `data-galaxy-frame` and the `galaxy-*` render
+contracts watch them — never put either attribute in JSX, or a re-render
+resets it.
+
 ## Media Manager — read `docs/MEDIA_MANAGER.md` first
 
 The `media-manager` module a TENANT admin uses on their own site. Read it

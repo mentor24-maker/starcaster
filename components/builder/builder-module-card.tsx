@@ -88,6 +88,8 @@ import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { BuilderConfettiModuleSettings } from "./builder-confetti-module-settings";
 import { TractorNavCardPreview, TractorNavRuntime } from "@/components/builder-tractor-nav-module";
 import { BuilderTractorNavModuleSettings } from "./builder-tractor-nav-module-settings";
+import { GalaxyCardPreview } from "@/components/builder-galaxy-module";
+import { BuilderGalaxyModuleSettings } from "./builder-galaxy-module-settings";
 import { BuilderModuleTriggerSettings } from "./builder-module-trigger-settings";
 import { BuilderBreadcrumbModuleSettings, parseBreadcrumbItems } from "./builder-breadcrumb-module-settings";
 import { BuilderBlogPostListModuleSettings } from "./builder-blog-post-list-module-settings";
@@ -960,6 +962,10 @@ function renderModulePreview(module: BuilderTemplateModule) {
 
   if (module.type === "tractor-nav") {
     return <TractorNavCardPreview settings={module.settings} />;
+  }
+
+  if (module.type === "galaxy") {
+    return <GalaxyCardPreview settings={module.settings} />;
   }
 
   if (module.type === "breadcrumb") {
@@ -3307,6 +3313,7 @@ export function BuilderModuleCard({
     const isConfettiModule = module.type === "confetti";
     const isNavigationModule = module.type === "navigation";
     const isTractorNavModule  = module.type === "tractor-nav";
+    const isGalaxyModule = module.type === "galaxy";
     const isSocialModule = module.type === "social";
     const isPollCategoryListModule = module.type === "poll-category-list";
     const isBreadcrumbModule = module.type === "breadcrumb";
@@ -3371,7 +3378,7 @@ export function BuilderModuleCard({
      * (their own editors offer background + margins), heading /
      * floating-image (own chrome blocks), button / table /
      * poll-category-list / reminder (bespoke or opted out), tractor-nav /
-     * confetti (fixed-position overlays where wrapper margins are
+     * galaxy / confetti (fixed-position overlays where wrapper margins are
      * meaningless).
      *
      * Navigation moved out of the else branch on 2026-08-11 (E6): its
@@ -3596,6 +3603,8 @@ export function BuilderModuleCard({
               <BuilderConfettiModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isTractorNavModule ? (
               <BuilderTractorNavModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
+            ) : isGalaxyModule ? (
+              <BuilderGalaxyModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBreadcrumbModule ? (
               <BuilderBreadcrumbModuleSettings module={module} themeColors={themeColors} onUpdateModule={onUpdateModule} />
             ) : isBlogPostListModule ? (
@@ -4297,6 +4306,8 @@ export function BuilderModuleCard({
           module.type !== "previous-results" &&
           module.type !== "current-poll" &&
           module.type !== "confetti" &&
+          // Nothing reads `module.text` on a galaxy — it draws from settings alone (E7).
+          module.type !== "galaxy" &&
           module.type !== "speech-bubble" &&
           module.type !== "reminder" &&
           module.type !== "button" &&

@@ -7395,6 +7395,36 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
+/*
+ * Galaxy panel (task 86bc7f5hg) — the TractorNav construction above, for the
+ * same reason: every slider shares the column's track and its readout gets a
+ * fixed track of its own, so the sliders are identical down the column and
+ * the readout's right edge is the slot's right edge. Base ruleset, not inside
+ * a breakpoint (MODULE_STANDARDS rule 3). No field gets a width (W0).
+ */
+.builder-react-root .builder-galaxy-module-settings {
+  /* Fits the longest readout ("1200px", "100%"). */
+  --galaxy-readout-w: 52px;
+}
+
+.builder-react-root
+  .builder-galaxy-module-settings
+  .builder-module-field-control
+  > input[type="range"] {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.builder-react-root
+  .builder-galaxy-module-settings
+  .builder-galaxy-readout {
+  flex: 0 0 var(--galaxy-readout-w, 52px);
+  text-align: right;
+  font-size: var(--text-xs, 0.75rem);
+  white-space: nowrap;
+}
+
 /* ------------------------------------------------------------------ *
  * Builder Preview strip (86bbq2y7x)
  *

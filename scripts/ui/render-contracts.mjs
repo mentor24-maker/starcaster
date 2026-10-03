@@ -3801,4 +3801,147 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  /*
+   * GALAXY (task 86bc7f5hg). A canvas paints pixels that no computed style can
+   * see, so the module publishes two facts on the element instead:
+   * `data-galaxy-count` (how many stars it actually generated) and
+   * `data-galaxy-frame` (a counter that goes up once per drawn frame). The
+   * series reader's `attrs` exists to watch the second one move.
+   */
+  {
+    id: 'galaxy-draws-a-canvas',
+    why:
+      'The module\'s whole output is one canvas. A canvas of zero width or height draws nothing and ' +
+      'errors nothing — the page would simply have no galaxy on it — and `data-galaxy-count` is only ' +
+      'written once the renderer has measured the box and generated its stars, so its presence proves ' +
+      'the runtime got that far, not merely that React rendered a tag.',
+    module: { type: 'galaxy', settings: {} },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 1, everyMs: 0, read: [], attrs: ['data-galaxy-count'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      if (!(sample.box.width > 0 && sample.box.height > 0)) {
+        return `the galaxy canvas is ${sample.box.width}×${sample.box.height} — nothing can be drawn into it.`;
+      }
+      const count = Number(sample.series?.[0]?.canvas?.['data-galaxy-count']);
+      if (!(count > 0)) {
+        return `the canvas reports data-galaxy-count="${sample.series?.[0]?.canvas?.['data-galaxy-count']}" — no stars were generated.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-keeps-drawing-frames',
+    why:
+      'A class name is not a rendering, and neither is a canvas: one still frame looks exactly like a ' +
+      'galaxy until somebody watches it for a second. This samples the frame counter five times over ' +
+      'half a second and fails unless it goes up every time — a loop that drew once and stopped, or ' +
+      'never started, is the failure this exists for.',
+    module: { type: 'galaxy', settings: {} },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 5, everyMs: 125, read: [], attrs: ['data-galaxy-frame'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-frame']));
+      if (frames.length < 5 || frames.some((n) => !Number.isFinite(n))) {
+        return `the frame counter could not be read on every sample (${frames.join(', ')}) — nothing was watched.`;
+      }
+      for (let i = 1; i < frames.length; i += 1) {
+        if (!(frames[i] > frames[i - 1])) {
+          return `the frame counter read ${frames.join(' → ')} over 500ms — the galaxy stopped drawing ` +
+            '(or never started), so the page shows a still picture where a turning galaxy was promised.';
+        }
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-draws-one-frame-under-reduced-motion',
+    why:
+      'A visitor who asked their device for less motion gets ONE frame — the galaxy, still — and no ' +
+      'loop at all. A loop left running for them is invisible to anybody testing with motion on, and ' +
+      'it is the accessibility setting most likely to be broken without a soul noticing.',
+    module: { type: 'galaxy', settings: {} },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    series: { count: 5, everyMs: 125, read: [], attrs: ['data-galaxy-frame'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-frame']));
+      if (frames.length < 5 || frames.some((n) => !Number.isFinite(n))) {
+        return `the frame counter could not be read on every sample (${frames.join(', ')}) — nothing was watched.`;
+      }
+      if (!(frames[0] >= 1)) {
+        return `under reduced motion the frame counter reads ${frames[0]} — not even the one still frame was drawn.`;
+      }
+      if (new Set(frames).size !== 1) {
+        return `under reduced motion the frame counter read ${frames.join(' → ')} — the galaxy is still ` +
+          'animating for a visitor who asked for less motion.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-star-count-reaches-the-canvas',
+    why:
+      'Star Count is the panel\'s biggest dial after the preset, and it passes through a device budget ' +
+      '(scaleGalaxyCount) on the way to the canvas — the classic place for a control to go dead while ' +
+      'the slider still moves. Two galaxies on one page, asked for 1,000 and 3,000 stars: the second ' +
+      'must actually generate more. In Place, so both have a box of their own.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', particleCount: '1000' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', particleCount: '3000' } },
+      ],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      attrs: ['data-galaxy-count'],
+      selectors: {
+        few: '.builder-preview-module:nth-child(1 of .builder-preview-module) canvas',
+        many: '.builder-preview-module:nth-child(2 of .builder-preview-module) canvas',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.few || !frame?.many) {
+        return 'two galaxy canvases were expected on the page and ' +
+          `${[frame?.few, frame?.many].filter(Boolean).length} were found — nothing could be compared.`;
+      }
+      const few = Number(frame.few['data-galaxy-count']);
+      const many = Number(frame.many['data-galaxy-count']);
+      if (!(few > 0 && many > few)) {
+        return `asked for 1,000 and 3,000 stars, the canvases generated ${few} and ${many} — Star Count ` +
+          'is not reaching the page.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-shows-its-poster-under-reduced-motion',
+    why:
+      'With a poster set, a visitor who asked for less motion gets the poster picture in the canvas\'s ' +
+      'place — the operator chose that picture for exactly them. Read as a presence (the <img>) AND an ' +
+      'absence (no canvas), because a poster laid over a still-running canvas would pass the first half.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', posterUrl: BANNER } },
+    selector: 'img[data-galaxy-poster]',
+    emulate: { reducedMotion: 'reduce' },
+    series: { count: 1, everyMs: 0, read: [], attrs: ['src'], selectors: { poster: 'img[data-galaxy-poster]', canvas: '.builder-galaxy canvas' } },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!(sample.box.width > 0 && sample.box.height > 0)) {
+        return `the poster renders at ${sample.box.width}×${sample.box.height} — the visitor sees nothing.`;
+      }
+      if (frame?.canvas) return 'the poster rendered but the canvas is still on the page beside it.';
+      if (!String(frame?.poster?.src || '').includes('starcaster_banner')) {
+        return `the poster <img> points at "${frame?.poster?.src}", not the picture the operator chose.`;
+      }
+      return null;
+    },
+  },
 ];

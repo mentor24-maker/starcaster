@@ -1,3 +1,33 @@
+## 2026-10-03 — Galaxy module 2/6 — a Galaxy module in Special Effects that draws the animated spiral on a page (#751)
+
+Slice 1 was the arithmetic; this slice is the thing you can actually put on a
+page. "Galaxy" now appears in the Module Library under Special Effects, and
+dropping it on a page draws a slowly turning spiral of stars on a black
+backdrop — in the Builder, in the preview, and on the published tenant site.
+The card in the library shows a still of the same spiral, drawn by the very
+same painting function as the live page, so the picture an operator picks from
+cannot drift away from the picture a visitor gets. There is a settings panel
+with a Preset at the top (Astra, Classic, Nebula, Subtle) that writes real
+values into the dials below it rather than hiding them, then star count, arms,
+turns, core, the five star colours with their weights, the haze, glow and
+opacity, and the usual placement controls — behind the whole page, or as a
+block of its own height in the flow.
+
+Two things were wrong in the work this slice inherited, and both were the kind
+that a reader cannot catch. The first: a visitor who has asked their computer
+for less motion was still getting the full animation. The code had a guard for
+exactly that, and one line started the animation by going around it — a line
+left over from somebody deliberately breaking the check to prove it worked,
+and never put back. The browser check measured the frame counter climbing
+119, 127, 136, 146, 155 under reduced motion and said so; nothing else in the
+test suite could see it, because the animation needs a real browser clock to
+run at all. The second was worse: on a page where the browser could not fully
+supply a drawing surface, the module did not fail to draw — it threw an error,
+and an error there takes down the whole page frame it sits in. A visitor would
+have got a blank screen rather than a page without a galaxy on it. Every
+gradient the module makes now checks that it actually got one back before
+using it, and falls back to painting without it. That fix carries four tests,
+and each was proved by removing the guard and watching the matching test fail.
 ## 2026-10-03 — A ticket Dane is working on by hand gets sent back to the build loop whenever anything comments on it (#752)
 
 On 3 October Dane was erasing and re-setting-up his MaxOne backup drive by hand,
