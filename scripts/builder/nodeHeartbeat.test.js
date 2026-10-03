@@ -2018,12 +2018,16 @@ test('the --stale-check TERMINAL summary names a blocked lane as a login, not a 
   const { spawnSync } = require('node:child_process');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-stale-'));
   try {
-    fs.writeFileSync(path.join(home, '.alphire-node'), 'macbook-pro\n');
+    // The machine that OWNS loop-build in lib/nodeRoles.js, read rather than
+    // written down: the lane moved to the MacBook on 2026-09-20 and back to the
+    // Mini on 2026-10-02, and a hardcoded name failed the suite both times.
+    const owner = require('../../lib/nodeRoles').roleOwner('loop-build');
+    fs.writeFileSync(path.join(home, '.alphire-node'), `${owner}\n`);
     const dir = hb.heartbeatDir(home);
     fs.mkdirSync(dir, { recursive: true });
     const at = new Date().toISOString();
     fs.writeFileSync(hb.beatFile('loop-build', home), JSON.stringify({
-      role: 'loop-build', node: 'macbook-pro', at, kind: hb.BEAT_BLOCKED,
+      role: 'loop-build', node: owner, at, kind: hb.BEAT_BLOCKED,
       why: 'the pass exited 1 without authenticating — a login has expired',
       standingDownSince: new Date(Date.now() - 62 * HOUR).toISOString(),
     }));
@@ -2031,8 +2035,8 @@ test('the --stale-check TERMINAL summary names a blocked lane as a login, not a 
       env: { ...process.env, HOME: home, NO_COLOR: '1' },
       encoding: 'utf8',
     });
-    // Only meaningful where macbook-pro owns loop-build; if the role table
-    // moves, say so rather than pass on an empty reading.
+    // If the stamp is not read at all the reading is empty, and an empty
+    // reading must fail loudly rather than pass.
     assert.match(run.stdout, /QUIET loop-build/, `the blocked stamp must be read at all:\n${run.stdout}${run.stderr}`);
     assert.equal(run.status, 1);
     assert.match(run.stdout, /cannot work at all/);
