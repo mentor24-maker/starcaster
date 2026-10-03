@@ -28,6 +28,35 @@ have got a blank screen rather than a page without a galaxy on it. Every
 gradient the module makes now checks that it actually got one back before
 using it, and falls back to painting without it. That fix carries four tests,
 and each was proved by removing the guard and watching the matching test fail.
+## 2026-10-03 — Both loop lanes home on the Mac Mini now that its scheduled passes can sign in again (#749)
+
+The build and review loops are the two jobs that drain the ticket queue
+overnight, and they only ever run on one machine at a time so two of them
+cannot grab the same ticket. They belong on the Mini because the Mini stays
+awake — a laptop closes, and a queue on a sleeping machine stops moving until
+morning. They had been parked on the MacBook since 20 September because the
+Mini could not sign in to Claude at all: every pass quit after about a second,
+278 times in a row. This moves them home.
+
+The thing worth keeping from it is how we decide the Mini is fixed, because we
+got that wrong once already. On 2 October the sign-in was repaired over a
+remote shell, the lanes were moved home on that evidence, and the Mini's
+scheduled passes went on failing all night anyway — a scheduled job runs in
+the machine's own desktop session and cannot see what a remote shell wrote.
+They were moved straight back a few hours later. So "somebody signed in" is
+not evidence; the only evidence is a scheduled pass in the Mini's own log that
+actually read the queue. By that test it works: the last sign-in failure was
+at 1:55am and every pass from 2:05am onward reads the queue normally.
+
+The file also now carries a trap this pass walked straight into, which is why
+it is written down. The fix was Dane deleting a stale saved password on the
+Mini, and checking the machine this morning showed that password sitting
+right there — which reads exactly like the fix was never done. It is not the
+same one. Its creation date is 5:47am MDT, three hours after the loops came
+back, so the sign-in wrote itself a fresh copy once it had a good one to save.
+Whether that password exists tells you nothing; its date does. Half an hour
+went into a correction that had to be taken back, so the note now says to ask
+for the date and compare it with the log.
 ## 2026-10-02 — Pipeline pulse report has not been saved for 12 days — it misreads every loop pass as hung and the report got too big for ClickUp (#746)
 
 The hourly Pipeline pulse on the Mini is the one place that says whether the
