@@ -49,16 +49,30 @@ const MS_PER_HOUR = 3600 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * The wrapper writes one of these around every pass:
+ * The wrapper (`scripts/loop_runner.sh`) writes one of these around every pass:
  *
  *   ===== 2026-08-22 01:43:14 START /loop-build =====
- *   ===== 2026-08-22 02:08:42 END /loop-build (exit 0) =====
+ *   ===== 2026-10-02 20:18:13 END /loop-build (exit 1 — not a verdict; the pass's report above is) =====
  *
  * Anchored whole-line so a pass whose own prose quotes a banner cannot open a
  * phantom pass inside the real one.
+ *
+ * THE EXIT CODE MAY BE FOLLOWED BY WORDS, AND THE PATTERN MUST ALLOW THEM
+ * (task 86bcc9dp8). The runner used to write `(exit 0)` and nothing more; PR
+ * #537 (2026-09-02) added the label "— not a verdict; the pass's report above
+ * is" after the number, because `claude -p` exits 0 whenever it produced
+ * output. This pattern still demanded a `)` straight after the digits, so
+ * from that day no END banner matched: every pass read as "started and never
+ * printed an END banner", the Mini's hourly pulse raised one hung-pass ALARM
+ * per pass (1,276 of them by 2026-10-02), the record grew past what ClickUp
+ * accepts (HTTP 413) and was not written for twelve days, and the A1 no-op
+ * check, with zero passes matched, could count nothing at all. Anything but a
+ * `)` is now allowed between the number and the closing paren; the test
+ * `scripts/builder/pulse.test.js` derives its fixture line FROM loop_runner.sh
+ * so the two cannot drift apart again without a test going red.
  */
 const PASS_BANNER_RE =
-  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\(exit (-?\d+)\))?\s+=====$/;
+  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\(exit (-?\d+)[^)]*\))?\s+=====$/;
 
 /**
  * Split a loop log into passes.
