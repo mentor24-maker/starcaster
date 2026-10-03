@@ -102,6 +102,75 @@ test('a banner quoted INSIDE a pass body cannot open a phantom pass', () => {
   assert.equal(unterminated.length, 0, 'the quoted banner is indented, so it is body text');
 });
 
+/**
+ * The banner the runner writes TODAY, derived from the runner itself (task
+ * 86bcc9dp8). The pattern above was written against `(exit 0)`; PR #537 added
+ * a label after the number and no test noticed, so for a month every pass read
+ * as hung and the pulse's record could not be written at all. Reading the
+ * format out of `scripts/loop_runner.sh` means the next change to that line
+ * turns this test red instead of silently blinding the pulse.
+ */
+function runnerBannerLines({ stamp, skill, code }) {
+  const sh = fs.readFileSync(path.join(__dirname, '..', 'loop_runner.sh'), 'utf8');
+  const echoes = sh.split('\n')
+    .map((l) => /^\s*echo "(===== .* (?:START|END) \/\$SKILL.*=====)" >> "\$LOG"\s*$/.exec(l))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  assert.equal(echoes.length, 2, 'loop_runner.sh writes exactly one START and one END banner');
+  const render = (tpl) => tpl
+    .replace(/\$\(date "[^"]*"\)/, stamp)
+    .replace(/\$SKILL/g, skill)
+    .replace(/\$CODE/g, String(code));
+  const start = echoes.find((e) => e.includes(' START '));
+  const end = echoes.find((e) => e.includes(' END '));
+  assert.ok(start && end, 'both banners found in the runner');
+  return { start: render(start), end: render(end) };
+}
+
+test('the END banner loop_runner.sh writes TODAY is parsed, exit code and all', () => {
+  const { start, end } = runnerBannerLines({ stamp: '2026-10-02 20:18:13', skill: 'loop-build', code: 1 });
+  assert.notEqual(end, '===== 2026-10-02 20:18:13 END /loop-build (exit 1) =====',
+    'the runner no longer writes the bare form; if it does again, this fixture is still right');
+  const { passes, unterminated } = parsePassLog([
+    '===== 2026-10-02 20:05:00 START /loop-build =====', // the shape START has always had
+    'a pass report',
+    end,
+    start.replace('2026-10-02 20:18:13', '2026-10-02 20:30:00'),
+    'the next pass, still running',
+  ].join('\n'));
+  assert.equal(passes.length, 1, 'the finished pass is matched — this was 0 of 227 on 2026-10-02');
+  assert.equal(passes[0].end, '2026-10-02 20:18:13');
+  assert.equal(passes[0].exitCode, 1, 'the exit code survives the label after it');
+  assert.equal(unterminated.length, 1, 'and the live pass is still the one unterminated');
+});
+
+test('the literal banner from the Mini log on 2026-10-02 parses — the incident line itself', () => {
+  const log = [
+    '===== 2026-10-02 20:05:00 START /loop-build =====',
+    "===== 2026-10-02 20:18:13 END /loop-build (exit 1 — not a verdict; the pass's report above is) =====",
+  ].join('\n');
+  const { passes, unterminated } = parsePassLog(log);
+  assert.equal(passes.length, 1);
+  assert.equal(passes[0].exitCode, 1);
+  assert.equal(unterminated.length, 0);
+});
+
+test('the bare (exit N) form still parses — older logs carry it', () => {
+  const { passes } = parsePassLog([banner('2026-08-26 01:00:00', 'START'), banner('2026-08-26 01:20:00', 'END', 0)].join('\n'));
+  assert.equal(passes.length, 1);
+  assert.equal(passes[0].exitCode, 0);
+});
+
+test('the pulse and the runner guard read the SAME exit code off the runner\'s END banner', () => {
+  // Two readers of one line. If they ever disagreed, the guard would hand back
+  // a ticket for a pass the pulse called complete, or the reverse.
+  const { exitCodeFromLog } = require('./loopRunnerGuard');
+  const { end } = runnerBannerLines({ stamp: '2026-10-02 20:18:13', skill: 'loop-review', code: 124 });
+  const { passes } = parsePassLog(['===== 2026-10-02 20:05:00 START /loop-review =====', end].join('\n'));
+  assert.equal(passes[0].exitCode, 124);
+  assert.equal(exitCodeFromLog(end), 124);
+});
+
 // ── A1: classifying a pass ──────────────────────────────────────────────────
 
 const pass = (body, exitCode = 0) => ({ body: [].concat(body), exitCode, start: 'x', end: 'y' });
