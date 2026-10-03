@@ -210,6 +210,36 @@ function isEscalationCard(text) {
   return String(text).includes(ESCALATION_BANNER);
 }
 
+/**
+ * THE HOLD — "Dane is working this ticket by hand; do not put it back in the
+ * queue" (2026-10-03, task 86bccgp8q).
+ *
+ * The MaxOne erase ticket (86bbvr0zf) was parked in `Needs your input` while
+ * he drove it from his own fast-track session, and the relay handed it back to
+ * `Queued` on every comment he left there — "Done(?)" mid-task at 11:34am, then
+ * his answer to the very card that said "leave it here" at 1:51pm. A build pass
+ * claimed it at 11:57am, four minutes after his session started scanning the
+ * drive. Nothing on the trail could say "held by hand", so this is that thing:
+ * a machine comment (`ask --hand-held`, or `hold-by-hand` on its own), matched
+ * on its FIRST line and honoured only when machine-written, so Dane quoting it
+ * is never a hold.
+ */
+const HAND_HELD_MARKER = 'HELD BY HAND —';
+
+function handHeldText({ at, by } = {}) {
+  return `${HAND_HELD_MARKER} Dane is working this ticket in his own session${by ? ` (${by})` : ''}.\n\n`
+    + 'The bus relay still passes his comments on, but it will NOT put this ticket back in the queue. '
+    + 'He, or the session he is driving, moves it when the work is done. '
+    + 'A newer question card from a loop ends the hold.'
+    + `${at ? `\n\n(held at ${at})` : ''}`;
+}
+
+function isHandHeldMarker(text) {
+  if (text == null) return false;
+  const first = String(text).split('\n').map((l) => l.trim()).find(Boolean) || '';
+  return first.replace(/\\/g, '').startsWith(HAND_HELD_MARKER);
+}
+
 /** Epoch ms of a ClickUp comment, or 0 when it has no usable date. */
 function commentAt(comment) {
   const at = Number(comment && comment.date);
@@ -287,6 +317,21 @@ function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, ha
   const answers = operatorComments(all, { operatorId, isMachine })
     .filter((c) => commentAt(c) > questionAt);
 
+  // HELD BY HAND (2026-10-03, task 86bccgp8q). A hold marker newer than the
+  // newest card says Dane is working this ticket in his own session, so an
+  // answer to the card is a step in HIS work, not a release to the loops. His
+  // words are still relayed; only the move is withheld. Scoped to the card it
+  // follows: a later ordinary `ask` posts a newer card and the hold lapses.
+  const heldAt = all
+    .filter((c) => isHandHeldMarker(c && c.comment_text) && machine(c && c.comment_text))
+    .reduce((newest, c) => Math.max(newest, commentAt(c)), 0);
+  if (heldAt >= questionAt) {
+    const answer = answers.length
+      ? answers.reduce((newest, c) => (commentAt(c) > commentAt(newest) ? c : newest))
+      : null;
+    return { state: 'hand-held', answer, answerAt: answer ? commentAt(answer) : 0, questionAt, delivered: null };
+  }
+
   if (!answers.length) {
     return { state: 'none', answer: null, answerAt: 0, questionAt, delivered: null };
   }
@@ -319,6 +364,32 @@ function answerAwaitingHandback({ comments, operatorId, isMachine, delivered, ha
     questionAt,
     delivered: typeof delivered === 'function' ? Boolean(delivered(answer)) : null,
   };
+}
+
+/**
+ * May the receipt for THIS relayed comment name a hand-back destination?
+ *
+ * WHY (2026-10-03, task 86bccgp8q). The receipt used to name the watch's
+ * target for every fresh comment it relayed, before anything had decided
+ * whether that comment releases the ticket. At 10:37am an unstamped sweep note
+ * posted BEFORE the card was relayed as Dane's, and its receipt said "This
+ * ticket is being returned to Queued" — a move `answerAwaitingHandback` then
+ * correctly declined. The trail claimed a re-queue that never happened.
+ *
+ * So the receipt names the move only when this comment is the one that makes
+ * it: the answer to the newest card, or — with no card on the trail — any
+ * fresh comment, which is the old rule the hand-back still applies there.
+ * Otherwise null, and the note says nothing about where the ticket goes.
+ *
+ * @param verdict   answerAwaitingHandback()'s result for the ticket
+ * @param commentId the comment being relayed
+ * @param target    where the watch would move the ticket
+ */
+function receiptTargetFor({ verdict, commentId, target } = {}) {
+  if (!target || !verdict) return null;
+  if (verdict.state === 'no-question') return target;
+  if (verdict.state === 'answered' && verdict.answer && String(verdict.answer.id) === String(commentId)) return target;
+  return null;
 }
 
 /** Where a task should be moved once its operator answer has been delivered —
@@ -891,8 +962,12 @@ module.exports = {
   sweepVerdict,
   ESCALATION_BANNER,
   isEscalationCard,
+  HAND_HELD_MARKER,
+  handHeldText,
+  isHandHeldMarker,
   commentAt,
   answerAwaitingHandback,
+  receiptTargetFor,
   handbackTarget,
   handbackDestination,
   isCloseCommand,

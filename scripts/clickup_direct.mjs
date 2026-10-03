@@ -98,7 +98,7 @@ import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import waitingOnOperator from './builder/waitingOnOperator.js';
 const {
   defaultWatches, handbackTarget, handbackDestination, mergeEnabled, operatorComments,
-  answerAwaitingHandback, handbackFailureText, handbackDoneText,
+  answerAwaitingHandback, receiptTargetFor, handHeldText, isHandHeldMarker, handbackFailureText, handbackDoneText,
   repliesShowRelayed, repliesShowHandbackDone, repliesShowHandbackFailure,
   ticketsToRead, markAfterPass, DEFAULT_OVERLAP_MS,
   deliveryVerdict, relayMarkerText, receiptText, isThisReceipt, busFailureBucket,
@@ -332,6 +332,26 @@ async function call(method, path, body) {
   }
 }
 
+/** Post the "held by hand" marker on a ticket and prove it landed — a hold
+ *  that silently failed is a ticket the relay will send back to the queue
+ *  while he is working on it. Exits non-zero on any failure; returns the
+ *  comment id. */
+async function postHandHold(task, by) {
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, {
+    comment_text: handHeldText({ at: new Date().toISOString(), by }),
+    notify_all: false,
+  });
+  if (!posted.res.ok) die('post the held-by-hand marker', posted);
+  const id = String(posted.json.id ?? '');
+  const back = await call('GET', `/api/v2/task/${task}/comment`);
+  const stored = back.res.ok && (back.json.comments || []).find((c) => String(c.id) === id);
+  if (!stored || !isHandHeldMarker(stored.comment_text) || !isMachineComment(stored.comment_text)) {
+    console.error(`The held-by-hand marker did NOT land intact (comment ${id || '(none)'}). The relay can still hand this ticket back.`);
+    process.exit(1);
+  }
+  return id;
+}
+
 /** One HTTP attempt. Everything that was `call` before the retry loop. */
 async function callOnce(method, path, body) {
   // THE ONE PLACE A MACHINE COMMENT IS MARKED (task 86bbqx2xe). The loops post
@@ -534,6 +554,11 @@ function usage(code = 2) {
   console.error('                                             refusal stands on `status --no-card`, the other door into his');
   console.error('                                             lane. --after-his-answer overrides it, on the record, when it');
   console.error('                                             genuinely is a NEW question.');
+  console.error('      [--hand-held [--by NAME]]               Dane is driving this ticket from his own session: post a HELD BY');
+  console.error('                                             HAND marker after the card, so the relay passes his answer on');
+  console.error('                                             but never puts the ticket back in the queue.');
+  console.error('  hold-by-hand --task <id> [--by NAME]      the same marker on its own, after an existing card. A newer');
+  console.error('                                             question card from a loop ends the hold.');
   console.error('  waiting [--task <id>]                     is anything ACTUALLY waiting on Dane? Live reads only.');
   console.error('                                             With --task: status, assignee, newest-comment author, verdict.');
   console.error('                                             With no arguments: every open ticket in Agent Response + the');
@@ -3882,6 +3907,15 @@ if (cmd === 'whoami') {
   console.log(`Task ${task}: priority "${was}" -> "${now}" (verified from the write response).`);
   reportLimits(out.res);
 
+} else if (cmd === 'hold-by-hand') {
+  // Mark a ticket as held by Dane's own session, so the relay passes his
+  // comments on without putting it back in the queue (task 86bccgp8q). The
+  // hold lapses on its own when a loop posts a newer question card.
+  const task = arg('task');
+  if (!task) usage();
+  const id = await postHandHold(task, arg('by'));
+  console.log(`Task ${task}: held by hand (comment ${id}) — the relay will not hand it back until a newer question card is posted.`);
+
 } else if (cmd === 'comment') {
   const task = arg('task'), bodyFile = arg('body-file');
   if (!task || !bodyFile) usage();
@@ -4512,6 +4546,15 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
 
+  // --hand-held: Dane is driving this ticket from his own session, so his
+  // answer to this card must not send it back to the claim line (86bccgp8q).
+  // Posted AFTER the card, because the hold only counts against the card it
+  // follows. Before the status move, so a failure leaves no half-held handoff.
+  if (flag('hand-held')) {
+    const holdId = await postHandHold(task, arg('by'));
+    console.log(`Task ${task}: held by hand (comment ${holdId}).`);
+  }
+
   if (noMove) {
     console.log(`Task ${task}: card ${cardId} posted (status untouched, --no-move).`);
     reportLimits(readBack.res);
@@ -5004,6 +5047,14 @@ if (cmd === 'whoami') {
       // is retrying and failing every pass moves no clock, so age alone cannot
       // see it (task 86bbvr0j5).
       const mergeRefusedCount = new Map();
+      // Which of his comments, if any, actually RELEASES this ticket — read
+      // once, before relaying, so a receipt never announces a move the
+      // hand-back below will decline (task 86bccgp8q; `receiptTargetFor`).
+      const releaseVerdict = answerAwaitingHandback({
+        comments: commentsOut.json.comments || [],
+        operatorId: OPERATOR_ID,
+        isMachine: isMachineComment,
+      });
 
       for (const c of fromOperator) {
         const repliesOut = await call('GET', `/api/v2/comment/${c.id}/reply`);
@@ -5050,7 +5101,11 @@ if (cmd === 'whoami') {
         const busBody = `[CC-starcaster bus-relay] Dane replied on "${t.name}" (${t.url}):\n\n${c.comment_text}`;
         // Chat, then a receipt comment on this very ticket. Only if BOTH fail
         // is the answer genuinely undelivered.
-        const simTarget = handbackDestination(watch, t.status?.status, 1, handbackPr, c.comment_text).target;
+        const simTarget = receiptTargetFor({
+          verdict: releaseVerdict,
+          commentId: c.id,
+          target: handbackDestination(watch, t.status?.status, 1, handbackPr, c.comment_text).target,
+        });
         const delivery = await deliverToBus(channel, busBody, {
           taskId: t.id,
           target: simTarget,

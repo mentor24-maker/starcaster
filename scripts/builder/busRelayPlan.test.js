@@ -1109,7 +1109,9 @@ test('the relay decides the hand-back from the ticket, and reports a reading it 
   assert.match(RELAY_SRC, /unchecked\.push\(`\$\{t\.id\}: his answer was delivered, but \$\{plan\.why\}`\)/,
     'and it must be reported, or "could not check" reads as a clean pass');
   // The receipt names the status the move will ask for, not a hard-coded one.
-  assert.match(RELAY_SRC, /const simTarget = handbackDestination\(watch, t\.status\?\.status, 1, handbackPr, c\.comment_text\)\.target;/,
+  // Since task 86bccgp8q it is filtered through receiptTargetFor, so it names
+  // that destination only for the comment that actually releases the ticket.
+  assert.match(RELAY_SRC, /target: handbackDestination\(watch, t\.status\?\.status, 1, handbackPr, c\.comment_text\)\.target,/,
     'the fallback receipt must name the destination this ticket is actually going to');
 });
 
