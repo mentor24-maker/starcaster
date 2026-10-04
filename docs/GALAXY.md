@@ -299,15 +299,31 @@ switching never leaves a value behind (a test holds that).
 ### Browser checks for the look
 
 Two differentials in `scripts/ui/render-contracts.mjs` read the canvas's own
-pixels (`series.luma`: the canvas scaled into a 64×64 sample, mean Rec. 709
-luminance 0–255), because neither setting changes any attribute or style.
-Measured when they were written, under reduced motion so each canvas is one
-still, assembled frame:
+pixels (`series.luma`: the mean Rec. 709 luminance 0–255 of EVERY pixel of the
+canvas at full resolution), because neither setting changes any attribute or
+style. Measured when they were written, under reduced motion so each canvas is
+one still, assembled frame:
 
 | Contract | Low | High |
 |---|---|---|
-| `galaxy-glow-brightens-the-canvas` (Glow 0 vs 100) | 3.04 | 7.40 |
-| `galaxy-flare-stars-brighten-the-canvas` (Flare Stars 0 vs 7) | 5.32 | 5.59 |
+| `galaxy-glow-brightens-the-canvas` (Glow 0 vs 100) | 3.71 | 8.37 |
+| `galaxy-flare-stars-brighten-the-canvas` (Flare Stars 0 vs 7) | FLARE_NONE | 6.43 |
+| … and its streak pair (7 flare stars, Flare Size 100, Intensity 0 vs 100) | 6.424 | 6.487 |
+
+**The streak pair is the half that matters, and it exists because the first
+version could not fail.** Break-tested by deleting the streaks from the engine,
+Flare Stars 0 against 7 still passed: moving seven stars into the bright
+flare class changes the reading on its own. The pair holds everything but the
+streak's strength fixed — same seed, same still frame — so its difference is
+the streaks and nothing else, and the contract asks for at least 0.02.
+
+**It reads every pixel, not a 64×64 shrink, for the same reason.** The first
+reader drew the canvas into 64×64 and averaged that; a downscale samples a few
+source pixels per cell and skipped the hairline streaks almost entirely (seven
+of them measured +0.001). At the defaults a streak on a 300px card reaches
+about 11px, and seven of them move the full-resolution mean by about 0.009 —
+real, but too close to nothing to assert on, which is why the pair runs the
+streaks at full size and strength.
 
 ## The rules
 
