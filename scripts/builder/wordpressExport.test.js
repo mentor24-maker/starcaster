@@ -120,6 +120,18 @@ test('modules become the matching Divi modules, columns keep their widths', () =
   assert.match(xml, /\[et_pb_column[^\]]* type="1_3"\][^]*Left[^]*\[et_pb_column[^\]]* type="2_3"\][^]*Right/);
 });
 
+test('a four-column row keeps each module in its own column', () => {
+  const { xml } = buildWordPressExport({
+    pages: [{ id: '1', name: 'Home', slug: '', layoutSections: [section(
+      ['left', 'center', 'right', 'col4'].map((column) => mod('text', { column, text: `<p>${column}-text</p>` })),
+      { layout: 'four-column' },
+    )] }],
+  });
+  const columns = xml.split('[et_pb_column ').slice(1);
+  assert.equal(columns.length, 4);
+  ['left', 'center', 'right', 'col4'].forEach((key, i) => assert.ok(columns[i].includes(`${key}-text`), `${key} landed in column ${i + 1}`));
+});
+
 test('nothing is dropped silently: a module with no Divi equivalent is named in the report', () => {
   const { xml, report } = run();
   assert.ok(!xml.includes('Spiral'));
