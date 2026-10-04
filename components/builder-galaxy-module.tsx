@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  GALAXY_RATIO_CAP,
+  GALAXY_RATIO_CAP_NARROW,
+  GALAXY_NARROW_VIEWPORT_PX,
+  GALAXY_VISIBLE_FRACTION,
   createGalaxyProjection,
   createGalaxyView,
   dragGalaxyView,
@@ -19,6 +23,7 @@ import {
   stepGalaxyView,
   stepGalaxyViewByKey,
   tiltGalaxyView,
+  type GalaxyBudgetReason,
   type GalaxyMix
 } from "@/lib/galaxy-field";
 import {
@@ -73,11 +78,16 @@ function readReducedMotion(): boolean {
   }
 }
 
-/** Retina is sharp at 2×; a phone pays for every pixel, so it stops at 1.5×. */
-function cappedPixelRatio(): number {
+/**
+ * The device's pixel ratio, under a cap. The page runtime takes its cap from
+ * the device budget (`scaleGalaxyCount`: 2×, 1.5× on a phone, 1× on a weak
+ * machine); the card has no budget and uses the screen-width half of it.
+ */
+function cappedPixelRatio(cap?: number): number {
   const raw = typeof window !== "undefined" && Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1;
-  const cap = typeof window !== "undefined" && window.innerWidth < 768 ? 1.5 : 2;
-  return Math.max(1, Math.min(cap, raw || 1));
+  const limit =
+    cap ?? (typeof window !== "undefined" && window.innerWidth < GALAXY_NARROW_VIEWPORT_PX ? GALAXY_RATIO_CAP_NARROW : GALAXY_RATIO_CAP);
+  return Math.max(1, Math.min(limit, raw || 1));
 }
 
 function makeSpriteCanvas(width: number, height: number): GalaxySpriteCanvas {
@@ -141,11 +151,12 @@ export function GalaxyRuntime({
   settings: GalaxyModuleSettings;
   liveSite?: boolean;
   /**
-   * Renders the "fewer stars than asked" note. Passed in by the page renderer
-   * so the note goes through its `BuilderOnlyNote`, which renders nothing on a
-   * published page; this component also never calls it when `liveSite` is set.
+   * Renders the "fewer stars than asked" note, with the reason the device
+   * budget gave. Passed in by the page renderer so the note goes through its
+   * `BuilderOnlyNote`, which renders nothing on a published page; this
+   * component also never calls it when `liveSite` is set.
    */
-  builderNote?: (shown: number, asked: number) => ReactNode;
+  builderNote?: (shown: number, asked: number, reason: GalaxyBudgetReason) => ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -171,7 +182,7 @@ export function GalaxyRuntime({
   const introStartRef = useRef<number | null>(null);
   const [reduced, setReduced] = useState(readReducedMotion);
   const [canvasFailed, setCanvasFailed] = useState(false);
-  const [shortfall, setShortfall] = useState<{ shown: number; asked: number } | null>(null);
+  const [shortfall, setShortfall] = useState<{ shown: number; asked: number; reason: GalaxyBudgetReason } | null>(null);
 
   const inline = proximityIsInline(settings.placement);
   const zIndex = proximityZIndex(Number.parseInt(settings.zIndex ?? "-9999", 10), settings.placement);
@@ -231,6 +242,7 @@ export function GalaxyRuntime({
     let width = 0;
     let height = 0;
     let ratio = 0;
+    let viewportWidth = 0;
     let field = generateGalaxyField({ ...stars, particleCount: 0 });
     let projection = createGalaxyProjection(0);
     let colourOf: Uint8Array = new Uint8Array(0);
@@ -249,32 +261,64 @@ export function GalaxyRuntime({
     // The newest cursor position, applied once per frame however many
     // mousemoves arrived since the last one.
     let pendingTilt: { x: number; y: number } | null = null;
+    /*
+     * Nobody can see it: an In Place block under 5% on screen, or a Window
+     * backdrop the scroll has faded to nothing. The frame loop stops while
+     * this is set and `start()` refuses to restart it, so a refocused window
+     * or a replayed intro cannot run frames nobody sees (task 86bc7f5hp).
+     */
+    let offscreen = false;
+    canvas.setAttribute("data-galaxy-paused", "false");
+
+    function setOffscreen(next: boolean) {
+      if (next === offscreen) return;
+      offscreen = next;
+      canvas!.setAttribute("data-galaxy-paused", next ? "true" : "false");
+      if (next) stop();
+      else start();
+    }
 
     function regenerate(count: number) {
       field = generateGalaxyField({ ...stars, particleCount: count });
       projection = createGalaxyProjection(field.count);
       colourOf = assignGalaxyColours(field.count, look.weights, stars.seed, Math.min(field.count, stars.flareStars));
       canvas!.setAttribute("data-galaxy-count", String(field.count));
-      setShortfall(field.count < stars.particleCount ? { shown: field.count, asked: stars.particleCount } : null);
     }
 
-    /** Size the backing store to the CSS box × the capped pixel ratio; regenerate only if the star budget moved. */
+    /**
+     * Size the backing store to the CSS box × the budget's pixel ratio, and
+     * regenerate only if the star count moved. The budget is re-read on every
+     * measure: rotating a phone across 768px changes it with no change of box.
+     */
     function measure() {
       const rect = canvas!.getBoundingClientRect();
-      const nextRatio = cappedPixelRatio();
       const nextW = Math.max(1, rect.width);
       const nextH = Math.max(1, rect.height);
-      if (nextW === width && nextH === height && nextRatio === ratio) return false;
+      const nextViewport = window.innerWidth;
+      if (nextW === width && nextH === height && nextViewport === viewportWidth && ratio) return false;
+      const budget = scaleGalaxyCount(stars.particleCount, { areaPx: nextW * nextH, viewportWidth: nextViewport, tier, inline });
+      const nextRatio = cappedPixelRatio(budget.pixelRatioCap);
       if (nextRatio !== ratio) sprites = buildGalaxySprites(look, nextRatio, makeSpriteCanvas);
       width = nextW;
       height = nextH;
       ratio = nextRatio;
+      viewportWidth = nextViewport;
       canvas!.width = Math.max(1, Math.round(width * ratio));
       canvas!.height = Math.max(1, Math.round(height * ratio));
       ctx!.setTransform(1, 0, 0, 1, 0, 0);
       ctx!.scale(ratio, ratio);
-      const count = scaleGalaxyCount(stars.particleCount, width * height, tier);
-      if (count !== field.count) regenerate(count);
+      if (budget.count !== field.count) regenerate(budget.count);
+      // Why it is short, for the Builder note and the browser checks. Written
+      // even when the count held, since the reason can change on its own.
+      canvas!.setAttribute("data-galaxy-budget", budget.reason ?? "full");
+      const reason = budget.reason;
+      setShortfall((prev) =>
+        reason === null
+          ? null
+          : prev && prev.shown === budget.count && prev.asked === stars.particleCount && prev.reason === reason
+            ? prev
+            : { shown: budget.count, asked: stars.particleCount, reason }
+      );
       return true;
     }
 
@@ -346,11 +390,17 @@ export function GalaxyRuntime({
       stepGalaxyView(view, dt);
       updateMix(now);
       draw();
+      // A Window backdrop scrolled to nothing: this frame drew it invisible,
+      // and there is nothing left to draw until the page scrolls back.
+      if (!inline && galaxyDisperseOpacity(mix.disperse) <= 0) {
+        setOffscreen(true);
+        return;
+      }
       raf = window.requestAnimationFrame(tick);
     }
 
     function start() {
-      if (raf || reduced || disposed || document.visibilityState === "hidden") return;
+      if (raf || reduced || disposed || offscreen || document.visibilityState === "hidden") return;
       last = 0;
       raf = window.requestAnimationFrame(tick);
     }
@@ -377,6 +427,18 @@ export function GalaxyRuntime({
       : null;
     observer?.observe(container);
     observer?.observe(canvas);
+    // In Place only: a Window canvas is fixed over the viewport, so it is
+    // always "intersecting" and the scroll decides instead (see `tick`).
+    const visibility = inline && typeof IntersectionObserver === "function"
+      ? new IntersectionObserver(
+          (entries) => {
+            const entry = entries[entries.length - 1];
+            if (entry) setOffscreen(!entry.isIntersecting || entry.intersectionRatio < GALAXY_VISIBLE_FRACTION);
+          },
+          { threshold: [0, GALAXY_VISIBLE_FRACTION] }
+        )
+      : null;
+    visibility?.observe(container);
     const onResize = () => {
       scrollDirty = scrollRuns;
       if (measure() && reduced) draw();
@@ -451,6 +513,8 @@ export function GalaxyRuntime({
      */
     const onScroll = () => {
       scrollDirty = true;
+      // A Window galaxy paused at full dispersal wakes when the page scrolls back.
+      if (!inline && offscreen && galaxyDisperseOpacity(readDisperse()) > 0) setOffscreen(false);
     };
     const onReplay = () => {
       introStartRef.current = performance.now();
@@ -481,6 +545,7 @@ export function GalaxyRuntime({
       if (scrollRuns) window.removeEventListener("scroll", onScroll);
       if (introRuns) document.removeEventListener(GALAXY_REPLAY_EVENT, onReplay);
       observer?.disconnect();
+      visibility?.disconnect();
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("blur", stop);
@@ -527,7 +592,7 @@ export function GalaxyRuntime({
           />
         ) : null}
       </div>
-      {!liveSite && shortfall && builderNote ? builderNote(shortfall.shown, shortfall.asked) : null}
+      {!liveSite && shortfall && builderNote ? builderNote(shortfall.shown, shortfall.asked, shortfall.reason) : null}
     </>
   );
 }

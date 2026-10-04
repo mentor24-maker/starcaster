@@ -389,11 +389,20 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
        * not tell "drifting slower" from "not moving because the page did not
        * move either", which is the way this check would most plausibly die.
        */
-      const scroller = series.scrollBy
+      /*
+       * `scrollTo` is the other shape: one ABSOLUTE scroll position per frame,
+       * for a contract that has to take something out of view and bring it
+       * back — the Galaxy's pause (task 86bc7f5hp). A step can only go one way.
+       */
+      const scroller = series.scrollBy || series.scrollTo
         ? (document.scrollingElement || document.documentElement)
         : null;
       for (let i = 0; i < series.count; i += 1) {
-        if (scroller && i > 0) {
+        if (scroller && Array.isArray(series.scrollTo) && Number.isFinite(series.scrollTo[i])
+          && scroller.scrollTop !== series.scrollTo[i]) {
+          scroller.scrollTop = series.scrollTo[i];
+          await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+        } else if (scroller && series.scrollBy && i > 0) {
           scroller.scrollTop += series.scrollBy;
           // One animation frame, so the rAF loop under test has actually run
           // against the new scroll position before anything is read.
@@ -428,6 +437,7 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
             ...(series.luma ? { luma: readCanvasLuma(node) } : {}),
             top: box.top,
             height: box.height,
+            width: box.width,
           };
         }
         seriesOut.push(frame);

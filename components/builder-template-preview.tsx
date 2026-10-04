@@ -2761,9 +2761,9 @@ function BuilderModulePreview({
         <GalaxyRuntime
           settings={module.settings}
           liveSite={liveSite}
-          builderNote={(shown, asked) => (
+          builderNote={(shown, asked, reason) => (
             <BuilderOnlyNote liveSite={liveSite}>
-              Showing {shown} of {asked} stars on this device.
+              Showing {shown} of {asked} stars on this device ({reason}).
             </BuilderOnlyNote>
           )}
         />

@@ -40,10 +40,11 @@ thousands of gradient objects sixty times a second.
 
 ## What the page runtime does
 
-- **Backing size = CSS size × devicePixelRatio**, capped at 2 (1.5 when the
-  window is narrower than 768px), with `ctx.scale` so all drawing stays in CSS
-  pixels. A `ResizeObserver` on the container and the canvas, plus window
-  `resize`, re-measures; the field is regenerated only when the star budget
+- **Backing size = CSS size × devicePixelRatio**, capped by the device budget
+  (2×, 1.5× under 768px, 1× on a low-power device or data saver — see
+  Performance), with `ctx.scale` so all drawing stays in CSS pixels. A
+  `ResizeObserver` on the container and the canvas, plus window `resize`,
+  re-measures; the field is regenerated only when the star budget
   (`scaleGalaxyCount`) actually changes.
 - **A settings change regenerates the field without remounting.** The effect
   that runs the loop is keyed on the settings' value; its cleanup cancels the
@@ -51,7 +52,8 @@ thousands of gradient objects sixty times a second.
   does the frame counter, which lives in a ref.
 - **Frame delta clamped to 50 ms**, so a stall never makes the galaxy jump.
 - **Pauses** on `visibilitychange` → hidden and on window `blur`; resumes on
-  the opposite.
+  the opposite. **And when nobody can see it** (Performance, below):
+  `data-galaxy-paused` says which.
 - **Reduced motion** (`prefers-reduced-motion: reduce`, listened for, so
   switching it on mid-visit applies at once) draws exactly ONE frame and
   starts no loop.
@@ -62,8 +64,9 @@ thousands of gradient objects sixty times a second.
   `data-galaxy-frame` (a counter, +1 per drawn frame). The canvas is
   `aria-hidden="true"`: it is decoration.
 - **Fewer stars than asked** (the device budget cut the count) shows
-  "Showing N of M stars on this device" in the Builder only, through
-  `BuilderOnlyNote`; nothing on a published page.
+  "Showing N of M stars on this device (small screen)" in the Builder only,
+  through `BuilderOnlyNote`; nothing on a published page. The bracket is the
+  budget's reason, also published as `data-galaxy-budget`.
 
 ### Placement
 
@@ -325,6 +328,69 @@ about 11px, and seven of them move the full-resolution mean by about 0.009 —
 real, but too close to nothing to assert on, which is why the pair runs the
 streaks at full size and strength.
 
+## Performance (task 86bc7f5hp)
+
+The galaxy draws less where it must, automatically. There is no setting for
+any of this on purpose: a setting the operator has to know about is a setting
+left at "everything" on a phone.
+
+**It stops drawing when nobody can see it.**
+
+- **In Place:** an `IntersectionObserver` on the block. Under 5% on screen
+  (`GALAXY_VISIBLE_FRACTION`) the frame loop stops; back in view it resumes.
+- **Window:** the canvas is fixed over the viewport, so it is always
+  "intersecting" and an observer would never fire. It stops instead on the
+  frame the scroll disperses it to nothing (opacity 0), and the scroll listener
+  restarts it when the page scrolls back. With Scroll Disperse off, a Window
+  backdrop is visible at every scroll position and never pauses for scrolling.
+  *The ticket asked for the page's first section to be observed instead; that
+  would freeze a still-visible backdrop the moment the first section scrolled
+  past, so it was corrected on the ticket before building.*
+- `start()` refuses while paused, so a refocused window or a replayed intro
+  cannot restart frames nobody sees. The canvas carries
+  `data-galaxy-paused="true"` / `"false"`.
+
+**It draws fewer stars on weaker screens.** `scaleGalaxyCount(requested,
+{ areaPx, viewportWidth, tier, inline })` returns the count, the pixel-ratio
+cap and the reason, from three cuts multiplied together:
+
+| Cut | When | Count | Pixel ratio cap | Note reads |
+|---|---|---|---|---|
+| Device | data saver on | × 0.5 | 1 | "data saver" |
+| Device | under 4 cores, or under 4 GB reported | × 0.5 | 1 | "low-power device" |
+| Viewport | narrower than 768px | × 0.6 | 1.5 | "small screen" |
+| Area | box smaller than 1440 × 900 | × √(area ÷ 1440·900) | — | "small module" In Place, "small screen" in a Window |
+
+Never more than asked, never under 100 unless fewer were asked. The note names
+the first cut that applied, device before viewport before area. Safari hides
+`deviceMemory` everywhere, so an iPhone is judged on its cores and caught by
+its narrow screen, not by a guess at its chip.
+
+**Measured** 2026-10-04 on the **Mac mini** (the build machine; the ticket
+named Dane's MacBook, which this pass could not reach), headed Chromium, 10 s
+per row, defaults with Intro None. The phone rows are **Chrome's iPhone 14
+emulation (390 × 844, 3× screen) with a 4× CPU throttle — no real phone was
+at hand.** CPU is Chrome's `TaskDuration` over wall time: the page's main
+thread as a share of one core (canvas rasterising happens in the GPU process
+and is not in this number).
+
+| Scenario | Stars drawn | fps | CPU (main thread) | Paused |
+|---|---|---|---|---|
+| Desktop 1440×900, Window backdrop | 4000 | 59.9 | 16.1% | false |
+| Desktop, Window backdrop scrolled away | 4000 | 0 | 0% | true |
+| Desktop, In Place 600px | 3266 (small module) | 60.1 | 15.3% | false |
+| Desktop, In Place scrolled out of view | 3266 (small module) | 0 | 0% | true |
+| Phone (emulated, 4× throttle), Window | 1210 (small screen) | 60 | 4.4% | false |
+| Phone (emulated, 4× throttle), In Place | 993 (small screen) | 60 | 4.0% | false |
+
+Targets were 60 fps desktop and at least 30 fps phone; both met, so the count
+scaling was not tightened. Re-take it with:
+
+```
+PORT=3061 node server.js
+UI_HARNESS_BASE_URL=http://localhost:3061 node scripts/ui/measure_galaxy.mjs
+```
+
 ## The rules
 
 1. **Nothing paints a star except `drawGalaxyFrame`.**
@@ -336,14 +402,15 @@ streaks at full size and strength.
    the index, so it keeps the colour.
 3. **The frame counter survives a settings change.** It is the evidence that a
    slider redraws without a remount; resetting it would hide a remount.
-4. **Never put `data-galaxy-frame` or `data-galaxy-count` in JSX.** They are
+4. **Never put `data-galaxy-frame`, `data-galaxy-count`, `data-galaxy-paused`
+   or `data-galaxy-budget` in JSX.** They are
    written imperatively. In JSX, every React re-render (the shortfall note
    setting state, for one) would reset them to the literal.
 5. **Presets are values, not a mode.** Nothing reads a preset name at render.
 
 ## The browser checks
 
-`scripts/ui/render-contracts.mjs`, fourteen contracts named `galaxy-*`, read
+`scripts/ui/render-contracts.mjs`, sixteen contracts named `galaxy-*`, read
 through the series reader's `attrs` (added for this module — a canvas's pixels
 are invisible to computed style), plus the two `luma` differentials above:
 
@@ -376,6 +443,17 @@ are invisible to computed style), plus the two `luma` differentials above:
   "Replay intro";
 - `galaxy-replay-button-never-on-a-live-site` — absence, on the page rendered
   as a published page, paired with the one above.
+
+- `galaxy-pauses-out-of-view` — an In Place block scrolled fully away reads
+  `data-galaxy-paused="true"` within 500 ms with a frame counter that has
+  stopped, and resumes counting when scrolled back. Uses the series'
+  `scrollTo` (added in slice 6): one absolute scroll position per sample,
+  because `scrollBy` can only go one way;
+- `galaxy-draws-fewer-stars-on-a-phone` — at 390 × 844 a Window galaxy asked
+  for 4,000 carries at most 60% of what the same area gets on a wide screen,
+  and names a reason. Compared against the area cut, not against 4,000: the
+  area cut alone already lowers a phone's count, so "fewer than asked" passed
+  with the viewport rule deleted.
 
 The arrow-key two use the harness's `press: { selector, key }` (added for this
 module): it focuses the element, refuses if focus did not land, and presses
