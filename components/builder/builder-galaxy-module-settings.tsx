@@ -10,6 +10,8 @@ import { type BuilderThemePalette } from "./builder-theme-color-field";
 import { PROXIMITY_PLACEMENT_OPTIONS, proximityIsInline } from "@/lib/effect-placement";
 import {
   GALAXY_DEFAULT_PALETTE,
+  GALAXY_MOTION_DEFAULTS,
+  GALAXY_MOTION_RANGES,
   GALAXY_SETTING_DEFAULTS,
   GALAXY_SETTING_RANGES,
   galaxyInteractionsFor,
@@ -49,11 +51,12 @@ function slider(
   label: string,
   options: { min?: number; max?: number; step?: number; suffix?: string; fallback?: string; visibleWhen?: (s: Record<string, string>) => boolean } = {}
 ): BuilderSchemaField {
-  const range = GALAXY_SETTING_RANGES[key];
+  const range = GALAXY_SETTING_RANGES[key] ?? GALAXY_MOTION_RANGES[key];
   const min = options.min ?? range?.min ?? 0;
   const max = options.max ?? range?.max ?? 100;
   const step = options.step ?? (range?.integer ? 1 : 0.05);
-  const fallback = options.fallback ?? GALAXY_SETTING_DEFAULTS[key] ?? GALAXY_LOOK_DEFAULTS[key] ?? String(min);
+  const fallback =
+    options.fallback ?? GALAXY_SETTING_DEFAULTS[key] ?? GALAXY_MOTION_DEFAULTS[key] ?? GALAXY_LOOK_DEFAULTS[key] ?? String(min);
   return {
     key,
     label,
@@ -103,6 +106,16 @@ function colourSlot(index: number): BuilderSchemaField[] {
       rendersVia: "assignGalaxyColours"
     }
   ];
+}
+
+/** The intro's timing fields exist only while there is an intro. Absent means Converge. */
+function introOn(settings: Record<string, string>): boolean {
+  return (settings.intro || GALAXY_MOTION_DEFAULTS.intro) !== "none";
+}
+
+/** Scroll Distance exists only while Scroll Away is on. Absent means on. */
+function scrollOn(settings: Record<string, string>): boolean {
+  return (settings.scrollDisperse || GALAXY_MOTION_DEFAULTS.scrollDisperse) !== "false";
 }
 
 export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColors = [] }: Props) {
@@ -205,6 +218,38 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
           ],
           [slider("differential", "Inner Speed", { step: 1 }), slider("flowSpeed", "Flow", { step: 1 })],
           [slider("twinkle", "Twinkle", { step: 1 })],
+          /*
+           * The entrance and the exit (Galaxy module 4/6). Each toggle sits
+           * beside the fields it gates, which are hidden — not greyed — when
+           * it is off.
+           */
+          [
+            {
+              key: "intro",
+              label: "Intro",
+              width: "select-md",
+              control: "select",
+              fallback: GALAXY_MOTION_DEFAULTS.intro,
+              options: [
+                { value: "converge", label: "Converge" },
+                { value: "none", label: "None" }
+              ],
+              rendersVia: "GalaxyRuntime"
+            },
+            slider("introDelay", "Intro Delay", { step: 0.1, suffix: "s", visibleWhen: introOn })
+          ],
+          [slider("introDuration", "Intro Length", { step: 0.1, suffix: "s", visibleWhen: introOn })],
+          [
+            {
+              key: "scrollDisperse",
+              label: "Scroll Away",
+              width: "check",
+              control: "checkbox",
+              fallback: GALAXY_MOTION_DEFAULTS.scrollDisperse,
+              rendersVia: "GalaxyRuntime"
+            },
+            slider("scrollDistance", "Scroll Distance", { step: 10, suffix: "px", visibleWhen: scrollOn })
+          ],
           [
             {
               // What the visitor can do to it. The choices depend on Sits:

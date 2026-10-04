@@ -3,7 +3,7 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { normalizeBuilderModuleSettingsForType, normalizeLayoutSections, normalizeModuleType } from "@/lib/builder-template";
-import { GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
+import { GALAXY_MOTION_DEFAULTS, GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
 import { GALAXY_LOOK_DEFAULTS, matchGalaxyPreset } from "@/lib/galaxy-render";
 import { searchModulePalette, type ModuleSearchHit } from "@/lib/builder-module-search";
 import { modulePaletteGroups, modulePaletteItems } from "@/components/builder/builder-types";
@@ -56,6 +56,21 @@ describe("the galaxy normalizer block (DOCTRINE §5.27)", () => {
     for (const key of ["c1", "c2", "c3", "c4", "c5", "haze", "posterUrl"]) {
       expect(filled[key], key).toBeUndefined();
     }
+  });
+});
+
+describe("the intro and scroll settings in the normalizer (task 86bc7f5hj)", () => {
+  it("fills all five with the engine's own defaults", () => {
+    const filled = normalizeBuilderModuleSettingsForType("galaxy", {});
+    for (const [key, value] of Object.entries(GALAXY_MOTION_DEFAULTS)) {
+      expect(filled[key], key).toBe(value);
+    }
+  });
+
+  it("keeps an intro switched off and a scroll switched off — a backfill must not switch them back on", () => {
+    const kept = normalizeBuilderModuleSettingsForType("galaxy", { intro: "none", scrollDisperse: "false" });
+    expect(kept.intro).toBe("none");
+    expect(kept.scrollDisperse).toBe("false");
   });
 });
 

@@ -169,6 +169,15 @@ export function BuilderPreviewPage() {
   const [isEmbedded] = useState(
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("embed") === "1"
   );
+  /*
+   * `?live=1`: render exactly as a PUBLISHED page would, `liveSite` and all,
+   * so a browser check can prove a Builder-only control is absent from what
+   * a visitor gets (task 86bc7f5hj — the galaxy's "Replay intro"). Nothing
+   * in the app links here; without the flag this page is what it always was.
+   */
+  const [isLive] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("live") === "1"
+  );
   const isEmailPreview = previewDevice === "email";
 
   useEffect(() => {
@@ -313,6 +322,7 @@ export function BuilderPreviewPage() {
         applyThemePageMargins={false}
         suppressShellBackground
         previewMode
+        liveSite={isLive}
       />
     </BuilderViewportShellLayout>
   ) : null;

@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  GALAXY_INTRO_STAGGER,
+  GALAXY_MIX_IN_PLACE,
+  GALAXY_MOTION_DEFAULTS,
+  GALAXY_SCATTER_MAX,
+  GALAXY_SCATTER_MIN,
+  galaxyDisperseOpacity,
+  galaxyIntroProgress,
+  galaxyScrollDisperse,
+  galaxyStarPlacement,
+  readGalaxyMotion,
   GALAXY_ARM_FLOOR_MAX,
   GALAXY_DAMPING,
   GALAXY_DRAG_RADIANS_PER_PX,
@@ -789,11 +799,13 @@ describe("a frame keeps its arrays", () => {
     const field = generateGalaxyField(settings);
     const out = createGalaxyProjection(field.count);
     const arrays = fieldArrays(field);
-    expect(arrays.length).toBe(12);
+    // 12 since slice 1, plus the three scatter offsets of slice 4.
+    expect(arrays.length).toBe(15);
+    const mix = { converge: 0.5, disperse: 0.25 };
     const outArrays = [out.x, out.y, out.depth];
     for (let frame = 0; frame < 1000; frame++) {
       const stepped = stepGalaxyField(field, FRAME, settings);
-      const projected = projectGalaxyField(field, frame * 0.01, 0.2, 1440, 900, out);
+      const projected = projectGalaxyField(field, frame * 0.01, 0.2, 1440, 900, out, mix);
       expect(stepped).toBe(field);
       expect(projected).toBe(out);
       const after = fieldArrays(field);
@@ -946,5 +958,174 @@ describe("interaction (Galaxy module 3/6, task 86bc7f5hh)", () => {
     expect(resolveGalaxyInteraction(true, "none")).toBe("none");
     expect(resolveGalaxyInteraction(false, "none")).toBe("none");
     expect(resolveGalaxyInteraction(false, "spin")).toBe("tilt");
+  });
+});
+
+describe("intro and scroll (Galaxy module 4/6, task 86bc7f5hj)", () => {
+  const W = 800;
+  const H = 600;
+
+  function projectWith(field: GalaxyField, converge: number, disperse = 0) {
+    return projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count), { converge, disperse });
+  }
+
+  it("at converge 0 every star is at its scatter position, and at 1 at its layout position", () => {
+    const field = generateGalaxyField(readGalaxySettings({ particleCount: "1200" }));
+    const home = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count));
+    const scattered = projectWith(field, 0);
+    const settled = projectWith(field, 1);
+    const scale = home.scale;
+    for (let i = 0; i < field.count; i++) {
+      expect(settled.x[i]).toBeCloseTo(home.x[i], 4);
+      expect(settled.y[i]).toBeCloseTo(home.y[i], 4);
+      // Face-on, x and y are the scatter offset in pixels exactly.
+      expect(scattered.x[i] - home.x[i]).toBeCloseTo(field.scatterX[i] * scale, 2);
+      expect(scattered.y[i] - home.y[i]).toBeCloseTo(field.scatterY[i] * scale, 2);
+    }
+  });
+
+  it("every scatter offset is 2 to 4 field radii long in the disc's plane", () => {
+    const field = generateGalaxyField(readGalaxySettings({ particleCount: "3000" }));
+    let shortest = Infinity;
+    let longest = 0;
+    for (let i = 0; i < field.count; i++) {
+      const length = Math.hypot(field.scatterX[i], field.scatterY[i]);
+      shortest = Math.min(shortest, length);
+      longest = Math.max(longest, length);
+    }
+    expect(shortest).toBeGreaterThanOrEqual(GALAXY_SCATTER_MIN - 1e-5);
+    expect(longest).toBeLessThanOrEqual(GALAXY_SCATTER_MAX + 1e-5);
+    // Spread across the range, not bunched at one end.
+    expect(shortest).toBeLessThan(GALAXY_SCATTER_MIN + 0.1);
+    expect(longest).toBeGreaterThan(GALAXY_SCATTER_MAX - 0.1);
+  });
+
+  it("the scatter is seeded, and moves no star of the layout slices 1 to 3 shipped", () => {
+    const a = generateGalaxyField(readGalaxySettings({ seed: "11", particleCount: "800" }));
+    const b = generateGalaxyField(readGalaxySettings({ seed: "11", particleCount: "800" }));
+    const c = generateGalaxyField(readGalaxySettings({ seed: "12", particleCount: "800" }));
+    expect(Array.from(a.scatterX)).toEqual(Array.from(b.scatterX));
+    expect(Array.from(a.scatterZ)).toEqual(Array.from(b.scatterZ));
+    expect(Array.from(a.scatterX)).not.toEqual(Array.from(c.scatterX));
+    // The scatter draws from a source of its own, so the layout is the one
+    // slices 1 to 3 shipped. These numbers were read off main BEFORE slice 4
+    // (2026-10-03): had the scatter taken its draws from the layout's source,
+    // every one of them would have moved.
+    expect([a.radius[0], a.radius[400], a.radius[799], a.angle[799], a.size[799]]).toEqual([
+      Math.fround(0.8307999968528748),
+      Math.fround(0.6004835963249207),
+      Math.fround(0.5603447556495667),
+      Math.fround(-8.786552429199219),
+      Math.fround(1.5046547651290894)
+    ]);
+  });
+
+  it("the wave runs from the core out: at converge 0.5 the innermost star is ahead of the outermost", () => {
+    const field = generateGalaxyField(readGalaxySettings({ particleCount: "2000" }));
+    let inner = 0;
+    let outer = 0;
+    for (let i = 0; i < field.count; i++) {
+      if (field.radius[i] < field.radius[inner]) inner = i;
+      if (field.radius[i] > field.radius[outer]) outer = i;
+    }
+    const innerShare = galaxyStarPlacement(0.5, 0, field.radius[inner]);
+    const outerShare = galaxyStarPlacement(0.5, 0, field.radius[outer]);
+    expect(innerShare).toBeGreaterThan(outerShare);
+    expect(innerShare).toBeGreaterThan(0.9);
+    expect(outerShare).toBeLessThan(0.1);
+    // And it shows in the projection: the inner star is nearer its place.
+    const home = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count));
+    const half = projectWith(field, 0.5);
+    const gap = (i: number) => Math.hypot(half.x[i] - home.x[i], half.y[i] - home.y[i]);
+    expect(gap(inner)).toBeLessThan(gap(outer));
+  });
+
+  it("a star's placement rises with converge and never runs backwards", () => {
+    for (const radius of [0, 0.1, 0.5, 0.9, 1]) {
+      let previous = -1;
+      for (let step = 0; step <= 100; step++) {
+        const share = galaxyStarPlacement(step / 100, 0, radius);
+        expect(share).toBeGreaterThanOrEqual(previous);
+        previous = share;
+      }
+      expect(galaxyStarPlacement(0, 0, radius)).toBe(0);
+      expect(galaxyStarPlacement(1, 0, radius)).toBe(1);
+    }
+    // The core leaves at 0 and the rim at the stagger, no sooner.
+    expect(galaxyStarPlacement(GALAXY_INTRO_STAGGER, 0, 1)).toBe(0);
+    expect(galaxyStarPlacement(0.01, 0, 0)).toBeGreaterThan(0);
+  });
+
+  it("disperse is the intro run backwards: the arm tips leave first, and at 1 every star is scattered", () => {
+    expect(galaxyStarPlacement(1, 0.5, 1)).toBeLessThan(galaxyStarPlacement(1, 0.5, 0));
+    for (const radius of [0, 0.3, 1]) {
+      expect(galaxyStarPlacement(1, 1, radius)).toBe(0);
+      expect(galaxyStarPlacement(1, 0, radius)).toBe(1);
+    }
+    const field = generateGalaxyField(readGalaxySettings({ particleCount: "600" }));
+    const scattered = projectWith(field, 0);
+    const dispersed = projectWith(field, 1, 1);
+    for (let i = 0; i < field.count; i++) {
+      expect(dispersed.x[i]).toBeCloseTo(scattered.x[i], 3);
+      expect(dispersed.y[i]).toBeCloseTo(scattered.y[i], 3);
+    }
+  });
+
+  it("disperse fades the field: opacity 1 in place, 0 fully dispersed", () => {
+    expect(galaxyDisperseOpacity(0)).toBe(1);
+    expect(galaxyDisperseOpacity(0.25)).toBeCloseTo(0.75);
+    expect(galaxyDisperseOpacity(1)).toBe(0);
+    expect(galaxyDisperseOpacity(Number.NaN)).toBe(1);
+  });
+
+  it("leaving the mix out is everything in place, and a NaN in it is too", () => {
+    const field = generateGalaxyField(readGalaxySettings({ particleCount: "400" }));
+    const plain = projectGalaxyField(field, 0.3, 0.2, W, H, createGalaxyProjection(field.count));
+    const nan = projectGalaxyField(field, 0.3, 0.2, W, H, createGalaxyProjection(field.count), {
+      converge: Number.NaN,
+      disperse: Number.NaN
+    });
+    const explicit = projectGalaxyField(field, 0.3, 0.2, W, H, createGalaxyProjection(field.count), GALAXY_MIX_IN_PLACE);
+    expect(Array.from(nan.x)).toEqual(Array.from(plain.x));
+    expect(Array.from(explicit.y)).toEqual(Array.from(plain.y));
+  });
+
+  it("the timeline waits out the delay, then runs straight to 1 over the duration", () => {
+    expect(galaxyIntroProgress(0, 1, 5)).toBe(0);
+    expect(galaxyIntroProgress(1, 1, 5)).toBe(0);
+    expect(galaxyIntroProgress(3.5, 1, 5)).toBeCloseTo(0.5);
+    expect(galaxyIntroProgress(6, 1, 5)).toBe(1);
+    expect(galaxyIntroProgress(600, 1, 5)).toBe(1);
+    expect(galaxyIntroProgress(-1, 0, 5)).toBe(0);
+    expect(galaxyIntroProgress(Number.NaN, 0, 5)).toBe(1);
+    expect(galaxyIntroProgress(0.5, 0, 0)).toBe(1);
+  });
+
+  it("scroll maps the distance onto 0..1 and clamps both ends", () => {
+    expect(galaxyScrollDisperse(0, 800)).toBe(0);
+    expect(galaxyScrollDisperse(-200, 800)).toBe(0);
+    expect(galaxyScrollDisperse(400, 800)).toBe(0.5);
+    expect(galaxyScrollDisperse(2000, 800)).toBe(1);
+    expect(galaxyScrollDisperse(400, 0)).toBe(0);
+    expect(galaxyScrollDisperse(Number.NaN, 800)).toBe(0);
+  });
+
+  it("reads the five settings with their defaults and ranges, and only an exact 'none'/'false' switches one off", () => {
+    expect(readGalaxyMotion({})).toEqual({
+      intro: "converge",
+      introDelay: 1,
+      introDuration: 5,
+      scrollDisperse: true,
+      scrollDistance: 800
+    });
+    expect(Object.keys(GALAXY_MOTION_DEFAULTS).sort()).toEqual(
+      ["intro", "introDelay", "introDuration", "scrollDisperse", "scrollDistance"].sort()
+    );
+    const odd = readGalaxyMotion({ intro: "sideways", scrollDisperse: "maybe", introDelay: "99", introDuration: "0", scrollDistance: "50" });
+    expect(odd).toEqual({ intro: "converge", introDelay: 5, introDuration: 1, scrollDisperse: true, scrollDistance: 200 });
+    const off = readGalaxyMotion({ intro: "none", scrollDisperse: "false", scrollDistance: "abc" });
+    expect(off.intro).toBe("none");
+    expect(off.scrollDisperse).toBe(false);
+    expect(off.scrollDistance).toBe(800);
   });
 });

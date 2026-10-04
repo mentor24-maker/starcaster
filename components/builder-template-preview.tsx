@@ -108,7 +108,8 @@ import {
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { BuilderConfettiRuntime } from "@/components/builder-confetti-runtime";
 import { TractorNavRuntime } from "@/components/builder-tractor-nav-module";
-import { GalaxyRuntime } from "@/components/builder-galaxy-module";
+import { GALAXY_REPLAY_EVENT, GalaxyRuntime } from "@/components/builder-galaxy-module";
+import { readGalaxyMotion } from "@/lib/galaxy-field";
 import { BuilderPollModuleRuntime, BuilderSocialShareRuntime } from "@/components/builder-poll-runtime";
 import { PollCategoryListPreview } from "@/components/builder/poll-category-list-preview";
 import {
@@ -2756,15 +2757,34 @@ function BuilderModulePreview({
 
   if (module.type === "galaxy") {
     return (
-      <GalaxyRuntime
-        settings={module.settings}
-        liveSite={liveSite}
-        builderNote={(shown, asked) => (
+      <>
+        <GalaxyRuntime
+          settings={module.settings}
+          liveSite={liveSite}
+          builderNote={(shown, asked) => (
+            <BuilderOnlyNote liveSite={liveSite}>
+              Showing {shown} of {asked} stars on this device.
+            </BuilderOnlyNote>
+          )}
+        />
+        {/*
+         * "Replay intro" — the confetti module's Test Burst, for the galaxy's
+         * fly-in (task 86bc7f5hj). Addressed to whoever is building the page,
+         * so it lives inside BuilderOnlyNote and a published page never shows
+         * it. Offered only when there is an intro to replay.
+         */}
+        {readGalaxyMotion(module.settings).intro === "converge" ? (
           <BuilderOnlyNote liveSite={liveSite}>
-            Showing {shown} of {asked} stars on this device.
+            <button
+              className="secondary-button builder-galaxy-replay"
+              onClick={() => document.dispatchEvent(new CustomEvent(GALAXY_REPLAY_EVENT))}
+              type="button"
+            >
+              Replay intro
+            </button>
           </BuilderOnlyNote>
-        )}
-      />
+        ) : null}
+      </>
     );
   }
 

@@ -22,6 +22,12 @@
  *   4. `readGalaxySettings` / `scaleGalaxyCount` / `readDeviceTier` turn the
  *      module's string settings and the visitor's device into clamped numbers.
  *
+ * Since slice 3 it also holds the view a visitor turns (drag, keys, tilt),
+ * and since slice 4 the intro and the scroll: every star has a seeded
+ * scatter offset, and `projectGalaxyField` draws it part of the way out
+ * there according to a `GalaxyMix` the runtime works out from the clock
+ * and the scroll position (`galaxyIntroProgress`, `galaxyScrollDisperse`).
+ *
  * THE SHAPE HOLDS. A spiral whose inner stars simply rotate faster than its
  * outer ones winds itself up: at the default settings the arms were gone in
  * a minute (round-1 review, task 86bc7f5hf). So the motion here is built
@@ -323,6 +329,15 @@ export interface GalaxyField {
   colour: Uint8Array;
   arm: Uint8Array;
   flare: Uint8Array;
+  /**
+   * Where each star waits before the intro (Galaxy module 4/6): an OFFSET
+   * from its layout position, in unit-disc terms, 2 to 4 field radii long in
+   * a seeded random direction. An offset rather than a point, so a star that
+   * has turned or streamed since generation still flies in to where it IS.
+   */
+  scatterX: Float32Array;
+  scatterY: Float32Array;
+  scatterZ: Float32Array;
   /** How far the whole pattern has turned since generation, radians, folded into [0, 2π). */
   spin: number;
   /** The field's own random source, so re-seeding inside `step` stays deterministic. */
@@ -524,9 +539,13 @@ export function generateGalaxyField(settings: GalaxySettings): GalaxyField {
     colour: new Uint8Array(count),
     arm: new Uint8Array(count),
     flare: new Uint8Array(count),
+    scatterX: new Float32Array(count),
+    scatterY: new Float32Array(count),
+    scatterZ: new Float32Array(count),
     spin: 0,
     random: mulberry32(settings.seed)
   };
+  writeScatter(field, settings.seed);
   const random = field.random;
   const geo = armGeometry(settings);
   const flareCount = Math.min(count, Math.max(0, Math.round(settings.flareStars)));
@@ -579,6 +598,25 @@ function writeCartesian(field: GalaxyField): void {
     const a = angle[i] + spin;
     x[i] = radius[i] * Math.cos(a);
     y[i] = radius[i] * Math.sin(a);
+  }
+}
+
+/**
+ * Give every star its scatter offset (Galaxy module 4/6). Drawn from a source
+ * of its OWN, seeded from the field's seed: taking these numbers from the
+ * layout's source would move every star of every existing galaxy, and the
+ * layout is what slices 1 to 3 pinned. Mostly in the disc's plane, so the
+ * stars come in from the edges of the picture rather than from in front of it.
+ */
+function writeScatter(field: GalaxyField, seed: number): void {
+  const random = mulberry32((Number.isFinite(seed) ? Math.floor(seed) : 0) ^ GALAXY_SCATTER_SEED_SALT);
+  const { count, scatterX, scatterY, scatterZ } = field;
+  for (let i = 0; i < count; i++) {
+    const direction = random() * TWO_PI;
+    const distance = GALAXY_SCATTER_MIN + random() * (GALAXY_SCATTER_MAX - GALAXY_SCATTER_MIN);
+    scatterX[i] = Math.cos(direction) * distance;
+    scatterY[i] = Math.sin(direction) * distance;
+    scatterZ[i] = gaussian(random) * GALAXY_SCATTER_DEPTH;
   }
 }
 
@@ -700,6 +738,12 @@ export function createGalaxyProjection(count: number): GalaxyProjection {
  * the viewport, into `out`. Returns `out`. Nothing is allocated: the arrays
  * are the caller's, sized by `createGalaxyProjection(field.count)`.
  *
+ * `mix` is the intro and the scroll (Galaxy module 4/6): each star is drawn
+ * `galaxyStarPlacement` of the way from its scatter position to where it
+ * really is, BEFORE the rotation, so a star flying in turns with the view
+ * like everything else. Left out, every star is in place — the card, and
+ * every caller written before the intro existed.
+ *
  * Orthographic on purpose: at yaw 0 and pitch 0 every star's distance from
  * the centre is exactly its field radius times `out.scale`, which is what
  * lets a test hold the projection still. Perspective, if a renderer wants
@@ -714,7 +758,8 @@ export function projectGalaxyField(
   pitch: number,
   viewportW: number,
   viewportH: number,
-  out: GalaxyProjection
+  out: GalaxyProjection,
+  mix: GalaxyMix = GALAXY_MIX_IN_PLACE
 ): GalaxyProjection {
   const w = Number.isFinite(viewportW) ? Math.max(0, viewportW) : 0;
   const h = Number.isFinite(viewportH) ? Math.max(0, viewportH) : 0;
@@ -725,15 +770,25 @@ export function projectGalaxyField(
   const sinYaw = Math.sin(Number.isFinite(yaw) ? yaw : 0);
   const cosPitch = Math.cos(Number.isFinite(pitch) ? pitch : 0);
   const sinPitch = Math.sin(Number.isFinite(pitch) ? pitch : 0);
-  const { x, y, z } = field;
+  const { x, y, z, radius, scatterX, scatterY, scatterZ } = field;
   const n = Math.min(field.count, out.x.length, out.y.length, out.depth.length);
   const ox = out.x;
   const oy = out.y;
   const od = out.depth;
+  const converge = galaxyUnit(mix.converge, 1);
+  const disperse = galaxyUnit(mix.disperse, 0);
+  // The common case — everything home — pays nothing per star.
+  const mixing = converge < 1 || disperse > 0;
   for (let i = 0; i < n; i++) {
-    const px = x[i];
-    const py = y[i];
-    const pz = z[i];
+    let px = x[i];
+    let py = y[i];
+    let pz = z[i];
+    if (mixing) {
+      const away = 1 - galaxyStarPlacement(converge, disperse, radius[i]);
+      px += scatterX[i] * away;
+      py += scatterY[i] * away;
+      pz += scatterZ[i] * away;
+    }
     // Yaw: rotate in the x–z plane.
     const x1 = px * cosYaw + pz * sinYaw;
     const z1 = -px * sinYaw + pz * cosYaw;
@@ -935,4 +990,141 @@ export function stepGalaxyView(view: GalaxyView, dtSeconds: number): GalaxyView 
   view.yaw = easeToward(view.yaw, view.targetYaw, GALAXY_DAMPING, dtSeconds);
   view.pitch = easeToward(view.pitch, view.targetPitch, GALAXY_DAMPING, dtSeconds);
   return view;
+}
+
+// ---------------------------------------------------------------------------
+// Intro and scroll (Galaxy module 4/6, task 86bc7f5hj)
+// ---------------------------------------------------------------------------
+
+/** A star waits this many field radii from where it belongs, at least… */
+export const GALAXY_SCATTER_MIN = 2;
+/** …and at most. */
+export const GALAXY_SCATTER_MAX = 4;
+/** The scatter's depth (one standard deviation): a little, so the fly-in is not perfectly flat. */
+const GALAXY_SCATTER_DEPTH = 0.3;
+/** XOR'd into the seed so the scatter's random source is not the layout's. Any fixed number works. */
+const GALAXY_SCATTER_SEED_SALT = 0x5ca77e4;
+/**
+ * The share of the intro the wave takes to cross the field. The core leaves
+ * at converge 0 and the rim at converge STAGGER, and each star then takes
+ * (1 − STAGGER) of the timeline to arrive — so at 0.5 the innermost star is
+ * home and the outermost has not set off.
+ */
+export const GALAXY_INTRO_STAGGER = 0.5;
+
+/** How far the intro and the scroll have got. Both 0..1. */
+export interface GalaxyMix {
+  /** 0 = every star at its scatter position, 1 = every star in place. */
+  converge: number;
+  /** 0 = in place, 1 = scattered again and faded out. */
+  disperse: number;
+}
+
+/** Everything home: what a caller that knows nothing of the intro gets. */
+export const GALAXY_MIX_IN_PLACE: Readonly<GalaxyMix> = Object.freeze({ converge: 1, disperse: 0 });
+
+/** A finite number clamped into [0, 1]; anything else is the fallback. */
+function galaxyUnit(value: number, fallback: number): number {
+  return Number.isFinite(value) ? clamp(value, 0, 1) : fallback;
+}
+
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * How far ONE star has got from its scatter position to its place, 0..1,
+ * eased. A star's turn in the wave is its radius: the core (radius 0) moves
+ * first, the rim (radius 1) last — so the galaxy assembles from the centre
+ * out, and comes apart from the arm tips in.
+ *
+ * Dispersing is the intro run backwards (`1 − disperse` through the same
+ * wave), multiplied in, so a galaxy scrolled away while still arriving is
+ * the lesser of the two and never jumps.
+ */
+export function galaxyStarPlacement(converge: number, disperse: number, radius: number): number {
+  const turn = GALAXY_INTRO_STAGGER * galaxyUnit(radius, 1);
+  const span = 1 - GALAXY_INTRO_STAGGER;
+  const arriving = smoothstep(clamp((galaxyUnit(converge, 1) - turn) / span, 0, 1));
+  const staying = smoothstep(clamp((1 - galaxyUnit(disperse, 0) - turn) / span, 0, 1));
+  return arriving * staying;
+}
+
+/**
+ * How visible the field is while it disperses: 1 in place, 0 fully dispersed.
+ * Applied to the whole frame by the runtime, on top of the Opacity setting.
+ */
+export function galaxyDisperseOpacity(disperse: number): number {
+  return 1 - galaxyUnit(disperse, 0);
+}
+
+export const GALAXY_INTROS = ["converge", "none"] as const;
+export type GalaxyIntro = (typeof GALAXY_INTROS)[number];
+
+/** The intro and scroll settings' defaults, as the strings the module stores. */
+export const GALAXY_MOTION_DEFAULTS: Record<string, string> = {
+  intro: "converge",
+  introDelay: "1",
+  introDuration: "5",
+  scrollDisperse: "true",
+  scrollDistance: "800"
+};
+
+export const GALAXY_MOTION_RANGES: Record<string, { min: number; max: number }> = {
+  introDelay: { min: 0, max: 5 },
+  introDuration: { min: 1, max: 10 },
+  scrollDistance: { min: 200, max: 2000 }
+};
+
+export interface GalaxyMotion {
+  intro: GalaxyIntro;
+  /** Seconds after the galaxy appears before the stars set off. */
+  introDelay: number;
+  /** Seconds the whole wave takes, first star leaving to last star home. */
+  introDuration: number;
+  scrollDisperse: boolean;
+  /** Pixels of scrolling over which the field disperses and fades. */
+  scrollDistance: number;
+}
+
+function readMotionNumber(bag: Record<string, string | undefined>, key: string): number {
+  const range = GALAXY_MOTION_RANGES[key];
+  const parsed = Number.parseFloat(String(bag[key] ?? ""));
+  return clamp(Number.isFinite(parsed) ? parsed : Number.parseFloat(GALAXY_MOTION_DEFAULTS[key]), range.min, range.max);
+}
+
+/**
+ * The intro and scroll settings, clamped. Absent means the default — the
+ * intro ON, scroll-disperse ON — and only the exact strings "none" and
+ * "false" switch them off, so a value nobody recognises never quietly turns
+ * a feature off.
+ */
+export function readGalaxyMotion(bag: Record<string, string | undefined> = {}): GalaxyMotion {
+  return {
+    intro: String(bag.intro ?? "").trim().toLowerCase() === "none" ? "none" : "converge",
+    introDelay: readMotionNumber(bag, "introDelay"),
+    introDuration: readMotionNumber(bag, "introDuration"),
+    scrollDisperse: String(bag.scrollDisperse ?? "").trim().toLowerCase() !== "false",
+    scrollDistance: readMotionNumber(bag, "scrollDistance")
+  };
+}
+
+/**
+ * The intro's timeline: `elapsed` seconds after the galaxy appeared, how far
+ * the wave has got — 0 through the delay, then a straight line to 1 over the
+ * duration. Linear on purpose: each star eases itself (`galaxyStarPlacement`),
+ * and easing the timeline as well would stack two slow starts.
+ */
+export function galaxyIntroProgress(elapsedSeconds: number, delaySeconds: number, durationSeconds: number): number {
+  if (!Number.isFinite(elapsedSeconds)) return 1;
+  const delay = Number.isFinite(delaySeconds) ? Math.max(0, delaySeconds) : 0;
+  const duration = Number.isFinite(durationSeconds) ? durationSeconds : 0;
+  if (duration <= 0) return elapsedSeconds >= delay ? 1 : 0;
+  return clamp((elapsedSeconds - delay) / duration, 0, 1);
+}
+
+/** Scrolled `px` out of `distance` px, as 0..1. A distance of nothing disperses nothing. */
+export function galaxyScrollDisperse(scrolledPx: number, distancePx: number): number {
+  if (!Number.isFinite(scrolledPx) || !Number.isFinite(distancePx) || distancePx <= 0) return 0;
+  return clamp(scrolledPx / distancePx, 0, 1);
 }
