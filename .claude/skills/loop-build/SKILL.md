@@ -615,6 +615,17 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
   outstanding — a ticket in a claimable status with an honest note is a
   perfectly good outcome. An unfinished promise is not.
 
+- **A PASS HAS TWO HOURS, AND A GATE THAT WILL NOT GO GREEN EATS THEM.** The
+  runner stops any pass still going at two hours. When it does, it writes on
+  the ticket you held what you were running at that moment (`⏱ Time limit:`),
+  and the **second** such stop since the ticket last reached a pull request
+  sends it to Dane instead of back to the claim line (task 86bccr85c). On
+  2026-10-04 five passes in a row re-ran an 8-minute `check:render` that never
+  passed and were stopped, ten hours of a dead lane. So if a slow gate has
+  failed twice on the same cause, stop re-running it: hand the ticket back to
+  `Rework` with a note naming the gate and its first failing line, or `ask`.
+  A note you wrote beats a note the time limit writes for you.
+
 - **VERIFY THE PREMISE BEFORE BUILDING IT.** A defect ticket is a claim to
   verify, not a specification to obey. Before touching a line, read the
   mechanism the ticket names (its `EVIDENCE:` line says where; a defect

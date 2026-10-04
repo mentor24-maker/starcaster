@@ -58,6 +58,10 @@ const TRANSITIONS = {
   'auto-merge-cancelled': ({ at }) => `✋ auto-merge stopped — back to waiting on your word (${at})`,
   merged:    ({ at }) => `✅ live ${at}`,
   escalated: ({ at }) => `🙋 needs Dane — a question is waiting (${at})`,
+  // Task 86bccr85c. A pass stopped at the time limit used to leave the queue
+  // reading "building — claimed" for a pass that was already dead; this says
+  // what it was stuck in, which is the one thing nobody could find out.
+  'timed-out': ({ at, reason }) => `⏱ stopped at the time limit ${at} — ${reason || 'see the note on the ticket'}`,
 };
 
 /** Compose the note for one transition. Throws on an unknown transition — a
