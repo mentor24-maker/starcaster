@@ -2880,6 +2880,17 @@ export function normalizeBuilderModuleSettingsForType(
     for (const [key, fallback] of Object.entries(galaxyDefaults)) {
       if (!settings[key]) settings[key] = fallback;
     }
+    /* Galaxy module 3/6 (task 86bc7f5hh). `interaction` depends on the
+       placement: "rotate" exists only In Place, "tilt" only in a Window, and
+       "none" in both. An absent or mismatched value becomes the placement's
+       default — the key is rewritten, never deleted, so the panel and the
+       runtime read the same answer. Mirrors resolveGalaxyInteraction in
+       galaxy-field.ts, written out for the same bundle-size reason. */
+    const galaxyInline = settings.placement === "inline";
+    const galaxyOffered = galaxyInline ? ["rotate", "none"] : ["tilt", "none"];
+    if (!galaxyOffered.includes(settings.interaction)) {
+      settings.interaction = galaxyInline ? "rotate" : "tilt";
+    }
   }
 
   if (type === "navigation") {

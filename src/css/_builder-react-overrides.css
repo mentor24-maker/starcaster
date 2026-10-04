@@ -7425,6 +7425,42 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
+/*
+ * Galaxy drag surface (task 86bc7f5hh) — the In Place galaxy's turn handle.
+ * A real <button> laid over the canvas, so it is focusable and announced;
+ * nothing of it is visible except the cursor and, when it has keyboard
+ * focus, a ring. `touch-action: pan-y` hands a vertical swipe to the page —
+ * a phone visitor scrolling past the galaxy must not get stuck on it — and
+ * keeps the horizontal swipe for turning.
+ */
+.builder-react-root .galaxy-drag-surface {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: grab;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.builder-react-root .galaxy-drag-surface[data-galaxy-dragging] {
+  cursor: grabbing;
+}
+
+.builder-react-root .galaxy-drag-surface:focus {
+  outline: none;
+}
+
+.builder-react-root .galaxy-drag-surface:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -4px;
+}
+
 /* ------------------------------------------------------------------ *
  * Builder Preview strip (86bbq2y7x)
  *

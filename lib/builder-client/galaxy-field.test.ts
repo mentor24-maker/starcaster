@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   GALAXY_ARM_FLOOR_MAX,
+  GALAXY_DAMPING,
+  GALAXY_DRAG_RADIANS_PER_PX,
+  GALAXY_KEY_STEP,
+  GALAXY_PITCH_LIMIT,
+  GALAXY_TILT_PITCH,
+  GALAXY_TILT_YAW,
+  createGalaxyView,
+  dragGalaxyView,
+  easeToward,
+  resolveGalaxyInteraction,
+  stepGalaxyView,
+  stepGalaxyViewByKey,
+  tiltGalaxyView,
   GALAXY_CORE_ARM,
   GALAXY_COUNT_FLOOR,
   GALAXY_REFERENCE_AREA_PX,
@@ -836,5 +849,102 @@ describe("readDeviceTier", () => {
     expect(readDeviceTier({ hardwareConcurrency: 8 })).toBe("mid");
     // Two cores is low whatever else is hidden.
     expect(readDeviceTier({ hardwareConcurrency: 2 })).toBe("low");
+  });
+});
+
+describe("interaction (Galaxy module 3/6, task 86bc7f5hh)", () => {
+  it("easeToward never overshoots, from either side, even on a huge frame", () => {
+    for (const [from, to] of [[0, 1], [1, 0], [-2, 3], [5, -5]]) {
+      let v = from;
+      for (const dt of [FRAME, 0.05, 0.5, 10]) {
+        const next = easeToward(v, to, GALAXY_DAMPING, dt);
+        const gapBefore = to - v;
+        const gapAfter = to - next;
+        // Same sign (or zero) and strictly no bigger: never past the target.
+        expect(gapAfter * gapBefore).toBeGreaterThanOrEqual(0);
+        expect(Math.abs(gapAfter)).toBeLessThanOrEqual(Math.abs(gapBefore));
+        v = next;
+      }
+    }
+  });
+
+  it("easeToward reaches within 1% of the target in under 1 s at damping 6", () => {
+    let v = 0;
+    let t = 0;
+    while (Math.abs(1 - v) > 0.01 && t < 2) {
+      v = easeToward(v, 1, 6, FRAME);
+      t += FRAME;
+    }
+    expect(t).toBeLessThan(1);
+  });
+
+  it("easeToward is frame-rate independent — 60 small frames land where 1 big one does", () => {
+    let small = 0;
+    for (let i = 0; i < 60; i++) small = easeToward(small, 1, GALAXY_DAMPING, 1 / 60);
+    expect(small).toBeCloseTo(easeToward(0, 1, GALAXY_DAMPING, 1), 10);
+  });
+
+  it("easeToward with no time or no damping does not move", () => {
+    expect(easeToward(0.3, 1, GALAXY_DAMPING, 0)).toBe(0.3);
+    expect(easeToward(0.3, 1, 0, FRAME)).toBe(0.3);
+  });
+
+  it("a drag turns yaw by 0.005 rad/px and clamps pitch at ±1.2", () => {
+    const view = createGalaxyView();
+    dragGalaxyView(view, 100, 0);
+    expect(view.targetYaw).toBeCloseTo(100 * GALAXY_DRAG_RADIANS_PER_PX, 10);
+    dragGalaxyView(view, -300, 0);
+    expect(view.targetYaw).toBeLessThan(0);
+    dragGalaxyView(view, 0, 10_000);
+    expect(view.targetPitch).toBe(GALAXY_PITCH_LIMIT);
+    dragGalaxyView(view, 0, -100_000);
+    expect(view.targetPitch).toBe(-GALAXY_PITCH_LIMIT);
+  });
+
+  it("each arrow key steps 0.08 rad, and only arrow keys are claimed", () => {
+    const view = createGalaxyView();
+    expect(stepGalaxyViewByKey(view, "ArrowLeft")).toBe(true);
+    expect(view.targetYaw).toBeCloseTo(-GALAXY_KEY_STEP, 10);
+    expect(stepGalaxyViewByKey(view, "ArrowRight")).toBe(true);
+    expect(stepGalaxyViewByKey(view, "ArrowRight")).toBe(true);
+    expect(view.targetYaw).toBeCloseTo(GALAXY_KEY_STEP, 10);
+    expect(stepGalaxyViewByKey(view, "ArrowDown")).toBe(true);
+    expect(view.targetPitch).toBeCloseTo(GALAXY_KEY_STEP, 10);
+    expect(stepGalaxyViewByKey(view, "ArrowUp")).toBe(true);
+    expect(view.targetPitch).toBeCloseTo(0, 10);
+    // Tab, Space, Enter must keep their usual meaning on the page.
+    for (const key of ["Tab", " ", "Enter", "PageDown"]) expect(stepGalaxyViewByKey(view, key)).toBe(false);
+  });
+
+  it("tilt spans exactly 0.5 rad of yaw from the left edge to the right edge", () => {
+    const view = createGalaxyView();
+    tiltGalaxyView(view, 0, 400, 1280, 800);
+    const left = view.targetYaw;
+    tiltGalaxyView(view, 1280, 400, 1280, 800);
+    expect(view.targetYaw - left).toBeCloseTo(2 * GALAXY_TILT_YAW, 10);
+    expect(2 * GALAXY_TILT_YAW).toBeCloseTo(0.5, 10);
+    tiltGalaxyView(view, 640, 0, 1280, 800);
+    expect(view.targetYaw).toBeCloseTo(0, 10);
+    expect(view.targetPitch).toBeCloseTo(-GALAXY_TILT_PITCH, 10);
+  });
+
+  it("the view eases toward its target and arrives", () => {
+    const view = createGalaxyView();
+    stepGalaxyViewByKey(view, "ArrowRight");
+    stepGalaxyView(view, FRAME);
+    expect(view.yaw).toBeGreaterThan(0);
+    expect(view.yaw).toBeLessThan(GALAXY_KEY_STEP);
+    for (let i = 0; i < 120; i++) stepGalaxyView(view, FRAME);
+    expect(view.yaw).toBeCloseTo(GALAXY_KEY_STEP, 4);
+  });
+
+  it("an interaction the placement does not offer resolves to that placement's default", () => {
+    expect(resolveGalaxyInteraction(true, undefined)).toBe("rotate");
+    expect(resolveGalaxyInteraction(false, undefined)).toBe("tilt");
+    expect(resolveGalaxyInteraction(true, "tilt")).toBe("rotate");
+    expect(resolveGalaxyInteraction(false, "rotate")).toBe("tilt");
+    expect(resolveGalaxyInteraction(true, "none")).toBe("none");
+    expect(resolveGalaxyInteraction(false, "none")).toBe("none");
+    expect(resolveGalaxyInteraction(false, "spin")).toBe("tilt");
   });
 });

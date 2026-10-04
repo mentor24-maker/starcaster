@@ -8,7 +8,14 @@ import {
 } from "./builder-settings-schema";
 import { type BuilderThemePalette } from "./builder-theme-color-field";
 import { PROXIMITY_PLACEMENT_OPTIONS, proximityIsInline } from "@/lib/effect-placement";
-import { GALAXY_DEFAULT_PALETTE, GALAXY_SETTING_DEFAULTS, GALAXY_SETTING_RANGES } from "@/lib/galaxy-field";
+import {
+  GALAXY_DEFAULT_PALETTE,
+  GALAXY_SETTING_DEFAULTS,
+  GALAXY_SETTING_RANGES,
+  galaxyInteractionsFor,
+  resolveGalaxyInteraction,
+  type GalaxyInteraction
+} from "@/lib/galaxy-field";
 import {
   GALAXY_DEFAULT_HAZE,
   GALAXY_LOOK_DEFAULTS,
@@ -29,6 +36,12 @@ type Props = {
  * panel arrived at after its inline widths left a visible notch (86bbjt1b0).
  */
 const READOUT_CLASS = "builder-galaxy-readout";
+
+const INTERACTION_LABELS: Record<GalaxyInteraction, string> = {
+  rotate: "Drag to Rotate",
+  tilt: "Tilt with Cursor",
+  none: "None"
+};
 
 /** A slider with its value beside it. Range comes from the engine's own table, so the panel cannot offer a value the engine clamps away. */
 function slider(
@@ -191,7 +204,36 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
             }
           ],
           [slider("differential", "Inner Speed", { step: 1 }), slider("flowSpeed", "Flow", { step: 1 })],
-          [slider("twinkle", "Twinkle", { step: 1 })]
+          [slider("twinkle", "Twinkle", { step: 1 })],
+          [
+            {
+              // What the visitor can do to it. The choices depend on Sits:
+              // only an In Place galaxy can be pressed on, and a Window one
+              // reads the cursor from anywhere on the page instead. The select
+              // shows what will actually RUN, so a value left over from the
+              // other placement reads as that placement's default, never blank.
+              key: "interaction",
+              label: "Interaction",
+              width: "select-md",
+              control: "custom",
+              rendersVia: "GalaxyRuntime",
+              render: ({ settings, set }) => {
+                const inline = proximityIsInline(settings.placement);
+                return (
+                  <select
+                    value={resolveGalaxyInteraction(inline, settings.interaction)}
+                    onChange={(event) => set("interaction", event.target.value)}
+                  >
+                    {galaxyInteractionsFor(inline).map((value) => (
+                      <option key={value} value={value}>
+                        {INTERACTION_LABELS[value]}
+                      </option>
+                    ))}
+                  </select>
+                );
+              }
+            }
+          ]
         ]
       },
       {

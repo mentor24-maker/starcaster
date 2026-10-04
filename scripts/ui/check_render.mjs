@@ -807,7 +807,32 @@ try {
       }
     }
 
-    const result = hoverError || embedError ? null : await sample(
+    /*
+     * Optional KEY PRESS, for behaviour that only exists after the visitor
+     * does something with the keyboard (task 86bc7f5hh — arrow keys turn the
+     * galaxy). `press: { selector, key }` focuses the element and presses the
+     * key once; the sample is taken afterwards, so a series watches what the
+     * press set going. Same rule as hover: an element that cannot be focused
+     * FAILS the contract, never samples the untouched page.
+     */
+    let pressError = null;
+    if (contract.press && !hoverError && !embedError) {
+      try {
+        await page.focus(contract.press.selector, { timeout: 4000 });
+        const focused = await page.evaluate(
+          (selector) => document.activeElement === document.querySelector(selector),
+          contract.press.selector
+        );
+        if (!focused) throw new Error('the element did not take keyboard focus');
+        await page.keyboard.press(contract.press.key);
+      } catch (err) {
+        pressError = `${contract.id}: could not press ${contract.press.key} on \`${contract.press.selector}\` — ` +
+          'the element the contract needs to type into was not there or would not take focus, so the ' +
+          `state it measures was never entered. ${String(err && err.message || err).split('\n')[0]}`;
+      }
+    }
+
+    const result = hoverError || embedError || pressError ? null : await sample(
       target,
       contract.selector,
       contract.read || [],
@@ -824,6 +849,10 @@ try {
 
     if (hoverError) {
       failures.push(hoverError);
+      continue;
+    }
+    if (pressError) {
+      failures.push(pressError);
       continue;
     }
     if (embedError) {

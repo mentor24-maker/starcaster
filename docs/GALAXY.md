@@ -120,6 +120,61 @@ colour reset on the next reload. A test holds both halves.
 Galaxy is skipped in email (`builder-email-render.ts`: an email client draws
 no canvas and runs no script) and never indexed by site search.
 
+## Interaction (task 86bc7f5hh)
+
+One setting, **Interaction**, on the Structure axis after the motion group.
+What it offers depends on **Sits**:
+
+| Sits | Choices | Default |
+|---|---|---|
+| In Place | Drag to Rotate, None | Drag to Rotate |
+| Window Center | Tilt with Cursor, None | Tilt with Cursor |
+
+A stored value the placement does not offer (Drag to Rotate left on a galaxy
+somebody then moved to Window) runs as that placement's default, and the
+normalizer rewrites the key to match — it never deletes it.
+`resolveGalaxyInteraction` in `galaxy-field.ts` is the one rule; the panel's
+select, the runtime and the normalizer all give the same answer.
+
+**Why drag is In Place only.** A Window galaxy is `position: fixed` at
+z-index -9999, behind the whole page, so it can never receive a pointer
+(TractorNav trap 3). A button lifted above the page to fix that would swallow
+every click on every link. So the Window galaxy reads the cursor from the
+document instead, and only In Place gets something to press.
+
+**Drag to Rotate.** A real `<button type="button" class="galaxy-drag-surface">`
+covers the canvas, labelled *"Drag or use the arrow keys to rotate the
+galaxy"*, focusable, with a visible focus ring.
+
+- Drag: yaw += dx × **0.005** rad/px, pitch += dy × 0.005, pitch clamped to
+  **±1.2** so the disc cannot flip onto its back. The pointer is captured on
+  press, so releasing outside the canvas still ends the drag; it is also
+  ended on pointer cancel and window blur.
+- Arrow keys: **0.08** rad per press (Left/Right turn, Up/Down tip), with
+  `preventDefault` so the page does not scroll while the button has focus.
+  Every other key keeps its normal meaning.
+- `touch-action: pan-y` on the button: a vertical swipe on a phone scrolls
+  the page; a horizontal one turns the galaxy.
+
+**Tilt with Cursor.** One passive `mousemove` on the document, coalesced so
+only the newest position is applied, once per frame. The cursor's place in
+the viewport maps to yaw **±0.25** (0.5 rad from the left edge to the right)
+and pitch **±0.15**.
+
+**Easing.** Both set a target; the frame loop eases toward it with damping
+**6** through `easeToward`, which closes the gap by e^(-6·dt) per frame —
+the reference's "(target − current) × 6 × dt" to first order, but it cannot
+overshoot however long a frame was, and lands within 1% in about 0.77 s.
+
+**What adds no listener at all:** Interaction set to None, and reduced
+motion. Under reduced motion the button still renders (the page reads the
+same to a keyboard or screen reader) but pressing it does nothing, because a
+still galaxy has no loop to ease anything.
+
+The angle a frame was drawn at is published on the canvas as
+`data-galaxy-yaw` and `data-galaxy-pitch` (three decimals, written only when
+they change), for the browser checks and a console readout.
+
 ## The rules
 
 1. **Nothing paints a star except `drawGalaxyFrame`.**
@@ -138,7 +193,7 @@ no canvas and runs no script) and never indexed by site search.
 
 ## The browser checks
 
-`scripts/ui/render-contracts.mjs`, five contracts named `galaxy-*`, read
+`scripts/ui/render-contracts.mjs`, nine contracts named `galaxy-*`, read
 through the series reader's `attrs` (added for this module — a canvas's pixels
 are invisible to computed style):
 
@@ -151,6 +206,19 @@ are invisible to computed style):
   different counts;
 - `galaxy-shows-its-poster-under-reduced-motion` — the poster `<img>` renders
   and no canvas beside it.
+- `galaxy-in-place-rotate-has-a-labelled-drag-surface` — the button renders,
+  labelled, `type="button"`, covering the canvas;
+- `galaxy-window-tilt-has-no-drag-surface` — absence, paired with the one
+  above;
+- `galaxy-arrow-key-turns-it` — one real ArrowLeft carries `data-galaxy-yaw`
+  toward -0.08;
+- `galaxy-reduced-motion-keeps-the-button-but-does-not-animate` — under
+  reduced motion the button still takes focus, and the frame counter is flat
+  for 300 ms after an ArrowLeft.
+
+The last two use the harness's `press: { selector, key }` (added for this
+module): it focuses the element, refuses if focus did not land, and presses
+the key before the sample is taken.
 
 `scripts/ui/seed_fixture.mjs` seeds two galaxies for `check:panels`, one
 Window and one In Place, because Height is only visible In Place.

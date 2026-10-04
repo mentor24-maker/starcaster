@@ -800,3 +800,139 @@ export function scaleGalaxyCount(requested: number, areaPx: number, deviceTier: 
   const scaled = Math.round(wanted * areaScale * tierScale);
   return Math.min(wanted, Math.max(Math.min(wanted, GALAXY_COUNT_FLOOR), scaled));
 }
+
+// ---------------------------------------------------------------------------
+// Interaction (Galaxy module 3/6, task 86bc7f5hh)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a visitor turns the galaxy. Which ones are offered depends on where it
+ * sits: `rotate` (drag and arrow keys) needs something to press, so it exists
+ * only In Place; a Window galaxy sits behind the page at z-index -9999 and can
+ * never receive a pointer, so it gets `tilt`, read from the cursor anywhere on
+ * the page (TractorNav trap 3). `none` is valid in both.
+ */
+export const GALAXY_INTERACTIONS = ["rotate", "tilt", "none"] as const;
+export type GalaxyInteraction = (typeof GALAXY_INTERACTIONS)[number];
+
+/** Radians the galaxy turns per pixel dragged — the reference page's value. */
+export const GALAXY_DRAG_RADIANS_PER_PX = 0.005;
+/** Radians one arrow-key press turns it. */
+export const GALAXY_KEY_STEP = 0.08;
+/** Pitch never passes this, so a drag cannot flip the disc over onto its back. */
+export const GALAXY_PITCH_LIMIT = 1.2;
+/** How quickly the view eases toward where it was turned to (per second). */
+export const GALAXY_DAMPING = 6;
+/** Window tilt: the cursor at a viewport edge turns the backdrop this far. */
+export const GALAXY_TILT_YAW = 0.25;
+export const GALAXY_TILT_PITCH = 0.15;
+
+/** The interaction a placement gets when none is stored, or the stored one is not offered there. */
+export function defaultGalaxyInteraction(inline: boolean): GalaxyInteraction {
+  return inline ? "rotate" : "tilt";
+}
+
+/** The interactions the panel offers for a placement, in panel order. */
+export function galaxyInteractionsFor(inline: boolean): GalaxyInteraction[] {
+  return inline ? ["rotate", "none"] : ["tilt", "none"];
+}
+
+/**
+ * The interaction that actually runs. A stored value the placement does not
+ * offer — `rotate` on a Window galaxy, say, after somebody switched Sits —
+ * becomes that placement's default rather than silently doing nothing.
+ */
+export function resolveGalaxyInteraction(inline: boolean, value: string | undefined): GalaxyInteraction {
+  const wanted = String(value ?? "").trim().toLowerCase();
+  return (galaxyInteractionsFor(inline) as string[]).includes(wanted)
+    ? (wanted as GalaxyInteraction)
+    : defaultGalaxyInteraction(inline);
+}
+
+/**
+ * Move `current` toward `target`, frame-rate independent: the gap shrinks by
+ * e^(-damping × dt) each frame. To first order that is the reference's
+ * "(target − current) × damping × dt", but it can never overshoot however
+ * long the frame was, which the linear form does once damping × dt passes 1.
+ */
+export function easeToward(current: number, target: number, damping: number, dtSeconds: number): number {
+  if (!Number.isFinite(target)) return current;
+  if (!Number.isFinite(current)) return target;
+  const k = Number.isFinite(damping) && damping > 0 ? damping : 0;
+  const dt = Number.isFinite(dtSeconds) && dtSeconds > 0 ? dtSeconds : 0;
+  const share = 1 - Math.exp(-k * dt);
+  if (share >= 1) return target;
+  const next = current + (target - current) * share;
+  // Rounding alone can step one unit past the target; the target is the limit.
+  return (target - next) * (target - current) < 0 ? target : next;
+}
+
+/** Where the view is, and where it was turned to. Yaw and pitch in radians. */
+export interface GalaxyView {
+  yaw: number;
+  pitch: number;
+  targetYaw: number;
+  targetPitch: number;
+}
+
+export function createGalaxyView(): GalaxyView {
+  return { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 };
+}
+
+function clampPitch(pitch: number): number {
+  return clamp(pitch, -GALAXY_PITCH_LIMIT, GALAXY_PITCH_LIMIT);
+}
+
+/** A drag of (dx, dy) pixels turns the target; the view eases after it. */
+export function dragGalaxyView(view: GalaxyView, dx: number, dy: number): GalaxyView {
+  if (Number.isFinite(dx)) view.targetYaw += dx * GALAXY_DRAG_RADIANS_PER_PX;
+  if (Number.isFinite(dy)) view.targetPitch = clampPitch(view.targetPitch + dy * GALAXY_DRAG_RADIANS_PER_PX);
+  return view;
+}
+
+/**
+ * One arrow-key press. Returns false for any other key, so the caller only
+ * calls `preventDefault` — and only stops the page scrolling — for the four
+ * keys that turn the galaxy. The directions match a drag: Right is a drag to
+ * the right, Down a drag downward.
+ */
+export function stepGalaxyViewByKey(view: GalaxyView, key: string): boolean {
+  switch (key) {
+    case "ArrowLeft":
+      view.targetYaw -= GALAXY_KEY_STEP;
+      return true;
+    case "ArrowRight":
+      view.targetYaw += GALAXY_KEY_STEP;
+      return true;
+    case "ArrowUp":
+      view.targetPitch = clampPitch(view.targetPitch - GALAXY_KEY_STEP);
+      return true;
+    case "ArrowDown":
+      view.targetPitch = clampPitch(view.targetPitch + GALAXY_KEY_STEP);
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Window tilt: the cursor's place in the viewport sets the target directly —
+ * the left edge is −GALAXY_TILT_YAW, the right edge +GALAXY_TILT_YAW, the top
+ * −GALAXY_TILT_PITCH, the bottom +. A viewport with no size leaves it alone.
+ */
+export function tiltGalaxyView(view: GalaxyView, clientX: number, clientY: number, viewportW: number, viewportH: number): GalaxyView {
+  if (Number.isFinite(clientX) && Number.isFinite(viewportW) && viewportW > 0) {
+    view.targetYaw = (clamp(clientX / viewportW, 0, 1) * 2 - 1) * GALAXY_TILT_YAW;
+  }
+  if (Number.isFinite(clientY) && Number.isFinite(viewportH) && viewportH > 0) {
+    view.targetPitch = (clamp(clientY / viewportH, 0, 1) * 2 - 1) * GALAXY_TILT_PITCH;
+  }
+  return view;
+}
+
+/** Ease the view one frame toward its target. */
+export function stepGalaxyView(view: GalaxyView, dtSeconds: number): GalaxyView {
+  view.yaw = easeToward(view.yaw, view.targetYaw, GALAXY_DAMPING, dtSeconds);
+  view.pitch = easeToward(view.pitch, view.targetPitch, GALAXY_DAMPING, dtSeconds);
+  return view;
+}
