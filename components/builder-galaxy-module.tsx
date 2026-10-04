@@ -312,7 +312,12 @@ export function GalaxyRuntime({
 
     function draw() {
       projectGalaxyField(field, view.yaw, view.pitch, width, height, projection, mix);
-      drawGalaxyFrame(ctx!, { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY }, drawnLook, sprites);
+      drawGalaxyFrame(
+        ctx!,
+        { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY, assembled: mix.converge },
+        drawnLook,
+        sprites
+      );
       frameRef.current += 1;
       canvas!.setAttribute("data-galaxy-frame", String(frameRef.current));
       // The angle it was drawn at, for the browser checks and a console

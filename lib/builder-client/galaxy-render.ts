@@ -22,7 +22,14 @@
  * Task 86bc7f5hg (Galaxy module 2/6). docs/GALAXY.md.
  */
 
-import { GALAXY_DEFAULT_PALETTE, mulberry32, type GalaxyField, type GalaxyProjection } from "./galaxy-field";
+import {
+  GALAXY_DEFAULT_PALETTE,
+  GALAXY_SETTING_DEFAULTS,
+  galaxyCoreRadius,
+  mulberry32,
+  type GalaxyField,
+  type GalaxyProjection
+} from "./galaxy-field";
 
 // ---------------------------------------------------------------------------
 // Look settings
@@ -40,6 +47,9 @@ export const GALAXY_LOOK_DEFAULTS: Record<string, string> = {
   opacity: "100",
   haze: GALAXY_DEFAULT_HAZE,
   hazeStrength: "55",
+  // Galaxy module 5/6 (task 86bc7f5hm): the four-point streak on a flare star.
+  flareSize: "41",
+  flareIntensity: "28",
   w1: "52",
   w2: "15",
   w3: "18",
@@ -59,6 +69,16 @@ export interface GalaxyLook {
   haze: [number, number, number];
   /** 0..1 */
   hazeStrength: number;
+  /** 0..1 — flareSize / 100. 0.41 (the default) draws a streak reaching `GALAXY_FLARE_REACH` field radii. */
+  flareSize: number;
+  /** 0..1 — how bright a flare star's streak is. */
+  flareIntensity: number;
+  /** 0..1 — how deep a star's twinkle dips; the engine reads the same setting for how fast. */
+  twinkle: number;
+  /** 0..100 — the engine's Core Size, which sizes the core glow. */
+  coreSize: number;
+  /** 0..1 — the engine's Core Stars, which sets the core glow's brightness. */
+  coreStrength: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -67,7 +87,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function readPercent(bag: Record<string, string | undefined>, key: string): number {
   const parsed = Number.parseFloat(String(bag[key] ?? ""));
-  const fallback = Number.parseFloat(GALAXY_LOOK_DEFAULTS[key] ?? "0");
+  const fallback = Number.parseFloat(GALAXY_LOOK_DEFAULTS[key] ?? GALAXY_SETTING_DEFAULTS[key] ?? "0");
   return clamp(Number.isFinite(parsed) ? parsed : fallback, 0, 100);
 }
 
@@ -105,7 +125,12 @@ export function readGalaxyLook(bag: Record<string, string | undefined> = {}): Ga
     glow: readPercent(bag, "glow") / 100,
     opacity: readPercent(bag, "opacity") / 100,
     haze: parseHexColour(bag.haze) ?? (parseHexColour(GALAXY_DEFAULT_HAZE) as [number, number, number]),
-    hazeStrength: readPercent(bag, "hazeStrength") / 100
+    hazeStrength: readPercent(bag, "hazeStrength") / 100,
+    flareSize: readPercent(bag, "flareSize") / 100,
+    flareIntensity: readPercent(bag, "flareIntensity") / 100,
+    twinkle: readPercent(bag, "twinkle") / 100,
+    coreSize: readPercent(bag, "coreSize"),
+    coreStrength: readPercent(bag, "coreStrength") / 100
   };
 }
 
@@ -158,37 +183,41 @@ export function assignGalaxyColours(count: number, weights: number[], seed: numb
  * the panel shows "Custom" until the values match a preset again.
  *
  * Astra is the reference picture — the engine's defaults and the reference
- * page's palette. The other three exist so the control means something; their
- * tuning against the poster is slice 5's job (task 86bc7f5hm).
+ * page's palette. Classic, Nebula and Subtle follow the plan's brief for
+ * each (task 86bc7f5hm): docs/GALAXY.md, "Look", has the table.
  */
 export const GALAXY_PRESETS: Record<string, Record<string, string>> = {
+  // The reference picture: the engine's defaults and the reference page's palette.
   astra: {
     particleCount: "4000", arms: "2", turns: "2.35", armWidth: "40", coreSize: "12", coreStrength: "66",
     flareStars: "7", starSize: "2", spinSpeed: "10", differential: "50", flowSpeed: "30", twinkle: "60",
     c1: "#F5F6FB", c2: "#6DCBF4", c3: "#7AB1FE", c4: "#F87915", c5: "#FA994C",
     w1: "52", w2: "15", w3: "18", w4: "7", w5: "8",
-    haze: "#23435F", hazeStrength: "55", glow: "70", opacity: "100"
+    haze: "#23435F", hazeStrength: "55", glow: "70", opacity: "100", flareSize: "41", flareIntensity: "28"
   },
+  // A textbook spiral: three looser arms, white and pale blue only, a bare black sky.
   classic: {
-    particleCount: "3500", arms: "2", turns: "1.5", armWidth: "30", coreSize: "18", coreStrength: "80",
-    flareStars: "5", starSize: "2", spinSpeed: "8", differential: "40", flowSpeed: "20", twinkle: "40",
-    c1: "#FFF6E5", c2: "#FFD9A0", c3: "#A8C8FF", c4: "#FFB070", c5: "#FFFFFF",
-    w1: "50", w2: "20", w3: "15", w4: "10", w5: "5",
-    haze: "#3A2A1A", hazeStrength: "40", glow: "60", opacity: "100"
+    particleCount: "5000", arms: "3", turns: "1.6", armWidth: "35", coreSize: "14", coreStrength: "70",
+    flareStars: "5", starSize: "1.8", spinSpeed: "8", differential: "40", flowSpeed: "25", twinkle: "45",
+    c1: "#FFFFFF", c2: "#CFE3FF", c3: "#7AB1FE", c4: "#F87915", c5: "#FA994C",
+    w1: "60", w2: "40", w3: "0", w4: "0", w5: "0",
+    haze: "#23435F", hazeStrength: "0", glow: "60", opacity: "100", flareSize: "36", flareIntensity: "24"
   },
+  // Two wide, soft arms in purples over a strong violet haze.
   nebula: {
-    particleCount: "4500", arms: "3", turns: "2", armWidth: "70", coreSize: "10", coreStrength: "50",
-    flareStars: "9", starSize: "2.4", spinSpeed: "6", differential: "60", flowSpeed: "35", twinkle: "70",
-    c1: "#F5E6FF", c2: "#C084FC", c3: "#F472B6", c4: "#60A5FA", c5: "#FDE68A",
-    w1: "40", w2: "20", w3: "20", w4: "12", w5: "8",
-    haze: "#4C1D95", hazeStrength: "70", glow: "85", opacity: "100"
+    particleCount: "3000", arms: "2", turns: "2", armWidth: "75", coreSize: "16", coreStrength: "55",
+    flareStars: "6", starSize: "2.4", spinSpeed: "6", differential: "50", flowSpeed: "25", twinkle: "70",
+    c1: "#B388FF", c2: "#7AB1FE", c3: "#F5F6FB", c4: "#F87915", c5: "#FA994C",
+    w1: "45", w2: "30", w3: "25", w4: "0", w5: "0",
+    haze: "#1B1040", hazeStrength: "90", glow: "85", opacity: "100", flareSize: "48", flareIntensity: "30"
   },
+  // A quiet background: fewer, smaller, dimmer stars, turning slowly.
   subtle: {
-    particleCount: "2500", arms: "2", turns: "2.35", armWidth: "45", coreSize: "10", coreStrength: "50",
-    flareStars: "3", starSize: "1.4", spinSpeed: "4", differential: "30", flowSpeed: "15", twinkle: "30",
+    particleCount: "1500", arms: "2", turns: "2.35", armWidth: "45", coreSize: "10", coreStrength: "45",
+    flareStars: "3", starSize: "1.6", spinSpeed: "4", differential: "30", flowSpeed: "15", twinkle: "30",
     c1: "#F5F6FB", c2: "#6DCBF4", c3: "#7AB1FE", c4: "#F87915", c5: "#FA994C",
     w1: "52", w2: "15", w3: "18", w4: "7", w5: "8",
-    haze: "#23435F", hazeStrength: "30", glow: "40", opacity: "60"
+    haze: "#23435F", hazeStrength: "30", glow: "40", opacity: "60", flareSize: "30", flareIntensity: "16"
   }
 };
 
@@ -247,6 +276,118 @@ export interface GalaxySprites {
   canvases: (GalaxySpriteCanvas | null)[][];
   /** The halo reach the sprites were painted with, in core radii. */
   reach: number;
+  /**
+   * The flare streak: one horizontal line and one vertical, in the flare
+   * stars' colour (slot 0). Null where a context could not be had — flare
+   * stars are then drawn as round stars, nothing more.
+   */
+  flare: { horizontal: GalaxySpriteCanvas; vertical: GalaxySpriteCanvas } | null;
+}
+
+// ---------------------------------------------------------------------------
+// Flare streaks
+// ---------------------------------------------------------------------------
+
+/**
+ * How far a flare streak reaches from its star at flareSize 41 (the
+ * default), in FIELD radii — 0.085 of the galaxy's radius, so the streak
+ * keeps its proportion from the Builder card to a full window. Other sizes
+ * scale linearly: flareSize 82 reaches twice as far.
+ */
+export const GALAXY_FLARE_REACH = 0.085;
+/** The flareSize the reach above is quoted at. */
+export const GALAXY_FLARE_REACH_AT = 41;
+/** The streak's cross-section: a gaussian with this standard deviation, in CSS pixels. */
+export const GALAXY_FLARE_SIGMA_PX = 0.7;
+/** The streak sprite's thickness in CSS pixels — six sigma, so the gaussian has faded to nothing at its edges. */
+export const GALAXY_FLARE_THICKNESS_PX = 6 * GALAXY_FLARE_SIGMA_PX;
+/** The sprite's length in CSS pixels before `drawImage` stretches it to the streak's reach. */
+const FLARE_SPRITE_LENGTH_PX = 128;
+
+/** Streak reach in CSS pixels, for a galaxy drawn at `scale` px per field radius. */
+export function galaxyFlareReachPx(flareSize: number, scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) return 0;
+  const size = clamp(Number.isFinite(flareSize) ? flareSize : 0, 0, 1) * 100;
+  return GALAXY_FLARE_REACH * (size / GALAXY_FLARE_REACH_AT) * scale;
+}
+
+/**
+ * Peak opacity of a streak at its centre. flareIntensity 28 (the default)
+ * gives 0.7, and 40 and above saturate — the streak is drawn with
+ * `"lighter"` over everything else, so past full opacity there is nothing
+ * left to add.
+ */
+export function galaxyFlareAlpha(flareIntensity: number): number {
+  return clamp((Number.isFinite(flareIntensity) ? flareIntensity : 0) * 2.5, 0, 1);
+}
+
+/**
+ * The brightness of one streak pixel: `u` runs -1..1 along the line (0 at
+ * the star), `d` is the distance across it in CSS pixels. A gaussian across,
+ * and a fall-off along that is steep near the star and long in the tail,
+ * which is what reads as a diffraction spike rather than a plus sign.
+ */
+export function galaxyFlarePixel(u: number, d: number): number {
+  const along = Math.pow(Math.max(0, 1 - Math.abs(u)), 2.2);
+  const across = Math.exp(-(d * d) / (2 * GALAXY_FLARE_SIGMA_PX * GALAXY_FLARE_SIGMA_PX));
+  return along * across;
+}
+
+/**
+ * Paint the two streak sprites. Pixel by pixel through ImageData, because a
+ * line that is a gaussian across and a power curve along is two gradients
+ * multiplied, which Canvas 2D has no one call for. It is 128 × 5 pixels,
+ * painted once per settings change, never per frame.
+ *
+ * Two sprites rather than one plus-shaped one so `drawImage` can stretch
+ * each ALONG its length only: the streak's reach follows the canvas size,
+ * and its thickness stays a hairline at every size.
+ */
+export function buildGalaxyFlareSprite(
+  colour: [number, number, number],
+  pixelRatio: number,
+  makeCanvas: (width: number, height: number) => GalaxySpriteCanvas
+): GalaxySprites["flare"] {
+  const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
+  const length = Math.max(8, Math.round(FLARE_SPRITE_LENGTH_PX * ratio));
+  const thickness = Math.max(3, Math.round(GALAXY_FLARE_THICKNESS_PX * ratio) | 1);
+  const paint = (width: number, height: number, horizontal: boolean): GalaxySpriteCanvas | null => {
+    const canvas = makeCanvas(width, height);
+    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | null;
+    if (!ctx || typeof ctx.createImageData !== "function" || typeof ctx.putImageData !== "function") return null;
+    let image: ImageData | undefined;
+    try {
+      image = ctx.createImageData(width, height);
+    } catch {
+      return null;
+    }
+    // The same "existing is not working" rule as galaxyRadialGradient.
+    if (!image || !image.data || image.data.length < width * height * 4) return null;
+    const [r, g, b] = colour;
+    const midLength = (length - 1) / 2;
+    const midThick = (thickness - 1) / 2;
+    for (let py = 0; py < height; py++) {
+      for (let px = 0; px < width; px++) {
+        const along = horizontal ? px : py;
+        const across = horizontal ? py : px;
+        const value = galaxyFlarePixel((along - midLength) / midLength, (across - midThick) / ratio);
+        const o = (py * width + px) * 4;
+        image.data[o] = r;
+        image.data[o + 1] = g;
+        image.data[o + 2] = b;
+        image.data[o + 3] = Math.round(255 * value);
+      }
+    }
+    try {
+      ctx.putImageData(image, 0, 0);
+    } catch {
+      return null;
+    }
+    return canvas;
+  };
+  const horizontal = paint(length, thickness, true);
+  const vertical = paint(thickness, length, false);
+  return horizontal && vertical ? { horizontal, vertical } : null;
 }
 
 /**
@@ -323,7 +464,7 @@ export function buildGalaxySprites(
       return canvas;
     })
   );
-  return { canvases, reach };
+  return { canvases, reach, flare: buildGalaxyFlareSprite(look.colours[0], ratio, makeCanvas) };
 }
 
 /** The nearest size class for a radius in CSS pixels. */
@@ -347,8 +488,41 @@ export function galaxySizeClass(radius: number): number {
 /** The page's backdrop under the haze — the reference page is black. */
 export const GALAXY_BACKDROP = "#000000";
 
-/** How deep a twinkle dips: at the bottom of its cycle a star keeps this share of its brightness. */
-const TWINKLE_FLOOR = 0.45;
+/**
+ * A star's brightness multiplier at this twinkle phase: 1 at the top of its
+ * cycle, and down to 1 − twinkle at the bottom — so Twinkle 0 is a still sky
+ * and Twinkle 100 lets a star go dark for an instant. The plan's formula,
+ * base × (1 − twinkle × 0.5 × (1 + sin(phase))).
+ */
+export function galaxyTwinkle(twinkle: number, phase: number): number {
+  const depth = clamp(Number.isFinite(twinkle) ? twinkle : 0, 0, 1);
+  return 1 - depth * 0.5 * (1 + Math.sin(Number.isFinite(phase) ? phase : 0));
+}
+
+/** The core glow reaches this many core radii — wide enough to read as light around the core, not a disc. */
+export const GALAXY_CORE_GLOW_REACH = 2.6;
+/** The core glow is never smaller than this many field radii, so Core Size 0 still has a faint centre. */
+export const GALAXY_CORE_GLOW_MIN = 0.05;
+/** Peak opacity of the core glow at Core Stars 100. */
+export const GALAXY_CORE_GLOW_PEAK = 0.85;
+
+/** The core glow's radius in CSS pixels, for a galaxy drawn at `scale` px per field radius. */
+export function galaxyCoreGlowRadiusPx(coreSize: number, scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) return 0;
+  return Math.max(GALAXY_CORE_GLOW_MIN, galaxyCoreRadius(coreSize)) * GALAXY_CORE_GLOW_REACH * scale;
+}
+
+/**
+ * The core glow's colour: the near-white slot warmed a third of the way
+ * toward the last (the reference's pale orange), because the reference's
+ * core is a warm white, not a blue one.
+ */
+export function galaxyCoreGlowColour(look: GalaxyLook): [number, number, number] {
+  const [r1, g1, b1] = look.colours[0];
+  const [r2, g2, b2] = look.colours[look.colours.length - 1];
+  const mix = (a: number, b: number) => Math.round(a + (b - a) / 3);
+  return [mix(r1, r2), mix(g1, g2), mix(b1, b2)];
+}
 
 export interface GalaxyFrameInput {
   field: GalaxyField;
@@ -362,6 +536,12 @@ export interface GalaxyFrameInput {
   /** Nudge from the centre, CSS pixels; positive Y moves the galaxy UP. */
   offsetX?: number;
   offsetY?: number;
+  /**
+   * 0..1 — how assembled the galaxy is (the intro's converge). The core glow
+   * scales by it, so the centre lights up as the stars arrive rather than
+   * glowing alone in an empty sky. Left out, 1.
+   */
+  assembled?: number;
 }
 
 /** The subset of CanvasRenderingContext2D a frame uses, so a test can pass a recorder. */
@@ -371,8 +551,9 @@ export type GalaxyDrawContext = Pick<
 >;
 
 /**
- * Paint one frame: backdrop, haze, then every star as a sprite blended with
- * `"lighter"`. Returns how many stars were actually drawn (stars entirely off
+ * Paint one frame: backdrop, haze, the core glow, then every star as a
+ * sprite blended with `"lighter"` — a flare star's streak drawn just under
+ * its round sprite. Returns how many stars were actually drawn (stars entirely off
  * the canvas are skipped). Both the card and the runtime call this, and
  * nothing else in the module paints a star.
  */
@@ -409,7 +590,31 @@ export function drawGalaxyFrame(
 
   if (look.opacity <= 0) return 0;
   ctx.globalCompositeOperation = "lighter";
+
+  // The core glow: one gradient per frame, filled over its own box only.
+  const assembled = clamp(Number.isFinite(input.assembled) ? (input.assembled as number) : 1, 0, 1);
+  const coreAlpha = GALAXY_CORE_GLOW_PEAK * look.coreStrength * look.opacity * assembled;
+  const coreRadius = galaxyCoreGlowRadiusPx(look.coreSize, projection.scale);
+  if (coreAlpha > 0 && coreRadius > 0) {
+    const [kr, kg, kb] = galaxyCoreGlowColour(look);
+    const core = galaxyRadialGradient(ctx, cx, cy, 0, cx, cy, coreRadius);
+    if (core) {
+      core.addColorStop(0, `rgba(${kr},${kg},${kb},${coreAlpha.toFixed(3)})`);
+      core.addColorStop(0.18, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.55).toFixed(3)})`);
+      core.addColorStop(0.5, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.14).toFixed(3)})`);
+      core.addColorStop(1, `rgba(${kr},${kg},${kb},0)`);
+      ctx.fillStyle = core;
+      ctx.fillRect(cx - coreRadius, cy - coreRadius, coreRadius * 2, coreRadius * 2);
+    }
+  }
+
+  const flare = sprites.flare;
+  const flareReach = galaxyFlareReachPx(look.flareSize, projection.scale);
+  const flareAlpha = galaxyFlareAlpha(look.flareIntensity);
+  const drawFlares = Boolean(flare) && flareReach > 0 && flareAlpha > 0;
+  const flareThickness = GALAXY_FLARE_THICKNESS_PX;
   const { size, brightness, twinklePhase } = field;
+  const isFlare = field.flare;
   const px = projection.x;
   const py = projection.y;
   const n = Math.min(projection.count, field.count, colourOf.length);
@@ -423,8 +628,13 @@ export function drawGalaxyFrame(
     if (x + half < 0 || y + half < 0 || x - half > width || y - half > height) continue;
     const sprite = sprites.canvases[colourOf[i]]?.[galaxySizeClass(radius)];
     if (!sprite) continue;
-    const twinkle = TWINKLE_FLOOR + (1 - TWINKLE_FLOOR) * (0.5 + 0.5 * Math.sin(twinklePhase[i]));
-    ctx.globalAlpha = clamp(brightness[i] * twinkle * look.opacity, 0, 1);
+    const shine = clamp(brightness[i] * galaxyTwinkle(look.twinkle, twinklePhase[i]) * look.opacity, 0, 1);
+    if (drawFlares && isFlare[i] === 1) {
+      ctx.globalAlpha = clamp(shine * flareAlpha, 0, 1);
+      ctx.drawImage(flare!.horizontal as unknown as CanvasImageSource, x - flareReach, y - flareThickness / 2, flareReach * 2, flareThickness);
+      ctx.drawImage(flare!.vertical as unknown as CanvasImageSource, x - flareThickness / 2, y - flareReach, flareThickness, flareReach * 2);
+    }
+    ctx.globalAlpha = shine;
     ctx.drawImage(sprite as unknown as CanvasImageSource, x - half, y - half, half * 2, half * 2);
     drawn += 1;
   }
