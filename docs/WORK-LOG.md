@@ -1,3 +1,17 @@
+## 2026-10-04 — Acquire YouTube says only "fetch failed" when the Mac Mini is offline, and nothing warns that video downloads have stopped (#759)
+
+When the video download helper on the Mac Mini can't be reached, the Acquire
+screen used to say just "fetch failed" — which is what Dane saw on 4 October,
+after the Mini's Tailscale tunnel (the link that lets the live site reach it)
+had quietly been off for 24 days. It now says "Couldn't reach the download
+helper on the Mac Mini — it may be offline, or its Tailscale tunnel may be
+down", with the technical reason in brackets. And a new check,
+`npm run worker-watch`, knocks on the helper's public address every ten
+minutes from whichever machine is awake; if nobody answers, it posts on the bus
+(once every six hours while it stays down) and posts once more when it comes
+back, so a dead tunnel is noticed in minutes instead of whenever someone next
+tries a download.
+
 ## 2026-10-03 — Galaxy module 4/6 — the intro: stars converge into the spiral on load and disperse as the visitor scrolls (#755)
 
 The galaxy now makes an entrance and an exit. When a page loads, its stars
