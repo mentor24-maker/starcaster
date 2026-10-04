@@ -803,6 +803,8 @@ export const modulePaletteItems: ModulePaletteItem[] = [
       // … and the reference picture's look.
       glow: "70",
       opacity: "100",
+      flareSize: "41",
+      flareIntensity: "28",
       haze: "#23435F",
       hazeStrength: "55",
       c1: "#F5F6FB",

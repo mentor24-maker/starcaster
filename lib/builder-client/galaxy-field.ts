@@ -292,6 +292,9 @@ const FLOW_TRIP_SECONDS_AT_MAX = 20;
  * has none.
  */
 const DIFFERENTIAL_RIM_GAIN = 2;
+/** A flare star's twinkle phase advances at this share of everyone else's. */
+export const GALAXY_FLARE_TWINKLE_RATE = 0.5;
+
 /** twinkle 100 cycles a star's twinkle phase once per second. */
 const TWINKLE_RADIANS_PER_SECOND_AT_MAX = 2 * Math.PI;
 const TWO_PI = 2 * Math.PI;
@@ -650,8 +653,9 @@ function foldTurn(angle: number): number {
  * Flare stars are pinned and the core cluster is already home, so neither
  * streams; both turn with the pattern.
  *
- * Twinkle: the phase advances at twinkle × 1 Hz and is folded by a modulo,
- * so a large dt cannot carry it past one turn.
+ * Twinkle: the phase advances at twinkle × 1 Hz (flare stars at half that,
+ * `GALAXY_FLARE_TWINKLE_RATE`) and is folded by a modulo, so a large dt
+ * cannot carry it past one turn.
  *
  * The caller clamps `dt` (plan rule 5, 50 ms); this function only refuses a
  * non-finite or negative one.
@@ -693,7 +697,10 @@ export function stepGalaxyField(field: GalaxyField, dtSeconds: number, settings:
     const rr = radius[i];
     x[i] = rr * Math.cos(a);
     y[i] = rr * Math.sin(a);
-    twinklePhase[i] = foldTurn(twinklePhase[i] + twinkleStep);
+    // Flare stars twinkle at half the rate, so they read as steady beacons
+    // among the shimmer rather than as the brightest flickers on the page
+    // (Galaxy module 5/6, task 86bc7f5hm).
+    twinklePhase[i] = foldTurn(twinklePhase[i] + (flare[i] === 1 ? twinkleStep * GALAXY_FLARE_TWINKLE_RATE : twinkleStep));
   }
   return field;
 }

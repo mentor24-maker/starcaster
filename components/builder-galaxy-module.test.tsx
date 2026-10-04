@@ -45,7 +45,7 @@ describe("the galaxy normalizer block (DOCTRINE §5.27)", () => {
   });
 
   it("fills the look numbers with the renderer's own defaults", () => {
-    for (const key of ["glow", "opacity", "hazeStrength", "w1", "w2", "w3", "w4", "w5"]) {
+    for (const key of ["glow", "opacity", "hazeStrength", "flareSize", "flareIntensity", "w1", "w2", "w3", "w4", "w5"]) {
       expect(filled[key], key).toBe(GALAXY_LOOK_DEFAULTS[key]);
     }
   });

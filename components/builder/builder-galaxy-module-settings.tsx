@@ -386,6 +386,25 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
             slider("glow", "Glow", { min: 0, max: 100, step: 1, suffix: "%" }),
             slider("opacity", "Opacity", { min: 0, max: 100, step: 1, suffix: "%" })
           ],
+          /*
+           * The four-point streak on each flare star (Galaxy module 5/6).
+           * Hidden while there are no flare stars to put it on.
+           */
+          [
+            slider("flareSize", "Flare Size", {
+              min: 0,
+              max: 100,
+              step: 1,
+              visibleWhen: (settings) => (settings.flareStars || GALAXY_SETTING_DEFAULTS.flareStars) !== "0"
+            }),
+            slider("flareIntensity", "Flare Intensity", {
+              min: 0,
+              max: 100,
+              step: 1,
+              suffix: "%",
+              visibleWhen: (settings) => (settings.flareStars || GALAXY_SETTING_DEFAULTS.flareStars) !== "0"
+            })
+          ],
           [
             {
               key: "frameNote",

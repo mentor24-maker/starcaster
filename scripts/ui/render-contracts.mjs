@@ -3922,6 +3922,93 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * Galaxy module 5/6 (task 86bc7f5hm): two RENDER DIFFERENTIALS read off the
+   * canvas's own pixels (`series.luma`, the mean luminance of a 64×64 sample).
+   * Each pair is two In Place galaxies identical but for one setting, under
+   * reduced motion so each draws exactly one still, fully assembled frame —
+   * no twinkle phase or intro moment can make the two differ by accident.
+   */
+  {
+    id: 'galaxy-glow-brightens-the-canvas',
+    why:
+      'Glow is how far each star\'s halo reaches, and it is drawn into pre-built sprites — the ' +
+      'classic place for a slider to go dead while the panel still moves, since no attribute or style ' +
+      'changes either way. Glow 0 against Glow 100 must change the canvas\'s brightness.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', glow: '0' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', glow: '100' } },
+      ],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      luma: true,
+      selectors: {
+        low: '.builder-preview-module:nth-child(1 of .builder-preview-module) canvas',
+        high: '.builder-preview-module:nth-child(2 of .builder-preview-module) canvas',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      const low = frame?.low?.luma;
+      const high = frame?.high?.luma;
+      if (!Number.isFinite(low) || !Number.isFinite(high)) {
+        return `the two canvases' brightness could not be read (glow 0: ${low}, glow 100: ${high}) — nothing was compared.`;
+      }
+      if (!(high > low * 1.15 && high - low > 0.5)) {
+        return `mean canvas luminance was ${low.toFixed(2)} at Glow 0 and ${high.toFixed(2)} at Glow 100 — ` +
+          'Glow is not reaching the picture.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-flare-stars-brighten-the-canvas',
+    why:
+      'Seven flare stars with four-point streaks are the reference picture\'s signature, and a streak ' +
+      'is pixels on a canvas, which no style or attribute can see. Flare Stars 0 against 7 must change ' +
+      'the canvas\'s brightness.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '0' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '7' } },
+      ],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      luma: true,
+      selectors: {
+        none: '.builder-preview-module:nth-child(1 of .builder-preview-module) canvas',
+        seven: '.builder-preview-module:nth-child(2 of .builder-preview-module) canvas',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      const none = frame?.none?.luma;
+      const seven = frame?.seven?.luma;
+      if (!Number.isFinite(none) || !Number.isFinite(seven)) {
+        return `the two canvases' brightness could not be read (0 flares: ${none}, 7 flares: ${seven}) — nothing was compared.`;
+      }
+      if (!(Math.abs(seven - none) > 0.05)) {
+        return `mean canvas luminance was ${none.toFixed(3)} with no flare stars and ${seven.toFixed(3)} with ` +
+          'seven — Flare Stars is not reaching the picture.';
+      }
+      return null;
+    },
+  },
+
   {
     id: 'galaxy-shows-its-poster-under-reduced-motion',
     why:
