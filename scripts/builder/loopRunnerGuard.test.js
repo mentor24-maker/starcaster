@@ -150,8 +150,13 @@ test('a pass that stood down or was blocked STILL beats, and says which it was',
   // run.
   assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--blocked /,
     'the blocked branch beats, with the blocked flag');
-  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 3,
-    'exactly three beat calls: a pass that worked, one a limit closed, one that could not work at all');
+  // And the fourth (task 86bccr85e): a pass the time limit stopped beats as
+  // timed out, carrying the guard's sentence naming the ticket — never as
+  // blocked, whose text sends Dane to sign in on a machine that is signed in.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--timed-out "\$\{ANSWER_WHY/,
+    'the timed-out branch beats with the timed-out flag and the guard\'s own reason');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 4,
+    'exactly four beat calls: worked, a limit closed it, could not work at all, ran out of time');
 });
 
 test('THE ROUND-2 DEFECT: the runner consults the EXIT CODE, and only asks the guard when it is non-zero', () => {
@@ -227,8 +232,8 @@ test('the installer speaks bash 3.2 — the bash every Mac actually ships', () =
 test('the delay CLI answers "<kind> <seconds>", scopes to the last pass, and never kills the runner', () => {
   const src = withoutComments(read('scripts/loop_runner_delay.mjs'));
   assert.match(src, /scopeToLastPass/, 'unscoped, a stale limit line backs off every healthy pass forever');
-  assert.match(src, /console\.log\(`\$\{kind\} \$\{seconds\}`\)/,
-    'two fields: the runner has to record WHAT the pass did, not only how long to sleep');
+  assert.match(src, /`\$\{kind\} \$\{seconds\}`/,
+    'kind and seconds first: the runner has to record WHAT the pass did, not only how long to sleep');
   // Every failure path answers, and answers `blocked 0` — the runner keeps its
   // normal pacing, and a pass this script could not read about is never
   // recorded as a healthy one.
@@ -354,4 +359,87 @@ test('the exit code is read back off the runner\'s own END banner when none is g
   assert.equal(guard.exitCodeFromLog(REAL_PASS_DISCUSSING_LIMITS), 0);
   assert.equal(guard.exitCodeFromLog('a log with no banner in it'), null,
     'and "no banner" is its own answer, not a zero');
+});
+
+// ---------------------------------------------------------------------------
+// Task 86bccr85e — a pass the TIME LIMIT stopped is not a locked door.
+//
+// On 2026-10-04 every build pass on the Mini was killed at two hours (exit
+// 124) while re-running one failing render check. Exit 124 named neither a
+// limit nor a login, so it fell through to `blocked`, and the heartbeat told
+// Dane to go and sign in on a machine that was signed in and working.
+// ---------------------------------------------------------------------------
+
+/** The shape run_with_time_limit.sh leaves in the log when it stops a pass. */
+const REAL_TIMED_OUT_PASS = [
+  '',
+  '===== 2026-10-04 10:00:01 START /loop-build =====',
+  '[run_with_time_limit] 2026-10-04 12:00:01 stopped after 7200s — still running at the limit, which a working pass never reaches: claude -p /loop-build',
+  '===== 2026-10-04 12:00:32 END /loop-build (exit 124 — not a verdict; the pass\'s report above is) =====',
+].join('\n');
+
+test('exit 124 is TIMED OUT — never blocked, and it does not back off', () => {
+  const out = guard.passOutcome({ text: guard.scopeToLastPass(REAL_TIMED_OUT_PASS), exitCode: 124, nowMs: Date.now() });
+  assert.equal(out.kind, guard.PASS_TIMED_OUT, 'blocked renders as an expired login — the false sentence this ticket is about');
+  assert.equal(out.sleepSeconds, 0, 'the next pass is the retry; a timeout is not a limit window');
+  assert.doesNotMatch(`${out.why} ${out.reason}`, /login|sign in/i);
+});
+
+test('the exit code is read back off the END banner too, so the by-hand reading agrees', () => {
+  const scoped = guard.scopeToLastPass(REAL_TIMED_OUT_PASS);
+  assert.equal(guard.exitCodeFromLog(scoped), guard.TIME_LIMIT_EXIT);
+});
+
+test('the other direction: an authentication failure is still BLOCKED, even on exit 124', () => {
+  // A login that died mid-pass and left the session hanging must still send
+  // somebody to sign in — the timeout branch may never swallow it.
+  const both = `${REAL_TIMED_OUT_PASS}\nFailed to authenticate: OAuth session expired and could not be refreshed`;
+  const out = guard.passOutcome({ text: both, exitCode: 124, nowMs: Date.now() });
+  assert.equal(out.kind, guard.PASS_BLOCKED);
+  assert.match(out.why, /login/i);
+  // And a plain non-zero exit with no cause named is still blocked — only 124 moved.
+  assert.equal(guard.passOutcome({ text: 'boom', exitCode: 1, nowMs: Date.now() }).kind, guard.PASS_BLOCKED);
+});
+
+test('a limit phrase in a timed-out pass is the pass writing about one — it does not stand down', () => {
+  const text = `${REAL_TIMED_OUT_PASS}\nthe guard matches "hit your session limit" in prose`;
+  assert.notEqual(guard.limitDelay({ text, nowMs: Date.now() }), null, 'the fixture must still match LIMIT_LINE');
+  assert.equal(guard.passOutcome({ text, exitCode: 124, nowMs: Date.now() }).kind, guard.PASS_TIMED_OUT);
+});
+
+test('the timed-out sentence names the limit and the ticket, and says so when it cannot', () => {
+  const named = guard.timedOutWhy({ limitSeconds: 7200, ticket: '86bccr85e' });
+  assert.match(named, /full 2h time limit/);
+  assert.match(named, /ticket 86bccr85e \(https:\/\/app\.clickup\.com\/t\/86bccr85e\)/);
+  assert.doesNotMatch(named, /sign in|needs a human/i);
+  const unnamed = guard.timedOutWhy({ limitSeconds: 5400, ticketWhy: 'it had not claimed one' });
+  assert.match(unnamed, /full 90m time limit/);
+  assert.match(unnamed, /could not be named \(it had not claimed one\)/);
+});
+
+test('the delay CLI answers "timed-out 0 <why>" for a stopped pass, on one line', () => {
+  const { spawnSync } = require('node:child_process');
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loop-timeout-'));
+  try {
+    const log = path.join(dir, 'loop-build.log');
+    fs.writeFileSync(log, REAL_TIMED_OUT_PASS);
+    const run = spawnSync(process.execPath, [
+      path.join(REPO, 'scripts', 'loop_runner_delay.mjs'), log, '--exit', '124', '--skill', 'loop-build', '--limit', '7200',
+    ], { encoding: 'utf8' });
+    assert.equal(run.status, 0);
+    const line = run.stdout.trim();
+    assert.equal(line.split('\n').length, 1, 'the runner reads exactly one line');
+    assert.match(line, /^timed-out 0 the pass ran the full 2h time limit without finishing/);
+    // Whichever ticket the claim marker on this checkout names, the sentence
+    // either names one or says why it could not — never neither.
+    assert.match(line, /working on ticket \S+|could not be named \(/);
+    // BREAK TEST: the same log with exit 1 is still blocked, with no third field.
+    const blocked = spawnSync(process.execPath, [
+      path.join(REPO, 'scripts', 'loop_runner_delay.mjs'), log, '--exit', '1',
+    ], { encoding: 'utf8' });
+    assert.equal(blocked.stdout.trim(), 'blocked 0');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -2047,3 +2047,142 @@ test('the --stale-check TERMINAL summary names a blocked lane as a login, not a 
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Task 86bccr85e — TIMED OUT is not BLOCKED.
+//
+// On 2026-10-04 `npm run heartbeat` called loop-build BLOCKED — "an expired
+// login, most likely … somebody signs in on that machine". The Mini was signed
+// in; every pass was being stopped at the two-hour limit while stuck on one
+// failing render check. These tests hold both directions: a timeout never
+// renders as a login, and a login still does.
+// ---------------------------------------------------------------------------
+
+const TIMED_OUT_WHY = 'the pass ran the full 2h time limit without finishing — usually a gate or test it cannot '
+  + 'get past, not a login; it was working on ticket 86bxyz (https://app.clickup.com/t/86bxyz)';
+
+const timedOutRow = (overrides = {}) => blockedRow({
+  role: 'bus-relay', kind: hb.BEAT_TIMED_OUT, why: TIMED_OUT_WHY, ...overrides,
+});
+
+const timedOutLocalEntry = (role, sinceIso) => {
+  const e = blockedLocalEntry(role, sinceIso);
+  e.beat.beat.kind = hb.BEAT_TIMED_OUT;
+  e.beat.beat.why = TIMED_OUT_WHY;
+  return e;
+};
+
+const SIGN_IN = /sign(s)? (Claude Code )?in|expired login|needs a human|\/login/i;
+
+test('a TIMED OUT row alarms like a block but names the ticket, never a login', () => {
+  const r = hb.rollCallReport({ rows: [timedOutRow({ standingDownSince: agoHours(6) })], now: NOW, roles: ROLES });
+  assert.equal(r.blocked.length, 1, 'a lane that never finishes ships nothing — it alarms from the first one');
+  assert.equal(r.blocked[0].timedOut, true);
+  assert.equal(r.silent, true);
+  assert.match(r.blocked[0].reason, /every pass for 6h 0m ran out of time/);
+  assert.match(r.blocked[0].reason, /ticket 86bxyz/);
+  assert.doesNotMatch(r.blocked[0].reason, SIGN_IN);
+  // BREAK TEST, other direction: the same row as a real block still says it.
+  const locked = hb.rollCallReport({ rows: [blockedRow({ role: 'bus-relay' })], now: NOW, roles: ROLES });
+  assert.equal(locked.blocked[0].timedOut, false);
+  assert.match(locked.blocked[0].reason, /will not clear\s+on its own/);
+});
+
+test('the roll-call table cell says TIMED OUT, not "BLOCKED — needs a human"', () => {
+  const md = hb.renderRollCall([timedOutRow()], { now: NOW });
+  assert.match(md, /\*\*TIMED OUT\*\* — every pass for 1h 0m ran the full time limit/);
+  assert.doesNotMatch(md, /BLOCKED — needs a human/);
+  assert.match(hb.renderRollCall([blockedRow()], { now: NOW }), /BLOCKED — needs a human/,
+    'and a real block keeps its cell');
+});
+
+test('a timed-out kind survives the stamp round trip and carries its start forward', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-timedout-'));
+  try {
+    hb.recordBeat({
+      role: 'loop-build', node: 'mac-mini', at: new Date(NOW).toISOString(),
+      kind: hb.BEAT_TIMED_OUT, why: TIMED_OUT_WHY, standingDownSince: agoHours(4), homedir: dir,
+    });
+    const back = hb.readBeat({ role: 'loop-build', homedir: dir });
+    assert.equal(back.beat.kind, hb.BEAT_TIMED_OUT, 'normalizeKind must not round it down to a run');
+    const at = new Date(NOW).toISOString();
+    assert.equal(hb.standDownSince({ prior: back, kind: hb.BEAT_TIMED_OUT, at }).since, agoHours(4),
+      'an unbroken run of timeouts keeps one start instant — "since <time>"');
+    assert.equal(hb.standDownSince({ prior: back, kind: hb.BEAT_BLOCKED, at }).since, at,
+      'and a login dying after it starts a new clock');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the timed-out bus post names the ticket and never says sign in', () => {
+  const r = hb.rollCallReport({ rows: [timedOutRow({ role: 'bus-relay' })], now: NOW, roles: ROLES });
+  const text = hb.renderBlockedPost({ blocked: r.blocked, now: NOW, reportedBy: 'macbook-pro' });
+  assert.match(text, /keeps running out of time/);
+  assert.match(text, /not a login problem, and nobody needs to sign in/);
+  assert.match(text, /86bxyz/);
+  assert.doesNotMatch(text, /waiting does not help/i, 'the login paragraph is not for this lane');
+  assert.doesNotMatch(text, /cannot work at all/);
+});
+
+test('a MIXED bus post keeps both: the login paragraph for one lane, the timeout one for the other', () => {
+  const timed = hb.rollCallReport({ rows: [timedOutRow()], now: NOW, roles: ROLES }).blocked[0];
+  const locked = hb.rollCallReport({ rows: [blockedRow()], now: NOW, roles: ROLES }).blocked[0];
+  const text = hb.renderBlockedPost({ blocked: [timed, { ...locked, role: 'loop-review' }], now: NOW });
+  assert.match(text, /cannot work at all/, 'a real block in the set keeps the louder headline');
+  assert.match(text, /waiting does not help/i);
+  assert.match(text, /nobody needs to sign in/);
+  assert.match(text, /running out of time since/);
+  assert.match(text, /doing no work since/);
+});
+
+test('the LOCAL stale alarm and its post call a timed-out lane what it is', () => {
+  const r = hb.recencyReport({ entries: [timedOutLocalEntry('bus-relay', agoHours(5))], now: NOW });
+  assert.equal(r.quiet.length, 1, 'reported at once, like a block');
+  assert.equal(r.quiet[0].timedOut, true);
+  assert.doesNotMatch(r.quiet[0].reason, SIGN_IN);
+  const post = hb.renderStalePost({ quiet: r.quiet, node: 'mac-mini', now: NOW });
+  assert.match(post, /keeps running out of time/);
+  assert.doesNotMatch(post, /sign Claude Code in again/);
+  assert.doesNotMatch(post, /waiting does not help/i);
+  assert.match(post, /clickup -- get --task/);
+  // The other direction, through the same function: a real block still says sign in.
+  const locked = hb.renderStalePost({
+    quiet: hb.recencyReport({ entries: [blockedLocalEntry('bus-relay', agoHours(5))], now: NOW }).quiet,
+    node: 'mac-mini',
+    now: NOW,
+  });
+  assert.match(locked, /sign Claude Code in again on mac-mini/);
+});
+
+test('the summary lines pick the right story, and a mixed set gets both', () => {
+  assert.deepEqual(hb.blockedSummaryLines([{ timedOut: true }]), hb.TIMED_OUT_SUMMARY);
+  assert.deepEqual(hb.blockedSummaryLines([{ timedOut: false }]), hb.BLOCKED_SUMMARY);
+  assert.deepEqual(hb.blockedSummaryLines([{ timedOut: true }, {}]), [...hb.BLOCKED_SUMMARY, ...hb.TIMED_OUT_SUMMARY]);
+  for (const line of hb.TIMED_OUT_SUMMARY) assert.doesNotMatch(line, SIGN_IN);
+});
+
+test('the --stale-check TERMINAL output and --beat say TIMED OUT, never "signs in"', () => {
+  const { spawnSync } = require('node:child_process');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-timedout-cli-'));
+  try {
+    const owner = require('../../lib/nodeRoles').roleOwner('loop-build');
+    fs.writeFileSync(path.join(home, '.alphire-node'), `${owner}\n`);
+    fs.mkdirSync(hb.heartbeatDir(home), { recursive: true });
+    const env = { ...process.env, HOME: home, NO_COLOR: '1', CLICKUP_API_TOKEN: '' };
+    // Recorded through the real --beat path, the way the runner does it.
+    const beat = spawnSync(process.execPath, [path.join(__dirname, '..', 'node_heartbeat.mjs'),
+      '--beat', '--role', 'loop-build', '--timed-out', TIMED_OUT_WHY], { env, encoding: 'utf8' });
+    assert.match(beat.stderr, /loop-build TIMED OUT at/, `--timed-out must be recorded as such:\n${beat.stderr}`);
+    assert.equal(hb.readBeat({ role: 'loop-build', homedir: home }).beat.kind, hb.BEAT_TIMED_OUT);
+    const run = spawnSync(process.execPath, [path.join(__dirname, '..', 'node_heartbeat.mjs'), '--stale-check'],
+      { env, encoding: 'utf8' });
+    assert.match(run.stdout, /QUIET loop-build/, `the stamp must be read at all:\n${run.stdout}${run.stderr}`);
+    assert.equal(run.status, 1);
+    assert.match(run.stdout, /running out of time before finishing/);
+    assert.match(run.stdout, /ticket 86bxyz/);
+    assert.doesNotMatch(run.stdout, /signs in on that machine|expired login/);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

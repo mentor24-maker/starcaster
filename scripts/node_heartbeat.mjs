@@ -21,6 +21,11 @@
  *                                           waiting is the wrong answer to a locked door: the 09-16
  *                                           outage was a limit for two hours and a dead OAuth session
  *                                           for the next three days (task 86bc3t0n1)
+ *   npm run heartbeat -- --beat --role X --timed-out "<why>"
+ *                                           the pass WAS working and the time limit stopped it before it
+ *                                           finished. Alarms like --blocked, but never says "sign in":
+ *                                           on 2026-10-04 that text put Dane in the blocker's seat over a
+ *                                           pass stuck on a render check (task 86bccr85e)
  *   npm run heartbeat -- --stale-check      the LOCAL recency alarm, read-only, no ClickUp read
  *   npm run heartbeat -- --stale-check --check   the same, and post to the bus
  *   npm run heartbeat -- --push-owned       relay this machine's local stamps onto the shared row
@@ -346,6 +351,15 @@ function printReport(state) {
   // human acts. The 2026-09-18 expired login sat in this state for three days
   // wearing a BEAT label.
   for (const b of (blocked || [])) {
+    if (b.timedOut) {
+      // Not a locked door (task 86bccr85e): the machine is signed in and the
+      // pass was working. Saying "needs a human on that machine" here is the
+      // false sentence this branch exists to stop.
+      out.push(`  ${red('TIMED OUT')} ${b.role} on ${b.owner} — ${b.reason}.`);
+      out.push(`        ${dim(`last beat ${b.at}; running out of time since ${b.since}`)}`);
+      out.push(`        ${dim('The schedule is fine and the machine is signed in. Look at the ticket it names.')}`);
+      continue;
+    }
     out.push(`  ${red('BLOCKED')} ${b.role} on ${b.owner} — ${b.reason}.`);
     out.push(`        ${dim(`last beat ${b.at}; doing no work since ${b.since}`)}`);
     out.push(`        ${dim('The schedule is fine and the machine is awake. This needs a human on that machine.')}`);
@@ -367,8 +381,10 @@ function printReport(state) {
   // the waiting period removed, and it is stated FIRST because it is the only
   // line here that names something a human has to go and do.
   if (stuck.length > 0) {
-    out.push(bold(red(`${stuck.length} job${stuck.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
-    for (const line of heartbeat.BLOCKED_SUMMARY) out.push(dim(line));
+    out.push(bold(red(stuck.every((b) => b.timedOut)
+      ? `${stuck.length} job${stuck.length === 1 ? ' is' : 's are'} firing on time and running out of time before finishing.`
+      : `${stuck.length} job${stuck.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
+    for (const line of heartbeat.blockedSummaryLines(stuck)) out.push(dim(line));
     for (const b of stuck) out.push(dim(`  ${b.role} on ${b.owner}: ${b.why}`));
     if (alarming.length > 0) out.push(bold(red(`${alarming.length} more ${alarming.length === 1 ? 'is' : 'are'} standing down.`)));
     if (overdue.length > 0) out.push(bold(red(`${overdue.length} more ${overdue.length === 1 ? 'has' : 'have'} gone quiet altogether.`)));
@@ -395,7 +411,7 @@ function printReport(state) {
 
 // --- recording a beat -------------------------------------------------------
 
-async function doBeat(role, { standDownWhy = '', blockedWhy = '' } = {}) {
+async function doBeat(role, { standDownWhy = '', blockedWhy = '', timedOutWhy = '' } = {}) {
   if (!role) {
     console.error(`--beat needs --role <role>. Known roles: ${Object.keys(nodeRoles.ROLES).join(', ')}`);
     return 0;
@@ -405,10 +421,15 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '' } = {}) {
   // differ only in whether anything changes without a human, and the safe way
   // to be wrong is to say a human is needed when one is not — the other way
   // round is the 90 hours.
+  // A timeout sits between the two: it alarms like a block, and it is only
+  // ever sent by the runner on exit 124, so a caller sending it with --blocked
+  // is a caller that knows something worse happened.
   const kind = blockedWhy
     ? heartbeat.BEAT_BLOCKED
-    : (standDownWhy ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN);
-  const idleWhy = blockedWhy || standDownWhy;
+    : (timedOutWhy
+      ? heartbeat.BEAT_TIMED_OUT
+      : (standDownWhy ? heartbeat.BEAT_STOOD_DOWN : heartbeat.BEAT_RAN));
+  const idleWhy = blockedWhy || timedOutWhy || standDownWhy;
 
   // HOW LONG HAS THIS BEEN GOING ON? Read the PREVIOUS stamp before overwriting
   // it, so an unbroken run of stand-downs keeps one start instant instead of
@@ -424,7 +445,10 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '' } = {}) {
     role, node: NODE.name, at, kind, why: idleWhy, standingDownSince: since.since,
   });
   if (!local.ok) console.error(`heartbeat: could not write the local beat (${local.why}) — carrying on.`);
-  else if (kind === heartbeat.BEAT_BLOCKED) {
+  else if (kind === heartbeat.BEAT_TIMED_OUT) {
+    console.error(`heartbeat: ${role} TIMED OUT at ${at} (${timedOutWhy}) — recorded as timed out, not as a run.`);
+    console.error(`heartbeat: its passes have been running out of time since ${since.since}. The machine is fine — look at the ticket named.`);
+  } else if (kind === heartbeat.BEAT_BLOCKED) {
     console.error(`heartbeat: ${role} BLOCKED at ${at} (${blockedWhy}) — recorded as blocked, not as a run.`);
     console.error(`heartbeat: it has done no work since ${since.since}, and this one does not clear itself — it needs a human here.`);
   } else if (kind === heartbeat.BEAT_STOOD_DOWN) {
@@ -577,7 +601,9 @@ async function doStaleCheck({ post }) {
     // A blocked row has no threshold by design — quoting one invites the
     // reader to wait for it (round 3).
     out.push(`        ${dim(q.blocked
-      ? `no threshold — this does not clear with time; last beat ${q.at}`
+      ? (q.timedOut
+        ? `no threshold — one pass that runs out of time is reported at once; last beat ${q.at}`
+        : `no threshold — this does not clear with time; last beat ${q.at}`)
       : `threshold ${heartbeat.ageText(q.thresholdMs).replace(' ago', '')}; last beat ${q.at}`)}`);
   }
   for (const u of report.unknown) {
@@ -648,8 +674,10 @@ async function doStaleCheck({ post }) {
     const down = report.quiet.filter((q) => q.standDown && !q.blocked);
     const stopped = report.quiet.filter((q) => !q.standDown);
     if (blocked.length > 0) {
-      out.push(bold(red(`${blocked.length} job${blocked.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
-      for (const line of heartbeat.BLOCKED_SUMMARY) out.push(dim(line));
+      out.push(bold(red(blocked.every((q) => q.timedOut)
+        ? `${blocked.length} job${blocked.length === 1 ? ' is' : 's are'} firing on time and running out of time before finishing.`
+        : `${blocked.length} job${blocked.length === 1 ? ' is' : 's are'} firing on time and cannot work at all.`)));
+      for (const line of heartbeat.blockedSummaryLines(blocked)) out.push(dim(line));
     }
     if (stopped.length > 0) {
       out.push(bold(red(`${stopped.length} job${stopped.length === 1 ? ' has' : 's have'} stopped beating on this machine.`)));
@@ -1035,6 +1063,7 @@ if (flag('beat')) {
   process.exit(await doBeat(arg('role'), {
     standDownWhy: arg('stood-down'),
     blockedWhy: arg('blocked'),
+    timedOutWhy: arg('timed-out'),
   }));
 }
 
