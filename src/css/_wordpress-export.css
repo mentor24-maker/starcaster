@@ -21,6 +21,7 @@
 
 .wp-export-subheading {
   margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-base);
   font-weight: 700;
 }
 
