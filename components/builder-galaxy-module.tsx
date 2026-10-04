@@ -5,16 +5,21 @@ import {
   createGalaxyProjection,
   createGalaxyView,
   dragGalaxyView,
+  galaxyDisperseOpacity,
+  galaxyIntroProgress,
+  galaxyScrollDisperse,
   generateGalaxyField,
   projectGalaxyField,
   readDeviceTier,
+  readGalaxyMotion,
   readGalaxySettings,
   resolveGalaxyInteraction,
   scaleGalaxyCount,
   stepGalaxyField,
   stepGalaxyView,
   stepGalaxyViewByKey,
-  tiltGalaxyView
+  tiltGalaxyView,
+  type GalaxyMix
 } from "@/lib/galaxy-field";
 import {
   assignGalaxyColours,
@@ -47,6 +52,13 @@ const CARD_HEIGHT_PX = 180;
 
 /** Frames further apart than this are treated as this far apart, so a stall never makes the galaxy jump. */
 const MAX_FRAME_SECONDS = 0.05;
+
+/**
+ * The document event that restarts the intro on every galaxy on the page.
+ * The Builder's "Replay intro" button dispatches it; nothing on a live page
+ * does (Galaxy module 4/6).
+ */
+export const GALAXY_REPLAY_EVENT = "galaxy:replay";
 
 function clampInt(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = Number.parseInt(String(value ?? ""), 10);
@@ -150,6 +162,13 @@ export function GalaxyRuntime({
    * galaxy should stay where it was turned rather than snap back to face-on.
    */
   const viewRef = useRef(createGalaxyView());
+  /*
+   * When the intro started, on the frame clock. A ref for the same reason
+   * again: a settings change re-runs the effect, and dragging a slider in the
+   * Builder must not fly every star back out to the edges. Only a mount and
+   * "Replay intro" set it.
+   */
+  const introStartRef = useRef<number | null>(null);
   const [reduced, setReduced] = useState(readReducedMotion);
   const [canvasFailed, setCanvasFailed] = useState(false);
   const [shortfall, setShortfall] = useState<{ shown: number; asked: number } | null>(null);
@@ -194,6 +213,14 @@ export function GalaxyRuntime({
 
     const stars = readGalaxySettings(settings);
     const look = readGalaxyLook(settings);
+    const motion = readGalaxyMotion(settings);
+    // What a frame is drawn with: the look, faded while the field disperses.
+    // One object for the whole effect, rewritten in place — never one per frame.
+    const drawnLook = { ...look };
+    const mix: GalaxyMix = { converge: 1, disperse: 0 };
+    const introRuns = !reduced && motion.intro === "converge";
+    const scrollRuns = !reduced && motion.scrollDisperse;
+    if (introStartRef.current === null) introStartRef.current = performance.now();
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
     const tier = readDeviceTier({
       hardwareConcurrency: nav.hardwareConcurrency,
@@ -214,6 +241,11 @@ export function GalaxyRuntime({
     const view = viewRef.current;
     let shownYaw = "";
     let shownPitch = "";
+    let shownConverge = "";
+    let shownDisperse = "";
+    // Set by the scroll listener, read once per frame: however many scroll
+    // events arrive between two frames, the page is measured once.
+    let scrollDirty = scrollRuns;
     // The newest cursor position, applied once per frame however many
     // mousemoves arrived since the last one.
     let pendingTilt: { x: number; y: number } | null = null;
@@ -246,9 +278,41 @@ export function GalaxyRuntime({
       return true;
     }
 
+    /*
+     * How far the page has carried the galaxy away, 0..1. In Place: how far
+     * the block's top has gone above the top of the window, over Scroll
+     * Distance — but never over more than the block's own height, or a
+     * 480px block scrolled away under the default 800px would leave the
+     * window still 40% visible (the acceptance criterion is that it is gone
+     * BEFORE it leaves). Window: the page's own scroll from the top.
+     */
+    function readDisperse(): number {
+      if (!scrollRuns) return 0;
+      if (inline) {
+        const rect = container!.getBoundingClientRect();
+        const distance = rect.height > 0 ? Math.min(motion.scrollDistance, rect.height) : motion.scrollDistance;
+        return galaxyScrollDisperse(-rect.top, distance);
+      }
+      return galaxyScrollDisperse(window.scrollY || document.documentElement.scrollTop || 0, motion.scrollDistance);
+    }
+
+    /** Where the intro and the scroll have got to, at `now` on the frame clock. */
+    function updateMix(now: number) {
+      mix.converge = introRuns
+        ? galaxyIntroProgress((now - (introStartRef.current ?? now)) / 1000, motion.introDelay, motion.introDuration)
+        : 1;
+      if (scrollDirty) {
+        scrollDirty = false;
+        mix.disperse = readDisperse();
+      }
+      const fade = galaxyDisperseOpacity(mix.disperse);
+      drawnLook.opacity = look.opacity * fade;
+      drawnLook.hazeStrength = look.hazeStrength * fade;
+    }
+
     function draw() {
-      projectGalaxyField(field, view.yaw, view.pitch, width, height, projection);
-      drawGalaxyFrame(ctx!, { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY }, look, sprites);
+      projectGalaxyField(field, view.yaw, view.pitch, width, height, projection, mix);
+      drawGalaxyFrame(ctx!, { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY }, drawnLook, sprites);
       frameRef.current += 1;
       canvas!.setAttribute("data-galaxy-frame", String(frameRef.current));
       // The angle it was drawn at, for the browser checks and a console
@@ -257,6 +321,11 @@ export function GalaxyRuntime({
       const pitch = view.pitch.toFixed(3);
       if (yaw !== shownYaw) canvas!.setAttribute("data-galaxy-yaw", (shownYaw = yaw));
       if (pitch !== shownPitch) canvas!.setAttribute("data-galaxy-pitch", (shownPitch = pitch));
+      // The intro's progress and the scroll's, two decimals, for the same readers.
+      const converge = mix.converge.toFixed(2);
+      const disperse = mix.disperse.toFixed(2);
+      if (converge !== shownConverge) canvas!.setAttribute("data-galaxy-converge", (shownConverge = converge));
+      if (disperse !== shownDisperse) canvas!.setAttribute("data-galaxy-disperse", (shownDisperse = disperse));
     }
 
     function tick(now: number) {
@@ -270,6 +339,7 @@ export function GalaxyRuntime({
         pendingTilt = null;
       }
       stepGalaxyView(view, dt);
+      updateMix(now);
       draw();
       raf = window.requestAnimationFrame(tick);
     }
@@ -286,6 +356,9 @@ export function GalaxyRuntime({
     }
 
     measure();
+    // The first frame starts from wherever the clock and the page already
+    // are: a page loaded half scrolled draws the galaxy half dispersed.
+    updateMix(performance.now());
     // Reduced motion gets ONE frame and no loop. This goes through start(),
     // never a bare requestAnimationFrame: start() is where the reduced-motion
     // and hidden-tab guards live, and a direct call silently bypasses both.
@@ -300,6 +373,7 @@ export function GalaxyRuntime({
     observer?.observe(container);
     observer?.observe(canvas);
     const onResize = () => {
+      scrollDirty = scrollRuns;
       if (measure() && reduced) draw();
     };
     const onVisibility = () => (document.visibilityState === "hidden" ? stop() : start());
@@ -365,6 +439,26 @@ export function GalaxyRuntime({
     }
     if (tilting) document.addEventListener("mousemove", onTilt, { passive: true });
 
+    /*
+     * Intro and scroll. Under reduced motion neither listens: the mix stays
+     * at "everything in place", and the one frame drawn above is the galaxy
+     * assembled and still.
+     */
+    const onScroll = () => {
+      scrollDirty = true;
+    };
+    const onReplay = () => {
+      introStartRef.current = performance.now();
+      // Draw the scattered field NOW rather than on the next frame, so
+      // nothing — a person or a browser check — can read the finished intro
+      // in the gap between the press and the restart.
+      updateMix(introStartRef.current);
+      draw();
+      start();
+    };
+    if (scrollRuns) window.addEventListener("scroll", onScroll, { passive: true });
+    if (introRuns) document.addEventListener(GALAXY_REPLAY_EVENT, onReplay);
+
     return () => {
       disposed = true;
       stop();
@@ -379,6 +473,8 @@ export function GalaxyRuntime({
         window.removeEventListener("blur", endDrag);
       }
       if (tilting) document.removeEventListener("mousemove", onTilt);
+      if (scrollRuns) window.removeEventListener("scroll", onScroll);
+      if (introRuns) document.removeEventListener(GALAXY_REPLAY_EVENT, onReplay);
       observer?.disconnect();
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);

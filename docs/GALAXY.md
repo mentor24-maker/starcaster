@@ -111,6 +111,11 @@ Engine numbers are clamped by `readGalaxySettings` (ranges in
 | `glow` | Glow | 70 | How far each star's halo reaches |
 | `opacity` | Opacity | 100 | |
 | `seed` | — | 27 | Not offered in the panel; fixes the layout so every load is the same galaxy |
+| `intro` | Structure › Intro | converge | `converge` / `none` — see *Intro and scroll* |
+| `introDelay` | Intro Delay | 1 | Seconds, 0–5; shown only with Intro on Converge |
+| `introDuration` | Intro Length | 5 | Seconds, 1–10; shown only with Intro on Converge |
+| `scrollDisperse` | Scroll Away | true | Checkbox |
+| `scrollDistance` | Scroll Distance | 800 | Pixels, 200–2000; shown only with Scroll Away on |
 
 The normalizer (`normalizeBuilderModuleSettingsForType`) fills every number
 above on load, and deliberately **not** `c1`..`c5`, `haze` or `posterUrl` —
@@ -175,6 +180,65 @@ The angle a frame was drawn at is published on the canvas as
 `data-galaxy-yaw` and `data-galaxy-pitch` (three decimals, written only when
 they change), for the browser checks and a console readout.
 
+## Intro and scroll (task 86bc7f5hj)
+
+The galaxy's entrance and exit. Five settings on the Structure axis, after
+Twinkle and before Interaction (the table above).
+
+**Every star has a scatter offset.** `generateGalaxyField` gives each star a
+point 2 to 4 field radii away from where it belongs, in a random direction
+mostly in the disc's plane — from a random source of its OWN, seeded from the
+field's seed, so no star of the layout slices 1 to 3 shipped moved (a test
+pins five of them against values read off `main` before this slice). It is an
+offset, not a position, so a star that has turned or streamed since still
+flies in to where it is now.
+
+**One number per moment, a wave per star.** The runtime works out a
+`GalaxyMix` — `converge` (0 = everything scattered, 1 = everything home) and
+`disperse` (0 = home, 1 = scattered and faded) — and `projectGalaxyField`
+draws each star `galaxyStarPlacement(converge, disperse, radius)` of the way
+home. A star's turn in the wave is its radius: the core sets off at converge
+0, the rim at `GALAXY_INTRO_STAGGER` (0.5), and each takes the remaining half
+of the timeline to arrive, eased with smoothstep. So the centre settles first
+and the arm tips last. Dispersing is the same wave run backwards — the tips
+leave first — multiplied in, so scrolling away mid-intro never jumps. The
+card passes no mix and is always the assembled galaxy.
+
+**The intro.** From the moment the galaxy mounts: wait Intro Delay, then
+converge runs in a straight line from 0 to 1 over Intro Length
+(`galaxyIntroProgress`; linear because each star eases itself). The start time
+lives in a ref, so dragging a slider in the Builder does not fly every star
+back out. A `galaxy:replay` event on the document (`GALAXY_REPLAY_EVENT`)
+restarts it on every galaxy that hears it, and draws the scattered frame at
+once rather than on the next frame.
+
+**The scroll.** One passive `scroll` listener marks the position dirty; the
+frame loop measures once per frame however many events arrived.
+`galaxyScrollDisperse` maps it to 0..1:
+
+- **In Place** — how far the block's top has gone above the top of the
+  window, over Scroll Distance **or the block's own height, whichever is
+  smaller**. The cap is deliberate: the acceptance criterion is that the
+  galaxy has faded to nothing *before it leaves the window*, and a 480px block
+  under the default 800px would otherwise leave 40% visible. Measured: a 400px
+  block reads 0.67 with 130px of it still on screen and 1.00 as its bottom
+  edge reaches the top.
+- **Window** — the page's own scroll from the top, over Scroll Distance.
+
+The fade (`galaxyDisperseOpacity`, 1 − disperse) scales the Opacity setting
+and the haze strength for the frame; the black backdrop stays.
+
+**Replay intro** is a button under the galaxy in the Builder, inside
+`BuilderOnlyNote`, so a published page never renders it. Shown only when
+Intro is Converge. It is the confetti module's Test Burst pattern.
+
+**Reduced motion:** converge is fixed at 1 and disperse at 0; no timeline, no
+scroll listener, no replay listener. The one still frame is the assembled
+galaxy.
+
+Published on the canvas, two decimals, written only when they change:
+`data-galaxy-converge` and `data-galaxy-disperse`.
+
 ## The rules
 
 1. **Nothing paints a star except `drawGalaxyFrame`.**
@@ -193,7 +257,7 @@ they change), for the browser checks and a console readout.
 
 ## The browser checks
 
-`scripts/ui/render-contracts.mjs`, nine contracts named `galaxy-*`, read
+`scripts/ui/render-contracts.mjs`, fourteen contracts named `galaxy-*`, read
 through the series reader's `attrs` (added for this module — a canvas's pixels
 are invisible to computed style):
 
@@ -216,9 +280,25 @@ are invisible to computed style):
   reduced motion the button still takes focus, and the frame counter is flat
   for 300 ms after an ArrowLeft.
 
-The last two use the harness's `press: { selector, key }` (added for this
+- `galaxy-intro-converges` — after a replay at a 1.2 s Intro Length,
+  `data-galaxy-converge` starts below 0.3, never falls, and passes 0.9 within
+  1.5 s;
+- `galaxy-intro-skipped-under-reduced-motion` — the same replay under reduced
+  motion reads 1.00 throughout;
+- `galaxy-intro-none-starts-assembled` — Intro None reads 1.00;
+- `galaxy-replay-button-in-the-builder` — the button renders, reading
+  "Replay intro";
+- `galaxy-replay-button-never-on-a-live-site` — absence, on the page rendered
+  as a published page, paired with the one above.
+
+The arrow-key two use the harness's `press: { selector, key }` (added for this
 module): it focuses the element, refuses if focus did not land, and presses
-the key before the sample is taken.
+the key before the sample is taken. The intro ones use `dispatch` (added in
+slice 4): a document event fired after the settle and immediately before the
+series — after, because the intro would otherwise be 600 ms gone before the
+first reading. The live-site one uses `emulate: { liveSite: true }`, which
+loads `builder-preview.html?live=1` — the preview rendered with `liveSite`,
+exactly as `BuilderPublicSitePage` renders a published page.
 
 `scripts/ui/seed_fixture.mjs` seeds two galaxies for `check:panels`, one
 Window and one In Place, because Height is only visible In Place.

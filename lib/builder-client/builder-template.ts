@@ -2875,7 +2875,12 @@ export function normalizeBuilderModuleSettingsForType(
       spinSpeed: "10", spinDirection: "clockwise", differential: "50", flowSpeed: "30", twinkle: "60",
       placement: "window", height: "480", posX: "0", posY: "0", zIndex: "-9999",
       glow: "70", opacity: "100", hazeStrength: "55",
-      w1: "52", w2: "15", w3: "18", w4: "7", w5: "8"
+      w1: "52", w2: "15", w3: "18", w4: "7", w5: "8",
+      /* Galaxy module 4/6 (task 86bc7f5hj): the intro and the scroll.
+         Mirrors GALAXY_MOTION_DEFAULTS in galaxy-field.ts. The two switches
+         are filled too — absent already MEANS "converge" and "true" to the
+         runtime, so the backfill changes nothing a visitor sees. */
+      intro: "converge", introDelay: "1", introDuration: "5", scrollDisperse: "true", scrollDistance: "800"
     };
     for (const [key, fallback] of Object.entries(galaxyDefaults)) {
       if (!settings[key]) settings[key] = fallback;

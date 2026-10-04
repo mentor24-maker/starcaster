@@ -1,3 +1,17 @@
+## 2026-10-03 — Galaxy module 4/6 — the intro: stars converge into the spiral on load and disperse as the visitor scrolls (#755)
+
+The galaxy now makes an entrance and an exit. When a page loads, its stars
+start scattered off at the edges and fly in over about five seconds, the
+centre settling first and the arm tips last, until the spiral is whole. When
+a visitor scrolls the galaxy away it spreads apart and fades out — fully gone
+by the time an In Place galaxy's bottom edge leaves the window — and scrolling
+back brings it back. Five new settings control it (Intro on or off, how long
+to wait, how long it takes, whether scrolling disperses it, and over how many
+pixels). In the Builder, a "Replay intro" button under the galaxy plays the
+fly-in again; it never appears on a published page. Visitors who have asked
+their device for less motion get the spiral already assembled and still. The
+stars' resting positions are exactly what they were before this change.
+
 ## 2026-10-03 — Galaxy module 3/6 — drag, arrow keys and cursor tilt rotate the galaxy (#753)
 
 Visitors can now turn the galaxy. A new Interaction setting sits under the

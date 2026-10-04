@@ -268,7 +268,7 @@ function documentForSection({
   };
 }
 
-async function render(page, doc, previewDevice = 'desktop') {
+async function render(page, doc, previewDevice = 'desktop', liveSite = false) {
   await page.evaluate(
     ([draftKey, draft, deviceKey, device]) => {
       window.localStorage.setItem(draftKey, draft);
@@ -276,9 +276,17 @@ async function render(page, doc, previewDevice = 'desktop') {
     },
     [DRAFT_KEY, JSON.stringify(doc), DEVICE_KEY, previewDevice]
   );
+  /*
+   * `liveSite` renders the page as a PUBLISHED page would (`?live=1` on the
+   * preview, task 86bc7f5hj), so an absence contract can prove a Builder-only
+   * control never reaches a visitor. Every other contract stays on the plain
+   * URL, which is the Builder's view.
+   */
+  const wanted = `${BASE_URL}/builder-preview.html${liveSite ? '?live=1' : ''}`;
   // NOT `networkidle`: the page runs animations and never goes idle, so it
   // times out after 30s having rendered perfectly. Wait for the module.
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  if (page.url() === wanted) await page.reload({ waitUntil: 'domcontentloaded' });
+  else await page.goto(wanted, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.builder-preview-module', { timeout: 20000 }).catch(() => {});
   // Back to the top before anything is measured. A reload restores the
   // previous scroll position, so a scrolling contract would otherwise start
@@ -293,8 +301,8 @@ async function render(page, doc, previewDevice = 'desktop') {
 /**
  * Everything a contract can assert on, sampled twice so motion is provable.
  */
-function sample(page, selector, read, settleMs, series, probes) {
-  return page.evaluate(async ({ selector, read, settleMs, series, probes }) => {
+function sample(page, selector, read, settleMs, series, probes, dispatch) {
+  return page.evaluate(async ({ selector, read, settleMs, series, probes, dispatch }) => {
     const doc = document.documentElement;
     const modules = document.querySelectorAll('.builder-preview-module');
     const el = document.querySelector(selector);
@@ -316,6 +324,15 @@ function sample(page, selector, read, settleMs, series, probes) {
     const before = readAnimations();
     await new Promise((resolve) => setTimeout(resolve, settleMs));
     const after = readAnimations();
+    /*
+     * Optional DOCUMENT EVENT, fired after the settle and immediately before
+     * the series (task 86bc7f5hj). The galaxy's intro has run its course by
+     * the time the page has settled, so a series watching it rise has to
+     * restart it first — with the same `galaxy:replay` event the Builder's
+     * "Replay intro" button sends. Fired here rather than before the settle,
+     * or the first 600ms of what it starts would never be watched.
+     */
+    if (dispatch) document.dispatchEvent(new CustomEvent(dispatch));
 
     const cs = getComputedStyle(el);
     const styles = {};
@@ -470,7 +487,7 @@ function sample(page, selector, read, settleMs, series, probes) {
       text: (el.textContent || '').trim().slice(0, 200),
       settleMs,
     };
-  }, { selector, read, settleMs, series: series ?? null, probes: probes ?? null });
+  }, { selector, read, settleMs, series: series ?? null, probes: probes ?? null, dispatch: dispatch ?? null });
 }
 
 /**
@@ -734,7 +751,8 @@ try {
     await render(
       page,
       contract.section ? documentForSection(contract.section) : documentFor(contract.module),
-      contract.emulate?.storedDevice || contract.emulate?.previewDevice || 'desktop'
+      contract.emulate?.storedDevice || contract.emulate?.previewDevice || 'desktop',
+      contract.emulate?.liveSite === true
     );
 
     /*
@@ -838,7 +856,8 @@ try {
       contract.read || [],
       SETTLE_MS,
       contract.series,
-      contract.probes
+      contract.probes,
+      contract.dispatch
     );
 
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });

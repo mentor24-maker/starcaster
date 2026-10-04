@@ -4039,4 +4039,115 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  /*
+   * GALAXY INTRO (task 86bc7f5hj). The runtime publishes how far the intro
+   * has got as `data-galaxy-converge`, two decimals: 0 = every star out at
+   * its scatter position, 1 = every star home. By the time the harness has
+   * settled the intro has finished, so the rising contract restarts it with
+   * `dispatch` — the same `galaxy:replay` event the Builder's button sends —
+   * and watches it from the restart.
+   */
+  {
+    id: 'galaxy-intro-converges',
+    why:
+      'On load the stars fly in from the edges and settle into the spiral. An intro whose timeline ' +
+      'never runs leaves a finished galaxy (or an empty one) and looks like a choice, not a fault. ' +
+      'Restarted with galaxy:replay and watched for 1.5s at a 1.2s Intro Length: the progress must ' +
+      'start below 0.3, never go backwards, and pass 0.9.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'inline', height: '300', intro: 'converge', introDelay: '0', introDuration: '1.2' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    dispatch: 'galaxy:replay',
+    series: { count: 11, everyMs: 150, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const values = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-converge']));
+      if (values.length < 11 || values.some((n) => !Number.isFinite(n))) {
+        return `data-galaxy-converge could not be read on every sample (${values.join(', ')}) — nothing was watched.`;
+      }
+      if (values[0] >= 0.3) {
+        return `right after a replay the intro read ${values[0].toFixed(2)} — it did not restart from scattered ` +
+          `(${values.join(' → ')}).`;
+      }
+      for (let i = 1; i < values.length; i += 1) {
+        if (values[i] < values[i - 1]) {
+          return `the intro went backwards (${values.join(' → ')}) — stars flew out again mid-way.`;
+        }
+      }
+      if (values[values.length - 1] <= 0.9) {
+        return `after 1.5s of a 1.2s intro the progress was only ${values[values.length - 1].toFixed(2)} ` +
+          `(${values.join(' → ')}) — the stars never arrived.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-intro-skipped-under-reduced-motion',
+    why:
+      'A visitor who asked for less motion gets the spiral already assembled: no fly-in, and a ' +
+      'replay does nothing. The same restart as the contract above, under reduced motion — the ' +
+      'progress must read 1.00 on every sample.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'inline', height: '300', intro: 'converge', introDelay: '0', introDuration: '1.2' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    dispatch: 'galaxy:replay',
+    series: { count: 5, everyMs: 150, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const values = (sample.series || []).map((f) => f.canvas?.['data-galaxy-converge']);
+      if (values.length < 5) return 'the series did not complete — nothing was watched.';
+      if (values.some((v) => v !== '1.00')) {
+        return `under reduced motion the intro read ${values.join(' → ')} — stars were scattered for a ` +
+          'visitor who asked for less motion.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-intro-none-starts-assembled',
+    why:
+      'Intro set to None means the galaxy is whole on its very first frame. Read once: the progress ' +
+      'must be 1.00.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none' } },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 1, everyMs: 0, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const value = sample.series?.[0]?.canvas?.['data-galaxy-converge'];
+      return value === '1.00' ? null : `with Intro set to None the first frame read data-galaxy-converge="${value}", not 1.00.`;
+    },
+  },
+  /*
+   * "Replay intro" is a Builder control (BuilderOnlyNote). The pair below is
+   * one rule: it renders in the Builder's view, and it does not render on a
+   * published page — `emulate.liveSite` renders the preview with
+   * `liveSite`, exactly as BuilderPublicSitePage does.
+   */
+  {
+    id: 'galaxy-replay-button-in-the-builder',
+    why:
+      'The Builder shows a "Replay intro" button under the galaxy so whoever is building the page can ' +
+      'watch the fly-in again. Paired with the absence contract below, which on its own would pass if ' +
+      'the button never rendered anywhere.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'converge' } },
+    selector: 'button.builder-galaxy-replay',
+    expect(sample) {
+      return /Replay intro/.test(sample.text || '')
+        ? null
+        : `the Builder's replay button rendered as "${sample.text}", not "Replay intro".`;
+    },
+  },
+  {
+    id: 'galaxy-replay-button-never-on-a-live-site',
+    why:
+      'A visitor has nothing to replay and no Builder to replay it in — a "Replay intro" button on a ' +
+      'client\'s published page is builder chrome leaking onto their site (landmine 16, DOCTRINE §5.29).',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'converge' } },
+    selector: 'button.builder-galaxy-replay',
+    absent: true,
+    emulate: { liveSite: true },
+  },
 ];
