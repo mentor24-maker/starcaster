@@ -1,0 +1,52 @@
+/* Export to WordPress (Divi) card (React island) —
+   components/settings/wordpress-export-panel.tsx, on Settings › Projects ›
+   (a project), right column under Modules. */
+
+.wp-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.wp-export-error {
+  color: var(--status-warn-ink);
+}
+
+.wp-export-counts {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+  line-height: 1.6;
+}
+
+.wp-export-subheading {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: 700;
+}
+
+.wp-export-notes ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.wp-export-howto {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-3);
+}
+
+.wp-export-howto summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.wp-export-howto ol {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  font-size: var(--text-base);
+  line-height: 1.55;
+}
