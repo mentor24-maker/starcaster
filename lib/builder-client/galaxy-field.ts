@@ -815,53 +815,108 @@ export function projectGalaxyField(
 // Device budget
 // ---------------------------------------------------------------------------
 
-export type GalaxyDeviceTier = "high" | "mid" | "low";
-
 /**
  * Which class of machine is looking, from what a browser will admit to.
- * `saveData` is the visitor asking for less, and wins outright. `high`
- * needs BOTH cores and memory reported and both generous: a browser that
- * hides either (Safari hides `deviceMemory` on every device, an eight-core
- * iPhone included) is capped at mid, because guessing high on an old phone
- * is the guess that stutters.
+ * `saveData` is the visitor asking for less, and wins outright. A machine
+ * with fewer than four cores, or that reports under 4 GB of memory, is
+ * low-power. A browser that hides a number (Safari hides `deviceMemory` on
+ * every device) is judged on what it does report: a phone is caught by its
+ * narrow screen in `scaleGalaxyCount`, not by guessing at its chip.
  */
+export type GalaxyDeviceTier = "full" | "low-power" | "data-saver";
+
 export function readDeviceTier(input: {
   hardwareConcurrency?: number | null;
   deviceMemory?: number | null;
   saveData?: boolean | null;
 }): GalaxyDeviceTier {
-  if (input.saveData === true) return "low";
+  if (input.saveData === true) return "data-saver";
   const cores = Number.isFinite(input.hardwareConcurrency as number) ? (input.hardwareConcurrency as number) : null;
   const memory = Number.isFinite(input.deviceMemory as number) ? (input.deviceMemory as number) : null;
-  if ((cores !== null && cores <= 2) || (memory !== null && memory <= 2)) return "low";
-  if (cores === null || memory === null || cores <= 4 || memory <= 4) return "mid";
-  return "high";
+  if ((cores !== null && cores < 4) || (memory !== null && memory < 4)) return "low-power";
+  return "full";
 }
 
-/** The pixel area the full star count is budgeted for: a 1920 × 1080 backdrop. */
-export const GALAXY_REFERENCE_AREA_PX = 1920 * 1080;
+/** The pixel area the full star count is budgeted for: a 1440 × 900 hero. */
+export const GALAXY_REFERENCE_AREA_PX = 1440 * 900;
 /** Below this the field reads as empty, so a scaled count never goes lower (unless fewer were asked for). */
 export const GALAXY_COUNT_FLOOR = 100;
-const TIER_SCALE: Record<GalaxyDeviceTier, number> = { high: 1, mid: 0.7, low: 0.5 };
+/** A viewport narrower than this is a phone, and draws fewer stars at a lower pixel ratio. */
+export const GALAXY_NARROW_VIEWPORT_PX = 768;
+/** What a low-power device or data saver keeps of the count. */
+export const GALAXY_LOW_TIER_SCALE = 0.5;
+/** What a narrow viewport keeps of the count. */
+export const GALAXY_NARROW_SCALE = 0.6;
+/** Pixel-ratio caps: Retina is sharp at 2×, a phone pays for every pixel, a weak machine draws at 1×. */
+export const GALAXY_RATIO_CAP = 2;
+export const GALAXY_RATIO_CAP_NARROW = 1.5;
+export const GALAXY_RATIO_CAP_LOW = 1;
+
+/** Why the galaxy is drawing fewer stars than asked — the words the Builder note shows. */
+export type GalaxyBudgetReason = "data saver" | "low-power device" | "small screen" | "small module";
+
+export interface GalaxyBudget {
+  /** How many stars to generate. */
+  count: number;
+  /** The highest device pixel ratio worth drawing at. */
+  pixelRatioCap: number;
+  /** Why `count` is below the request; null when it is not. */
+  reason: GalaxyBudgetReason | null;
+}
 
 /**
- * How many stars to actually draw: the requested count, scaled down by the
- * area it is drawn into (by the square root, so a quarter of the area keeps
- * half the stars — density, not count, is what the eye reads) and by the
- * device tier (a low tier halves it). Never MORE than requested, never below
- * the floor unless the request itself was. An unknown area (0 or NaN) does
- * not penalise: the caller has not measured yet, and a first frame drawn
- * thin would be a flash.
+ * How much galaxy this device and this box can afford. Automatic on purpose
+ * (Galaxy module 6/6, task 86bc7f5hp): a setting the operator has to know
+ * about is a setting that is left at "everything" on a phone.
+ *
+ * Three cuts, multiplied:
+ *   - the DEVICE — a low-power device or data saver keeps half;
+ *   - the VIEWPORT — narrower than 768px keeps 60%;
+ *   - the AREA drawn into, against a 1440 × 900 hero, by the square root (a
+ *     quarter of the area keeps half the stars: density, not count, is what
+ *     the eye reads), so a small In Place block does not carry a hero's count.
+ *     An unknown area (0 or NaN) does not penalise: the caller has not
+ *     measured yet, and a first frame drawn thin would be a flash.
+ *
+ * Never MORE than requested, never below the floor unless the request itself
+ * was. The reason names the FIRST cut that applied, device before viewport
+ * before area — the one a person can do something about least is the one
+ * worth telling them. An area cut in a Window is the visitor's screen, so it
+ * reads "small screen"; In Place it is the block, "small module".
  */
-export function scaleGalaxyCount(requested: number, areaPx: number, deviceTier: GalaxyDeviceTier): number {
+export function scaleGalaxyCount(
+  requested: number,
+  input: { areaPx: number; viewportWidth: number; tier: GalaxyDeviceTier; inline: boolean }
+): GalaxyBudget {
+  const lowTier = input.tier === "low-power" || input.tier === "data-saver";
+  const narrow = Number.isFinite(input.viewportWidth) && input.viewportWidth > 0 && input.viewportWidth < GALAXY_NARROW_VIEWPORT_PX;
+  const pixelRatioCap = lowTier ? GALAXY_RATIO_CAP_LOW : narrow ? GALAXY_RATIO_CAP_NARROW : GALAXY_RATIO_CAP;
+
   const wanted = Number.isFinite(requested) ? Math.max(0, Math.round(requested)) : 0;
-  if (wanted === 0) return 0;
-  const area = Number.isFinite(areaPx) && areaPx > 0 ? areaPx : GALAXY_REFERENCE_AREA_PX;
+  if (wanted === 0) return { count: 0, pixelRatioCap, reason: null };
+  const area = Number.isFinite(input.areaPx) && input.areaPx > 0 ? input.areaPx : GALAXY_REFERENCE_AREA_PX;
   const areaScale = Math.min(1, Math.sqrt(area / GALAXY_REFERENCE_AREA_PX));
-  const tierScale = TIER_SCALE[deviceTier] ?? TIER_SCALE.mid;
-  const scaled = Math.round(wanted * areaScale * tierScale);
-  return Math.min(wanted, Math.max(Math.min(wanted, GALAXY_COUNT_FLOOR), scaled));
+  const scaled = Math.round(wanted * areaScale * (lowTier ? GALAXY_LOW_TIER_SCALE : 1) * (narrow ? GALAXY_NARROW_SCALE : 1));
+  const count = Math.min(wanted, Math.max(Math.min(wanted, GALAXY_COUNT_FLOOR), scaled));
+
+  let reason: GalaxyBudgetReason | null = null;
+  if (count < wanted) {
+    if (input.tier === "data-saver") reason = "data saver";
+    else if (input.tier === "low-power") reason = "low-power device";
+    else if (narrow) reason = "small screen";
+    else reason = input.inline ? "small module" : "small screen";
+  }
+  return { count, pixelRatioCap, reason };
 }
+
+/**
+ * Below this fraction of an In Place galaxy on screen, its frame loop stops;
+ * it resumes on re-entry. A sliver at the edge of the window is not worth a
+ * frame. A Window galaxy is fixed behind the page and always "on screen", so
+ * it stops instead when the scroll has dispersed it to nothing (see
+ * `galaxyDisperseOpacity`) — the only moment nobody can see it.
+ */
+export const GALAXY_VISIBLE_FRACTION = 0.05;
 
 // ---------------------------------------------------------------------------
 // Interaction (Galaxy module 3/6, task 86bc7f5hh)

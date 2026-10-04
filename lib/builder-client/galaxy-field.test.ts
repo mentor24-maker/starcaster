@@ -824,44 +824,108 @@ describe("a frame keeps its arrays", () => {
 });
 
 describe("scaleGalaxyCount", () => {
-  it("never returns more than requested, and halves on the low tier", () => {
-    expect(scaleGalaxyCount(4000, GALAXY_REFERENCE_AREA_PX, "high")).toBe(4000);
-    expect(scaleGalaxyCount(4000, GALAXY_REFERENCE_AREA_PX, "mid")).toBe(2800);
-    expect(scaleGalaxyCount(4000, GALAXY_REFERENCE_AREA_PX, "low")).toBe(2000);
-    expect(scaleGalaxyCount(4000, GALAXY_REFERENCE_AREA_PX * 100, "high")).toBe(4000);
+  const desk = { areaPx: GALAXY_REFERENCE_AREA_PX, viewportWidth: 1440, tier: "full" as const, inline: false };
+
+  it("gives a full-size hero on a full device everything it asked for, at 2×", () => {
+    expect(scaleGalaxyCount(4000, desk)).toEqual({ count: 4000, pixelRatioCap: 2, reason: null });
+    // A bigger box never earns MORE than asked.
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: GALAXY_REFERENCE_AREA_PX * 100 }).count).toBe(4000);
   });
 
-  it("scales with the square root of the area, and keeps a floor unless fewer were asked for", () => {
-    expect(scaleGalaxyCount(4000, GALAXY_REFERENCE_AREA_PX / 4, "high")).toBe(2000);
-    expect(scaleGalaxyCount(4000, 1, "high")).toBe(GALAXY_COUNT_FLOOR);
-    expect(scaleGalaxyCount(50, 1, "low")).toBe(50);
-    expect(scaleGalaxyCount(0, 1, "low")).toBe(0);
+  it("data saver halves the count, caps the ratio at 1, and says so", () => {
+    expect(scaleGalaxyCount(4000, { ...desk, tier: "data-saver" })).toEqual({
+      count: 2000,
+      pixelRatioCap: 1,
+      reason: "data saver"
+    });
+  });
+
+  it("a low-power device halves the count, caps the ratio at 1, and says so", () => {
+    expect(scaleGalaxyCount(4000, { ...desk, tier: "low-power" })).toEqual({
+      count: 2000,
+      pixelRatioCap: 1,
+      reason: "low-power device"
+    });
+  });
+
+  it("a narrow viewport keeps 60% at 1.5× — on top of its smaller area — and says small screen", () => {
+    // Full area, narrow: 4000 × 0.6.
+    expect(scaleGalaxyCount(4000, { ...desk, viewportWidth: 767 })).toEqual({
+      count: 2400,
+      pixelRatioCap: 1.5,
+      reason: "small screen"
+    });
+    // An iPhone 14 as a Window backdrop, 390 × 844: 4000 × √(329160 / 1296000) × 0.6 = 1209.5, rounded to 1210.
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: 390 * 844, viewportWidth: 390 })).toEqual({
+      count: 1210,
+      pixelRatioCap: 1.5,
+      reason: "small screen"
+    });
+    // 768 is not narrow.
+    expect(scaleGalaxyCount(4000, { ...desk, viewportWidth: 768 }).reason).toBeNull();
+  });
+
+  it("scales with the square root of the area against 1440 × 900 — a small In Place block says small module", () => {
+    // A quarter of the hero's area keeps half the stars.
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: GALAXY_REFERENCE_AREA_PX / 4, inline: true })).toEqual({
+      count: 2000,
+      pixelRatioCap: 2,
+      reason: "small module"
+    });
+    // A 1200 × 300 block: 4000 × √(360000 / 1296000) = 2108.
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: 1200 * 300, inline: true }).count).toBe(2108);
+    // The same cut in a Window is the visitor's screen, not the module.
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: 1280 * 720 })).toEqual({
+      count: 3373,
+      pixelRatioCap: 2,
+      reason: "small screen"
+    });
+  });
+
+  it("names the device before the viewport before the area, when several cuts apply", () => {
+    // Low-power phone in a small block: 4000 × √(390·300 / 1296000) × 0.5 × 0.6 = 361.
+    expect(scaleGalaxyCount(4000, { areaPx: 390 * 300, viewportWidth: 390, tier: "low-power", inline: true })).toEqual({
+      count: 361,
+      pixelRatioCap: 1,
+      reason: "low-power device"
+    });
+    expect(scaleGalaxyCount(4000, { areaPx: 390 * 300, viewportWidth: 390, tier: "full", inline: true }).reason).toBe(
+      "small screen"
+    );
+  });
+
+  it("keeps a floor unless fewer were asked for, and gives no reason when nothing was cut", () => {
+    expect(scaleGalaxyCount(4000, { ...desk, areaPx: 1 }).count).toBe(GALAXY_COUNT_FLOOR);
+    expect(scaleGalaxyCount(50, { ...desk, areaPx: 1, tier: "low-power" })).toEqual({
+      count: 50,
+      pixelRatioCap: 1,
+      reason: null
+    });
+    expect(scaleGalaxyCount(0, { ...desk, tier: "low-power" }).count).toBe(0);
   });
 
   it("does not penalise an unmeasured area", () => {
-    expect(scaleGalaxyCount(3000, 0, "high")).toBe(3000);
-    expect(scaleGalaxyCount(3000, Number.NaN, "high")).toBe(3000);
+    expect(scaleGalaxyCount(3000, { ...desk, areaPx: 0 }).count).toBe(3000);
+    expect(scaleGalaxyCount(3000, { ...desk, areaPx: Number.NaN }).count).toBe(3000);
   });
 });
 
 describe("readDeviceTier", () => {
-  it("reads three tiers from cores and memory, with data-saver winning", () => {
-    expect(readDeviceTier({ hardwareConcurrency: 10, deviceMemory: 8 })).toBe("high");
-    expect(readDeviceTier({ hardwareConcurrency: 4, deviceMemory: 8 })).toBe("mid");
-    expect(readDeviceTier({ hardwareConcurrency: 8, deviceMemory: 4 })).toBe("mid");
-    expect(readDeviceTier({ hardwareConcurrency: 2, deviceMemory: 8 })).toBe("low");
-    expect(readDeviceTier({ hardwareConcurrency: 8, deviceMemory: 2 })).toBe("low");
-    expect(readDeviceTier({ hardwareConcurrency: 16, deviceMemory: 16, saveData: true })).toBe("low");
+  it("is low-power under four cores or 4 GB, data saver wins outright", () => {
+    expect(readDeviceTier({ hardwareConcurrency: 10, deviceMemory: 8 })).toBe("full");
+    expect(readDeviceTier({ hardwareConcurrency: 4, deviceMemory: 4 })).toBe("full");
+    expect(readDeviceTier({ hardwareConcurrency: 3, deviceMemory: 8 })).toBe("low-power");
+    expect(readDeviceTier({ hardwareConcurrency: 8, deviceMemory: 2 })).toBe("low-power");
+    expect(readDeviceTier({ hardwareConcurrency: 8, deviceMemory: 0.5 })).toBe("low-power");
+    expect(readDeviceTier({ hardwareConcurrency: 16, deviceMemory: 16, saveData: true })).toBe("data-saver");
   });
 
-  it("caps a browser that hides memory at mid — Safari on a six-core iPhone is not a high-tier desktop", () => {
-    expect(readDeviceTier({})).toBe("mid");
-    expect(readDeviceTier({ hardwareConcurrency: null, deviceMemory: undefined })).toBe("mid");
-    // Safari: cores reported, deviceMemory hidden on every device.
-    expect(readDeviceTier({ hardwareConcurrency: 6 })).toBe("mid");
-    expect(readDeviceTier({ hardwareConcurrency: 8 })).toBe("mid");
-    // Two cores is low whatever else is hidden.
-    expect(readDeviceTier({ hardwareConcurrency: 2 })).toBe("low");
+  it("judges a browser that hides a number on what it does report", () => {
+    expect(readDeviceTier({})).toBe("full");
+    expect(readDeviceTier({ hardwareConcurrency: null, deviceMemory: undefined })).toBe("full");
+    // Safari: cores reported, deviceMemory hidden on every device. A phone is caught by its screen width instead.
+    expect(readDeviceTier({ hardwareConcurrency: 6 })).toBe("full");
+    expect(readDeviceTier({ hardwareConcurrency: 2 })).toBe("low-power");
   });
 });
 
