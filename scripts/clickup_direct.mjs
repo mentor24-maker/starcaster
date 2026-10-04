@@ -83,6 +83,7 @@ import reviewGate from './builder/reviewGate.js';
 import conflictWork from './builder/conflictWork.js';
 import wipCap from './builder/wipCap.js';
 import passClaim from './builder/passClaim.js';
+import passTimeout from './builder/passTimeout.js';
 import loopStatuses from './builder/loopStatuses.js';
 import autoMergeLane from './builder/autoMergeLane.js';
 import autoMergeLedgerFile from './builder/autoMergeLedgerFile.js';
@@ -482,6 +483,13 @@ function usage(code = 2) {
   console.error('                                             of that skill hands the ticket back if this one dies. Opt-in on purpose:');
   console.error('                                             a hand-driven session claims with this same command, and a marker from');
   console.error('                                             one would let a loop reclaim a ticket a person is building.');
+  console.error('  pass-timeout --pass <skill> --limit <s> [--snapshot <file>]');
+  console.error('                                             run by loop_runner.sh when the time limit STOPPED a pass: if the pass');
+  console.error('                                             still held a ticket in "Building", say on it what the pass was running');
+  console.error('                                             (read from the snapshot run_with_time_limit.sh wrote) — and on the');
+  console.error('                                             second stop since the ticket last reached a PR, escalate it to Dane');
+  console.error('                                             instead of letting the next pass claim it again. exit 0 = done or');
+  console.error('                                             nothing held, 1 = a write failed. Task 86bccr85c.');
   console.error('  pass-reconcile [--scheduled]               the FIRST thing a loop-build pass runs: if the previous pass left a');
   console.error('                                             claim marker and its ticket is still "Building", hand it back and clear');
   console.error('                                             the marker. It goes to Rework if a pull request is open for it, if');
@@ -3282,6 +3290,91 @@ if (cmd === 'whoami') {
 
   console.log(passClaim.reconcileMessage(decision, { destination }));
   process.exit(passClaim.reconcileExitCode({ action: decision.action, ok }));
+
+} else if (cmd === 'pass-timeout') {
+  // A PASS THE TIME LIMIT STOPPED SAYS WHAT IT WAS STUCK IN (task 86bccr85c).
+  //
+  // Run by loop_runner.sh on exit 124 — after the pass is dead, because
+  // nothing inside a stopped pass runs again. On 2026-10-04 five passes in a
+  // row on one ticket were stopped at two hours each, and the log held START,
+  // END and nothing between, so a failing 8-minute check read as a dead
+  // machine for ten hours. The pass marker names the ticket; the snapshot
+  // names the command; `pass-reconcile` on the next pass still does the
+  // hand-back, so this never moves a ticket except to escalate it.
+  const skill = arg('pass') || 'loop-build';
+  const limitSeconds = Number(arg('limit')) || 7200;
+  const snapFile = arg('snapshot');
+  let rows = [];
+  let snapshotSay = '';
+  if (snapFile && existsSync(snapFile)) {
+    try { rows = passTimeout.parseSnapshot(readFileSync(snapFile, 'utf8')); } catch (e) { snapshotSay = ` (the snapshot could not be read: ${e.message})`; }
+  } else {
+    snapshotSay = ' (no snapshot was written, so what it was running is unknown)';
+  }
+  const stuck = passTimeout.describeStuck(rows);
+  const sentence = passTimeout.stuckSentence(stuck);
+  console.log(`pass-timeout: the /${skill} pass was stopped at the time limit; ${sentence}${snapshotSay}.`);
+
+  const marker = passClaim.readMarker(passMarkerPath());
+  if (!marker.found || !marker.record?.task) {
+    console.log('pass-timeout: it held no ticket (no pass marker), so there is nothing to note on ClickUp.');
+    process.exit(0);
+  }
+  // The marker is one file per checkout, and both loop lanes run from it. A
+  // stopped REVIEW pass must not write on the ticket a live BUILD pass holds.
+  if (marker.record.skill && String(marker.record.skill) !== skill) {
+    console.log(`pass-timeout: the claim marker belongs to a /${marker.record.skill} pass, not this /${skill} one — leaving its ticket alone.`);
+    process.exit(0);
+  }
+  const task = String(marker.record.task);
+  const seen = await call('GET', `/api/v2/task/${task}`);
+  if (!seen.res.ok) {
+    console.error(`pass-timeout: could not read ${task} — its note is NOT written. The next pass's pass-reconcile still hands it back.`);
+    process.exit(1);
+  }
+  const status = String(seen.json.status?.status || '').toLowerCase();
+  if (status !== 'building') {
+    console.log(`pass-timeout: ${task} is in "${status}", not Building — the pass handed it on before it was stopped. Nothing to note.`);
+    process.exit(0);
+  }
+  const cmts = await call('GET', `/api/v2/task/${task}/comment`);
+  if (!cmts.res.ok) {
+    console.error(`pass-timeout: could not read ${task}'s comments, so cannot count earlier stops — its note is NOT written.`);
+    process.exit(1);
+  }
+  const decision = passTimeout.timeoutDecision(passTimeout.priorTimeouts(cmts.json.comments || []));
+  const at = nowDateClock();
+  const note = passTimeout.timeoutNote({ skill, limitSeconds, at, rows, stuck, decision });
+  const posted = await call('POST', `/api/v2/task/${task}/comment`, { comment_text: note, notify_all: false });
+  if (!posted.res.ok) {
+    console.error(`pass-timeout: the note on ${task} could NOT be written. The next pass's pass-reconcile still hands it back.`);
+    process.exit(1);
+  }
+  console.log(`pass-timeout: noted on ${task} (stop ${decision.stop} since it last reached a PR).`);
+
+  let escalated = false;
+  if (decision.escalate) {
+    // Through `ask` itself, not a copy of it: the card shape, the
+    // already-answered guard and the assignment check all apply unchanged.
+    const bodyPath = path.join(os.tmpdir(), `pass-timeout-${task}-${process.pid}.txt`);
+    writeFileSync(bodyPath, passTimeout.escalationCard({ skill, limitSeconds, stuck, decision, at }));
+    const asked = spawnSync(process.execPath, [process.argv[1], 'ask', '--task', task, '--body-file', bodyPath],
+      { encoding: 'utf8', env: process.env });
+    try { unlinkSync(bodyPath); } catch { /* temp file */ }
+    process.stdout.write(asked.stdout || '');
+    process.stderr.write(asked.stderr || '');
+    escalated = asked.status === 0;
+    if (escalated) {
+      console.log(`pass-timeout: stop ${decision.stop} — ${task} escalated to Dane instead of going back to the claim line.`);
+    } else {
+      console.error(`pass-timeout: the escalation of ${task} was REFUSED (exit ${asked.status}) — it stays in Building and the next pass's pass-reconcile hands it back as usual.`);
+    }
+  }
+  const reason = stuck.kind === 'idle' ? 'nothing was running under it'
+    : `running \`${stuck.what.length > 80 ? `${stuck.what.slice(0, 79)}…` : stuck.what}\`${stuck.seconds == null ? '' : `, ${passTimeout.formatDuration(stuck.seconds)}`}`;
+  // Last, because it exits the process when it cannot write anywhere.
+  await stampLoopNote(task, loopNote(escalated ? 'escalated' : 'timed-out', { at: nowClock(), reason }), { comment: true });
+  process.exit(decision.escalate && !escalated ? 1 : 0);
 
 } else if (cmd === 'wip-check') {
   // Is the merge side already full? Exit codes mirror `node:owns`:
