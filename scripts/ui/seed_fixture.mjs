@@ -762,7 +762,7 @@ const buildTuned = (ids) => ({
   galaxy: {
     name: 'Galaxy (Window)',
     settings: {
-      placement: 'window', posX: '40', posY: '-20', zIndex: '-9999',
+      placement: 'window', interaction: 'tilt', posX: '40', posY: '-20', zIndex: '-9999',
       particleCount: '3000', arms: '3', turns: '2', spinDirection: 'counterclockwise',
       c1: '#FFFFFF', c3: '#88AAFF', haze: '#335577', hazeStrength: '40',
       posterUrl: '/images/Gemini_Generated_starcaster_banner.png',
@@ -1181,6 +1181,7 @@ const buildPanelCheckSection = (ids) => {
         settings: {
           ...base.settings,
           placement: 'inline',
+          interaction: 'rotate',
           height: '360',
           particleCount: '2000',
         },

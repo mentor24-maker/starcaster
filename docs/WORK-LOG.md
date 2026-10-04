@@ -1,3 +1,17 @@
+## 2026-10-03 — Galaxy module 3/6 — drag, arrow keys and cursor tilt rotate the galaxy (#753)
+
+Visitors can now turn the galaxy. A new Interaction setting sits under the
+motion sliders. A galaxy placed In Place gets an invisible, labelled button
+over it: drag it with a mouse or finger, or click it and use the arrow keys,
+and it turns and glides to a stop — while an up-and-down swipe on a phone
+still scrolls the page. A galaxy used as a Window backdrop sits behind the
+page and can never be clicked, so it tilts gently as the mouse moves across
+the window instead (measured: half a radian from the left edge to the right).
+Choosing None, or a visitor who has asked their device for reduced motion,
+turns all of it off. The half-finished build this pass picked up had one real
+bug — under reduced motion an arrow key set a still galaxy moving — which the
+new browser check caught when it was put back on purpose, and which is fixed.
+
 ## 2026-10-03 — Galaxy module 2/6 — a Galaxy module in Special Effects that draws the animated spiral on a page (#751)
 
 Slice 1 was the arithmetic; this slice is the thing you can actually put on a

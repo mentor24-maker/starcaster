@@ -3944,4 +3944,99 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+
+  /*
+   * GALAXY INTERACTION (task 86bc7f5hh). In Place + Drag to Rotate puts a
+   * labelled <button> over the canvas; a Window galaxy never gets one, because
+   * it sits behind the page and could never be pressed. The absence is paired
+   * with the presence so "no button" cannot pass by the module failing to
+   * render at all.
+   */
+  {
+    id: 'galaxy-in-place-rotate-has-a-labelled-drag-surface',
+    why:
+      'An In Place galaxy set to Drag to Rotate must give the visitor something to press: a real ' +
+      'button, labelled, covering the canvas. Without it a mouse has nothing to drag and a keyboard ' +
+      'has nothing to focus, and the setting does nothing while the panel says it is on.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', interaction: 'rotate' } },
+    selector: 'button.galaxy-drag-surface',
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      attrs: ['aria-label', 'type'],
+      selectors: { button: 'button.galaxy-drag-surface', canvas: '.builder-galaxy canvas' },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.canvas) return 'the drag button rendered but there is no galaxy canvas under it.';
+      const label = String(frame?.button?.['aria-label'] || '');
+      if (!/rotate the galaxy/i.test(label)) {
+        return `the drag button's aria-label is "${label}" — a screen reader would not say what it does.`;
+      }
+      if (frame?.button?.type !== 'button') {
+        return `the drag button is type="${frame?.button?.type}" — inside a form it would submit it.`;
+      }
+      if (!(sample.box.height >= 290)) {
+        return `the drag button is ${sample.box.width}×${sample.box.height}, not covering the 300px galaxy.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-window-tilt-has-no-drag-surface',
+    why:
+      'A Window galaxy sits behind the whole page at z-index -9999, so a button over it could never ' +
+      'be pressed — and one lifted above the page would swallow every click on it. Tilt reads the ' +
+      'cursor from the document instead. Paired with the presence contract above.',
+    module: { type: 'galaxy', settings: { placement: 'window', interaction: 'tilt' } },
+    selector: '.galaxy-drag-surface',
+    absent: true,
+  },
+  {
+    id: 'galaxy-arrow-key-turns-it',
+    why:
+      'Each arrow-key press turns the galaxy a visible step — the keyboard half of Drag to Rotate. ' +
+      'The canvas publishes the yaw it was last drawn at, so the turn is read rather than guessed: ' +
+      'ArrowLeft must carry it below zero and keep it there as it eases toward -0.08.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', interaction: 'rotate' } },
+    selector: 'canvas[data-galaxy-count]',
+    press: { selector: 'button.galaxy-drag-surface', key: 'ArrowLeft' },
+    series: { count: 4, everyMs: 150, read: [], attrs: ['data-galaxy-yaw'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const yaws = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-yaw']));
+      if (yaws.length < 4 || yaws.some((n) => !Number.isFinite(n))) {
+        return `the yaw could not be read on every sample (${yaws.join(', ')}) — nothing was watched.`;
+      }
+      const last = yaws[yaws.length - 1];
+      if (!(last < -0.04 && last >= -0.0801)) {
+        return `after one ArrowLeft the galaxy's yaw read ${yaws.join(' → ')} — it should ease toward ` +
+          '-0.08 (one 0.08-radian step), so the key is not turning it.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-reduced-motion-keeps-the-button-but-does-not-animate',
+    why:
+      'Under reduced motion the drag button still renders, so the page reads the same to a keyboard ' +
+      'or screen reader — but pressing an arrow key must not set a still galaxy moving. Watched for ' +
+      '300ms after a real ArrowLeft: the frame counter must not move.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', interaction: 'rotate' } },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    press: { selector: 'button.galaxy-drag-surface', key: 'ArrowLeft' },
+    series: { count: 4, everyMs: 100, read: [], attrs: ['data-galaxy-frame'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-frame']));
+      if (frames.length < 4 || frames.some((n) => !Number.isFinite(n))) {
+        return `the frame counter could not be read on every sample (${frames.join(', ')}) — nothing was watched.`;
+      }
+      if (new Set(frames).size !== 1) {
+        return `under reduced motion an ArrowLeft set the frame counter moving (${frames.join(' → ')}) — ` +
+          'the galaxy animated for a visitor who asked for less motion.';
+      }
+      return null;
+    },
+  },
 ];

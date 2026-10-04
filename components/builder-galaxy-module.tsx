@@ -3,12 +3,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   createGalaxyProjection,
+  createGalaxyView,
+  dragGalaxyView,
   generateGalaxyField,
   projectGalaxyField,
   readDeviceTier,
   readGalaxySettings,
+  resolveGalaxyInteraction,
   scaleGalaxyCount,
-  stepGalaxyField
+  stepGalaxyField,
+  stepGalaxyView,
+  stepGalaxyViewByKey,
+  tiltGalaxyView
 } from "@/lib/galaxy-field";
 import {
   assignGalaxyColours,
@@ -137,6 +143,13 @@ export function GalaxyRuntime({
    * canvas WITHOUT remounting it: a remount would start a new canvas at 0.
    */
   const frameRef = useRef(0);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  /*
+   * Where the visitor has turned the galaxy to. A ref for the same reason as
+   * the frame counter: a settings change re-runs the effect below, and the
+   * galaxy should stay where it was turned rather than snap back to face-on.
+   */
+  const viewRef = useRef(createGalaxyView());
   const [reduced, setReduced] = useState(readReducedMotion);
   const [canvasFailed, setCanvasFailed] = useState(false);
   const [shortfall, setShortfall] = useState<{ shown: number; asked: number } | null>(null);
@@ -149,6 +162,10 @@ export function GalaxyRuntime({
   const posterUrl = (settings.posterUrl ?? "").trim();
   const showPoster = Boolean(posterUrl) && (reduced || canvasFailed);
   const key = settingsKey(settings);
+  // `rotate` exists only In Place and `tilt` only in a Window; a stored value
+  // the placement does not offer runs as that placement's default.
+  const interaction = resolveGalaxyInteraction(inline, settings.interaction);
+  const showDragSurface = inline && interaction === "rotate" && !showPoster;
 
   // Reduced motion is LISTENED for: a visitor who switches it on mid-visit
   // gets the still frame now, not on their next page load.
@@ -194,6 +211,12 @@ export function GalaxyRuntime({
     let raf = 0;
     let last = 0;
     let disposed = false;
+    const view = viewRef.current;
+    let shownYaw = "";
+    let shownPitch = "";
+    // The newest cursor position, applied once per frame however many
+    // mousemoves arrived since the last one.
+    let pendingTilt: { x: number; y: number } | null = null;
 
     function regenerate(count: number) {
       field = generateGalaxyField({ ...stars, particleCount: count });
@@ -224,10 +247,16 @@ export function GalaxyRuntime({
     }
 
     function draw() {
-      projectGalaxyField(field, 0, 0, width, height, projection);
+      projectGalaxyField(field, view.yaw, view.pitch, width, height, projection);
       drawGalaxyFrame(ctx!, { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY }, look, sprites);
       frameRef.current += 1;
       canvas!.setAttribute("data-galaxy-frame", String(frameRef.current));
+      // The angle it was drawn at, for the browser checks and a console
+      // readout — written only when it changes, so a still galaxy writes nothing.
+      const yaw = view.yaw.toFixed(3);
+      const pitch = view.pitch.toFixed(3);
+      if (yaw !== shownYaw) canvas!.setAttribute("data-galaxy-yaw", (shownYaw = yaw));
+      if (pitch !== shownPitch) canvas!.setAttribute("data-galaxy-pitch", (shownPitch = pitch));
     }
 
     function tick(now: number) {
@@ -236,6 +265,11 @@ export function GalaxyRuntime({
       const dt = last ? Math.min(MAX_FRAME_SECONDS, (now - last) / 1000) : 0;
       last = now;
       stepGalaxyField(field, dt, stars);
+      if (pendingTilt) {
+        tiltGalaxyView(view, pendingTilt.x, pendingTilt.y, window.innerWidth, window.innerHeight);
+        pendingTilt = null;
+      }
+      stepGalaxyView(view, dt);
       draw();
       raf = window.requestAnimationFrame(tick);
     }
@@ -274,9 +308,77 @@ export function GalaxyRuntime({
     window.addEventListener("blur", stop);
     window.addEventListener("focus", start);
 
+    /*
+     * Interaction. Nothing is listened for under reduced motion or when it is
+     * "none": a still galaxy has no loop to ease toward a target, and a
+     * listener with nothing to drive is cost for no one.
+     *
+     * ROTATE (In Place): the drag surface is a real <button>, so it is
+     * focusable and announced. A drag captures the pointer, so releasing
+     * outside the canvas still ends it; `touch-action: pan-y` in the CSS
+     * leaves a vertical swipe to the page, and the browser cancels the
+     * pointer when it takes the swipe over.
+     *
+     * TILT (Window): the canvas sits behind the page and never receives a
+     * pointer (TractorNav trap 3), so the cursor is read from the document —
+     * one passive listener, applied once per frame in `tick`.
+     */
+    const button = buttonRef.current;
+    let dragId: number | null = null;
+    let dragX = 0;
+    let dragY = 0;
+    const endDrag = () => {
+      if (dragId !== null && button?.hasPointerCapture?.(dragId)) button.releasePointerCapture(dragId);
+      dragId = null;
+      button?.removeAttribute("data-galaxy-dragging");
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      dragId = event.pointerId;
+      dragX = event.clientX;
+      dragY = event.clientY;
+      button?.setPointerCapture?.(event.pointerId);
+      button?.setAttribute("data-galaxy-dragging", "true");
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== dragId) return;
+      dragGalaxyView(view, event.clientX - dragX, event.clientY - dragY);
+      dragX = event.clientX;
+      dragY = event.clientY;
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (stepGalaxyViewByKey(view, event.key)) event.preventDefault();
+    };
+    const onTilt = (event: MouseEvent) => {
+      pendingTilt = { x: event.clientX, y: event.clientY };
+    };
+    const rotating = !reduced && interaction === "rotate" && inline && button;
+    const tilting = !reduced && interaction === "tilt" && !inline;
+    if (rotating) {
+      button.addEventListener("pointerdown", onPointerDown);
+      button.addEventListener("pointermove", onPointerMove);
+      button.addEventListener("pointerup", endDrag);
+      button.addEventListener("pointercancel", endDrag);
+      button.addEventListener("lostpointercapture", endDrag);
+      button.addEventListener("keydown", onKeyDown);
+      window.addEventListener("blur", endDrag);
+    }
+    if (tilting) document.addEventListener("mousemove", onTilt, { passive: true });
+
     return () => {
       disposed = true;
       stop();
+      if (rotating) {
+        endDrag();
+        button.removeEventListener("pointerdown", onPointerDown);
+        button.removeEventListener("pointermove", onPointerMove);
+        button.removeEventListener("pointerup", endDrag);
+        button.removeEventListener("pointercancel", endDrag);
+        button.removeEventListener("lostpointercapture", endDrag);
+        button.removeEventListener("keydown", onKeyDown);
+        window.removeEventListener("blur", endDrag);
+      }
+      if (tilting) document.removeEventListener("mousemove", onTilt);
       observer?.disconnect();
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -314,6 +416,15 @@ export function GalaxyRuntime({
         ) : (
           <canvas ref={canvasRef} aria-hidden="true" style={surfaceStyle} />
         )}
+        {showDragSurface ? (
+          <button
+            ref={buttonRef}
+            type="button"
+            className="galaxy-drag-surface"
+            aria-label="Drag or use the arrow keys to rotate the galaxy"
+            style={{ zIndex }}
+          />
+        ) : null}
       </div>
       {!liveSite && shortfall && builderNote ? builderNote(shortfall.shown, shortfall.asked) : null}
     </>

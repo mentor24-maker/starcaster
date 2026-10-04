@@ -59,6 +59,26 @@ describe("the galaxy normalizer block (DOCTRINE §5.27)", () => {
   });
 });
 
+describe("interaction follows the placement (task 86bc7f5hh)", () => {
+  const norm = (settings: Record<string, string>) => normalizeBuilderModuleSettingsForType("galaxy", settings).interaction;
+
+  it("an absent interaction becomes the placement's default", () => {
+    expect(norm({ placement: "inline" })).toBe("rotate");
+    expect(norm({ placement: "window" })).toBe("tilt");
+    expect(norm({})).toBe("tilt");
+  });
+
+  it("a mismatched one is rewritten to that default — the key stays", () => {
+    expect(norm({ placement: "window", interaction: "rotate" })).toBe("tilt");
+    expect(norm({ placement: "inline", interaction: "tilt" })).toBe("rotate");
+  });
+
+  it("None survives either placement", () => {
+    expect(norm({ placement: "inline", interaction: "none" })).toBe("none");
+    expect(norm({ placement: "window", interaction: "none" })).toBe("none");
+  });
+});
+
 describe("the palette entry", () => {
   const groups = modulePaletteGroups.map((g) => ({ value: g.value, label: g.label, description: g.description }));
   const items = modulePaletteItems.map((item) => ({
@@ -107,6 +127,28 @@ describe("the runtime's markup", () => {
     expect(html).toMatch(/height:360px/);
     expect(html).toMatch(/position:absolute/);
     expect(html).toMatch(/z-index:0/);
+  });
+
+  it("In Place + rotate: a labelled, focusable button over the canvas", () => {
+    const html = renderToStaticMarkup(<GalaxyRuntime settings={{ placement: "inline", interaction: "rotate" }} />);
+
+    expect(html).toContain('<button type="button" class="galaxy-drag-surface"');
+    expect(html).toContain('aria-label="Drag or use the arrow keys to rotate the galaxy"');
+  });
+
+  it("In Place with no interaction stored still gets the button — rotate is its default", () => {
+    const html = renderToStaticMarkup(<GalaxyRuntime settings={{ placement: "inline" }} />);
+    expect(html).toContain("galaxy-drag-surface");
+  });
+
+  it("no button In Place + none, and never one on a Window galaxy", () => {
+    for (const settings of [
+      { placement: "inline", interaction: "none" },
+      { placement: "window", interaction: "tilt" },
+      { placement: "window", interaction: "rotate" }
+    ]) {
+      expect(renderToStaticMarkup(<GalaxyRuntime settings={settings} />), JSON.stringify(settings)).not.toContain("galaxy-drag-surface");
+    }
   });
 
   it("never renders the builder note on a live site", () => {
