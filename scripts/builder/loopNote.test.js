@@ -53,7 +53,12 @@ test('the heartbeat handles an empty queue honestly', () => {
 test('KNOWN_TRANSITIONS lists exactly the composable transitions', () => {
   assert.deepEqual(KNOWN_TRANSITIONS.sort(),
     ['auto-merge-armed', 'auto-merge-cancelled', 'claimed', 'escalated', 'merged',
-      'pr-open', 'review-started', 'sent-back', 'verified'].sort());
+      'pr-open', 'review-started', 'sent-back', 'timed-out', 'verified'].sort());
+});
+
+test('a time-limit stop says what the pass was stuck in (task 86bccr85c)', () => {
+  assert.equal(loopNote('timed-out', { at: '3:54am', reason: 'running `npm run check:render`, 7m 12s' }),
+    '⏱ stopped at the time limit 3:54am — running `npm run check:render`, 7m 12s');
 });
 
 test('the armed note says when, in his own clock, and how to stop it', () => {

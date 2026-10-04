@@ -105,6 +105,12 @@ while true; do
   # overnight (task 86bbzwuz6). A pass takes 10-15 minutes; two hours is dead.
   # Exit 124 means it was stopped; the next pass's pass-reconcile hands back
   # any ticket it had claimed.
+  #
+  # The snapshot is what the pass was running when it was stopped (task
+  # 86bccr85c). Cleared first, so a stop never reports the previous one's.
+  SNAPSHOT="$HOME/loop-logs/$SKILL.timeout-snapshot"
+  rm -f "$SNAPSHOT"
+  RUN_WITH_TIME_LIMIT_SNAPSHOT="$SNAPSHOT" \
   "$REPO/scripts/run_with_time_limit.sh" "${LOOP_PASS_LIMIT_SECONDS:-7200}" -- \
     "$CLAUDE_BIN" -p "/$SKILL" \
     --allowedTools Bash Edit Write Read Glob Grep Task TodoWrite WebFetch \
@@ -116,6 +122,20 @@ while true; do
   # finished, green PR exited 0 — so the pass's own report above is the only
   # verdict there is.
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") END /$SKILL (exit $CODE — not a verdict; the pass's report above is) =====" >> "$LOG"
+
+  # ── 1b. A pass the time limit stopped has no report — say what it was doing ─
+  # On 2026-10-04 five passes in a row on one ticket were stopped here, and
+  # the log held START and END with nothing between: a check that kept failing
+  # looked exactly like a dead machine, for ten hours (task 86bccr85c). This
+  # puts what was running on the ticket the pass held, and on the second stop
+  # since that ticket last reached a pull request, hands it to Dane instead of
+  # letting the next pass claim it for another two hours. It never fails the
+  # runner.
+  if [ "$CODE" -eq 124 ]; then
+    npm run --silent clickup -- pass-timeout --pass "$SKILL" \
+      --limit "${LOOP_PASS_LIMIT_SECONDS:-7200}" --snapshot "$SNAPSHOT" \
+      >> "$LOG" 2>&1 || true
+  fi
 
   # ── 2. What did this pass actually DO? ────────────────────────────────────
   # ASKED BEFORE THE BEAT, AND THAT ORDER IS THE POINT (task 86bc3t0n1). This
