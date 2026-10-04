@@ -1,3 +1,14 @@
+## 2026-10-04 — The status report tells Dane to sign in on the Mini when a build pass simply ran out of time (#760)
+
+When a build pass on the Mini ran its full two hours without finishing, the
+status report used to call the lane "BLOCKED" and say the login had probably
+expired and somebody needed to sign in on that machine. That was wrong: the
+Mini was signed in and working, and the pass had just got stuck re-running one
+failing check until the time limit stopped it. Now that case is reported as
+"TIMED OUT", and the report names the ticket the pass was stuck on, so the
+place to look is obvious and nobody is sent to the machine for nothing. A real
+login failure still says "sign in", exactly as before.
+
 ## 2026-10-04 — Galaxy module 6/6 — it stays smooth on phones and stops drawing when nobody can see it (#758)
 
 The galaxy now looks after the visitor's battery. When it scrolls off screen
