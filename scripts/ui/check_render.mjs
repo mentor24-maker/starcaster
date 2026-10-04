@@ -351,6 +351,29 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
      * Each entry samples the named selectors' computed properties repeatedly
      * and hands the whole series to `expect`.
      */
+    function readCanvasLuma(node) {
+      if (!(node instanceof HTMLCanvasElement) || !node.width || !node.height) return null;
+      try {
+        // Every pixel at full resolution, copied onto a scratch canvas first
+        // so the page's own context is never read. NOT a scaled-down copy:
+        // drawImage into 64×64 samples a few source pixels per cell and
+        // skipped the Galaxy's hairline flare streaks almost entirely
+        // (seven streaks measured +0.001 that way; task 86bc7f5hm).
+        const sample = document.createElement('canvas');
+        sample.width = node.width;
+        sample.height = node.height;
+        const ctx = sample.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(node, 0, 0);
+        const { data } = ctx.getImageData(0, 0, node.width, node.height);
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+        return sum / (data.length / 4);
+      } catch {
+        return null;
+      }
+    }
+
     let seriesOut = null;
     if (series) {
       seriesOut = [];
@@ -392,6 +415,17 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
              * count move (task 86bc7f5hg). Absent means null, never "".
              */
             ...Object.fromEntries((series.attrs || []).map((attr) => [attr, node.getAttribute(attr)])),
+            /*
+             * `luma` reads a CANVAS's pixels: the whole canvas scaled down
+             * into a 64×64 sample and read back through getImageData, as the
+             * mean luminance 0..255 (Rec. 709 weights). It exists because a
+             * canvas setting that changes no attribute — the Galaxy's Glow,
+             * its flare streaks — is otherwise invisible to every check here
+             * (task 86bc7f5hm). Null for anything that is not a canvas, and
+             * null rather than 0 when the read fails, so a blind reading can
+             * never pass for a dark one.
+             */
+            ...(series.luma ? { luma: readCanvasLuma(node) } : {}),
             top: box.top,
             height: box.height,
           };

@@ -765,6 +765,9 @@ const buildTuned = (ids) => ({
       placement: 'window', interaction: 'tilt', posX: '40', posY: '-20', zIndex: '-9999',
       particleCount: '3000', arms: '3', turns: '2', spinDirection: 'counterclockwise',
       c1: '#FFFFFF', c3: '#88AAFF', haze: '#335577', hazeStrength: '40',
+      // The flare streak's two sliders (task 86bc7f5hm) — shown only while
+      // there are flare stars, so this galaxy keeps some.
+      flareStars: '7', flareSize: '55', flareIntensity: '35',
       posterUrl: '/images/Gemini_Generated_starcaster_banner.png',
     },
   },

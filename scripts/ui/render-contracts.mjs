@@ -26,6 +26,14 @@ const BANNER = '/images/Gemini_Generated_starcaster_banner.png';
 const PICTURE = { url: BANNER, alt: 'Contract fixture picture', size: '40' };
 
 /**
+ * The least the Galaxy's flare streaks must add to a canvas's mean luminance (0..255) — seven streaked
+ * flare stars against the same seven at Flare Intensity 0 (task 86bc7f5hm). Measured 2026-10-04: 0.063 at Flare Size 100, Intensity 100 against 0 on a 300px
+ * card (the same seven at the defaults: 0.009). Both canvases share a seed and draw one still frame,
+ * so the difference is the streaks and nothing else — a third of the measurement leaves room.
+ */
+const FLARE_STREAK_MIN_LUMA = 0.02;
+
+/**
  * The video-background fixture. Six seconds, 128KB, generated with ffmpeg and
  * committed so this needs no database, no upload and no network — the same
  * bargain the rest of `builder-preview.html` makes.
@@ -3917,6 +3925,110 @@ export const RENDER_CONTRACTS = [
       if (!(few > 0 && many > few)) {
         return `asked for 1,000 and 3,000 stars, the canvases generated ${few} and ${many} — Star Count ` +
           'is not reaching the page.';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * Galaxy module 5/6 (task 86bc7f5hm): two RENDER DIFFERENTIALS read off the
+   * canvas's own pixels (`series.luma`, the mean luminance of every pixel).
+   * Each pair is two In Place galaxies identical but for one setting, under
+   * reduced motion so each draws exactly one still, fully assembled frame —
+   * no twinkle phase or intro moment can make the two differ by accident.
+   */
+  {
+    id: 'galaxy-glow-brightens-the-canvas',
+    why:
+      'Glow is how far each star\'s halo reaches, and it is drawn into pre-built sprites — the ' +
+      'classic place for a slider to go dead while the panel still moves, since no attribute or style ' +
+      'changes either way. Glow 0 against Glow 100 must change the canvas\'s brightness.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', glow: '0' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', glow: '100' } },
+      ],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      luma: true,
+      selectors: {
+        low: '.builder-preview-module:nth-child(1 of .builder-preview-module) canvas',
+        high: '.builder-preview-module:nth-child(2 of .builder-preview-module) canvas',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      const low = frame?.low?.luma;
+      const high = frame?.high?.luma;
+      if (!Number.isFinite(low) || !Number.isFinite(high)) {
+        return `the two canvases' brightness could not be read (glow 0: ${low}, glow 100: ${high}) — nothing was compared.`;
+      }
+      if (!(high > low * 1.15 && high - low > 0.5)) {
+        return `mean canvas luminance was ${low.toFixed(2)} at Glow 0 and ${high.toFixed(2)} at Glow 100 — ` +
+          'Glow is not reaching the picture.';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-flare-stars-brighten-the-canvas',
+    why:
+      'Seven flare stars with four-point streaks are the reference picture\'s signature, and a streak ' +
+      'is pixels on a canvas, which no style or attribute can see. Flare Stars 0 against 7 must change ' +
+      'the canvas\'s brightness — and so must the streaks on their own, which is why there is a third ' +
+      'pair: seven flare stars at full Flare Size with Flare Intensity 100 against 0. Without it this contract passed with the ' +
+      'streaks deleted from the engine, because 0 against 7 also moves seven bright round stars, and ' +
+      'that alone changed the reading (break test, task 86bc7f5hm).',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '0' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '7' } },
+        // The streak pair runs the streaks at full size and full strength: at the defaults on a 300px
+        // card a streak reaches ~11px and seven of them move the mean by ~0.01, too close to nothing
+        // to tell a streak from rounding.
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '7', flareSize: '100', flareIntensity: '100' } },
+        { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', flareStars: '7', flareSize: '100', flareIntensity: '0' } },
+      ],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { reducedMotion: 'reduce' },
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      luma: true,
+      selectors: {
+        none: '.builder-preview-module:nth-child(1 of .builder-preview-module) canvas',
+        seven: '.builder-preview-module:nth-child(2 of .builder-preview-module) canvas',
+        streaked: '.builder-preview-module:nth-child(3 of .builder-preview-module) canvas',
+        bare: '.builder-preview-module:nth-child(4 of .builder-preview-module) canvas',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      const none = frame?.none?.luma;
+      const seven = frame?.seven?.luma;
+      const streaked = frame?.streaked?.luma;
+      const bare = frame?.bare?.luma;
+      if (![none, seven, streaked, bare].every(Number.isFinite)) {
+        return `the four canvases' brightness could not be read (0 flares: ${none}, 7 flares: ${seven}, ` +
+          `7 at full streak: ${streaked}, 7 without streaks: ${bare}) — nothing was compared.`;
+      }
+      if (!(Math.abs(seven - none) > 0.05)) {
+        return `mean canvas luminance was ${none.toFixed(3)} with no flare stars and ${seven.toFixed(3)} with ` +
+          'seven — Flare Stars is not reaching the picture.';
+      }
+      if (!(streaked - bare > FLARE_STREAK_MIN_LUMA)) {
+        return `mean canvas luminance was ${streaked.toFixed(3)} with seven flare stars at full streak and ` +
+          `${bare.toFixed(3)} with the same seven at Flare Intensity 0 — the four-point streaks are not reaching the picture.`;
       }
       return null;
     },

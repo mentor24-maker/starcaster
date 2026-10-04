@@ -110,6 +110,8 @@ Engine numbers are clamped by `readGalaxySettings` (ranges in
 | `hazeStrength` | Haze Strength | 55 | |
 | `glow` | Glow | 70 | How far each star's halo reaches |
 | `opacity` | Opacity | 100 | |
+| `flareSize` | Flare Size | 41 | How far the four-point streak reaches; hidden with Flare Stars at 0 |
+| `flareIntensity` | Flare Intensity | 28 | How bright the streak is; 40 and above saturate |
 | `seed` | — | 27 | Not offered in the panel; fixes the layout so every load is the same galaxy |
 | `intro` | Structure › Intro | converge | `converge` / `none` — see *Intro and scroll* |
 | `introDelay` | Intro Delay | 1 | Seconds, 0–5; shown only with Intro on Converge |
@@ -239,6 +241,90 @@ galaxy.
 Published on the canvas, two decimals, written only when they change:
 `data-galaxy-converge` and `data-galaxy-disperse`.
 
+## Look (task 86bc7f5hm)
+
+Everything here lives in `lib/builder-client/galaxy-render.ts`, and one frame
+is painted in this order by `drawGalaxyFrame`:
+
+1. **Backdrop and haze.** Black, then one radial fill of `haze` at
+   `hazeStrength` over the whole canvas.
+2. **Core glow.** One radial gradient at the centre, drawn with `"lighter"`
+   before any star. Its radius is the engine's core radius (Core Size) × 2.6
+   field radii, never below 0.05; its peak opacity is 0.85 × Core Stars ×
+   Opacity. The colour is slot 1 warmed a third of the way toward slot 5, so
+   the core reads warm white as in the reference. It is multiplied by the
+   intro's converge, so the centre lights up as the stars arrive instead of
+   glowing alone in an empty sky.
+3. **Stars.** One pre-built sprite per colour × size class (never one per
+   star), blended with `"lighter"`. Brightness is
+   `base × (1 − twinkle × 0.5 × (1 + sin(phase)))` — Twinkle 0 is a still sky,
+   Twinkle 100 lets a star go dark for an instant (`galaxyTwinkle`).
+4. **Flare streaks.** The first `flareStars` stars carry, just under their
+   round sprite, two thin streak sprites — one horizontal, one vertical. Each
+   is a gaussian across (σ 0.7 CSS px, so it stays a hairline at any size) and
+   a power curve along, steep near the star and long in the tail, which reads
+   as a diffraction spike rather than a plus sign. Painted once per settings
+   change through ImageData; `drawImage` stretches each along its length
+   only. Reach is 0.085 field radii at Flare Size 41 and scales linearly with
+   it; peak opacity is Flare Intensity × 2.5, capped at 1. Flare stars twinkle
+   at half the rate of everyone else (`GALAXY_FLARE_TWINKLE_RATE`), so they
+   read as steady beacons. A context that cannot make ImageData leaves them as
+   round stars.
+
+**Colour shares are exact.** `assignGalaxyColours` bins each star index into a
+slot by the Share weights, seeded; a test bins 10,000 stars and holds every
+slot within ±2% of its weight.
+
+### Presets
+
+Choosing one writes every key below into the module's settings; nothing reads
+a preset's name at render. Moving any of these sliders afterwards shows
+**Custom**. Every preset writes every key any other preset writes, so
+switching never leaves a value behind (a test holds that).
+
+| | Astra (reference) | Classic | Nebula | Subtle |
+|---|---|---|---|---|
+| Stars | 4000 | 5000 | 3000 | 1500 |
+| Arms / turns | 2 / 2.35 | 3 / 1.6 | 2 / 2 | 2 / 2.35 |
+| Arm width | 40 | 35 | 75 | 45 |
+| Core size / stars | 12 / 66 | 14 / 70 | 16 / 55 | 10 / 45 |
+| Flare stars / size / intensity | 7 / 41 / 28 | 5 / 36 / 24 | 6 / 48 / 30 | 3 / 30 / 16 |
+| Star size | 2 | 1.8 | 2.4 | 1.6 |
+| Spin / inner / flow | 10 / 50 / 30 | 8 / 40 / 25 | 6 / 50 / 25 | 4 / 30 / 15 |
+| Twinkle | 60 | 45 | 70 | 30 |
+| Colours (share) | #F5F6FB 52, #6DCBF4 15, #7AB1FE 18, #F87915 7, #FA994C 8 | #FFFFFF 60, #CFE3FF 40 | #B388FF 45, #7AB1FE 30, #F5F6FB 25 | as Astra |
+| Haze / strength | #23435F 55 | none (0) | #1B1040 90 | #23435F 30 |
+| Glow / opacity | 70 / 100 | 60 / 100 | 85 / 100 | 40 / 60 |
+
+### Browser checks for the look
+
+Two differentials in `scripts/ui/render-contracts.mjs` read the canvas's own
+pixels (`series.luma`: the mean Rec. 709 luminance 0–255 of EVERY pixel of the
+canvas at full resolution), because neither setting changes any attribute or
+style. Measured when they were written, under reduced motion so each canvas is
+one still, assembled frame:
+
+| Contract | Low | High |
+|---|---|---|
+| `galaxy-glow-brightens-the-canvas` (Glow 0 vs 100) | 3.71 | 8.37 |
+| `galaxy-flare-stars-brighten-the-canvas` (Flare Stars 0 vs 7) | FLARE_NONE | 6.43 |
+| … and its streak pair (7 flare stars, Flare Size 100, Intensity 0 vs 100) | 6.424 | 6.487 |
+
+**The streak pair is the half that matters, and it exists because the first
+version could not fail.** Break-tested by deleting the streaks from the engine,
+Flare Stars 0 against 7 still passed: moving seven stars into the bright
+flare class changes the reading on its own. The pair holds everything but the
+streak's strength fixed — same seed, same still frame — so its difference is
+the streaks and nothing else, and the contract asks for at least 0.02.
+
+**It reads every pixel, not a 64×64 shrink, for the same reason.** The first
+reader drew the canvas into 64×64 and averaged that; a downscale samples a few
+source pixels per cell and skipped the hairline streaks almost entirely (seven
+of them measured +0.001). At the defaults a streak on a 300px card reaches
+about 11px, and seven of them move the full-resolution mean by about 0.009 —
+real, but too close to nothing to assert on, which is why the pair runs the
+streaks at full size and strength.
+
 ## The rules
 
 1. **Nothing paints a star except `drawGalaxyFrame`.**
@@ -259,7 +345,7 @@ Published on the canvas, two decimals, written only when they change:
 
 `scripts/ui/render-contracts.mjs`, fourteen contracts named `galaxy-*`, read
 through the series reader's `attrs` (added for this module — a canvas's pixels
-are invisible to computed style):
+are invisible to computed style), plus the two `luma` differentials above:
 
 - `galaxy-draws-a-canvas` — the canvas has a box and stars;
 - `galaxy-keeps-drawing-frames` — the frame counter rises on every one of five

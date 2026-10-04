@@ -25,6 +25,7 @@ import {
   stepGalaxyViewByKey,
   tiltGalaxyView,
   GALAXY_CORE_ARM,
+  GALAXY_FLARE_TWINKLE_RATE,
   GALAXY_COUNT_FLOOR,
   GALAXY_REFERENCE_AREA_PX,
   GALAXY_SETTING_DEFAULTS,
@@ -1127,5 +1128,23 @@ describe("intro and scroll (Galaxy module 4/6, task 86bc7f5hj)", () => {
     expect(off.intro).toBe("none");
     expect(off.scrollDisperse).toBe(false);
     expect(off.scrollDistance).toBe(800);
+  });
+});
+
+describe("flare stars twinkle at half rate (task 86bc7f5hm)", () => {
+  it("a flare star's phase advances half as far per step as an ordinary star's", () => {
+    const settings = readGalaxySettings({ particleCount: "300", flareStars: "3", twinkle: "50", flowSpeed: "0", differential: "0" });
+    const field = generateGalaxyField(settings);
+    const before = Array.from(field.twinklePhase);
+    stepGalaxyField(field, 0.05, settings);
+    const advance = (i: number) => {
+      let d = field.twinklePhase[i] - before[i];
+      if (d < 0) d += 2 * Math.PI;
+      return d;
+    };
+    expect(field.flare[0]).toBe(1);
+    expect(field.flare[10]).toBe(0);
+    expect(advance(0)).toBeCloseTo(advance(10) * GALAXY_FLARE_TWINKLE_RATE, 5);
+    expect(GALAXY_FLARE_TWINKLE_RATE).toBe(0.5);
   });
 });
