@@ -383,6 +383,21 @@ and is not in this number).
 | Phone (emulated, 4× throttle), Window | 1210 (small screen) | 60 | 4.4% | false |
 | Phone (emulated, 4× throttle), In Place | 993 (small screen) | 60 | 4.0% | false |
 
+Re-taken the same day (3:47 PM Mountain) on **Dane's MacBook Pro**, the
+machine the ticket named, by the fast-track review pass with the same script.
+Its screen refreshes at 120 Hz, so a frame loop that keeps up reads 120 fps,
+and the CPU share is roughly double the Mini's because it draws twice the
+frames. The phone rows are the same emulation with a 4× CPU throttle.
+
+| Scenario | Stars drawn | fps | CPU (main thread) | Paused |
+|---|---|---|---|---|
+| Desktop 1440×900, Window backdrop | 4000 | 120 | 40.8% | false |
+| Desktop, Window backdrop scrolled away | 4000 | 0 | 0% | true |
+| Desktop, In Place 600px | 3249 (small module) | 120 | 32.5% | false |
+| Desktop, In Place scrolled out of view | 3249 (small module) | 0 | 0% | true |
+| Phone (emulated, 4× throttle), Window | 1210 (small screen) | 120 | 51.7% | false |
+| Phone (emulated, 4× throttle), In Place | 993 (small screen) | 119.9 | 44.5% | false |
+
 Targets were 60 fps desktop and at least 30 fps phone; both met, so the count
 scaling was not tightened. Re-take it with:
 
