@@ -369,13 +369,27 @@ function cmdClear() {
         keptBytes += r.size;
         why.set(v.why, (why.get(v.why) || 0) + 1);
       }
-    } else {
-      if (apply) {
-        const to = path.join(trash, r.folder, r.rel);
+    } else if (apply) {
+      // One file macOS refuses to move must not stop the other thirty
+      // thousand. Google Drive's own .tmp.driveupload folder is locked by the
+      // app, and the first --apply on 2026-10-03 crashed on it 25 GB in. The
+      // file stays put, is named in the record, and counts as kept.
+      const to = path.join(trash, r.folder, r.rel);
+      try {
         fs.mkdirSync(path.dirname(to), { recursive: true });
         fs.renameSync(file, to);
         outcome = 'moved to the Trash';
-      } else outcome = 'would move to the Trash';
+        moved += 1;
+        movedBytes += r.size;
+      } catch (e) {
+        const w = `macOS would not move it (${e.code || e.message})`;
+        outcome = `KEPT — ${w}`;
+        kept += 1;
+        keptBytes += r.size;
+        why.set(w, (why.get(w) || 0) + 1);
+      }
+    } else {
+      outcome = 'would move to the Trash';
       moved += 1;
       movedBytes += r.size;
     }
@@ -387,7 +401,7 @@ function cmdClear() {
   const recordFile = path.join(STATE, apply ? 'record.tsv' : 'clear-dry-run.tsv');
   fs.writeFileSync(recordFile, tsv(record));
   if (apply) log(`clear --apply: moved ${moved} file(s), ${idx.humanBytes(movedBytes)}, into ${trash}`);
-  console.log(`${apply ? 'Moved' : 'Would move'} ${moved} file(s), ${idx.humanBytes(movedBytes)}, ${apply ? 'into' : 'to'} the Trash${apply ? ` (${trash})` : ''}; ${kept} file(s), ${idx.humanBytes(keptBytes)}, stay on the Mac because they are not safely on a Drive.`);
+  console.log(`${apply ? 'Moved' : 'Would move'} ${moved} file(s), ${idx.humanBytes(movedBytes)}, ${apply ? 'into' : 'to'} the Trash${apply ? ` (${trash})` : ''}; ${kept} file(s), ${idx.humanBytes(keptBytes)}, stay on the Mac, for the reasons below.`);
   for (const [w, n] of [...why].sort((a, b) => b[1] - a[1])) console.log(`  ${n} × ${w}`);
   console.log(`Record: ${recordFile}`);
   if (!apply) console.log('Dry run — nothing moved. Add --apply to move exactly the files marked "would move".');

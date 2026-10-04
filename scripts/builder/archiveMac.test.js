@@ -119,11 +119,13 @@ test('end to end: upload, verify, clear into the Trash — and keep what is not 
     [`Desktop - Dane’s MacBook Pro (2)/${shot}`]: 'png bytes',
     'Downloads/letter copy.pdf': 'a letter',
     'Downloads/old.jpg': 'already on drive',
+    'Desktop/locked/stuck.jpg': 'also on drive',
     'Desktop/repo/.git/HEAD': 'ref: main',
   };
   for (const [rel, body] of Object.entries(files)) put(rel, body);
   fs.mkdirSync(path.join(m24, 'Photos'), { recursive: true });
   fs.writeFileSync(path.join(m24, 'Photos', 'old.jpg'), 'already on drive');
+  fs.writeFileSync(path.join(m24, 'Photos', 'stuck.jpg'), 'also on drive');
 
   const run = (...args) => spawnSync('node', [path.join(ROOT, 'scripts', 'archive_mac.mjs'), ...args,
     '--home', home, '--state', state, '--trash', trash,
@@ -133,7 +135,7 @@ test('end to end: upload, verify, clear into the Trash — and keep what is not 
     let r = run('plan');
     assert.equal(r.status, 0, r.stderr + r.stdout);
     assert.match(r.stdout, /3 to upload/);
-    assert.match(r.stdout, /2 already on a Drive/);
+    assert.match(r.stdout, /3 already on a Drive/);
 
     r = run('run');
     assert.equal(r.status, 0, r.stderr + r.stdout);
@@ -152,7 +154,15 @@ test('end to end: upload, verify, clear into the Trash — and keep what is not 
     const vid = path.join(gdrive, 'Archives-from-mac', 'Desktop', 'party.mov');
     fs.renameSync(vid, path.join(tmp, 'party.mov.aside'));
     fs.writeFileSync(path.join(home, 'Desktop', 'letter.pdf'), 'a letter, edited');
+    // And a folder macOS will not let us move out of — Google Drive's own
+    // .tmp.driveupload is locked like this, and the first real run crashed
+    // on it 25 GB in (2026-10-03). It must stay, be named, and stop nothing.
+    const locked = path.join(home, 'Desktop', 'locked');
+    fs.chmodSync(locked, 0o555);
     r = run('clear', '--apply');
+    fs.chmodSync(locked, 0o755);
+    assert.ok(fs.existsSync(path.join(locked, 'stuck.jpg')), 'a file macOS refused to move went missing');
+    assert.match(r.stdout, /macOS would not move it \(EACCES\)/);
     assert.equal(r.status, 1, r.stdout);
     assert.match(r.stdout, /changed since the plan/);
     assert.match(r.stdout, /no copy with this fingerprint/);
@@ -172,7 +182,7 @@ test('end to end: upload, verify, clear into the Trash — and keep what is not 
     fs.writeFileSync(path.join(home, 'Desktop', 'letter.pdf'), 'a letter');
     r = run('clear');
     assert.equal(r.status, 0, r.stdout);
-    assert.match(r.stdout, /Would move 2 file/);
+    assert.match(r.stdout, /Would move 3 file/);
     assert.ok(fs.existsSync(path.join(home, 'Desktop', 'party.mov')), 'the dry run moved something');
     r = run('clear', '--apply');
     assert.equal(r.status, 0, r.stdout);
