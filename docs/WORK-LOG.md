@@ -1,3 +1,15 @@
+## 2026-10-04 — A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine (#756)
+
+The automatic builder gives each attempt two hours and then stops it. Until
+now a stopped attempt left nothing behind — the log showed it start and end
+with nothing in between — so on 4 October five attempts in a row spent ten
+hours re-running one failing check and it looked exactly like a broken
+machine. Now, just before stopping an attempt, the system writes down what it
+was running (for example "the render check, 7 minutes in") in the log and on
+the ticket it was working on. If the same ticket gets stopped a second time,
+it is brought to Dane with that information instead of being picked up again
+for another two wasted hours.
+
 ## 2026-10-03 — Galaxy module 4/6 — the intro: stars converge into the spiral on load and disperse as the visitor scrolls (#755)
 
 The galaxy now makes an entrance and an exit. When a page loads, its stars
