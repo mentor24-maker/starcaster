@@ -387,8 +387,14 @@ function openQueue(file, options = {}) {
    * handed to somebody else while this worker was busy. A worker that ignores
    * that answer is about to finish a job a second worker is also doing.
    */
-  function heartbeat(id, owner, { progressPct = null } = {}) {
+  function heartbeat(id, owner, { progressPct = null, leaseMs: extendMs = null } = {}) {
     const at = clock();
+    // `leaseMs` here is for a worker that is about to go quiet for longer than
+    // the default lease — the proxy pass, whose encode runs synchronously and
+    // cannot beat while ffmpeg works. It sizes the lease to the encode ONCE,
+    // up front, rather than leaving the job for a reaper to hand out again
+    // half-way through (proxyPass.js, leaseForEncode).
+    const extendBy = Number(extendMs) > 0 ? Number(extendMs) : leaseMs;
     const result = db
       .prepare(
         `UPDATE jobs
@@ -397,7 +403,7 @@ function openQueue(file, options = {}) {
                 updated_at = ?
           WHERE id = ? AND lease_owner = ? AND state = '${STATES.RUNNING}'`
       )
-      .run(at + leaseMs, progressPct == null ? null : Math.max(0, Math.min(100, Number(progressPct) || 0)), at, Number(id), text(owner));
+      .run(at + extendBy, progressPct == null ? null : Math.max(0, Math.min(100, Number(progressPct) || 0)), at, Number(id), text(owner));
     return result.changes > 0;
   }
 

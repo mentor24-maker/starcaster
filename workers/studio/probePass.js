@@ -36,6 +36,7 @@ const fs = require('node:fs');
 
 const { probeFile, PROBE_FAILURES } = require('./probe.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
+const { enqueueProxy } = require('./proxyPass.js');
 
 const STAGE_PROBE = 'probe';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -245,6 +246,12 @@ async function probeJob({
       + `with duration ${readBack.data.durationS}, so the catalog did not keep what the probe found. `
       + `Fix: inspect row ${sourceId} by hand, then delete this blocked job.`);
   }
+
+  // Hand the source on BEFORE completing, the order ingest uses for the same
+  // reason: a crash between the two re-runs this probe (which re-asks, and the
+  // queue dedupes), whereas the other order could finish the probe and lose
+  // the proxy for good — the "stops at probed forever" this exists to end.
+  enqueueProxy(queue, { sourceId, localPath });
 
   queue.complete(job.id, owner);
   return {
