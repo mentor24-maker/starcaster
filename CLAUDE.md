@@ -447,8 +447,9 @@ stated reason turning out to be a missing runner rather than an impossibility.
 2026-09-02, when their runner joined this repo; and the two Pulse pipelines,
 `channel-steward` and `librarian-sweep`, on 2026-09-12. Three still report
 **NOT REPORTING with the reason**: `db-refresh` has no schedule on purpose,
-`youtube-media` is a service rather than a scheduled pass (nothing asks it on a
-timer yet), and `weekly-report` has a runner that could emit but no schedule
+`youtube-media` is a service rather than a scheduled pass (no beat, but
+`npm run worker-watch` probes its public address on every relay wake and posts
+to the bus when production cannot reach it), and `weekly-report` has a runner that could emit but no schedule
 installed. Never as healthy, because a system that is part-instrumented must not
 read as a green board — and adding a role to `lib/nodeRoles.js` without deciding
 either way fails a test.

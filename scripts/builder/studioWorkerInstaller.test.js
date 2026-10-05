@@ -107,3 +107,159 @@ test('a label that IS loaded reports as loaded — the script\'s own bytes, agai
   assert.ok(out.includes(`row=`) && out.includes(real),
     'and the summary row names the label, so the `loaded: yes — PID` line has something to print');
 });
+
+/*
+ * THE SETTINGS — 86bccuqpy. As first written, the plist ran `node daemon.js`
+ * with only PATH and HOME, and the daemon loads no settings of its own: it
+ * would start with no database, no Drive credential and no STUDIO_PROJECT_ID,
+ * fail its first write, and be restarted by launchd once a minute forever. Now
+ * it runs under `doppler run`, `--status` names what is missing, and `install`
+ * refuses rather than installing a crash loop.
+ *
+ * These run the real script against a FAKE doppler (and a fake launchctl,
+ * ffmpeg and ffprobe, so a refusal that stopped happening could never load a
+ * real job on the machine running the tests). The environment is built from
+ * nothing, so a real credential in the test runner's own environment cannot
+ * make a missing setting read as present.
+ */
+
+const REQUIRED_FULL = {
+  STUDIO_PROJECT_ID: 'proj-planted',
+  STUDIO_DRIVE_INBOX_FOLDER_ID: 'inbox-planted',
+  STUDIO_DRIVE_PLATES_FOLDER_ID: 'plates-planted',
+  SUPABASE_URL: 'https://plantedhost.supabase.co/rest/v1?apikey=PLANTED-URL-SECRET',
+  SUPABASE_SERVICE_KEY: 'PLANTED-SERVICE-KEY-VALUE',
+  GOOGLE_DRIVE_CLIENT_ID: 'PLANTED-CLIENT-ID',
+  GOOGLE_DRIVE_CLIENT_SECRET: 'PLANTED-CLIENT-SECRET',
+  GOOGLE_DRIVE_REFRESH_TOKEN: 'PLANTED-REFRESH-TOKEN',
+};
+
+/** A bin directory with fake doppler/launchctl/ffmpeg/ffprobe, and a home. */
+function sandbox(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-installer-env-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const bin = path.join(dir, 'bin');
+  const home = path.join(dir, 'home');
+  fs.mkdirSync(bin);
+  fs.mkdirSync(home);
+  // doppler: `run ... -- cmd args` execs cmd with the planted settings, or
+  // fails the way an unauthenticated CLI does. Records its arguments.
+  fs.writeFileSync(path.join(bin, 'doppler'), `#!/usr/bin/env node
+const fs = require('fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(path.join(dir, 'doppler.calls'))}, JSON.stringify(args) + '\\n');
+if (process.env.FAKE_DOPPLER_MODE === 'auth-fail') {
+  console.error('Doppler Error: Unable to fetch secrets from the Doppler API');
+  process.exit(1);
+}
+const cut = args.indexOf('--');
+const env = { ...process.env, ...JSON.parse(process.env.FAKE_DOPPLER_ENV || '{}') };
+const r = require('child_process').spawnSync(args[cut + 1], args.slice(cut + 2), { env, stdio: 'inherit' });
+process.exit(r.status == null ? 1 : r.status);
+`, { mode: 0o755 });
+  // launchctl: nothing is loaded; any bootstrap is recorded, never performed.
+  fs.writeFileSync(path.join(bin, 'launchctl'), `#!/bin/bash
+echo "$*" >> ${JSON.stringify(path.join(dir, 'launchctl.calls'))}
+[ "$1" = list ] && exit 1
+exit 0
+`, { mode: 0o755 });
+  for (const name of ['ffmpeg', 'ffprobe']) {
+    fs.writeFileSync(path.join(bin, name), '#!/bin/bash\nexit 0\n', { mode: 0o755 });
+  }
+  return { dir, bin, home };
+}
+
+function runScript(box, args, fakeEnv, mode = 'ok') {
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync('bash', [SCRIPT, ...args], {
+    encoding: 'utf8',
+    env: {
+      PATH: `${box.bin}:${process.env.PATH}`,
+      HOME: box.home,
+      FAKE_DOPPLER_MODE: mode,
+      FAKE_DOPPLER_ENV: JSON.stringify(fakeEnv),
+    },
+  });
+  return { code: r.status, out: `${r.stdout}${r.stderr}` };
+}
+
+test('the plist runs the daemon under `doppler run ... --config prd`, on one line', () => {
+  const out = execFileSync('bash', [SCRIPT, '--print-plist'], { encoding: 'utf8' });
+  const lines = out.split('\n').filter((l) => /doppler run --project starcaster --config prd --no-check-version -- /.test(l));
+  assert.equal(lines.length, 1, `exactly one line carries the wrapper:\n${out}`);
+  assert.match(lines[0], /workers\/studio\/daemon\.js<\/string>$/, 'and the daemon is what it runs');
+  if (os.platform() === 'darwin') {
+    const { spawnSync } = require('node:child_process');
+    const lint = spawnSync('plutil', ['-lint', '-'], { input: out, encoding: 'utf8' });
+    assert.equal(lint.status, 0, `plutil -lint: ${lint.stdout}${lint.stderr}`);
+  }
+});
+
+test('--doppler-config changes the config in the plist, and a non-name is refused', () => {
+  const out = execFileSync('bash', [SCRIPT, '--print-plist', '--doppler-config', 'stg'], { encoding: 'utf8' });
+  assert.match(out, /--config stg --no-check-version/);
+  const { spawnSync } = require('node:child_process');
+  const bad = spawnSync('bash', [SCRIPT, '--print-plist', '--doppler-config', 'x</string>'], { encoding: 'utf8' });
+  assert.equal(bad.status, 2, 'a config name that would break the XML is refused');
+});
+
+test('a missing STUDIO_PROJECT_ID is named by --status, and install refuses naming it', (t) => {
+  const box = sandbox(t);
+  const env = { ...REQUIRED_FULL };
+  delete env.STUDIO_PROJECT_ID;
+
+  const status = runScript(box, ['--status'], env);
+  assert.equal(status.code, 1, `status exits 1 when something is missing:\n${status.out}`);
+  assert.match(status.out, /settings: MISSING under Doppler config "prd"/);
+  assert.match(status.out, /^\s+STUDIO_PROJECT_ID$/m, 'the missing name is on its own line');
+  assert.doesNotMatch(status.out, /^\s+SUPABASE_URL$/m, 'and only what is missing is named');
+
+  const install = runScript(box, ['--install'], env);
+  assert.equal(install.code, 1, `install refuses:\n${install.out}`);
+  assert.match(install.out, /Refusing to install: the worker would crash-loop/);
+  assert.match(install.out, /STUDIO_PROJECT_ID/);
+  assert.ok(!fs.existsSync(path.join(box.home, 'Library', 'LaunchAgents', 'com.starcaster.studio-worker.plist')),
+    'no plist was written');
+  const calls = fs.existsSync(path.join(box.dir, 'launchctl.calls'))
+    ? fs.readFileSync(path.join(box.dir, 'launchctl.calls'), 'utf8') : '';
+  assert.doesNotMatch(calls, /bootstrap/, 'and nothing was loaded');
+});
+
+test('a Doppler that will not authenticate reads CANNOT TELL — never OK — and install refuses', (t) => {
+  const box = sandbox(t);
+  const status = runScript(box, ['--status'], REQUIRED_FULL, 'auth-fail');
+  assert.equal(status.code, 2, `status exits 2 when it could not tell:\n${status.out}`);
+  assert.match(status.out, /settings: CANNOT TELL/);
+  assert.doesNotMatch(status.out, /settings: OK/);
+
+  const install = runScript(box, ['--install'], REQUIRED_FULL, 'auth-fail');
+  assert.equal(install.code, 2, `install refuses on a reading it could not take:\n${install.out}`);
+  assert.match(install.out, /Refusing to install: could not confirm/);
+});
+
+test('everything present reads OK and names the database HOST — and no value ever appears', (t) => {
+  const box = sandbox(t);
+  const status = runScript(box, ['--status'], REQUIRED_FULL);
+  assert.equal(status.code, 0, status.out);
+  assert.match(status.out, /settings: OK/);
+  assert.match(status.out, /database: the worker would write to plantedhost\.supabase\.co — the PRODUCTION database/);
+  for (const [name, value] of Object.entries(REQUIRED_FULL)) {
+    if (name === 'SUPABASE_URL') {
+      assert.ok(!status.out.includes('PLANTED-URL-SECRET'), 'only the host of the URL is printed');
+      continue;
+    }
+    assert.ok(!status.out.includes(value), `${name}'s value leaked into the output`);
+  }
+  const calls = fs.readFileSync(path.join(box.dir, 'doppler.calls'), 'utf8');
+  assert.match(calls, /"--config","prd"/, 'it asked the config the plist would use');
+});
+
+test('the other spelling of the service key satisfies the requirement, and a local database is called out', (t) => {
+  const box = sandbox(t);
+  const env = { ...REQUIRED_FULL, SUPABASE_URL: 'http://127.0.0.1:54321' };
+  delete env.SUPABASE_SERVICE_KEY;
+  env.SUPABASE_SERVICE_ROLE_KEY = 'PLANTED-ROLE-KEY';
+  const status = runScript(box, ['--status'], env);
+  assert.equal(status.code, 0, status.out);
+  assert.match(status.out, /127\.0\.0\.1 — a database on THIS machine/);
+});

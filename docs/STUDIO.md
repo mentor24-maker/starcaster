@@ -111,13 +111,39 @@ number.
 
 ## Settings the pipeline reads
 
-These live in the Mini's environment, not in the admin app. An agent session
-changes them; they are listed so the names mean something when they come up.
+These live in **Doppler** (the password vault every scheduled job here reads
+from), under project `starcaster`, config **`prd`** — not in the admin app and
+not in a file on the Mini. The installed worker is started *through* Doppler
+(`doppler run --project starcaster --config prd -- node workers/studio/daemon.js`),
+so it receives them the moment it starts and nothing is written to disk. An
+agent session changes them; they are listed so the names mean something when
+they come up.
+
+**Why `prd` and not `dev`:** on the Mini, the `dev` config points the database
+at a copy on that machine. A worker run under it would look perfectly healthy
+and file every video where the live Footage screen can never see it. The
+installer takes `--doppler-config <name>` if a different config is ever wanted,
+and `--status` prints which config and which database host the worker uses.
+
+**The installer checks before it installs.** `--status` lists, by name only
+(never a value), any required setting missing from that config, and says
+CANNOT TELL — not OK — if Doppler on that machine cannot be read. `install`
+refuses in either case rather than setting up a worker that would crash and be
+restarted once a minute forever.
+
+Required — the worker cannot do its job without these:
 
 | Setting | What it controls |
 |---|---|
-| `STUDIO_PROJECT_ID` | Which StarCaster project the footage is filed under. Required — without it the pipeline refuses to file anything, rather than filing it under no project |
+| `STUDIO_PROJECT_ID` | Which StarCaster project the footage is filed under. Without it the pipeline refuses to file anything, rather than filing it under no project |
 | `STUDIO_DRIVE_INBOX_FOLDER_ID`, `STUDIO_DRIVE_PLATES_FOLDER_ID` | The two Drive folders it watches |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | The database the catalog is written to (`SUPABASE_SERVICE_ROLE_KEY` is accepted in place of the key) |
+| `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN` | The Google Drive sign-in it reads and downloads with |
+
+Optional — each has a working default:
+
+| Setting | What it controls |
+|---|---|
 | `STUDIO_CACHE_DIR` | Where downloaded originals are kept on the Mini |
 | `STUDIO_DERIVED_DIR` | Where the proxies and audio tracks are written |
 | `STUDIO_DISK_FLOOR_BYTES` | The free-space floor below which downloads stop (default 50 GB) |

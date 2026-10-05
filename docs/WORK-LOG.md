@@ -10,6 +10,43 @@ so with the fix in plain words and carries on with the work it already has,
 asking Google again only once a minute rather than hammering it. Nothing runs
 on the Mac Mini yet; the last ticket in this set switches the worker on.
 
+## 2026-10-04 — Studio: the worker would start on the Mini with no settings and the wrong database, and crash every minute (#763)
+
+The Studio worker — the program that will process footage on the Mac Mini —
+was set up to start with none of the settings it needs: no database, no
+Google Drive sign-in, no project to file videos under. Switched on, it would
+have failed and been restarted once a minute forever. Now it starts through
+Doppler (the password vault the Mini's other jobs already use), with the
+production settings by default. Its status check names any setting that is
+missing (never showing the secret itself), says "cannot tell" rather than "OK"
+when it can't read the vault, and shows which database it would write to — so
+it can't quietly file everything into a test copy nobody sees. The installer
+now refuses to install a worker that would only crash.
+
+## 2026-10-04 — The status report tells Dane to sign in on the Mini when a build pass simply ran out of time (#760)
+
+When a build pass on the Mini ran its full two hours without finishing, the
+status report used to call the lane "BLOCKED" and say the login had probably
+expired and somebody needed to sign in on that machine. That was wrong: the
+Mini was signed in and working, and the pass had just got stuck re-running one
+failing check until the time limit stopped it. Now that case is reported as
+"TIMED OUT", and the report names the ticket the pass was stuck on, so the
+place to look is obvious and nobody is sent to the machine for nothing. A real
+login failure still says "sign in", exactly as before.
+
+## 2026-10-04 — Acquire YouTube says only "fetch failed" when the Mac Mini is offline, and nothing warns that video downloads have stopped (#759)
+
+When the video download helper on the Mac Mini can't be reached, the Acquire
+screen used to say just "fetch failed" — which is what Dane saw on 4 October,
+after the Mini's Tailscale tunnel (the link that lets the live site reach it)
+had quietly been off for 24 days. It now says "Couldn't reach the download
+helper on the Mac Mini — it may be offline, or its Tailscale tunnel may be
+down", with the technical reason in brackets. And a new check,
+`npm run worker-watch`, knocks on the helper's public address every ten
+minutes from whichever machine is awake; if nobody answers, it posts on the bus
+(once every six hours while it stays down) and posts once more when it comes
+back, so a dead tunnel is noticed in minutes instead of whenever someone next
+tries a download.
 ## 2026-10-04 — A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine (#756)
 
 The automatic builder gives each attempt two hours and then stops it. Until

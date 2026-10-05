@@ -9,7 +9,14 @@
  * goes to stderr, which the runner appends to the same log, so neither the
  * sleep nor the kind is ever a mystery.
  *
- *   node scripts/loop_runner_delay.mjs <log-file> [--exit <code>]
+ *   node scripts/loop_runner_delay.mjs <log-file> [--exit <code>] [--skill <name>] [--limit <seconds>]
+ *
+ * A TIMED-OUT PASS GETS A THIRD FIELD (task 86bccr85e): `timed-out 0 <why>`,
+ * where <why> names the time limit and the ticket the pass was holding — read
+ * off the claim marker that `clickup claim` writes and that only a FINISHED
+ * pass clears. A timed-out pass printed nothing of its own (it was killed), so
+ * the marker is the one record of what it was stuck on. The runner reads the
+ * line with `read -r kind seconds why`, so the first two fields are unchanged.
  *
  * TWO FIELDS, NOT ONE, SINCE 2026-09-20 (task 86bc3t0n1, round 2). This used to
  * print only the seconds, so the runner had nothing to record about a pass
@@ -38,10 +45,16 @@
  * reset is 23 hours away — a healthy pass answered with a needless backoff.
  */
 import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const guard = require('./builder/loopRunnerGuard.js');
+const passClaim = require('./builder/passClaim.js');
+
+const REPO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Only the end of the log matters, and logs run to megabytes. */
 const TAIL_BYTES = 16 * 1024;
@@ -68,6 +81,8 @@ function tailOf(file) {
 function parseArgs(argv) {
   let file = '';
   let exitCode = null;
+  let skill = '';
+  let limitSeconds = null;
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--exit') {
       const raw = Number(argv[i + 1]);
@@ -75,18 +90,55 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
+    if (argv[i] === '--skill') {
+      skill = String(argv[i + 1] || '');
+      i += 1;
+      continue;
+    }
+    if (argv[i] === '--limit') {
+      const raw = Number(argv[i + 1]);
+      if (Number.isFinite(raw)) limitSeconds = raw;
+      i += 1;
+      continue;
+    }
     if (!argv[i].startsWith('--') && !file) file = argv[i];
   }
-  return { file, exitCode };
+  return { file, exitCode, skill, limitSeconds };
 }
 
-function say(kind, seconds) {
-  console.log(`${kind} ${seconds}`);
+/**
+ * Which ticket was the stopped pass holding? The claim marker names it until a
+ * pass hands the ticket on, and a pass the time limit killed never got there.
+ * A marker left by the OTHER lane is not this pass's ticket, so it is named as
+ * unknown rather than borrowed. Never throws — the caller's line still goes out.
+ */
+function claimedTicket(skill) {
+  try {
+    const r = spawnSync('git', ['rev-parse', '--git-common-dir'], { cwd: REPO, encoding: 'utf8' });
+    const common = r.status === 0 ? String(r.stdout || '').trim() : '';
+    const file = passClaim.markerPath(common ? path.resolve(REPO, common) : path.join(REPO, '.git'));
+    const m = passClaim.readMarker(file);
+    if (!m.found) return { ticket: '', ticketWhy: 'it had not claimed one' };
+    if (!m.record) return { ticket: '', ticketWhy: m.why };
+    if (skill && m.record.skill && String(m.record.skill) !== skill) {
+      return { ticket: '', ticketWhy: `the claim on record belongs to ${m.record.skill}, not ${skill}` };
+    }
+    return { ticket: String(m.record.task), ticketWhy: '' };
+  } catch (err) {
+    return { ticket: '', ticketWhy: `the claim marker could not be read (${err?.message || err})` };
+  }
+}
+
+function say(kind, seconds, why = '') {
+  // One line: kind, seconds, and — only when there is one — the sentence the
+  // beat should carry. Newlines would split the runner's `read`, so none survive.
+  const tail = String(why || '').replace(/\s+/g, ' ').trim();
+  console.log(tail ? `${kind} ${seconds} ${tail}` : `${kind} ${seconds}`);
   process.exit(0);
 }
 
 try {
-  const { file, exitCode: fromFlag } = parseArgs(process.argv.slice(2));
+  const { file, exitCode: fromFlag, skill, limitSeconds } = parseArgs(process.argv.slice(2));
   if (!file) {
     console.error('[loop_runner_delay] no log file given — answering "blocked 0": no pass was read, so none can be called healthy');
     say(guard.PASS_BLOCKED, 0);
@@ -105,6 +157,9 @@ try {
 
   const outcome = guard.passOutcome({ text: scoped, exitCode, nowMs: Date.now() });
   if (outcome.reason) console.error(`[loop_runner_delay] ${outcome.reason}`);
+  if (outcome.kind === guard.PASS_TIMED_OUT) {
+    say(outcome.kind, outcome.sleepSeconds, guard.timedOutWhy({ limitSeconds, ...claimedTicket(skill) }));
+  }
   say(outcome.kind, outcome.sleepSeconds);
 } catch (err) {
   console.error(`[loop_runner_delay] could not read the log (${err?.message || err}) — answering "blocked 0" (normal pacing, and not recorded as a healthy pass)`);
