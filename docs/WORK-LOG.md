@@ -1,3 +1,17 @@
+## 2026-10-05 — Studio: downloaded footage never gets its length, date or device read, so it stops at 'downloaded' (#764)
+
+Once the Studio worker downloaded a video, nothing ever opened it to find out
+how long it is, its frame rate, when it was recorded, or which device shot it
+(iPhone, iPad, Zoom, or a background plate). Every file stopped at
+"downloaded". Now each finished download gets a follow-up job that reads the
+file and saves those details. If the file has its own recording date inside
+it, that replaces the Drive upload date that used to stand in for it. A file
+that is missing or broken is marked "failed" with a plain reason, and the
+worker moves on to the next one. If the reading tool isn't installed on the
+machine, the files are left alone (they're fine), and the worker waits and
+tries again later. Nothing runs on the Mac Mini yet; the last ticket in this
+set switches the worker on.
+
 ## 2026-10-04 — Studio: footage dropped into Google Drive is never noticed, so nothing gets processed (#762)
 
 The Studio worker had the part that checks Google Drive for new footage, but

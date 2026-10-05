@@ -1658,3 +1658,94 @@ test('a replacement of the SAME LENGTH is not adopted from the cache', async (t)
     'and the file on disk really is the replacement, byte for byte'
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 86bccuqpv: a downloaded file is handed to the probe pass.
+//
+// Before this, ingest completed at `downloaded` and enqueued nothing, so every
+// file stopped there for good — no length, no device, no recording date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const { STAGE_PROBE, SUBJECT_VIDEO_SOURCE } = require('../../workers/studio/probePass.js');
+
+test('ingesting a file leaves exactly ONE probe job for its source, and a re-run does not add a second', async (t) => {
+  const bytes = crypto.randomBytes(5_000);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes, { name: 'wide.mov' }) });
+  queueIngestJob(queue, { name: 'wide.mov', lane: 'plates', layerRole: 'plate' });
+
+  const first = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(first.ingested.length, 1, formatIngestReport(first));
+  const probes = queue.listJobs({ stage: STAGE_PROBE });
+  assert.equal(probes.length, 1, 'one probe job for one downloaded file');
+  assert.equal(probes[0].subjectKind, SUBJECT_VIDEO_SOURCE);
+  assert.equal(probes[0].subjectId, first.ingested[0].sourceId, 'keyed by the SOURCE, which is what it writes to');
+  assert.equal(probes[0].payload.localPath, first.ingested[0].localPath);
+  assert.equal(probes[0].payload.sourcePath, '/Studio/Plates/wide.mov',
+    'the Drive folder travels with it — it is the only thing that can say a file is a plate');
+
+  // The watcher saw a rename and queued the file again; the probe has not run.
+  queueIngestJob(queue, { name: 'wide.mov', lane: 'plates', layerRole: 'plate' });
+  const second = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(second.deduped.length, 1, formatIngestReport(second));
+  assert.equal(queue.listJobs({ stage: STAGE_PROBE }).length, 1, 'still ONE probe job, not two');
+});
+
+test('a file that is already probed is not probed again just because the watcher saw it again', async (t) => {
+  const bytes = crypto.randomBytes(3_000);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+
+  // The probe ran and finished.
+  const probe = queue.claim('probe-test', { stages: [STAGE_PROBE] });
+  queue.complete(probe.id, 'probe-test');
+  catalog.sources[0].state = 'probed';
+
+  queueIngestJob(queue);
+  const again = await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(again.deduped.length, 1, formatIngestReport(again));
+  assert.equal(queue.listJobs({ stage: STAGE_PROBE, state: 'pending' }).length, 0,
+    'same bytes, already described — nothing new to ask');
+});
+
+test('a row stuck at downloaded with no probe heals on the next dedupe', async (t) => {
+  // The rows ingested before the probe pass existed: done ingest job, no probe.
+  const bytes = crypto.randomBytes(3_000);
+  const queue = tmpQueue(t);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(bytes) });
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+  const stale = queue.claim('probe-test', { stages: [STAGE_PROBE] });
+  queue.fail(stale.id, 'probe-test', 'x');
+  // Put it beyond reach, as if it never existed: block it outright.
+  queue.block({ stage: STAGE_PROBE, subjectKind: SUBJECT_VIDEO_SOURCE, subjectId: stale.subjectId, reason: 'gone', jobId: stale.id });
+  assert.equal(catalog.sources[0].state, 'downloaded');
+
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+  assert.equal(queue.listJobs({ stage: STAGE_PROBE, state: 'pending' }).length, 1,
+    'a source still at downloaded is asked for again');
+});
+
+test('a REPLACED file is probed again, because the old probe describes bytes that are gone', async (t) => {
+  const at = { now: Date.now() };
+  const queue = tmpQueue(t, at);
+  const catalog = fakeCatalog();
+  const opts = passOptions(t, { catalog, drive: fakeDrive(crypto.randomBytes(4_096)) });
+  queueIngestJob(queue);
+  await runIngest({ queue, owner: OWNER, ...opts });
+  const firstProbe = queue.claim('probe-test', { stages: [STAGE_PROBE] });
+  queue.complete(firstProbe.id, 'probe-test');
+  catalog.sources[0].state = 'probed';
+
+  at.now += 60 * 1000;
+  queueIngestJob(queue);
+  const second = await runIngest({ queue, owner: OWNER, ...opts, drive: fakeDrive(crypto.randomBytes(8_192)) });
+  assert.equal(second.ingested.length, 1, formatIngestReport(second));
+  assert.equal(queue.listJobs({ stage: STAGE_PROBE, state: 'pending' }).length, 1);
+});

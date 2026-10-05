@@ -53,6 +53,7 @@ const path = require('node:path');
 const { openQueue, STATES } = require('./queue.js');
 const { runIngest, STAGE_INGEST } = require('./ingest.js');
 const { watchDrive, STAGE_WATCH } = require('./drive.js');
+const { runProbe, STAGE_PROBE } = require('./probePass.js');
 
 /** How long to wait after a tick that found nothing to do. */
 const DEFAULT_IDLE_MS = 30 * 1000;
@@ -117,11 +118,12 @@ const ROLE = 'studio-worker';
  * settles it (complete / fail / release / block). That contract is what lets
  * this file stay out of the claiming business entirely.
  *
- * `ingest` is the only queue-driven pass that exists today. Probe (5/8) and
- * proxy (6/8) shipped as pure functions over a file path, with no pass around
- * them yet; `drive.watch` is cursor-driven rather than job-driven, so it runs
- * from WATCHERS below instead. Adding probe and proxy here is one line each
- * WHEN they grow a pass — and until then, a job
+ * `ingest` and `probe` are the queue-driven passes that exist today; ingest
+ * enqueues a probe for every source it leaves at `downloaded`
+ * (workers/studio/probePass.js). Proxy (6/8) shipped as a pure function over a
+ * file path, with no pass around it yet; `drive.watch` is cursor-driven rather
+ * than job-driven, so it runs from WATCHERS below instead. Adding proxy here is
+ * one line WHEN it grows a pass — and until then, a job
  * waiting on a stage with no runner is REPORTED rather than ignored, because a
  * queue that quietly holds work nobody is doing is a queue that lies about
  * being empty (DOCTRINE 3.11). See `unhandled` in the tick report.
@@ -130,6 +132,10 @@ const STAGE_RUNNERS = {
   [STAGE_INGEST]: {
     label: 'ingest',
     run: ({ queue, owner, env }) => runIngest({ queue, owner, env, max: 1 }),
+  },
+  [STAGE_PROBE]: {
+    label: 'probe',
+    run: ({ queue, owner, env }) => runProbe({ queue, owner, env, max: 1 }),
   },
 };
 
