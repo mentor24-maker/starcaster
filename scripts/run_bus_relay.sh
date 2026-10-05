@@ -201,6 +201,22 @@ npm run --silent stale-ready -- --check || true
 # first. Never allowed to fail the relay: it exits 1 on a finding and 2 on a
 # cannot-tell, both of which are readings, not this script's failure.
 npm run --silent stale-answer -- --check || true
+# THE SIXTH WATCHDOG — can production reach the YouTube download helper?
+# (ticket 86bccrz1v)
+#
+# On 2026-10-04 Acquire Video said only "fetch failed". The helper on the Mini
+# was healthy the whole time; the Tailscale tunnel that gives it a public
+# address had been off for 24 days, and nothing asked, because `youtube-media`
+# is a service with no beat. This probes the PUBLIC address — localhost answered
+# throughout the outage — and posts once per 6h while it fails, one all-clear
+# when it answers again.
+#
+# Before the ownership check and on every machine, for the reason its
+# neighbours give: the wake on the machine that does not own the helper is the
+# one vantage point that survives the Mini being off. Never allowed to fail the
+# relay: 1 is UNREACHABLE and 2 is CANNOT TELL, both readings, not failures.
+npm run --silent worker-watch -- --check || true
+
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the
 # defect that opened that morning's stall report wearing a new coat. It rides

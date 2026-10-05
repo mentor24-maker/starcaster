@@ -139,6 +139,66 @@ test('POST /api/acquire/youtube-media without a worker', async (t) => {
   });
 });
 
+// ── A worker that is configured but cannot be reached ──────────────────────
+//
+// 2026-10-04 (ticket 86bccrz1v): the Mini's Tailscale tunnel had been down for
+// 24 days and the Acquire panel said only "Media download failed: fetch failed"
+// — Node's wording for "no route to that address". Port 1 on loopback refuses
+// instantly, which gives the same failure deterministically and offline.
+
+test('an unreachable worker is described in plain words, on every path', async (t) => {
+  const worker = require('../../lib/acquire/YoutubeMediaWorker');
+  const { handle } = require('../../routes/acquire');
+  process.env.YOUTUBE_MEDIA_WORKER_URL = 'http://127.0.0.1:1';
+  process.env.YOUTUBE_MEDIA_WORKER_TOKEN = 'x';
+  t.after(() => {
+    delete process.env.YOUTUBE_MEDIA_WORKER_URL;
+    delete process.env.YOUTUBE_MEDIA_WORKER_TOKEN;
+  });
+
+  const assertPlain = (text, where) => {
+    assert.match(text, /download helper on the Mac Mini/, `${where} must name the machine that is unreachable`);
+    assert.doesNotMatch(text, /^fetch failed$/i, `${where} must not be Node's bare "fetch failed"`);
+    assert.match(text, /\(.+\)$/, `${where} keeps the raw reason in brackets for diagnosis`);
+  };
+
+  await t.test('startMediaJob (the initial acquire uses this)', async () => {
+    const started = await worker.startMediaJob({ videoUrl: 'https://youtu.be/abc' });
+    assert.equal(started.ok, false);
+    assert.equal(started.status, 'worker-unreachable');
+    assertPlain(started.error, 'startMediaJob');
+  });
+
+  await t.test('POST /api/acquire/youtube-media', async () => {
+    const res = fakeRes();
+    await handle(
+      fakeReq('POST', '/api/acquire/youtube-media', { video_url: 'https://youtu.be/abc' }),
+      res,
+      '/api/acquire/youtube-media',
+      'POST'
+    );
+    assert.equal(res.statusCode, 502);
+    assertPlain(payloadOf(res).error.message, 'the start route');
+  });
+
+  await t.test('GET /api/acquire/youtube-media/:jobId (the poll)', async () => {
+    const res = fakeRes();
+    await handle(
+      fakeReq('GET', '/api/acquire/youtube-media/job_1'),
+      res,
+      '/api/acquire/youtube-media/job_1',
+      'GET'
+    );
+    assert.equal(res.statusCode, 502);
+    assertPlain(payloadOf(res).error.message, 'the poll route');
+  });
+
+  await t.test('a timeout says so rather than quoting the abort', () => {
+    const err = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+    assert.equal(worker.unreachableMessage(err), `${worker.UNREACHABLE_MESSAGE} (no answer before the time limit)`);
+  });
+});
+
 test('the media routes are registered under the acquire prefix', () => {
   const { manifest } = require('../../routes/acquire');
   assert.ok(
