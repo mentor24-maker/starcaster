@@ -26,8 +26,10 @@ import {
   GALAXY_DEFAULT_PALETTE,
   GALAXY_SETTING_DEFAULTS,
   galaxyCoreRadius,
+  galaxyRevealShare,
   mulberry32,
   type GalaxyField,
+  type GalaxyIntro,
   type GalaxyProjection
 } from "./galaxy-field";
 
@@ -542,6 +544,66 @@ export interface GalaxyFrameInput {
    * glowing alone in an empty sky. Left out, 1.
    */
   assembled?: number;
+  /**
+   * The intro (task 86bcd9qtc): each star's brightness is multiplied by
+   * `galaxyRevealShare(mode, progress, its radius)`. Left out, every star
+   * is shown.
+   */
+  reveal?: { mode: GalaxyIntro; progress: number };
+  /**
+   * The resting pose: `squash` is how much shorter than wide the disc reads
+   * (`galaxyPoseSquash`), `roll` the radians it is turned on the page. The
+   * haze and core glow are drawn as ellipses to match. Left out, round.
+   */
+  pose?: { squash: number; roll: number };
+}
+
+/** The canvas calls a posed (oval) glow needs; a context without them paints the glow round. */
+type GalaxyPoseContext = Pick<CanvasRenderingContext2D, "save" | "restore" | "translate" | "rotate" | "scale">;
+
+function canPose(ctx: unknown): ctx is GalaxyPoseContext {
+  const c = ctx as Partial<GalaxyPoseContext>;
+  return ["save", "restore", "translate", "rotate", "scale"].every(
+    (name) => typeof c[name as keyof GalaxyPoseContext] === "function"
+  );
+}
+
+/**
+ * Fill one radial glow centred on (cx, cy). Round, it is exactly the fill
+ * this file always drew (`box` chooses the whole canvas for the haze or the
+ * glow's own square for the core). Posed, it is drawn in the disc's frame —
+ * turned by `roll` and squashed by `squash` — over its own square, which the
+ * gradient's last stop leaves transparent at the edge anyway.
+ */
+function fillGlow(
+  ctx: GalaxyDrawContext,
+  cx: number,
+  cy: number,
+  radius: number,
+  box: [number, number, number, number],
+  pose: { squash: number; roll: number } | undefined,
+  stops: Array<[number, string]>
+): void {
+  const squash = pose && Number.isFinite(pose.squash) ? clamp(pose.squash, 0.05, 1) : 1;
+  const roll = pose && Number.isFinite(pose.roll) ? pose.roll : 0;
+  const posed = (squash < 0.999 || Math.abs(roll) > 1e-6) && canPose(ctx);
+  const gradient = posed
+    ? galaxyRadialGradient(ctx, 0, 0, 0, 0, 0, radius)
+    : galaxyRadialGradient(ctx, cx, cy, 0, cx, cy, radius);
+  if (!gradient) return;
+  for (const [at, colour] of stops) gradient.addColorStop(at, colour);
+  ctx.fillStyle = gradient;
+  if (!posed) {
+    ctx.fillRect(box[0], box[1], box[2], box[3]);
+    return;
+  }
+  const c = ctx as unknown as GalaxyPoseContext;
+  c.save();
+  c.translate(cx, cy);
+  c.rotate(roll);
+  c.scale(1, squash);
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+  c.restore();
 }
 
 /** The subset of CanvasRenderingContext2D a frame uses, so a test can pass a recorder. */
@@ -578,14 +640,11 @@ export function drawGalaxyFrame(
   const hazeRadius = Math.max(1, projection.scale * 1.15);
   if (look.hazeStrength > 0 && projection.scale > 0) {
     const [hr, hg, hb] = look.haze;
-    const haze = galaxyRadialGradient(ctx, cx, cy, 0, cx, cy, hazeRadius);
-    if (haze) {
-      haze.addColorStop(0, `rgba(${hr},${hg},${hb},${(0.6 * look.hazeStrength).toFixed(3)})`);
-      haze.addColorStop(0.5, `rgba(${hr},${hg},${hb},${(0.25 * look.hazeStrength).toFixed(3)})`);
-      haze.addColorStop(1, `rgba(${hr},${hg},${hb},0)`);
-      ctx.fillStyle = haze;
-      ctx.fillRect(0, 0, width, height);
-    }
+    fillGlow(ctx, cx, cy, hazeRadius, [0, 0, width, height], input.pose, [
+      [0, `rgba(${hr},${hg},${hb},${(0.6 * look.hazeStrength).toFixed(3)})`],
+      [0.5, `rgba(${hr},${hg},${hb},${(0.25 * look.hazeStrength).toFixed(3)})`],
+      [1, `rgba(${hr},${hg},${hb},0)`]
+    ]);
   }
 
   if (look.opacity <= 0) return 0;
@@ -597,15 +656,12 @@ export function drawGalaxyFrame(
   const coreRadius = galaxyCoreGlowRadiusPx(look.coreSize, projection.scale);
   if (coreAlpha > 0 && coreRadius > 0) {
     const [kr, kg, kb] = galaxyCoreGlowColour(look);
-    const core = galaxyRadialGradient(ctx, cx, cy, 0, cx, cy, coreRadius);
-    if (core) {
-      core.addColorStop(0, `rgba(${kr},${kg},${kb},${coreAlpha.toFixed(3)})`);
-      core.addColorStop(0.18, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.55).toFixed(3)})`);
-      core.addColorStop(0.5, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.14).toFixed(3)})`);
-      core.addColorStop(1, `rgba(${kr},${kg},${kb},0)`);
-      ctx.fillStyle = core;
-      ctx.fillRect(cx - coreRadius, cy - coreRadius, coreRadius * 2, coreRadius * 2);
-    }
+    fillGlow(ctx, cx, cy, coreRadius, [cx - coreRadius, cy - coreRadius, coreRadius * 2, coreRadius * 2], input.pose, [
+      [0, `rgba(${kr},${kg},${kb},${coreAlpha.toFixed(3)})`],
+      [0.18, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.55).toFixed(3)})`],
+      [0.5, `rgba(${kr},${kg},${kb},${(coreAlpha * 0.14).toFixed(3)})`],
+      [1, `rgba(${kr},${kg},${kb},0)`]
+    ]);
   }
 
   const flare = sprites.flare;
@@ -619,6 +675,11 @@ export function drawGalaxyFrame(
   const py = projection.y;
   const n = Math.min(projection.count, field.count, colourOf.length);
   const reach = sprites.reach;
+  const revealMode = input.reveal?.mode;
+  const revealProgress = input.reveal ? input.reveal.progress : 1;
+  // The common case — the intro over, or none — pays nothing per star.
+  const revealing = revealMode !== undefined && revealMode !== "none" && revealProgress < 1;
+  const starRadius = field.radius;
   let drawn = 0;
   for (let i = 0; i < n; i++) {
     const radius = size[i];
@@ -628,7 +689,9 @@ export function drawGalaxyFrame(
     if (x + half < 0 || y + half < 0 || x - half > width || y - half > height) continue;
     const sprite = sprites.canvases[colourOf[i]]?.[galaxySizeClass(radius)];
     if (!sprite) continue;
-    const shine = clamp(brightness[i] * galaxyTwinkle(look.twinkle, twinklePhase[i]) * look.opacity, 0, 1);
+    const shown = revealing ? galaxyRevealShare(revealMode, revealProgress, starRadius[i]) : 1;
+    if (shown <= 0) continue;
+    const shine = clamp(brightness[i] * galaxyTwinkle(look.twinkle, twinklePhase[i]) * look.opacity * shown, 0, 1);
     if (drawFlares && isFlare[i] === 1) {
       ctx.globalAlpha = clamp(shine * flareAlpha, 0, 1);
       ctx.drawImage(flare!.horizontal as unknown as CanvasImageSource, x - flareReach, y - flareThickness / 2, flareReach * 2, flareThickness);

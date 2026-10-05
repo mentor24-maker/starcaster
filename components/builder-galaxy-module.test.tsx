@@ -3,7 +3,7 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { normalizeBuilderModuleSettingsForType, normalizeLayoutSections, normalizeModuleType } from "@/lib/builder-template";
-import { GALAXY_MOTION_DEFAULTS, GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
+import { GALAXY_MOTION_DEFAULTS, GALAXY_POSE_DEFAULTS, GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
 import { GALAXY_LOOK_DEFAULTS, matchGalaxyPreset } from "@/lib/galaxy-render";
 import { searchModulePalette, type ModuleSearchHit } from "@/lib/builder-module-search";
 import { modulePaletteGroups, modulePaletteItems } from "@/components/builder/builder-types";
@@ -65,6 +65,19 @@ describe("the intro and scroll settings in the normalizer (task 86bc7f5hj)", () 
     for (const [key, value] of Object.entries(GALAXY_MOTION_DEFAULTS)) {
       expect(filled[key], key).toBe(value);
     }
+  });
+
+  it("moves a page saved with the retired Converge intro to Unfurl (task 86bcd9qtc)", () => {
+    expect(normalizeBuilderModuleSettingsForType("galaxy", { intro: "converge" }).intro).toBe("unfurl");
+    expect(normalizeBuilderModuleSettingsForType("galaxy", { intro: "fade" }).intro).toBe("fade");
+  });
+
+  it("fills the resting pose face-on, and keeps one somebody set (task 86bcd9qtc)", () => {
+    const filled = normalizeBuilderModuleSettingsForType("galaxy", {});
+    for (const [key, value] of Object.entries(GALAXY_POSE_DEFAULTS)) expect(filled[key], key).toBe(value);
+    const kept = normalizeBuilderModuleSettingsForType("galaxy", { viewAngle: "55", ovalDirection: "-30" });
+    expect(kept.viewAngle).toBe("55");
+    expect(kept.ovalDirection).toBe("-30");
   });
 
   it("keeps an intro switched off and a scroll switched off — a backfill must not switch them back on", () => {

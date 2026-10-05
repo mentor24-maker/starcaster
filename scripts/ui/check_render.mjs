@@ -374,6 +374,59 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
       }
     }
 
+    /*
+     * Where the light IS on a canvas, not just how much (task 86bcd9qtc): the
+     * luminance-weighted spread of the lit pixels along x and along y, as
+     * standard deviations in canvas pixels. A tilted galaxy is an oval —
+     * wider than tall — and an unfurling one is a small bright patch that
+     * grows; total luminance cannot tell either from its opposite. Pixels at
+     * or under the backdrop's own level (the darkest pixel) weigh nothing.
+     */
+    function readCanvasShape(node) {
+      if (!(node instanceof HTMLCanvasElement) || !node.width || !node.height) return null;
+      try {
+        const sample = document.createElement('canvas');
+        sample.width = node.width;
+        sample.height = node.height;
+        const ctx = sample.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(node, 0, 0);
+        const { data } = ctx.getImageData(0, 0, node.width, node.height);
+        const w = node.width;
+        const lum = new Float32Array(data.length / 4);
+        let floor = Infinity;
+        for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
+          const l = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+          lum[p] = l;
+          if (l < floor) floor = l;
+        }
+        let total = 0;
+        let mx = 0;
+        let my = 0;
+        for (let p = 0; p < lum.length; p += 1) {
+          const v = lum[p] - floor;
+          if (v <= 0) continue;
+          total += v;
+          mx += v * (p % w);
+          my += v * Math.floor(p / w);
+        }
+        if (!(total > 0)) return { sx: 0, sy: 0, lit: 0 };
+        mx /= total;
+        my /= total;
+        let vx = 0;
+        let vy = 0;
+        for (let p = 0; p < lum.length; p += 1) {
+          const v = lum[p] - floor;
+          if (v <= 0) continue;
+          vx += v * (p % w - mx) ** 2;
+          vy += v * (Math.floor(p / w) - my) ** 2;
+        }
+        return { sx: Math.sqrt(vx / total), sy: Math.sqrt(vy / total), lit: total / lum.length };
+      } catch {
+        return null;
+      }
+    }
+
     let seriesOut = null;
     if (series) {
       seriesOut = [];
@@ -435,6 +488,7 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
              * never pass for a dark one.
              */
             ...(series.luma ? { luma: readCanvasLuma(node) } : {}),
+            ...(series.shape ? { shape: readCanvasShape(node) } : {}),
             top: box.top,
             height: box.height,
             width: box.width,

@@ -11,6 +11,8 @@ import { PROXIMITY_PLACEMENT_OPTIONS, proximityIsInline } from "@/lib/effect-pla
 import {
   GALAXY_DEFAULT_PALETTE,
   GALAXY_MOTION_DEFAULTS,
+  GALAXY_POSE_DEFAULTS,
+  GALAXY_POSE_RANGES,
   GALAXY_MOTION_RANGES,
   GALAXY_SETTING_DEFAULTS,
   GALAXY_SETTING_RANGES,
@@ -51,12 +53,12 @@ function slider(
   label: string,
   options: { min?: number; max?: number; step?: number; suffix?: string; fallback?: string; visibleWhen?: (s: Record<string, string>) => boolean } = {}
 ): BuilderSchemaField {
-  const range = GALAXY_SETTING_RANGES[key] ?? GALAXY_MOTION_RANGES[key];
+  const range = GALAXY_SETTING_RANGES[key] ?? GALAXY_MOTION_RANGES[key] ?? GALAXY_POSE_RANGES[key];
   const min = options.min ?? range?.min ?? 0;
   const max = options.max ?? range?.max ?? 100;
   const step = options.step ?? (range?.integer ? 1 : 0.05);
   const fallback =
-    options.fallback ?? GALAXY_SETTING_DEFAULTS[key] ?? GALAXY_MOTION_DEFAULTS[key] ?? GALAXY_LOOK_DEFAULTS[key] ?? String(min);
+    options.fallback ?? GALAXY_SETTING_DEFAULTS[key] ?? GALAXY_MOTION_DEFAULTS[key] ?? GALAXY_POSE_DEFAULTS[key] ?? GALAXY_LOOK_DEFAULTS[key] ?? String(min);
   return {
     key,
     label,
@@ -108,7 +110,12 @@ function colourSlot(index: number): BuilderSchemaField[] {
   ];
 }
 
-/** The intro's timing fields exist only while there is an intro. Absent means Converge. */
+/** Oval Direction turns an oval; a face-on (round) galaxy has none to turn. */
+function viewAngleOn(settings: Record<string, string>): boolean {
+  return Number.parseFloat(settings.viewAngle || GALAXY_POSE_DEFAULTS.viewAngle) > 0;
+}
+
+/** The intro's timing fields exist only while there is an intro. Absent means Unfurl. */
 function introOn(settings: Record<string, string>): boolean {
   return (settings.intro || GALAXY_MOTION_DEFAULTS.intro) !== "none";
 }
@@ -201,6 +208,13 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
           [slider("armWidth", "Arm Width"), slider("coreSize", "Core Size")],
           [slider("coreStrength", "Core Stars"), slider("flareStars", "Flare Stars")],
           [slider("starSize", "Star Size", { step: 0.1 })],
+          // The resting pose (task 86bcd9qtc): lean the disc back into an
+          // oval, then turn the oval on the page. Oval Direction does nothing
+          // to a face-on galaxy, so it waits for a View Angle.
+          [
+            slider("viewAngle", "View Angle", { step: 1, suffix: "°" }),
+            slider("ovalDirection", "Oval Direction", { step: 1, suffix: "°", visibleWhen: viewAngleOn })
+          ],
           [
             slider("spinSpeed", "Spin Speed", { step: 1 }),
             {
@@ -231,7 +245,8 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
               control: "select",
               fallback: GALAXY_MOTION_DEFAULTS.intro,
               options: [
-                { value: "converge", label: "Converge" },
+                { value: "unfurl", label: "Unfurl" },
+                { value: "fade", label: "Fade In" },
                 { value: "none", label: "None" }
               ],
               rendersVia: "GalaxyRuntime"
