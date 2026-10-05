@@ -175,6 +175,9 @@ const TYPE_CHECKS = new Map([
   ['timestamp', isTimestampValue],
   ['timestamp with time zone', isTimestampValue],
   ['date', isTimestampValue],
+  // Only ever a GENERATED column here (see parseColumn), and Postgres refuses
+  // any value written to one — so no value a caller supplies is acceptable.
+  ['tsvector', () => false],
 ]);
 
 /**
@@ -287,6 +290,27 @@ function parseColumn(definition) {
     type = arrayType;
   }
 
+  // generated always as (to_tsvector('<config>', coalesce(<column>, ''))) stored
+  // — the one generated-column shape the setup files use, IMPLEMENTED: the
+  // value is computed on every insert and update, a caller writing it is
+  // refused the way Postgres refuses it, and the `plfts` filter reads it. Any
+  // other generated expression throws rather than being stored as a blank.
+  let generated = null;
+  const gen = cutParenClause(remaining, /\bgenerated\s+always\s+as\b/i);
+  if (gen) {
+    const expr = /^\(\s*to_tsvector\(\s*'([a-z_]+)'\s*,\s*coalesce\(\s*([a-z_][a-z0-9_]*)\s*,\s*''\s*\)\s*\)\s*\)$/i
+      .exec(gen.clause);
+    if (!expr || !/\bstored\b/i.test(gen.remaining)) {
+      throw new Error(
+        `sqlSchemaFake: the generated column "${name}" is not the `
+        + "\"to_tsvector('<config>', coalesce(<column>, '')) stored\" form this fake implements — "
+        + gen.clause
+      );
+    }
+    generated = { config: expr[1].toLowerCase(), source: expr[2] };
+    remaining = gen.remaining.replace(/\bstored\b/i, ' ').replace(/\s+/g, ' ').trim();
+  }
+
   if (!TYPE_CHECKS.has(type)) {
     throw new Error(
       `sqlSchemaFake: column "${name}" is declared "${type}", which this fake cannot check a `
@@ -357,6 +381,7 @@ function parseColumn(definition) {
     primaryKey,
     unique,
     references,
+    generated,
   };
 }
 
@@ -476,7 +501,9 @@ function parseSchemaText(sqlText) {
       continue;
     }
 
-    match = /^create (unique )?index if not exists ([a-z_][a-z0-9_]*) on public\.([a-z_][a-z0-9_]*) \(([^)]*)\)(?: where (.+))?$/i.exec(normalized);
+    // `using gin` / `using btree` is accepted and has no effect here: the
+    // access method changes how Postgres FINDS rows, never which rows match.
+    match = /^create (unique )?index if not exists ([a-z_][a-z0-9_]*) on public\.([a-z_][a-z0-9_]*) (?:using (?:gin|btree) )?\(([^)]*)\)(?: where (.+))?$/i.exec(normalized);
     if (match) {
       const [, unique, name, table, columnList, predicate] = match;
       if (!indexes.some((index) => index.name === name)) {
@@ -589,7 +616,9 @@ function parseQuery(query) {
     const index = pair.indexOf('=');
     const key = index === -1 ? pair : pair.slice(0, index);
     const value = index === -1 ? '' : pair.slice(index + 1);
-    if (key === 'select' || key === 'order' || key === 'limit') params.set(key, value);
+    if (key === 'select' || key === 'order' || key === 'limit' || key === 'on_conflict') {
+      params.set(key, decodeURIComponent(value));
+    }
     else if (key === 'or') params.set('or', value);
     else {
       const filters = params.get('filters') || [];
@@ -669,6 +698,19 @@ function matchesOr(row, conditions) {
   return conditions.some((node) => evaluateFilterNode(row, node));
 }
 
+/**
+ * The words Postgres's 'simple' text-search configuration would index:
+ * lower-cased, split on anything that is not a letter or a digit, nothing
+ * stemmed and nothing dropped. An approximation of the default parser — it
+ * does not emit the extra whole-token lexeme Postgres adds for a hyphenated
+ * word — and the only configuration implemented: `english` stems, and a fake
+ * that matched 'prices' for 'pricing' by accident would be worse than one that
+ * refuses.
+ */
+function simpleLexemes(text) {
+  return String(text || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
 function createFakeDb(schema, { idPrefix = 'row' } = {}) {
   const data = new Map();
   const calls = [];
@@ -679,6 +721,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
   function applyDefaults(table, input) {
     const row = {};
     for (const [name, column] of table.columns) {
+      if (column.generated) continue;
       if (input[name] !== undefined) {
         row[name] = input[name];
         continue;
@@ -701,6 +744,12 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
           : `${idPrefix}-${counter}`;
       } else if (column.default === 'now()') {
         row[name] = new Date(1755000000000 + counter * 1000).toISOString();
+      } else if (column.default !== null && (column.type === 'jsonb' || column.type === 'json')) {
+        // `'[]'::jsonb` is an ARRAY, not the two-character string '[]' the
+        // generic branch below would leave — a store reading Array.isArray on
+        // a defaulted column would otherwise be tested against a value
+        // Postgres never returns.
+        row[name] = JSON.parse(column.default.replace(/::jsonb?$/i, '').replace(/^'|'$/g, ''));
       } else if (column.default !== null) {
         row[name] = column.default.replace(/^'|'(::[a-z]+)?$/g, '').replace(/::jsonb$/, '');
         if (row[name] === 'true') row[name] = true;
@@ -710,7 +759,27 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         row[name] = null;
       }
     }
+    computeGenerated(table, row);
     return row;
+  }
+
+  /** Recompute every generated column from the row's current values. */
+  function computeGenerated(table, row) {
+    for (const [name, column] of table.columns) {
+      if (!column.generated) continue;
+      const source = row[column.generated.source];
+      row[name] = simpleLexemes(source === null || source === undefined ? '' : source);
+    }
+  }
+
+  /** Postgres refuses ANY value written to a generated column, even a right one. */
+  function generatedWrite(table, input) {
+    for (const key of Object.keys(input || {})) {
+      if (table.columns.get(key)?.generated) {
+        return `cannot insert a non-DEFAULT value into column "${key}" (428C9)`;
+      }
+    }
+    return '';
   }
 
   function violation(table, row) {
@@ -720,6 +789,9 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         return `null value in column "${name}" violates not-null constraint`;
       }
       if (value === null || value === undefined) continue;
+      // A generated column's value is the fake's own computation, never a
+      // caller's — generatedWrite() is what refuses a caller writing one.
+      if (column.generated) continue;
       // The declared type was parsed and then never consulted, so
       // 'not-a-uuid-at-all' landed in a uuid column under ok:true and an
       // object landed in a text column as '[object Object]'. Postgres's own
@@ -964,13 +1036,56 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     const table = schema.tables.get(tableName);
     let rows = data.get(tableName).slice();
     for (const [key, value] of params.get('filters') || []) {
-      const match = /^eq\.(.*)$/.exec(value);
-      if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
       if (!table.columns.has(key)) {
         return { error: `column ${tableName}.${key} does not exist` };
       }
+      const column = table.columns.get(key);
+
+      // `col=in.(a,b,c)` — any of the listed values; NULL matches none of them.
+      const inList = /^in\.\((.*)\)$/s.exec(value);
+      if (inList) {
+        const wantedList = inList[1] === '' ? [] : inList[1].split(',').map((part) => part.trim());
+        for (const wanted of wantedList) {
+          if (!filterValueFits(column.type, wanted)) {
+            return { error: `invalid input syntax for type ${column.type}: "${wanted}"` };
+          }
+        }
+        rows = rows.filter((row) => {
+          const cell = row[key];
+          if (cell === null || cell === undefined) return false;
+          return wantedList.some((wanted) => valuesEqual(column.type, cell, wanted));
+        });
+        continue;
+      }
+
+      // `col=plfts(config).words` — plainto_tsquery: EVERY word must be in the
+      // vector. Only on a generated tsvector column, and only with the config
+      // that column was built with; anything else is a question this fake
+      // cannot answer the way Postgres would, so it refuses.
+      const fts = /^plfts(?:\(([a-z_]+)\))?\.(.*)$/s.exec(value);
+      if (fts) {
+        if (column.type !== 'tsvector' || !column.generated) {
+          throw new Error(`sqlSchemaFake: plfts on "${key}", which is not a generated tsvector column`);
+        }
+        const config = (fts[1] || '').toLowerCase();
+        if (config !== column.generated.config) {
+          throw new Error(
+            `sqlSchemaFake: plfts(${config || '<default>'}) on "${key}", which is built with `
+            + `'${column.generated.config}' — only a matching config is implemented`
+          );
+        }
+        const words = simpleLexemes(fts[2]);
+        rows = rows.filter((row) => {
+          const lexemes = new Set(row[key] || []);
+          return words.length > 0 && words.every((word) => lexemes.has(word));
+        });
+        continue;
+      }
+
+      const match = /^eq\.(.*)$/.exec(value);
+      if (!match) throw new Error(`sqlSchemaFake: unsupported filter ${key}=${value}`);
       const wanted = match[1];
-      const { type } = table.columns.get(key);
+      const { type } = column;
       if (!filterValueFits(type, wanted)) {
         return { error: `invalid input syntax for type ${type}: "${wanted}"` };
       }
@@ -1023,7 +1138,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
    * An unknown header, or an unknown Prefer token, THROWS — the same bargain the
    * unsupported-clause and unknown-type checks already make.
    */
-  function wantsRepresentation(headers) {
+  function preferences(headers) {
     const names = Object.keys(headers || {});
     const unknown = names.filter((name) => name.toLowerCase() !== 'prefer');
     if (unknown.length) {
@@ -1033,25 +1148,27 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       );
     }
     const prefer = names.length ? String(headers[names[0]] || '') : '';
-    if (!prefer.trim()) return false;
+    const result = { representation: false, mergeDuplicates: false };
+    if (!prefer.trim()) return result;
 
-    let asked = false;
     for (const token of prefer.split(',').map((part) => part.trim().toLowerCase())) {
       if (!token) continue;
-      if (token === 'return=representation') asked = true;
-      else if (token === 'return=minimal') asked = false;
+      if (token === 'return=representation') result.representation = true;
+      else if (token === 'return=minimal') result.representation = false;
+      // The other half of an upsert (CLAUDE.md landmine 15) — see the POST path.
+      else if (token === 'resolution=merge-duplicates') result.mergeDuplicates = true;
       else {
         throw new Error(`sqlSchemaFake: Prefer token "${token}" is not implemented`);
       }
     }
-    return asked;
+    return result;
   }
 
   async function sbQuery({
     method = 'GET', table: tableName = '', query = '', body = undefined, headers = {},
   } = {}) {
     calls.push({ method, table: tableName, query, body, headers });
-    const representation = wantsRepresentation(headers);
+    const { representation, mergeDuplicates } = preferences(headers);
     const table = schema.tables.get(tableName);
     if (!table) {
       return { ok: false, status: 404, error: `relation "public.${tableName}" does not exist` };
@@ -1081,13 +1198,69 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     if (method === 'POST') {
       const inputs = Array.isArray(body) ? body : [body];
       const created = [];
+
+      // AN UPSERT IS TWO THINGS, and PostgREST needs both (CLAUDE.md landmine
+      // 15): `on_conflict=` names the columns, and `Prefer:
+      // resolution=merge-duplicates` asks for the merge. `on_conflict=` alone
+      // is a plain insert — the second write for the same key is a 409, which
+      // is exactly what froze the blog card template for two months. So the
+      // conflict target is only consulted when the header asked for a merge.
+      let conflictIndex = null;
+      if (mergeDuplicates) {
+        const target = String(params.get('on_conflict') || '').split(',').map((c) => c.trim()).filter(Boolean);
+        if (!target.length) {
+          // PostgREST falls back to the primary key here; nothing in this repo
+          // relies on that, so it is refused rather than guessed at.
+          throw new Error('sqlSchemaFake: resolution=merge-duplicates without on_conflict= is not implemented');
+        }
+        conflictIndex = schema.indexes.find((index) => index.table === tableName && index.unique
+          && index.columns.length === target.length
+          && index.columns.every((column) => target.includes(column))) || null;
+        if (!conflictIndex) {
+          return {
+            ok: false,
+            status: 400,
+            error: 'there is no unique or exclusion constraint matching the ON CONFLICT specification (42P10)',
+          };
+        }
+      }
+
       for (const input of inputs) {
         for (const key of Object.keys(input || {})) {
           if (!table.columns.has(key)) {
             return { ok: false, status: 400, error: `column "${key}" of relation "${tableName}" does not exist` };
           }
         }
+        const refusedGenerated = generatedWrite(table, input);
+        if (refusedGenerated) return { ok: false, status: 400, error: refusedGenerated };
         const row = applyDefaults(table, input || {});
+
+        if (conflictIndex && conflictIndex.predicate(row) && !hasNullIndexColumn(conflictIndex, row)) {
+          const existing = data.get(tableName).find((other) => conflictIndex.predicate(other)
+            && conflictIndex.columns.every((column) => String(other[column]) === String(row[column])));
+          if (existing) {
+            // ON CONFLICT DO UPDATE SET <every column in the payload> =
+            // EXCLUDED.<column>. Columns the payload did not name keep their
+            // values — including the id and created_at.
+            const next = { ...existing };
+            for (const key of Object.keys(input || {})) next[key] = row[key];
+            computeGenerated(table, next);
+            const broken = violation(table, next);
+            if (broken) return { ok: false, status: 400, error: broken };
+            const duplicate = uniqueViolation(tableName, next, existing);
+            if (duplicate) return { ok: false, status: 409, error: duplicate };
+            const dangling = foreignKeyViolation(tableName, next);
+            if (dangling) return { ok: false, status: 409, error: dangling };
+            Object.assign(existing, next);
+            // The conflict path IS an update, so before-update triggers fire.
+            for (const column of (schema.triggers?.get(tableName) || new Map()).values()) {
+              existing[column] = new Date().toISOString();
+            }
+            created.push({ ...existing });
+            continue;
+          }
+        }
+
         const broken = violation(table, row);
         if (broken) return { ok: false, status: 400, error: broken };
         const duplicate = uniqueViolation(tableName, row);
@@ -1115,9 +1288,12 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
           return { ok: false, status: 400, error: `column "${key}" of relation "${tableName}" does not exist` };
         }
       }
+      const refusedGenerated = generatedWrite(table, body);
+      if (refusedGenerated) return { ok: false, status: 400, error: refusedGenerated };
       const updated = [];
       for (const row of rows) {
         const next = { ...row, ...body };
+        computeGenerated(table, next);
         const broken = violation(table, next);
         if (broken) return { ok: false, status: 400, error: broken };
         const duplicate = uniqueViolation(tableName, next, row);
@@ -1125,6 +1301,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         const dangling = foreignKeyViolation(tableName, next);
         if (dangling) return { ok: false, status: 409, error: dangling };
         Object.assign(row, body);
+        computeGenerated(table, row);
         // Before-update triggers, after the write, as Postgres does.
         for (const column of (schema.triggers?.get(tableName) || new Map()).values()) {
           row[column] = new Date().toISOString();

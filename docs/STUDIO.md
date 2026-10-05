@@ -171,6 +171,11 @@ For an agent session working on this, not for day-to-day use.
 - Catalog tables: `docs/SQL/video_studio_setup.sql` (`video_sessions`,
   `video_sources`); stores in `lib/videoSessionsStore.js` and
   `lib/videoSourcesStore.js`.
+- Transcripts (Phase 2): `docs/SQL/video_transcripts_setup.sql`
+  (`video_transcripts`, one row per source; apply after the catalog file);
+  store in `lib/videoTranscriptsStore.js`. No row means "not transcribed yet",
+  never a state. Search uses the `simple` text-search config on purpose — see
+  the note in the SQL.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).
