@@ -8,6 +8,10 @@
 #   ./scripts/install_studio_worker.sh --uninstall  # remove it from here
 #   ./scripts/install_studio_worker.sh --print-plist  # the exact plist, installing nothing
 #
+#   Any of them takes --doppler-config <name> (default prd): which Doppler
+#   config the worker's settings and credentials come from. See "WHERE ITS
+#   SETTINGS COME FROM" below.
+#
 # PROVING THE RESTART, by hand, on the machine that owns the role — the
 # acceptance criterion this script carries and the one no unit test can reach,
 # because it is a claim about launchd rather than about our code:
@@ -39,6 +43,27 @@
 # moves — the same layering as install_loop_runner.sh, for the same
 # cutover-without-a-gap reason.
 #
+# WHERE ITS SETTINGS COME FROM. launchd hands a job PATH and HOME and nothing
+# else, and the daemon loads no settings file of its own — so a plist that runs
+# `node daemon.js` directly starts with no database, no Drive credential and no
+# STUDIO_PROJECT_ID, fails its first write, and is restarted once a minute
+# forever. Every other job on the Mini gets its secrets the same way, so this
+# one does too: the plist runs the daemon UNDER `doppler run`, and the values
+# never touch the plist, the disk or this script's output.
+#
+# THE CONFIG DEFAULTS TO prd, NOT dev, and that is the point of the flag. On
+# the Mini, Doppler's `dev` config points SUPABASE_URL at the database on that
+# machine (checked 2026-10-04), so a worker run under it would file footage
+# where the production Footage screen can never see it — and look perfectly
+# healthy everywhere else. `--status` therefore prints the database HOST the
+# worker would write to, and `install` refuses outright when a required setting
+# is missing rather than installing a job that crash-loops.
+#
+# NAMES, NEVER VALUES (docs/DOCTRINE.md §4.1). The preflight runs a few lines of
+# node inside `doppler run` and prints only which setting names are present and
+# the database's host name. Nothing it prints is a secret, and a test plants a
+# fake value and fails if it ever appears in the output.
+#
 # Every path is derived, never written down (vault doctrine/NODES.md, P1). The
 # Mini's home is /Users/daneofearth and this laptop's is /Users/mentor; a
 # literal path here would install cleanly and then fail on exactly the machine
@@ -51,6 +76,27 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="com.starcaster.studio-worker"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 ROLE="studio-worker"
+
+# Which Doppler config the worker runs under. Set by --doppler-config; when the
+# flag is absent, --status reads it back from the installed plist so it reports
+# what the INSTALLED job uses, not what the default would be.
+DEFAULT_DOPPLER_CONFIG="prd"
+DOPPLER_CONFIG=""
+DOPPLER_CONFIG_FROM=""
+
+# What the daemon cannot work without. Each line is one requirement; a line with
+# a `|` is satisfied by any one of its names (lib/supabase.js takes either
+# spelling of the service key). Settings with a working default —
+# STUDIO_CACHE_DIR, STUDIO_DERIVED_DIR, the two floors — are not here: their
+# absence is a choice, not a fault. docs/STUDIO.md lists all of them.
+REQUIRED_SETTINGS="STUDIO_PROJECT_ID
+STUDIO_DRIVE_INBOX_FOLDER_ID
+STUDIO_DRIVE_PLATES_FOLDER_ID
+SUPABASE_URL
+SUPABASE_SERVICE_KEY|SUPABASE_SERVICE_ROLE_KEY
+GOOGLE_DRIVE_CLIENT_ID
+GOOGLE_DRIVE_CLIENT_SECRET
+GOOGLE_DRIVE_REFRESH_TOKEN"
 
 # The plist, rendered to stdout. A separate function so `--print-plist` shows
 # the EXACT bytes `--install` would write — checking a copy of a template is
@@ -75,8 +121,24 @@ render_plist() {
   # minute — a few megabytes a week at the very worst, against a daemon log
   # capped at 48 MB. --status prints its size so it is never a blind spot.
   local LLOG="$HOME/Library/Logs/$LABEL.launchd.log"
-  local NODE_BIN
+  local NODE_BIN DOPPLER_BIN
   NODE_BIN="$(command -v node || echo /usr/local/bin/node)"
+  DOPPLER_BIN="$(command -v doppler || echo /opt/homebrew/bin/doppler)"
+
+  # ONE line, through /bin/sh, so the plist shows the whole command the way a
+  # person would type it (`--print-plist | grep doppler` is the check), and
+  # `exec` so no shell is left sitting between launchd and doppler. The paths go
+  # in unquoted, so one carrying a space or anything the shell or the XML would
+  # read is refused rather than escaped — no machine in this fleet has one, and
+  # a refusal you can read beats a job that launchd cannot start.
+  local p
+  for p in "$DOPPLER_BIN" "$NODE_BIN" "$REPO"; do
+    if ! printf '%s' "$p" | grep -Eq '^[A-Za-z0-9/._+-]+$'; then
+      echo "Refusing to write a plist: the path \"$p\" has a space or a character this script does not quote." >&2
+      exit 1
+    fi
+  done
+  local COMMAND_LINE="exec $DOPPLER_BIN run --project starcaster --config $DOPPLER_CONFIG --no-check-version -- $NODE_BIN $REPO/workers/studio/daemon.js"
   cat <<PLIST_BODY
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -86,8 +148,9 @@ render_plist() {
     <string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$NODE_BIN</string>
-        <string>$REPO/workers/studio/daemon.js</string>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>$COMMAND_LINE</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$REPO</string>
@@ -144,6 +207,67 @@ loaded_row() {
   printf '%s\n' "$all" | grep -F "$LABEL" || true
 }
 
+# THE SETTINGS PREFLIGHT. Three answers, never two: 0 every required setting is
+# present, 1 something is missing (named), 2 CANNOT TELL — Doppler is not here,
+# or will not answer for this config. A Doppler that could not be read is never
+# reported as fine, because "could not check" and "checked, all present" lead to
+# opposite next moves.
+#
+# The check runs INSIDE `doppler run`, so it sees exactly the environment the
+# daemon would, and it prints a marker line first: no marker means the node
+# never ran, which means Doppler refused — whatever else it printed.
+settings_preflight() {
+  if ! command -v doppler >/dev/null 2>&1; then
+    echo "settings: CANNOT TELL — the doppler command is not on this machine, and the worker gets every setting from it."
+    echo "          Install it (brew install dopplerhq/cli/doppler) and sign it in, then run this again."
+    return 2
+  fi
+
+  local out rc=0
+  out="$(doppler run --project starcaster --config "$DOPPLER_CONFIG" --no-check-version -- \
+    node -e '
+      const { classify } = require(process.argv[1] + "/lib/environmentBanner.js");
+      const has = (n) => String(process.env[n] || "").trim() !== "";
+      console.log("@@PREFLIGHT");
+      for (const line of process.argv[2].split("\n").filter(Boolean)) {
+        const names = line.split("|");
+        console.log((names.some(has) ? "present " : "missing ") + names.join(" or "));
+      }
+      // The HOST only. The rest of a connection URL is nobody else\x27s business.
+      let host = "";
+      try { host = new URL(String(process.env.SUPABASE_URL || "").trim()).hostname; } catch (_) {}
+      console.log("host " + (host || "-") + " " + classify(process.env.SUPABASE_URL));
+    ' "$REPO" "$REQUIRED_SETTINGS" 2>&1)" || rc=$?
+
+  if ! printf '%s\n' "$out" | grep -q '^@@PREFLIGHT$'; then
+    echo "settings: CANNOT TELL — Doppler would not hand over the \"$DOPPLER_CONFIG\" config on this machine (exit $rc), so whether the worker could start is unknown."
+    echo "          Doppler said: $(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | head -1)"
+    echo "          Usually this machine's Doppler is not signed in, or has no access to that config."
+    return 2
+  fi
+
+  local missing
+  missing="$(printf '%s\n' "$out" | sed -n 's/^missing //p')"
+  local host_line host kind
+  host_line="$(printf '%s\n' "$out" | grep '^host ' || true)"
+  host="$(printf '%s\n' "$host_line" | awk '{print $2}')"
+  kind="$(printf '%s\n' "$host_line" | awk '{print $3}')"
+
+  case "$kind" in
+    production) echo "database: the worker would write to $host — the PRODUCTION database, which the live Footage screen reads" ;;
+    local)      echo "database: the worker would write to $host — a database on THIS machine. The live Footage screen will never see what it files." ;;
+    *)          echo "database: CANNOT TELL — SUPABASE_URL is not a readable address under the \"$DOPPLER_CONFIG\" config" ;;
+  esac
+
+  if [ -n "$missing" ]; then
+    echo "settings: MISSING under Doppler config \"$DOPPLER_CONFIG\" — the worker would start and fail without:"
+    printf '%s\n' "$missing" | sed 's/^/            /'
+    return 1
+  fi
+  echo "settings: OK — every required setting is present under Doppler config \"$DOPPLER_CONFIG\" (names checked, values not shown)"
+  return 0
+}
+
 status() {
   node -e '
     const { thisNode, checkRole } = require(process.argv[1] + "/lib/nodeRoles.js");
@@ -154,6 +278,9 @@ status() {
   ' "$REPO"
 
   if [ -f "$PLIST" ]; then echo "schedule: INSTALLED at $PLIST"; else echo "schedule: not installed on this machine"; fi
+  echo "doppler:  config \"$DOPPLER_CONFIG\" ($DOPPLER_CONFIG_FROM)"
+  local preflight_rc=0
+  settings_preflight || preflight_rc=$?
   if is_loaded; then
     echo "loaded:   yes — $(loaded_row)"
     echo "          (columns: PID, last exit code, label. A PID here means the daemon is alive right now.)"
@@ -203,6 +330,8 @@ status() {
   ' "$REPO"
   echo
   echo "Is it beating, judged against its threshold:  npm run heartbeat -- --stale-check"
+  # The settings verdict is the exit code: 0 OK, 1 missing, 2 cannot tell.
+  return "$preflight_rc"
 }
 
 uninstall() {
@@ -214,6 +343,19 @@ uninstall() {
 }
 
 install_it() {
+  # Settings first: a job that is installed without them is restarted once a
+  # minute forever, failing the same way every time, into a log nobody reads.
+  local preflight_rc=0
+  settings_preflight || preflight_rc=$?
+  if [ "$preflight_rc" -eq 1 ]; then
+    echo "Refusing to install: the worker would crash-loop without the setting(s) named above." >&2
+    echo "Add them to Doppler config \"$DOPPLER_CONFIG\", then run this again." >&2
+    exit 1
+  elif [ "$preflight_rc" -ne 0 ]; then
+    echo "Refusing to install: could not confirm the worker's settings under Doppler config \"$DOPPLER_CONFIG\" (see above)." >&2
+    exit 2
+  fi
+
   # A schedule pointing at a worktree works until the worktree ships and is
   # deleted. Install from the main checkout only (same guard as the loop
   # runner's and the relay's).
@@ -226,7 +368,7 @@ install_it() {
   # launchd hands the job almost no environment, so everything it needs has to
   # be findable now, on the machine doing the installing — not discovered at
   # 3am by a job that exits 1 into a log nobody reads.
-  for bin in node ffmpeg ffprobe; do
+  for bin in node doppler ffmpeg ffprobe; do
     if ! command -v "$bin" >/dev/null; then
       echo "Cannot find $bin on this machine — the daemon would install and then fail on every media job." >&2
       echo "Install it first (brew install ffmpeg covers the last two), then run this again." >&2
@@ -245,13 +387,44 @@ install_it() {
   status
 }
 
-case "${1:-}" in
+usage() {
+  echo "usage: $0 [--install | --uninstall | --status | --print-plist] [--doppler-config <name>]" >&2
+  exit 2
+}
+
+MODE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --doppler-config)
+      [ $# -ge 2 ] || usage
+      DOPPLER_CONFIG="$2"; DOPPLER_CONFIG_FROM="from --doppler-config"; shift 2 ;;
+    --doppler-config=*)
+      DOPPLER_CONFIG="${1#*=}"; DOPPLER_CONFIG_FROM="from --doppler-config"; shift ;;
+    --uninstall|--remove|--status|--print-plist|--install)
+      [ -z "$MODE" ] || usage
+      MODE="$1"; shift ;;
+    *) usage ;;
+  esac
+done
+
+# No flag: the installed plist's config, so --status describes the job that is
+# actually there; then the default. The name lands inside the plist's XML, so
+# only a plain config name is accepted.
+if [ -z "$DOPPLER_CONFIG" ] && [ -f "$PLIST" ]; then
+  DOPPLER_CONFIG="$(sed -n 's/.* run --project starcaster --config \([A-Za-z0-9_-]*\) .*/\1/p' "$PLIST" | head -1)"
+  [ -n "$DOPPLER_CONFIG" ] && DOPPLER_CONFIG_FROM="read from the installed schedule"
+fi
+if [ -z "$DOPPLER_CONFIG" ]; then
+  DOPPLER_CONFIG="$DEFAULT_DOPPLER_CONFIG"; DOPPLER_CONFIG_FROM="the default"
+fi
+if ! printf '%s' "$DOPPLER_CONFIG" | grep -Eq '^[A-Za-z0-9_-]+$'; then
+  echo "\"$DOPPLER_CONFIG\" is not a Doppler config name (letters, digits, - and _ only)." >&2
+  exit 2
+fi
+
+case "$MODE" in
   --uninstall|--remove) uninstall ;;
   --status)             status ;;
   --print-plist)        render_plist ;;
   ""|--install)         install_it ;;
-  *)
-    echo "usage: $0 [--install | --uninstall | --status | --print-plist]" >&2
-    exit 2
-    ;;
 esac
