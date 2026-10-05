@@ -92,10 +92,26 @@ const AUTH_FAILURE_LINE = /(failed to authenticate|oauth session (?:has )?expire
  */
 const END_BANNER_EXIT = /\bEND \/\S+ \(exit (\d+)/;
 
-/** What a pass turned out to be. Three, never two — and never a boolean. */
+/** What a pass turned out to be. Four, never two — and never a boolean. */
 const PASS_RAN = 'ran';
 const PASS_STOOD_DOWN = 'stood-down';
 const PASS_BLOCKED = 'blocked';
+const PASS_TIMED_OUT = 'timed-out';
+
+/**
+ * THE EXIT CODE scripts/run_with_time_limit.sh RETURNS WHEN IT STOPPED A PASS
+ * (the GNU `timeout` convention). It is a fact the runner's own wrapper wrote,
+ * not something the pass said, and it means one thing: the pass was alive and
+ * working when the limit arrived, and did not finish.
+ *
+ * WHY IT IS ITS OWN ANSWER (task 86bccr85e, 2026-10-04). It used to fall
+ * through to `blocked`, and `blocked` renders as "an expired login … somebody
+ * has to sign in on that machine". That day the Mini was signed in and
+ * working; every build pass was stopped at the two-hour limit while re-running
+ * one failing render check. The heartbeat told Dane he was the blocker when
+ * nothing needed his hands, and pointed the diagnosis at the wrong cause.
+ */
+const TIME_LIMIT_EXIT = 124;
 
 const DEFAULT_ZONE = 'America/Denver';
 
@@ -134,6 +150,29 @@ function scopeToLastPass(text) {
   const body = String(text || '');
   const at = body.lastIndexOf(PASS_START_MARKER);
   return at === -1 ? body : body.slice(at);
+}
+
+/**
+ * The sentence a timed-out beat carries: how long the limit was and which
+ * ticket the pass was holding, so the reader goes to the ticket rather than to
+ * the machine. Pure — the caller reads the claim marker and hands over what it
+ * found.
+ *
+ * @param {object} opts
+ * @param {number} [opts.limitSeconds]  the time limit the pass ran into
+ * @param {string} [opts.ticket]        the ticket id the pass had claimed, if any
+ * @param {string} [opts.ticketWhy]     why the ticket could not be named, when it could not
+ */
+function timedOutWhy({ limitSeconds, ticket = '', ticketWhy = '' } = {}) {
+  const secs = Number(limitSeconds);
+  const limitText = Number.isFinite(secs) && secs > 0
+    ? (secs % 3600 === 0 ? `${secs / 3600}h` : `${Math.round(secs / 60)}m`)
+    : 'its';
+  const head = `the pass ran the full ${limitText} time limit without finishing — usually a gate or test it `
+    + 'cannot get past, not a login';
+  const id = String(ticket || '').trim();
+  if (id) return `${head}; it was working on ticket ${id} (https://app.clickup.com/t/${id})`;
+  return `${head}; which ticket it was working on could not be named (${ticketWhy || 'no claim was recorded'})`;
 }
 
 /**
@@ -246,6 +285,9 @@ function exitCodeFromLog(text) {
  *               at a keyboard — an expired login, or a failure naming no cause
  *               that clears itself. Do NOT sleep on it: sleeping half an hour in
  *               front of a locked door 48 times a day is what the 90 hours were.
+ *   timed-out   it WAS working, and the two-hour limit stopped it before it
+ *               finished (exit 124). Not a login, not a limit — usually a gate
+ *               or test the pass cannot get past (task 86bccr85e).
  *
  * @param {object} opts
  * @param {string} opts.text      this pass's output (already scoped to the pass)
@@ -300,6 +342,21 @@ function passOutcome({ text, exitCode, nowMs } = {}) {
     };
   }
 
+  // THE TIME LIMIT OUTRANKS A LIMIT LINE, and only the authentication check
+  // above outranks it. Exit 124 is the wrapper saying it stopped a pass that
+  // was still running two hours in — a pass a usage limit had closed would
+  // have exited in seconds, so a limit phrase in a timed-out pass's output is
+  // the pass writing about one. Pace normally: the next pass is the retry.
+  if (code === TIME_LIMIT_EXIT) {
+    return {
+      kind: PASS_TIMED_OUT,
+      sleepSeconds: 0,
+      why: 'the pass ran the full time limit without finishing and was stopped',
+      reason: `this pass exited ${TIME_LIMIT_EXIT}: the time limit stopped it while it was still running. `
+        + 'It was working, not locked out — recording it as timed out, not as blocked, and pacing normally.',
+    };
+  }
+
   const limit = limitDelay({ text: body, nowMs });
   if (limit) {
     return {
@@ -331,6 +388,9 @@ module.exports = {
   PASS_RAN,
   PASS_STOOD_DOWN,
   PASS_BLOCKED,
+  PASS_TIMED_OUT,
+  TIME_LIMIT_EXIT,
+  timedOutWhy,
   exitCodeFromLog,
   passOutcome,
   limitDelay,
