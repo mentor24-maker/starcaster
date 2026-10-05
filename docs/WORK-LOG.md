@@ -11,6 +11,30 @@ when it can't read the vault, and shows which database it would write to — so
 it can't quietly file everything into a test copy nobody sees. The installer
 now refuses to install a worker that would only crash.
 
+## 2026-10-04 — The status report tells Dane to sign in on the Mini when a build pass simply ran out of time (#760)
+
+When a build pass on the Mini ran its full two hours without finishing, the
+status report used to call the lane "BLOCKED" and say the login had probably
+expired and somebody needed to sign in on that machine. That was wrong: the
+Mini was signed in and working, and the pass had just got stuck re-running one
+failing check until the time limit stopped it. Now that case is reported as
+"TIMED OUT", and the report names the ticket the pass was stuck on, so the
+place to look is obvious and nobody is sent to the machine for nothing. A real
+login failure still says "sign in", exactly as before.
+
+## 2026-10-04 — Acquire YouTube says only "fetch failed" when the Mac Mini is offline, and nothing warns that video downloads have stopped (#759)
+
+When the video download helper on the Mac Mini can't be reached, the Acquire
+screen used to say just "fetch failed" — which is what Dane saw on 4 October,
+after the Mini's Tailscale tunnel (the link that lets the live site reach it)
+had quietly been off for 24 days. It now says "Couldn't reach the download
+helper on the Mac Mini — it may be offline, or its Tailscale tunnel may be
+down", with the technical reason in brackets. And a new check,
+`npm run worker-watch`, knocks on the helper's public address every ten
+minutes from whichever machine is awake; if nobody answers, it posts on the bus
+(once every six hours while it stays down) and posts once more when it comes
+back, so a dead tunnel is noticed in minutes instead of whenever someone next
+tries a download.
 ## 2026-10-04 — A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine (#756)
 
 The automatic builder gives each attempt two hours and then stops it. Until

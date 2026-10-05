@@ -170,16 +170,23 @@ while true; do
   #               human — an expired login, or a failure naming no cause that
   #               clears itself. Never slept on: sleeping in front of a locked
   #               door 48 times a day is what the 90 hours were.
+  #   timed-out   it WAS working and the time limit above stopped it (exit
+  #               124). Not a login: on 2026-10-04 every build pass was stopped
+  #               at two hours re-running one failing render check, and the
+  #               roll call told Dane to go and sign in (task 86bccr85e). The
+  #               guard's third field names the ticket the pass was holding.
   PASS_KIND=ran
   LIMIT_SLEEP=0
   if [ "$CODE" -ne 0 ]; then
-    GUARD_ANSWER=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" --exit "$CODE" 2>> "$LOG")
-    # Two fields, "<kind> <seconds>". Anything else means the guard did not
-    # answer, and a pass that exited non-zero is not called healthy on the
-    # strength of a broken reading — it is `blocked`, paced normally.
-    read -r ANSWER_KIND ANSWER_SLEEP <<< "$GUARD_ANSWER"
+    GUARD_ANSWER=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" --exit "$CODE" \
+      --skill "$SKILL" --limit "${LOOP_PASS_LIMIT_SECONDS:-7200}" 2>> "$LOG")
+    # "<kind> <seconds>", plus "<why>" on a timed-out pass. Anything else means
+    # the guard did not answer, and a pass that exited non-zero is not called
+    # healthy on the strength of a broken reading — it is `blocked`, paced
+    # normally.
+    read -r ANSWER_KIND ANSWER_SLEEP ANSWER_WHY <<< "$GUARD_ANSWER"
     case "$ANSWER_KIND" in
-      ran|stood-down|blocked) PASS_KIND="$ANSWER_KIND" ;;
+      ran|stood-down|blocked|timed-out) PASS_KIND="$ANSWER_KIND" ;;
       *)
         echo "[loop-runner] the pass guard gave no usable answer ('$GUARD_ANSWER') for a pass that exited $CODE — recording it as blocked" >> "$LOG"
         PASS_KIND=blocked
@@ -210,6 +217,11 @@ while true; do
     blocked)
       npm run --silent heartbeat -- --beat --role "$SKILL" \
         --blocked "the pass exited $CODE having done no work; see $LOG for the reason the guard read" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    timed-out)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --timed-out "${ANSWER_WHY:-the pass ran the full time limit without finishing and was stopped; see $LOG}" \
         >> "$LOG" 2>&1 || true
       ;;
     *)
