@@ -2880,10 +2880,17 @@ export function normalizeBuilderModuleSettingsForType(
       w1: "52", w2: "15", w3: "18", w4: "7", w5: "8",
       /* Galaxy module 4/6 (task 86bc7f5hj): the intro and the scroll.
          Mirrors GALAXY_MOTION_DEFAULTS in galaxy-field.ts. The two switches
-         are filled too — absent already MEANS "converge" and "true" to the
+         are filled too — absent already MEANS "unfurl" and "true" to the
          runtime, so the backfill changes nothing a visitor sees. */
-      intro: "converge", introDelay: "1", introDuration: "5", scrollDisperse: "true", scrollDistance: "800"
+      intro: "unfurl", introDelay: "0", introDuration: "5", scrollDisperse: "true", scrollDistance: "800",
+      /* Task 86bcd9qtc: the resting pose. Mirrors GALAXY_POSE_DEFAULTS —
+         0 and 0 are the face-on galaxy every page had before. */
+      viewAngle: "0", ovalDirection: "0"
     };
+    /* Task 86bcd9qtc: the Converge fly-in was retired. A page that saved it
+       gets Unfurl, the intro the runtime already reads it as — written back
+       so the panel's Intro select shows a value it actually offers. */
+    if (settings.intro === "converge") settings.intro = "unfurl";
     for (const [key, fallback] of Object.entries(galaxyDefaults)) {
       if (!settings[key]) settings[key] = fallback;
     }

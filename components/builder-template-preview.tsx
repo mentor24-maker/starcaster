@@ -2769,11 +2769,11 @@ function BuilderModulePreview({
         />
         {/*
          * "Replay intro" — the confetti module's Test Burst, for the galaxy's
-         * fly-in (task 86bc7f5hj). Addressed to whoever is building the page,
+         * intro (task 86bc7f5hj; Unfurl and Fade In since 86bcd9qtc). Addressed to whoever is building the page,
          * so it lives inside BuilderOnlyNote and a published page never shows
          * it. Offered only when there is an intro to replay.
          */}
-        {readGalaxyMotion(module.settings).intro === "converge" ? (
+        {readGalaxyMotion(module.settings).intro !== "none" ? (
           <BuilderOnlyNote liveSite={liveSite}>
             <button
               className="secondary-button builder-galaxy-replay"

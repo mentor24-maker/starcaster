@@ -1187,9 +1187,13 @@ const buildPanelCheckSection = (ids) => {
           interaction: 'rotate',
           height: '360',
           particleCount: '2000',
-          // The intro and scroll fields (task 86bc7f5hj). Converge and Scroll
+          // The intro and scroll fields (task 86bc7f5hj). An intro and Scroll
           // Away both on, so every field they gate is showing and measured.
-          intro: 'converge',
+          intro: 'unfurl',
+          // A View Angle, so Oval Direction (hidden at 0) is showing too
+          // (task 86bcd9qtc).
+          viewAngle: '30',
+          ovalDirection: '0',
           introDelay: '0',
           introDuration: '5',
           scrollDisperse: 'true',

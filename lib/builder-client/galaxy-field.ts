@@ -741,8 +741,10 @@ export function createGalaxyProjection(count: number): GalaxyProjection {
 
 /**
  * Rotate the field — yaw about the screen's vertical axis, then pitch about
- * its horizontal one — and project it orthographically to pixels centred in
- * the viewport, into `out`. Returns `out`. Nothing is allocated: the arrays
+ * its horizontal one, then `roll` in the screen's plane — and project it
+ * orthographically to pixels centred in the viewport, into `out`. A resting
+ * pitch is what makes the disc read as an oval (the View Angle setting), and
+ * roll turns that oval on the page (Oval Direction). Returns `out`. Nothing is allocated: the arrays
  * are the caller's, sized by `createGalaxyProjection(field.count)`.
  *
  * `mix` is the intro and the scroll (Galaxy module 4/6): each star is drawn
@@ -766,7 +768,8 @@ export function projectGalaxyField(
   viewportW: number,
   viewportH: number,
   out: GalaxyProjection,
-  mix: GalaxyMix = GALAXY_MIX_IN_PLACE
+  mix: GalaxyMix = GALAXY_MIX_IN_PLACE,
+  roll = 0
 ): GalaxyProjection {
   const w = Number.isFinite(viewportW) ? Math.max(0, viewportW) : 0;
   const h = Number.isFinite(viewportH) ? Math.max(0, viewportH) : 0;
@@ -777,6 +780,8 @@ export function projectGalaxyField(
   const sinYaw = Math.sin(Number.isFinite(yaw) ? yaw : 0);
   const cosPitch = Math.cos(Number.isFinite(pitch) ? pitch : 0);
   const sinPitch = Math.sin(Number.isFinite(pitch) ? pitch : 0);
+  const cosRoll = Math.cos(Number.isFinite(roll) ? roll : 0);
+  const sinRoll = Math.sin(Number.isFinite(roll) ? roll : 0);
   const { x, y, z, radius, scatterX, scatterY, scatterZ } = field;
   const n = Math.min(field.count, out.x.length, out.y.length, out.depth.length);
   const ox = out.x;
@@ -786,10 +791,20 @@ export function projectGalaxyField(
   const disperse = galaxyUnit(mix.disperse, 0);
   // The common case — everything home — pays nothing per star.
   const mixing = converge < 1 || disperse > 0;
+  const reveal = galaxyUnit(mix.reveal ?? 1, 1);
+  const unfurling = mix.revealMode === "unfurl" && reveal < 1;
   for (let i = 0; i < n; i++) {
     let px = x[i];
     let py = y[i];
     let pz = z[i];
+    if (unfurling) {
+      // Unfurl: a star not yet out sits nearer the centre, and slides out to
+      // its place as its turn in the wave comes — the spiral grows from the
+      // core. In the disc's own plane, so it turns with the view.
+      const out = GALAXY_UNFURL_START + (1 - GALAXY_UNFURL_START) * galaxyRevealShare("unfurl", reveal, radius[i]);
+      px *= out;
+      py *= out;
+    }
     if (mixing) {
       const away = 1 - galaxyStarPlacement(converge, disperse, radius[i]);
       px += scatterX[i] * away;
@@ -802,8 +817,10 @@ export function projectGalaxyField(
     // Pitch: rotate in the y–z plane.
     const y2 = py * cosPitch - z1 * sinPitch;
     const z2 = py * sinPitch + z1 * cosPitch;
-    ox[i] = cx + x1 * scale;
-    oy[i] = cy + y2 * scale;
+    // Roll: turn the projected picture in the screen's own plane, so a
+    // tilted (oval) galaxy can lie at any angle on the page.
+    ox[i] = cx + (x1 * cosRoll - y2 * sinRoll) * scale;
+    oy[i] = cy + (x1 * sinRoll + y2 * cosRoll) * scale;
     od[i] = z2;
   }
   out.scale = scale;
@@ -1080,6 +1097,13 @@ export interface GalaxyMix {
   converge: number;
   /** 0 = in place, 1 = scattered again and faded out. */
   disperse: number;
+  /**
+   * The intro's progress, 0..1, for the Unfurl and Fade In intros
+   * (task 86bcd9qtc). Left out, 1: everything shown.
+   */
+  reveal?: number;
+  /** Which intro `reveal` drives. Left out, nothing is held back. */
+  revealMode?: GalaxyIntro;
 }
 
 /** Everything home: what a caller that knows nothing of the intro gets. */
@@ -1120,13 +1144,46 @@ export function galaxyDisperseOpacity(disperse: number): number {
   return 1 - galaxyUnit(disperse, 0);
 }
 
-export const GALAXY_INTROS = ["converge", "none"] as const;
+/**
+ * The intros (task 86bcd9qtc). The original fly-in — stars converging from
+ * scattered positions — was retired as too close to the reference page's own
+ * intro (Dane, 2026-10-05). The galaxy now turns from its first frame and is
+ * revealed in place:
+ *
+ *   - `unfurl` grows out from the core: each star fades in and slides out to
+ *     its place on the same centre-first wave the fly-in used, so the arm
+ *     tips arrive last;
+ *   - `fade` brightens the whole galaxy at once;
+ *   - `none` shows it whole on the first frame.
+ *
+ * A page saved with the old `converge` reads as `unfurl` — the nearest
+ * intro that still exists, so nobody's galaxy loses its entrance.
+ */
+export const GALAXY_INTROS = ["unfurl", "fade", "none"] as const;
 export type GalaxyIntro = (typeof GALAXY_INTROS)[number];
+
+/** Unfurl: a star not yet revealed is drawn this share of the way out to its place. */
+export const GALAXY_UNFURL_START = 0.35;
+
+/**
+ * How much of ONE star the intro is showing, 0..1, eased, at `progress`
+ * through the intro. Unfurl runs the centre-first wave (`GALAXY_INTRO_STAGGER`)
+ * — the core at once, the rim from halfway; Fade In shows every star alike;
+ * None shows everything. Used twice: as the star's brightness, and (Unfurl
+ * only) as how far out it has slid.
+ */
+export function galaxyRevealShare(mode: GalaxyIntro | undefined, progress: number, radius: number): number {
+  const p = galaxyUnit(progress, 1);
+  if (mode === "fade") return smoothstep(p);
+  if (mode !== "unfurl") return 1;
+  const turn = GALAXY_INTRO_STAGGER * galaxyUnit(radius, 1);
+  return smoothstep(clamp((p - turn) / (1 - GALAXY_INTRO_STAGGER), 0, 1));
+}
 
 /** The intro and scroll settings' defaults, as the strings the module stores. */
 export const GALAXY_MOTION_DEFAULTS: Record<string, string> = {
-  intro: "converge",
-  introDelay: "1",
+  intro: "unfurl",
+  introDelay: "0",
   introDuration: "5",
   scrollDisperse: "true",
   scrollDistance: "800"
@@ -1155,6 +1212,12 @@ function readMotionNumber(bag: Record<string, string | undefined>, key: string):
   return clamp(Number.isFinite(parsed) ? parsed : Number.parseFloat(GALAXY_MOTION_DEFAULTS[key]), range.min, range.max);
 }
 
+/** "none" and "fade" are themselves; anything else — absent, the retired "converge", a typo — is Unfurl. */
+function readIntro(value: string | undefined): GalaxyIntro {
+  const wanted = String(value ?? "").trim().toLowerCase();
+  return wanted === "none" || wanted === "fade" ? wanted : "unfurl";
+}
+
 /**
  * The intro and scroll settings, clamped. Absent means the default — the
  * intro ON, scroll-disperse ON — and only the exact strings "none" and
@@ -1163,7 +1226,7 @@ function readMotionNumber(bag: Record<string, string | undefined>, key: string):
  */
 export function readGalaxyMotion(bag: Record<string, string | undefined> = {}): GalaxyMotion {
   return {
-    intro: String(bag.intro ?? "").trim().toLowerCase() === "none" ? "none" : "converge",
+    intro: readIntro(bag.intro),
     introDelay: readMotionNumber(bag, "introDelay"),
     introDuration: readMotionNumber(bag, "introDuration"),
     scrollDisperse: String(bag.scrollDisperse ?? "").trim().toLowerCase() !== "false",
@@ -1189,4 +1252,60 @@ export function galaxyIntroProgress(elapsedSeconds: number, delaySeconds: number
 export function galaxyScrollDisperse(scrolledPx: number, distancePx: number): number {
   if (!Number.isFinite(scrolledPx) || !Number.isFinite(distancePx) || distancePx <= 0) return 0;
   return clamp(scrolledPx / distancePx, 0, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Resting pose (task 86bcd9qtc)
+// ---------------------------------------------------------------------------
+
+/**
+ * How the galaxy rests before anybody turns it. `viewAngle` leans the disc
+ * back from face-on, in degrees, so it reads as an oval — 0 is the round,
+ * face-on galaxy every page had before these settings existed. `ovalDirection`
+ * turns that oval on the page, in degrees (0 = its long side level). Drag,
+ * arrow keys and cursor tilt all still work, on top of the resting pose.
+ *
+ * Stops at 75 degrees: past that the disc is nearly a line, and its 2%
+ * thickness (`DISC_THICKNESS`) starts to show as a band of stars.
+ */
+export const GALAXY_POSE_DEFAULTS: Record<string, string> = {
+  viewAngle: "0",
+  ovalDirection: "0"
+};
+
+export const GALAXY_POSE_RANGES: Record<string, { min: number; max: number }> = {
+  viewAngle: { min: 0, max: 75 },
+  ovalDirection: { min: -90, max: 90 }
+};
+
+export interface GalaxyPose {
+  /** Radians the disc leans back: added to the view's pitch. */
+  pitch: number;
+  /** Radians the projected picture turns in the screen's plane. */
+  roll: number;
+}
+
+function readPoseDegrees(bag: Record<string, string | undefined>, key: string): number {
+  const range = GALAXY_POSE_RANGES[key];
+  const parsed = Number.parseFloat(String(bag[key] ?? ""));
+  return clamp(Number.isFinite(parsed) ? parsed : Number.parseFloat(GALAXY_POSE_DEFAULTS[key]), range.min, range.max);
+}
+
+/** The resting pose, in radians. Absent, unparseable or out of range is clamped, never NaN. */
+export function readGalaxyPose(bag: Record<string, string | undefined> = {}): GalaxyPose {
+  return {
+    pitch: (readPoseDegrees(bag, "viewAngle") * Math.PI) / 180,
+    roll: (readPoseDegrees(bag, "ovalDirection") * Math.PI) / 180
+  };
+}
+
+/**
+ * How much shorter than it is wide a disc pitched by `pitch` looks: the
+ * projection of a flat circle tipped back is an ellipse whose short side is
+ * cos(pitch) of its long side. The renderer squashes the haze and core glow
+ * by it so they lean with the stars. Never below 0.05, so a glow never
+ * collapses to nothing.
+ */
+export function galaxyPoseSquash(pitch: number): number {
+  return Math.max(0.05, Math.abs(Math.cos(Number.isFinite(pitch) ? pitch : 0)));
 }
