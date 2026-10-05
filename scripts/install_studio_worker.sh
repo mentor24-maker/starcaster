@@ -138,11 +138,13 @@ render_plist() {
   # person would type it (`--print-plist | grep doppler` is the check), and
   # `exec` so no shell is left sitting between launchd and doppler. The paths go
   # in unquoted, so one carrying a space or anything the shell or the XML would
-  # read is refused rather than escaped — no machine in this fleet has one, and
-  # a refusal you can read beats a job that launchd cannot start.
+  # read is refused rather than escaped, and a refusal you can read beats a job
+  # that launchd cannot start. `@` is allowed: it means nothing to sh or to
+  # XML, and Homebrew's versioned node lives at /opt/homebrew/opt/node@22 —
+  # the Mini's node, which the first real install refused (2026-10-05).
   local p
   for p in "$DOPPLER_BIN" "$NODE_BIN" "$REPO" "$DOPPLER_SCOPE"; do
-    if ! printf '%s' "$p" | grep -Eq '^[A-Za-z0-9/._+-]+$'; then
+    if ! printf '%s' "$p" | grep -Eq '^[A-Za-z0-9/._+@-]+$'; then
       echo "Refusing to write a plist: the path \"$p\" has a space or a character this script does not quote." >&2
       exit 1
     fi
@@ -430,7 +432,7 @@ if [ -z "$DOPPLER_CONFIG" ] && [ -f "$PLIST" ]; then
   [ -n "$DOPPLER_CONFIG" ] && DOPPLER_CONFIG_FROM="read from the installed schedule"
 fi
 if [ -z "$DOPPLER_SCOPE_FLAG" ] && [ -f "$PLIST" ]; then
-  installed_scope="$(sed -n 's/.* run --scope \([A-Za-z0-9/._+-]*\) .*/\1/p' "$PLIST" | head -1)"
+  installed_scope="$(sed -n 's/.* run --scope \([A-Za-z0-9/._+@-]*\) .*/\1/p' "$PLIST" | head -1)"
   [ -n "$installed_scope" ] && DOPPLER_SCOPE="$installed_scope"
 fi
 if [ -n "$DOPPLER_SCOPE_FLAG" ]; then DOPPLER_SCOPE="$DOPPLER_SCOPE_FLAG"; fi
