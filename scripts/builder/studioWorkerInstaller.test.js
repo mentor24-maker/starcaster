@@ -217,6 +217,32 @@ test('the worker reads its Doppler key from ~/Studio, never the repo folder the 
   assert.match(moved.out, /doppler run --scope \/opt\/elsewhere --project starcaster/);
 });
 
+test('a Homebrew node at .../node@22/bin/node is accepted; a path with a space is still refused', (t) => {
+  // The Mini's node is /opt/homebrew/opt/node@22/bin/node, and the first real
+  // install (2026-10-05) refused it: `@` was not in the allowed set, though it
+  // means nothing to sh or to XML.
+  const { spawnSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-installer-node-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const place = (folder) => {
+    const bin = path.join(dir, folder, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.symlinkSync(process.execPath, path.join(bin, 'node'));
+    return bin;
+  };
+  const run = (bin) => spawnSync('bash', [SCRIPT, '--print-plist'], {
+    encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+  });
+
+  const versioned = run(place('node@22'));
+  assert.equal(versioned.status, 0, versioned.stderr);
+  assert.match(versioned.stdout, /node@22\/bin\/node \S+\/workers\/studio\/daemon\.js<\/string>/);
+
+  const spaced = run(place('has space'));
+  assert.notEqual(spaced.status, 0, 'a space is still refused rather than written unquoted');
+  assert.match(spaced.stderr, /Refusing to write a plist/);
+});
+
 test('--doppler-config changes the config in the plist, and a non-name is refused', () => {
   const out = execFileSync('bash', [SCRIPT, '--print-plist', '--doppler-config', 'stg'], { encoding: 'utf8' });
   assert.match(out, /--config stg --no-check-version/);
