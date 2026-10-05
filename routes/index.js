@@ -72,6 +72,7 @@ const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
 const associations = require('./associations');
 const siteImport  = require('./siteImport');
+const siteExport  = require('./siteExport');
 const themeWizard = require('./themeWizard');
 const themeUsage  = require('./themeUsage');
 const publicSite  = require('./publicSite');
@@ -113,6 +114,7 @@ const ROUTE_MODULES = [
   themeUsage,
   builder,
   siteImport,
+  siteExport,
   seoAltText,
   communityAssets,
   messaging,

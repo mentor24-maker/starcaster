@@ -3931,6 +3931,110 @@ export const RENDER_CONTRACTS = [
   },
 
   /*
+   * Galaxy module 6/6 (task 86bc7f5hp): the galaxy costs nothing where nobody
+   * can see it, and less on a phone. Both read attributes the runtime
+   * publishes — `data-galaxy-paused` and `data-galaxy-budget` — next to the
+   * frame counter and the star count the earlier contracts already watch.
+   */
+  {
+    id: 'galaxy-pauses-out-of-view',
+    why:
+      'A galaxy scrolled off screen was still drawing sixty frames a second for nobody — on a phone that ' +
+      'is the battery and the heat. Scrolled fully out of view, the canvas must say data-galaxy-paused="true" ' +
+      'within 500ms and its frame counter must stop; scrolled back, it must say "false" and count again. ' +
+      'Spacer sections above and below make the page tall enough to scroll the block away.',
+    section: {
+      layout: 'single',
+      spacers: 2,
+      modules: [{ type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none' } }],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: {
+      count: 10,
+      everyMs: 250,
+      // Frames 0–2 with the block in view, 3–6 scrolled to the top (the block
+      // sits below the fold), 7–9 back in view.
+      scrollTo: [900, 900, 900, 0, 0, 0, 0, 900, 900, 900],
+      read: [],
+      attrs: ['data-galaxy-frame', 'data-galaxy-paused'],
+      selectors: { canvas: 'canvas[data-galaxy-count]' },
+    },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => ({
+        frame: Number(f.canvas?.['data-galaxy-frame']),
+        paused: f.canvas?.['data-galaxy-paused'] ?? null,
+        top: f.canvas?.top,
+      }));
+      if (frames.length !== 10 || frames.some((f) => !Number.isFinite(f.frame))) {
+        return `the frame counter could not be read across the scroll (${frames.map((f) => f.frame).join(', ')}).`;
+      }
+      const [, inA, inB, , , gone, goneLater, , backA, backB] = frames;
+      if (!(inB.paused === 'false' && inB.frame > inA.frame)) {
+        return `in view, the galaxy read paused="${inB.paused}" and frames ${inA.frame} → ${inB.frame} — ` +
+          'it was not running before it was scrolled away, so a pause proves nothing.';
+      }
+      if (gone.paused !== 'true') {
+        return `500ms after the block was scrolled out of view (its top at ${Math.round(gone.top)}px) the ` +
+          `canvas still read data-galaxy-paused="${gone.paused}" — it never noticed it went off screen.`;
+      }
+      if (goneLater.frame !== gone.frame) {
+        return `out of view and marked paused, the frame counter still went ${gone.frame} → ${goneLater.frame} — ` +
+          'the attribute says paused while the galaxy keeps drawing for nobody.';
+      }
+      if (!(backB.paused === 'false' && backB.frame > backA.frame)) {
+        return `scrolled back into view, the galaxy read paused="${backB.paused}" and frames ${backA.frame} → ` +
+          `${backB.frame} — it never resumed, so a visitor scrolling back finds a frozen picture.`;
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'galaxy-draws-fewer-stars-on-a-phone',
+    why:
+      'A phone pays for every star, so a viewport under 768px keeps 60% of the count on top of the cut ' +
+      'every smaller screen gets for its area. As a Window backdrop on a 390×844 phone, asked for 4,000, ' +
+      'the canvas must carry no more than 60% of what the same area would carry on a wide screen — and ' +
+      'say why in data-galaxy-budget. Comparing against the area cut alone is the point: the area cut ' +
+      'by itself already lowers the count on a phone, so "fewer than 4,000" would pass with the ' +
+      'viewport rule deleted.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'galaxy', settings: { particleCount: '4000', intro: 'none' } }],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    emulate: { viewport: { width: 390, height: 844 } },
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: [],
+      attrs: ['data-galaxy-count', 'data-galaxy-budget'],
+      selectors: { canvas: 'canvas[data-galaxy-count]' },
+    },
+    expect(sample) {
+      const canvas = sample.series?.[0]?.canvas;
+      const count = Number(canvas?.['data-galaxy-count']);
+      const reason = canvas?.['data-galaxy-budget'] ?? null;
+      if (!canvas || !Number.isFinite(count) || !(canvas.width > 0 && canvas.height > 0)) {
+        return 'the galaxy canvas or its star count could not be read on the phone-sized page.';
+      }
+      // What the same box would carry on a wide screen: 4,000 × √(area / 1440×900), never more than asked.
+      const wide = Math.min(4000, Math.round(4000 * Math.sqrt((canvas.width * canvas.height) / (1440 * 900))));
+      const limit = Math.round(wide * 0.6) + 1;
+      if (!(count > 0 && count <= limit)) {
+        return `on a 390px-wide screen the canvas (${Math.round(canvas.width)}×${Math.round(canvas.height)}) ` +
+          `carries ${count} stars; a wide screen would draw ${wide} in that area and a phone at most ${limit} — ` +
+          'the narrow-viewport cut is not reaching the page.';
+      }
+      if (!['small screen', 'low-power device', 'data saver'].includes(reason)) {
+        return `the canvas reports data-galaxy-budget="${reason}" — the Builder note would not say why the ` +
+          'count is short.';
+      }
+      return null;
+    },
+  },
+
+  /*
    * Galaxy module 5/6 (task 86bc7f5hm): two RENDER DIFFERENTIALS read off the
    * canvas's own pixels (`series.luma`, the mean luminance of every pixel).
    * Each pair is two In Place galaxies identical but for one setting, under

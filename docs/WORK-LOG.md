@@ -11,6 +11,28 @@ minutes from whichever machine is awake; if nobody answers, it posts on the bus
 (once every six hours while it stays down) and posts once more when it comes
 back, so a dead tunnel is noticed in minutes instead of whenever someone next
 tries a download.
+## 2026-10-04 — A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine (#756)
+
+The automatic builder gives each attempt two hours and then stops it. Until
+now a stopped attempt left nothing behind — the log showed it start and end
+with nothing in between — so on 4 October five attempts in a row spent ten
+hours re-running one failing check and it looked exactly like a broken
+machine. Now, just before stopping an attempt, the system writes down what it
+was running (for example "the render check, 7 minutes in") in the log and on
+the ticket it was working on. If the same ticket gets stopped a second time,
+it is brought to Dane with that information instead of being picked up again
+for another two wasted hours.
+## 2026-10-04 — Galaxy module 6/6 — it stays smooth on phones and stops drawing when nobody can see it (#758)
+
+The galaxy now looks after the visitor's battery. When it scrolls off screen
+it stops drawing altogether and starts again the moment it comes back — the
+tab's CPU drops to zero while it is out of sight. On a phone, a slow machine,
+or with data saver on, it quietly draws fewer stars at a lower sharpness, and
+a small block draws fewer than a full-screen hero. None of this is a setting:
+it happens on its own. In the Builder the note under the galaxy now says why
+it is showing fewer stars ("small screen", "low-power device", "data saver" or
+"small module"). Measured on the Mac mini: 60 frames a second on the desktop
+and on an emulated iPhone with its processor slowed four times.
 
 ## 2026-10-03 — Galaxy module 4/6 — the intro: stars converge into the spiral on load and disperse as the visitor scrolls (#755)
 
