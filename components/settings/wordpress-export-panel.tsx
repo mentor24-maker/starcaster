@@ -1,7 +1,10 @@
 import React, { useCallback, useState } from 'react';
 
 /**
- * Settings › Projects › (a project) › Export to WordPress (Divi).
+ * Settings › Projects › (a project) › Import / Export: a way into Site Import,
+ * and the Export to WordPress (Divi) download. One card in the right column
+ * under Modules (Dane, 2026-10-05: "Put them in the right column below the
+ * modules section.").
  *
  * A React island inside the frozen vanilla project-detail screen, mounted into
  * #wordpressExportReactRoot by react-entry.js. Opening a project for editing
@@ -202,42 +205,65 @@ export default function WordPressExportPanel() {
 
   const report = visible?.report;
 
+  // Site Import is its own screen (Builder › Site Import); it works on the
+  // active project, which opening this project for editing already set.
+  const openSiteImport = useCallback(() => {
+    const app = getApp();
+    if (typeof app?.builder?.openSiteImportPage === 'function') app.builder.openSiteImportPage();
+    else if (typeof app?.setActivePage === 'function') app.setActivePage('builderSiteImportPage');
+    else setError('The admin app has not finished loading. Reload the page and try again.');
+  }, []);
+
   return (
     <div className="card wp-export-card">
-      <h3 className="project-details-section-heading">Export to WordPress (Divi)</h3>
-      <p className="meta">
-        Download this project&apos;s website as one file that WordPress can import. Pages are rebuilt
-        with the Divi page builder, the header and footer go into Divi&apos;s Theme Builder, and blog
-        posts, images and the main menu come along.
-      </p>
+      <h3 className="project-details-section-heading">Import / Export</h3>
 
-      <div className="wp-export-actions">
-        <button type="button" className="btn" onClick={check} disabled={checking || downloading}>
-          {checking ? 'Checking…' : report ? 'Check again' : 'Check what will be exported'}
-        </button>
-        <button type="button" className="btn btn-primary" onClick={download} disabled={checking || downloading}>
-          {downloading ? 'Preparing file…' : 'Download WordPress file'}
-        </button>
+      <div className="import-export-part">
+        <p className="import-export-part-title module-toggle-label">Import a website</p>
+        <p className="meta">
+          Bring an existing website — WordPress or any other — into this project&apos;s Builder as draft pages.
+        </p>
+        <div className="wp-export-actions">
+          <button type="button" className="btn" onClick={openSiteImport}>Open Site Import</button>
+        </div>
       </div>
 
-      {error && <p className="meta wp-export-error" role="alert">{error}</p>}
-      {downloaded && <p className="meta">Downloaded <strong>{downloaded}</strong>. The steps below load it into WordPress.</p>}
+      <div className="import-export-part">
+        <p className="import-export-part-title module-toggle-label">Export to WordPress (Divi)</p>
+        <p className="meta">
+          Download this project&apos;s website as one file that WordPress can import. Pages are rebuilt
+          with the Divi page builder, the header and footer go into Divi&apos;s Theme Builder, and blog
+          posts, images and the main menu come along.
+        </p>
 
-      {report && <ExportSummary report={report} bytes={visible?.bytes || 0} />}
+        <div className="wp-export-actions">
+          <button type="button" className="btn" onClick={check} disabled={checking || downloading}>
+            {checking ? 'Checking…' : report ? 'Check again' : 'Check what will be exported'}
+          </button>
+          <button type="button" className="btn btn-primary" onClick={download} disabled={checking || downloading}>
+            {downloading ? 'Preparing file…' : 'Download WordPress file'}
+          </button>
+        </div>
 
-      <details className="wp-export-howto">
-        <summary>How to load the file into WordPress</summary>
-        <ol>
-          <li>Install the <strong>Divi</strong> theme and activate it (Appearance → Themes) <em>before</em> importing — WordPress skips the Divi parts of the file otherwise.</li>
-          <li>Go to <strong>Tools → Import → WordPress</strong>. If it says &ldquo;Install Now&rdquo;, click it, then &ldquo;Run Importer&rdquo;.</li>
-          <li>Choose the downloaded file and click <strong>Upload file and import</strong>.</li>
-          <li>Pick which WordPress user the content belongs to, and tick <strong>Download and import file attachments</strong> — that box is what brings the images across.</li>
-          <li>Go to <strong>Appearance → Menus</strong>, choose &ldquo;Main Menu&rdquo;, tick <strong>Primary Menu</strong> and save.</li>
-          <li>Go to <strong>Settings → Reading</strong>, choose &ldquo;A static page&rdquo; and set the homepage to <strong>{report?.homePageSlug === 'home' ? 'Home' : 'your home page'}</strong>.</li>
-          <li>Go to <strong>Settings → Permalinks</strong> and choose &ldquo;Post name&rdquo;, so links like /about keep working.</li>
-          <li>Open <strong>Divi → Theme Builder</strong> and check the default website template shows &ldquo;StarCaster Header&rdquo; and &ldquo;StarCaster Footer&rdquo;. If it does not, add them from the Divi Library, where copies are saved under the same names.</li>
-        </ol>
-      </details>
+        {error && <p className="meta wp-export-error" role="alert">{error}</p>}
+        {downloaded && <p className="meta">Downloaded <strong>{downloaded}</strong>. The steps below load it into WordPress.</p>}
+
+        {report && <ExportSummary report={report} bytes={visible?.bytes || 0} />}
+
+        <details className="wp-export-howto">
+          <summary>How to load the file into WordPress</summary>
+          <ol>
+            <li>Install the <strong>Divi</strong> theme and activate it (Appearance → Themes) <em>before</em> importing — WordPress skips the Divi parts of the file otherwise.</li>
+            <li>Go to <strong>Tools → Import → WordPress</strong>. If it says &ldquo;Install Now&rdquo;, click it, then &ldquo;Run Importer&rdquo;.</li>
+            <li>Choose the downloaded file and click <strong>Upload file and import</strong>.</li>
+            <li>Pick which WordPress user the content belongs to, and tick <strong>Download and import file attachments</strong> — that box is what brings the images across.</li>
+            <li>Go to <strong>Appearance → Menus</strong>, choose &ldquo;Main Menu&rdquo;, tick <strong>Primary Menu</strong> and save.</li>
+            <li>Go to <strong>Settings → Reading</strong>, choose &ldquo;A static page&rdquo; and set the homepage to <strong>{report?.homePageSlug === 'home' ? 'Home' : 'your home page'}</strong>.</li>
+            <li>Go to <strong>Settings → Permalinks</strong> and choose &ldquo;Post name&rdquo;, so links like /about keep working.</li>
+            <li>Open <strong>Divi → Theme Builder</strong> and check the default website template shows &ldquo;StarCaster Header&rdquo; and &ldquo;StarCaster Footer&rdquo;. If it does not, add them from the Divi Library, where copies are saved under the same names.</li>
+          </ol>
+        </details>
+      </div>
     </div>
   );
 }
