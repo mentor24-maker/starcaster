@@ -84,6 +84,15 @@ DEFAULT_DOPPLER_CONFIG="prd"
 DOPPLER_CONFIG=""
 DOPPLER_CONFIG_FROM=""
 
+# WHICH DOPPLER KEY, not only which config. Doppler keeps ONE key per folder
+# ("scope"), and on the Mini the repo folder's key is the read-only `dev` one
+# every loop runs on — a `prd` key stored there would replace it and stop the
+# loops, and a `prd` key stored anywhere else is never read by a `doppler run`
+# started in the repo. So the worker's key lives at ~/Studio (the folder the
+# worker already owns) and every `doppler run` here names that scope. Found by
+# the first switch-on pass, 2026-10-05 (86bccuqq0). Set by --doppler-scope.
+DOPPLER_SCOPE="$HOME/Studio"
+
 # What the daemon cannot work without. Each line is one requirement; a line with
 # a `|` is satisfied by any one of its names (lib/supabase.js takes either
 # spelling of the service key). Settings with a working default —
@@ -132,13 +141,13 @@ render_plist() {
   # read is refused rather than escaped — no machine in this fleet has one, and
   # a refusal you can read beats a job that launchd cannot start.
   local p
-  for p in "$DOPPLER_BIN" "$NODE_BIN" "$REPO"; do
+  for p in "$DOPPLER_BIN" "$NODE_BIN" "$REPO" "$DOPPLER_SCOPE"; do
     if ! printf '%s' "$p" | grep -Eq '^[A-Za-z0-9/._+-]+$'; then
       echo "Refusing to write a plist: the path \"$p\" has a space or a character this script does not quote." >&2
       exit 1
     fi
   done
-  local COMMAND_LINE="exec $DOPPLER_BIN run --project starcaster --config $DOPPLER_CONFIG --no-check-version -- $NODE_BIN $REPO/workers/studio/daemon.js"
+  local COMMAND_LINE="exec $DOPPLER_BIN run --scope $DOPPLER_SCOPE --project starcaster --config $DOPPLER_CONFIG --no-check-version -- $NODE_BIN $REPO/workers/studio/daemon.js"
   cat <<PLIST_BODY
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -224,7 +233,7 @@ settings_preflight() {
   fi
 
   local out rc=0
-  out="$(doppler run --project starcaster --config "$DOPPLER_CONFIG" --no-check-version -- \
+  out="$(doppler run --scope "$DOPPLER_SCOPE" --project starcaster --config "$DOPPLER_CONFIG" --no-check-version -- \
     node -e '
       const { classify } = require(process.argv[1] + "/lib/environmentBanner.js");
       const has = (n) => String(process.env[n] || "").trim() !== "";
@@ -242,7 +251,7 @@ settings_preflight() {
   if ! printf '%s\n' "$out" | grep -q '^@@PREFLIGHT$'; then
     echo "settings: CANNOT TELL — Doppler would not hand over the \"$DOPPLER_CONFIG\" config on this machine (exit $rc), so whether the worker could start is unknown."
     echo "          Doppler said: $(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | head -1)"
-    echo "          Usually this machine's Doppler is not signed in, or has no access to that config."
+    echo "          Usually no Doppler key for that config is stored at $DOPPLER_SCOPE on this machine (docs/STUDIO.md says how to add one)."
     return 2
   fi
 
@@ -278,7 +287,7 @@ status() {
   ' "$REPO"
 
   if [ -f "$PLIST" ]; then echo "schedule: INSTALLED at $PLIST"; else echo "schedule: not installed on this machine"; fi
-  echo "doppler:  config \"$DOPPLER_CONFIG\" ($DOPPLER_CONFIG_FROM)"
+  echo "doppler:  config \"$DOPPLER_CONFIG\" ($DOPPLER_CONFIG_FROM), key stored at $DOPPLER_SCOPE"
   local preflight_rc=0
   settings_preflight || preflight_rc=$?
   if is_loaded; then
@@ -388,11 +397,12 @@ install_it() {
 }
 
 usage() {
-  echo "usage: $0 [--install | --uninstall | --status | --print-plist] [--doppler-config <name>]" >&2
+  echo "usage: $0 [--install | --uninstall | --status | --print-plist] [--doppler-config <name>] [--doppler-scope <folder>]" >&2
   exit 2
 }
 
 MODE=""
+DOPPLER_SCOPE_FLAG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --doppler-config)
@@ -400,6 +410,11 @@ while [ $# -gt 0 ]; do
       DOPPLER_CONFIG="$2"; DOPPLER_CONFIG_FROM="from --doppler-config"; shift 2 ;;
     --doppler-config=*)
       DOPPLER_CONFIG="${1#*=}"; DOPPLER_CONFIG_FROM="from --doppler-config"; shift ;;
+    --doppler-scope)
+      [ $# -ge 2 ] || usage
+      DOPPLER_SCOPE_FLAG="$2"; shift 2 ;;
+    --doppler-scope=*)
+      DOPPLER_SCOPE_FLAG="${1#*=}"; shift ;;
     --uninstall|--remove|--status|--print-plist|--install)
       [ -z "$MODE" ] || usage
       MODE="$1"; shift ;;
@@ -411,9 +426,14 @@ done
 # actually there; then the default. The name lands inside the plist's XML, so
 # only a plain config name is accepted.
 if [ -z "$DOPPLER_CONFIG" ] && [ -f "$PLIST" ]; then
-  DOPPLER_CONFIG="$(sed -n 's/.* run --project starcaster --config \([A-Za-z0-9_-]*\) .*/\1/p' "$PLIST" | head -1)"
+  DOPPLER_CONFIG="$(sed -n 's/.* --project starcaster --config \([A-Za-z0-9_-]*\) .*/\1/p' "$PLIST" | head -1)"
   [ -n "$DOPPLER_CONFIG" ] && DOPPLER_CONFIG_FROM="read from the installed schedule"
 fi
+if [ -z "$DOPPLER_SCOPE_FLAG" ] && [ -f "$PLIST" ]; then
+  installed_scope="$(sed -n 's/.* run --scope \([A-Za-z0-9/._+-]*\) .*/\1/p' "$PLIST" | head -1)"
+  [ -n "$installed_scope" ] && DOPPLER_SCOPE="$installed_scope"
+fi
+if [ -n "$DOPPLER_SCOPE_FLAG" ]; then DOPPLER_SCOPE="$DOPPLER_SCOPE_FLAG"; fi
 if [ -z "$DOPPLER_CONFIG" ]; then
   DOPPLER_CONFIG="$DEFAULT_DOPPLER_CONFIG"; DOPPLER_CONFIG_FROM="the default"
 fi

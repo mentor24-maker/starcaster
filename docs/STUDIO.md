@@ -78,8 +78,8 @@ picking files up.
 waiting for a step that is not running. `failed` means a step tried and gave
 up; the reason is kept on the Mini.
 
-**Ask the roll call.** Once the worker is installed on the Mini (Studio 7/8),
-it records a heartbeat as the job `studio-worker` every time it runs, and the
+**Ask the roll call.** The worker is installed on the Mini (since 2026-10-05)
+and records a heartbeat as the job `studio-worker` every five minutes. The
 same watchdog that watches the loops turns six hours of silence into a message
 on the bus. From any machine:
 
@@ -87,18 +87,17 @@ on the bus. From any machine:
 npm run heartbeat
 ```
 
-Until the worker is installed, that line reads **quiet** — which is true:
-nothing is running the Studio anywhere yet. The install is one command on the
-Mini, and it needs a shell on that machine.
-
-**On the Mini itself**, once the worker is installed:
+**On the Mini itself:**
 
 ```
 ./scripts/install_studio_worker.sh --status
 ```
 
-says whether the scheduled worker is loaded and running, and its process
-number.
+says whether the scheduled worker is loaded and running, its process number,
+which database it writes to, and whether every setting it needs is present.
+Install from the Mini's main checkout (`~/WebApps/starcaster`), never from a
+worktree: the schedule points at the folder it was installed from, and
+`npm run tidy` deletes worktrees.
 
 ## When it stops, and what fixes it
 
@@ -115,10 +114,25 @@ number.
 These live in **Doppler** (the password vault every scheduled job here reads
 from), under project `starcaster`, config **`prd`** — not in the admin app and
 not in a file on the Mini. The installed worker is started *through* Doppler
-(`doppler run --project starcaster --config prd -- node workers/studio/daemon.js`),
+(`doppler run --scope ~/Studio --project starcaster --config prd -- node workers/studio/daemon.js`),
 so it receives them the moment it starts and nothing is written to disk. An
 agent session changes them; they are listed so the names mean something when
 they come up.
+
+**The Mini's key to `prd` is kept at `~/Studio`, not in the repo folder.**
+Doppler holds one key per folder, and the repo folder's key is the read-only
+`dev` one every loop runs on — a `prd` key stored there would replace it and
+stop the loops. So the worker's read-only `prd` key (named `mac-mini-studio`
+in Doppler) is stored for `~/Studio`, and every `doppler run` the installer
+writes names `--scope ~/Studio`. To replace it, without the value ever being
+shown: `doppler configs tokens create <name> --project starcaster --config prd
+--access read --plain | ssh mac-mini 'IFS= read -r T; doppler configure set
+token="$T" --scope ~/Studio >/dev/null'`.
+
+**Google Drive's sign-in** (`GOOGLE_DRIVE_CLIENT_ID`, `_SECRET`,
+`_REFRESH_TOKEN`) is in `prd` too, for mentor24@gmail.com, renewed 2026-10-05.
+When Google expires it, the worker stops and says so; renewing it is one
+browser login by Dane.
 
 **Why `prd` and not `dev`:** on the Mini, the `dev` config points the database
 at a copy on that machine. A worker run under it would look perfectly healthy

@@ -628,41 +628,22 @@ test('the beat is throttled — twenty ticks in a minute do not write twenty sta
   q.close();
 });
 
-test('studio-worker is a role, and is PARKED with a reason rather than silently missing', () => {
-  // The daemon emits a beat every five minutes (the four tests above prove it),
-  // but the launchd job it would beat from cannot be installed yet: the role is
-  // owned by mac-mini and that machine is unreachable until ~2026-10-01. So it
-  // is registered as NOT REPORTING WITH THE REASON — the same shelf db-refresh,
-  // youtube-media and weekly-report sit on — rather than as an emitter, which
-  // would put a QUIET alarm on the bus every six hours for eleven days about a
-  // daemon nobody can start and nobody can clear.
-  //
-  // WHAT THIS TEST IS REALLY GUARDING is that it is never BOTH and never
-  // NEITHER. Neither reads as a bug in the tool rather than a gap in the
-  // instrumentation; both makes the roll call carry two answers for one role.
+test('studio-worker is a role and an EMITTER — never both an emitter and parked, never neither', () => {
+  // Graduated 2026-10-05 (86bccuqq0), the day the worker was installed on the
+  // Mini. Until then it sat in NOT_REPORTING_WHY with the reason; the guard
+  // that matters is unchanged: one answer per role, never two and never none.
   const { ROLES } = require('../../lib/nodeRoles.js');
   const heartbeat = require('../../lib/nodeHeartbeat.js');
   assert.equal(ROLES['studio-worker'].owner, 'mac-mini');
-  assert.equal(heartbeat.BEAT_EMITTERS['studio-worker'], undefined,
-    'not an emitter while there is nothing installed to beat from');
-  assert.ok(heartbeat.NOT_REPORTING_WHY['studio-worker'],
-    'but never silently absent — a role in neither column reports a generic "no emitter" line');
-  assert.match(heartbeat.NOT_REPORTING_WHY['studio-worker'], /2026-10-01/,
-    'and the reason names the unblocking condition, so the row removes itself rather than becoming furniture');
+  assert.ok(heartbeat.BEAT_EMITTERS['studio-worker'], 'an emitter now that it is installed');
+  assert.equal(heartbeat.NOT_REPORTING_WHY['studio-worker'], undefined,
+    'and no longer parked — both would make the roll call carry two answers for one role');
+  assert.equal(heartbeat.BEAT_EMITTERS['studio-worker'].beatMeans, 'liveness');
 
-  // The number the acceptance criterion asked for, asserted where it will still
-  // be read when this graduates: six hours of silence. quietAfterFor floors at
-  // three hours and otherwise takes six intervals, so the hourly cadence named
-  // in the parked note produces exactly that.
-  assert.equal(typeof heartbeat.quietAfterFor, 'function');
-  // The second argument IS the emitter map — quietAfterFor(role, emitters) —
-  // so this asks the real function the real question with the cadence the
-  // parked note commits to, rather than restating the arithmetic here.
-  const asIfInstalled = { 'studio-worker': { intervalMs: 60 * 60 * 1000, beatMeans: 'liveness' } };
-  assert.equal(heartbeat.quietAfterFor('studio-worker', asIfInstalled), 6 * 60 * 60 * 1000,
-    'six hours of silence is what Studio 7/8 asked for, derived from the hourly cadence it graduates with');
-  assert.equal(heartbeat.quietAfterFor('studio-worker'), null,
-    'and TODAY it is null: nothing is installed, so there is no silence to measure yet');
+  // Six hours of silence, the number Studio 7/8 asked for, derived from the
+  // hourly cadence: the daemon beats every five minutes but cannot beat during
+  // a synchronous encode, so the window must outlast a long one.
+  assert.equal(heartbeat.quietAfterFor('studio-worker'), 6 * 60 * 60 * 1000);
 });
 
 test('the whole loop: claim, run, complete, beat, and report', async () => {

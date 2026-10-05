@@ -185,7 +185,7 @@ function runScript(box, args, fakeEnv, mode = 'ok') {
 
 test('the plist runs the daemon under `doppler run ... --config prd`, on one line', () => {
   const out = execFileSync('bash', [SCRIPT, '--print-plist'], { encoding: 'utf8' });
-  const lines = out.split('\n').filter((l) => /doppler run --project starcaster --config prd --no-check-version -- /.test(l));
+  const lines = out.split('\n').filter((l) => /doppler run --scope \S+ --project starcaster --config prd --no-check-version -- /.test(l));
   assert.equal(lines.length, 1, `exactly one line carries the wrapper:\n${out}`);
   assert.match(lines[0], /workers\/studio\/daemon\.js<\/string>$/, 'and the daemon is what it runs');
   if (os.platform() === 'darwin') {
@@ -193,6 +193,28 @@ test('the plist runs the daemon under `doppler run ... --config prd`, on one lin
     const lint = spawnSync('plutil', ['-lint', '-'], { input: out, encoding: 'utf8' });
     assert.equal(lint.status, 0, `plutil -lint: ${lint.stdout}${lint.stderr}`);
   }
+});
+
+test('the worker reads its Doppler key from ~/Studio, never the repo folder the loops\' key lives in', (t) => {
+  // On the Mini the repo folder holds the read-only `dev` key every loop runs
+  // on; one folder holds one key, so the worker's `prd` key lives at ~/Studio
+  // and BOTH the plist and the preflight must name that scope — a preflight
+  // reading a different key from the job it vouches for is a check of nothing.
+  const box = sandbox(t);
+  const plist = runScript(box, ['--print-plist'], REQUIRED_FULL);
+  assert.match(plist.out, new RegExp(`doppler run --scope ${path.join(box.home, 'Studio')} --project starcaster`));
+
+  const status = runScript(box, ['--status'], REQUIRED_FULL);
+  assert.match(status.out, /settings: OK/, status.out);
+  const calls = fs.readFileSync(path.join(box.dir, 'doppler.calls'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const runs = calls.filter((a) => a[0] === 'run');
+  assert.ok(runs.length >= 1, 'the preflight ran under doppler');
+  for (const a of runs) {
+    assert.equal(a[a.indexOf('--scope') + 1], path.join(box.home, 'Studio'), `every doppler run names the scope: ${JSON.stringify(a)}`);
+  }
+
+  const moved = runScript(box, ['--print-plist', '--doppler-scope', '/opt/elsewhere'], REQUIRED_FULL);
+  assert.match(moved.out, /doppler run --scope \/opt\/elsewhere --project starcaster/);
 });
 
 test('--doppler-config changes the config in the plist, and a non-name is refused', () => {
