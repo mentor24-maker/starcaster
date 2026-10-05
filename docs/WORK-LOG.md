@@ -1,3 +1,16 @@
+## 2026-10-04 — Studio: the worker would start on the Mini with no settings and the wrong database, and crash every minute (#763)
+
+The Studio worker — the program that will process footage on the Mac Mini —
+was set up to start with none of the settings it needs: no database, no
+Google Drive sign-in, no project to file videos under. Switched on, it would
+have failed and been restarted once a minute forever. Now it starts through
+Doppler (the password vault the Mini's other jobs already use), with the
+production settings by default. Its status check names any setting that is
+missing (never showing the secret itself), says "cannot tell" rather than "OK"
+when it can't read the vault, and shows which database it would write to — so
+it can't quietly file everything into a test copy nobody sees. The installer
+now refuses to install a worker that would only crash.
+
 ## 2026-10-04 — A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine (#756)
 
 The automatic builder gives each attempt two hours and then stops it. Until
