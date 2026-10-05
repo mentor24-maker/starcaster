@@ -441,11 +441,12 @@ and each incident are in `lib/nodeHeartbeat.js`. It clears itself on the next
 beat and says so — and that is the only "good news" it ever posts, because the
 message is only sent when an alarm actually went out.
 
-**Six jobs beat today**, and the list has grown twice by the same route — a
+**Seven jobs beat today**, and the list has grown twice by the same route — a
 stated reason turning out to be a missing runner rather than an impossibility.
 `bus-relay` and `pipeline-pulse` from the start; the two loop lanes on
-2026-09-02, when their runner joined this repo; and the two Pulse pipelines,
-`channel-steward` and `librarian-sweep`, on 2026-09-12. Three still report
+2026-09-02, when their runner joined this repo; the two Pulse pipelines,
+`channel-steward` and `librarian-sweep`, on 2026-09-12; and `studio-worker` on
+2026-10-05, the day it was first installed on the Mini. Three still report
 **NOT REPORTING with the reason**: `db-refresh` has no schedule on purpose,
 `youtube-media` is a service rather than a scheduled pass (no beat, but
 `npm run worker-watch` probes its public address on every relay wake and posts
