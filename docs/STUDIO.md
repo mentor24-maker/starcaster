@@ -56,8 +56,9 @@ Open the admin app, choose the project the Studio files into, then
   been read for its own recording date yet, so the screen shows the session's
   date or the day the file was added. Hover it and it says which.
 - **Stage** is how far through the pipeline the file has got:
-  `new` → `downloading` → `downloaded` → `probed` → `proxied` → `ready`, or
-  `failed`.
+  `new` → `downloading` → `downloaded` → `probed` → `ready`, or `failed`.
+  `ready` means the working copies exist. (`proxied` is reserved for when a
+  later step such as transcription is still to come; Phase 1 never shows it.)
 - **Filters**: search session names, pick a device, and pick a date range.
   A file with no date at all cannot be placed in a range, so a date filter
   leaves it out — and the screen says how many it left out.
