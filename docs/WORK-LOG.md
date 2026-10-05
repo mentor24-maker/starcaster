@@ -1,3 +1,15 @@
+## 2026-10-04 — Studio: footage dropped into Google Drive is never noticed, so nothing gets processed (#762)
+
+The Studio worker had the part that checks Google Drive for new footage, but
+nothing ever switched it on — and it is the only thing that puts footage in
+line to be processed. So a recording dropped into Studio/Inbox sat there
+unnoticed. Now the worker checks Drive when it starts and then once a minute,
+and a new file starts processing in the same round it is found. If Drive
+cannot be read (an expired sign-in, a missing folder), the worker's log says
+so with the fix in plain words and carries on with the work it already has,
+asking Google again only once a minute rather than hammering it. Nothing runs
+on the Mac Mini yet; the last ticket in this set switches the worker on.
+
 ## 2026-10-04 — Studio: the worker would start on the Mini with no settings and the wrong database, and crash every minute (#763)
 
 The Studio worker — the program that will process footage on the Mac Mini —

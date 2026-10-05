@@ -52,6 +52,7 @@ const path = require('node:path');
 
 const { openQueue, STATES } = require('./queue.js');
 const { runIngest, STAGE_INGEST } = require('./ingest.js');
+const { watchDrive, STAGE_WATCH } = require('./drive.js');
 
 /** How long to wait after a tick that found nothing to do. */
 const DEFAULT_IDLE_MS = 30 * 1000;
@@ -80,6 +81,28 @@ const DEFAULT_REAP_EVERY_MS = 60 * 1000;
  */
 const DEFAULT_BEAT_EVERY_MS = 5 * 60 * 1000;
 
+/**
+ * How often the Drive watch looks for new footage: once a minute.
+ *
+ * NOT MEASURED — chosen, and here is the arithmetic it was chosen on. One watch
+ * pass is about five requests to Google, not one: `getAccessToken` exchanges
+ * the refresh token every time (lib/googleDrive.js caches nothing), then the
+ * account, one folder check per configured lane, and at least one page of the
+ * changes feed. Once a minute is ~7,200 requests a day, against Drive's default
+ * allowance of 12,000 a MINUTE per user — so the quota block `fixFor('quota')`
+ * describes ("the watch interval is too tight") cannot come from this cadence
+ * alone. Going tighter buys nothing a person would notice: a file only reaches
+ * Inbox after an upload that takes minutes, and the ingest download behind it
+ * takes longer still. Going much looser starts to read as "I dropped it in and
+ * nothing happened".
+ *
+ * IT IS A FLOOR, NOT A TIMER. The watch runs inside a tick, and no tick runs
+ * while a stage is mid-job — so during a two-hour encode nothing looks at Drive
+ * for two hours. That costs nothing: the cursor is saved in the queue, and the
+ * first watch afterwards reads every change it missed, page by page.
+ */
+const DEFAULT_DRIVE_WATCH_EVERY_MS = 60 * 1000;
+
 /** Rotate at 8 MB, keep 5 — about six weeks of ordinary logging. */
 const DEFAULT_LOG_MAX_BYTES = 8 * 1024 * 1024;
 const DEFAULT_LOG_KEEP = 5;
@@ -96,8 +119,9 @@ const ROLE = 'studio-worker';
  *
  * `ingest` is the only queue-driven pass that exists today. Probe (5/8) and
  * proxy (6/8) shipped as pure functions over a file path, with no pass around
- * them yet, and `drive.watch` is cursor-driven rather than job-driven. Adding
- * them here is one line each WHEN they grow a pass — and until then, a job
+ * them yet; `drive.watch` is cursor-driven rather than job-driven, so it runs
+ * from WATCHERS below instead. Adding probe and proxy here is one line each
+ * WHEN they grow a pass — and until then, a job
  * waiting on a stage with no runner is REPORTED rather than ignored, because a
  * queue that quietly holds work nobody is doing is a queue that lies about
  * being empty (DOCTRINE 3.11). See `unhandled` in the tick report.
@@ -106,6 +130,33 @@ const STAGE_RUNNERS = {
   [STAGE_INGEST]: {
     label: 'ingest',
     run: ({ queue, owner, env }) => runIngest({ queue, owner, env, max: 1 }),
+  },
+};
+
+/**
+ * THE WATCHERS — passes that run on a CLOCK rather than because a job is due.
+ *
+ * `drive.watch` is the reason this list exists. It is the only thing that puts
+ * an `ingest` job on the queue (drive.js `consumeChange`), so it cannot wait
+ * for a job to ask for it: with only the runner registry, a file dropped into
+ * /Studio/Inbox/ was noticed by nothing at all, ingest had nothing to claim,
+ * and the daemon reported "nothing due" — truthfully, every tick, for ever.
+ *
+ * A watcher keeps its own position (Drive's cursor lives in the queue's
+ * `drive_cursor` table), so running it twice costs requests, never duplicate
+ * work. It reports its own failures on the queue — `needsAPerson` failures as
+ * ONE blocked `drive.watch` row, refreshed rather than duplicated, and cleared
+ * by the next clean pass — so the daemon's only jobs are when to call it and
+ * keeping a throw from taking the lane down.
+ *
+ * `drive` is a seam for the tests; left undefined, `watchDrive` uses the real
+ * Google client.
+ */
+const WATCHERS = {
+  [STAGE_WATCH]: {
+    label: 'drive watch',
+    everyMs: DEFAULT_DRIVE_WATCH_EVERY_MS,
+    run: ({ queue, env, drive }) => watchDrive({ queue, env, ...(drive ? { drive } : {}) }),
   },
 };
 
@@ -307,6 +358,13 @@ async function tickOnce({
   owner,
   env = process.env,
   runners = STAGE_RUNNERS,
+  watchers = WATCHERS,
+  // When each watcher last ran, keyed by its stage. The CALLER owns this object
+  // and passes the same one every tick — that is what lets `tickOnce` stay free
+  // of process state while the cadence still holds across ticks. A fresh `{}`
+  // (the default) means "never ran", so a lone tick always watches.
+  watchedAt = {},
+  drive,
   now = Date.now(),
   reap = true,
 }) {
@@ -325,9 +383,33 @@ async function tickOnce({
     error: null,
     failedJobs: [],
     unhandled: [],
+    // One entry per watcher that was DUE this tick. A watcher that was not due
+    // is absent rather than listed as skipped: once a minute against a tick
+    // every 30 seconds, "not due" is the ordinary state of half the ticks.
+    watched: [],
   };
 
   if (reap) report.reaped = queue.reap();
+
+  // WATCH BEFORE RUNNING, so a file Drive reports this tick is due for the
+  // runner loop below in the same tick rather than a whole idle sleep later.
+  // And a watch that fails is reported and walked past — its failure is about
+  // Google, and the jobs already on the queue do not depend on Google being up.
+  for (const [stage, watcher] of Object.entries(watchers)) {
+    const last = watchedAt[stage];
+    if (last != null && now - last < watcher.everyMs) continue;
+    // Stamped whether it succeeds or not. A watch that fails every time must
+    // still be held to its cadence, or a dead credential would be retried on
+    // every tick — which is the retry storm drive.js exists to refuse.
+    watchedAt[stage] = now;
+    const entry = { stage, label: watcher.label || stage, result: null, error: null };
+    try {
+      entry.result = await watcher.run({ queue, owner, env, now, drive });
+    } catch (err) {
+      entry.error = { message: err.message, stack: err.stack };
+    }
+    report.watched.push(entry);
+  }
 
   // Stages with work due but no runner. Asked BEFORE anything is claimed, so
   // the answer is about the queue rather than about what this tick happened to
@@ -385,6 +467,7 @@ function formatTick(report) {
   if (report.reaped && (report.reaped.recovered || report.reaped.blocked)) {
     parts.push(`reaped ${report.reaped.recovered} expired lease(s), ${report.reaped.blocked} gave up for good`);
   }
+  for (const w of report.watched || []) parts.push(formatWatch(w));
   if (report.error) {
     parts.push(`${report.stage} THREW: ${report.error.message}`);
     parts.push(report.failedJobs.length
@@ -408,6 +491,33 @@ function formatTick(report) {
 }
 
 /**
+ * One watcher's outcome, in the tick line.
+ *
+ * Read off the watch report rather than restated, and with the SAME four
+ * verdicts drive.js's own `formatReport` headline uses — OK, BLOCKED, FINISHED
+ * WITH FAILURES, COULD NOT TELL — so "could not tell" never reads as a quiet
+ * clean pass. A blocked watch carries its reason in full: that sentence names
+ * the errand (re-mint the token, fix a folder id), and the tick line is where a
+ * person reading the log at 8am will see it first.
+ */
+function formatWatch(w) {
+  if (w.error) return `${w.label} THREW: ${w.error.message} — the stages still ran this tick`;
+  const r = w.result || {};
+  if (r.blocked) return `${w.label} BLOCKED (${r.blocked.kind}): ${r.blocked.reason}`;
+  const queued = Array.isArray(r.processed) ? r.processed.length : 0;
+  const skipped = Array.isArray(r.skipped) ? r.skipped.length : 0;
+  const failed = Array.isArray(r.failed) ? r.failed.length : 0;
+  const blind = Array.isArray(r.blind) ? r.blind.length : 0;
+  let verdict = 'OK';
+  if (!r.ok) verdict = failed ? 'FINISHED WITH FAILURES' : 'COULD NOT TELL';
+  const bits = [`${w.label} ${verdict}: ${queued} new file(s) queued, ${skipped} skipped, ${failed} failed`];
+  if (r.cursor && r.cursor.initialised) bits.push('started watching from now, nothing replayed');
+  if (blind) bits.push(`${blind} thing(s) it could not check`);
+  if (r.recovered) bits.push('the previous block has cleared');
+  return bits.join(', ');
+}
+
+/**
  * The daemon proper. Runs until it is asked to stop.
  *
  * `stopAfterTicks` exists for the tests and for a hand-run smoke check; the
@@ -420,6 +530,8 @@ async function runDaemon(options = {}) {
   const {
     env = process.env,
     runners = STAGE_RUNNERS,
+    watchers = WATCHERS,
+    drive,
     idleMs = DEFAULT_IDLE_MS,
     busyMs = DEFAULT_BUSY_MS,
     reapEveryMs = DEFAULT_REAP_EVERY_MS,
@@ -463,6 +575,7 @@ async function runDaemon(options = {}) {
 
   let lastReap = 0;
   let lastBeat = 0;
+  const watchedAt = {};
   let ticks = 0;
   const summary = { ticks: 0, worked: 0, errors: 0, beats: 0, rotations: 0, owner, queueFile, logFile };
 
@@ -481,7 +594,7 @@ async function runDaemon(options = {}) {
     }
 
     const report = await tickOnce({
-      queue, owner, env, runners, now,
+      queue, owner, env, runners, watchers, watchedAt, drive, now,
       reap: now - lastReap >= reapEveryMs,
     });
     if (report.reaped) lastReap = now;
@@ -539,6 +652,7 @@ module.exports = {
   runDaemon,
   tickOnce,
   formatTick,
+  formatWatch,
   // Exported for their own tests. Each is a decision that can be wrong on its
   // own, and driving a whole daemon loop to check one boundary is how a test
   // ends up asserting nothing in particular.
@@ -548,11 +662,13 @@ module.exports = {
   resolveQueueFile,
   resolveLogFile,
   STAGE_RUNNERS,
+  WATCHERS,
   ROLE,
   DEFAULT_IDLE_MS,
   DEFAULT_BUSY_MS,
   DEFAULT_REAP_EVERY_MS,
   DEFAULT_BEAT_EVERY_MS,
+  DEFAULT_DRIVE_WATCH_EVERY_MS,
   DEFAULT_LOG_MAX_BYTES,
   DEFAULT_LOG_KEEP,
 };
