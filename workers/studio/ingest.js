@@ -54,6 +54,7 @@ const googleDrive = require('../../lib/googleDrive.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const videoSessionsStore = require('../../lib/videoSessionsStore.js');
 const { STAGE_INGEST, SUBJECT_DRIVE_FILE, LANES } = require('./drive.js');
+const { enqueueProbe } = require('./probePass.js');
 
 /**
  * The ingest pass's own health flag, on the queue as a job like any other —
@@ -891,6 +892,24 @@ async function ingestJob({
     };
   };
 
+  /**
+   * Hand a downloaded source to the probe pass. Called BEFORE the ingest job
+   * completes, on purpose: a crash between the two then leaves ingest to run
+   * again (and dedupe, which re-asks for the probe below), whereas the other
+   * order could complete the ingest and lose the probe for good — which is the
+   * "stops at downloaded forever" this exists to end.
+   *
+   * The queue's unique index on live jobs is the dedupe, so a re-run while the
+   * probe is still waiting gets the same job back rather than a second one.
+   */
+  const askForProbe = (source, localPath, name) => {
+    enqueueProbe(queue, {
+      sourceId: source.id,
+      localPath: localPath || source.localPath || '',
+      sourcePath: facts.folderPath ? `${facts.folderPath}${name || facts.name}` : '',
+    });
+  };
+
   if (!facts.driveFileId) {
     return blockIt(
       'this job carries no Drive file id, so there is nothing to download. '
@@ -1022,6 +1041,10 @@ async function ingestJob({
   if (already.data) {
     const storedMd5 = text(already.data.driveMd5);
     if (storedMd5 && storedMd5 === expectedMd5) {
+      // A row still at `downloaded` never got its probe — it was ingested
+      // before the probe pass existed, or by a pass that died between the two.
+      // Asking again here is what lets those heal rather than stay stuck.
+      if (text(already.data.state) === STATE_DOWNLOADED) askForProbe(already.data, '', driveName);
       queue.complete(job.id, owner);
       return {
         ...base,
@@ -1209,6 +1232,7 @@ async function ingestJob({
       return releaseIt(`the source row's Drive md5 could not be recorded: ${backfilled.error}`);
     }
     await removeQuietly(verifyPath);
+    if (text(replacing.state) === STATE_DOWNLOADED) askForProbe(replacing, '', driveName);
     queue.complete(job.id, owner);
     return {
       ...base,
@@ -1302,6 +1326,8 @@ async function ingestJob({
         + `Fix: inspect row ${replacing.id} by hand, then delete this blocked job.`
       );
     }
+    // New bytes, so the old probe describes a file that is gone.
+    askForProbe(readBackUpdated.data, paths.finalPath, driveName);
     queue.complete(job.id, owner);
     return {
       ...base,
@@ -1399,6 +1425,7 @@ async function ingestJob({
     );
   }
 
+  askForProbe(readBack.data, paths.finalPath, driveName);
   queue.complete(job.id, owner);
   return {
     ...base,
@@ -1782,6 +1809,7 @@ module.exports = {
   resolveDiskFloorBytes,
   resolveDriveTimeouts,
   resolveProjectId,
+  scopeFor,
   readJobPayload,
   holdingSessionTitle,
   ensureHoldingSession,
