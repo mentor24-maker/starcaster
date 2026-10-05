@@ -1,4 +1,4 @@
-/* Export to WordPress (Divi) card (React island) —
+/* Import / Export card (React island) —
    components/settings/wordpress-export-panel.tsx, on Settings › Projects ›
    (a project), right column under Modules. */
 
@@ -50,4 +50,21 @@
   padding-left: var(--space-5);
   font-size: var(--text-base);
   line-height: 1.55;
+}
+
+/* Import and Export are two parts of one card, divided by a rule, so the
+   card reads like the Modules card above it: a label, a line saying what it
+   does, then its controls. */
+.import-export-part + .import-export-part {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--space-4);
+}
+
+.import-export-part-title {
+  /* Size and weight come from .module-toggle-label, so these titles match
+     CRM / Blog in the Modules card above. */
+  display: block;
+  margin: 0 0 var(--space-1);
+  color: var(--ink-primary);
 }
