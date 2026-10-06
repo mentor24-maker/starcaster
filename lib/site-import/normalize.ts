@@ -854,6 +854,11 @@ function normalizePage(
   const desktop = captures.desktop;
   const url = desktop.finalUrl || desktop.url || "";
   const styles = desktop.styles || {};
+  const rects = desktop.rects || {};
+  const boxOf = (scimKey: string): ElementIR["box"] | undefined => {
+    const r = scimKey ? rects[scimKey] : undefined;
+    return r ? { x: r[0], y: r[1], w: r[2], h: r[3] } : undefined;
+  };
 
   const { $, body } = parseBody(desktop.html);
   if (!body) return degradedPage(pageIdx, captures);
@@ -895,6 +900,8 @@ function normalizePage(
         depth: v.depth,
         assetRefs: [],
       };
+      const runBox = boxOf((v.parentNode.attribs || {})["data-scim"] || "");
+      if (runBox) el.box = runBox;
     } else {
       const html = stripScimMarkers(outerHtml($, v.node));
       const textContent = collapseWhitespace(getText(v.node));
@@ -914,6 +921,8 @@ function normalizePage(
         ...(crop ? { screenshot: crop } : {}),
         assetRefs,
       };
+      const elBox = boxOf(scimKey);
+      if (elBox) el.box = elBox;
       if (assetRefs.length) assetUses.push({ sourceId, assetIds: assetRefs });
     }
 
