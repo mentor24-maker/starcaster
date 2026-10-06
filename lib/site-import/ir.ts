@@ -130,6 +130,14 @@ export type CaptureResult = {
   /** Computed styles keyed by data-scim id. Desktop capture only. */
   styles: CapturedStylesById;
 
+  /**
+   * Each stamped element's desktop box, keyed by data-scim id, as
+   * [x, y, width, height] in page pixels (scrolled-to-top frame). Desktop
+   * capture only; absent on captures made before 2026-10-06, which then
+   * import single-column as they always did (see columns.ts).
+   */
+  rects?: Record<string, [number, number, number, number]>;
+
   /** Blob path of the full-page screenshot. */
   fullPageScreenshot: string;
   /**
@@ -266,6 +274,12 @@ export type ElementIR = {
   screenshot?: string;
   /** AssetRef ids this element references (by URL match). */
   assetRefs: string[];
+  /**
+   * Desktop position in page pixels — what column inference (columns.ts)
+   * reads. Absent when the capture predates it or the element had no box.
+   * A bare text run carries its parent container's box.
+   */
+  box?: { x: number; y: number; w: number; h: number };
 };
 
 export type SectionIR = {

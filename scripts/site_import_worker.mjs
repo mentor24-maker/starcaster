@@ -317,6 +317,7 @@ async function runCaptureStage(job, opts) {
             viewport: raw.viewport,
             html: raw.html,
             styles: raw.styles,
+            rects: raw.rects || {},
             assetUrls: raw.assetUrls,
             fontFamilies: raw.fontFamilies,
             meta: raw.meta,

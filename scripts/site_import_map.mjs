@@ -110,7 +110,7 @@ const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');
 const savedSectionsStore = require('./lib/builderSavedSectionsStore.js');
 const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
-const { mapSite, reportReconciles } = require('./lib/site-import/dist/map.js');
+const { mapSite, reportReconciles, mergeMappedSections } = require('./lib/site-import/dist/map.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
@@ -370,12 +370,7 @@ async function main() {
     }
     let saved;
     if (current) {
-      const mappedById = new Map(sections.map((s) => [s.id, s]));
-      const merged = (current.layoutSections || []).map((s) =>
-        mappedById.has(s.id) && !protectedIds.has(s.id) ? mappedById.get(s.id) : s
-      );
-      const presentIds = new Set(merged.map((s) => s.id));
-      for (const s of sections) if (!presentIds.has(s.id)) merged.push(s);
+      const merged = mergeMappedSections(current.layoutSections || [], sections, protectedIds);
       saved = must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`);
     } else {
       saved = must(await pagesStore.createPage({
