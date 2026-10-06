@@ -267,6 +267,41 @@ if (dockerInfo.ok && dockerInfo.text) {
   );
 }
 
+// --- 2b. model files --------------------------------------------------------
+// Checked by SHA-256, never by name: a download that died at 80% leaves a file
+// with exactly the right name (lib/nodeProvision.js REQUIRED_MODELS). Only the
+// models of jobs this machine owns are required here.
+
+heading('MODELS — large files the jobs on this node read');
+
+if (!knownNode) {
+  unknown(
+    'Cannot say which models this machine needs.',
+    'It does not know which node it is (see IDENTITY), and models follow the jobs a node owns.',
+  );
+} else {
+  const needed = provision.modelsForNode(node.name);
+  if (needed.length === 0) {
+    note(`${node.name} owns no job that reads a model file.`);
+  }
+  for (const model of needed) {
+    const where = provision.modelPath(model);
+    const fix = 'npm run provision:node:apply      (downloads it and checks it before keeping it)';
+    const result = provision.checkModelFile(where, model);
+    if (result.state === 'present') {
+      pass(`${model.file} — checksum verified.`, `${where} · ${model.why}`);
+    } else if (result.state === 'missing') {
+      fail(`${model.file} is not on this machine.`, fix, `${where} · ${model.why}`);
+    } else if (result.state === 'wrong-size') {
+      fail(`${model.file} is the wrong size — most likely a download that did not finish.`, fix, `${where} · ${result.detail}`);
+    } else if (result.state === 'wrong-checksum') {
+      fail(`${model.file} does not match its published checksum.`, fix, `${where} · ${result.detail}`);
+    } else {
+      unknown(`${model.file} could not be read.`, result.detail, `ls -l ${where}`);
+    }
+  }
+}
+
 // --- 3. repos ---------------------------------------------------------------
 
 heading('REPOS — the checkouts on this machine');

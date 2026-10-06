@@ -86,12 +86,26 @@ which is why this is checked first.
 ### Toolchain
 
 `brew`, `git`, `node`, `npm`, `gh`, `doppler`, `supabase`, `jq`, `ffmpeg`,
-`claude`.
+`whisper-cli`, `claude`.
 
 `ffmpeg` is on the list because the Studio reads what a video file actually
 is with `ffprobe`, and the node suite that gates every `npm run ship` probes
 real generated files rather than skipping that proof — so a node without it
 fails the ship of an unrelated ticket.
+
+`whisper-cli` (Homebrew `whisper.cpp`) is the Studio's on-machine
+speech-to-text.
+
+### Models
+
+Large files no package manager installs, listed in `REQUIRED_MODELS` in
+`lib/nodeProvision.js`. Each belongs to a job, and only the machine that owns
+that job carries it — today, the whisper model
+(`~/Studio/models/ggml-large-v3-turbo.bin`, 1.6 GB) on the `studio-worker`
+machine. A model is **present only when its size and SHA-256 match the
+published ones**; a file with the right name and the wrong bytes is a FAIL.
+The provisioner downloads to `<name>.partial`, checks that, and only then
+renames it, so a download that died part way never wears the real name.
 
 `brew` and `claude` install by piping a URL into a shell, so the script prints
 them and never runs them — that is a decision with a person's name on it, not
