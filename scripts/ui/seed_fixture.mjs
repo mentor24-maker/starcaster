@@ -1569,6 +1569,11 @@ for (const [name, slug, sections = []] of buildPages(ids)) {
  * one with no Drive id at all, and a Drive id that will not resolve locally —
  * both of which must render the placeholder, never a broken image.
  *
+ * The File column (86bcdejzy) gets every shape it has: a long name that must
+ * wrap rather than push the table off the screen, a name with no Drive copy
+ * (plain text and "not from Drive", never a dead link), a Drive file not
+ * downloaded yet ("Open in Drive"), and a file with neither.
+ *
  * Idempotent by content hash: the hash is unique per project, so a re-seed
  * finds each file instead of duplicating it.
  */
@@ -1585,8 +1590,8 @@ async function seedStudioFootage(scope) {
       title: `${LONG} — Saturday match-play filming, all three courts, two iPhones and the MacBook screen`,
       recordedAt: '2026-09-13T14:00:00Z',
       files: [
-        { hash: 'fixture-footage-01', deviceLane: 'iphone', layerRole: 'subject', durationS: 3725.4, width: 3840, height: 2160, recordedAt: '2026-09-13T14:02:00Z', state: 'proxied', driveFileId: 'fixture-missing-drive-file-1' },
-        { hash: 'fixture-footage-02', deviceLane: 'iphone', layerRole: 'background', durationS: 3690, width: 1920, height: 1080, recordedAt: '2026-09-13T14:01:30Z', state: 'probed' },
+        { hash: 'fixture-footage-01', deviceLane: 'iphone', layerRole: 'subject', durationS: 3725.4, width: 3840, height: 2160, recordedAt: '2026-09-13T14:02:00Z', state: 'proxied', driveFileId: 'fixture-missing-drive-file-1', localPath: '/fixture/studio-cache/iphone/fixture-missing-drive-file-1/IMG_1962 — Saturday match-play, court one wide, full set with the warm-up and the tiebreak.MOV' },
+        { hash: 'fixture-footage-02', deviceLane: 'iphone', layerRole: 'background', durationS: 3690, width: 1920, height: 1080, recordedAt: '2026-09-13T14:01:30Z', state: 'probed', localPath: '/fixture/studio-cache/iphone/local-only/IMG_1963.MOV' },
         { hash: 'fixture-footage-03', deviceLane: 'macbook', layerRole: 'plate', durationS: 612.25, width: 2880, height: 1800, state: 'downloaded', driveFileId: 'fixture-missing-drive-file-2' },
         { hash: 'fixture-footage-04', layerRole: 'reference', state: 'new' },
       ],
@@ -1595,7 +1600,7 @@ async function seedStudioFootage(scope) {
       title: 'Adult clinic — coach cam',
       recordedAt: '2026-09-06T09:30:00Z',
       files: [
-        { hash: 'fixture-footage-05', deviceLane: 'ipad', layerRole: 'subject', durationS: 45.9, width: 1080, height: 1920, recordedAt: '2026-09-06T09:31:00Z', state: 'ready' },
+        { hash: 'fixture-footage-05', deviceLane: 'ipad', layerRole: 'subject', durationS: 45.9, width: 1080, height: 1920, recordedAt: '2026-09-06T09:31:00Z', state: 'ready', driveFileId: 'fixture-missing-drive-file-3', localPath: '/fixture/studio-cache/ipad/fixture-missing-drive-file-3/coach-cam.mov' },
         { hash: 'fixture-footage-06', deviceLane: 'screen', layerRole: 'plate', durationS: 128, width: 1440, height: 900, state: 'failed' },
       ],
     },
@@ -1612,7 +1617,15 @@ async function seedStudioFootage(scope) {
     }
     for (const file of shoot.files) {
       const existing = lookup(await videoSourcesStore.findSourceByContentHash(file.hash, scope), 'find footage file');
-      if (existing) { found += 1; continue; }
+      if (existing) {
+        found += 1;
+        // A fixture seeded before the File column existed has no localPath,
+        // so the column would only ever measure its fallbacks. Fill it in.
+        if (file.localPath && !existing.localPath) {
+          must(await videoSourcesStore.updateSource(existing.id, { localPath: file.localPath }, scope), 'name footage file');
+        }
+        continue;
+      }
       const { hash, ...rest } = file;
       must(
         await videoSourcesStore.createSource({ sessionId: session.id, contentHash: hash, ...rest }, scope),

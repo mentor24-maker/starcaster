@@ -48,6 +48,8 @@ function footage(title: string, ids: string[]) {
         date: "2026-09-01T15:00:00Z",
         dateSource: "recorded",
         hasDriveFile: true,
+        fileName: `${id}.MOV`,
+        driveUrl: `https://drive.google.com/file/d/drv-${id}/view`,
       })),
     }],
   };
@@ -195,5 +197,34 @@ describe("Footage panel — Refresh retries previews", () => {
 
     expect(thumbnailRequests.length).toBe(before);
     expect(container?.querySelectorAll("img").length).toBe(2);
+  });
+});
+
+describe("Footage panel — watching a recording (86bcdejzy)", () => {
+  it("the file name and the preview both open the original in Drive, in a new tab", async () => {
+    await mount();
+    const links = [...(container?.querySelectorAll("a") || [])].filter((a) => a.getAttribute("href") === "https://drive.google.com/file/d/drv-fx-1/view");
+    expect(links.length).toBe(2);
+    expect(links.some((a) => a.textContent === "fx-1.MOV")).toBe(true);
+    expect(links.some((a) => a.querySelector(".studio-footage-thumb"))).toBe(true);
+    for (const a of links) {
+      expect(a.getAttribute("target")).toBe("_blank");
+      expect(a.getAttribute("rel")).toBe("noopener");
+    }
+  });
+
+  it("a file with no Drive copy shows its name and why, never a dead link", async () => {
+    const row = CATALOG.proj_fixture.sessions[0].sources[0];
+    const saved = { ...row };
+    Object.assign(row, { hasDriveFile: false, driveUrl: null });
+    try {
+      await mount();
+      const firstRow = container?.querySelector("tbody tr");
+      expect(firstRow?.querySelectorAll("a").length).toBe(0);
+      expect(firstRow?.textContent).toContain("fx-1.MOV");
+      expect(firstRow?.textContent).toContain("not from Drive");
+    } finally {
+      Object.assign(row, saved);
+    }
   });
 });

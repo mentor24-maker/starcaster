@@ -139,3 +139,37 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
 .studio-footage-date-note {
   color: var(--muted, #6b7280);
 }
+
+/* The preview and the file name open the original in Drive (86bcdejzy). */
+.studio-footage-play {
+  color: inherit;
+  text-decoration: none;
+}
+
+.studio-footage-play .studio-footage-thumb {
+  cursor: pointer;
+}
+
+.studio-footage-play:hover .studio-footage-thumb,
+.studio-footage-play:focus-visible .studio-footage-thumb {
+  outline: 2px solid var(--primary-color, #0b82d4);
+  outline-offset: 1px;
+}
+
+.studio-footage-play .studio-footage-file-name {
+  color: var(--primary-color, #0b82d4);
+  text-decoration: underline;
+}
+
+.studio-footage-file-note {
+  color: var(--muted, #6b7280);
+  font-size: var(--text-xs);
+}
+
+/* A name is never truncated (UI_RULES T-1), and the table must never be wider
+   than the screen (T0), so this one cell wraps where every other cell holds. */
+.studio-footage-table td.studio-footage-file-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 12ch;
+}
