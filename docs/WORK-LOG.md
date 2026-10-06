@@ -1,3 +1,16 @@
+## 2026-10-06 — Delray site: links to PDFs (job application, flyers, policies) open a 'not found' page (#776)
+
+On delraytennis.com, clicking a document — the employment application, the
+maintenance job posting, the afterschool waiver, the press release — opened a
+"not found" page. Those links still pointed at the old WordPress site, which
+stopped existing at that address when the domain moved to StarCaster on 10/2.
+The files were never lost: Site Import had already saved a copy of every one
+in StarCaster's own storage, it just never updated the links. A new tool now
+points each link at its saved copy — on the pages, on what visitors are
+actually served, and in blog posts — without publishing anything else. In
+production that is 9 documents on 6 live pages, and every one has a working
+copy.
+
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
 The Mac Mini can now turn what you say in a recording into text, on its own,
