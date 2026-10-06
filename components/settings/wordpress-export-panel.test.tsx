@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ExportSummary, type ExportReport } from './wordpress-export-panel';
+import { ExportSummary, HowToLoad, type ExportReport } from './wordpress-export-panel';
 
 /**
  * The Export to WordPress (Divi) card's summary. Asserted on rendered markup,
@@ -66,5 +66,30 @@ describe('ExportSummary', () => {
     );
     expect(html).toContain('No header — this site has no shared header section · no shared footer section');
     expect(html).toContain('No menu found on this site');
+  });
+});
+
+describe('the .wpress choice', () => {
+  it('does not show the .xml size for a .wpress, and says the images make it larger', () => {
+    const html = renderToStaticMarkup(<ExportSummary report={report()} bytes={2_300_000} format="wpress" />);
+    expect(html).not.toContain('File size: 2.2 MB');
+    expect(html).toContain('carries all 12 images inside');
+  });
+
+  it('warns before the download that importing a .wpress replaces the site\'s pages and posts', () => {
+    const html = renderToStaticMarkup(<HowToLoad format="wpress" homePageSlug="home" />);
+    expect(html).toContain('All-in-One WP Migration');
+    expect(html).toContain('replaces the site&#x27;s pages, posts, menus and comments');
+    expect(html).toContain('logins and settings are kept');
+    // The file sets these itself, so the steps must not send anyone to do them.
+    expect(html).not.toContain('Settings → Reading');
+    expect(html).not.toContain('Appearance → Menus');
+  });
+
+  it('keeps the WordPress Importer steps for the .xml', () => {
+    const html = renderToStaticMarkup(<HowToLoad format="xml" homePageSlug="home" />);
+    expect(html).toContain('Tools → Import → WordPress');
+    expect(html).toContain('Download and import file attachments');
+    expect(html).toContain('set the homepage to <strong>Home</strong>');
   });
 });

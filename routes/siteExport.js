@@ -5,7 +5,11 @@
  * built for the Divi theme (lib/wordpressExport.js does the converting).
  *
  *   GET /api/site-export/wordpress/summary   what the file will hold, as JSON
- *   GET /api/site-export/wordpress/download  the file itself (WXR .xml)
+ *   GET /api/site-export/wordpress/download  the file itself: the .xml
+ *       (WordPress Importer), or with ?format=wpress the .wpress (All-in-One
+ *       WP Migration), which carries every image inside it and is STREAMED —
+ *       Delray's is ~95 MB, far past the 4.5 MB a buffered Vercel response
+ *       may be (streamed Node responses have no such cap).
  *
  * Both read the ACTIVE project (x-project-id). Staff-only, like Site Import:
  * '/api/site-export' sits in PROJECT_ADMIN_SESSION_DENY_PREFIXES, because the
@@ -20,6 +24,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { listPages } = require('../lib/builderPagesStore');
 const { listPosts } = require('../lib/blogPostsStore');
 const { buildWordPressExport } = require('../lib/wordpressExport');
+const { streamWpressExport } = require('../lib/wpressExport');
 
 const PREFIX = '/api/site-export';
 
@@ -53,7 +58,7 @@ function siteUrlFor(project, origin) {
   return origin;
 }
 
-async function buildForRequest(req) {
+async function exportInputFor(req) {
   const scope = requestProjectScope(req);
   const pagesRes = await listPages(5000, { projectId: scope.projectId, userId: scope.userId });
   if (!pagesRes.ok) return { error: pagesRes.error || 'Could not read the pages', status: pagesRes.status || 500 };
@@ -63,7 +68,7 @@ async function buildForRequest(req) {
   const logo = String(project.logoDataUrl || '');
   return {
     project,
-    result: buildWordPressExport({
+    input: {
       project: {
         name: project.name,
         slug: project.slug,
@@ -76,8 +81,44 @@ async function buildForRequest(req) {
       posts,
       // Site-relative images (/images/...) are served by StarCaster itself.
       assetOrigin: origin,
-    }),
+    },
   };
+}
+
+function downloadName(project, generatedAt, ext) {
+  const base = String(project.slug || project.name || 'site')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
+  return `${base}-wordpress-divi-${String(generatedAt).slice(0, 10)}.${ext}`;
+}
+
+async function sendWpress(req, res, built) {
+  const startedAt = new Date().toISOString();
+  res.writeHead(200, {
+    'Content-Type': 'application/octet-stream',
+    'Content-Disposition': `attachment; filename="${downloadName(built.project, startedAt, 'wpress')}"`,
+    'Cache-Control': 'no-store',
+    // Ask any proxy in between not to hold the stream back.
+    'X-Accel-Buffering': 'no',
+  });
+  const write = (chunk) => new Promise((resolve, reject) => {
+    if (res.destroyed) return reject(new Error('the browser stopped the download'));
+    if (res.write(chunk)) return resolve();
+    res.once('drain', resolve);
+    res.once('close', () => reject(new Error('the browser stopped the download')));
+  });
+  try {
+    const result = await streamWpressExport(built.input, write);
+    for (const miss of result.images.failed) {
+      console.warn(`[site-export] .wpress: image left at its StarCaster address (${miss.reason}): ${miss.url}`);
+    }
+    res.end();
+  } catch (err) {
+    // The 200 and part of the file are already on the wire, so there is no
+    // error envelope to send. Cutting the connection makes the browser report
+    // a failed download instead of saving a broken archive as if whole.
+    console.error('[site-export] .wpress failed part-way:', err?.message || err);
+    res.destroy(err);
+  }
 }
 
 async function handle(req, res, pathname, method) {
@@ -97,15 +138,25 @@ async function handle(req, res, pathname, method) {
     return sendErr(res, 400, 'An active project is required (x-project-id header)', { code: 'PROJECT_REQUIRED' }), true;
   }
 
-  const built = await buildForRequest(req);
+  const built = await exportInputFor(req);
   if (built.error) return sendErr(res, built.status, built.error), true;
-  const { xml, report } = built.result;
 
+  const format = new URL(req.url || '/', 'http://x').searchParams.get('format') || 'xml';
+  if (format !== 'xml' && format !== 'wpress') {
+    return sendErr(res, 400, `Unknown export format "${format}" — use xml or wpress`, { code: 'VALIDATION_ERROR' }), true;
+  }
+  if (isDownload && format === 'wpress') {
+    if (!built.input.project.siteUrl) {
+      return sendErr(res, 400, 'This project has no site address. Set its Custom Domain or Default URL first.', { code: 'SITE_URL_REQUIRED' }), true;
+    }
+    await sendWpress(req, res, built);
+    return true;
+  }
+
+  const { xml, report } = buildWordPressExport(built.input);
   if (isSummary) return sendOk(res, 200, { report, bytes: Buffer.byteLength(xml, 'utf8') }), true;
 
-  const base = String(built.project.slug || built.project.name || 'site')
-    .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
-  const filename = `${base}-wordpress-divi-${report.generatedAt.slice(0, 10)}.xml`;
+  const filename = downloadName(built.project, report.generatedAt, 'xml');
   const body = Buffer.from(xml, 'utf8');
   res.writeHead(200, {
     'Content-Type': 'application/xml; charset=utf-8',

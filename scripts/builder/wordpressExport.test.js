@@ -193,3 +193,15 @@ test('the site address prefers the custom domain', () => {
   assert.equal(siteUrlFor({ siteUrl: 'https://a.b/' }, 'https://app.x'), 'https://a.b');
   assert.equal(siteUrlFor({}, 'https://app.x'), 'https://app.x');
 });
+
+test('a link that opens a full-size photo is treated as an image too, in both formats', () => {
+  const { xml, report } = buildWordPressExport({
+    assetOrigin: 'https://app.example.com',
+    pages: [{ id: '1', name: 'Home', slug: '', layoutSections: [section([
+      mod('text', { text: '<p><a href="https://cdn.example.com/full.jpg">see</a> <a href="/about">about</a></p>' }),
+    ])] }],
+  });
+  assert.equal(report.images, 1);
+  assert.match(xml, /<wp:attachment_url><!\[CDATA\[https:\/\/cdn\.example\.com\/full\.jpg\]\]>/);
+  assert.ok(xml.includes('href="/about"'), 'an ordinary page link is left alone');
+});
