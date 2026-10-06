@@ -116,9 +116,11 @@ Engine numbers are clamped by `readGalaxySettings` (ranges in
 | `flareSize` | Flare Size | 41 | How far the four-point streak reaches; hidden with Flare Stars at 0 |
 | `flareIntensity` | Flare Intensity | 28 | How bright the streak is; 40 and above saturate |
 | `seed` | — | 27 | Not offered in the panel; fixes the layout so every load is the same galaxy |
-| `intro` | Structure › Intro | converge | `converge` / `none` — see *Intro and scroll* |
-| `introDelay` | Intro Delay | 1 | Seconds, 0–5; shown only with Intro on Converge |
-| `introDuration` | Intro Length | 5 | Seconds, 1–10; shown only with Intro on Converge |
+| `intro` | Structure › Intro | unfurl | `unfurl` / `fade` / `none`; a stored `converge` reads as `unfurl` — see *Intro and scroll* |
+| `introDelay` | Intro Delay | 0 | Seconds, 0–5; shown only while there is an intro (was 1 before task 86bcd9qtc) |
+| `introDuration` | Intro Length | 5 | Seconds, 1–10; shown only while there is an intro |
+| `viewAngle` | View Angle | 0 | Degrees, 0–75; leans the disc back into an oval — see *Resting pose* |
+| `ovalDirection` | Oval Direction | 0 | Degrees, −90–90; turns the oval; shown only with a View Angle |
 | `scrollDisperse` | Scroll Away | true | Checkbox |
 | `scrollDistance` | Scroll Distance | 800 | Pixels, 200–2000; shown only with Scroll Away on |
 
@@ -209,8 +211,27 @@ and the arm tips last. Dispersing is the same wave run backwards — the tips
 leave first — multiplied in, so scrolling away mid-intro never jumps. The
 card passes no mix and is always the assembled galaxy.
 
+> **The fly-in described above was retired on 2026-10-05 (task 86bcd9qtc)**
+> as too close to the reference page's own intro. The scatter offsets remain,
+> but only Scroll Away uses them now; the runtime holds `converge` at 1. The
+> intro is now one of these, and the galaxy is turning from its first frame
+> in every one:
+>
+> - **Unfurl** (default) grows out from the core. Each star fades in and
+>   slides out from `GALAXY_UNFURL_START` (35%) of its distance to its place,
+>   on the same centre-first wave (`galaxyRevealShare`, stagger 0.5), so the
+>   arm tips arrive last. The core glow comes up with the core.
+> - **Fade In** brightens every star alike, in place.
+> - **None** shows the galaxy whole on its first frame.
+>
+> A page saved with `intro: "converge"` reads as Unfurl, and the normalizer
+> writes `unfurl` back so the panel's select shows a value it offers. New
+> modules get Intro Delay 0 (it was 1 s), so the galaxy starts at once. The
+> runtime publishes the progress as `data-galaxy-intro` (formerly
+> `data-galaxy-converge`).
+
 **The intro.** From the moment the galaxy mounts: wait Intro Delay, then
-converge runs in a straight line from 0 to 1 over Intro Length
+the intro's progress runs in a straight line from 0 to 1 over Intro Length
 (`galaxyIntroProgress`; linear because each star eases itself). The start time
 lives in a ref, so dragging a slider in the Builder does not fly every star
 back out. A `galaxy:replay` event on the document (`GALAXY_REPLAY_EVENT`)
@@ -243,6 +264,25 @@ galaxy.
 
 Published on the canvas, two decimals, written only when they change:
 `data-galaxy-converge` and `data-galaxy-disperse`.
+
+## Resting pose: View Angle and Oval Direction (task 86bcd9qtc)
+
+Two sliders after Star Size. **View Angle** (0–75°) leans the disc back from
+face-on, so it reads as an oval: `readGalaxyPose` turns it into radians that
+the runtime adds to the view's pitch every frame, so drag, arrow keys and
+cursor tilt all still work on top of it. **Oval Direction** (−90° to 90°)
+turns that oval on the page: a `roll` applied in the screen's plane after
+the pitch (`projectGalaxyField`'s last argument). It is hidden while View
+Angle is 0, because a round galaxy has no direction to turn.
+
+The haze and core glow lean with the stars. `drawGalaxyFrame` takes a `pose`
+— `squash`, which is `galaxyPoseSquash(pitch)` = cos(pitch) floored at 0.05,
+and `roll` — and draws each glow inside its own save/rotate/scale/restore.
+With no pose (squash 1, roll 0) it takes exactly the old path, so every
+existing page draws the same pixels; a test holds that.
+
+Both default to 0. Capped at 75° because past that the disc's 2% thickness
+starts to show as a band of stars rather than a thin oval.
 
 ## Look (task 86bc7f5hm)
 

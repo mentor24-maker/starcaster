@@ -560,3 +560,63 @@ describe("the four presets (task 86bc7f5hm)", () => {
     expect(matchGalaxyPreset({ ...GALAXY_PRESETS.nebula, flareSize: "60" })).toBe("custom");
   });
 });
+
+describe("drawGalaxyFrame: the intro and the resting pose (task 86bcd9qtc)", () => {
+  it("Unfurl draws nothing at the start, the core but not the rim early on, and everything at the end", () => {
+    const frame = frameFor(2000);
+    const drawnAt = (progress: number) => {
+      const { ctx } = recorder();
+      return drawGalaxyFrame(ctx, { ...frame, reveal: { mode: "unfurl", progress } }, frame.look, frame.sprites);
+    };
+    const whole = drawnAt(1);
+    expect(drawnAt(0)).toBe(0);
+    // At 0.3 the wave has reached radius 0.6: the core is out, the outer arms are not.
+    const halfway = drawnAt(0.3);
+    expect(halfway).toBeGreaterThan(0);
+    expect(halfway).toBeLessThan(whole);
+    const { ctx } = recorder();
+    expect(drawGalaxyFrame(ctx, frame, frame.look, frame.sprites)).toBe(whole);
+  });
+
+  it("Fade In dims every star by the same share", () => {
+    const frame = frameFor(400);
+    const full = recorder();
+    drawGalaxyFrame(full.ctx, frame, frame.look, frame.sprites);
+    const half = recorder();
+    drawGalaxyFrame(half.ctx, { ...frame, reveal: { mode: "fade", progress: 0.5 } }, frame.look, frame.sprites);
+    expect(half.calls.alphas.length).toBe(full.calls.alphas.length);
+    for (let i = 0; i < full.calls.alphas.length; i++) {
+      expect(half.calls.alphas[i]).toBeCloseTo(full.calls.alphas[i] * 0.5, 6);
+    }
+  });
+
+  it("draws the haze and core glow as turned ovals when posed, and exactly as before when not", () => {
+    const frame = frameFor(200);
+    const transforms: string[] = [];
+    const posedCtx = (base: GalaxyDrawContext) =>
+      Object.assign(base, {
+        save: () => transforms.push("save"),
+        restore: () => transforms.push("restore"),
+        translate: () => transforms.push("translate"),
+        rotate: (r: number) => transforms.push(`rotate ${r.toFixed(2)}`),
+        scale: (x: number, y: number) => transforms.push(`scale ${x} ${y.toFixed(2)}`)
+      });
+
+    drawGalaxyFrame(posedCtx(recorder().ctx), { ...frame, pose: { squash: 1, roll: 0 } }, frame.look, frame.sprites);
+    expect(transforms).toEqual([]);
+
+    drawGalaxyFrame(posedCtx(recorder().ctx), { ...frame, pose: { squash: 0.5, roll: 0.3 } }, frame.look, frame.sprites);
+    // Haze, then core glow: each drawn inside its own save/restore, turned and squashed.
+    expect(transforms).toEqual([
+      "save", "translate", "rotate 0.30", "scale 1 0.50", "restore",
+      "save", "translate", "rotate 0.30", "scale 1 0.50", "restore"
+    ]);
+  });
+
+  it("a context with no transform calls still paints a posed frame, round, rather than throwing", () => {
+    const frame = frameFor(200);
+    const { ctx, calls } = recorder();
+    expect(() => drawGalaxyFrame(ctx, { ...frame, pose: { squash: 0.5, roll: 0.3 } }, frame.look, frame.sprites)).not.toThrow();
+    expect(calls.drawImage).toBeGreaterThan(0);
+  });
+});

@@ -14,6 +14,19 @@ and a description of the voice). One client can never see another client's
 list, and a test proves it. There is no screen yet (that is the next ticket),
 and nothing comments on anything. The two new database tables need Dane to
 run one SQL file before this goes live.
+## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
+
+The Mac Mini can now turn what you say in a recording into text, on its own,
+for free, without the audio ever leaving the house. The speech-to-text
+program and its 1.6 GB model file are now part of the Mini's setup checklist,
+so a rebuilt Mini gets them back automatically. The model only counts as
+installed if its fingerprint matches the one its publisher lists, so a
+half-finished download can't pass as "there". On your test clip it took about
+10 seconds to transcribe two and a half minutes of talking. One finding
+shapes the next step: the program's default word timings were up to a second
+off (nearly six at the start), but with its alignment switched on, every word
+landed within half a second of the audio. Nothing uses it yet; the next
+ticket wires it into the pipeline.
 
 ## 2026-10-05 — Studio: downloaded footage never gets its length, date or device read, so it stops at 'downloaded' (#764)
 
