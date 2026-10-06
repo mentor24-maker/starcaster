@@ -230,7 +230,11 @@ TOOLS="$(ask_inventory 'the toolchain' -e '
 while IFS=$'\t' read -r id command brew manual hint; do
   [ -n "$id" ] || continue
   if command -v "$command" >/dev/null 2>&1; then
-    pass "$command $("$command" --version 2>&1 | head -1 | tr -d '\n')"
+    # stdout first: whisper-cli prints its Metal start-up log on stderr ahead of
+    # the version. Fall back to stderr for the tools that only answer there.
+    version="$("$command" --version 2>/dev/null | head -1)"
+    [ -n "$version" ] || version="$("$command" --version 2>&1 | head -1)"
+    pass "$command $(printf '%s' "$version" | tr -d '\n')"
     continue
   fi
   if [ "$manual" = "manual" ] || [ "$brew" = "-" ]; then
@@ -267,6 +271,63 @@ elif command -v docker >/dev/null 2>&1; then
   failed "Docker is installed but not running." "open -a Docker      (then wait for the whale to stop animating)"
 else
   do_fix "Install Colima and the docker CLI" brew install colima docker || true
+fi
+
+# --- 2b. model files ---------------------------------------------------------
+
+heading "MODELS"
+
+# The state of one model file, judged by lib/nodeProvision.js checkModelFile —
+# size AND SHA-256, never the name. Prints one word: present, missing,
+# wrong-size, wrong-checksum or unreadable.
+model_state() {
+  node -e '
+    const p = require(process.argv[1] + "/lib/nodeProvision.js");
+    const m = p.REQUIRED_MODELS.find((x) => x.id === process.argv[2]);
+    if (!m) { console.error("no such model: " + process.argv[2]); process.exit(1); }
+    console.log(p.checkModelFile(process.argv[3], m).state);
+  ' "$REPO" "$1" "$2"
+}
+
+# Download beside the destination, check the download, and only then move it
+# into place. A download that dies part way leaves a `.partial` (curl resumes
+# it next run); a download that finishes but does not match is deleted. Either
+# way the real name is never given to a file that has not passed its check.
+fetch_model() {
+  local id="$1" dest="$2" url="$3"
+  local partial="$dest.partial" state
+  mkdir -p "$(dirname "$dest")" || return 1
+  curl -fL --retry 3 -C - -o "$partial" "$url" || return 1
+  state="$(model_state "$id" "$partial")" || return 1
+  if [ "$state" != "present" ]; then
+    echo "the download did not pass its check ($state) and was deleted" >&2
+    rm -f "$partial"
+    return 1
+  fi
+  mv -f "$partial" "$dest"
+}
+
+if [ "$NODE_KNOWN" != "known" ]; then
+  failed "Cannot tell which models this machine needs — it has no recognised identity." "$0 --apply --node <name>"
+else
+  MODELS="$(ask_inventory 'the model list' -e '
+    const p = require(process.argv[1] + "/lib/nodeProvision.js");
+    for (const m of p.modelsForNode(process.argv[2])) console.log([m.id, p.modelPath(m), m.url].join("\t"));
+  ' "$REPO" "$NODE_IS")" || exit 1
+  [ -n "$MODELS" ] || detail "$NODE_IS owns no job that reads a model file."
+
+  while IFS=$'\t' read -r id dest url; do
+    [ -n "$id" ] || continue
+    STATE="$(model_state "$id" "$dest")" || { failed "Cannot check $id." "npm run doctor:node"; continue; }
+    case "$STATE" in
+      present) pass "$(basename "$dest") — checksum verified." ;;
+      unreadable) failed "$(basename "$dest") exists but could not be read." "ls -l $dest" ;;
+      *)
+        detail "$(basename "$dest"): $STATE"
+        do_fix "Download $(basename "$dest") and verify its checksum" fetch_model "$id" "$dest" "$url" || true
+        ;;
+    esac
+  done <<<"$MODELS"
 fi
 
 # --- 3. repos ----------------------------------------------------------------
