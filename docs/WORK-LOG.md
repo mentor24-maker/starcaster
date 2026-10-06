@@ -1,3 +1,13 @@
+## 2026-10-05 — Footage screen: you can't watch a recording — nothing is clickable (#773)
+
+The Footage screen listed every recording, but nothing on it could be
+clicked, so there was no way to watch one. Each row now shows the file's name
+from Google Drive, and clicking the name or its little preview picture opens
+the original in Drive's player in a new tab. The browser has to be signed in
+to a Google account that can see the Studio folder. Files with no copy in
+Drive say "not from Drive" instead of showing a link that leads nowhere.
+Playing a video right on the page is a separate, later decision.
+
 ## 2026-10-05 — Studio: downloaded footage never gets its length, date or device read, so it stops at 'downloaded' (#764)
 
 Once the Studio worker downloaded a video, nothing ever opened it to find out
