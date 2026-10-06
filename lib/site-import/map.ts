@@ -28,6 +28,8 @@
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
+import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
+export { mergeMappedSections } from "./columns";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
 export const TEXT_MODULE_CHAR_BUDGET = 9500;
@@ -41,7 +43,9 @@ export const SOURCE_HTML_INLINE_BUDGET = 9000;
 export type MappedModule = {
   id: string;
   type: string;
-  column: "main";
+  /** "main" in a single-column section; left/center/right/col4–col6 in a
+   *  multi-column one (columns.ts). */
+  column: string;
   name: string;
   text: string;
   settings: Record<string, string>;
@@ -52,7 +56,9 @@ export type MappedModule = {
 export type MappedSection = {
   id: string;
   title: string;
-  layout: "single";
+  /** A Builder layout name — "single" unless column inference found a
+   *  side-by-side row (columns.ts). */
+  layout: string;
   widthMode: "contained";
   background: { mode: "none" | "color"; color: string; color2: string; imageUrl: string; styleKey: "" };
   modules: MappedModule[];
@@ -426,6 +432,92 @@ const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
  * The engine
  * ------------------------------------------------------------------------ */
 
+/** Modules that lay out their own columns: a row holding one stays a
+ *  single full-width column, or the module would be squeezed into a cell. */
+const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
+
+type Dispositions = { mapped: number; placeholder: number; deduped: number };
+
+/**
+ * Split one IR section's modules into Builder sections, one per row that
+ * column inference found (columns.ts). With no side-by-side rows this
+ * returns exactly what the mapper always emitted: one single-column section
+ * under the section's own id — so pre-2026-10-06 captures, which carry no
+ * positions, import unchanged. The first row keeps that id (a re-import
+ * replaces it in place); later rows are `<id>b<band>`.
+ */
+function splitIntoRows(args: {
+  section: SectionIR;
+  baseId: string;
+  fallbackHeading: string;
+  modules: MappedModule[];
+  moduleCells: Cell[];
+  grid: ReturnType<typeof planSectionGrid>;
+  cellOf: (sourceId: string) => Cell;
+  sourceElementIds: string[];
+  dispositionsFor: (band: number) => Dispositions;
+}): MappedSection[] {
+  const { section, baseId, modules, moduleCells, grid, cellOf } = args;
+  const bands = Array.from(new Set(moduleCells.map((c) => c.band))).sort((a, b) => a - b);
+  const out: MappedSection[] = [];
+
+  bands.forEach((band, i) => {
+    const idx = modules.map((_, k) => k).filter((k) => moduleCells[k].band === band);
+    const rowModules = idx.map((k) => modules[k]);
+    const cols = Array.from(new Set(idx.map((k) => moduleCells[k].col))).sort((a, b) => a - b);
+
+    let layout = "single";
+    if (cols.length > 1 && !rowModules.some((m) => SELF_COLUMNED_TYPES.has(m.type))) {
+      const plan = grid.bands[band];
+      const widths = cols.map((c) => {
+        const col = plan?.columns[c];
+        return col ? col.x1 - col.x0 : 1;
+      });
+      layout = chooseLayout(widths);
+      const keys = columnKeys(cols.length);
+      for (const k of idx) modules[k].column = keys[cols.indexOf(moduleCells[k].col)];
+    }
+
+    const heading = (section.elements || []).find(
+      (el) => el.class === "heading" && cellOf(el.sourceId).band === band
+    );
+    const title = (heading ? collapse(heading.textContent) : args.fallbackHeading).slice(0, 60);
+    // Every import-owned section carries the section source marker (spec:
+    // idempotency + provenance) — each row of a split section too.
+    rowModules[0].settings.importSectionSourceId = section.sourceId;
+    out.push({
+      id: i === 0 ? baseId : `${baseId}b${band}`,
+      title: `Imported: ${title || "section"}`,
+      layout,
+      widthMode: "contained",
+      background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+      modules: rowModules,
+      sourceElementIds: args.sourceElementIds.filter((id) => cellOf(id).band === band),
+      dispositions: { ...args.dispositionsFor(band) },
+    });
+  });
+
+  // Rows that produced no module (nav links, deduped repeats) still have to
+  // be accounted for — fold their elements and tallies into the first row.
+  const first = out[0];
+  const kept = new Set(bands);
+  const orphanBands = new Set<number>();
+  for (const id of args.sourceElementIds) {
+    const band = cellOf(id).band;
+    if (!kept.has(band)) {
+      first.sourceElementIds.push(id);
+      orphanBands.add(band);
+    }
+  }
+  for (const band of orphanBands) {
+    const d = args.dispositionsFor(band);
+    first.dispositions.mapped += d.mapped;
+    first.dispositions.placeholder += d.placeholder;
+    first.dispositions.deduped += d.deduped;
+  }
+  return out;
+}
+
 export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
   const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
@@ -748,7 +840,24 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     for (const section of page.sections || []) {
       const modules: MappedModule[] = [];
       const sourceElementIds: string[] = [];
-      const dispositions = { mapped: 0, placeholder: 0, deduped: 0 };
+      // Column inference (columns.ts): which row and column each element sat
+      // in on the source page. Prose never merges across a cell boundary, and
+      // every module is tagged with the cell it was built in, so the section
+      // can be split into Builder rows once the modules exist.
+      const grid = planSectionGrid(
+        (section.elements || []).map((el) => ({ id: el.sourceId, box: el.box }))
+      );
+      const moduleCells: Cell[] = [];
+      const bandDispositions = new Map<number, { mapped: number; placeholder: number; deduped: number }>();
+      const dispositionsFor = (band: number) => {
+        const found = bandDispositions.get(band);
+        if (found) return found;
+        const fresh = { mapped: 0, placeholder: 0, deduped: 0 };
+        bandDispositions.set(band, fresh);
+        return fresh;
+      };
+      let currentCell: Cell = { band: 0, col: 0 };
+      let dispositions = dispositionsFor(0);
       let prose: { html: string; sourceIds: string[] } = { html: "", sourceIds: [] };
       let firstHeading = "";
 
@@ -805,7 +914,18 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         pagePlaceholders += 1;
       };
 
+      const tagNewModules = () => {
+        while (moduleCells.length < modules.length) moduleCells.push(currentCell);
+      };
+
       for (const el of section.elements || []) {
+        const cell = grid.cells.get(el.sourceId) || currentCell;
+        if (cell.band !== currentCell.band || cell.col !== currentCell.col) {
+          flushProse();
+          tagNewModules();
+          currentCell = cell;
+          dispositions = dispositionsFor(cell.band);
+        }
         report.elements.total += 1;
         sourceElementIds.push(el.sourceId);
         if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
@@ -1040,21 +1160,21 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         });
       }
       flushProse();
+      tagNewModules();
 
       if (!modules.length) continue; // nothing mappable (e.g. nav-only section)
-      // The first module of every import-owned section carries the section
-      // source marker (spec: idempotency + provenance).
-      modules[0].settings.importSectionSourceId = section.sourceId;
-      mappedSections.push({
-        id: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
-        title: `Imported: ${firstHeading.slice(0, 60) || "section"}`,
-        layout: "single",
-        widthMode: "contained",
-        background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+      const built = splitIntoRows({
+        section,
+        baseId: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
+        fallbackHeading: firstHeading,
         modules,
+        moduleCells,
+        grid,
+        cellOf: (id) => grid.cells.get(id) || { band: 0, col: 0 },
         sourceElementIds,
-        dispositions,
+        dispositionsFor,
       });
+      mappedSections.push(...built);
       pageModules += modules.length;
     }
 

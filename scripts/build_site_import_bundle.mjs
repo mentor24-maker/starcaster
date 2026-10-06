@@ -22,6 +22,7 @@ const bundles = [
   { entry: 'map.ts', outfile: 'map.js' },
   { entry: 'reconcile.ts', outfile: 'reconcile.js' },
   { entry: 'image-topup.ts', outfile: 'image-topup.js' },
+  { entry: 'columns.ts', outfile: 'columns.js' },
 ];
 
 for (const { entry, outfile } of bundles) {
