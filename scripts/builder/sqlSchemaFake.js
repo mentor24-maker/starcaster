@@ -868,16 +868,22 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     return '';
   }
 
+  /**
+   * `{ row }` or `{ error }` — never a bare row. It used to return the row
+   * itself, and the caller asked `picked.error`, so a table with a real column
+   * named `error` (substack_notes_items) read every row holding a failure
+   * reason as a database refusal (Substack Notes 1/7, 2026-10-07).
+   */
   function selectColumns(tableName, row, select) {
     const table = schema.tables.get(tableName);
     const requested = String(select || '*').split(',').map((column) => column.trim()).filter(Boolean);
-    if (requested.includes('*') || !requested.length) return { ...row };
+    if (requested.includes('*') || !requested.length) return { row: { ...row } };
     const picked = {};
     for (const column of requested) {
       if (!table.columns.has(column)) return { error: `column ${tableName}.${column} does not exist` };
       picked[column] = row[column];
     }
-    return picked;
+    return { row: picked };
   }
 
   /**
@@ -1184,7 +1190,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       for (const row of rows) {
         const picked = selectColumns(tableName, row, params.get('select'));
         if (picked.error) return { ok: false, status: 400, error: picked.error };
-        projected.push(picked);
+        projected.push(picked.row);
       }
       // A select of a column that does not exist fails even with no rows —
       // that is exactly how projectScope's probe learns the truth.
