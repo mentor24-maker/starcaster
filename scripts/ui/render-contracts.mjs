@@ -1958,6 +1958,22 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'heading-renders-in-any-google-font',
+    why:
+      'Task 86bce9wwv: a font slot takes any Google Font ("gf:Open Sans"), not only the ten built-ins. ' +
+      'Before it, the normalizer blanked any other name on the way to the page, so the heading quietly ' +
+      'fell back to the theme font — an imported site lost its typeface with nothing failing.',
+    module: { type: 'heading', text: 'Open Sans heading', settings: { fontFamily: 'gf:Open Sans' } },
+    selector: '.builder-preview-heading',
+    read: ['fontFamily'],
+    expect(sample) {
+      return /Open Sans/.test(sample.styles.fontFamily)
+        ? null
+        : `the heading asked for Google font Open Sans but rendered in ${sample.styles.fontFamily} — the font name was dropped before it reached the page.`;
+    },
+  },
+
+  {
     id: 'gradient-background-still-runs-at-135-degrees-by-default',
     why:
       'THE SAFETY HALF OF THE ANGLE SETTING, and the one worth measuring. Every gradient in the ' +
@@ -4257,44 +4273,120 @@ export const RENDER_CONTRACTS = [
   },
 
   /*
-   * GALAXY INTRO (task 86bc7f5hj). The runtime publishes how far the intro
-   * has got as `data-galaxy-converge`, two decimals: 0 = every star out at
-   * its scatter position, 1 = every star home. By the time the harness has
-   * settled the intro has finished, so the rising contract restarts it with
-   * `dispatch` — the same `galaxy:replay` event the Builder's button sends —
-   * and watches it from the restart.
+   * GALAXY INTRO (task 86bc7f5hj; the fly-in retired for Unfurl and Fade In
+   * in task 86bcd9qtc). The runtime publishes how far the intro has got as
+   * `data-galaxy-intro`, two decimals: 0 = nothing revealed yet, 1 = the
+   * whole galaxy shown. By the time the harness has settled the intro has
+   * finished, so the rising contracts restart it with `dispatch` — the same
+   * `galaxy:replay` event the Builder's button sends — and watch from there.
    */
   {
-    id: 'galaxy-intro-converges',
+    id: 'galaxy-intro-runs',
     why:
-      'On load the stars fly in from the edges and settle into the spiral. An intro whose timeline ' +
-      'never runs leaves a finished galaxy (or an empty one) and looks like a choice, not a fault. ' +
-      'Restarted with galaxy:replay and watched for 1.5s at a 1.2s Intro Length: the progress must ' +
-      'start below 0.3, never go backwards, and pass 0.9.',
+      'On load the galaxy unfurls from its core. An intro whose timeline never runs leaves a finished ' +
+      'galaxy (or an empty one) and looks like a choice, not a fault. Restarted with galaxy:replay and ' +
+      'watched for 1.5s at a 1.2s Intro Length: the progress must start below 0.3, never go backwards, ' +
+      'and pass 0.9.',
     module: {
       type: 'galaxy',
-      settings: { placement: 'inline', height: '300', intro: 'converge', introDelay: '0', introDuration: '1.2' },
+      settings: { placement: 'inline', height: '300', intro: 'unfurl', introDelay: '0', introDuration: '1.2' },
     },
     selector: 'canvas[data-galaxy-count]',
     dispatch: 'galaxy:replay',
-    series: { count: 11, everyMs: 150, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    series: { count: 11, everyMs: 150, read: [], attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
     expect(sample) {
-      const values = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-converge']));
+      const values = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-intro']));
       if (values.length < 11 || values.some((n) => !Number.isFinite(n))) {
-        return `data-galaxy-converge could not be read on every sample (${values.join(', ')}) — nothing was watched.`;
+        return `data-galaxy-intro could not be read on every sample (${values.join(', ')}) — nothing was watched.`;
       }
       if (values[0] >= 0.3) {
-        return `right after a replay the intro read ${values[0].toFixed(2)} — it did not restart from scattered ` +
+        return `right after a replay the intro read ${values[0].toFixed(2)} — it did not restart ` +
           `(${values.join(' → ')}).`;
       }
       for (let i = 1; i < values.length; i += 1) {
         if (values[i] < values[i - 1]) {
-          return `the intro went backwards (${values.join(' → ')}) — stars flew out again mid-way.`;
+          return `the intro went backwards (${values.join(' → ')}).`;
         }
       }
       if (values[values.length - 1] <= 0.9) {
         return `after 1.5s of a 1.2s intro the progress was only ${values[values.length - 1].toFixed(2)} ` +
-          `(${values.join(' → ')}) — the stars never arrived.`;
+          `(${values.join(' → ')}) — the galaxy never finished arriving.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-unfurl-grows-from-the-core',
+    why:
+      'Unfurl (task 86bcd9qtc) is the galaxy growing outward from its centre, which is what makes it ' +
+      'NOT the reference page\'s fly-in. Read off the pixels: early in a 3s unfurl the light must sit in ' +
+      'a patch well under 70% as spread out as the finished galaxy\'s, and it must already be lit — ' +
+      'an empty canvas would pass "smaller" too. A fly-in from the edges, or a plain fade, starts as ' +
+      'spread out as it ends.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'inline', height: '400', intro: 'unfurl', introDelay: '0', introDuration: '3', scrollDisperse: 'false' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    dispatch: 'galaxy:replay',
+    series: { count: 9, everyMs: 450, read: [], shape: true, attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => ({
+        p: Number(f.canvas?.['data-galaxy-intro']),
+        shape: f.canvas?.shape,
+      }));
+      if (frames.length < 9 || frames.some((f) => !f.shape || !Number.isFinite(f.p))) {
+        return 'the canvas shape or the intro progress could not be read on every sample — nothing was watched.';
+      }
+      const early = frames.find((f) => f.p >= 0.15 && f.p <= 0.4 && f.shape.lit > 0);
+      const done = frames[frames.length - 1];
+      if (!(done.p >= 0.99)) return `the unfurl had not finished after 3.6s (progress ${done.p}).`;
+      if (!early) {
+        return `no sample caught the unfurl lit and under way (progress ${frames.map((f) => f.p).join(' → ')}).`;
+      }
+      const spreadOf = (f) => Math.hypot(f.shape.sx, f.shape.sy);
+      const ratio = spreadOf(early) / spreadOf(done);
+      if (!(ratio < 0.7)) {
+        return `at progress ${early.p.toFixed(2)} the light was already ${(ratio * 100).toFixed(0)}% as spread out as ` +
+          'the finished galaxy — it is not growing from the core.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-fade-in-keeps-its-shape',
+    why:
+      'Fade In (task 86bcd9qtc) brightens the whole galaxy in place: the pair of Unfurl above. Early in ' +
+      'a 3s fade the light must be dimmer than the finished galaxy but already spread over at least 85% ' +
+      'of its extent — if Fade In were wired to the unfurl wave, it would start as a small patch.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'inline', height: '400', intro: 'fade', introDelay: '0', introDuration: '3', scrollDisperse: 'false' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    dispatch: 'galaxy:replay',
+    series: { count: 9, everyMs: 450, read: [], shape: true, luma: true, attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => ({
+        p: Number(f.canvas?.['data-galaxy-intro']),
+        shape: f.canvas?.shape,
+        luma: f.canvas?.luma,
+      }));
+      if (frames.length < 9 || frames.some((f) => !f.shape || !Number.isFinite(f.p) || !Number.isFinite(f.luma))) {
+        return 'the canvas shape, brightness or intro progress could not be read on every sample — nothing was watched.';
+      }
+      const early = frames.find((f) => f.p >= 0.2 && f.p <= 0.45 && f.shape.lit > 0);
+      const done = frames[frames.length - 1];
+      if (!(done.p >= 0.99)) return `the fade had not finished after 3.6s (progress ${done.p}).`;
+      if (!early) return `no sample caught the fade lit and under way (progress ${frames.map((f) => f.p).join(' → ')}).`;
+      if (!(early.shape.lit < done.shape.lit * 0.8)) {
+        return `at progress ${early.p.toFixed(2)} the galaxy was already as bright as when finished — nothing faded in.`;
+      }
+      const spreadOf = (f) => Math.hypot(f.shape.sx, f.shape.sy);
+      const ratio = spreadOf(early) / spreadOf(done);
+      if (!(ratio >= 0.85)) {
+        return `at progress ${early.p.toFixed(2)} the light covered only ${(ratio * 100).toFixed(0)}% of the finished ` +
+          'spread — Fade In is growing from the core instead of brightening in place.';
       }
       return null;
     },
@@ -4302,22 +4394,22 @@ export const RENDER_CONTRACTS = [
   {
     id: 'galaxy-intro-skipped-under-reduced-motion',
     why:
-      'A visitor who asked for less motion gets the spiral already assembled: no fly-in, and a ' +
-      'replay does nothing. The same restart as the contract above, under reduced motion — the ' +
-      'progress must read 1.00 on every sample.',
+      'A visitor who asked for less motion gets the galaxy already whole: no intro, and a replay does ' +
+      'nothing. The same restart as above, under reduced motion — the progress must read 1.00 on every ' +
+      'sample.',
     module: {
       type: 'galaxy',
-      settings: { placement: 'inline', height: '300', intro: 'converge', introDelay: '0', introDuration: '1.2' },
+      settings: { placement: 'inline', height: '300', intro: 'unfurl', introDelay: '0', introDuration: '1.2' },
     },
     selector: 'canvas[data-galaxy-count]',
     emulate: { reducedMotion: 'reduce' },
     dispatch: 'galaxy:replay',
-    series: { count: 5, everyMs: 150, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    series: { count: 5, everyMs: 150, read: [], attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
     expect(sample) {
-      const values = (sample.series || []).map((f) => f.canvas?.['data-galaxy-converge']);
+      const values = (sample.series || []).map((f) => f.canvas?.['data-galaxy-intro']);
       if (values.length < 5) return 'the series did not complete — nothing was watched.';
       if (values.some((v) => v !== '1.00')) {
-        return `under reduced motion the intro read ${values.join(' → ')} — stars were scattered for a ` +
+        return `under reduced motion the intro read ${values.join(' → ')} — the galaxy was held back for a ` +
           'visitor who asked for less motion.';
       }
       return null;
@@ -4330,10 +4422,62 @@ export const RENDER_CONTRACTS = [
       'must be 1.00.',
     module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none' } },
     selector: 'canvas[data-galaxy-count]',
-    series: { count: 1, everyMs: 0, read: [], attrs: ['data-galaxy-converge'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    series: { count: 1, everyMs: 0, read: [], attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
     expect(sample) {
-      const value = sample.series?.[0]?.canvas?.['data-galaxy-converge'];
-      return value === '1.00' ? null : `with Intro set to None the first frame read data-galaxy-converge="${value}", not 1.00.`;
+      const value = sample.series?.[0]?.canvas?.['data-galaxy-intro'];
+      return value === '1.00' ? null : `with Intro set to None the first frame read data-galaxy-intro="${value}", not 1.00.`;
+    },
+  },
+  /*
+   * THE RESTING POSE (task 86bcd9qtc). Read off the pixels with
+   * `series.shape`: the luminance-weighted spread of the light along x and
+   * along y. Intro None and no interaction, so nothing but the setting moves it.
+   */
+  {
+    id: 'galaxy-view-angle-makes-an-oval',
+    why:
+      'View Angle leans the galaxy back so it reads as an oval. At 60° the light must spread at most ' +
+      '70% as far up and down as it does across — a face-on galaxy spreads about evenly, so a View Angle ' +
+      'that never reaches the projection reads near 100% and fails.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'inline', height: '500', intro: 'none', interaction: 'none', scrollDisperse: 'false', viewAngle: '60' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 1, everyMs: 0, read: [], shape: true, selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const shape = sample.series?.[0]?.canvas?.shape;
+      if (!shape || !(shape.sx > 0)) return 'the galaxy canvas shape could not be read — nothing was measured.';
+      const ratio = shape.sy / shape.sx;
+      return ratio <= 0.7
+        ? null
+        : `at View Angle 60 the light spreads ${(ratio * 100).toFixed(0)}% as far vertically as horizontally — ` +
+          'the galaxy is still round.';
+    },
+  },
+  {
+    id: 'galaxy-oval-direction-turns-the-oval',
+    why:
+      'Oval Direction turns the oval on the page. At View Angle 60 and Oval Direction 90 the oval stands ' +
+      'upright: the light must spread at most 70% as far across as it does up and down — the pair of the ' +
+      'contract above, which on its own would pass with the direction ignored.',
+    module: {
+      type: 'galaxy',
+      settings: {
+        placement: 'inline', height: '500', intro: 'none', interaction: 'none', scrollDisperse: 'false',
+        viewAngle: '60', ovalDirection: '90',
+      },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 1, everyMs: 0, read: [], shape: true, selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const shape = sample.series?.[0]?.canvas?.shape;
+      if (!shape || !(shape.sy > 0)) return 'the galaxy canvas shape could not be read — nothing was measured.';
+      const ratio = shape.sx / shape.sy;
+      return ratio <= 0.7
+        ? null
+        : `at Oval Direction 90 the light spreads ${(ratio * 100).toFixed(0)}% as far across as up and down — ` +
+          'the oval did not turn upright.';
     },
   },
   /*
@@ -4346,9 +4490,9 @@ export const RENDER_CONTRACTS = [
     id: 'galaxy-replay-button-in-the-builder',
     why:
       'The Builder shows a "Replay intro" button under the galaxy so whoever is building the page can ' +
-      'watch the fly-in again. Paired with the absence contract below, which on its own would pass if ' +
+      'watch the intro again. Paired with the absence contract below, which on its own would pass if ' +
       'the button never rendered anywhere.',
-    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'converge' } },
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'unfurl' } },
     selector: 'button.builder-galaxy-replay',
     expect(sample) {
       return /Replay intro/.test(sample.text || '')
@@ -4361,7 +4505,7 @@ export const RENDER_CONTRACTS = [
     why:
       'A visitor has nothing to replay and no Builder to replay it in — a "Replay intro" button on a ' +
       'client\'s published page is builder chrome leaking onto their site (landmine 16, DOCTRINE §5.29).',
-    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'converge' } },
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'unfurl' } },
     selector: 'button.builder-galaxy-replay',
     absent: true,
     emulate: { liveSite: true },

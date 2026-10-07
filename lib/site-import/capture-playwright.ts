@@ -45,6 +45,8 @@ const MAX_ELEMENT_CROPS = 40;
 type PageScanResult = {
   html: string;
   styles: Record<string, Record<string, string>>;
+  rects: Record<string, [number, number, number, number]>;
+  pageBackground: string;
   /** Crop targets by their data-scim stamp — the provider screenshots them
    *  via locator('[data-scim=…]'), which scrolls each into view. A clip
    *  rect would NOT work: page.screenshot({clip}) only sees the current
@@ -92,6 +94,7 @@ function pageScan(args: PageScanArgs): PageScanResult {
 
   const body = document.body;
   const styles: Record<string, Record<string, string>> = {};
+  const rects: Record<string, [number, number, number, number]> = {};
   const fontTally: Record<string, number> = {};
   const assetUrls: AssetUrlRef[] = [];
   const seenAssets: Record<string, boolean> = {};
@@ -216,6 +219,16 @@ function pageScan(args: PageScanArgs): PageScanResult {
         if (value) picked[prop] = value;
       }
       styles[key] = picked;
+      // Page coordinates (the provider scrolls back to the top before this
+      // scan, but scroll offsets are added anyway so a page that refuses to
+      // scroll home still measures consistently). Column inference reads it.
+      const r = el.getBoundingClientRect();
+      rects[key] = [
+        Math.round(r.left + window.scrollX),
+        Math.round(r.top + window.scrollY),
+        Math.round(r.width),
+        Math.round(r.height),
+      ];
       const family = computed.getPropertyValue("font-family");
       if (family) fontTally[family] = (fontTally[family] || 0) + 1;
       const bg = computed.getPropertyValue("background-image");
@@ -365,6 +378,17 @@ function pageScan(args: PageScanArgs): PageScanResult {
   return {
     html: document.documentElement.outerHTML,
     styles,
+    rects,
+    // The page's own ground colour — <body>, else <html>. Neither is stamped
+    // (the stamp loop walks body's DESCENDANTS), and it is the one colour the
+    // import theme needs most (site-import theme.ts → palette.surface).
+    pageBackground: (() => {
+      const clear = (v: string) => !v || v === "transparent" || /rgba\([^)]*,\s*0\)$/.test(v);
+      const bodyBg = getComputedStyle(document.body).backgroundColor;
+      if (!clear(bodyBg)) return bodyBg;
+      const htmlBg = getComputedStyle(document.documentElement).backgroundColor;
+      return clear(htmlBg) ? "" : htmlBg;
+    })(),
     sectionTargets,
     elementCropTargets,
     assetUrls,
@@ -460,6 +484,8 @@ export class PlaywrightCaptureProvider implements CaptureProvider {
         viewport: opts.viewport.label,
         html: scan.html,
         styles: scan.styles,
+        rects: scan.rects,
+        pageBackground: scan.pageBackground,
         assetUrls: scan.assetUrls,
         fontFamilies: scan.fontFamilies,
         meta: scan.meta,

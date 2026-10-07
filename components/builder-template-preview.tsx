@@ -219,6 +219,7 @@ import { BuilderReminderRuntime } from "@/components/builder-reminder-runtime";
 import { SpeechBubblePreview } from "@/components/builder/speech-bubble-preview";
 import { resolveEmailMergeTokensForPreview } from "@/lib/builder-email-template";
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
+import { useGoogleFontLinks } from "@/components/builder/use-google-font-links";
 
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
@@ -1464,6 +1465,8 @@ export function BuilderTemplatePreview({
     ...(suppressShellBackground ? {} : shellBackground.inlineBackground),
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
+  // Any Google Font the theme or a module names (gf:<Family>) loads here.
+  useGoogleFontLinks([theme, layoutSections], emailPreview);
 
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;
@@ -2769,11 +2772,11 @@ function BuilderModulePreview({
         />
         {/*
          * "Replay intro" — the confetti module's Test Burst, for the galaxy's
-         * fly-in (task 86bc7f5hj). Addressed to whoever is building the page,
+         * intro (task 86bc7f5hj; Unfurl and Fade In since 86bcd9qtc). Addressed to whoever is building the page,
          * so it lives inside BuilderOnlyNote and a published page never shows
          * it. Offered only when there is an intro to replay.
          */}
-        {readGalaxyMotion(module.settings).intro === "converge" ? (
+        {readGalaxyMotion(module.settings).intro !== "none" ? (
           <BuilderOnlyNote liveSite={liveSite}>
             <button
               className="secondary-button builder-galaxy-replay"

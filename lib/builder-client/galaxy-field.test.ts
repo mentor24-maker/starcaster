@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  GALAXY_POSE_DEFAULTS,
+  GALAXY_UNFURL_START,
+  galaxyPoseSquash,
+  galaxyRevealShare,
+  readGalaxyPose,
   GALAXY_INTRO_STAGGER,
   GALAXY_MIX_IN_PLACE,
   GALAXY_MOTION_DEFAULTS,
@@ -1177,8 +1182,8 @@ describe("intro and scroll (Galaxy module 4/6, task 86bc7f5hj)", () => {
 
   it("reads the five settings with their defaults and ranges, and only an exact 'none'/'false' switches one off", () => {
     expect(readGalaxyMotion({})).toEqual({
-      intro: "converge",
-      introDelay: 1,
+      intro: "unfurl",
+      introDelay: 0,
       introDuration: 5,
       scrollDisperse: true,
       scrollDistance: 800
@@ -1187,7 +1192,7 @@ describe("intro and scroll (Galaxy module 4/6, task 86bc7f5hj)", () => {
       ["intro", "introDelay", "introDuration", "scrollDisperse", "scrollDistance"].sort()
     );
     const odd = readGalaxyMotion({ intro: "sideways", scrollDisperse: "maybe", introDelay: "99", introDuration: "0", scrollDistance: "50" });
-    expect(odd).toEqual({ intro: "converge", introDelay: 5, introDuration: 1, scrollDisperse: true, scrollDistance: 200 });
+    expect(odd).toEqual({ intro: "unfurl", introDelay: 5, introDuration: 1, scrollDisperse: true, scrollDistance: 200 });
     const off = readGalaxyMotion({ intro: "none", scrollDisperse: "false", scrollDistance: "abc" });
     expect(off.intro).toBe("none");
     expect(off.scrollDisperse).toBe(false);
@@ -1210,5 +1215,132 @@ describe("flare stars twinkle at half rate (task 86bc7f5hm)", () => {
     expect(field.flare[10]).toBe(0);
     expect(advance(0)).toBeCloseTo(advance(10) * GALAXY_FLARE_TWINKLE_RATE, 5);
     expect(GALAXY_FLARE_TWINKLE_RATE).toBe(0.5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Unfurl / Fade In, and the resting pose (task 86bcd9qtc)
+// ---------------------------------------------------------------------------
+
+describe("the intros after the fly-in was retired (task 86bcd9qtc)", () => {
+  it("reads a saved 'converge' as Unfurl, and keeps fade and none as themselves", () => {
+    expect(readGalaxyMotion({ intro: "converge" }).intro).toBe("unfurl");
+    expect(readGalaxyMotion({ intro: "unfurl" }).intro).toBe("unfurl");
+    expect(readGalaxyMotion({ intro: " Fade " }).intro).toBe("fade");
+    expect(readGalaxyMotion({ intro: "none" }).intro).toBe("none");
+    expect(readGalaxyMotion({}).intro).toBe("unfurl");
+  });
+
+  it("Unfurl shows the core first and the rim last; at the start nothing, at the end everything", () => {
+    expect(galaxyRevealShare("unfurl", 0, 0)).toBe(0);
+    expect(galaxyRevealShare("unfurl", 0.5, 0)).toBe(1);
+    // The rim's turn in the wave starts halfway through, so at 0.5 it has not begun.
+    expect(galaxyRevealShare("unfurl", 0.5, 1)).toBe(0);
+    expect(galaxyRevealShare("unfurl", 0.75, 0.2)).toBeGreaterThan(galaxyRevealShare("unfurl", 0.75, 0.9));
+    for (const radius of [0, 0.3, 0.7, 1]) expect(galaxyRevealShare("unfurl", 1, radius)).toBe(1);
+  });
+
+  it("Fade In shows every star alike, rising from 0 to 1", () => {
+    for (const p of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(galaxyRevealShare("fade", p, 0)).toBe(galaxyRevealShare("fade", p, 1));
+    }
+    expect(galaxyRevealShare("fade", 0, 0.5)).toBe(0);
+    expect(galaxyRevealShare("fade", 0.5, 0.5)).toBe(0.5);
+    expect(galaxyRevealShare("fade", 1, 0.5)).toBe(1);
+  });
+
+  it("None and an absent mode hold nothing back", () => {
+    expect(galaxyRevealShare("none", 0, 1)).toBe(1);
+    expect(galaxyRevealShare(undefined, 0, 1)).toBe(1);
+  });
+
+  it("a star's reveal never runs backwards as the intro goes on", () => {
+    for (const mode of ["unfurl", "fade"] as const) {
+      for (const radius of [0, 0.25, 0.5, 0.75, 1]) {
+        let previous = -1;
+        for (let step = 0; step <= 100; step++) {
+          const share = galaxyRevealShare(mode, step / 100, radius);
+          expect(share).toBeGreaterThanOrEqual(previous);
+          previous = share;
+        }
+      }
+    }
+  });
+
+  it("Unfurl draws a star not yet out nearer the centre, and at its place once revealed; Fade In never moves one", () => {
+    const field = generateGalaxyField({ ...readGalaxySettings({}), particleCount: 400 });
+    const W = 1000;
+    const H = 1000;
+    const home = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count));
+    const start = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count), {
+      converge: 1, disperse: 0, reveal: 0, revealMode: "unfurl"
+    });
+    const done = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count), {
+      converge: 1, disperse: 0, reveal: 1, revealMode: "unfurl"
+    });
+    const fading = projectGalaxyField(field, 0, 0, W, H, createGalaxyProjection(field.count), {
+      converge: 1, disperse: 0, reveal: 0, revealMode: "fade"
+    });
+    for (let i = 0; i < field.count; i++) {
+      const homeDx = home.x[i] - W / 2;
+      const homeDy = home.y[i] - H / 2;
+      expect(start.x[i] - W / 2).toBeCloseTo(homeDx * GALAXY_UNFURL_START, 2);
+      expect(start.y[i] - H / 2).toBeCloseTo(homeDy * GALAXY_UNFURL_START, 2);
+      expect(done.x[i]).toBeCloseTo(home.x[i], 3);
+      expect(fading.x[i]).toBeCloseTo(home.x[i], 3);
+      expect(fading.y[i]).toBeCloseTo(home.y[i], 3);
+    }
+  });
+});
+
+describe("the resting pose: View Angle and Oval Direction (task 86bcd9qtc)", () => {
+  /** The spread of the projected stars along x and along y (standard deviations, px). */
+  function spread(viewAngle: string, ovalDirection: string) {
+    const pose = readGalaxyPose({ viewAngle, ovalDirection });
+    const field = generateGalaxyField({ ...readGalaxySettings({}), particleCount: 2000 });
+    const out = projectGalaxyField(field, 0, pose.pitch, 1000, 1000, createGalaxyProjection(field.count), undefined, pose.roll);
+    let sx = 0;
+    let sy = 0;
+    for (let i = 0; i < out.count; i++) {
+      sx += (out.x[i] - 500) ** 2;
+      sy += (out.y[i] - 500) ** 2;
+    }
+    return { x: Math.sqrt(sx / out.count), y: Math.sqrt(sy / out.count) };
+  }
+
+  it("defaults to face-on and level, so every existing page looks exactly as it did", () => {
+    expect(GALAXY_POSE_DEFAULTS).toEqual({ viewAngle: "0", ovalDirection: "0" });
+    expect(readGalaxyPose({})).toEqual({ pitch: 0, roll: 0 });
+  });
+
+  it("clamps to 0–75 degrees of lean and ±90 of direction, and never yields NaN", () => {
+    expect(readGalaxyPose({ viewAngle: "200" }).pitch).toBeCloseTo((75 * Math.PI) / 180, 10);
+    expect(readGalaxyPose({ viewAngle: "-10" }).pitch).toBe(0);
+    expect(readGalaxyPose({ ovalDirection: "-500" }).roll).toBeCloseTo(-Math.PI / 2, 10);
+    expect(readGalaxyPose({ viewAngle: "abc", ovalDirection: "" })).toEqual({ pitch: 0, roll: 0 });
+  });
+
+  // A two-armed galaxy is not perfectly round even face-on, so each reading
+  // is held against the face-on one, not against its own other axis.
+  it("a View Angle of 60 keeps the width and halves the height — an oval", () => {
+    const flat = spread("0", "0");
+    const tilted = spread("60", "0");
+    expect(tilted.x).toBeCloseTo(flat.x, 0);
+    expect(tilted.y / flat.y).toBeGreaterThan(0.48);
+    expect(tilted.y / flat.y).toBeLessThan(0.52);
+  });
+
+  it("an Oval Direction of 90 stands the oval upright: the two axes swap", () => {
+    const tilted = spread("60", "0");
+    const upright = spread("60", "90");
+    expect(upright.x).toBeCloseTo(tilted.y, 0);
+    expect(upright.y).toBeCloseTo(tilted.x, 0);
+  });
+
+  it("the glow squash is cos of the lean, floored so a glow never vanishes", () => {
+    expect(galaxyPoseSquash(0)).toBe(1);
+    expect(galaxyPoseSquash(Math.PI / 3)).toBeCloseTo(0.5, 10);
+    expect(galaxyPoseSquash(Math.PI / 2)).toBe(0.05);
+    expect(galaxyPoseSquash(Number.NaN)).toBe(1);
   });
 });

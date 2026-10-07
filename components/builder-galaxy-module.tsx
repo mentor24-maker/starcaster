@@ -11,11 +11,14 @@ import {
   dragGalaxyView,
   galaxyDisperseOpacity,
   galaxyIntroProgress,
+  galaxyPoseSquash,
+  galaxyRevealShare,
   galaxyScrollDisperse,
   generateGalaxyField,
   projectGalaxyField,
   readDeviceTier,
   readGalaxyMotion,
+  readGalaxyPose,
   readGalaxySettings,
   resolveGalaxyInteraction,
   scaleGalaxyCount,
@@ -122,10 +125,16 @@ export function GalaxyCardPreview({ settings }: { settings: GalaxyModuleSettings
 
     const stars = readGalaxySettings({ ...settings, particleCount: String(GALAXY_CARD_STARS) });
     const look = readGalaxyLook(settings);
+    const pose = readGalaxyPose(settings);
     const field = generateGalaxyField(stars);
-    const projection = projectGalaxyField(field, 0, 0, width, height, createGalaxyProjection(field.count));
+    const projection = projectGalaxyField(field, 0, pose.pitch, width, height, createGalaxyProjection(field.count), undefined, pose.roll);
     const colourOf = assignGalaxyColours(field.count, look.weights, stars.seed, Math.min(field.count, stars.flareStars));
-    drawGalaxyFrame(ctx, { field, projection, colourOf, width, height }, look, buildGalaxySprites(look, ratio, makeSpriteCanvas));
+    drawGalaxyFrame(
+      ctx,
+      { field, projection, colourOf, width, height, pose: { squash: galaxyPoseSquash(pose.pitch), roll: pose.roll } },
+      look,
+      buildGalaxySprites(look, ratio, makeSpriteCanvas)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -228,8 +237,13 @@ export function GalaxyRuntime({
     // What a frame is drawn with: the look, faded while the field disperses.
     // One object for the whole effect, rewritten in place — never one per frame.
     const drawnLook = { ...look };
-    const mix: GalaxyMix = { converge: 1, disperse: 0 };
-    const introRuns = !reduced && motion.intro === "converge";
+    const pose = readGalaxyPose(settings);
+    // The fly-in is retired (task 86bcd9qtc): `converge` stays 1, so no star
+    // is ever drawn at its scatter position on the way IN. The scatter is
+    // still what Scroll Away flies the stars out to.
+    const mix: GalaxyMix = { converge: 1, disperse: 0, reveal: 1, revealMode: motion.intro };
+    const introRuns = !reduced && motion.intro !== "none";
+    const framePose = { squash: 1, roll: pose.roll };
     const scrollRuns = !reduced && motion.scrollDisperse;
     if (introStartRef.current === null) introStartRef.current = performance.now();
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
@@ -253,7 +267,7 @@ export function GalaxyRuntime({
     const view = viewRef.current;
     let shownYaw = "";
     let shownPitch = "";
-    let shownConverge = "";
+    let shownIntro = "";
     let shownDisperse = "";
     // Set by the scroll listener, read once per frame: however many scroll
     // events arrive between two frames, the page is measured once.
@@ -342,7 +356,7 @@ export function GalaxyRuntime({
 
     /** Where the intro and the scroll have got to, at `now` on the frame clock. */
     function updateMix(now: number) {
-      mix.converge = introRuns
+      mix.reveal = introRuns
         ? galaxyIntroProgress((now - (introStartRef.current ?? now)) / 1000, motion.introDelay, motion.introDuration)
         : 1;
       if (scrollDirty) {
@@ -351,14 +365,32 @@ export function GalaxyRuntime({
       }
       const fade = galaxyDisperseOpacity(mix.disperse);
       drawnLook.opacity = look.opacity * fade;
-      drawnLook.hazeStrength = look.hazeStrength * fade;
+      // The haze comes up with the intro, so the opening frames are not a
+      // lone glow with no galaxy in it (task 86bcd9qtc). Fade In and Unfurl
+      // alike: Unfurl's stars bring their own wave, the haze is the backdrop.
+      drawnLook.hazeStrength = look.hazeStrength * fade * galaxyRevealShare(introRuns ? "fade" : "none", mix.reveal ?? 1, 0);
     }
 
     function draw() {
-      projectGalaxyField(field, view.yaw, view.pitch, width, height, projection, mix);
+      const drawPitch = view.pitch + pose.pitch;
+      projectGalaxyField(field, view.yaw, drawPitch, width, height, projection, mix, pose.roll);
+      framePose.squash = galaxyPoseSquash(drawPitch);
+      const reveal = mix.reveal ?? 1;
       drawGalaxyFrame(
         ctx!,
-        { field, projection, colourOf, width, height, offsetX: posX, offsetY: posY, assembled: mix.converge },
+        {
+          field,
+          projection,
+          colourOf,
+          width,
+          height,
+          offsetX: posX,
+          offsetY: posY,
+          // The core glow arrives with the core: first under Unfurl, with everything under Fade In.
+          assembled: galaxyRevealShare(motion.intro, reveal, 0),
+          reveal: { mode: motion.intro, progress: reveal },
+          pose: framePose
+        },
         drawnLook,
         sprites
       );
@@ -371,9 +403,9 @@ export function GalaxyRuntime({
       if (yaw !== shownYaw) canvas!.setAttribute("data-galaxy-yaw", (shownYaw = yaw));
       if (pitch !== shownPitch) canvas!.setAttribute("data-galaxy-pitch", (shownPitch = pitch));
       // The intro's progress and the scroll's, two decimals, for the same readers.
-      const converge = mix.converge.toFixed(2);
+      const intro = (mix.reveal ?? 1).toFixed(2);
       const disperse = mix.disperse.toFixed(2);
-      if (converge !== shownConverge) canvas!.setAttribute("data-galaxy-converge", (shownConverge = converge));
+      if (intro !== shownIntro) canvas!.setAttribute("data-galaxy-intro", (shownIntro = intro));
       if (disperse !== shownDisperse) canvas!.setAttribute("data-galaxy-disperse", (shownDisperse = disperse));
     }
 

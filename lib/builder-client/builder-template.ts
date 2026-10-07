@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { normalizeEmailFunction, type BuilderEmailFunction } from "@/lib/builder-email-template";
+import { isGoogleFontKey } from "./builder-google-fonts";
 import { CONFETTI_EFFECT_DEFAULTS, normalizeConfettiModuleSettings } from "@/lib/confetti-effect";
 import { normalizeCurrentPollModuleWidth } from "@/lib/current-poll-module";
 import {
@@ -1403,6 +1404,7 @@ export function normalizeDecimalValue(value: unknown, fallback: string, min: num
 }
 
 // Keep these in sync with BUILDER_HEADING_FONTS in components/builder/builder-utils.ts.
+// Any Google Font is ALSO valid, stored as "gf:<Family>" — see isAllowedFontKey.
 const HEADING_FONT_KEYS = new Set([
   "",
   "inter",
@@ -1867,9 +1869,16 @@ function normalizeThemeNumber(value: unknown, min: number, max: number): number 
   return Math.min(max, Math.max(min, num));
 }
 
+/** A built-in font key or a Google Font ("gf:Open Sans"). Anything else
+ *  normalizes to "" (inherit) — before 2026-10-06 a Google family was
+ *  blanked here on every save (task 86bce9wwv). */
+function isAllowedFontKey(key: string): boolean {
+  return HEADING_FONT_KEYS.has(key) || isGoogleFontKey(key);
+}
+
 function normalizeThemeFontKey(value: unknown): string {
   const key = safeText(value, 40);
-  return HEADING_FONT_KEYS.has(key) ? key : "";
+  return isAllowedFontKey(key) ? key : "";
 }
 
 function normalizeThemeElementStyle(value: unknown): BuilderThemeElementStyle | null {
@@ -2880,10 +2889,17 @@ export function normalizeBuilderModuleSettingsForType(
       w1: "52", w2: "15", w3: "18", w4: "7", w5: "8",
       /* Galaxy module 4/6 (task 86bc7f5hj): the intro and the scroll.
          Mirrors GALAXY_MOTION_DEFAULTS in galaxy-field.ts. The two switches
-         are filled too — absent already MEANS "converge" and "true" to the
+         are filled too — absent already MEANS "unfurl" and "true" to the
          runtime, so the backfill changes nothing a visitor sees. */
-      intro: "converge", introDelay: "1", introDuration: "5", scrollDisperse: "true", scrollDistance: "800"
+      intro: "unfurl", introDelay: "0", introDuration: "5", scrollDisperse: "true", scrollDistance: "800",
+      /* Task 86bcd9qtc: the resting pose. Mirrors GALAXY_POSE_DEFAULTS —
+         0 and 0 are the face-on galaxy every page had before. */
+      viewAngle: "0", ovalDirection: "0"
     };
+    /* Task 86bcd9qtc: the Converge fly-in was retired. A page that saved it
+       gets Unfurl, the intro the runtime already reads it as — written back
+       so the panel's Intro select shows a value it actually offers. */
+    if (settings.intro === "converge") settings.intro = "unfurl";
     for (const [key, fallback] of Object.entries(galaxyDefaults)) {
       if (!settings[key]) settings[key] = fallback;
     }
@@ -3126,7 +3142,7 @@ export function normalizeBuilderModuleSettingsForType(
   if (type === "heading") {
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
-    settings.fontFamily = HEADING_FONT_KEYS.has(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
+    settings.fontFamily = isAllowedFontKey(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
     settings.fontWeight = normalizeHeadingFontWeight(settings.fontWeight, settings.bold);
     settings.textAlign = HEADING_TEXT_ALIGN_KEYS.has(settings.textAlign ?? "")
       ? settings.textAlign
