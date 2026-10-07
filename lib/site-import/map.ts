@@ -386,6 +386,30 @@ function attrFromHtml(html: string, attr: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
+/** A picture that was a link on the source site (normalize classifies an
+ *  <a> holding only one picture as "image", task 86bcebrwp) keeps that link:
+ *  its HTML starts with the anchor, so the first href is the anchor's own. */
+function imageLink(el: ElementIR): { linkUrl: string; newTab?: "true" } | null {
+  const html = String(el.html || "");
+  if (!/^\s*<a\b/i.test(html)) return null;
+  const linkUrl = attrFromHtml(html, "href").trim();
+  if (!linkUrl) return null;
+  const opening = html.slice(0, html.indexOf(">") + 1);
+  return /target\s*=\s*"_blank"/i.test(opening) ? { linkUrl, newTab: "true" } : { linkUrl };
+}
+
+/** The asset an image element shows. A linked picture's href can itself
+ *  name an asset (a thumbnail linking to its full-size file), and it comes
+ *  first in the HTML — so prefer the asset that matches the picture's src. */
+function shownAssetId(el: ElementIR, assetsById: Map<string, AssetRef>): string | undefined {
+  const src = attrFromHtml(el.html, "src");
+  if (src && el.assetRefs.length > 1) {
+    const match = el.assetRefs.find((id) => assetsById.get(id)?.originalUrl === src);
+    if (match) return match;
+  }
+  return el.assetRefs[0];
+}
+
 /**
  * How wide a picture was SHOWN on the source page, in px, or 0 when nothing
  * says. The `width` attribute of its <img> (what the author asked for) and its
@@ -996,7 +1020,8 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // Anything longer is body copy.
       const iconEl = texts.find((e) => collapse(e.textContent).length <= 3) || null;
       const bodyEl = texts.find((e) => e !== iconEl) || null;
-      const asset = imageEl?.assetRefs[0] ? promoteAsset(imageEl.assetRefs[0]) : null;
+      const imageAssetId = imageEl ? shownAssetId(imageEl, assetsById) : undefined;
+      const asset = imageAssetId ? promoteAsset(imageAssetId) : null;
       const rawSrc = imageEl ? attrFromHtml(imageEl.html, "src") : "";
       cards.push({
         id: `card-${gi + 1}`,
@@ -1004,7 +1029,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         body: bodyEl ? collapse(bodyEl.textContent) : "",
         imageUrl: asset?.storageUrl || asset?.originalUrl || rawSrc,
         imageAlt: (imageEl ? attrFromHtml(imageEl.html, "alt") : "") || asset?.altText || "",
-        linkUrl: linkEl ? attrFromHtml(linkEl.html, "href") : "",
+        linkUrl: linkEl
+          ? attrFromHtml(linkEl.html, "href")
+          : (imageEl && imageLink(imageEl)?.linkUrl) || "",
         linkLabel: linkEl ? collapse(linkEl.textContent) : "",
         icon: iconEl ? collapse(iconEl.textContent) : "",
       });
@@ -1355,7 +1382,8 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
 
         if (el.class === "image") {
           flushProse();
-          const asset = el.assetRefs[0] ? promoteAsset(el.assetRefs[0]) : null;
+          const assetId = shownAssetId(el, assetsById);
+          const asset = assetId ? promoteAsset(assetId) : null;
           const url = asset?.storageUrl || asset?.originalUrl || attrFromHtml(el.html, "src");
           modules.push({
             id: nextModuleId(el.sourceId),
@@ -1367,6 +1395,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               url,
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
               size: "100",
+              ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
               importSourceIds: el.sourceId,
             },

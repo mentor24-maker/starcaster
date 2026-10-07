@@ -197,7 +197,8 @@ export type CaptureResult = {
  * classify by tag/role:
  *
  *   heading  h1–h6                                   count, do not descend
- *   image    img, picture                            count, do not descend
+ *   image    img, picture, and an a[href] whose only
+ *            visible content is ONE picture          count, do not descend
  *   form     form                                    count, do not descend
  *   video    video                                   count, do not descend
  *   embed    iframe, embed, object                   count, do not descend
@@ -217,7 +218,10 @@ export type CaptureResult = {
  *   - A link inside a paragraph is NOT a separate countable — it is part of
  *     that text element's verbatim HTML, so it is preserved, just not
  *     double-counted. Links counted as "link" are the ones reached outside
- *     prose atoms: nav items, footer links, linked images, standalone CTAs.
+ *     prose atoms: nav items, footer links, standalone CTAs. A link holding
+ *     nothing but one picture is an "image" instead (its link travels with
+ *     its HTML) — as a "link" it became a text module that rendered empty
+ *     (task 86bcebrwp).
  *   - <li> is a container, not a text atom, so menu markup like
  *     <li><a href=…>About</a></li> yields a "link", while
  *     <li>plain bullet text</li> yields its text run as "text".

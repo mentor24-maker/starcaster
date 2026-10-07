@@ -35,8 +35,14 @@ test('methodology pins: what counts as one countable', () => {
     ["<body><table><tr><td><img src='x.png'></td></tr></table></body>", { table: 1 }],
     // role=button on a div.
     ["<body><div role='button'>Go</div></body>", { button: 1 }],
-    // Linked image: the anchor atom swallows the img (counted as link).
-    ["<body><a href='/'><img src='logo.png'></a></body>", { link: 1 }],
+    // Linked image: an anchor holding only one picture is ONE image (its
+    // link rides in the HTML) — wrappers and noscript fallbacks included.
+    ["<body><a href='/'><img src='logo.png'></a></body>", { image: 1 }],
+    ["<body><a href='/'><span><picture><source srcset='l.webp'><img src='l.png'></picture></span><noscript><img src='l.png'></noscript></a></body>", { image: 1 }],
+    // ...but a picture with words, or two pictures, stays a link.
+    ["<body><a href='/'><img src='logo.png'> Home</a></body>", { link: 1 }],
+    ["<body><a href='/'><img src='a.png'><img src='b.png'></a></body>", { link: 1 }],
+    ["<body><a href='/'>Plain words</a></body>", { link: 1 }],
     // Headings and media.
     ['<body><h1>T</h1><video src="v.mp4"></video><iframe src="f"></iframe></body>',
       { heading: 1, video: 1, embed: 1 }],
