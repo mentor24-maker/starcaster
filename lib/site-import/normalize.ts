@@ -800,10 +800,14 @@ function collectStyleEvidence(desktop: CaptureResult, ev: StyleEvidence): void {
       const headerLike = tag === "header" || attribs.role === "banner" || (HEADER_HINT.test(hint) && r[1] < 150);
       if (headerLike) tally(ev.headerBackgrounds, bg);
     }
-    const buttonLike =
+    // A control inside a <form> is the search box's or the comment form's
+    // submit, not the site's button style — on daneofearth.org the grey
+    // search button (one per blog page) outvoted every real button.
+    const inForm = $(node).closest("form").length > 0;
+    const buttonLike = !inForm && (
       tag === "button" ||
       (tag === "input" && /^(submit|button)$/i.test(attribs.type || "")) ||
-      (tag === "a" && (BUTTON_HINT.test(hint) || attribs.role === "button"));
+      (tag === "a" && (BUTTON_HINT.test(hint) || attribs.role === "button")));
     if (buttonLike && (!isClearColor(bg) || parseFloat(st["border-top-width"] || "0") > 0)) {
       const radius = Math.round(parseFloat(st["border-radius"] || "0") || 0);
       const fill = isClearColor(bg) ? "" : bg;

@@ -116,6 +116,14 @@ test('system fonts and built-ins are not requested from Google', () => {
   assert.equal(t.typography.fonts.heading, 'playfair');
 });
 
+test('an outlined button becomes a filled one in its colour, and says so', () => {
+  const t = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(46, 163, 242)|3', count: 7 }] }), 'x 1');
+  assert.equal(t.palette.button, '#2ea3f2');
+  assert.equal(t.palette.buttonText, '#111111');
+  assert.equal(t.borderRadius, 3);
+  assert.ok(t.notes.some((n) => n.includes('outlined')));
+});
+
 test('a capture without style evidence still gets fonts and colours, and invents no palette', () => {
   const t = deriveImportTheme(siteIr(null), 'daneofearth 1');
   assert.equal(t.typography.fonts.body, 'gf:Open Sans');
@@ -141,6 +149,8 @@ test('normalize records the style evidence by role from the capture', () => {
     '<header data-scim="0" id="main-header"><a data-scim="1" href="/">Home</a></header>' +
     '<div data-scim="2" class="et_pb_row"><p data-scim="3">Hello</p>' +
     '<a data-scim="4" class="et_pb_button" href="/go">Go</a></div>' +
+    '<form data-scim="7"><button data-scim="8">Search</button></form>' +
+    '<form data-scim="9"><button data-scim="10">Search</button></form>' +
     '<div data-scim="5" class="band"><p data-scim="6">Band</p></div>' +
     '</body></html>';
   const desktop = {
@@ -150,8 +160,11 @@ test('normalize records the style evidence by role from the capture', () => {
       2: {},
       4: { 'background-color': 'rgb(46, 163, 242)', color: 'rgb(255, 255, 255)', 'border-radius': '3px' },
       5: { 'background-color': 'rgb(26, 26, 26)' },
+      // Two grey search buttons outnumber the one real button — and must not count.
+      8: { 'background-color': 'rgb(221, 221, 221)', color: 'rgb(102, 102, 102)' },
+      10: { 'background-color': 'rgb(221, 221, 221)', color: 'rgb(102, 102, 102)' },
     },
-    rects: { 0: [0, 0, 1440, 80], 1: [100, 20, 60, 20], 2: [180, 100, 1080, 300], 3: [180, 100, 1080, 30], 4: [180, 200, 120, 40], 5: [0, 400, 1440, 400], 6: [180, 450, 1080, 30] },
+    rects: { 0: [0, 0, 1440, 80], 1: [100, 20, 60, 20], 2: [180, 100, 1080, 300], 3: [180, 100, 1080, 30], 4: [180, 200, 120, 40], 5: [0, 400, 1440, 400], 6: [180, 450, 1080, 30], 7: [0, 900, 300, 40], 8: [0, 900, 80, 40], 9: [0, 950, 300, 40], 10: [0, 950, 80, 40] },
     pageBackground: 'rgb(255, 255, 255)',
     fullPageScreenshot: '', sectionScreenshots: {}, elementScreenshots: {}, assetUrls: [], fontFamilies: [],
     meta: { title: '', metaDescription: '', ogTags: {}, canonicalUrl: '', lang: '' },
@@ -163,6 +176,7 @@ test('normalize records the style evidence by role from the capture', () => {
   assert.equal(s.backgroundsByArea[0].value, 'rgb(26, 26, 26)', 'the biggest band wins by area');
   assert.equal(s.headerBackgrounds[0].value, 'rgb(255, 255, 255)');
   assert.equal(s.buttons[0].value, 'rgb(46, 163, 242)|rgb(255, 255, 255)|3');
+  assert.equal(s.buttons.length, 1, 'search/form buttons are not the site button style');
   assert.equal(s.contentWidths[0].value, '1080');
 
   const { ir: old } = normalizeSite({ jobId: 'j', sourceUrl: 'https://x.test/', capturedAt: '', pages: [{ desktop: { ...desktop, rects: undefined } }], assets: [] });

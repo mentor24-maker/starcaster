@@ -103,6 +103,16 @@ export function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+/** White or near-black — whichever reads more clearly on this colour
+ *  (WCAG contrast ratio). A plain luminance cut-off put white text on
+ *  #2ea3f2 at 2.7:1; near-black there is 7:1. */
+export function contrastText(hex: string): string {
+  const l = luminance(hex);
+  const onWhite = 1.05 / (l + 0.05);
+  const onDark = (l + 0.05) / (luminance("#111111") + 0.05);
+  return onWhite >= onDark ? "#ffffff" : "#111111";
+}
+
 const px = (value: string | undefined): number => {
   const n = parseFloat(String(value || ""));
   return Number.isFinite(n) ? n : 0;
@@ -222,14 +232,19 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   const header = toHex(top(sum?.headerBackgrounds));
   if (header) {
     palette.header = header;
-    palette.headerText = luminance(header) < 0.35 ? "#ffffff" : text || "#111111";
+    palette.headerText = contrastText(header) === "#ffffff" ? "#ffffff" : text || "#111111";
   }
   let borderRadius: number | undefined;
   const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
-  const fill = toHex(buttonFill);
+  // An OUTLINED button (no fill, coloured text + border) has no Builder
+  // equivalent — the theme's button is a fill — so its colour becomes the
+  // fill and the text is whichever of white/near-black reads better on it.
+  const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
+  const fill = toHex(buttonFill) || toHex(buttonText);
   if (fill) {
     palette.button = fill;
-    palette.buttonText = toHex(buttonText) || (luminance(fill) < 0.35 ? "#ffffff" : "#111111");
+    palette.buttonText = outlined ? contrastText(fill) : toHex(buttonText) || contrastText(fill);
+    if (outlined) notes.push(`buttons: outlined in ${fill} on the original — Builder's button is filled, so it becomes ${fill} filled`);
   }
   if (top(sum?.buttons)) borderRadius = Math.max(0, Math.min(60, Number(radius) || 0));
   notes.push(`palette: ${Object.entries(palette).map(([k, v]) => `${k} ${v}`).join(", ") || "no backgrounds measured (capture predates it)"}`);
