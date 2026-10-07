@@ -1,3 +1,22 @@
+## 2026-10-07 — Imported pages lose their section backgrounds, card borders, rounded corners, shadows and spacing (#779)
+
+When Site Import copies a website, it now keeps the look of the boxes around
+the content as well as the content itself. A coloured band behind a section
+arrives as that row's background, with the space above and below it. A card
+with a border, rounded corners and a shadow arrives as the column's border,
+corners, shadow and inner spacing. A grid of cards now comes in as rows of
+cards, one card per column, because a Builder column can only wear one card's
+look. Before this, daneofearth.org's coloured strips and its grid of cards
+all came through as plain boxes on white and had to be restyled by hand.
+The first version missed the real site: its whole page sits inside one
+wrapper with six coloured strips stacked in it, and the import only looked
+for one strip per wrapper, so all six still came out white. It now finds
+each strip on its own, and two-colour fades (gradients) come across as
+Builder gradients. Checked against the real Dane of Earth capture, which is
+now a test: the space photo, the blue fade, the teal grid strip, the second
+fade, the starfield and the dark footer all arrive. Small background icons,
+such as a phone glyph, are ignored so they never get stretched across a
+column. Older captures still get their strips, but not cards.
 ## 2026-10-05 — Footage screen: you can't watch a recording — nothing is clickable (#773)
 
 The Footage screen listed every recording, but nothing on it could be
