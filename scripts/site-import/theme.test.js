@@ -40,9 +40,12 @@ function siteIr(styleSummary) {
           el('h1', 'heading', '<h1>Dane</h1>', H1),
           el('h2a', 'heading', '<h2>One</h2>', H2),
           el('h2b', 'heading', '<h2>Two</h2>', H2),
+          // The odd one out comes FIRST, so "most common" and "first seen"
+          // give different answers (a break test caught the version that
+          // could not tell them apart).
+          el('p3', 'text', '<p>c</p>', { ...TEXT, color: 'rgb(0, 0, 0)' }),
           el('p1', 'text', '<p>a</p>', TEXT),
           el('p2', 'text', '<p>b</p>', TEXT),
-          el('p3', 'text', '<p>c</p>', { ...TEXT, color: 'rgb(0, 0, 0)' }),
           el('a1', 'link', '<a href="/x">x</a>', LINK),
         ],
       }],
@@ -55,8 +58,10 @@ const SUMMARY = {
   backgroundsByArea: [
     { value: 'rgb(255, 255, 255)', count: 9000 },
     { value: 'rgb(244, 244, 244)', count: 3000 },
+    // A faint overlay that covers MORE screen than the real dark band — it
+    // must still not become the inverse colour.
+    { value: 'rgba(0, 0, 0, 0.1)', count: 2000 },
     { value: 'rgb(26, 26, 26)', count: 1500 },
-    { value: 'rgba(0, 0, 0, 0.1)', count: 900 },
   ],
   headerBackgrounds: [{ value: 'rgb(255, 255, 255)', count: 24 }],
   buttons: [{ value: 'rgb(46, 163, 242)|rgb(255, 255, 255)|3', count: 12 }],
