@@ -1012,7 +1012,19 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // the real plan then refuses to pour two different cards into one cell
       // (columns.ts, GridItem.group).
       const sectionEls = section.elements || [];
-      const bandOf = planBands(sectionEls, section.containerBoxes);
+      const containerStyles = section.containers || {};
+      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const bandLooks = new Map<string, SurfaceLook>();
+      const bandLookOf = (key: string): SurfaceLook | null => {
+        if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
+        return bandLooks.get(key) || null;
+      };
+      // A wrapper painted the page's own colour is not a band — keep looking
+      // inward (round 2 of 86bce9wx3).
+      const bandOf = planBands(sectionEls, section.containerBoxes, (key) => {
+        const look = bandLookOf(key);
+        return Boolean(look && hasPaint(look));
+      });
       const draft = planSectionGrid(
         sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
       );
@@ -1027,13 +1039,6 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
         }))
       );
-      const containerStyles = section.containers || {};
-      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
-      const bandLooks = new Map<string, SurfaceLook>();
-      const bandLookOf = (key: string): SurfaceLook | null => {
-        if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
-        return bandLooks.get(key) || null;
-      };
       // No painted band anywhere: the section root may still carry the spacing.
       const rootLook = (() => {
         const root = readSurface(section.rootStyles, rowCtx);

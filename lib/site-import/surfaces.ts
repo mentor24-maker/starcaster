@@ -224,10 +224,20 @@ type Box = { x: number; y: number; w: number; h: number };
  * narrower than that is a card or a panel, never a band. A box with no
  * recorded position counts as a band only when every element in the section
  * sits in it — the rule before positions were recorded.
+ *
+ * `shows` says whether a box looks like anything once the page's own surface
+ * is taken away. Divi, Elementor and most WordPress themes paint their main
+ * wrapper the page's white; that wrapper is full-width and outermost, so it
+ * used to win and pour every coloured band inside it into single cells
+ * (round 2 of 86bce9wx3). A box that shows nothing is skipped and the search
+ * keeps going inward. White WITH a picture or a gradient still shows. Only
+ * when nothing inward shows does the plain box stand as the band, for its
+ * padding alone.
  */
 export function planBands(
   elements: ElementIR[],
-  boxes: Record<string, Box> | undefined
+  boxes: Record<string, Box> | undefined,
+  shows: (key: string) => boolean = () => true
 ): Map<string, string> {
   const placed = elements.map((el) => el.box).filter((b): b is Box => Boolean(b && b.w > 0));
   const left = placed.length ? Math.min(...placed.map((b) => b.x)) : 0;
@@ -242,7 +252,9 @@ export function planBands(
   };
   const bandOf = new Map<string, string>();
   elements.forEach((el, i) => {
-    const band = chains[i].find(isBand);
+    // Failing a band that shows, the plain one still carries the room around
+    // the content — Divi's white sections pad every row by 54px.
+    const band = chains[i].find((key) => isBand(key) && shows(key)) || chains[i].find(isBand);
     if (band) bandOf.set(el.sourceId, band);
   });
   return bandOf;

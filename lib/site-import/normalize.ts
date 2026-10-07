@@ -1039,10 +1039,17 @@ function normalizePage(
   const perCandidateContainers = new Map<number, Record<string, CapturedStyles>>();
   const perCandidateBoxes = new Map<number, Record<string, NonNullable<ElementIR["box"]>>>();
   /** The painted boxes between an element and its section root (inclusive),
-   *  outermost first. Recorded into the section as it goes. */
+   *  outermost first. Recorded into the section as it goes. Never a box above
+   *  the root: an element that IS its section root starts the walk at its
+   *  parent, outside the section, and used to climb to <body> and <html> and
+   *  wear their colours (round 2 of 86bce9wx3) — so a start the root does not
+   *  contain records nothing. */
   const paintedChain = (start: DomNode, target: number | null): string[] => {
     if (target === null) return [];
     const root = candidates[target];
+    let inside: DomNode | null | undefined = start;
+    while (inside && inside !== root) inside = inside.parent;
+    if (!inside) return [];
     const chain: string[] = [];
     let cur: DomNode | null | undefined = start;
     while (cur) {

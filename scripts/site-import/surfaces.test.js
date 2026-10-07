@@ -239,6 +239,88 @@ test('two plain bands in one wrapper stay two rows, each with its own colour', (
   assert.equal(second.joinWithPrevious, undefined, 'a different band never joins');
 });
 
+test('a plain white page wrapper does not hide the coloured bands inside it', () => {
+  // Divi (#main-content), Elementor and most WordPress themes paint their main
+  // wrapper white. Round 2 of 86bce9wx3 took that wrapper as the band and
+  // poured the real bands into single cells as fills.
+  const pad = { 'padding-top': '54px', 'padding-bottom': '54px' };
+  const styles = {
+    0: { 'background-color': 'rgb(255, 255, 255)' },
+    1: { 'background-color': 'rgb(6, 75, 109)', ...pad }, 2: { color: 'rgb(0, 0, 0)' },
+    3: { 'background-color': 'rgb(238, 238, 238)', ...pad }, 4: { color: 'rgb(0, 0, 0)' },
+    5: {}, 6: { color: 'rgb(0, 0, 0)' },
+  };
+  const rects = {
+    0: [0, 0, 1200, 400], 1: [0, 0, 1200, 200], 2: [100, 80, 1000, 40],
+    3: [0, 200, 1200, 200], 4: [100, 280, 1000, 40], 5: [0, -60, 1200, 60], 6: [100, -40, 200, 20],
+  };
+  const desktop = {
+    ...capture(),
+    html: '<html><body><header data-scim="5"><p data-scim="6">Site</p></header>' +
+      '<div data-scim="0"><div data-scim="1"><p data-scim="2">Teal band</p></div>' +
+      '<div data-scim="3"><p data-scim="4">Grey band</p></div></div></body></html>',
+    styles, rects,
+  };
+  const { sections } = importIt(desktop);
+  const teal = holding(sections, /Teal band/);
+  const grey = holding(sections, /Grey band/);
+  assert.notEqual(teal, grey);
+  for (const [row, color] of [[teal, '#064b6d'], [grey, '#eeeeee']]) {
+    assert.deepEqual([row.background.mode, row.background.color], ['color', color], `${color} is the row's background`);
+    assert.deepEqual([row.paddingTop, row.paddingBottom], ['54', '54'], `${color} keeps its padding`);
+    assert.equal(row.cellBackgrounds, undefined, `${color} is not a cell fill`);
+  }
+});
+
+test('plain white sections with nothing coloured inside still keep their spacing', () => {
+  // Divi pads each white section by 54px inside an unpainted wrapper. Skipping
+  // them as bands must not lose that room when no coloured band sits inside
+  // (eight Dane of Earth pages lost it in a first cut of round 3).
+  const white = { 'background-color': 'rgb(255, 255, 255)', 'padding-top': '54px', 'padding-bottom': '54px' };
+  const styles = {
+    0: {}, 1: white, 2: { color: 'rgb(0, 0, 0)' }, 3: white, 4: { color: 'rgb(0, 0, 0)' },
+    5: {}, 6: { color: 'rgb(0, 0, 0)' },
+  };
+  const rects = {
+    0: [0, 0, 1200, 400], 1: [0, 0, 1200, 200], 2: [100, 80, 1000, 40],
+    3: [0, 200, 1200, 200], 4: [100, 280, 1000, 40], 5: [0, -60, 1200, 60], 6: [100, -40, 200, 20],
+  };
+  const desktop = {
+    ...capture(),
+    html: '<html><body><header data-scim="5"><p data-scim="6">Site</p></header>' +
+      '<div data-scim="0"><div data-scim="1"><p data-scim="2">First plain</p></div>' +
+      '<div data-scim="3"><p data-scim="4">Second plain</p></div></div></body></html>',
+    styles, rects,
+  };
+  const { sections } = importIt(desktop);
+  for (const text of [/First plain/, /Second plain/]) {
+    const row = holding(sections, text);
+    assert.equal(row.background.mode, 'none', 'white on white shows nothing');
+    assert.deepEqual([row.paddingTop, row.paddingBottom], ['54', '54'], `${text} keeps its room`);
+  }
+});
+
+test('a heading placed straight in a painted <body> takes no colour from above its section', () => {
+  // The element IS its section root, so the walk from its parent never met the
+  // root and climbed to <body> and <html> (round 2 of 86bce9wx3).
+  const desktop = {
+    ...capture(),
+    html: '<html data-scim="0"><body data-scim="1"><h1 data-scim="2">Alone</h1></body></html>',
+    styles: {
+      0: { 'background-color': 'rgb(20, 20, 20)' },
+      1: { 'background-color': 'rgb(240, 230, 200)' },
+      2: { color: 'rgb(0, 0, 0)', 'font-size': '32px' },
+    },
+    rects: { 0: [0, 0, 1200, 800], 1: [0, 0, 1200, 800], 2: [100, 100, 1000, 40] },
+  };
+  const { ir, sections } = importIt(desktop);
+  const el = ir.pages[0].sections.flatMap((s) => s.elements).find((e) => e.textContent === 'Alone');
+  assert.equal(el.containers, undefined, 'no box above the section is recorded');
+  const row = holding(sections, /Alone/);
+  assert.equal(row.background.mode, 'none');
+  assert.equal(row.cellBackgrounds, undefined);
+});
+
 /* ---------- the real thing: daneofearth.org's home page ---------- */
 
 // A trimmed real capture (fixtures/daneofearth-home.json, its _source says
