@@ -2,7 +2,7 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import FootagePanel, { PROJECT_SWITCH_EVENT } from "./footage-panel";
+import FootagePanel, { PROJECT_SWITCH_EVENT, timestamp, transcriptSentence } from "./footage-panel";
 
 /**
  * Review round 1 of Studio 8/8 (86bbjv68z) found two defects by driving the
@@ -50,6 +50,7 @@ function footage(title: string, ids: string[]) {
         hasDriveFile: true,
         fileName: `${id}.MOV`,
         driveUrl: `https://drive.google.com/file/d/drv-${id}/view`,
+        transcript: { state: "not_yet", reason: "" } as { state: string; reason: string },
       })),
     }],
   };
@@ -66,6 +67,17 @@ let activeProject = "proj_fixture";
 let footageReads: string[] = [];
 let thumbnailRequests: string[] = [];
 let thumbnailsWork = false;
+let transcriptReads: string[] = [];
+const TRANSCRIPT = {
+  sourceId: "fx-1",
+  state: "done",
+  language: "en",
+  segments: [
+    { start: 0, end: 4.2, text: "Hello and welcome." },
+    { start: 12.9, end: 18, text: "Today we talk about pricing." },
+    { start: 3725.4, end: 3730, text: "That is the whole set." },
+  ],
+};
 
 async function flush() {
   // A few turns of the microtask queue: api() → setData → Thumbnail effect → fetch → blob.
@@ -98,8 +110,13 @@ beforeEach(() => {
   footageReads = [];
   thumbnailRequests = [];
   thumbnailsWork = false;
+  transcriptReads = [];
   (window as unknown as { App: unknown }).App = {
     api: async (path: string) => {
+      if (path.includes("/transcript")) {
+        transcriptReads.push(path);
+        return { ok: true, data: TRANSCRIPT };
+      }
       footageReads.push(`${activeProject} ${path}`);
       return { ok: true, data: CATALOG[activeProject] };
     },
@@ -226,5 +243,71 @@ describe("Footage panel — watching a recording (86bcdejzy)", () => {
     } finally {
       Object.assign(row, saved);
     }
+  });
+});
+
+describe("Footage panel — reading what was said (86bcdek0e)", () => {
+  function withStates(states: Record<string, { state: string; reason: string }>) {
+    const rows = CATALOG.proj_fixture.sessions[0].sources;
+    const saved = rows.map((r) => ({ ...r.transcript }));
+    rows.forEach((r) => { if (states[r.id]) r.transcript = states[r.id]; });
+    return () => rows.forEach((r, i) => { r.transcript = saved[i]; });
+  }
+
+  function rowText(id: string): string {
+    const rows = [...(container?.querySelectorAll("tbody tr") || [])];
+    return rows.find((r) => r.textContent?.includes(`${id}.MOV`))?.textContent || "";
+  }
+
+  it("each transcript state says its own sentence; only a finished one has a button", async () => {
+    const restore = withStates({
+      "fx-1": { state: "failed", reason: "whisper-cli exited 1" },
+      "fx-2": { state: "no_audio", reason: "" },
+    });
+    try {
+      await mount();
+      expect(rowText("fx-1")).toContain("Transcription failed: whisper-cli exited 1");
+      expect(rowText("fx-2")).toContain("No transcript: this file has no sound");
+      expect(container?.querySelectorAll('[data-testid="studio-transcript-open"]').length).toBe(0);
+    } finally {
+      restore();
+    }
+    expect(transcriptSentence({ state: "done", reason: "" })).toBe("Transcribed");
+    expect(transcriptSentence({ state: "plate", reason: "" })).toMatch(/Plates/);
+    expect(transcriptSentence({ state: "not_yet", reason: "" })).toBe("Not transcribed yet");
+    expect(transcriptSentence({ state: "unknown", reason: "" })).toMatch(/Could not read/);
+  });
+
+  it("a finished transcript opens as lines, each starting with its time", async () => {
+    const restore = withStates({ "fx-1": { state: "done", reason: "" } });
+    try {
+      await mount();
+      const buttons = [...(container?.querySelectorAll('[data-testid="studio-transcript-open"]') || [])];
+      expect(buttons.length).toBe(1);
+      act(() => { buttons[0].dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      await flush();
+
+      expect(transcriptReads).toEqual(["/api/studio/sources/fx-1/transcript"]);
+      const lines = [...(container?.querySelectorAll('[data-testid="studio-transcript-lines"] li') || [])]
+        .map((li) => li.textContent);
+      expect(lines).toEqual([
+        "0:00Hello and welcome.",
+        "0:12Today we talk about pricing.",
+        "1:02:05That is the whole set.",
+      ]);
+      expect(container?.textContent).toContain("Transcript of fx-1.MOV");
+
+      const close = [...(container?.querySelectorAll("button") || [])].find((b) => b.textContent === "Close");
+      act(() => { close!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      expect(container?.querySelector('[data-testid="studio-transcript-lines"]')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it("times are floored, never rounded up past what was said", () => {
+    expect(timestamp(59.9)).toBe("0:59");
+    expect(timestamp(0)).toBe("0:00");
+    expect(timestamp(3600)).toBe("1:00:00");
   });
 });
