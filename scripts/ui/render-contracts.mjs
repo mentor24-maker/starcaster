@@ -1958,6 +1958,22 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'heading-renders-in-any-google-font',
+    why:
+      'Task 86bce9wwv: a font slot takes any Google Font ("gf:Open Sans"), not only the ten built-ins. ' +
+      'Before it, the normalizer blanked any other name on the way to the page, so the heading quietly ' +
+      'fell back to the theme font — an imported site lost its typeface with nothing failing.',
+    module: { type: 'heading', text: 'Open Sans heading', settings: { fontFamily: 'gf:Open Sans' } },
+    selector: '.builder-preview-heading',
+    read: ['fontFamily'],
+    expect(sample) {
+      return /Open Sans/.test(sample.styles.fontFamily)
+        ? null
+        : `the heading asked for Google font Open Sans but rendered in ${sample.styles.fontFamily} — the font name was dropped before it reached the page.`;
+    },
+  },
+
+  {
     id: 'gradient-background-still-runs-at-135-degrees-by-default',
     why:
       'THE SAFETY HALF OF THE ANGLE SETTING, and the one worth measuring. Every gradient in the ' +
