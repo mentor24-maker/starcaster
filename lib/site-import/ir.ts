@@ -197,7 +197,8 @@ export type CaptureResult = {
  * classify by tag/role:
  *
  *   heading  h1–h6                                   count, do not descend
- *   image    img, picture                            count, do not descend
+ *   image    img, picture, and an a[href] whose only
+ *            visible content is ONE picture          count, do not descend
  *   form     form                                    count, do not descend
  *   video    video                                   count, do not descend
  *   embed    iframe, embed, object                   count, do not descend
@@ -217,7 +218,10 @@ export type CaptureResult = {
  *   - A link inside a paragraph is NOT a separate countable — it is part of
  *     that text element's verbatim HTML, so it is preserved, just not
  *     double-counted. Links counted as "link" are the ones reached outside
- *     prose atoms: nav items, footer links, linked images, standalone CTAs.
+ *     prose atoms: nav items, footer links, standalone CTAs. A link holding
+ *     nothing but one picture is an "image" instead (its link travels with
+ *     its HTML) — as a "link" it became a text module that rendered empty
+ *     (task 86bcebrwp).
  *   - <li> is a container, not a text atom, so menu markup like
  *     <li><a href=…>About</a></li> yields a "link", while
  *     <li>plain bullet text</li> yields its text run as "text".
@@ -284,6 +288,14 @@ export type ElementIR = {
    * A bare text run carries its parent container's box.
    */
   box?: { x: number; y: number; w: number; h: number };
+  /**
+   * The styled boxes this element sits inside, OUTERMOST first, as keys into
+   * its section's `containers` — a band's background, a card's border and
+   * shadow. Only ancestors from the section root down that visibly paint
+   * something are listed (see normalize.ts paintsSurface). Absent when there
+   * are none, and on IRs normalized before 2026-10-07 (task 86bce9wx3).
+   */
+  containers?: string[];
 };
 
 export type SectionIR = {
@@ -293,6 +305,19 @@ export type SectionIR = {
   /** Blob path of the 1440px section crop ("" when capture had none). */
   screenshot: string;
   elements: ElementIR[];
+  /**
+   * Surface styles (background, border, radius, shadow, padding — see
+   * CONTAINER_STYLE_PROPS) of every container an element's `containers`
+   * names, keyed the same way. Absent when the section has none.
+   */
+  containers?: Record<string, CapturedStyles>;
+  /** Where each of those containers sat on the 1440px desktop page, keyed the
+   *  same way — how the mapper tells a full-width band from a card. Absent
+   *  when the capture recorded no rects. */
+  containerBoxes?: Record<string, { x: number; y: number; w: number; h: number }>;
+  /** The section root's own surface styles, painted or not — where its
+   *  padding comes from when no container paints. Absent when empty. */
+  rootStyles?: CapturedStyles;
 };
 
 export type PageIR = {

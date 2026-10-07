@@ -159,6 +159,15 @@ export function nextThemeName(siteName: string, existingNames: string[]): string
   return `${siteName} ${max + 1}`;
 }
 
+/** The colour the import theme gives the page surface: the most common page
+ *  background, white when backgrounds were measured but none was painted,
+ *  "" when the capture predates the measurement. The mapper leaves a band or
+ *  card of exactly this colour unset, so it follows the theme. */
+export function importSurfaceColor(ir: SiteIR): string {
+  const sum = ir.styleSummary;
+  return toHex(top(sum?.pageBackgrounds)) || (sum ? "#ffffff" : "");
+}
+
 /* ---------- the derivation ---------- */
 
 export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
@@ -213,7 +222,7 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // Palette, from the role-separated evidence (absent on old captures).
   const sum = ir.styleSummary;
   const palette: Record<string, string> = {};
-  const surface = toHex(top(sum?.pageBackgrounds)) || (sum ? "#ffffff" : "");
+  const surface = importSurfaceColor(ir);
   if (surface) {
     palette.surface = surface;
     if (text) palette.surfaceText = text;
