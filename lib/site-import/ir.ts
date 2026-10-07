@@ -284,6 +284,14 @@ export type ElementIR = {
    * A bare text run carries its parent container's box.
    */
   box?: { x: number; y: number; w: number; h: number };
+  /**
+   * The styled boxes this element sits inside, OUTERMOST first, as keys into
+   * its section's `containers` — a band's background, a card's border and
+   * shadow. Only ancestors from the section root down that visibly paint
+   * something are listed (see normalize.ts paintsSurface). Absent when there
+   * are none, and on IRs normalized before 2026-10-07 (task 86bce9wx3).
+   */
+  containers?: string[];
 };
 
 export type SectionIR = {
@@ -293,6 +301,15 @@ export type SectionIR = {
   /** Blob path of the 1440px section crop ("" when capture had none). */
   screenshot: string;
   elements: ElementIR[];
+  /**
+   * Surface styles (background, border, radius, shadow, padding — see
+   * CONTAINER_STYLE_PROPS) of every container an element's `containers`
+   * names, keyed the same way. Absent when the section has none.
+   */
+  containers?: Record<string, CapturedStyles>;
+  /** The section root's own surface styles, painted or not — where its
+   *  padding comes from when no container paints. Absent when empty. */
+  rootStyles?: CapturedStyles;
 };
 
 export type PageIR = {
