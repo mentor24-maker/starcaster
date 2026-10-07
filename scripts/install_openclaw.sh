@@ -364,11 +364,12 @@ install_it() {
   if [ "$installed" != "$OPENCLAW_VERSION" ]; then
     echo "openclaw: installing $OPENCLAW_VERSION into $APP_DIR"
     (cd "$APP_DIR" && [ -f package.json ] || echo '{"private":true}' > "$APP_DIR/package.json")
-    # npm 11 (Node 24's) skips every package's install script unless it is
-    # named. Skipped, OpenClaw installs "fine" and runs without its bundled
-    # plugins (found 2026-10-05) — so name the five it needs, and only those.
-    (cd "$APP_DIR" && PATH="$(dirname "$NODE_BIN"):$PATH" npm install --no-fund --no-audit --save-exact \
-      --allow-scripts=@google/genai,esbuild,koffi,protobufjs,openclaw "openclaw@$OPENCLAW_VERSION" >/dev/null)
+    # Installed into its own folder, not with `npm install -g`: npm 11 (Node
+    # 24's) SKIPS install scripts on a global install unless each package is
+    # named, and OpenClaw's postinstall bundles its plugins (found 2026-10-05).
+    # In a folder install those scripts still run (npm only warns), and
+    # `--allow-scripts` is refused there outright.
+    (cd "$APP_DIR" && PATH="$(dirname "$NODE_BIN"):$PATH" npm install --no-fund --no-audit --save-exact "openclaw@$OPENCLAW_VERSION" >/dev/null)
   fi
 
   # An `openclaw` command for people and agents on this machine, pinned to the
