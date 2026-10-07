@@ -1,3 +1,16 @@
+## 2026-10-07 — Studio: recordings reach 'ready' but nothing turns what you said into text (#786)
+
+Recordings dropped into Studio already got as far as "ready" on the Mac Mini,
+but nothing turned what was said in them into words. Now, when a recording
+becomes ready, the Mini runs its speech-to-text program on the recording's
+sound and saves the words — and the second each one was said — in the
+transcripts table. Plates (footage of a place) are skipped, and a recording
+with no sound is marked as such so the screen can say why it has no text. If
+the speech-to-text program is missing, the job just waits and tries again
+later rather than marking the recording as failed. A one-off catch-up command
+picks up the one recording that was already ready before this existed
+(IMG_1962). Tested on the Mini against IMG_1962's own audio: 251 words in
+about ten seconds. Reading the transcript on screen comes in a later ticket.
 ## 2026-10-05 — Studio: there is nowhere to keep a transcript of a recording (#771)
 
 Studio is about to start turning what you say in a recording into text, and
