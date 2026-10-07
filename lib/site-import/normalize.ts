@@ -438,12 +438,12 @@ function clearColor(value: string | undefined): boolean {
   return !v || v === "transparent" || /^rgba\([^)]*,\s*0(\.0+)?\)$/.test(v);
 }
 
-/** True when a box visibly paints something: a fill, a background picture,
- *  a border or a shadow. Padding or rounded corners alone draw nothing, and
+/** True when a box visibly paints something: a fill, a background picture
+ *  or gradient, a border or a shadow. Padding or rounded corners alone draw nothing, and
  *  counting them would list every layout wrapper on the page. */
 export function paintsSurface(st: CapturedStyles): boolean {
   if (!clearColor(st["background-color"])) return true;
-  if (/url\(/i.test(st["background-image"] || "")) return true;
+  if (/url\(|gradient\(/i.test(st["background-image"] || "")) return true;
   if (st["box-shadow"] && st["box-shadow"] !== "none") return true;
   return ["top", "right", "bottom", "left"].some(
     (side) =>
@@ -1037,6 +1037,7 @@ function normalizePage(
   // One walk builds every element, assigned to its candidate section.
   const perCandidate = new Map<number, ElementIR[]>();
   const perCandidateContainers = new Map<number, Record<string, CapturedStyles>>();
+  const perCandidateBoxes = new Map<number, Record<string, NonNullable<ElementIR["box"]>>>();
   /** The painted boxes between an element and its section root (inclusive),
    *  outermost first. Recorded into the section as it goes. */
   const paintedChain = (start: DomNode, target: number | null): string[] => {
@@ -1053,6 +1054,12 @@ function normalizePage(
           const sink = perCandidateContainers.get(target) || {};
           sink[key] = st;
           perCandidateContainers.set(target, sink);
+          const box = boxOf(key);
+          if (box) {
+            const boxes = perCandidateBoxes.get(target) || {};
+            boxes[key] = box;
+            perCandidateBoxes.set(target, boxes);
+          }
         }
       }
       if (cur === root) break;
@@ -1140,6 +1147,7 @@ function normalizePage(
     if (!elements || elements.length === 0) return;
     let sectionPath = `section[${i}]`;
     const containers = perCandidateContainers.get(i);
+    const containerBoxes = perCandidateBoxes.get(i);
     const rootKey = (node.attribs || {})["data-scim"] || "";
     const rootStyles = containerStyles(styles[rootKey], rects[rootKey]);
     sections.push({
@@ -1148,6 +1156,7 @@ function normalizePage(
       screenshot: sectionShots[String(i)] || "",
       elements,
       ...(containers ? { containers } : {}),
+      ...(containerBoxes ? { containerBoxes } : {}),
       ...(Object.keys(rootStyles).length ? { rootStyles } : {}),
     });
   });

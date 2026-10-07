@@ -9,18 +9,27 @@
  * bands and its 2x2 grid of cards arrived as plain boxes on white and were
  * restyled by hand.
  *
- * Pure, no I/O. normalize.ts records the boxes (SectionIR.containers, and each
- * element's `containers` chain); the mapper (map.ts) decides which box is the
- * row's band and which is a column's card, and calls readSurface for each.
+ * Pure, no I/O. normalize.ts records the boxes (SectionIR.containers and
+ * containerBoxes, and each element's `containers` chain); planBands and
+ * planCards decide which box is each element's band and which its card, and
+ * the mapper (map.ts) calls readSurface for each.
+ *
+ * One imported section can hold MANY bands: a Divi/WordPress page puts its
+ * whole main area in one wrapper, and daneofearth.org stacks six coloured
+ * bands inside it (round-1 review of 86bce9wx3). So a band is decided per
+ * element — the outermost painted box spanning the full width of the
+ * section's content — never as the one box every element shares.
  */
 
 import type { CapturedStyles, ElementIR } from "./ir";
 import { toHex } from "./theme";
 
 export type MappedBackground = {
-  mode: "none" | "color" | "image";
+  mode: "none" | "color" | "gradient" | "image";
   color: string;
   color2: string;
+  /** Mode "gradient" only — CSS degrees, which Builder paints the same way. */
+  gradientAngle?: number;
   imageUrl: string;
   styleKey: "";
 };
@@ -105,6 +114,59 @@ function firstUrl(value: string | undefined): string {
   return m ? m[1] : "";
 }
 
+/** "rgba(0, 11, 140, 0.38)" → the solid colour it shows as over `under`. */
+function solidOver(value: string, under: string): string {
+  const m = value.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?\s*\)$/i);
+  if (!m) return toHex(value);
+  const a = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+  const base = under.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  const bg = base ? [1, 2, 3].map((i) => parseInt(base[i], 16)) : [255, 255, 255];
+  return `#${[m[1], m[2], m[3]]
+    .map((c, i) => Math.round(parseFloat(c) * a + bg[i] * (1 - a)))
+    .map((c) => Math.max(0, Math.min(255, c)).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+const GRADIENT_SIDES: Record<string, number> = {
+  "to top": 0, "to right": 90, "to bottom": 180, "to left": 270,
+  "to top right": 45, "to right top": 45, "to bottom right": 135, "to right bottom": 135,
+  "to bottom left": 225, "to left bottom": 225, "to top left": 315, "to left top": 315,
+};
+
+/**
+ * A computed `linear-gradient(...)` → Builder's two-colour gradient: its first
+ * and last stops, and its direction (CSS's default, top to bottom, is 180°).
+ * A see-through stop is flattened onto the box's own fill, which is what it
+ * paints over — daneofearth.org's "Support" band fades white into
+ * rgba(0, 11, 140, 0.38) on white. Middle stops, radial and repeating
+ * gradients are not representable and read as no gradient.
+ */
+export function readGradient(
+  value: string | undefined,
+  under: string
+): { color: string; color2: string; gradientAngle: number } | null {
+  const m = /^linear-gradient\((.*)\)$/i.exec(String(value || "").trim());
+  if (!m) return null;
+  const parts = m[1].split(/,(?![^(]*\))/).map((p) => p.trim());
+  let angle = 180;
+  const deg = /^(-?[\d.]+)deg$/i.exec(parts[0]);
+  if (deg) {
+    angle = ((Math.round(parseFloat(deg[1])) % 360) + 360) % 360;
+    parts.shift();
+  } else if (/^to\s/i.test(parts[0])) {
+    const side = GRADIENT_SIDES[parts[0].toLowerCase().replace(/\s+/g, " ")];
+    if (side === undefined) return null;
+    angle = side;
+    parts.shift();
+  }
+  if (parts.length < 2) return null;
+  const stop = (p: string) => (p.match(/^((?:rgba?|hsla?)\([^)]*\)|#[0-9a-f]{3,8}|[a-z]+)/i) || [""])[0];
+  const color = solidOver(stop(parts[0]), under);
+  const color2 = solidOver(stop(parts[parts.length - 1]), under);
+  if (!color || !color2) return null;
+  return { color, color2, gradientAngle: angle };
+}
+
 export function readSurface(st: CapturedStyles | undefined, ctx: SurfaceContext): SurfaceLook {
   const look: SurfaceLook = { padding: {} };
   if (!st) return look;
@@ -112,8 +174,11 @@ export function readSurface(st: CapturedStyles | undefined, ctx: SurfaceContext)
   const fill = toHex(st["background-color"]);
   const color = fill && fill !== ctx.surface ? fill : "";
   const imageUrl = firstUrl(st["background-image"]) ? ctx.resolveImage(firstUrl(st["background-image"])) : "";
+  const gradient = imageUrl ? null : readGradient(st["background-image"], fill || "#ffffff");
   if (imageUrl) {
     look.background = { mode: "image", color: fill, color2: "", imageUrl, styleKey: "" };
+  } else if (gradient) {
+    look.background = { mode: "gradient", ...gradient, imageUrl: "", styleKey: "" };
   } else if (color) {
     look.background = { mode: "color", color, color2: "", imageUrl: "", styleKey: "" };
   }
@@ -151,21 +216,50 @@ export function hasPaint(look: SurfaceLook): boolean {
   return Boolean(look.background || look.border || look.radius || look.shadow);
 }
 
+type Box = { x: number; y: number; w: number; h: number };
+
 /**
- * Which painted boxes are the SECTION's (shared by every element in it — the
- * band) and which box each element's card is. A card is the outermost box
- * beyond the band whose contents all sit in ONE cell of the section's
- * provisional column grid: a panel holding the whole grid spans several
- * cells and is not a card; each tile inside it is.
+ * Each element's BAND: the outermost painted box in its chain that spans the
+ * full width the section's content occupies (2% slack for rounding). A box
+ * narrower than that is a card or a panel, never a band. A box with no
+ * recorded position counts as a band only when every element in the section
+ * sits in it — the rule before positions were recorded.
+ */
+export function planBands(
+  elements: ElementIR[],
+  boxes: Record<string, Box> | undefined
+): Map<string, string> {
+  const placed = elements.map((el) => el.box).filter((b): b is Box => Boolean(b && b.w > 0));
+  const left = placed.length ? Math.min(...placed.map((b) => b.x)) : 0;
+  const right = placed.length ? Math.max(...placed.map((b) => b.x + b.w)) : 0;
+  const contentWidth = right - left;
+  const chains = elements.map((el) => el.containers || []);
+  const shared = (key: string) => chains.every((chain) => chain.includes(key));
+  const isBand = (key: string): boolean => {
+    const box = boxes?.[key];
+    if (!box || contentWidth <= 0) return shared(key);
+    return box.w >= contentWidth * 0.98;
+  };
+  const bandOf = new Map<string, string>();
+  elements.forEach((el, i) => {
+    const band = chains[i].find(isBand);
+    if (band) bandOf.set(el.sourceId, band);
+  });
+  return bandOf;
+}
+
+/**
+ * Each element's CARD: the outermost painted box INSIDE its band whose
+ * contents all sit in ONE cell of the section's provisional column grid. A
+ * panel holding the whole grid spans several cells and is not a card; each
+ * tile inside it is.
  */
 export function planCards(
   elements: ElementIR[],
+  bandOf: Map<string, string>,
   cellKey: (sourceId: string) => string
-): { common: string[]; cardOf: Map<string, string> } {
+): Map<string, string> {
   const chains = elements.map((el) => el.containers || []);
-  const common = chains.length
-    ? chains[0].filter((key) => chains.every((chain) => chain.includes(key)))
-    : [];
   const cellsByKey = new Map<string, Set<string>>();
   elements.forEach((el, i) => {
     for (const key of chains[i]) {
@@ -176,10 +270,10 @@ export function planCards(
   });
   const cardOf = new Map<string, string>();
   elements.forEach((el, i) => {
-    const card = chains[i].find(
-      (key) => !common.includes(key) && (cellsByKey.get(key)?.size || 0) === 1
-    );
+    const band = bandOf.get(el.sourceId);
+    const inside = band ? chains[i].slice(chains[i].indexOf(band) + 1) : chains[i];
+    const card = inside.find((key) => (cellsByKey.get(key)?.size || 0) === 1);
     if (card) cardOf.set(el.sourceId, card);
   });
-  return { common, cardOf };
+  return cardOf;
 }

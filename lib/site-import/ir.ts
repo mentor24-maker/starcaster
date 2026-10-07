@@ -307,6 +307,10 @@ export type SectionIR = {
    * names, keyed the same way. Absent when the section has none.
    */
   containers?: Record<string, CapturedStyles>;
+  /** Where each of those containers sat on the 1440px desktop page, keyed the
+   *  same way — how the mapper tells a full-width band from a card. Absent
+   *  when the capture recorded no rects. */
+  containerBoxes?: Record<string, { x: number; y: number; w: number; h: number }>;
   /** The section root's own surface styles, painted or not — where its
    *  padding comes from when no container paints. Absent when empty. */
   rootStyles?: CapturedStyles;

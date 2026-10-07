@@ -13,7 +13,7 @@ const assert = require('node:assert/strict');
 const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
 const { mapSite, reportReconciles } = require('../../lib/site-import/dist/map.js');
 const { planSectionGrid } = require('../../lib/site-import/dist/columns.js');
-const { readSurface, shadowPreset, keepCellFill } = require('../../lib/site-import/dist/surfaces.js');
+const { readSurface, readGradient, shadowPreset, keepCellFill } = require('../../lib/site-import/dist/surfaces.js');
 const template = require('../../lib/builder/template.js');
 
 /* ---------- a synthetic capture: band + 2x2 cards, a lone card, a photo band ---------- */
@@ -92,6 +92,8 @@ function importIt(desktop = capture()) {
   return { ir, out, sections: out.pages[0].sections };
 }
 
+const holding = (sections, pattern) =>
+  sections.find((s) => s.modules.some((m) => pattern.test(JSON.stringify(m.settings || {}) + (m.text || ''))));
 const byTitle = (sections, title) => sections.filter((s) => s.title === `Imported: ${title}`);
 
 /* ---------- normalize ---------- */
@@ -205,6 +207,122 @@ test('the cell fills Builder wipes are the ones keepCellFill nudges (SYNC POINT)
   assert.equal(keepCellFill('#336699'), '#336699');
 });
 
+test('two plain bands in one wrapper stay two rows, each with its own colour', () => {
+  // One wrapper, two full-width bands of single-column text and no cards —
+  // nothing but the band itself keeps their rows apart.
+  const styles = {
+    0: {}, 1: { 'background-color': 'rgb(17, 34, 51)' }, 2: { color: 'rgb(0, 0, 0)' },
+    3: { 'background-color': 'rgb(170, 187, 204)' }, 4: { color: 'rgb(0, 0, 0)' },
+    5: {}, 6: { color: 'rgb(0, 0, 0)' },
+  };
+  const rects = {
+    0: [0, 0, 1200, 400], 1: [0, 0, 1200, 200], 2: [100, 80, 1000, 40],
+    3: [0, 200, 1200, 200], 4: [100, 280, 1000, 40], 5: [0, -60, 1200, 60], 6: [100, -40, 200, 20],
+  };
+  const desktop = {
+    ...capture(),
+    // The header beside it keeps the wrapper from being opened up into two
+    // sections before the mapper ever sees it — a real page's shape.
+    html: '<html><body><header data-scim="5"><p data-scim="6">Site</p></header>' +
+      '<div data-scim="0"><div data-scim="1"><p data-scim="2">First band</p></div>' +
+      '<div data-scim="3"><p data-scim="4">Second band</p></div></div></body></html>',
+    styles, rects,
+  };
+  const { ir, sections } = importIt(desktop);
+  assert.equal(ir.pages[0].sections.filter((x) => /First|Second/.test(JSON.stringify(x.elements))).length, 1,
+    'both bands sit in ONE imported section, as on daneofearth.org');
+  const first = holding(sections, /First band/);
+  const second = holding(sections, /Second band/);
+  assert.notEqual(first, second, 'the two bands are not poured into one row');
+  assert.equal(first.background.color, '#112233');
+  assert.equal(second.background.color, '#aabbcc');
+  assert.equal(second.joinWithPrevious, undefined, 'a different band never joins');
+});
+
+/* ---------- the real thing: daneofearth.org's home page ---------- */
+
+// A trimmed real capture (fixtures/daneofearth-home.json, its _source says
+// what was cut). Its whole main area is ONE imported section holding six
+// coloured bands one after another — the shape round 1 of this ticket missed,
+// because it looked only for the one box every element shared, and there is
+// none on a Divi/WordPress page.
+function importDaneOfEarth() {
+  const { desktop } = require('./fixtures/daneofearth-home.json');
+  const { ir } = normalizeSite({
+    jobId: 'j', sourceUrl: 'https://daneofearth.org/', capturedAt: '', assets: [], pages: [{ desktop }],
+  });
+  const out = mapSite(ir, { existingSlugs: [] });
+  return { out, sections: out.pages[0].sections };
+}
+
+
+test('Dane of Earth: the hero band is a ROW background with the Oregon-from-space picture, across its rows', () => {
+  const { sections } = importDaneOfEarth();
+  const hero = holding(sections, /Tales from the Road Less Traveled/);
+  assert.equal(hero.background.mode, 'image');
+  assert.match(hero.background.imageUrl, /oregon_from_space/);
+  assert.equal(hero.cellBackgrounds, undefined, 'not a single column\'s picture');
+  assert.equal(hero.paddingTop, '99');
+  const run = sections.filter((s) => /oregon_from_space/.test(s.background.imageUrl));
+  assert.ok(run.length >= 2, 'the blog-post panel inside the hero is part of the same band');
+  assert.ok(run.slice(1).every((s) => s.joinWithPrevious === true));
+  assert.ok(sections.every((s) => !Object.values(s.cellBackgrounds || {}).some((b) => /oregon_from_space/.test(b.imageUrl))));
+});
+
+test('Dane of Earth: the 2x2 grid band is dark teal on every row it became', () => {
+  const { sections } = importDaneOfEarth();
+  const teal = sections.filter((s) => s.background.mode === 'color' && s.background.color === '#064b6d');
+  assert.ok(teal.length >= 1, 'the grid band survives');
+  const links = teal.flatMap((s) => s.sourceElementIds);
+  assert.equal(links.length, 4, 'all four tiles of the grid sit on the teal band');
+  assert.equal(teal[0].paddingTop, '54');
+  assert.equal(teal[teal.length - 1].paddingBottom, '54');
+});
+
+test('Dane of Earth: the starfield band and the #222 footer are row backgrounds too', () => {
+  const { sections } = importDaneOfEarth();
+  const star = holding(sections, /Join me on the Adventure/);
+  assert.equal(star.background.mode, 'image');
+  assert.match(star.background.imageUrl, /background_starfield/);
+  const footer = holding(sections, /footer-info/);
+  assert.deepEqual([footer.background.mode, footer.background.color], ['color', '#222222']);
+  assert.equal(footer.cellBackgrounds, undefined, 'the footer is a band, not a column');
+});
+
+test('Dane of Earth: the two gradient bands import as gradients, see-through stops flattened onto white', () => {
+  const { sections } = importDaneOfEarth();
+  const follow = holding(sections, /Follow and Share Dane of Earth/);
+  assert.deepEqual(
+    [follow.background.mode, follow.background.color, follow.background.color2, follow.background.gradientAngle],
+    ['gradient', '#9ad2f9', '#ffffff', 180]
+  );
+  const support = holding(sections, /Support Dane of Earth/);
+  assert.deepEqual(
+    [support.background.mode, support.background.color, support.background.color2],
+    ['gradient', '#ffffff', '#9ea2d3']
+  );
+});
+
+test('Dane of Earth: no two bands share a Builder row, and every band is joined only to itself', () => {
+  const { sections, out } = importDaneOfEarth();
+  const look = (s) => JSON.stringify(s.background);
+  sections.forEach((s, i) => {
+    if (s.joinWithPrevious) assert.equal(look(s), look(sections[i - 1]), `${s.title} joins a different band`);
+  });
+  const distinct = new Set(sections.filter((s) => s.background.mode !== 'none').map(look));
+  assert.equal(distinct.size, 7, 'header, hero, follow, grid, support, starfield, footer');
+  assert.ok(reportReconciles(out.report));
+});
+
+test('Builder keeps an imported gradient (read back through the server template)', () => {
+  const { sections } = importDaneOfEarth();
+  const saved = template.normalizeLayoutSections(sections.map(({ sourceElementIds, dispositions, ...s }) => s));
+  const support = saved.find((s) => s.background.mode === 'gradient' && s.background.color2 === '#9ea2d3');
+  assert.ok(support, 'the gradient survives normalization');
+  assert.equal(support.background.color, '#ffffff');
+  assert.equal(support.background.gradientAngle, 180);
+});
+
 /* ---------- captures without surfaces ---------- */
 
 test('a capture with no positions and no painted boxes maps with no surface settings', () => {
@@ -259,6 +377,18 @@ test('a border is a frame only when all four sides draw one', () => {
   assert.deepEqual(framed.border, { width: '1', color: '#dddddd', style: 'solid' });
   assert.equal(framed.background, undefined, 'white on a white-surfaced theme stays unset');
   assert.equal(readSurface({ 'padding-top': '400px' }, ctx).padding.top, '50');
+});
+
+test('gradients read their first and last stops and their direction', () => {
+  assert.deepEqual(readGradient('linear-gradient(rgb(154, 210, 249) 0%, rgb(255, 255, 255) 100%)', '#ffffff'),
+    { color: '#9ad2f9', color2: '#ffffff', gradientAngle: 180 });
+  assert.deepEqual(readGradient('linear-gradient(90deg, rgb(0, 0, 0), rgb(10, 20, 30) 50%, rgb(255, 0, 0))', '#ffffff'),
+    { color: '#000000', color2: '#ff0000', gradientAngle: 90 });
+  assert.equal(readGradient('linear-gradient(to left, rgb(0, 0, 0), rgb(255, 255, 255))', '#ffffff').gradientAngle, 270);
+  assert.equal(readGradient('linear-gradient(rgb(255, 255, 255), rgba(0, 0, 0, 0.5))', '#000000').color2, '#000000',
+    'a see-through stop shows the fill under it');
+  assert.equal(readGradient('radial-gradient(rgb(0, 0, 0), rgb(255, 255, 255))', '#ffffff'), null);
+  assert.equal(readGradient('none', '#ffffff'), null);
 });
 
 /* ---------- columns ---------- */

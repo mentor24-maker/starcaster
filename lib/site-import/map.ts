@@ -33,6 +33,7 @@ import { importSurfaceColor } from "./theme";
 import {
   hasPaint,
   keepCellFill,
+  planBands,
   planCards,
   readSurface,
   type MappedBackground,
@@ -473,9 +474,10 @@ const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
 type Dispositions = { mapped: number; placeholder: number; deduped: number };
 
 /**
- * The band a section was painted with, onto each Builder row it became. Every
- * row carries the background, and rows after the first JOIN the first, so a
- * band split into several rows still reads as one band (Builder paints a
+ * A band onto each Builder row of the run it became (planBands decides each
+ * element's band; a run is consecutive rows in one band). Every row carries
+ * the background, and rows after the first JOIN the first, so a band split
+ * into several rows still reads as one band (Builder paints a
  * joined run with its first row's background). Padding goes on the band's
  * outer edges only — top of the first row, bottom of the last — or a split
  * band would gain the gap between every row. A frame (and the corners, which
@@ -551,14 +553,30 @@ function splitIntoRows(args: {
   cellOf: (sourceId: string) => Cell;
   sourceElementIds: string[];
   dispositionsFor: (band: number) => Dispositions;
-  /** The section's band look (from its shared painted box), if any. */
-  bandLook: SurfaceLook | null;
-  /** Element sourceId → the look of the card it sits in. */
-  cardLookOf: (sourceId: string) => { key: string; look: SurfaceLook } | null;
+  /** Element sourceId → the painted band it sits in ("" for none). */
+  bandOf: (sourceId: string) => string;
+  /** A band's look, by its container key. */
+  bandLookOf: (key: string) => SurfaceLook | null;
+  /** The section root's spacing, for a section with no band anywhere. */
+  rootLook: SurfaceLook | null;
+  /** Element sourceId → the look of the card it sits in; `onBand` when the
+   *  row is painted, so a card the page's colour still shows against it. */
+  cardLookOf: (sourceId: string, onBand: boolean) => { key: string; look: SurfaceLook } | null;
 }): MappedSection[] {
   const { section, baseId, modules, moduleCells, grid, cellOf } = args;
   const bands = Array.from(new Set(moduleCells.map((c) => c.band))).sort((a, b) => a - b);
   const out: MappedSection[] = [];
+
+  // Each Builder row's band: the one band every element in it sits in. Rows
+  // never merge across a band (columns.ts, GridItem.group), so a mixed row
+  // only happens where an element has no band of its own — it gets none.
+  const rowBand = bands.map((band) => {
+    const keys = new Set(
+      args.sourceElementIds.filter((id) => cellOf(id).band === band).map((id) => args.bandOf(id))
+    );
+    return keys.size === 1 ? Array.from(keys)[0] : "";
+  });
+  const anyBand = rowBand.some(Boolean);
 
   bands.forEach((band, i) => {
     const idx = modules.map((_, k) => k).filter((k) => moduleCells[k].band === band);
@@ -594,7 +612,20 @@ function splitIntoRows(args: {
       sourceElementIds: args.sourceElementIds.filter((id) => cellOf(id).band === band),
       dispositions: { ...args.dispositionsFor(band) },
     };
-    applyBand(row, args.bandLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
+    // Consecutive rows in one band are one run: joined, padded at its ends.
+    const key = rowBand[i];
+    if (anyBand) {
+      if (key) {
+        let start = i;
+        while (start > 0 && rowBand[start - 1] === key) start--;
+        let end = i;
+        while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
+        applyBand(row, args.bandLookOf(key), { first: i === start, last: i === end, rows: end - start + 1 });
+      }
+    } else {
+      applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
+    }
+    const onBand = Boolean(row.background.mode !== "none");
     // A column wears a card only when everything in it sat in that one card.
     const byColumn = new Map<string, Set<string>>();
     const lookByKey = new Map<string, SurfaceLook>();
@@ -602,7 +633,7 @@ function splitIntoRows(args: {
     for (const id of row.sourceElementIds) {
       const at = layout === "single" ? 0 : cols.indexOf(cellOf(id).col);
       if (at < 0) continue; // a cell that built no module (nav links)
-      const card = args.cardLookOf(id);
+      const card = args.cardLookOf(id, onBand);
       const set = byColumn.get(cellKeys[at]) || new Set<string>();
       set.add(card ? card.key : "");
       byColumn.set(cellKeys[at], set);
@@ -974,45 +1005,58 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // in on the source page. Prose never merges across a cell boundary, and
       // every module is tagged with the cell it was built in, so the section
       // can be split into Builder rows once the modules exist.
-      // Cards (surfaces.ts): a first plan without them says which boxes
-      // hold one cell's worth of content; the real plan then refuses to pour
-      // two different cards into one cell (columns.ts, GridItem.group).
+      // Bands and cards (surfaces.ts). Each element's band is decided on its
+      // own, so a page whose whole main area is one wrapper still keeps every
+      // band inside it; rows never merge across a band. A first plan grouped
+      // by band says which boxes hold one cell's worth of content (cards);
+      // the real plan then refuses to pour two different cards into one cell
+      // (columns.ts, GridItem.group).
       const sectionEls = section.elements || [];
-      const draft = planSectionGrid(sectionEls.map((el) => ({ id: el.sourceId, box: el.box })));
-      const cards = planCards(sectionEls, (id) => {
+      const bandOf = planBands(sectionEls, section.containerBoxes);
+      const draft = planSectionGrid(
+        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
+      );
+      const cardOf = planCards(sectionEls, bandOf, (id) => {
         const c = draft.cells.get(id);
         return c ? `${c.band}:${c.col}` : "";
       });
       const grid = planSectionGrid(
-        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: cards.cardOf.get(el.sourceId) }))
+        sectionEls.map((el) => ({
+          id: el.sourceId,
+          box: el.box,
+          group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+        }))
       );
       const containerStyles = section.containers || {};
-      const bandKey = cards.common[0];
-      const bandLook = (() => {
-        const ctx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
-        if (bandKey) return readSurface(containerStyles[bandKey], ctx);
-        // No painted band: the section root may still carry the spacing.
-        const root = readSurface(section.rootStyles, ctx);
+      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const bandLooks = new Map<string, SurfaceLook>();
+      const bandLookOf = (key: string): SurfaceLook | null => {
+        if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
+        return bandLooks.get(key) || null;
+      };
+      // No painted band anywhere: the section root may still carry the spacing.
+      const rootLook = (() => {
+        const root = readSurface(section.rootStyles, rowCtx);
         return root.padding.top || root.padding.bottom ? { padding: root.padding } : null;
       })();
       // A card the colour of the page vanishes against the page — but not
       // against a painted band, so it keeps its fill there.
-      const cardSurface = bandLook?.background ? "" : surfaceColor;
       const cardLooks = new Map<string, SurfaceLook>();
-      const cardLookOf = (sourceId: string) => {
-        const key = cards.cardOf.get(sourceId);
+      const cardLookOf = (sourceId: string, onBand: boolean) => {
+        const key = cardOf.get(sourceId);
         if (!key) return null;
-        if (!cardLooks.has(key)) {
+        const memo = `${onBand ? "band" : "page"}\u0001${key}`;
+        if (!cardLooks.has(memo)) {
           cardLooks.set(
-            key,
+            memo,
             readSurface(containerStyles[key], {
-              surface: cardSurface,
+              surface: onBand ? "" : surfaceColor,
               resolveImage: resolveBackgroundImage,
               maxPadding: 50,
             })
           );
         }
-        const look = cardLooks.get(key) as SurfaceLook;
+        const look = cardLooks.get(memo) as SurfaceLook;
         return hasPaint(look) ? { key, look } : null;
       };
       const moduleCells: Cell[] = [];
@@ -1341,7 +1385,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         cellOf: (id) => grid.cells.get(id) || { band: 0, col: 0 },
         sourceElementIds,
         dispositionsFor,
-        bandLook,
+        bandOf: (id) => bandOf.get(id) || "",
+        bandLookOf,
+        rootLook,
         cardLookOf,
       });
       mappedSections.push(...built);

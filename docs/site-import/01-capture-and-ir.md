@@ -483,9 +483,12 @@ Recorded now so the mapping phase inherits them verbatim:
   them — a section's coloured band, a card's border, corners and shadow —
   were lost. Each element now carries `containers`, the keys of the painted
   boxes between it and its section root (outermost first; a box "paints"
-  when it has a fill, a background picture, a border or a shadow), and each
+  when it has a fill, a background picture or gradient, a border or a
+  shadow), and each
   section carries `containers` (those boxes' surface styles, keyed alike)
-  plus `rootStyles` (the root's own, for its padding). A background picture
+  plus `containerBoxes` (where each sat on the desktop page — how a
+  full-width band is told from a card) and `rootStyles` (the root's own,
+  for its padding). A box painted only by a gradient counts as painted. A background picture
   on a box smaller than 200x80 is an icon or sprite and is not recorded.
   IRs normalized earlier simply lack the fields and map as before.
 
