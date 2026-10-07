@@ -28,8 +28,9 @@ const {
   STAGE_TRANSCRIBE,
 } = require('../../workers/studio/transcribePass.js');
 const { runProxy, enqueueProxy } = require('../../workers/studio/proxyPass.js');
-const { STAGE_RUNNERS } = require('../../workers/studio/daemon.js');
-const { runBackfill, planBackfill } = require('../studio_backfill_transcripts.cjs');
+const { STAGE_RUNNERS, ROLE: STUDIO_ROLE } = require('../../workers/studio/daemon.js');
+const { runBackfill, planBackfill, refuseHere, main } = require('../studio_backfill_transcripts.cjs');
+const { checkRole } = require('../../lib/nodeRoles.js');
 
 const PROJECT = 'proj_studio';
 const OWNER = 'transcribe-test';
@@ -48,14 +49,63 @@ const HAVE_SAY = process.platform === 'darwin' && runs('which', ['say']);
 const HAVE_FFMPEG = runs(FFMPEG, ['-version']);
 const CAN_SPEAK = HAVE_WHISPER && HAVE_SAY && HAVE_FFMPEG;
 
-// Skips OUT LOUD, the way studioProxyPass.test.js does for ffmpeg: CI has no
-// whisper and no 1.6 GB model, and says so with STUDIO_ALLOW_NO_WHISPER=1. A
-// machine that sets nothing and lacks them is told the proof is not being taken.
-test('whisper, its model, `say` and ffmpeg are present, or the real-speech proof below is not being taken', () => {
-  if (process.env.STUDIO_ALLOW_NO_WHISPER === '1') return;
-  assert.ok(CAN_SPEAK, `cannot take the real-speech reading here: whisper ${HAVE_WHISPER ? 'ok' : `missing (${WHISPER}, model ${MODEL})`}, `
-    + `say ${HAVE_SAY ? 'ok' : 'missing (macOS only)'}, ffmpeg ${HAVE_FFMPEG ? 'ok' : 'missing'}. `
-    + 'Run npm run provision:node:apply on the Mini, or set STUDIO_ALLOW_NO_WHISPER=1 to say this machine is not taking it.');
+/**
+ * Whether the real-speech proof below must be taken HERE, or may skip.
+ *
+ * The model is 1.6 GB and is provisioned only on the machine that owns
+ * studio-worker (lib/nodeProvision.js REQUIRED_MODELS). Failing everywhere it
+ * is missing stopped `npm run ship` on the MacBook for a reason that had
+ * nothing to do with the change being shipped (round-1 review, 86bcdejzm). So:
+ *
+ *   'take' — everything is here; the proof runs.
+ *   'skip' — this machine is not the one that can take it: CI says so with
+ *            STUDIO_ALLOW_NO_WHISPER=1, or lib/nodeRoles.js says another
+ *            machine owns studio-worker. Skipped OUT LOUD, with the reason.
+ *   'fail' — this machine OWNS studio-worker and still lacks the tools, or it
+ *            cannot say which machine it is. The owner is the one place the
+ *            reading must be taken, and "cannot tell" is never "not mine".
+ */
+function speechProofRule({ canSpeak, allowNoWhisper, role }) {
+  if (canSpeak) return { verdict: 'take' };
+  if (allowNoWhisper) return { verdict: 'skip', why: 'STUDIO_ALLOW_NO_WHISPER=1 says this machine is not taking the real-speech reading' };
+  if (role.verdict === 'other-node') {
+    return { verdict: 'skip', why: `studio-worker is owned by ${role.owner}, not this machine (${role.node.name}); the real-speech reading is taken there` };
+  }
+  if (role.verdict === 'owned') {
+    return { verdict: 'fail', why: `this machine (${role.node.name}) owns studio-worker, so it must take the real-speech reading — run npm run provision:node:apply` };
+  }
+  return { verdict: 'fail', why: `cannot tell whether this machine must take the real-speech reading: ${String(role.message || role.verdict).split('\n')[0]}` };
+}
+
+const MISSING = `whisper ${HAVE_WHISPER ? 'ok' : `missing (${WHISPER}, model ${MODEL})`}, `
+  + `say ${HAVE_SAY ? 'ok' : 'missing (macOS only)'}, ffmpeg ${HAVE_FFMPEG ? 'ok' : 'missing'}`;
+const PROOF = speechProofRule({
+  canSpeak: CAN_SPEAK,
+  allowNoWhisper: process.env.STUDIO_ALLOW_NO_WHISPER === '1',
+  role: checkRole(STUDIO_ROLE),
+});
+const PROOF_SKIP = PROOF.verdict === 'skip' && `real-speech reading not taken here (${MISSING}): ${PROOF.why}`;
+
+test('whisper, its model, `say` and ffmpeg are present where the real-speech proof must be taken',
+  { skip: PROOF_SKIP }, () => {
+    assert.notEqual(PROOF.verdict, 'fail', `cannot take the real-speech reading here (${MISSING}): ${PROOF.why}`);
+  });
+
+test('the real-speech rule: the studio-worker machine must take it, any other machine skips out loud', () => {
+  const node = { name: 'macbook-pro' };
+  const elsewhere = { verdict: 'other-node', owner: 'mac-mini', node };
+  const here = { verdict: 'owned', owner: 'mac-mini', node: { name: 'mac-mini' } };
+  const lost = { verdict: 'unidentified', owner: 'mac-mini', node: { name: 'somemac' }, message: 'This machine has not been told which node it is\nmore' };
+
+  assert.equal(speechProofRule({ canSpeak: true, allowNoWhisper: false, role: lost }).verdict, 'take');
+  assert.equal(speechProofRule({ canSpeak: false, allowNoWhisper: false, role: here }).verdict, 'fail');
+  const skipped = speechProofRule({ canSpeak: false, allowNoWhisper: false, role: elsewhere });
+  assert.equal(skipped.verdict, 'skip');
+  assert.match(skipped.why, /owned by mac-mini.*macbook-pro/);
+  assert.equal(speechProofRule({ canSpeak: false, allowNoWhisper: true, role: here }).verdict, 'skip', 'CI states it explicitly');
+  const unknown = speechProofRule({ canSpeak: false, allowNoWhisper: false, role: lost });
+  assert.equal(unknown.verdict, 'fail', 'an unidentified machine is never read as "not mine"');
+  assert.match(unknown.why, /cannot tell.*not been told/);
 });
 
 function tmpDir(t) {
@@ -156,7 +206,7 @@ const SIMPLE_DOC = whisperDoc([[0, 1500, ' Hello there.', [['[_BEG_]', -1], [' H
 // ── The real thing ──────────────────────────────────────────────────────────
 
 test('real speech becomes a done transcript whose words are what was said, in order',
-  { skip: !CAN_SPEAK && 'whisper, its model, say or ffmpeg is not on this machine (see the test above)' }, async (t) => {
+  { skip: !CAN_SPEAK && `whisper, its model, say or ffmpeg is not on this machine (${MISSING})` }, async (t) => {
     const dir = tmpDir(t);
     const aiff = path.join(dir, 'spoken.aiff');
     execFileSync('say', ['-o', aiff, 'The quick brown fox jumps over the lazy dog']);
@@ -464,6 +514,35 @@ test('backfill plan: plates and transcribed recordings are skipped with a reason
   });
   assert.equal(plan.enqueue.length, 0);
   assert.deepEqual(plan.skipped.map((s) => s.why), ['a plate — plates are not transcribed', 'already has a transcript row']);
+});
+
+test('backfill refuses anywhere a queued job would sit unread', (t) => {
+  const node = { name: 'macbook-pro' };
+  const elsewhere = refuseHere({ role: { verdict: 'other-node', owner: 'mac-mini', node }, queueFile: '/q', queueExists: true });
+  assert.equal(elsewhere.code, 3);
+  assert.match(elsewhere.message, /owned by mac-mini.*macbook-pro/);
+
+  const lost = refuseHere({ role: { verdict: 'unidentified', owner: 'mac-mini', node, message: 'not told' }, queueFile: '/q', queueExists: true });
+  assert.equal(lost.code, 2, 'an unidentified machine is never read as allowed');
+
+  const owned = { verdict: 'owned', owner: 'mac-mini', node: { name: 'mac-mini' } };
+  const noQueue = refuseHere({ role: owned, queueFile: '/nowhere/queue.sqlite', queueExists: false });
+  assert.equal(noQueue.code, 2);
+  assert.match(noQueue.message, /no queue at \/nowhere\/queue\.sqlite/);
+
+  assert.equal(refuseHere({ role: owned, queueFile: '/q', queueExists: true }), null);
+});
+
+test('backfill main() that refuses creates no queue file', async (t) => {
+  const dir = tmpDir(t);
+  const queueFile = path.join(dir, 'queue.sqlite');
+  const { verdict } = checkRole(STUDIO_ROLE);
+  const errors = [];
+  t.mock.method(console, 'error', (msg) => errors.push(String(msg)));
+  const code = await main(['--apply'], { STUDIO_PROJECT_ID: PROJECT, SUPABASE_URL: 'http://127.0.0.1:1', STUDIO_QUEUE_FILE: queueFile });
+  assert.notEqual(code, 0, errors.join('\n'));
+  assert.equal(fs.existsSync(queueFile), false, `main() created ${queueFile} on a ${verdict} machine`);
+  assert.match(errors.join('\n'), /Refused/);
 });
 
 // ── The daemon ──────────────────────────────────────────────────────────────

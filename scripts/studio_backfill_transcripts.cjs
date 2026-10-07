@@ -23,14 +23,25 @@
  * queue (and later, their transcripts are in the catalog), and both are
  * reasons to skip.
  *
+ * IT REFUSES ANYWHERE BUT THE STUDIO WORKER'S MACHINE, and when the queue
+ * file is not already there. Opening a queue creates the file, so a run on the
+ * MacBook used to make a fresh empty queue, enqueue into it, print
+ * "Enqueued 1" — and no worker ever reads that file (round-1 review,
+ * 86bcdejzm). The daemon creates the real one when it first starts, so a
+ * missing file means "not the machine, or the worker never ran here".
+ *
  * Exit 0 ran (whatever it found), 1 could not read the catalog or the queue,
- * 2 not configured (no STUDIO_PROJECT_ID / database settings).
+ * 2 not configured, or cannot tell which machine this is, or no queue file
+ * here, 3 another machine owns studio-worker (lib/nodeRoles.js).
  */
 
+const fs = require('node:fs');
 const path = require('node:path');
 
+const { checkRole } = require('../lib/nodeRoles.js');
+
 const { openQueue, STATES } = require('../workers/studio/queue.js');
-const { resolveQueueFile } = require('../workers/studio/daemon.js');
+const { resolveQueueFile, ROLE } = require('../workers/studio/daemon.js');
 const { laneFor } = require('../workers/studio/proxyPass.js');
 const { enqueueTranscribe, STAGE_TRANSCRIBE } = require('../workers/studio/transcribePass.js');
 const { scopeFor } = require('../workers/studio/ingest.js');
@@ -135,6 +146,30 @@ function report(result) {
   return lines.join('\n');
 }
 
+/**
+ * Why this machine must not run the backfill, or null if it may. Pure, so the
+ * refusal is tested without a real identity file or queue.
+ *
+ *   role        — lib/nodeRoles.js checkRole() verdict for studio-worker
+ *   queueFile   — the path the daemon reads
+ *   queueExists — whether that file is already there
+ */
+function refuseHere({ role, queueFile, queueExists }) {
+  if (role.verdict === 'other-node') {
+    return { code: 3, message: `Refused: ${ROLE} is owned by ${role.owner} and this machine is ${role.node.name}. `
+      + `A job queued here would sit in a file no worker reads. Run this on ${role.owner}.` };
+  }
+  if (role.verdict !== 'owned') {
+    return { code: 2, message: `Refused — cannot tell whether this machine runs the Studio worker:\n${role.message}` };
+  }
+  if (!queueExists) {
+    return { code: 2, message: `Refused: there is no queue at ${queueFile}. The Studio worker creates it when it first `
+      + 'starts, so either it has never run on this machine or STUDIO_QUEUE_FILE points somewhere else. '
+      + 'Nothing was created, so nothing was queued.' };
+  }
+  return null;
+}
+
 async function main(argv = process.argv.slice(2), env = process.env) {
   const apply = argv.includes('--apply');
   const scope = scopeFor({}, env);
@@ -144,6 +179,11 @@ async function main(argv = process.argv.slice(2), env = process.env) {
     return 2;
   }
   const queueFile = resolveQueueFile({}, env);
+  const refused = refuseHere({ role: checkRole(ROLE), queueFile, queueExists: fs.existsSync(queueFile) });
+  if (refused) {
+    console.error(refused.message);
+    return refused.code;
+  }
   let queue;
   try {
     queue = openQueue(queueFile);
@@ -176,4 +216,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { planBackfill, queuedSourceIds, runBackfill, report, main, SOURCE_LIMIT };
+module.exports = { planBackfill, queuedSourceIds, refuseHere, runBackfill, report, main, SOURCE_LIMIT };
