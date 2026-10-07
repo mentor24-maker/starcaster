@@ -149,8 +149,52 @@ function classifyTag(node: DomNode): ElementClass | null {
   }
   if ((attribs.role || "").toLowerCase() === "button") return "button";
   if (TEXT_ATOMS.has(name)) return "text";
-  if (name === "a" && attribs.href !== undefined) return "link";
+  if (name === "a" && attribs.href !== undefined) {
+    // A link whose only visible content is one picture is a clickable
+    // picture, not a text link. As "link" it was poured into a text module
+    // as an <a> wrapping an <img>, which renders empty — daneofearth.org's
+    // four project tiles and most WordPress sites' logos (task 86bcebrwp).
+    return isSoleImageLink(node) ? "image" : "link";
+  }
   return null;
+}
+
+/**
+ * True when an anchor holds exactly one picture (<img>, or one <picture>)
+ * and no visible text. Wrappers around it (Divi's <span class=
+ * "et_pb_image_wrap">) are fine; anything else countable — a heading, a
+ * second picture, a video — keeps it a link. <noscript> fallbacks are
+ * skipped, like everywhere else in the walk, so a lazy-load theme's
+ * duplicate <img> does not count as a second picture.
+ */
+function isSoleImageLink(anchor: DomNode): boolean {
+  let pictures = 0;
+  let disqualified = false;
+  const walk = (node: DomNode): void => {
+    for (const child of node.children || []) {
+      if (disqualified) return;
+      if (child.type === "text") {
+        if ((child.data || "").trim()) disqualified = true;
+        continue;
+      }
+      if (child.type !== "tag") continue;
+      const name = (child.name || "").toLowerCase();
+      if (SKIP_TAGS.has(name)) continue;
+      const cls = classifyTag(child);
+      if (cls === "image") {
+        if (name === "a") disqualified = true; // a link nested in a link
+        else pictures += 1;
+        continue; // a <picture>'s own <img> is the same picture
+      }
+      if (cls) {
+        disqualified = true;
+        continue;
+      }
+      walk(child);
+    }
+  };
+  walk(anchor);
+  return !disqualified && pictures === 1;
 }
 
 export type CountableVisit =
