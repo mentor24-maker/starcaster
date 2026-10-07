@@ -15,12 +15,21 @@
  *   GET    /api/youtube-outreach/settings           ?account=
  *   PUT    /api/youtube-outreach/settings           ?account=   (PATCH accepted too)
  *
+ * Drafts and approval (4/7, task 86bcda661 — lib/youtubeOutreachCommentsStore.js):
+ *
+ *   POST   /api/youtube-outreach/targets/:id/drafts             write a draft (AI)
+ *   GET    /api/youtube-outreach/comments    ?status=draft,approved&targetId=
+ *   POST   /api/youtube-outreach/comments/:id/approve   { text }  (edited wording)
+ *   POST   /api/youtube-outreach/comments/:id/reject
+ *   POST   /api/youtube-outreach/comments/:id/redraft            "Write another"
+ *
  * `account` defaults to dane_of_earth. Auth and project scope are decided
  * centrally in routes/index.js; there is no public access to any of this.
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/youtubeOutreachStore');
+const commentsStore = require('../lib/youtubeOutreachCommentsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 const PREFIX = '/api/youtube-outreach';
@@ -36,6 +45,7 @@ function errorCode(status) {
   if (status === 400) return 'VALIDATION_ERROR';
   if (status === 404) return 'NOT_FOUND';
   if (status === 409) return 'CONFLICT';
+  if (status === 422) return 'RULE_BROKEN';
   return undefined;
 }
 
@@ -90,6 +100,37 @@ async function handle(req, res, pathname, method) {
       return reply(res, await store.createTarget(body, scope), 201);
     }
     return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  const drafts = pathname.match(/^\/api\/youtube-outreach\/targets\/([^/]+)\/drafts$/);
+  if (drafts) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'youtubeOutreach.drafts.create')) return true;
+    return reply(res, await commentsStore.writeDraftForTarget(decodeURIComponent(drafts[1]), scope), 201);
+  }
+
+  if (pathname === `${PREFIX}/comments`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    const limit = urlObj.searchParams.get('limit');
+    const status = urlObj.searchParams.get('status');
+    return reply(res, await commentsStore.listComments(limit === null ? 200 : Number(limit), scope, {
+      statuses: status ? status.split(',') : [],
+      targetId: urlObj.searchParams.get('targetId') || '',
+    }));
+  }
+
+  const decision = pathname.match(/^\/api\/youtube-outreach\/comments\/([^/]+)\/(approve|reject|redraft)$/);
+  if (decision) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const id = decodeURIComponent(decision[1]);
+    if (decision[2] === 'approve') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await commentsStore.approveComment(id, body, scope));
+    }
+    if (decision[2] === 'reject') return reply(res, await commentsStore.rejectComment(id, scope));
+    if (checkEndpointLimit(req, res, 'youtubeOutreach.drafts.create')) return true;
+    return reply(res, await commentsStore.redraftComment(id, scope), 201);
   }
 
   const action = pathname.match(/^\/api\/youtube-outreach\/targets\/([^/]+)\/(pause|resume)$/);
