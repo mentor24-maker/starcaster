@@ -104,7 +104,7 @@
               },
               {
                 "sourceId": "0-65b924fa",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.facebook.com/DelrayTennis\" target=\"_blank\"><img src=\"https://www.delraytennis.com/wp-content/uploads/sites/2829/2014/10/facebook_11.png\" alt=\"\" width=\"24\" height=\"24\" border=\"0\"></a>",
                 "textContent": "",
                 "textLength": 0,
@@ -156,7 +156,7 @@
               },
               {
                 "sourceId": "0-a1b5b1d7",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.instagram.com/delraybeachtennis/\" target=\"_blank\"><img src=\"https://www.delraytennis.com/wp-content/uploads/sites/2829/2026/06/instagramlogo.png\" alt=\"\" width=\"24\" height=\"24\" border=\"0\"></a>",
                 "textContent": "",
                 "textLength": 0,
@@ -4517,7 +4517,7 @@
               },
               {
                 "sourceId": "0-f3168028",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.golfnowbusiness.com/\" target=\"_blank\">\n\t\t\t\t\t<img alt=\"Powered by Golf Channel Solutions\" src=\"https://www.delraytennis.com/wp-content/plugins/golfnow-customize/assets/images/GN_Primary_Logo_RGB_Inverse.png\">\n\t\t\t\t</a>",
                 "textContent": "",
                 "textLength": 0,
@@ -4708,7 +4708,7 @@
               },
               {
                 "sourceId": "1-65b924fa",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.facebook.com/DelrayTennis\" target=\"_blank\"><img src=\"https://www.delraytennis.com/wp-content/uploads/sites/2829/2014/10/facebook_11.png\" alt=\"\" width=\"24\" height=\"24\" border=\"0\"></a>",
                 "textContent": "",
                 "textLength": 0,
@@ -4760,7 +4760,7 @@
               },
               {
                 "sourceId": "1-a1b5b1d7",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.instagram.com/delraybeachtennis/\" target=\"_blank\"><img src=\"https://www.delraytennis.com/wp-content/uploads/sites/2829/2026/06/instagramlogo.png\" alt=\"\" width=\"24\" height=\"24\" border=\"0\"></a>",
                 "textContent": "",
                 "textLength": 0,
@@ -5976,7 +5976,7 @@
               },
               {
                 "sourceId": "1-f3168028",
-                "class": "link",
+                "class": "image",
                 "html": "<a href=\"https://www.golfnowbusiness.com/\" target=\"_blank\">\n\t\t\t\t\t<img alt=\"Powered by Golf Channel Solutions\" src=\"https://www.delraytennis.com/wp-content/plugins/golfnow-customize/assets/images/GN_Primary_Logo_RGB_Inverse.png\">\n\t\t\t\t</a>",
                 "textContent": "",
                 "textLength": 0,
@@ -10182,16 +10182,16 @@
   },
   "coverage": {
     "captured": {
-      "link": 60,
+      "link": 54,
       "text": 106,
-      "image": 45,
+      "image": 51,
       "heading": 25,
       "table": 16
     },
     "emitted": {
-      "link": 60,
+      "link": 54,
       "text": 106,
-      "image": 45,
+      "image": 51,
       "heading": 25,
       "table": 16
     },

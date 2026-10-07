@@ -204,7 +204,7 @@
             "elements": [
               {
                 "sourceId": "0-266e8816",
-                "class": "link",
+                "class": "image",
                 "html": "<a class=\"brand\" href=\"https://www.blazefish.com/\" aria-label=\"Delray Tennis home\">\n      <img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/logo-delray.png\" alt=\"Delray Beach Tennis Center and Delray Swim &amp; Tennis Club\">    </a>",
                 "textContent": "",
                 "textLength": 0,
@@ -9908,17 +9908,17 @@
   "coverage": {
     "captured": {
       "text": 78,
-      "link": 141,
+      "link": 140,
+      "image": 18,
       "button": 1,
-      "heading": 60,
-      "image": 17
+      "heading": 60
     },
     "emitted": {
       "text": 78,
-      "link": 141,
+      "link": 140,
+      "image": 18,
       "button": 1,
-      "heading": 60,
-      "image": 17
+      "heading": 60
     },
     "dropped": {},
     "pages": {
