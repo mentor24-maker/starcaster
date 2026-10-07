@@ -1,3 +1,18 @@
+## 2026-10-07 — Imported pages lose their section backgrounds, card borders, rounded corners, shadows and spacing (#779)
+
+When Site Import copies a website, it now keeps the look of the boxes around
+the content as well as the content itself. A coloured band behind a section
+arrives as that row's background, with the space above and below it. A card
+with a border, rounded corners and a shadow arrives as the column's border,
+corners, shadow and inner spacing. A grid of cards now comes in as rows of
+cards, one card per column, because a Builder column can only wear one card's
+look. Before this, daneofearth.org's coloured strips and its grid of cards
+all came through as plain boxes on white and had to be restyled by hand.
+Small background icons, such as a phone glyph, are ignored so they never get
+stretched across a column. Older captures still get their bands, but not
+cards. Re-importing Dane of Earth to check it on the real site is the
+remaining step.
+
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
 The Mac Mini can now turn what you say in a recording into text, on its own,
