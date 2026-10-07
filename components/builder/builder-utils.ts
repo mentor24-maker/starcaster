@@ -637,12 +637,35 @@ export function getTextModuleRhythmStyle(
   return Object.keys(style).length > 0 ? (style as CSSProperties) : undefined;
 }
 
+/** Largest a Max Width the image panel accepts — wider than any content
+ *  column, so a larger value could never be the thing holding a picture back. */
+export const IMAGE_MAX_WIDTH_PX_LIMIT = 4000;
+
+/**
+ * The image module's Max Width in px, or null for none (the default). Site
+ * Import sets it on a picture the source page showed smaller than its file
+ * (task 86bcebvg9); the operator can type or clear it in the panel.
+ */
+export function getImageMaxWidthPx(settings: Record<string, string>): number | null {
+  const raw = String(settings.maxWidthPx ?? "").trim();
+  if (!/^\d+$/.test(raw)) return null;
+  const px = Number.parseInt(raw, 10);
+  return px >= 1 && px <= IMAGE_MAX_WIDTH_PX_LIMIT ? px : null;
+}
+
 export function getImageModuleStyle(settings: Record<string, string>): CSSProperties {
   const borderThickness = Number.parseInt(settings.borderThickness ?? "0", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "18", 10);
+  const maxWidthPx = settings.url ? getImageMaxWidthPx(settings) : null;
 
   return {
     ...getModuleWidthStyle(settings),
+    // MAX WIDTH caps the frame in pixels, on top of Width's share of the
+    // column. It rides on `width` because `max-width` is already spoken for
+    // by the natural-size cap below, and intrinsic keywords cannot sit inside
+    // `min()` — a percentage can. The box is the smaller of the two, so a
+    // 24px icon set to Width 100% stays 24px in any column.
+    ...(maxWidthPx ? { width: `min(${getModuleWidthPercent(settings)}%, ${maxWidthPx}px)` } : {}),
     // A PICTURE NEVER RENDERS BIGGER THAN THE FILE IT CAME FROM (2026-08-17).
     // Width is a share of the column, which says nothing about how many pixels
     // the file actually has: the operator's 400px tennis ball at 25% of a

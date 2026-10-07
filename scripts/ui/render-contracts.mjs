@@ -398,6 +398,12 @@ export const RENDER_DIFFERENTIALS = [
     why: 'A frame setting with no effect involved, so the sweep is not only ever measuring animations.',
   },
   {
+    id: 'image-max-width',
+    module: { type: 'image', settings: { ...PICTURE, size: '100' } },
+    setting: 'maxWidthPx', from: '', to: '60',
+    why: 'Max Width rides on `width` as a min() beside the natural-size cap on `max-width` (task 86bcebvg9). Site Import fills it so a 1600px wordmark shown at 150px stays 150px; if the renderer stops reading it, every imported icon fills its column again and the panel still shows the number.',
+  },
+  {
     id: 'image-drop-shadow',
     module: { type: 'image', settings: { ...PICTURE } },
     setting: 'imageShadow', from: 'false', to: 'true',
