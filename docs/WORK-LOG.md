@@ -1,3 +1,18 @@
+## 2026-10-07 — Footage screen: you can't read what was said in a recording (#787)
+
+The Footage screen now has a Transcript column. When a recording has been
+turned into text, a Transcript button opens what was said, one line per phrase,
+each with the time it was said (like 0:12), in a box that scrolls on its own so
+an hour-long recording never stretches the page. Every other file says plainly
+why it has no transcript: it failed (and why), it has no sound, it came from
+the Plates folder (screen recordings are never transcribed), or it simply has
+not been done yet. The screen does not claim a file is "being transcribed",
+because that queue lives on the Mac Mini where the website cannot see it.
+Nothing is transcribed yet in the live system, so for now every file honestly
+reads "Not transcribed yet" until the transcribing step is switched on. The
+screen checker also learned to catch a box whose lines stop wrapping, which it
+could not see before.
+
 ## 2026-10-05 — Studio: there is nowhere to keep a transcript of a recording (#771)
 
 Studio is about to start turning what you say in a recording into text, and
