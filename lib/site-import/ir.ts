@@ -130,6 +130,18 @@ export type CaptureResult = {
   /** Computed styles keyed by data-scim id. Desktop capture only. */
   styles: CapturedStylesById;
 
+  /**
+   * Each stamped element's desktop box, keyed by data-scim id, as
+   * [x, y, width, height] in page pixels (scrolled-to-top frame). Desktop
+   * capture only; absent on captures made before 2026-10-06, which then
+   * import single-column as they always did (see columns.ts).
+   */
+  rects?: Record<string, [number, number, number, number]>;
+
+  /** Computed background colour of <body> (else <html>); "" when both are
+   *  transparent. Desktop only; absent before 2026-10-07. */
+  pageBackground?: string;
+
   /** Blob path of the full-page screenshot. */
   fullPageScreenshot: string;
   /**
@@ -266,6 +278,12 @@ export type ElementIR = {
   screenshot?: string;
   /** AssetRef ids this element references (by URL match). */
   assetRefs: string[];
+  /**
+   * Desktop position in page pixels — what column inference (columns.ts)
+   * reads. Absent when the capture predates it or the element had no box.
+   * A bare text run carries its parent container's box.
+   */
+  box?: { x: number; y: number; w: number; h: number };
 };
 
 export type SectionIR = {
@@ -347,6 +365,27 @@ export type SiteIR = {
     fontFamilies: TokenCount[];
     spacing: TokenCount[];
   };
+  /**
+   * Role-separated style evidence for the import theme (theme.ts, task
+   * 86bce9wx0). rawTokens mixes every colour together; these say WHAT each
+   * colour was for. Absent on IRs normalized before 2026-10-07, or when the
+   * capture carried no positions — the theme then falls back to rawTokens.
+   */
+  styleSummary?: StyleSummary;
+};
+
+export type StyleSummary = {
+  /** <body>/<html> background per page, counted once per page. */
+  pageBackgrounds: TokenCount[];
+  /** Background colours weighted by the screen area they cover (thousands
+   *  of px²) — the big bands of a site, not its badges. */
+  backgroundsByArea: TokenCount[];
+  /** Background of the site header (<header>, role=banner, *header* near the top). */
+  headerBackgrounds: TokenCount[];
+  /** Button looks as "fill|text colour|radius px", counted per button. */
+  buttons: TokenCount[];
+  /** Widths (px, nearest 10) of content containers — the page column. */
+  contentWidths: TokenCount[];
 };
 
 /* ---------------------------------------------------------------------------

@@ -11,6 +11,55 @@ entry, so it can never look "done" by accident, and a failed attempt must say
 why it failed. Nothing on screen changes yet; the next tickets in this set
 fill the table and show it. The table still has to be created in the live
 database, which is a one-time step handed to Dane on the ticket.
+## 2026-10-05 — Footage screen: you can't watch a recording — nothing is clickable (#773)
+
+The Footage screen listed every recording, but nothing on it could be
+clicked, so there was no way to watch one. Each row now shows the file's name
+from Google Drive, and clicking the name or its little preview picture opens
+the original in Drive's player in a new tab. The browser has to be signed in
+to a Google account that can see the Studio folder. Files with no copy in
+Drive say "not from Drive" instead of showing a link that leads nowhere.
+Playing a video right on the page is a separate, later decision.
+## 2026-10-06 — Delray site: links to PDFs (job application, flyers, policies) open a 'not found' page (#776)
+
+On delraytennis.com, clicking a document — the employment application, the
+maintenance job posting, the afterschool waiver, the press release — opened a
+"not found" page. Those links still pointed at the old WordPress site, which
+stopped existing at that address when the domain moved to StarCaster on 10/2.
+The files were never lost: Site Import had already saved a copy of every one
+in StarCaster's own storage, it just never updated the links. A new tool now
+points each link at its saved copy — on the pages, on what visitors are
+actually served, and in blog posts — without publishing anything else. In
+production that is 9 documents on 6 live pages, and every one has a working
+copy.
+## 2026-10-05 — YouTube outreach 1/7: a saved list of target videos, each with its own comment settings (storage and server) (#769)
+
+Starcaster now has a place to keep the list of YouTube videos the outreach
+agent should comment on. Each video on the list carries its own settings —
+what the comment is for, where it goes (a new comment or a reply), what kind
+of message, how long, whether it may include a link or mention Dane of Earth,
+whether to comment once or repeat every few days, and a priority — all
+starting from the defaults Dane approved. Adding a video only needs the link:
+Starcaster reads the title, channel, date and view count from YouTube, and if
+YouTube doesn't answer, it saves the link anyway and says why the details are
+missing. There is also one set of account-wide limits (at most 10 comments a
+day, at least 45 minutes apart, only 8am to 10pm, channels and words to avoid,
+and a description of the voice). One client can never see another client's
+list, and a test proves it. There is no screen yet (that is the next ticket),
+and nothing comments on anything. The two new database tables need Dane to
+run one SQL file before this goes live.
+## 2026-10-07 — Site Import stretches every picture to the full width of its column, so a client's small icons and logos arrive huge (#781)
+
+Imported pictures no longer balloon to fill their column when the original
+site showed them small. The real culprits were pictures whose file is much
+bigger than how they were displayed — Dane of Earth's Substack, Medium and
+Patreon wordmarks are 1,600-pixel files the old site showed at a fraction of
+that. The Image module now has a "Max Width (px)" box next to Width, and Site
+Import fills it in with the size the picture had on the original page, but
+only for pictures that took up less than half their column — so photos and
+Delray's big flyers still fill theirs. Leave the box blank and nothing
+changes, which is why every existing page looks exactly as it did.
+
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
 The Mac Mini can now turn what you say in a recording into text, on its own,

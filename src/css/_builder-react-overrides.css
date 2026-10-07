@@ -11605,3 +11605,8 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Font picker: the "Google font…" name box under the select (task 86bce9wwv). */
+.builder-font-select { display: grid; gap: 6px; width: 100%; }
+.builder-font-select-google { width: 100%; }
+.builder-font-select-error { margin: 0; font-size: var(--text-xs); color: var(--c-error); }
