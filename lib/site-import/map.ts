@@ -30,6 +30,7 @@ import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
 export { mergeMappedSections } from "./columns";
+export { deriveImportTheme, nextThemeName, siteNameFromUrl } from "./theme";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
 export const TEXT_MODULE_CHAR_BUDGET = 9500;
