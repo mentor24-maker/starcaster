@@ -1,3 +1,18 @@
+## 2026-10-07 — YouTube outreach 2/7: the screen where Dane adds target videos and sets how each is commented on (#783)
+
+The YouTube outreach list now has a screen: **Engage → YouTube Outreach**.
+Paste a YouTube link and click Add, and the video appears in the list with
+its title, channel and thumbnail, set up with the defaults Dane approved.
+Each row can be paused, resumed, edited or deleted. Edit opens every
+per-video setting in plain words ("Where to comment", "Mention Dane of
+Earth", "Length"). Fields that only matter in one mode, such as the link to
+use or the repeat schedule, only appear when that mode is picked. **Account
+settings** holds the account-wide limits: most comments per day, the gap
+between them, active hours, channels and words to avoid, and the voice. If
+the list is empty, the screen says so and what to do. If a save is refused,
+the server's own reason appears on the form. Switching project shows that
+project's list. Nothing is drafted or posted yet; those are the next tickets.
+
 ## 2026-10-05 — Studio: there is nowhere to keep a transcript of a recording (#771)
 
 Studio is about to start turning what you say in a recording into text, and
