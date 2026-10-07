@@ -46,6 +46,7 @@ type PageScanResult = {
   html: string;
   styles: Record<string, Record<string, string>>;
   rects: Record<string, [number, number, number, number]>;
+  pageBackground: string;
   /** Crop targets by their data-scim stamp — the provider screenshots them
    *  via locator('[data-scim=…]'), which scrolls each into view. A clip
    *  rect would NOT work: page.screenshot({clip}) only sees the current
@@ -378,6 +379,16 @@ function pageScan(args: PageScanArgs): PageScanResult {
     html: document.documentElement.outerHTML,
     styles,
     rects,
+    // The page's own ground colour — <body>, else <html>. Neither is stamped
+    // (the stamp loop walks body's DESCENDANTS), and it is the one colour the
+    // import theme needs most (site-import theme.ts → palette.surface).
+    pageBackground: (() => {
+      const clear = (v: string) => !v || v === "transparent" || /rgba\([^)]*,\s*0\)$/.test(v);
+      const bodyBg = getComputedStyle(document.body).backgroundColor;
+      if (!clear(bodyBg)) return bodyBg;
+      const htmlBg = getComputedStyle(document.documentElement).backgroundColor;
+      return clear(htmlBg) ? "" : htmlBg;
+    })(),
     sectionTargets,
     elementCropTargets,
     assetUrls,
@@ -474,6 +485,7 @@ export class PlaywrightCaptureProvider implements CaptureProvider {
         html: scan.html,
         styles: scan.styles,
         rects: scan.rects,
+        pageBackground: scan.pageBackground,
         assetUrls: scan.assetUrls,
         fontFamilies: scan.fontFamilies,
         meta: scan.meta,
