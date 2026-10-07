@@ -2,7 +2,8 @@ import React, { useCallback, useState } from 'react';
 
 /**
  * Settings › Projects › (a project) › Import / Export: a way into Site Import,
- * and the Export to WordPress (Divi) download. One card in the right column
+ * and the Export to WordPress (Divi) download, as a .xml (WordPress Importer)
+ * or a .wpress (All-in-One WP Migration; lib/wpressExport.js). One card in the right column
  * under Modules (Dane, 2026-10-05: "Put them in the right column below the
  * modules section.").
  *
@@ -39,6 +40,8 @@ export type ExportReport = {
 };
 
 type Summary = { projectId: string; report: ExportReport; bytes: number };
+
+export type ExportFormat = 'xml' | 'wpress';
 
 function getApp(): any {
   return (window as unknown as { App?: any }).App;
@@ -95,7 +98,7 @@ function NoteList({ title, notes }: { title: string; notes: ModuleNote[] }) {
 
 /** What the file will hold. Pure, so the wording is testable without a
  *  browser (wordpress-export-panel.test.tsx). */
-export function ExportSummary({ report, bytes }: { report: ExportReport; bytes: number }) {
+export function ExportSummary({ report, bytes, format = 'xml' }: { report: ExportReport; bytes: number; format?: ExportFormat }) {
   const publishedPages = report.pages.filter((p) => p.status === 'publish').length;
   const draftPages = report.pages.length - publishedPages;
   return (
@@ -120,7 +123,14 @@ export function ExportSummary({ report, bytes }: { report: ExportReport; bytes: 
             : 'no shared footer section'}
         </li>
         <li>{report.menu.items ? `Main menu: ${plural(report.menu.items, 'link')}` : 'No menu found on this site'}</li>
-        <li>File size: {formatSize(bytes)}</li>
+        {format === 'xml' ? (
+          <li>File size: {formatSize(bytes)}</li>
+        ) : (
+          <li>
+            File size: much larger than the .xml — the .wpress carries all {plural(report.images, 'image')} inside
+            it, so expect tens of megabytes and a few minutes to prepare
+          </li>
+        )}
       </ul>
 
       {report.pagesLeftOut.length > 0 && (
@@ -138,12 +148,53 @@ export function ExportSummary({ report, bytes }: { report: ExportReport; bytes: 
   );
 }
 
+/** The steps for whichever file was chosen. Pure, so it is testable. */
+export function HowToLoad({ format, homePageSlug }: { format: ExportFormat; homePageSlug: string }) {
+  const homeName = homePageSlug === 'home' ? 'Home' : 'your home page';
+  if (format === 'wpress') {
+    return (
+      <details className="wp-export-howto">
+        <summary>How to load the .wpress file into WordPress</summary>
+        <ol>
+          <li>Install the <strong>Divi</strong> theme (Appearance → Themes) <em>before</em> importing. The file switches the site to Divi but cannot carry the theme itself.</li>
+          <li>Install the <strong>All-in-One WP Migration</strong> plugin (Plugins → Add New Plugin, search for it, Install, Activate).</li>
+          <li>Go to <strong>All-in-One WP Migration → Import</strong>, choose <strong>Import From → File</strong> and pick the downloaded .wpress.</li>
+          <li>Click <strong>Proceed</strong>. This <strong>replaces the site&apos;s pages, posts, menus and comments</strong> with this project&apos;s. WordPress logins and settings are kept, so you stay signed in.</li>
+          <li>When it finishes, go to <strong>Settings → Permalinks</strong> and click <strong>Save Changes</strong> once, so links like /about work straight away.</li>
+          <li>Open <strong>Divi → Theme Builder</strong> and check the default website template shows &ldquo;StarCaster Header&rdquo; and &ldquo;StarCaster Footer&rdquo;.</li>
+        </ol>
+        <p className="meta">
+          The home page ({homeName}), the main menu and Post-name links are already set by the file — no other settings to change.
+          If WordPress says the file is too big, the web host&apos;s upload limit is lower than the file; ask the host to raise it, or use the .xml instead.
+        </p>
+      </details>
+    );
+  }
+  return (
+    <details className="wp-export-howto">
+      <summary>How to load the .xml file into WordPress</summary>
+      <ol>
+        <li>Install the <strong>Divi</strong> theme and activate it (Appearance → Themes) <em>before</em> importing — WordPress skips the Divi parts of the file otherwise.</li>
+        <li>Go to <strong>Tools → Import → WordPress</strong>. If it says &ldquo;Install Now&rdquo;, click it, then &ldquo;Run Importer&rdquo;.</li>
+        <li>Choose the downloaded file and click <strong>Upload file and import</strong>.</li>
+        <li>Pick which WordPress user the content belongs to, and tick <strong>Download and import file attachments</strong> — that box is what brings the images across.</li>
+        <li>Go to <strong>Appearance → Menus</strong>, choose &ldquo;Main Menu&rdquo;, tick <strong>Primary Menu</strong> and save.</li>
+        <li>Go to <strong>Settings → Reading</strong>, choose &ldquo;A static page&rdquo; and set the homepage to <strong>{homeName}</strong>.</li>
+        <li>Go to <strong>Settings → Permalinks</strong> and choose &ldquo;Post name&rdquo;, so links like /about keep working.</li>
+        <li>Open <strong>Divi → Theme Builder</strong> and check the default website template shows &ldquo;StarCaster Header&rdquo; and &ldquo;StarCaster Footer&rdquo;. If it does not, add them from the Divi Library, where copies are saved under the same names.</li>
+      </ol>
+    </details>
+  );
+}
+
 export default function WordPressExportPanel() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [checking, setChecking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [downloaded, setDownloaded] = useState('');
+  const [format, setFormat] = useState<ExportFormat>('xml');
+  const [received, setReceived] = useState(0);
 
   // A summary for a project that is no longer on screen is not shown.
   const visible = summary && summary.projectId === currentProjectId() ? summary : null;
@@ -175,8 +226,9 @@ export default function WordPressExportPanel() {
     setDownloading(true);
     setError('');
     setDownloaded('');
+    setReceived(0);
     try {
-      const res = await fetch(DOWNLOAD_PATH, { headers: requestHeaders(), credentials: 'include' });
+      const res = await fetch(`${DOWNLOAD_PATH}?format=${format}`, { headers: requestHeaders(), credentials: 'include' });
       if (!res.ok) {
         let message = `the server answered ${res.status}`;
         try {
@@ -185,8 +237,24 @@ export default function WordPressExportPanel() {
         } catch { /* not JSON — keep the status */ }
         throw new Error(message);
       }
-      const blob = await res.blob();
-      const name = filenameFrom(res.headers.get('content-disposition'), 'wordpress-divi-export.xml');
+      // Read it piece by piece so a .wpress, which takes minutes, can show
+      // how far it has got rather than sitting on "Preparing file…".
+      const parts: BlobPart[] = [];
+      if (res.body) {
+        const reader = res.body.getReader();
+        let total = 0;
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value);
+          total += value.length;
+          setReceived(total);
+        }
+      } else {
+        parts.push(await res.blob());
+      }
+      const blob = new Blob(parts);
+      const name = filenameFrom(res.headers.get('content-disposition'), `wordpress-divi-export.${format}`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -201,7 +269,7 @@ export default function WordPressExportPanel() {
     } finally {
       setDownloading(false);
     }
-  }, []);
+  }, [format]);
 
   const report = visible?.report;
 
@@ -236,33 +304,38 @@ export default function WordPressExportPanel() {
           posts, images and the main menu come along.
         </p>
 
+        <fieldset className="wp-export-formats" disabled={downloading}>
+          <legend className="meta">File type</legend>
+          <label>
+            <input type="radio" name="wpExportFormat" value="xml" checked={format === 'xml'} onChange={() => setFormat('xml')} />
+            <span><strong>.xml</strong> — for WordPress&apos;s built-in importer (Tools → Import). Adds to the site; images are fetched during the import.</span>
+          </label>
+          <label>
+            <input type="radio" name="wpExportFormat" value="wpress" checked={format === 'wpress'} onChange={() => setFormat('wpress')} />
+            <span><strong>.wpress</strong> — for the All-in-One WP Migration plugin. Replaces the site&apos;s pages and posts, carries every image inside the file, and sets the home page, menu and links for you.</span>
+          </label>
+        </fieldset>
+
         <div className="wp-export-actions">
           <button type="button" className="btn" onClick={check} disabled={checking || downloading}>
             {checking ? 'Checking…' : report ? 'Check again' : 'Check what will be exported'}
           </button>
           <button type="button" className="btn btn-primary" onClick={download} disabled={checking || downloading}>
-            {downloading ? 'Preparing file…' : 'Download WordPress file'}
+            {downloading
+              ? (received ? `Downloading… ${formatSize(received)}` : 'Preparing file…')
+              : `Download .${format} file`}
           </button>
         </div>
 
         {error && <p className="meta wp-export-error" role="alert">{error}</p>}
         {downloaded && <p className="meta">Downloaded <strong>{downloaded}</strong>. The steps below load it into WordPress.</p>}
 
-        {report && <ExportSummary report={report} bytes={visible?.bytes || 0} />}
+        {downloading && format === 'wpress' && (
+          <p className="meta">Packing every image into the file — this takes a few minutes for a large site. Keep this page open.</p>
+        )}
+        {report && <ExportSummary report={report} bytes={visible?.bytes || 0} format={format} />}
 
-        <details className="wp-export-howto">
-          <summary>How to load the file into WordPress</summary>
-          <ol>
-            <li>Install the <strong>Divi</strong> theme and activate it (Appearance → Themes) <em>before</em> importing — WordPress skips the Divi parts of the file otherwise.</li>
-            <li>Go to <strong>Tools → Import → WordPress</strong>. If it says &ldquo;Install Now&rdquo;, click it, then &ldquo;Run Importer&rdquo;.</li>
-            <li>Choose the downloaded file and click <strong>Upload file and import</strong>.</li>
-            <li>Pick which WordPress user the content belongs to, and tick <strong>Download and import file attachments</strong> — that box is what brings the images across.</li>
-            <li>Go to <strong>Appearance → Menus</strong>, choose &ldquo;Main Menu&rdquo;, tick <strong>Primary Menu</strong> and save.</li>
-            <li>Go to <strong>Settings → Reading</strong>, choose &ldquo;A static page&rdquo; and set the homepage to <strong>{report?.homePageSlug === 'home' ? 'Home' : 'your home page'}</strong>.</li>
-            <li>Go to <strong>Settings → Permalinks</strong> and choose &ldquo;Post name&rdquo;, so links like /about keep working.</li>
-            <li>Open <strong>Divi → Theme Builder</strong> and check the default website template shows &ldquo;StarCaster Header&rdquo; and &ldquo;StarCaster Footer&rdquo;. If it does not, add them from the Divi Library, where copies are saved under the same names.</li>
-          </ol>
-        </details>
+        <HowToLoad format={format} homePageSlug={report?.homePageSlug || ''} />
       </div>
     </div>
   );

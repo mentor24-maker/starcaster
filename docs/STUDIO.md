@@ -174,6 +174,49 @@ Optional — each has a working default:
 | `STUDIO_DISK_FLOOR_BYTES` | The free-space floor below which downloads stop (default 50 GB) |
 | `STUDIO_PROXY_FLOOR_KBPS` | Files already smaller than this are not re-encoded (default 1500) |
 
+## Speech-to-text (Phase 2)
+
+Transcription runs **on the Mac Mini**, not through a paid service — Dane's
+choice on 2026-10-05: it is free, and the audio never leaves the house. Two
+things make it possible, and both are part of the machine's setup rather than
+a hand-run install, so a rebuilt Mini gets them back with
+`npm run provision:node:apply`:
+
+- **`whisper-cli`** (Homebrew `whisper.cpp`), the speech-to-text program.
+- **The model file**, `~/Studio/models/ggml-large-v3-turbo.bin` (1.6 GB),
+  from the official whisper.cpp download. It is accepted only when its size
+  and SHA-256 match the published ones, so a download that stopped part way
+  can never pass as present. `npm run doctor:node` checks it the same way.
+
+Nothing in the pipeline runs it yet — that is Phase 2's next step.
+
+### Measured on 2026-10-05
+
+IMG_1962 (148.5 s of speech), Mac Mini M4, whisper.cpp 1.9.4, `large-v3-turbo`,
+Metal on:
+
+| Settings | Wall clock | Real-time factor |
+|---|---|---|
+| default | 8.6–9.3 s | 0.06 (about 16× faster than real time) |
+| with word alignment (`-nfa --dtw large.v3.turbo`) | 9.9 s | 0.07 |
+
+**Word timing: use the alignment flags.** The default per-word times are
+spread evenly across each segment, not tied to the audio: on this clip they
+put the first word at 0.00 s when speech starts at about 5.6 s, and drift by
+up to 0.9 s mid-clip. With `-nfa --dtw large.v3.turbo` (flash attention off,
+so the alignment can run), every word that starts after a pause landed within
+0.44 s of the audio, most within 0.1 s. So **turbo is kept** — `large-v3` was
+not needed — on the condition that the pipeline always passes those flags and
+reads each token's `t_dtw` (hundredths of a second) from the `-ojf` JSON.
+
+Two things the pipeline step has to handle:
+
+- The alignment gives **one time per token**, not a start and end. A word's
+  end is taken as the next word's start, which stretches the last word before
+  a pause across it.
+- A word can arrive as **several tokens** (21 of 251 on this clip). Tokens
+  that do not begin with a space continue the previous word.
+
 ## Where the pieces live
 
 For an agent session working on this, not for day-to-day use.

@@ -219,6 +219,7 @@ import { BuilderReminderRuntime } from "@/components/builder-reminder-runtime";
 import { SpeechBubblePreview } from "@/components/builder/speech-bubble-preview";
 import { resolveEmailMergeTokensForPreview } from "@/lib/builder-email-template";
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
+import { useGoogleFontLinks } from "@/components/builder/use-google-font-links";
 
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
@@ -1464,6 +1465,8 @@ export function BuilderTemplatePreview({
     ...(suppressShellBackground ? {} : shellBackground.inlineBackground),
   };
   const sitePlayerRegistered = useSitePlayerRegistration();
+  // Any Google Font the theme or a module names (gf:<Family>) loads here.
+  useGoogleFontLinks([theme, layoutSections], emailPreview);
 
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;

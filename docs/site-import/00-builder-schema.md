@@ -57,9 +57,8 @@ export type BuilderTemplateSection = {
   savedSectionId?: string;
   /** When true, this instance stays in sync with the master saved section. */
   canonical?: boolean;
-  layout: BuilderTemplateLayout;      // single | two-column | three-column |
-                                      // two-four | four-two | one-five |
-                                      // five-one | one-four-one
+  layout: BuilderTemplateLayout;      // 21 layouts, 1–6 columns — see
+                                      // LAYOUT_SPECS in builder-template.ts
   widthMode: "contained" | "full-width";
   widthPercent: string;
   alignment: "left" | "center" | "right";
@@ -92,8 +91,12 @@ export type BuilderTemplateSection = {
 };
 ```
 
-Column keys are `["main"]`, `["left","right"]`, or
-`["left","center","right"]`; legacy `col1/col2/col3` documents are
+Column keys are `["main"]`, `["left","right"]`, `["left","center","right"]`,
+and for the 4–6 equal-column layouts the three-column keys extended with
+`col4`, `col5`, `col6`. The full layout list (21 layouts: single, nine
+two-column splits, eight three-column splits, four/five/six-column) is
+`LAYOUT_SPECS` in `builder-template.ts` — the importer's copy in
+`lib/site-import/columns.ts` is checked against it by a test. Legacy `col1/col2/col3` documents are
 remapped on read by `resolveModuleColumnForLayout` and
 `lib/builder/migrate-from-legacy.js`.
 

@@ -86,12 +86,26 @@ which is why this is checked first.
 ### Toolchain
 
 `brew`, `git`, `node`, `npm`, `gh`, `doppler`, `supabase`, `jq`, `ffmpeg`,
-`claude`.
+`whisper-cli`, `claude`.
 
 `ffmpeg` is on the list because the Studio reads what a video file actually
 is with `ffprobe`, and the node suite that gates every `npm run ship` probes
 real generated files rather than skipping that proof — so a node without it
 fails the ship of an unrelated ticket.
+
+`whisper-cli` (Homebrew `whisper.cpp`) is the Studio's on-machine
+speech-to-text.
+
+### Models
+
+Large files no package manager installs, listed in `REQUIRED_MODELS` in
+`lib/nodeProvision.js`. Each belongs to a job, and only the machine that owns
+that job carries it — today, the whisper model
+(`~/Studio/models/ggml-large-v3-turbo.bin`, 1.6 GB) on the `studio-worker`
+machine. A model is **present only when its size and SHA-256 match the
+published ones**; a file with the right name and the wrong bytes is a FAIL.
+The provisioner downloads to `<name>.partial`, checks that, and only then
+renames it, so a download that died part way never wears the real name.
 
 `brew` and `claude` install by piping a URL into a shell, so the script prints
 them and never runs them — that is a decision with a person's name on it, not
@@ -160,10 +174,44 @@ it only asks how to install a job once you know it belongs here.
   blocked for a reason worth reading rather than skipping: their installer
   exists, and it is in the **pulse** repo, so this script cannot reach it.
 
+- `openclaw` → `scripts/install_openclaw.sh` (below, "openclaw").
+
 It also checks the mirror image, which nobody thinks to look for: a schedule
 still installed on a machine that no longer owns the job. Harmless — every job
 re-checks ownership at run time and exits — but a leftover schedule is how a
 cutover ends up half-done in both directions.
+
+### openclaw
+
+The browser-driving agent for YouTube outreach (ticket 86bcda5wp). What the role
+needs on its machine:
+
+- **Node 24 beside Node 22** — `brew install node@24`. It is keg-only, so the
+  everyday `node` stays 22. If `node -v` stops working afterwards, run
+  `brew upgrade node@22` (they share a library); the installer refuses to go on
+  until it does.
+- **Google Chrome** in `/Applications`.
+- **Doppler's `prd` key at `~/Studio`** (the Studio worker's), from which the
+  installer copies `ANTHROPIC_API_KEY` into `~/.openclaw/.env` without printing it.
+
+Then `./scripts/install_openclaw.sh`, and `--status` to read it back. The install
+lives outside the checkout (`~/OpenClaw/app`, state in `~/.openclaw`), so it is
+safe to run from a worktree.
+
+**The one hand step is Dane's: signing in.** The agent session opens the
+`dane-of-earth` browser window on the Mini
+(`openclaw browser --browser-profile dane-of-earth open https://www.youtube.com`);
+Dane connects with Screen Sharing (Finder → **Cmd+K** → `vnc://mac-mini.local`),
+clicks **Sign in** in that window, and signs in as Dane of Earth, including any
+two-step code. Then `node scripts/openclaw_smoke.mjs` on the Mini says whether
+it took: 0 signed in as Dane of Earth, 1 signed out or someone else, 2 no reading.
+
+**Loopback may not be the whole fence while Tailscale runs in userspace mode.**
+That mode can deliver connections from other tailnet devices to the Mini's own loopback
+ports, so a port nothing on the LAN can reach may still answer the tailnet. The
+gateway's token still stands in the way, but re-run the ticket's check from a
+tailnet device — `curl -m 5 http://<mini tailscale address>:18789/` must be
+refused — whenever Tailscale comes back after a restart.
 
 ---
 

@@ -34,6 +34,7 @@ import {
   type PageIR,
   type SectionIR,
   type SiteIR,
+  type StyleSummary,
   type TokenCount,
 } from "./ir";
 
@@ -732,6 +733,101 @@ const COLOR_PROPS = new Set([
   "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
 ]);
 const IGNORED_COLORS = new Set(["rgba(0, 0, 0, 0)", "transparent"]);
+
+/* ---------------------------------------------------------------------------
+ * Style evidence for the import theme (task 86bce9wx0)
+ * ------------------------------------------------------------------------ */
+
+type StyleEvidence = {
+  /** True once any page carried positions — without them, area and width
+   *  evidence is meaningless and the summary is omitted entirely. */
+  measured: boolean;
+  pageBackgrounds: TokenTally;
+  backgroundsByArea: TokenTally;
+  headerBackgrounds: TokenTally;
+  buttons: TokenTally;
+  contentWidths: TokenTally;
+};
+
+function newStyleEvidence(): StyleEvidence {
+  return {
+    measured: false,
+    pageBackgrounds: new Map(),
+    backgroundsByArea: new Map(),
+    headerBackgrounds: new Map(),
+    buttons: new Map(),
+    contentWidths: new Map(),
+  };
+}
+
+function isClearColor(value: string | undefined): boolean {
+  if (!value) return true;
+  const v = value.trim();
+  return IGNORED_COLORS.has(v) || /^rgba\([^)]*,\s*0(\.0+)?\)$/.test(v);
+}
+
+const HEADER_HINT = /(^|[\s_-])(header|masthead|top-?bar|navbar)([\s_-]|$)/i;
+const BUTTON_HINT = /(^|[\s_-])(btn|button)([\s_-]|$)/i;
+const CONTAINER_HINT = /(^|[\s_-])(container|row|inner|wrap|wrapper|content)([\s_-]|$)/i;
+
+/**
+ * Read one page's computed styles + positions for the evidence the theme
+ * needs, by element ROLE: what the page sits on, which colours fill the big
+ * bands, what the header wears, what a button looks like, how wide the
+ * content column is. Works off the stamped DOM so tag/class/id are known.
+ */
+function collectStyleEvidence(desktop: CaptureResult, ev: StyleEvidence): void {
+  const styles = desktop.styles || {};
+  const rects = desktop.rects || {};
+  if (!Object.keys(rects).length) return;
+  ev.measured = true;
+  if (desktop.pageBackground && !isClearColor(desktop.pageBackground)) {
+    tally(ev.pageBackgrounds, desktop.pageBackground);
+  }
+  const { $ } = parseBody(desktop.html);
+  if (!$) return;
+  $("[data-scim]").each((_, node) => {
+    const attribs = (node as { attribs?: Record<string, string> }).attribs || {};
+    const key = attribs["data-scim"];
+    const st = styles[key] || {};
+    const r = rects[key];
+    const tag = String((node as { name?: string }).name || "").toLowerCase();
+    const hint = `${attribs.class || ""} ${attribs.id || ""}`;
+    const bg = st["background-color"];
+    if (r && !isClearColor(bg)) {
+      const area = Math.round((r[2] * r[3]) / 1000);
+      if (area > 0) tally(ev.backgroundsByArea, bg, area);
+      const headerLike = tag === "header" || attribs.role === "banner" || (HEADER_HINT.test(hint) && r[1] < 150);
+      if (headerLike) tally(ev.headerBackgrounds, bg);
+    }
+    // A control inside a <form> is the search box's or the comment form's
+    // submit, not the site's button style — on daneofearth.org the grey
+    // search button (one per blog page) outvoted every real button.
+    const inForm = $(node).closest("form").length > 0;
+    const buttonLike = !inForm && (
+      tag === "button" ||
+      (tag === "input" && /^(submit|button)$/i.test(attribs.type || "")) ||
+      (tag === "a" && (BUTTON_HINT.test(hint) || attribs.role === "button")));
+    if (buttonLike && (!isClearColor(bg) || parseFloat(st["border-top-width"] || "0") > 0)) {
+      const radius = Math.round(parseFloat(st["border-radius"] || "0") || 0);
+      const fill = isClearColor(bg) ? "" : bg;
+      tally(ev.buttons, `${fill}|${st.color || ""}|${radius}`);
+    }
+    if (r && CONTAINER_HINT.test(hint) && r[2] >= 480) {
+      tally(ev.contentWidths, String(Math.round(r[2] / 10) * 10));
+    }
+  });
+}
+
+function styleEvidenceToSummary(ev: StyleEvidence): StyleSummary {
+  return {
+    pageBackgrounds: tallyToTokens(ev.pageBackgrounds),
+    backgroundsByArea: tallyToTokens(ev.backgroundsByArea),
+    headerBackgrounds: tallyToTokens(ev.headerBackgrounds),
+    buttons: tallyToTokens(ev.buttons),
+    contentWidths: tallyToTokens(ev.contentWidths),
+  };
+}
 const SPACING_PROPS = new Set([
   "margin-top", "margin-right", "margin-bottom", "margin-left",
   "padding-top", "padding-right", "padding-bottom", "padding-left",
@@ -854,6 +950,11 @@ function normalizePage(
   const desktop = captures.desktop;
   const url = desktop.finalUrl || desktop.url || "";
   const styles = desktop.styles || {};
+  const rects = desktop.rects || {};
+  const boxOf = (scimKey: string): ElementIR["box"] | undefined => {
+    const r = scimKey ? rects[scimKey] : undefined;
+    return r ? { x: r[0], y: r[1], w: r[2], h: r[3] } : undefined;
+  };
 
   const { $, body } = parseBody(desktop.html);
   if (!body) return degradedPage(pageIdx, captures);
@@ -895,6 +996,8 @@ function normalizePage(
         depth: v.depth,
         assetRefs: [],
       };
+      const runBox = boxOf((v.parentNode.attribs || {})["data-scim"] || "");
+      if (runBox) el.box = runBox;
     } else {
       const html = stripScimMarkers(outerHtml($, v.node));
       const textContent = collapseWhitespace(getText(v.node));
@@ -914,6 +1017,8 @@ function normalizePage(
         ...(crop ? { screenshot: crop } : {}),
         assetRefs,
       };
+      const elBox = boxOf(scimKey);
+      if (elBox) el.box = elBox;
       if (assetRefs.length) assetUses.push({ sourceId, assetIds: assetRefs });
     }
 
@@ -1028,6 +1133,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
     fontFamilies: new Map<string, number>(),
     spacing: new Map<string, number>(),
   };
+  const evidence = newStyleEvidence();
   const navs: NavTree[] = [];
   const captured: CoverageCounts = {};
   const pages: PageIR[] = [];
@@ -1038,6 +1144,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
     let build: PageBuild;
     try {
       build = normalizePage(pageIdx, captures, assetLookup, tokens, navs);
+      collectStyleEvidence(captures.desktop, evidence);
     } catch {
       build = degradedPage(pageIdx, captures);
     }
@@ -1077,6 +1184,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
       fontFamilies: tallyToTokens(tokens.fontFamilies),
       spacing: tallyToTokens(tokens.spacing),
     },
+    ...(evidence.measured ? { styleSummary: styleEvidenceToSummary(evidence) } : {}),
   };
 
   const coverage = computeCoverage({
