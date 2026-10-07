@@ -225,3 +225,15 @@ test('a loop lane on a machine with a lid has to say it is temporary and name it
     );
   }
 });
+
+// OpenClaw drives a browser signed in to YouTube as Dane of Earth (ticket
+// 86bcda5wp). The sign-in lives in one profile on one disk, so the role has
+// exactly one home, and the role's own words have to say why — a later move
+// to "spread the load" would hand every task to a logged-out browser.
+test('openclaw lives on the Mini, and its reason names the sign-in and the address', () => {
+  assert.equal(roleOwner('openclaw'), 'mac-mini');
+  const { why } = ROLES.openclaw;
+  assert.match(why, /second, logged-out\s+browser/, 'say why a second copy is not a spare');
+  assert.match(why, /home internet connection/, 'say why the Mini and not a rented server');
+  assert.match(why, /127\.0\.0\.1/, 'say that nothing off the machine can reach it');
+});

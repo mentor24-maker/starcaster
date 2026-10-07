@@ -1,0 +1,131 @@
+'use strict';
+
+/**
+ * YouTube outreach API — the target-video list and the account-wide limits
+ * (YouTube outreach 1/7, task 86bcda5vb). A thin layer over
+ * lib/youtubeOutreachStore.js, which does all the checking.
+ *
+ *   GET    /api/youtube-outreach/targets            ?account=&status=   the list
+ *   POST   /api/youtube-outreach/targets            { videoUrl, ...settings }
+ *   GET    /api/youtube-outreach/targets/:id
+ *   PATCH  /api/youtube-outreach/targets/:id        (PUT accepted too)
+ *   POST   /api/youtube-outreach/targets/:id/pause
+ *   POST   /api/youtube-outreach/targets/:id/resume
+ *   DELETE /api/youtube-outreach/targets/:id
+ *   GET    /api/youtube-outreach/settings           ?account=
+ *   PUT    /api/youtube-outreach/settings           ?account=   (PATCH accepted too)
+ *
+ * `account` defaults to dane_of_earth. Auth and project scope are decided
+ * centrally in routes/index.js; there is no public access to any of this.
+ */
+
+const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
+const store = require('../lib/youtubeOutreachStore');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
+
+const PREFIX = '/api/youtube-outreach';
+
+function requestScope(req) {
+  return {
+    projectId: String(req?.projectContext?.project?.id || '').trim(),
+    userId:    String(req?.authUser?.id || '').trim(),
+  };
+}
+
+function errorCode(status) {
+  if (status === 400) return 'VALIDATION_ERROR';
+  if (status === 404) return 'NOT_FOUND';
+  if (status === 409) return 'CONFLICT';
+  return undefined;
+}
+
+/** Answer from a store envelope. Returns true so `return reply(...)` ends the route. */
+function reply(res, result, okStatus) {
+  if (!result.ok) {
+    const status = result.status || 500;
+    sendErr(res, status, result.error || 'The outreach list could not be read or saved', { code: errorCode(status) });
+    return true;
+  }
+  sendOk(res, okStatus || result.status || 200, result.data);
+  return true;
+}
+
+async function readBody(req, res) {
+  try {
+    const body = await parseJsonBody(req);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      sendErr(res, 400, 'The request body must be a JSON object', { code: 'VALIDATION_ERROR' });
+      return null;
+    }
+    return body;
+  } catch (err) {
+    sendErr(res, 400, `The request body is not valid JSON: ${err.message}`, { code: 'VALIDATION_ERROR' });
+    return null;
+  }
+}
+
+function accountOptions(urlObj) {
+  const options = {};
+  const account = urlObj.searchParams.get('account');
+  if (account !== null) options.accountKey = account;
+  const status = urlObj.searchParams.get('status');
+  if (status !== null) options.status = status;
+  return options;
+}
+
+async function handle(req, res, pathname, method) {
+  if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
+  const scope = requestScope(req);
+  const urlObj = getUrlObj(req);
+
+  if (pathname === `${PREFIX}/targets`) {
+    if (method === 'GET') {
+      const limit = urlObj.searchParams.get('limit');
+      return reply(res, await store.listTargets(limit === null ? 200 : Number(limit), scope, accountOptions(urlObj)));
+    }
+    if (method === 'POST') {
+      if (checkEndpointLimit(req, res, 'youtubeOutreach.targets.create')) return true;
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.createTarget(body, scope), 201);
+    }
+    return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  const action = pathname.match(/^\/api\/youtube-outreach\/targets\/([^/]+)\/(pause|resume)$/);
+  if (action) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const id = decodeURIComponent(action[1]);
+    const status = action[2] === 'pause' ? 'paused' : 'active';
+    return reply(res, await store.setTargetStatus(id, status, scope));
+  }
+
+  const one = pathname.match(/^\/api\/youtube-outreach\/targets\/([^/]+)$/);
+  if (one) {
+    const id = decodeURIComponent(one[1]);
+    if (method === 'GET') return reply(res, await store.getTargetById(id, scope));
+    if (method === 'PATCH' || method === 'PUT') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.updateTarget(id, body, scope));
+    }
+    if (method === 'DELETE') return reply(res, await store.deleteTarget(id, scope));
+    return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  if (pathname === `${PREFIX}/settings`) {
+    if (method === 'GET') return reply(res, await store.getSettings(scope, accountOptions(urlObj)));
+    if (method === 'PUT' || method === 'PATCH') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.saveSettings(body, scope, accountOptions(urlObj)));
+    }
+    return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  return sendErr(res, 404, 'Unknown YouTube outreach endpoint', { code: 'NOT_FOUND' }), true;
+}
+
+const manifest = { id: 'youtubeOutreach', label: 'YouTube outreach', prefixes: [PREFIX] };
+
+module.exports = { handle, manifest };

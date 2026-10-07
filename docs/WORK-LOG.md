@@ -10,6 +10,33 @@ points each link at its saved copy — on the pages, on what visitors are
 actually served, and in blog posts — without publishing anything else. In
 production that is 9 documents on 6 live pages, and every one has a working
 copy.
+## 2026-10-05 — YouTube outreach 1/7: a saved list of target videos, each with its own comment settings (storage and server) (#769)
+
+Starcaster now has a place to keep the list of YouTube videos the outreach
+agent should comment on. Each video on the list carries its own settings —
+what the comment is for, where it goes (a new comment or a reply), what kind
+of message, how long, whether it may include a link or mention Dane of Earth,
+whether to comment once or repeat every few days, and a priority — all
+starting from the defaults Dane approved. Adding a video only needs the link:
+Starcaster reads the title, channel, date and view count from YouTube, and if
+YouTube doesn't answer, it saves the link anyway and says why the details are
+missing. There is also one set of account-wide limits (at most 10 comments a
+day, at least 45 minutes apart, only 8am to 10pm, channels and words to avoid,
+and a description of the voice). One client can never see another client's
+list, and a test proves it. There is no screen yet (that is the next ticket),
+and nothing comments on anything. The two new database tables need Dane to
+run one SQL file before this goes live.
+## 2026-10-07 — Site Import stretches every picture to the full width of its column, so a client's small icons and logos arrive huge (#781)
+
+Imported pictures no longer balloon to fill their column when the original
+site showed them small. The real culprits were pictures whose file is much
+bigger than how they were displayed — Dane of Earth's Substack, Medium and
+Patreon wordmarks are 1,600-pixel files the old site showed at a fraction of
+that. The Image module now has a "Max Width (px)" box next to Width, and Site
+Import fills it in with the size the picture had on the original page, but
+only for pictures that took up less than half their column — so photos and
+Delray's big flyers still fill theirs. Leave the box blank and nothing
+changes, which is why every existing page looks exactly as it did.
 
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 

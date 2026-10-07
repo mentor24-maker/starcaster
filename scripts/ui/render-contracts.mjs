@@ -398,6 +398,12 @@ export const RENDER_DIFFERENTIALS = [
     why: 'A frame setting with no effect involved, so the sweep is not only ever measuring animations.',
   },
   {
+    id: 'image-max-width',
+    module: { type: 'image', settings: { ...PICTURE, size: '100' } },
+    setting: 'maxWidthPx', from: '', to: '60',
+    why: 'Max Width rides on `width` as a min() beside the natural-size cap on `max-width` (task 86bcebvg9). Site Import fills it so a 1600px wordmark shown at 150px stays 150px; if the renderer stops reading it, every imported icon fills its column again and the panel still shows the number.',
+  },
+  {
     id: 'image-drop-shadow',
     module: { type: 'image', settings: { ...PICTURE } },
     setting: 'imageShadow', from: 'false', to: 'true',
@@ -1954,6 +1960,22 @@ export const RENDER_CONTRACTS = [
         return `the heading rendered but its text is "${sample.text.slice(0, 40)}" — the content did not arrive.`;
       }
       return null;
+    },
+  },
+
+  {
+    id: 'heading-renders-in-any-google-font',
+    why:
+      'Task 86bce9wwv: a font slot takes any Google Font ("gf:Open Sans"), not only the ten built-ins. ' +
+      'Before it, the normalizer blanked any other name on the way to the page, so the heading quietly ' +
+      'fell back to the theme font — an imported site lost its typeface with nothing failing.',
+    module: { type: 'heading', text: 'Open Sans heading', settings: { fontFamily: 'gf:Open Sans' } },
+    selector: '.builder-preview-heading',
+    read: ['fontFamily'],
+    expect(sample) {
+      return /Open Sans/.test(sample.styles.fontFamily)
+        ? null
+        : `the heading asked for Google font Open Sans but rendered in ${sample.styles.fontFamily} — the font name was dropped before it reached the page.`;
     },
   },
 

@@ -12,6 +12,7 @@ import {
   getImageOverlayStyle,
   getImageModuleShellStyle,
   getImageModuleStyle,
+  getImageMaxWidthPx,
   getModuleWidthShellStyle,
   getModuleWidthStyle,
   getPlainTextModuleStyle,
@@ -1173,6 +1174,34 @@ describe("image module padding", () => {
     expect(getImageModuleStyle({ verticalPadding: "9999" }).paddingTop).toBe("160px");
     expect(getImageModuleStyle({ verticalPadding: "-40" }).paddingTop).toBe("0px");
     expect(getImageModuleStyle({ verticalPadding: "abc" }).paddingTop).toBe("0px");
+  });
+});
+
+describe("image Max Width (task 86bcebvg9)", () => {
+  const url = "https://pics.test/fb.png";
+
+  it("caps the frame in pixels on top of Width's share of the column", () => {
+    const style = getImageModuleStyle({ url, size: "100", maxWidthPx: "24" });
+    expect(style.width).toBe("min(100%, 24px)");
+    // The natural-size cap is still there: Max Width only ever narrows.
+    expect(style.maxWidth).toBe("max-content");
+  });
+
+  it("keeps Width's percentage inside the cap", () => {
+    expect(getImageModuleStyle({ url, size: "50", maxWidthPx: "300" }).width).toBe("min(50%, 300px)");
+  });
+
+  it("is off when blank, unparseable or out of range — Width alone, as before", () => {
+    for (const maxWidthPx of [undefined, "", "abc", "0", "-5", "12.5", "99999"]) {
+      const settings: Record<string, string> = { url, size: "100" };
+      if (maxWidthPx !== undefined) settings.maxWidthPx = maxWidthPx;
+      expect(getImageMaxWidthPx(settings)).toBeNull();
+      expect(getImageModuleStyle(settings).width).toBe("100%");
+    }
+  });
+
+  it("does not shrink the empty drop target", () => {
+    expect(getImageModuleStyle({ size: "100", maxWidthPx: "24" }).width).toBe("100%");
   });
 });
 
