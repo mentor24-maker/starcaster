@@ -1020,11 +1020,20 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         return bandLooks.get(key) || null;
       };
       // A wrapper painted the page's own colour is not a band — keep looking
-      // inward (round 2 of 86bce9wx3).
-      const bandOf = planBands(sectionEls, section.containerBoxes, (key) => {
-        const look = bandLookOf(key);
-        return Boolean(look && hasPaint(look));
-      });
+      // inward (round 2 of 86bce9wx3). Failing a band that shows, the plain
+      // box with the spacing wins (round 3).
+      const bandOf = planBands(
+        sectionEls,
+        section.containerBoxes,
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && hasPaint(look));
+        },
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && (look.padding.top || look.padding.bottom));
+        }
+      );
       const draft = planSectionGrid(
         sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
       );

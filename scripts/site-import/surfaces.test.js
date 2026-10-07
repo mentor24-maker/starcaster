@@ -300,6 +300,54 @@ test('plain white sections with nothing coloured inside still keep their spacing
   }
 });
 
+function whiteWrapperPage(first, second) {
+  // The standard Divi shape: #main-content painted white with no padding,
+  // each .et_pb_section inside it full width and padded 54px top and bottom.
+  const pad = { 'padding-top': '54px', 'padding-bottom': '54px' };
+  const styles = {
+    0: { 'background-color': 'rgb(255, 255, 255)' },
+    1: { 'background-color': first, ...pad }, 2: { color: 'rgb(0, 0, 0)' },
+    3: { 'background-color': second, ...pad }, 4: { color: 'rgb(0, 0, 0)' },
+    5: {}, 6: { color: 'rgb(0, 0, 0)' },
+  };
+  const rects = {
+    0: [0, 0, 1200, 400], 1: [0, 0, 1200, 200], 2: [100, 80, 1000, 40],
+    3: [0, 200, 1200, 200], 4: [100, 280, 1000, 40], 5: [0, -60, 1200, 60], 6: [100, -40, 200, 20],
+  };
+  return importIt({
+    ...capture(),
+    html: '<html><body><header data-scim="5"><p data-scim="6">Site</p></header>' +
+      '<div data-scim="0"><div data-scim="1"><p data-scim="2">First section</p></div>' +
+      '<div data-scim="3"><p data-scim="4">Second section</p></div></div></body></html>',
+    styles, rects,
+  }).sections;
+}
+
+test('a white page wrapper does not take the spacing of the white sections inside it', () => {
+  // Round 3 of 86bce9wx3: with nothing coloured anywhere, the fallback took the
+  // OUTERMOST plain box — Divi's unpadded white wrapper — and every white 54px
+  // section arrived with no room at all.
+  const sections = whiteWrapperPage('rgb(255, 255, 255)', 'rgb(255, 255, 255)');
+  for (const text of [/First section/, /Second section/]) {
+    const row = holding(sections, text);
+    assert.equal(row.background.mode, 'none', 'white on white shows nothing');
+    assert.deepEqual([row.paddingTop, row.paddingBottom], ['54', '54'], `${text} keeps its room`);
+    assert.equal(row.cellBackgrounds, undefined, `${text} has no cell fill`);
+  }
+});
+
+test('under a white wrapper, a coloured band and a plain white section each keep their spacing', () => {
+  const sections = whiteWrapperPage('rgb(6, 75, 109)', 'rgb(255, 255, 255)');
+  const teal = holding(sections, /First section/);
+  const plain = holding(sections, /Second section/);
+  assert.notEqual(teal, plain);
+  assert.deepEqual([teal.background.mode, teal.background.color], ['color', '#064b6d'], 'teal is the row background');
+  assert.deepEqual([teal.paddingTop, teal.paddingBottom], ['54', '54'], 'teal keeps its padding');
+  assert.equal(teal.cellBackgrounds, undefined, 'teal is not a cell fill');
+  assert.equal(plain.background.mode, 'none', 'white on white shows nothing');
+  assert.deepEqual([plain.paddingTop, plain.paddingBottom], ['54', '54'], 'the white section keeps its padding');
+});
+
 test('a heading placed straight in a painted <body> takes no colour from above its section', () => {
   // The element IS its section root, so the walk from its parent never met the
   // root and climbed to <body> and <html> (round 2 of 86bce9wx3).
