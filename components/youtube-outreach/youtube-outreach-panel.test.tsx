@@ -10,6 +10,7 @@ import YoutubeOutreachPanel, {
   splitList,
   targetPatchFromForm,
   targetToForm,
+  withScheme,
   type OutreachSettings,
   type Target,
 } from "./youtube-outreach-panel";
@@ -328,6 +329,76 @@ describe("YouTube outreach screen", () => {
     expect(requests.filter((r) => r.project === "proj_delray" && r.method === "GET")).toHaveLength(2);
   });
 
+  it("drops a settings save that answers after a project switch", async () => {
+    stores.proj_doe.settings = { ...defaults(), maxCommentsPerDay: 3, saved: true, updatedAt: "2026-10-01T00:00:00Z" };
+    stores.proj_delray.settings = { ...defaults(), maxCommentsPerDay: 20, saved: true, updatedAt: "2026-10-02T00:00:00Z" };
+    let answer: (() => void) | null = null;
+    (window as unknown as { App: unknown }).App = {
+      api: vi.fn((path: string, options: RequestInit = {}) => {
+        if ((options.method || "GET").toUpperCase() !== "PUT") return fakeApi(path, options);
+        // Hold the save's reply until after the switch, as a slow network would.
+        return new Promise((resolve, reject) => {
+          answer = () => { fakeApi(path, options).then(resolve, reject); };
+        });
+      }),
+    };
+    await mount();
+    await click(button("Account settings"));
+    type(container!.querySelector<HTMLInputElement>("#yto-max-per-day")!, "5");
+    await submit(container!.querySelector<HTMLFormElement>("form.yt-outreach-settings")!);
+    expect(answer).not.toBeNull();
+
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    // The save was SENT under Dane of Earth, so it lands there…
+    activeProject = "proj_doe";
+    await act(async () => { answer!(); });
+    activeProject = "proj_delray";
+    await flush();
+    expect(stores.proj_doe.settings.maxCommentsPerDay).toBe(5);
+
+    // …but its reply must not become Delray's form.
+    expect(text()).not.toContain("Account settings saved.");
+    await click(button("Account settings"));
+    expect(container!.querySelector<HTMLInputElement>("#yto-max-per-day")!.value).toBe("20");
+    expect(stores.proj_delray.settings.maxCommentsPerDay).toBe(20);
+  });
+
+  it("names the settings read when only that one fails, and still shows the list", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    (window as unknown as { App: unknown }).App = {
+      api: vi.fn(async (path: string, options: RequestInit = {}) => {
+        if (path === "/api/youtube-outreach/settings") throw new Error("The settings table is not available");
+        return fakeApi(path, options);
+      }),
+    };
+    await mount();
+    expect(text()).toContain("The account settings could not be read: The settings table is not available");
+    expect(text()).not.toContain("The outreach list could not be read");
+    expect(row("abc").textContent).toContain("First video");
+    expect(button("Account settings").disabled).toBe(true);
+  });
+
+  it("adds a link pasted without https://", async () => {
+    await mount();
+    const input = container!.querySelector<HTMLInputElement>("#yto-add-url")!;
+    expect(input.type).toBe("text");
+    type(input, "youtube.com/watch?v=dQw4w9WgXcQ");
+    await submit(container!.querySelector<HTMLFormElement>("form.yt-outreach-add")!);
+    expect(requests.find((r) => r.method === "POST")?.body).toEqual({ videoUrl: "https://youtube.com/watch?v=dQw4w9WgXcQ" });
+    expect(row("dQw4w9WgXcQ")).toBeTruthy();
+  });
+
+  it("labels the safety settings with what they actually do", async () => {
+    await mount();
+    await click(button("Account settings"));
+    expect(text()).toContain("Never comment on a video more than once, unless that video is set to repeat");
+    expect(text()).not.toContain("in one day");
+    expect(text()).toContain("Blank uses this project's own time zone.");
+    expect(text()).not.toContain("server's clock");
+  });
+
   it("says the read failed rather than showing an empty list", async () => {
     (window as unknown as { App: unknown }).App = {
       api: vi.fn(async () => { throw new Error("The youtube_outreach_targets table is not available"); }),
@@ -381,6 +452,14 @@ describe("form helpers", () => {
     expect(splitList("a\n b ,c\n\n")).toEqual(["a", "b", "c"]);
     const patch = settingsPatchFromForm({ ...settingsToForm(defaults()), avoidChannels: "Spam TV\n" });
     expect(patch.avoidChannels).toEqual(["Spam TV"]);
+  });
+
+  it("adds https:// to a link pasted without it, and leaves a full link alone", () => {
+    expect(withScheme("youtu.be/dQw4w9WgXcQ")).toBe("https://youtu.be/dQw4w9WgXcQ");
+    expect(withScheme(" www.youtube.com/watch?v=x ")).toBe("https://www.youtube.com/watch?v=x");
+    expect(withScheme("http://youtube.com/watch?v=x")).toBe("http://youtube.com/watch?v=x");
+    expect(withScheme("https://youtu.be/x")).toBe("https://youtu.be/x");
+    expect(withScheme("")).toBe("");
   });
 
   it("describes repeats in words", () => {

@@ -23,9 +23,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * reasoning as components/studio/footage-panel.tsx, where the show-hook alone
  * left one client's list on screen under another client's name.
  *
+ * A SAVE is held to the same rule: account settings saved under one project
+ * and answered after a switch are dropped, or the old client's limits would
+ * sit in the new client's form and the next Save would write them there.
+ *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "no targets yet", "the
- * list could not be read" and "these limits have not been saved yet" are each
- * said in words.
+ * list could not be read", "the account settings could not be read" and
+ * "these limits have not been saved yet" are each said in words — and a read
+ * that fails names WHICH read, so a broken settings row never reads as a
+ * broken list.
  */
 
 const TARGETS_PATH = '/api/youtube-outreach/targets';
@@ -33,6 +39,16 @@ const SETTINGS_PATH = '/api/youtube-outreach/settings';
 
 /** The window event public/js/projectContext.js emits on every project switch. */
 export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
+
+/**
+ * The store accepts only a full link, but people paste "youtu.be/…" and
+ * "youtube.com/watch?v=…" without the https://. Add it rather than refuse.
+ */
+export function withScheme(link: string): string {
+  const trimmed = link.trim();
+  if (!trimmed || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+}
 
 export type Target = {
   id: string;
@@ -453,13 +469,13 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
         <Field label="Active until (hour)" htmlFor="yto-end-hour" help="1–24. Must be later than the start.">
           <input id="yto-end-hour" type="number" min={1} max={24} value={form.activeEndHour} onChange={(e) => set('activeEndHour', e.target.value)} />
         </Field>
-        <Field label="Time zone" htmlFor="yto-time-zone" help="For example America/Denver. Blank uses the server's clock.">
+        <Field label="Time zone" htmlFor="yto-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
           <input id="yto-time-zone" type="text" value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
         </Field>
         <Field label="One comment per video" htmlFor="yto-one-per-video">
           <label className="yt-outreach-check">
             <input id="yto-one-per-video" type="checkbox" checked={form.oneCommentPerVideo} onChange={(e) => set('oneCommentPerVideo', e.target.checked)} />
-            <span>Never comment twice on the same video in one day</span>
+            <span>Never comment on a video more than once, unless that video is set to repeat</span>
           </label>
         </Field>
         <Field label="Channels to avoid" htmlFor="yto-avoid-channels" help="One per line.">
@@ -486,6 +502,10 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
 export default function YoutubeOutreachPanel(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const requestSeq = useRef(0);
+  // Bumped on every project switch. A save started under one project checks
+  // it before showing its reply; requestSeq cannot serve, because a Refresh
+  // pressed during the save would wrongly discard a reply that is still valid.
+  const projectEpoch = useRef(0);
   const [targets, setTargets] = useState<Target[] | null>(null);
   const [settings, setSettings] = useState<OutreachSettings | null>(null);
   const [loading, setLoading] = useState(false);
@@ -509,20 +529,26 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     }
     const seq = ++requestSeq.current;
     setLoading(true);
-    try {
-      const [list, limits] = await Promise.all([api(TARGETS_PATH), api(SETTINGS_PATH)]);
-      if (seq !== requestSeq.current) return;
-      setTargets(Array.isArray(list?.data) ? (list.data as Target[]) : []);
-      setSettings((limits?.data as OutreachSettings) || null);
-      setError('');
-    } catch (err) {
-      if (seq !== requestSeq.current) return;
+    // Read both, and say which one failed: a missing settings row must not
+    // be reported as a missing list, or hide a list that read fine.
+    const [list, limits] = await Promise.allSettled([api(TARGETS_PATH), api(SETTINGS_PATH)]);
+    if (seq !== requestSeq.current) return;
+    const problems: string[] = [];
+    if (list.status === 'fulfilled') {
+      setTargets(Array.isArray(list.value?.data) ? (list.value.data as Target[]) : []);
+    } else {
       setTargets(null);
-      setSettings(null);
-      setError(`The outreach list could not be read: ${errorText(err, 'unknown error')}`);
-    } finally {
-      if (seq === requestSeq.current) setLoading(false);
+      problems.push(`The outreach list could not be read: ${errorText(list.reason, 'unknown error')}`);
     }
+    if (limits.status === 'fulfilled') {
+      setSettings((limits.value?.data as OutreachSettings) || null);
+    } else {
+      setSettings(null);
+      setSettingsOpen(false);
+      problems.push(`The account settings could not be read: ${errorText(limits.reason, 'unknown error')}`);
+    }
+    setError(problems.join(' '));
+    setLoading(false);
   }, []);
 
   // Load each time the page is shown.
@@ -546,6 +572,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   useEffect(() => {
     const onSwitch = () => {
       requestSeq.current += 1;
+      projectEpoch.current += 1;
       setTargets(null);
       setSettings(null);
       setError('');
@@ -569,11 +596,12 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     const api = getApi();
     const videoUrl = addUrl.trim();
     if (!api || !videoUrl) return;
+    const link = withScheme(videoUrl);
     setAdding(true);
     setError('');
     setNotice('');
     try {
-      const body = await api(TARGETS_PATH, { method: 'POST', body: JSON.stringify({ videoUrl }) });
+      const body = await api(TARGETS_PATH, { method: 'POST', body: JSON.stringify({ videoUrl: link }) });
       const created = body?.data as Target;
       setAddUrl('');
       setNotice(created?.detailsError
@@ -644,14 +672,19 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   const saveSettings = async (form: SettingsForm) => {
     const api = getApi();
     if (!api) return;
+    const epoch = projectEpoch.current;
     setSettingsBusy(true);
     setSettingsError('');
     try {
       const body = await api(SETTINGS_PATH, { method: 'PUT', body: JSON.stringify(settingsPatchFromForm(form)) });
+      // The project changed while this was in flight: the reply is the OLD
+      // project's limits, and the switch has already loaded the new one's.
+      if (epoch !== projectEpoch.current) return;
       setSettings(body.data as OutreachSettings);
       setSettingsOpen(false);
       setNotice('Account settings saved.');
     } catch (err) {
+      if (epoch !== projectEpoch.current) return;
       setSettingsError(`Not saved: ${errorText(err, 'unknown error')}`);
     } finally {
       setSettingsBusy(false);
@@ -667,7 +700,8 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
           <label className="yt-outreach-add-label" htmlFor="yto-add-url">YouTube link</label>
           <input
             id="yto-add-url"
-            type="url"
+            type="text"
+            inputMode="url"
             placeholder="https://www.youtube.com/watch?v=…"
             value={addUrl}
             onChange={(e) => setAddUrl(e.target.value)}
