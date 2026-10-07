@@ -14,6 +14,18 @@ and a description of the voice). One client can never see another client's
 list, and a test proves it. There is no screen yet (that is the next ticket),
 and nothing comments on anything. The two new database tables need Dane to
 run one SQL file before this goes live.
+## 2026-10-07 — Site Import stretches every picture to the full width of its column, so a client's small icons and logos arrive huge (#781)
+
+Imported pictures no longer balloon to fill their column when the original
+site showed them small. The real culprits were pictures whose file is much
+bigger than how they were displayed — Dane of Earth's Substack, Medium and
+Patreon wordmarks are 1,600-pixel files the old site showed at a fraction of
+that. The Image module now has a "Max Width (px)" box next to Width, and Site
+Import fills it in with the size the picture had on the original page, but
+only for pictures that took up less than half their column — so photos and
+Delray's big flyers still fill theirs. Leave the box blank and nothing
+changes, which is why every existing page looks exactly as it did.
+
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
 The Mac Mini can now turn what you say in a recording into text, on its own,

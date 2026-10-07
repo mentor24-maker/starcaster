@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { BuilderTheme } from "@/lib/builder-template";
 import { BuilderColorWheelInput } from "./builder-color-wheel-input";
 import { BuilderSettingRow } from "./builder-setting-row";
-import { BUILDER_HEADING_FONTS } from "./builder-utils";
+import { BuilderFontSelect } from "./builder-font-select";
 
 type ThemeUpdater = (updater: (theme: BuilderTheme) => BuilderTheme) => void;
 
@@ -122,22 +122,18 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
       <div className="builder-theme-typography-group">
         <h4 className="builder-theme-typography-heading">Fonts</h4>
         <BuilderSettingRow label="Heading font" fullWidth>
-          <select value={fonts.heading} onChange={(event) => updateFont("heading", event.target.value)}>
-            {BUILDER_HEADING_FONTS.map((font) => (
-              <option key={font.key} value={font.key}>
-                {font.label}
-              </option>
-            ))}
-          </select>
+          <BuilderFontSelect
+            ariaLabel="Heading font"
+            value={fonts.heading}
+            onChange={(next) => updateFont("heading", next)}
+          />
         </BuilderSettingRow>
         <BuilderSettingRow label="Body font" fullWidth>
-          <select value={fonts.body} onChange={(event) => updateFont("body", event.target.value)}>
-            {BUILDER_HEADING_FONTS.map((font) => (
-              <option key={font.key} value={font.key}>
-                {font.label}
-              </option>
-            ))}
-          </select>
+          <BuilderFontSelect
+            ariaLabel="Body font"
+            value={fonts.body}
+            onChange={(next) => updateFont("body", next)}
+          />
         </BuilderSettingRow>
       </div>
 

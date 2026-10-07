@@ -25,6 +25,12 @@
  *   overrides for one section at a time.
  * - The report must reconcile (every IR element accounted) or --apply
  *   refuses to run.
+ * - IMPORT THEME (task 86bce9wx0, Dane 2026-10-06): --apply also creates a
+ *   NEW theme named after the site ("daneofearth 1", then "… 2" on a
+ *   re-import — never overwriting one he adjusted) from the captured styles
+ *   (lib/site-import/theme.ts) and makes it the project's DEFAULT. The
+ *   previous default's id is printed and recorded on the job; making that
+ *   theme the default again undoes it. --no-theme skips it.
  * - Rollback: restore the snapshot id printed at apply time
  *   (POST /api/builder/page-snapshots/:id/restore) and/or the JSON backup.
  *
@@ -33,6 +39,7 @@
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --apply
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --nav [--nav-replace]
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
+ *   ... --no-theme   skip the import theme (see below)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
  */
@@ -110,11 +117,16 @@ const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');
 const savedSectionsStore = require('./lib/builderSavedSectionsStore.js');
 const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
-const { mapSite, reportReconciles } = require('./lib/site-import/dist/map.js');
+const {
+  mapSite, reportReconciles, mergeMappedSections, deriveImportTheme, nextThemeName, siteNameFromUrl,
+} = require('./lib/site-import/dist/map.js');
+const themesStore = require('./lib/builderThemesStore.js');
+const { normalizeTheme } = require('./lib/builder/template.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
+const NO_THEME = flag('--no-theme');
 const NAV_MASTER_ID = flagValue('--nav-master');
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
 const NO_CARDS_PATHS = flagValues('--no-cards');
@@ -276,6 +288,18 @@ async function main() {
   // vanished from the public site after a combined --nav --apply run).
   if (NAV && !APPLY) await runNav(job, scope, out);
 
+  // The import theme: derived now so the dry run shows exactly what --apply
+  // would save. Named against the project's CURRENT themes.
+  const existingThemes = NO_THEME ? [] : must(await themesStore.listThemes(1000, scope), 'list themes');
+  const themeName = nextThemeName(siteNameFromUrl(job.sourceUrl), existingThemes.map((t) => t.name));
+  const importTheme = NO_THEME ? null : deriveImportTheme(ir, themeName);
+  if (importTheme) {
+    log(`\nImport theme "${themeName}" (becomes the project default on --apply):`);
+    for (const note of importTheme.notes) log(`  ${note}`);
+  } else {
+    log('\nImport theme: skipped (--no-theme).');
+  }
+
   if (!APPLY) {
     log('\nDry run complete. Re-run with --apply to create the draft pages.');
     return;
@@ -370,12 +394,7 @@ async function main() {
     }
     let saved;
     if (current) {
-      const mappedById = new Map(sections.map((s) => [s.id, s]));
-      const merged = (current.layoutSections || []).map((s) =>
-        mappedById.has(s.id) && !protectedIds.has(s.id) ? mappedById.get(s.id) : s
-      );
-      const presentIds = new Set(merged.map((s) => s.id));
-      for (const s of sections) if (!presentIds.has(s.id)) merged.push(s);
+      const merged = mergeMappedSections(current.layoutSections || [], sections, protectedIds);
       saved = must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`);
     } else {
       saved = must(await pagesStore.createPage({
@@ -395,6 +414,33 @@ async function main() {
     log(`  wrote /${page.slug} (page ${saved.id}, draft)`);
   }
 
+  // 4b. The import theme: create, make default, READ BACK (landmine 12 —
+  //     an insert that "succeeds" can still land without its tenant).
+  let themeCheckpoint = null;
+  if (importTheme) {
+    const previousDefault = existingThemes.find((t) => t.isDefault) || null;
+    const { notes, typography, ...top } = importTheme;
+    const created = must(await themesStore.createTheme({
+      ...top,
+      typography: normalizeTheme({ typography }).typography,
+    }, scope), `create theme "${themeName}"`);
+    must(await themesStore.setDefaultTheme(created.id, scope), `make "${themeName}" the default`);
+    const after = must(await themesStore.listThemes(1000, scope), 're-read themes');
+    const mine = after.find((t) => t.id === created.id);
+    if (!mine) throw new Error(`theme "${themeName}" (${created.id}) was created but is not in this project's theme list — check its project_id.`);
+    if (!mine.isDefault) throw new Error(`theme "${themeName}" was created but is not the project default.`);
+    themeCheckpoint = {
+      id: created.id,
+      name: themeName,
+      previousDefaultId: previousDefault?.id || '',
+      previousDefaultName: previousDefault?.name || '',
+    };
+    log(`Theme "${themeName}" created (${created.id}) and is now the project default.`);
+    log(previousDefault
+      ? `  To undo: make "${previousDefault.name}" (${previousDefault.id}) the default again in Builder > Themes.`
+      : '  There was no default theme before this one.');
+  }
+
   // 5. Checkpoint + final report (now carrying page ids).
   const checkpoints = {
     ...(job.checkpoints || {}),
@@ -405,6 +451,7 @@ async function main() {
       pageIds,
       sectionHashes,
       appliedNamespace: applied,
+      ...(themeCheckpoint ? { theme: themeCheckpoint } : {}),
     },
   };
   job = must(await store.updateJob(job.id, { checkpoints }), 'record map checkpoint');

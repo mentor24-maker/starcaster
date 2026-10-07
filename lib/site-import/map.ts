@@ -28,6 +28,9 @@
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
+import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
+export { mergeMappedSections } from "./columns";
+export { deriveImportTheme, nextThemeName, siteNameFromUrl } from "./theme";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
 export const TEXT_MODULE_CHAR_BUDGET = 9500;
@@ -41,7 +44,9 @@ export const SOURCE_HTML_INLINE_BUDGET = 9000;
 export type MappedModule = {
   id: string;
   type: string;
-  column: "main";
+  /** "main" in a single-column section; left/center/right/col4–col6 in a
+   *  multi-column one (columns.ts). */
+  column: string;
   name: string;
   text: string;
   settings: Record<string, string>;
@@ -52,7 +57,9 @@ export type MappedModule = {
 export type MappedSection = {
   id: string;
   title: string;
-  layout: "single";
+  /** A Builder layout name — "single" unless column inference found a
+   *  side-by-side row (columns.ts). */
+  layout: string;
   widthMode: "contained";
   background: { mode: "none" | "color"; color: string; color2: string; imageUrl: string; styleKey: "" };
   modules: MappedModule[];
@@ -345,6 +352,61 @@ function attrFromHtml(html: string, attr: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
+/**
+ * How wide a picture was SHOWN on the source page, in px, or 0 when nothing
+ * says. The `width` attribute of its <img> (what the author asked for) and its
+ * measured desktop box (what the browser drew); when both exist the smaller
+ * wins, because a linked picture's box is its anchor's, and an anchor styled
+ * as a block is as wide as the column however small the icon inside it.
+ */
+function shownWidthPx(html: string, box?: { w: number } | null): number {
+  const imgTag = /<img\b[^>]*>/i.exec(String(html || ""))?.[0] || "";
+  const declared = /^\s*\d+(\.\d+)?\s*(px)?\s*$/i.test(attrFromHtml(imgTag, "width"))
+    ? Math.round(Number.parseFloat(attrFromHtml(imgTag, "width")))
+    : 0;
+  const measured = box && Number.isFinite(box.w) && box.w >= 2 ? Math.round(box.w) : 0;
+  if (declared > 0 && measured > 0) return Math.min(declared, measured);
+  return declared || measured;
+}
+
+/** A picture shown at less than this share of its column was meant to be
+ *  small (an icon, a wordmark, a badge); at or above it, it fills the column.
+ *  Half, not "nearly all": Delray's 791px clinic flyers sit in a ~1100px
+ *  page and are the page's main content, so they keep filling the column as
+ *  they always did. */
+const SMALL_IMAGE_SHARE = 0.5;
+/** The Builder's content column when nothing measured the source's — the
+ *  same figure `CONTENT_WIDTH_PX` in lib/builder-client/image-renditions.ts
+ *  uses (not imported: this file builds on its own, lib/site-import/dist). */
+const ASSUMED_COLUMN_PX = 1200;
+
+/**
+ * The image module's `maxWidthPx` for an imported picture, or "" for none
+ * (task 86bcebvg9). Every imported picture is Width 100% of its column; the
+ * module already never draws a picture larger than its file, so this only
+ * matters for a file with more pixels than the source page showed — Dane of
+ * Earth's 1600px Substack/Medium/Patreon wordmarks, displayed small, arrived
+ * filling the column. A pixel cap rather than a smaller Width %: a percentage
+ * is a share of a column the Builder chooses, and the Width control only
+ * offers 5–100% in fixed steps, so a 24px icon could not be expressed at all.
+ *
+ * Only small pictures get one — a photo shown at most of its column's width
+ * keeps filling it, so the 1103px flyer behaves exactly as before.
+ */
+function importedImageCap(shownPx: number, columnPx: number, asset: AssetRef | null): string {
+  if (!(shownPx > 0)) return "";
+  const column = columnPx > 0 ? columnPx : ASSUMED_COLUMN_PX;
+  if (shownPx >= column * SMALL_IMAGE_SHARE) return "";
+  // The file is no bigger than it was shown: the module's own natural-size
+  // cap already holds it there, and a setting would be noise in the panel.
+  if (asset?.width && asset.width <= shownPx) return "";
+  return String(shownPx);
+}
+
+function cappedAt(px: string): { maxWidthPx?: string } {
+  return px ? { maxWidthPx: px } : {};
+}
+
 function normalizeHref(href: string): string {
   return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -389,7 +451,9 @@ function structuralSignature(el: ElementIR): string {
  *
  * Returns the images to emit, or null when the element is a real table.
  */
-function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href: string }[] | null {
+function imagesFromLayoutTable(
+  el: ElementIR
+): { src: string; alt: string; href: string; width: number }[] | null {
   if (el.class !== "table") return null;
   let $: ReturnType<typeof cheerio.load>;
   try {
@@ -399,7 +463,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
   }
   const text = $.root().text().replace(/\s+/g, " ").trim();
   if (text.length > 0) return null; // any real copy means it may be data
-  const out: { src: string; alt: string; href: string }[] = [];
+  const out: { src: string; alt: string; href: string; width: number }[] = [];
   const seen = new Set<string>();
   $("img").each((_i, node) => {
     const $img = $(node);
@@ -413,6 +477,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
       src,
       alt: String($img.attr("alt") || "").trim(),
       href: href && href !== src ? href : "",
+      width: shownWidthPx($.html(node)),
     });
   });
   return out.length ? out : null;
@@ -426,9 +491,98 @@ const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
  * The engine
  * ------------------------------------------------------------------------ */
 
+/** Modules that lay out their own columns: a row holding one stays a
+ *  single full-width column, or the module would be squeezed into a cell. */
+const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
+
+type Dispositions = { mapped: number; placeholder: number; deduped: number };
+
+/**
+ * Split one IR section's modules into Builder sections, one per row that
+ * column inference found (columns.ts). With no side-by-side rows this
+ * returns exactly what the mapper always emitted: one single-column section
+ * under the section's own id — so pre-2026-10-06 captures, which carry no
+ * positions, import unchanged. The first row keeps that id (a re-import
+ * replaces it in place); later rows are `<id>b<band>`.
+ */
+function splitIntoRows(args: {
+  section: SectionIR;
+  baseId: string;
+  fallbackHeading: string;
+  modules: MappedModule[];
+  moduleCells: Cell[];
+  grid: ReturnType<typeof planSectionGrid>;
+  cellOf: (sourceId: string) => Cell;
+  sourceElementIds: string[];
+  dispositionsFor: (band: number) => Dispositions;
+}): MappedSection[] {
+  const { section, baseId, modules, moduleCells, grid, cellOf } = args;
+  const bands = Array.from(new Set(moduleCells.map((c) => c.band))).sort((a, b) => a - b);
+  const out: MappedSection[] = [];
+
+  bands.forEach((band, i) => {
+    const idx = modules.map((_, k) => k).filter((k) => moduleCells[k].band === band);
+    const rowModules = idx.map((k) => modules[k]);
+    const cols = Array.from(new Set(idx.map((k) => moduleCells[k].col))).sort((a, b) => a - b);
+
+    let layout = "single";
+    if (cols.length > 1 && !rowModules.some((m) => SELF_COLUMNED_TYPES.has(m.type))) {
+      const plan = grid.bands[band];
+      const widths = cols.map((c) => {
+        const col = plan?.columns[c];
+        return col ? col.x1 - col.x0 : 1;
+      });
+      layout = chooseLayout(widths);
+      const keys = columnKeys(cols.length);
+      for (const k of idx) modules[k].column = keys[cols.indexOf(moduleCells[k].col)];
+    }
+
+    const heading = (section.elements || []).find(
+      (el) => el.class === "heading" && cellOf(el.sourceId).band === band
+    );
+    const title = (heading ? collapse(heading.textContent) : args.fallbackHeading).slice(0, 60);
+    // Every import-owned section carries the section source marker (spec:
+    // idempotency + provenance) — each row of a split section too.
+    rowModules[0].settings.importSectionSourceId = section.sourceId;
+    out.push({
+      id: i === 0 ? baseId : `${baseId}b${band}`,
+      title: `Imported: ${title || "section"}`,
+      layout,
+      widthMode: "contained",
+      background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+      modules: rowModules,
+      sourceElementIds: args.sourceElementIds.filter((id) => cellOf(id).band === band),
+      dispositions: { ...args.dispositionsFor(band) },
+    });
+  });
+
+  // Rows that produced no module (nav links, deduped repeats) still have to
+  // be accounted for — fold their elements and tallies into the first row.
+  const first = out[0];
+  const kept = new Set(bands);
+  const orphanBands = new Set<number>();
+  for (const id of args.sourceElementIds) {
+    const band = cellOf(id).band;
+    if (!kept.has(band)) {
+      first.sourceElementIds.push(id);
+      orphanBands.add(band);
+    }
+  }
+  for (const band of orphanBands) {
+    const d = args.dispositionsFor(band);
+    first.dispositions.mapped += d.mapped;
+    first.dispositions.placeholder += d.placeholder;
+    first.dispositions.deduped += d.deduped;
+  }
+  return out;
+}
+
 export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
   const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
+  // The source page's content column (theme.ts reads the same tally); 0 when
+  // the capture measured nothing.
+  const siteContentPx = Number(ir.styleSummary?.contentWidths?.[0]?.value) || 0;
 
   // Nav lookup: label+href pairs from every extracted nav tree; matching
   // standalone link elements are navConsumed (decision 6: default runs
@@ -748,7 +902,41 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     for (const section of page.sections || []) {
       const modules: MappedModule[] = [];
       const sourceElementIds: string[] = [];
-      const dispositions = { mapped: 0, placeholder: 0, deduped: 0 };
+      // Column inference (columns.ts): which row and column each element sat
+      // in on the source page. Prose never merges across a cell boundary, and
+      // every module is tagged with the cell it was built in, so the section
+      // can be split into Builder rows once the modules exist.
+      const grid = planSectionGrid(
+        (section.elements || []).map((el) => ({ id: el.sourceId, box: el.box }))
+      );
+      // How wide the source column holding a cell was, for sizing small
+      // pictures (importedImageCap). A side-by-side column is its own extent;
+      // a stacked one is the section's whole span, or the site's measured
+      // content width when that is wider (a section holding only a logo
+      // spans only the logo). 0 = unmeasured.
+      const boxes = (section.elements || []).map((el) => el.box).filter((b) => b && b.w >= 2);
+      const sectionSpanPx = boxes.length
+        ? Math.max(...boxes.map((b) => b!.x + b!.w)) - Math.min(...boxes.map((b) => b!.x))
+        : 0;
+      const columnPxFor = (cell: Cell): number => {
+        const band = grid.bands[cell.band];
+        if (band && band.columns.length > 1) {
+          const col = band.columns[cell.col];
+          if (col && col.x1 - col.x0 > 1) return col.x1 - col.x0;
+        }
+        return Math.max(sectionSpanPx, siteContentPx);
+      };
+      const moduleCells: Cell[] = [];
+      const bandDispositions = new Map<number, { mapped: number; placeholder: number; deduped: number }>();
+      const dispositionsFor = (band: number) => {
+        const found = bandDispositions.get(band);
+        if (found) return found;
+        const fresh = { mapped: 0, placeholder: 0, deduped: 0 };
+        bandDispositions.set(band, fresh);
+        return fresh;
+      };
+      let currentCell: Cell = { band: 0, col: 0 };
+      let dispositions = dispositionsFor(0);
       let prose: { html: string; sourceIds: string[] } = { html: "", sourceIds: [] };
       let firstHeading = "";
 
@@ -805,7 +993,18 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         pagePlaceholders += 1;
       };
 
+      const tagNewModules = () => {
+        while (moduleCells.length < modules.length) moduleCells.push(currentCell);
+      };
+
       for (const el of section.elements || []) {
+        const cell = grid.cells.get(el.sourceId) || currentCell;
+        if (cell.band !== currentCell.band || cell.col !== currentCell.col) {
+          flushProse();
+          tagNewModules();
+          currentCell = cell;
+          dispositions = dispositionsFor(cell.band);
+        }
         report.elements.total += 1;
         sourceElementIds.push(el.sourceId);
         if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
@@ -943,6 +1142,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               url,
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
               size: "100",
+              ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
               importSourceIds: el.sourceId,
             },
           });
@@ -1013,6 +1213,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
                 // image module gets. Without it the module renders at the
                 // file's natural size — a 1103px flyer overflowed the page.
                 size: "100",
+                // A layout table's pictures have no box of their own (the
+                // table has one); the <img> width attribute is the evidence.
+                ...cappedAt(importedImageCap(img.width, columnPxFor(currentCell), asset)),
                 ...(img.href ? { linkUrl: img.href, newTab: "true" } : {}),
                 importSourceIds: el.sourceId,
                 importFromLayoutTable: "true",
@@ -1040,21 +1243,21 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         });
       }
       flushProse();
+      tagNewModules();
 
       if (!modules.length) continue; // nothing mappable (e.g. nav-only section)
-      // The first module of every import-owned section carries the section
-      // source marker (spec: idempotency + provenance).
-      modules[0].settings.importSectionSourceId = section.sourceId;
-      mappedSections.push({
-        id: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
-        title: `Imported: ${firstHeading.slice(0, 60) || "section"}`,
-        layout: "single",
-        widthMode: "contained",
-        background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+      const built = splitIntoRows({
+        section,
+        baseId: `imps_${String(section.sourceId).replace(/[^a-zA-Z0-9]+/g, "")}`,
+        fallbackHeading: firstHeading,
         modules,
+        moduleCells,
+        grid,
+        cellOf: (id) => grid.cells.get(id) || { band: 0, col: 0 },
         sourceElementIds,
-        dispositions,
+        dispositionsFor,
       });
+      mappedSections.push(...built);
       pageModules += modules.length;
     }
 
