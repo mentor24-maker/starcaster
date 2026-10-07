@@ -341,6 +341,18 @@ export function BuilderImageModuleSettings({
               fallback: "100",
               options: SIZE_OPTIONS.map((value) => ({ value, label: `${value}%` })),
               rendersVia: "getImageModuleStyle"
+            },
+            // Pixels, on top of Width's share of the column. Blank = no cap.
+            // Site Import fills it for a picture the source page showed
+            // small (task 86bcebvg9) — it sits beside Width so whoever
+            // wonders why Width 100% draws a small icon finds the reason.
+            {
+              key: "maxWidthPx",
+              label: "Max Width (px)",
+              width: "num",
+              control: "text",
+              placeholder: "None",
+              rendersVia: "getImageModuleStyle"
             }
           ],
           // The margin half of W7 comes from the shared chrome (E6 — never a

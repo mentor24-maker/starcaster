@@ -101,6 +101,94 @@ test('the container runtime is not a required tool — the two nodes answer it d
   assert.ok(provision.CONTAINER_RUNTIME.candidates.length > 1, 'more than one runtime must be acceptable');
 });
 
+test('whisper-cpp is required, and a pass may install it', () => {
+  // The Studio transcribes on the machine (2026-10-05). The probe is the binary
+  // the pipeline will call, not the formula name.
+  const tool = provision.REQUIRED_TOOLS.find((t) => t.id === 'whisper-cpp');
+  assert.ok(tool, 'whisper-cpp is missing from REQUIRED_TOOLS');
+  assert.strictEqual(tool.command, 'whisper-cli');
+  assert.ok(tool.brew, 'it is an ordinary brew formula');
+  assert.ok(!tool.manual, 'nothing about whisper needs a person');
+});
+
+// --- model files ------------------------------------------------------------
+
+const crypto = require('node:crypto');
+const fsx = require('node:fs');
+
+/** A small stand-in model: same rules, a few bytes instead of 1.6 GB. */
+function fakeModel(bytes) {
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'model-'));
+  const file = path.join(dir, 'model.bin');
+  fsx.writeFileSync(file, bytes);
+  return {
+    file,
+    model: {
+      id: 'fake',
+      file: 'model.bin',
+      sizeBytes: bytes.length,
+      sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
+    },
+  };
+}
+
+test('checkModelFile: the right bytes read as present', () => {
+  const { file, model } = fakeModel(Buffer.from('the whole model, every byte'));
+  assert.strictEqual(provision.checkModelFile(file, model).state, 'present');
+});
+
+test('checkModelFile: a truncated file is a FAIL, never present', () => {
+  // The case this exists for: a download that died part way leaves a file with
+  // exactly the right name.
+  const { file, model } = fakeModel(Buffer.from('the whole model, every byte'));
+  fsx.truncateSync(file, 10);
+  assert.strictEqual(provision.checkModelFile(file, model).state, 'wrong-size');
+});
+
+test('checkModelFile: one corrupted byte at the right size fails the checksum', () => {
+  const bytes = Buffer.from('the whole model, every byte');
+  const { file, model } = fakeModel(bytes);
+  const corrupted = Buffer.from(bytes);
+  corrupted[5] ^= 0xff;
+  fsx.writeFileSync(file, corrupted);
+  assert.strictEqual(provision.checkModelFile(file, model).state, 'wrong-checksum');
+});
+
+test('checkModelFile: no file is missing, not unreadable', () => {
+  const { model } = fakeModel(Buffer.from('x'));
+  const nowhere = path.join(os.tmpdir(), 'no-such-dir-' + process.pid, 'model.bin');
+  assert.strictEqual(provision.checkModelFile(nowhere, model).state, 'missing');
+});
+
+test('checkModelFile: a folder in the file\'s place is CANNOT TELL, not present', () => {
+  const dir = fsx.mkdtempSync(path.join(os.tmpdir(), 'model-dir-'));
+  assert.strictEqual(provision.checkModelFile(dir, { sizeBytes: 1, sha256: 'x' }).state, 'unreadable');
+});
+
+test('every required model carries a published checksum, a size, a URL and an owning job', () => {
+  for (const model of provision.REQUIRED_MODELS) {
+    assert.match(model.sha256, /^[0-9a-f]{64}$/, `${model.id} has no SHA-256 to verify against`);
+    assert.ok(Number.isInteger(model.sizeBytes) && model.sizeBytes > 0, `${model.id} has no size`);
+    assert.match(model.url, /^https:\/\//, `${model.id} has no download URL`);
+    assert.ok(nodeRoles.ROLES[model.role], `${model.id} names a job (${model.role}) the registry does not know`);
+    assert.ok(model.why, `${model.id} does not say why a node carries it`);
+  }
+});
+
+test('models follow the job: only the studio-worker machine is asked for the whisper model', () => {
+  const owner = nodeRoles.ROLES['studio-worker'].owner;
+  assert.ok(provision.modelsForNode(owner).some((m) => m.id === 'whisper-large-v3-turbo'));
+  for (const other of nodeRoles.KNOWN_NODES.filter((n) => n !== owner)) {
+    assert.ok(!provision.modelsForNode(other).some((m) => m.role === 'studio-worker'), `${other} would download a model it never reads`);
+  }
+  assert.deepStrictEqual(provision.modelsForNode('not-a-machine'), []);
+});
+
+test('model paths are derived from the home folder, under Studio/models', () => {
+  const model = provision.REQUIRED_MODELS[0];
+  assert.strictEqual(provision.modelPath(model, '/h'), path.join('/h', 'Studio', 'models', model.file));
+});
+
 // --- repos ------------------------------------------------------------------
 
 test('repo homes come from taskRepo, not from a second copy of the answer', () => {

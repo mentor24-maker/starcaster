@@ -1,6 +1,7 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { useGoogleFontLinks } from "./builder/use-google-font-links";
 import { buildBulkCreatePageBody } from "@/lib/bulk-create-page-body";
 import {
   ALREADY_UNDONE_MESSAGE,
@@ -389,6 +390,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
     () => resolveRenderTheme(draft.theme, linkedTheme),
     [draft.theme, linkedTheme]
   );
+  // The editing canvas draws modules itself, so it loads the page's Google
+  // Fonts (gf:<Family>) here as well as in the shared renderer.
+  useGoogleFontLinks([canvasTheme, draft.layoutSections]);
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]
