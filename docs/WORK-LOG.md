@@ -12,6 +12,19 @@ ticket naming the clashing files. If GitHub had been told to merge it
 automatically, that order is withdrawn, so it cannot land out of turn once
 fixed. A false alarm (GitHub says it clashes, git says it doesn't) is
 handled as before: the Mini brings the branch up to date and merges it.
+## 2026-10-05 — Studio: there is nowhere to keep a transcript of a recording (#771)
+
+Studio is about to start turning what you say in a recording into text, and
+that text needed a place to live. This adds one: a new table in the database
+that holds one transcript per recording — the full text, each sentence with
+the second it starts at, and each word with its timing. It also adds the
+server code that saves a transcript, reads it back, tells the Footage screen
+which recordings have one, and searches all of them for a word, returning the
+exact moments it was said. A recording with no transcript yet simply has no
+entry, so it can never look "done" by accident, and a failed attempt must say
+why it failed. Nothing on screen changes yet; the next tickets in this set
+fill the table and show it. The table still has to be created in the live
+database, which is a one-time step handed to Dane on the ticket.
 ## 2026-10-07 — Site Import drops every picture that is also a link, so a client's clickable tiles and logos arrive as empty blocks (#780)
 
 When you imported a website, any picture that was also a link disappeared:

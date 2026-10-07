@@ -1692,7 +1692,9 @@ test('the fake throws on a header or Prefer token it does not implement', async 
     await assert.rejects(
       () => db.sbQuery({
         method: 'POST', table: 'video_sessions', body: [{ project_id: 'proj_a', title: 'x' }],
-        headers: { Prefer: 'resolution=merge-duplicates' },
+        // Was `resolution=merge-duplicates` until Studio Phase 2 · 1 of 6
+        // (86bcdejyr) implemented upserts; ignore-duplicates still is not.
+        headers: { Prefer: 'resolution=ignore-duplicates' },
       }),
       /Prefer token/,
       'an unimplemented Prefer token was read past'
