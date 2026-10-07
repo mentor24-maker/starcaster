@@ -74,6 +74,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LABEL="com.starcaster.openclaw"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 ROLE="openclaw"
+CLI="$HOME/.local/bin/openclaw"
 
 OPENCLAW_VERSION="2026.9.8"
 APP_DIR="$HOME/OpenClaw/app"
@@ -189,7 +190,7 @@ render_config() {
         // A visible window, because Dane signs in to it over Screen Sharing.
         headless: false,
         profiles: {
-          [profile]: { cdpPort: Number(cdpPort), executablePath: chrome, color: "#C0392B" },
+          [profile]: { cdpPort: Number(cdpPort), executablePath: chrome },
         },
       },
       agents: { defaults: { model: { primary: model } } },
@@ -286,7 +287,7 @@ status() {
 
 uninstall() {
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-  rm -f "$PLIST"
+  rm -f "$PLIST" "$CLI"
   echo "Removed $LABEL from this machine. Its install ($APP_DIR) and its state — the config,"
   echo "the secrets file and the signed-in browser profile ($STATE_DIR) — are left in place,"
   echo "so installing again does not need Dane to sign in again."
@@ -363,8 +364,23 @@ install_it() {
   if [ "$installed" != "$OPENCLAW_VERSION" ]; then
     echo "openclaw: installing $OPENCLAW_VERSION into $APP_DIR"
     (cd "$APP_DIR" && [ -f package.json ] || echo '{"private":true}' > "$APP_DIR/package.json")
-    (cd "$APP_DIR" && PATH="$(dirname "$NODE_BIN"):$PATH" npm install --no-fund --no-audit --save-exact "openclaw@$OPENCLAW_VERSION" >/dev/null)
+    # npm 11 (Node 24's) skips every package's install script unless it is
+    # named. Skipped, OpenClaw installs "fine" and runs without its bundled
+    # plugins (found 2026-10-05) — so name the five it needs, and only those.
+    (cd "$APP_DIR" && PATH="$(dirname "$NODE_BIN"):$PATH" npm install --no-fund --no-audit --save-exact \
+      --allow-scripts=@google/genai,esbuild,koffi,protobufjs,openclaw "openclaw@$OPENCLAW_VERSION" >/dev/null)
   fi
+
+  # An `openclaw` command for people and agents on this machine, pinned to the
+  # same Node and install as the service. Without it, `openclaw` would resolve
+  # to the everyday Node 22 and refuse to start.
+  mkdir -p "$(dirname "$CLI")"
+  cat > "$CLI" <<CLI_BODY
+#!/bin/sh
+# Written by scripts/install_openclaw.sh. OpenClaw needs Node >= 24.16.
+exec "$NODE_BIN" "$APP_DIR/node_modules/openclaw/openclaw.mjs" "\$@"
+CLI_BODY
+  chmod +x "$CLI"
 
   write_secrets
 
