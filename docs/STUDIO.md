@@ -47,6 +47,16 @@ Open the admin app, choose the project the Studio files into, then
 - **Preview.** The small picture is Google Drive's own preview of the file.
   "No preview yet" means Drive has not drawn one (it takes a few minutes after
   an upload), or the file did not come from Drive. It is never a broken image.
+- **Watching a file.** Click its preview or its name in the **File** column
+  and the original opens in Google Drive's player, in a new tab. It opens in
+  **mentor24's Drive**, so the browser has to be signed in to a Google account
+  that can see the Studio folder. Otherwise Drive asks you to sign in or to
+  request access, and nothing is wrong with the file. It plays the original
+  and not the small editing copy, because that copy lives on the Mac Mini's
+  disk, which the website cannot reach. A file marked *not from Drive* has no
+  Drive copy to open, so it has no link. *Open in Drive* in place of a name
+  means the Mini has not downloaded the file yet, and that download is where
+  the name comes from.
 - **Device** is the machine that made the file. *Not known yet* means the
   probe step has not read that file.
 - **Role** is what the file is *in an edit*: `subject` (you on camera),

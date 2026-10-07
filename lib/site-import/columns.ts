@@ -25,7 +25,10 @@
 
 export type Box = { x: number; y: number; w: number; h: number };
 
-export type GridItem = { id: string; box?: Box | null };
+/** `group` names the styled box (a card) the item sits in, if any: rows only
+ *  merge when each column holds the same cards, so two cards are never
+ *  poured into one Builder cell that can wear only one card's look. */
+export type GridItem = { id: string; box?: Box | null; group?: string };
 
 export type Cell = { band: number; col: number };
 
@@ -96,8 +99,8 @@ function validBox(box: Box | null | undefined): box is Box {
   );
 }
 
-type Positioned = { id: string; box: Box };
-type RawColumn = { x0: number; x1: number; ids: string[] };
+type Positioned = { id: string; box: Box; group: string };
+type RawColumn = { x0: number; x1: number; ids: string[]; groups: string[] };
 type RawBand = { columns: RawColumn[] };
 
 function sweep<T>(
@@ -125,7 +128,17 @@ function columnsOf(group: Positioned[]): RawColumn[] {
     x0: Math.min(...col.map((p) => p.box.x)),
     x1: Math.max(...col.map((p) => p.box.x + p.box.w)),
     ids: col.map((p) => p.id),
+    groups: Array.from(new Set(col.map((p) => p.group))).sort(),
   }));
+}
+
+/** Same cards, column for column — the condition for two rows to merge. */
+function sameGroups(a: RawBand, b: RawBand): boolean {
+  return a.columns.every((ca, i) => ca.groups.join("\u0000") === b.columns[i].groups.join("\u0000"));
+}
+
+function unionGroups(a: string[], b: string[]): string[] {
+  return Array.from(new Set([...a, ...b])).sort();
 }
 
 function stacked(band: RawBand): RawBand {
@@ -136,6 +149,7 @@ function stacked(band: RawBand): RawBand {
         x0: Math.min(...all.map((c) => c.x0)),
         x1: Math.max(...all.map((c) => c.x1)),
         ids: all.flatMap((c) => c.ids),
+        groups: all.reduce<string[]>((acc, c) => unionGroups(acc, c.groups), []),
       },
     ],
   };
@@ -154,7 +168,7 @@ function aligned(a: RawBand, b: RawBand): boolean {
 export function planSectionGrid(items: GridItem[]): SectionGrid {
   const positioned: Positioned[] = items
     .filter((it) => validBox(it.box))
-    .map((it) => ({ id: it.id, box: it.box as Box }));
+    .map((it) => ({ id: it.id, box: it.box as Box, group: it.group || "" }));
 
   const cells = new Map<string, Cell>();
   if (positioned.length < 2) {
@@ -190,18 +204,22 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
     return out;
   });
 
-  // 3c. Merge runs: stacked after stacked, and rows whose columns line up.
+  // 3c. Merge runs: stacked after stacked, and rows whose columns line up —
+  // as long as each column holds the same cards (GridItem.group). Content
+  // with no cards has one empty group everywhere, so it merges as it always
+  // did; a 2x2 grid of cards stays two rows of two (task 86bce9wx3).
   const merged: RawBand[] = [];
   for (const band of bands) {
     const prev = merged[merged.length - 1];
-    if (prev && prev.columns.length === 1 && band.columns.length === 1) {
+    if (prev && prev.columns.length === 1 && band.columns.length === 1 && sameGroups(prev, band)) {
       merged[merged.length - 1] = stacked({ columns: [...prev.columns, ...band.columns] });
-    } else if (prev && aligned(prev, band)) {
+    } else if (prev && aligned(prev, band) && sameGroups(prev, band)) {
       merged[merged.length - 1] = {
         columns: prev.columns.map((c, i) => ({
           x0: Math.min(c.x0, band.columns[i].x0),
           x1: Math.max(c.x1, band.columns[i].x1),
           ids: [...c.ids, ...band.columns[i].ids],
+          groups: unionGroups(c.groups, band.columns[i].groups),
         })),
       };
     } else {

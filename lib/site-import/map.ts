@@ -29,6 +29,16 @@ import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
+import { importSurfaceColor } from "./theme";
+import {
+  hasPaint,
+  keepCellFill,
+  planBands,
+  planCards,
+  readSurface,
+  type MappedBackground,
+  type SurfaceLook,
+} from "./surfaces";
 export { mergeMappedSections } from "./columns";
 export { deriveImportTheme, nextThemeName, siteNameFromUrl } from "./theme";
 
@@ -61,8 +71,32 @@ export type MappedSection = {
    *  side-by-side row (columns.ts). */
   layout: string;
   widthMode: "contained";
-  background: { mode: "none" | "color"; color: string; color2: string; imageUrl: string; styleKey: "" };
+  background: MappedBackground;
   modules: MappedModule[];
+  /**
+   * The source page's surfaces (surfaces.ts, task 86bce9wx3) — present only
+   * when it measured some, so a capture without them maps exactly as before.
+   * Row: the band's padding, frame and (with joinWithPrevious) one band
+   * across every row an IR section was split into. Cell maps are keyed by
+   * column: a card's fill, frame, corners, shadow and padding.
+   */
+  joinWithPrevious?: boolean;
+  paddingTop?: string;
+  paddingBottom?: string;
+  rowBorderWidth?: string;
+  rowBorderColor?: string;
+  rowBorderStyle?: string;
+  rowBorderRadius?: string;
+  cellBackgrounds?: Record<string, MappedBackground>;
+  cellBorderWidth?: Record<string, string>;
+  cellBorderColor?: Record<string, string>;
+  cellBorderStyle?: Record<string, string>;
+  cellBorderRadius?: Record<string, string>;
+  cellShadow?: Record<string, string>;
+  cellPaddingTop?: Record<string, string>;
+  cellPaddingRight?: Record<string, string>;
+  cellPaddingBottom?: Record<string, string>;
+  cellPaddingLeft?: Record<string, string>;
   /** Engine bookkeeping for the runner (stripped before write): */
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
@@ -376,6 +410,61 @@ function shownAssetId(el: ElementIR, assetsById: Map<string, AssetRef>): string 
   return el.assetRefs[0];
 }
 
+/**
+ * How wide a picture was SHOWN on the source page, in px, or 0 when nothing
+ * says. The `width` attribute of its <img> (what the author asked for) and its
+ * measured desktop box (what the browser drew); when both exist the smaller
+ * wins, because a linked picture's box is its anchor's, and an anchor styled
+ * as a block is as wide as the column however small the icon inside it.
+ */
+function shownWidthPx(html: string, box?: { w: number } | null): number {
+  const imgTag = /<img\b[^>]*>/i.exec(String(html || ""))?.[0] || "";
+  const declared = /^\s*\d+(\.\d+)?\s*(px)?\s*$/i.test(attrFromHtml(imgTag, "width"))
+    ? Math.round(Number.parseFloat(attrFromHtml(imgTag, "width")))
+    : 0;
+  const measured = box && Number.isFinite(box.w) && box.w >= 2 ? Math.round(box.w) : 0;
+  if (declared > 0 && measured > 0) return Math.min(declared, measured);
+  return declared || measured;
+}
+
+/** A picture shown at less than this share of its column was meant to be
+ *  small (an icon, a wordmark, a badge); at or above it, it fills the column.
+ *  Half, not "nearly all": Delray's 791px clinic flyers sit in a ~1100px
+ *  page and are the page's main content, so they keep filling the column as
+ *  they always did. */
+const SMALL_IMAGE_SHARE = 0.5;
+/** The Builder's content column when nothing measured the source's — the
+ *  same figure `CONTENT_WIDTH_PX` in lib/builder-client/image-renditions.ts
+ *  uses (not imported: this file builds on its own, lib/site-import/dist). */
+const ASSUMED_COLUMN_PX = 1200;
+
+/**
+ * The image module's `maxWidthPx` for an imported picture, or "" for none
+ * (task 86bcebvg9). Every imported picture is Width 100% of its column; the
+ * module already never draws a picture larger than its file, so this only
+ * matters for a file with more pixels than the source page showed — Dane of
+ * Earth's 1600px Substack/Medium/Patreon wordmarks, displayed small, arrived
+ * filling the column. A pixel cap rather than a smaller Width %: a percentage
+ * is a share of a column the Builder chooses, and the Width control only
+ * offers 5–100% in fixed steps, so a 24px icon could not be expressed at all.
+ *
+ * Only small pictures get one — a photo shown at most of its column's width
+ * keeps filling it, so the 1103px flyer behaves exactly as before.
+ */
+function importedImageCap(shownPx: number, columnPx: number, asset: AssetRef | null): string {
+  if (!(shownPx > 0)) return "";
+  const column = columnPx > 0 ? columnPx : ASSUMED_COLUMN_PX;
+  if (shownPx >= column * SMALL_IMAGE_SHARE) return "";
+  // The file is no bigger than it was shown: the module's own natural-size
+  // cap already holds it there, and a setting would be noise in the panel.
+  if (asset?.width && asset.width <= shownPx) return "";
+  return String(shownPx);
+}
+
+function cappedAt(px: string): { maxWidthPx?: string } {
+  return px ? { maxWidthPx: px } : {};
+}
+
 function normalizeHref(href: string): string {
   return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -420,7 +509,9 @@ function structuralSignature(el: ElementIR): string {
  *
  * Returns the images to emit, or null when the element is a real table.
  */
-function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href: string }[] | null {
+function imagesFromLayoutTable(
+  el: ElementIR
+): { src: string; alt: string; href: string; width: number }[] | null {
   if (el.class !== "table") return null;
   let $: ReturnType<typeof cheerio.load>;
   try {
@@ -430,7 +521,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
   }
   const text = $.root().text().replace(/\s+/g, " ").trim();
   if (text.length > 0) return null; // any real copy means it may be data
-  const out: { src: string; alt: string; href: string }[] = [];
+  const out: { src: string; alt: string; href: string; width: number }[] = [];
   const seen = new Set<string>();
   $("img").each((_i, node) => {
     const $img = $(node);
@@ -444,6 +535,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
       src,
       alt: String($img.attr("alt") || "").trim(),
       href: href && href !== src ? href : "",
+      width: shownWidthPx($.html(node)),
     });
   });
   return out.length ? out : null;
@@ -464,6 +556,68 @@ const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
 type Dispositions = { mapped: number; placeholder: number; deduped: number };
 
 /**
+ * A band onto each Builder row of the run it became (planBands decides each
+ * element's band; a run is consecutive rows in one band). Every row carries
+ * the background, and rows after the first JOIN the first, so a band split
+ * into several rows still reads as one band (Builder paints a
+ * joined run with its first row's background). Padding goes on the band's
+ * outer edges only — top of the first row, bottom of the last — or a split
+ * band would gain the gap between every row. A frame (and the corners, which
+ * Builder draws only with a frame) is applied to a band that stayed one row:
+ * on a split band it would outline each row separately.
+ */
+function applyBand(
+  row: MappedSection,
+  look: SurfaceLook | null,
+  at: { first: boolean; last: boolean; rows: number }
+): void {
+  if (!look) return;
+  if (look.background) {
+    row.background = { ...look.background };
+    if (!at.first) row.joinWithPrevious = true;
+  }
+  if (at.first && look.padding.top) row.paddingTop = look.padding.top;
+  if (at.last && look.padding.bottom) row.paddingBottom = look.padding.bottom;
+  if (at.rows === 1 && look.border) {
+    row.rowBorderWidth = look.border.width;
+    row.rowBorderColor = look.border.color;
+    row.rowBorderStyle = look.border.style;
+    if (look.radius) row.rowBorderRadius = look.radius;
+  }
+}
+
+function setCell<K extends keyof MappedSection>(
+  row: MappedSection,
+  key: K,
+  column: string,
+  value: string
+): void {
+  const map = ((row[key] as Record<string, string> | undefined) || {}) as Record<string, string>;
+  map[column] = value;
+  (row as Record<string, unknown>)[key] = map;
+}
+
+/** One card's look onto one Builder column. */
+function applyCard(row: MappedSection, column: string, look: SurfaceLook): void {
+  if (look.background) {
+    const background = { ...look.background };
+    if (background.mode === "color") background.color = keepCellFill(background.color);
+    row.cellBackgrounds = { ...(row.cellBackgrounds || {}), [column]: background };
+  }
+  if (look.border) {
+    setCell(row, "cellBorderWidth", column, look.border.width);
+    setCell(row, "cellBorderColor", column, look.border.color);
+    setCell(row, "cellBorderStyle", column, look.border.style);
+  }
+  if (look.radius) setCell(row, "cellBorderRadius", column, look.radius);
+  if (look.shadow) setCell(row, "cellShadow", column, look.shadow);
+  if (look.padding.top) setCell(row, "cellPaddingTop", column, look.padding.top);
+  if (look.padding.right) setCell(row, "cellPaddingRight", column, look.padding.right);
+  if (look.padding.bottom) setCell(row, "cellPaddingBottom", column, look.padding.bottom);
+  if (look.padding.left) setCell(row, "cellPaddingLeft", column, look.padding.left);
+}
+
+/**
  * Split one IR section's modules into Builder sections, one per row that
  * column inference found (columns.ts). With no side-by-side rows this
  * returns exactly what the mapper always emitted: one single-column section
@@ -481,10 +635,30 @@ function splitIntoRows(args: {
   cellOf: (sourceId: string) => Cell;
   sourceElementIds: string[];
   dispositionsFor: (band: number) => Dispositions;
+  /** Element sourceId → the painted band it sits in ("" for none). */
+  bandOf: (sourceId: string) => string;
+  /** A band's look, by its container key. */
+  bandLookOf: (key: string) => SurfaceLook | null;
+  /** The section root's spacing, for a section with no band anywhere. */
+  rootLook: SurfaceLook | null;
+  /** Element sourceId → the look of the card it sits in; `onBand` when the
+   *  row is painted, so a card the page's colour still shows against it. */
+  cardLookOf: (sourceId: string, onBand: boolean) => { key: string; look: SurfaceLook } | null;
 }): MappedSection[] {
   const { section, baseId, modules, moduleCells, grid, cellOf } = args;
   const bands = Array.from(new Set(moduleCells.map((c) => c.band))).sort((a, b) => a - b);
   const out: MappedSection[] = [];
+
+  // Each Builder row's band: the one band every element in it sits in. Rows
+  // never merge across a band (columns.ts, GridItem.group), so a mixed row
+  // only happens where an element has no band of its own — it gets none.
+  const rowBand = bands.map((band) => {
+    const keys = new Set(
+      args.sourceElementIds.filter((id) => cellOf(id).band === band).map((id) => args.bandOf(id))
+    );
+    return keys.size === 1 ? Array.from(keys)[0] : "";
+  });
+  const anyBand = rowBand.some(Boolean);
 
   bands.forEach((band, i) => {
     const idx = modules.map((_, k) => k).filter((k) => moduleCells[k].band === band);
@@ -510,7 +684,7 @@ function splitIntoRows(args: {
     // Every import-owned section carries the section source marker (spec:
     // idempotency + provenance) — each row of a split section too.
     rowModules[0].settings.importSectionSourceId = section.sourceId;
-    out.push({
+    const row: MappedSection = {
       id: i === 0 ? baseId : `${baseId}b${band}`,
       title: `Imported: ${title || "section"}`,
       layout,
@@ -519,7 +693,39 @@ function splitIntoRows(args: {
       modules: rowModules,
       sourceElementIds: args.sourceElementIds.filter((id) => cellOf(id).band === band),
       dispositions: { ...args.dispositionsFor(band) },
-    });
+    };
+    // Consecutive rows in one band are one run: joined, padded at its ends.
+    const key = rowBand[i];
+    if (anyBand) {
+      if (key) {
+        let start = i;
+        while (start > 0 && rowBand[start - 1] === key) start--;
+        let end = i;
+        while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
+        applyBand(row, args.bandLookOf(key), { first: i === start, last: i === end, rows: end - start + 1 });
+      }
+    } else {
+      applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
+    }
+    const onBand = Boolean(row.background.mode !== "none");
+    // A column wears a card only when everything in it sat in that one card.
+    const byColumn = new Map<string, Set<string>>();
+    const lookByKey = new Map<string, SurfaceLook>();
+    const cellKeys = layout === "single" ? ["main"] : columnKeys(cols.length);
+    for (const id of row.sourceElementIds) {
+      const at = layout === "single" ? 0 : cols.indexOf(cellOf(id).col);
+      if (at < 0) continue; // a cell that built no module (nav links)
+      const card = args.cardLookOf(id, onBand);
+      const set = byColumn.get(cellKeys[at]) || new Set<string>();
+      set.add(card ? card.key : "");
+      byColumn.set(cellKeys[at], set);
+      if (card) lookByKey.set(card.key, card.look);
+    }
+    for (const [column, keys] of byColumn) {
+      const [only] = Array.from(keys);
+      if (keys.size === 1 && only) applyCard(row, column, lookByKey.get(only) as SurfaceLook);
+    }
+    out.push(row);
   });
 
   // Rows that produced no module (nav links, deduped repeats) still have to
@@ -546,6 +752,9 @@ function splitIntoRows(args: {
 export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
   const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
+  // The source page's content column (theme.ts reads the same tally); 0 when
+  // the capture measured nothing.
+  const siteContentPx = Number(ir.styleSummary?.contentWidths?.[0]?.value) || 0;
 
   // Nav lookup: label+href pairs from every extracted nav tree; matching
   // standalone link elements are navConsumed (decision 6: default runs
@@ -558,6 +767,18 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
   };
   for (const nav of ir.taxonomy?.navs || []) collectNav(nav.items);
+
+  const surfaceColor = importSurfaceColor(ir);
+  const assetByUrl = new Map<string, AssetRef>();
+  for (const a of ir.assets || []) if (a.originalUrl && !assetByUrl.has(a.originalUrl)) assetByUrl.set(a.originalUrl, a);
+  /** A background picture → the promoted asset's URL (copied on --apply),
+   *  else the original, the way image modules fall back to their src. */
+  const resolveBackgroundImage = (url: string): string => {
+    const asset = assetByUrl.get(url);
+    if (!asset) return url;
+    promoteAsset(asset.id);
+    return asset.storageUrl || asset.originalUrl;
+  };
 
   const report: MapReport = {
     elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
@@ -872,9 +1093,91 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // in on the source page. Prose never merges across a cell boundary, and
       // every module is tagged with the cell it was built in, so the section
       // can be split into Builder rows once the modules exist.
-      const grid = planSectionGrid(
-        (section.elements || []).map((el) => ({ id: el.sourceId, box: el.box }))
+      // Bands and cards (surfaces.ts). Each element's band is decided on its
+      // own, so a page whose whole main area is one wrapper still keeps every
+      // band inside it; rows never merge across a band. A first plan grouped
+      // by band says which boxes hold one cell's worth of content (cards);
+      // the real plan then refuses to pour two different cards into one cell
+      // (columns.ts, GridItem.group).
+      const sectionEls = section.elements || [];
+      const containerStyles = section.containers || {};
+      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const bandLooks = new Map<string, SurfaceLook>();
+      const bandLookOf = (key: string): SurfaceLook | null => {
+        if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
+        return bandLooks.get(key) || null;
+      };
+      // A wrapper painted the page's own colour is not a band — keep looking
+      // inward (round 2 of 86bce9wx3). Failing a band that shows, the plain
+      // box with the spacing wins (round 3).
+      const bandOf = planBands(
+        sectionEls,
+        section.containerBoxes,
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && hasPaint(look));
+        },
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && (look.padding.top || look.padding.bottom));
+        }
       );
+      const draft = planSectionGrid(
+        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
+      );
+      const cardOf = planCards(sectionEls, bandOf, (id) => {
+        const c = draft.cells.get(id);
+        return c ? `${c.band}:${c.col}` : "";
+      });
+      const grid = planSectionGrid(
+        sectionEls.map((el) => ({
+          id: el.sourceId,
+          box: el.box,
+          group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+        }))
+      );
+      // No painted band anywhere: the section root may still carry the spacing.
+      const rootLook = (() => {
+        const root = readSurface(section.rootStyles, rowCtx);
+        return root.padding.top || root.padding.bottom ? { padding: root.padding } : null;
+      })();
+      // A card the colour of the page vanishes against the page — but not
+      // against a painted band, so it keeps its fill there.
+      const cardLooks = new Map<string, SurfaceLook>();
+      const cardLookOf = (sourceId: string, onBand: boolean) => {
+        const key = cardOf.get(sourceId);
+        if (!key) return null;
+        const memo = `${onBand ? "band" : "page"}\u0001${key}`;
+        if (!cardLooks.has(memo)) {
+          cardLooks.set(
+            memo,
+            readSurface(containerStyles[key], {
+              surface: onBand ? "" : surfaceColor,
+              resolveImage: resolveBackgroundImage,
+              maxPadding: 50,
+            })
+          );
+        }
+        const look = cardLooks.get(memo) as SurfaceLook;
+        return hasPaint(look) ? { key, look } : null;
+      };
+      // How wide the source column holding a cell was, for sizing small
+      // pictures (importedImageCap). A side-by-side column is its own extent;
+      // a stacked one is the section's whole span, or the site's measured
+      // content width when that is wider (a section holding only a logo
+      // spans only the logo). 0 = unmeasured.
+      const boxes = (section.elements || []).map((el) => el.box).filter((b) => b && b.w >= 2);
+      const sectionSpanPx = boxes.length
+        ? Math.max(...boxes.map((b) => b!.x + b!.w)) - Math.min(...boxes.map((b) => b!.x))
+        : 0;
+      const columnPxFor = (cell: Cell): number => {
+        const band = grid.bands[cell.band];
+        if (band && band.columns.length > 1) {
+          const col = band.columns[cell.col];
+          if (col && col.x1 - col.x0 > 1) return col.x1 - col.x0;
+        }
+        return Math.max(sectionSpanPx, siteContentPx);
+      };
       const moduleCells: Cell[] = [];
       const bandDispositions = new Map<number, { mapped: number; placeholder: number; deduped: number }>();
       const dispositionsFor = (band: number) => {
@@ -1093,6 +1396,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
               size: "100",
               ...(imageLink(el) || {}),
+              ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
               importSourceIds: el.sourceId,
             },
           });
@@ -1163,6 +1467,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
                 // image module gets. Without it the module renders at the
                 // file's natural size — a 1103px flyer overflowed the page.
                 size: "100",
+                // A layout table's pictures have no box of their own (the
+                // table has one); the <img> width attribute is the evidence.
+                ...cappedAt(importedImageCap(img.width, columnPxFor(currentCell), asset)),
                 ...(img.href ? { linkUrl: img.href, newTab: "true" } : {}),
                 importSourceIds: el.sourceId,
                 importFromLayoutTable: "true",
@@ -1203,6 +1510,10 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         cellOf: (id) => grid.cells.get(id) || { band: 0, col: 0 },
         sourceElementIds,
         dispositionsFor,
+        bandOf: (id) => bandOf.get(id) || "",
+        bandLookOf,
+        rootLook,
+        cardLookOf,
       });
       mappedSections.push(...built);
       pageModules += modules.length;

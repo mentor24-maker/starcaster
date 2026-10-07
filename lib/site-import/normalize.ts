@@ -432,6 +432,72 @@ function compactStyles(raw: CapturedStyles | undefined): CapturedStyles {
 }
 
 /* ---------------------------------------------------------------------------
+ * Container surfaces (task 86bce9wx3)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a WRAPPING box contributes to a section's look: the band it paints,
+ * the card's border, corners and shadow, and the room inside it. The content
+ * atoms carry their own styles; these are the ones the atoms cannot — on
+ * daneofearth.org the coloured bands and the 2x2 grid's cards lived only on
+ * the divs around the content, and arrived as plain boxes on white.
+ */
+export const CONTAINER_STYLE_PROPS: string[] = [
+  "background-color", "background-image", "box-shadow", "border-radius",
+  "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "padding-top", "padding-right", "padding-bottom", "padding-left",
+];
+
+/** A background picture on a box smaller than this is an icon or a sprite
+ *  (delraytennis.com draws its phone and envelope glyphs that way), not a
+ *  band or card picture — and with no size or position recorded it would be
+ *  stretched across a whole column. */
+const MIN_BACKGROUND_IMAGE_BOX = { w: 200, h: 80 };
+
+function containerStyles(
+  raw: CapturedStyles | undefined,
+  rect?: [number, number, number, number]
+): CapturedStyles {
+  const compact = compactStyles(raw);
+  if (!rect || rect[2] < MIN_BACKGROUND_IMAGE_BOX.w || rect[3] < MIN_BACKGROUND_IMAGE_BOX.h) {
+    delete compact["background-image"];
+  }
+  const out: CapturedStyles = {};
+  for (const prop of CONTAINER_STYLE_PROPS) if (compact[prop]) out[prop] = compact[prop];
+  // A side with no border still has a computed colour (the text colour) —
+  // noise that would ride along on every box.
+  for (const side of ["top", "right", "bottom", "left"]) {
+    if (!out[`border-${side}-width`]) {
+      delete out[`border-${side}-color`];
+      delete out[`border-${side}-style`];
+    }
+  }
+  return out;
+}
+
+function clearColor(value: string | undefined): boolean {
+  const v = String(value || "").trim();
+  return !v || v === "transparent" || /^rgba\([^)]*,\s*0(\.0+)?\)$/.test(v);
+}
+
+/** True when a box visibly paints something: a fill, a background picture
+ *  or gradient, a border or a shadow. Padding or rounded corners alone draw nothing, and
+ *  counting them would list every layout wrapper on the page. */
+export function paintsSurface(st: CapturedStyles): boolean {
+  if (!clearColor(st["background-color"])) return true;
+  if (/url\(|gradient\(/i.test(st["background-image"] || "")) return true;
+  if (st["box-shadow"] && st["box-shadow"] !== "none") return true;
+  return ["top", "right", "bottom", "left"].some(
+    (side) =>
+      parseFloat(st[`border-${side}-width`] || "0") > 0 &&
+      !/^(none|hidden)$/.test(st[`border-${side}-style`] || "none") &&
+      !clearColor(st[`border-${side}-color`])
+  );
+}
+
+/* ---------------------------------------------------------------------------
  * Asset reference matching
  * ------------------------------------------------------------------------ */
 
@@ -1014,6 +1080,44 @@ function normalizePage(
 
   // One walk builds every element, assigned to its candidate section.
   const perCandidate = new Map<number, ElementIR[]>();
+  const perCandidateContainers = new Map<number, Record<string, CapturedStyles>>();
+  const perCandidateBoxes = new Map<number, Record<string, NonNullable<ElementIR["box"]>>>();
+  /** The painted boxes between an element and its section root (inclusive),
+   *  outermost first. Recorded into the section as it goes. Never a box above
+   *  the root: an element that IS its section root starts the walk at its
+   *  parent, outside the section, and used to climb to <body> and <html> and
+   *  wear their colours (round 2 of 86bce9wx3) — so a start the root does not
+   *  contain records nothing. */
+  const paintedChain = (start: DomNode, target: number | null): string[] => {
+    if (target === null) return [];
+    const root = candidates[target];
+    let inside: DomNode | null | undefined = start;
+    while (inside && inside !== root) inside = inside.parent;
+    if (!inside) return [];
+    const chain: string[] = [];
+    let cur: DomNode | null | undefined = start;
+    while (cur) {
+      const key = (cur.attribs || {})["data-scim"] || "";
+      if (key) {
+        const st = containerStyles(styles[key], rects[key]);
+        if (paintsSurface(st)) {
+          chain.unshift(key);
+          const sink = perCandidateContainers.get(target) || {};
+          sink[key] = st;
+          perCandidateContainers.set(target, sink);
+          const box = boxOf(key);
+          if (box) {
+            const boxes = perCandidateBoxes.get(target) || {};
+            boxes[key] = box;
+            perCandidateBoxes.set(target, boxes);
+          }
+        }
+      }
+      if (cur === root) break;
+      cur = cur.parent;
+    }
+    return chain;
+  };
   const loose: ElementIR[] = [];
   const usedIds = new Set<string>();
   const assetUses: PageBuild["assetUses"] = [];
@@ -1070,6 +1174,10 @@ function normalizePage(
       v.kind === "element"
         ? candidateFor(v.node, candidateIndex)
         : candidateFor(v.parentNode, candidateIndex);
+    // Text runs start at the box that holds the text (which may itself be the
+    // card); an element starts at its parent — its own paint is its own.
+    const chain = paintedChain(v.parentNode, target);
+    if (chain.length) el.containers = chain;
     if (target === null) {
       loose.push(el);
     } else {
@@ -1089,11 +1197,18 @@ function normalizePage(
     const elements = perCandidate.get(i);
     if (!elements || elements.length === 0) return;
     let sectionPath = `section[${i}]`;
+    const containers = perCandidateContainers.get(i);
+    const containerBoxes = perCandidateBoxes.get(i);
+    const rootKey = (node.attribs || {})["data-scim"] || "";
+    const rootStyles = containerStyles(styles[rootKey], rects[rootKey]);
     sections.push({
       sourceId: computeSourceId(pageIdx, sectionPath),
       type: "unknown",
       screenshot: sectionShots[String(i)] || "",
       elements,
+      ...(containers ? { containers } : {}),
+      ...(containerBoxes ? { containerBoxes } : {}),
+      ...(Object.keys(rootStyles).length ? { rootStyles } : {}),
     });
   });
   if (loose.length) {

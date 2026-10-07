@@ -88,7 +88,10 @@
                 },
                 "documentPosition": 4,
                 "depth": 4,
-                "assetRefs": []
+                "assetRefs": [],
+                "containers": [
+                  "8"
+                ]
               },
               {
                 "sourceId": "0-398d085c",
@@ -104,7 +107,10 @@
                 },
                 "documentPosition": 5,
                 "depth": 5,
-                "assetRefs": []
+                "assetRefs": [],
+                "containers": [
+                  "8"
+                ]
               },
               {
                 "sourceId": "0-d212f824",
@@ -128,9 +134,24 @@
                 },
                 "documentPosition": 6,
                 "depth": 4,
-                "assetRefs": []
+                "assetRefs": [],
+                "containers": [
+                  "8"
+                ]
               }
-            ]
+            ],
+            "containers": {
+              "8": {
+                "background-color": "rgb(15, 23, 42)",
+                "padding-top": "96px",
+                "padding-bottom": "96px"
+              }
+            },
+            "rootStyles": {
+              "background-color": "rgb(15, 23, 42)",
+              "padding-top": "96px",
+              "padding-bottom": "96px"
+            }
           },
           {
             "sourceId": "0-04c8c908",

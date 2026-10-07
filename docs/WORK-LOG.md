@@ -11,6 +11,73 @@ text links stay text links. One thing this exposes: imported pictures are
 always set to the full width of their column, so small icons now appear but
 too big — that was already true of every imported picture and is flagged
 separately.
+## 2026-10-07 — Imported pages lose their section backgrounds, card borders, rounded corners, shadows and spacing (#779)
+
+When Site Import copies a website, it now keeps the look of the boxes around
+the content as well as the content itself. A coloured band behind a section
+arrives as that row's background, with the space above and below it. A card
+with a border, rounded corners and a shadow arrives as the column's border,
+corners, shadow and inner spacing. A grid of cards now comes in as rows of
+cards, one card per column, because a Builder column can only wear one card's
+look. Before this, daneofearth.org's coloured strips and its grid of cards
+all came through as plain boxes on white and had to be restyled by hand.
+The first version missed the real site: its whole page sits inside one
+wrapper with six coloured strips stacked in it, and the import only looked
+for one strip per wrapper, so all six still came out white. It now finds
+each strip on its own, and two-colour fades (gradients) come across as
+Builder gradients. Checked against the real Dane of Earth capture, which is
+now a test: the space photo, the blue fade, the teal grid strip, the second
+fade, the starfield and the dark footer all arrive. Small background icons,
+such as a phone glyph, are ignored so they never get stretched across a
+column. Older captures still get their strips, but not cards.
+## 2026-10-05 — Footage screen: you can't watch a recording — nothing is clickable (#773)
+
+The Footage screen listed every recording, but nothing on it could be
+clicked, so there was no way to watch one. Each row now shows the file's name
+from Google Drive, and clicking the name or its little preview picture opens
+the original in Drive's player in a new tab. The browser has to be signed in
+to a Google account that can see the Studio folder. Files with no copy in
+Drive say "not from Drive" instead of showing a link that leads nowhere.
+Playing a video right on the page is a separate, later decision.
+## 2026-10-06 — Delray site: links to PDFs (job application, flyers, policies) open a 'not found' page (#776)
+
+On delraytennis.com, clicking a document — the employment application, the
+maintenance job posting, the afterschool waiver, the press release — opened a
+"not found" page. Those links still pointed at the old WordPress site, which
+stopped existing at that address when the domain moved to StarCaster on 10/2.
+The files were never lost: Site Import had already saved a copy of every one
+in StarCaster's own storage, it just never updated the links. A new tool now
+points each link at its saved copy — on the pages, on what visitors are
+actually served, and in blog posts — without publishing anything else. In
+production that is 9 documents on 6 live pages, and every one has a working
+copy.
+## 2026-10-05 — YouTube outreach 1/7: a saved list of target videos, each with its own comment settings (storage and server) (#769)
+
+Starcaster now has a place to keep the list of YouTube videos the outreach
+agent should comment on. Each video on the list carries its own settings —
+what the comment is for, where it goes (a new comment or a reply), what kind
+of message, how long, whether it may include a link or mention Dane of Earth,
+whether to comment once or repeat every few days, and a priority — all
+starting from the defaults Dane approved. Adding a video only needs the link:
+Starcaster reads the title, channel, date and view count from YouTube, and if
+YouTube doesn't answer, it saves the link anyway and says why the details are
+missing. There is also one set of account-wide limits (at most 10 comments a
+day, at least 45 minutes apart, only 8am to 10pm, channels and words to avoid,
+and a description of the voice). One client can never see another client's
+list, and a test proves it. There is no screen yet (that is the next ticket),
+and nothing comments on anything. The two new database tables need Dane to
+run one SQL file before this goes live.
+## 2026-10-07 — Site Import stretches every picture to the full width of its column, so a client's small icons and logos arrive huge (#781)
+
+Imported pictures no longer balloon to fill their column when the original
+site showed them small. The real culprits were pictures whose file is much
+bigger than how they were displayed — Dane of Earth's Substack, Medium and
+Patreon wordmarks are 1,600-pixel files the old site showed at a fraction of
+that. The Image module now has a "Max Width (px)" box next to Width, and Site
+Import fills it in with the size the picture had on the original page, but
+only for pictures that took up less than half their column — so photos and
+Delray's big flyers still fill theirs. Leave the box blank and nothing
+changes, which is why every existing page looks exactly as it did.
 
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
