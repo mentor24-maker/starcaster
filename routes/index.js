@@ -67,6 +67,7 @@ const crm         = require('./crm');
 const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
+const youtubeOutreach = require('./youtubeOutreach');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
@@ -129,6 +130,7 @@ const ROUTE_MODULES = [
   blog,
   events,
   studio,
+  youtubeOutreach,
   eventCategories,
   eventHarvest,
   publicSite,
