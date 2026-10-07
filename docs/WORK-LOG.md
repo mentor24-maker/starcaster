@@ -1,3 +1,19 @@
+## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
+
+Each video on **Engage → YouTube Outreach** now has a **Write a draft**
+button. Starcaster reads the video's description and top comments, then
+writes one comment that follows that video's settings and the account's
+voice. The draft appears on a new **Approvals** tab with the settings it
+followed and its words in a box Dane can edit. He can **Approve**, **Reject**
+or **Write another**. The rules are checked on what the AI actually wrote,
+not just asked for: a link when the video says "never", any link other than
+the allowed one, or a word on the avoid list. A draft that breaks a rule is
+thrown away with the reason named, so it can never be approved by accident.
+The same check runs when Dane approves an edited draft. Rejected drafts
+leave the tab but stay in that video's **History**. Nothing is posted yet.
+Approved comments wait for the next ticket. Needs one new table: Dane runs
+`docs/SQL/youtube_outreach_comments_setup.sql` before merge.
+
 ## 2026-10-07 — YouTube outreach 2/7: the screen where Dane adds target videos and sets how each is commented on (#783)
 
 The YouTube outreach list now has a screen: **Engage → YouTube Outreach**.
