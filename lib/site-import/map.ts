@@ -352,6 +352,61 @@ function attrFromHtml(html: string, attr: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
+/**
+ * How wide a picture was SHOWN on the source page, in px, or 0 when nothing
+ * says. The `width` attribute of its <img> (what the author asked for) and its
+ * measured desktop box (what the browser drew); when both exist the smaller
+ * wins, because a linked picture's box is its anchor's, and an anchor styled
+ * as a block is as wide as the column however small the icon inside it.
+ */
+function shownWidthPx(html: string, box?: { w: number } | null): number {
+  const imgTag = /<img\b[^>]*>/i.exec(String(html || ""))?.[0] || "";
+  const declared = /^\s*\d+(\.\d+)?\s*(px)?\s*$/i.test(attrFromHtml(imgTag, "width"))
+    ? Math.round(Number.parseFloat(attrFromHtml(imgTag, "width")))
+    : 0;
+  const measured = box && Number.isFinite(box.w) && box.w >= 2 ? Math.round(box.w) : 0;
+  if (declared > 0 && measured > 0) return Math.min(declared, measured);
+  return declared || measured;
+}
+
+/** A picture shown at less than this share of its column was meant to be
+ *  small (an icon, a wordmark, a badge); at or above it, it fills the column.
+ *  Half, not "nearly all": Delray's 791px clinic flyers sit in a ~1100px
+ *  page and are the page's main content, so they keep filling the column as
+ *  they always did. */
+const SMALL_IMAGE_SHARE = 0.5;
+/** The Builder's content column when nothing measured the source's — the
+ *  same figure `CONTENT_WIDTH_PX` in lib/builder-client/image-renditions.ts
+ *  uses (not imported: this file builds on its own, lib/site-import/dist). */
+const ASSUMED_COLUMN_PX = 1200;
+
+/**
+ * The image module's `maxWidthPx` for an imported picture, or "" for none
+ * (task 86bcebvg9). Every imported picture is Width 100% of its column; the
+ * module already never draws a picture larger than its file, so this only
+ * matters for a file with more pixels than the source page showed — Dane of
+ * Earth's 1600px Substack/Medium/Patreon wordmarks, displayed small, arrived
+ * filling the column. A pixel cap rather than a smaller Width %: a percentage
+ * is a share of a column the Builder chooses, and the Width control only
+ * offers 5–100% in fixed steps, so a 24px icon could not be expressed at all.
+ *
+ * Only small pictures get one — a photo shown at most of its column's width
+ * keeps filling it, so the 1103px flyer behaves exactly as before.
+ */
+function importedImageCap(shownPx: number, columnPx: number, asset: AssetRef | null): string {
+  if (!(shownPx > 0)) return "";
+  const column = columnPx > 0 ? columnPx : ASSUMED_COLUMN_PX;
+  if (shownPx >= column * SMALL_IMAGE_SHARE) return "";
+  // The file is no bigger than it was shown: the module's own natural-size
+  // cap already holds it there, and a setting would be noise in the panel.
+  if (asset?.width && asset.width <= shownPx) return "";
+  return String(shownPx);
+}
+
+function cappedAt(px: string): { maxWidthPx?: string } {
+  return px ? { maxWidthPx: px } : {};
+}
+
 function normalizeHref(href: string): string {
   return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -396,7 +451,9 @@ function structuralSignature(el: ElementIR): string {
  *
  * Returns the images to emit, or null when the element is a real table.
  */
-function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href: string }[] | null {
+function imagesFromLayoutTable(
+  el: ElementIR
+): { src: string; alt: string; href: string; width: number }[] | null {
   if (el.class !== "table") return null;
   let $: ReturnType<typeof cheerio.load>;
   try {
@@ -406,7 +463,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
   }
   const text = $.root().text().replace(/\s+/g, " ").trim();
   if (text.length > 0) return null; // any real copy means it may be data
-  const out: { src: string; alt: string; href: string }[] = [];
+  const out: { src: string; alt: string; href: string; width: number }[] = [];
   const seen = new Set<string>();
   $("img").each((_i, node) => {
     const $img = $(node);
@@ -420,6 +477,7 @@ function imagesFromLayoutTable(el: ElementIR): { src: string; alt: string; href:
       src,
       alt: String($img.attr("alt") || "").trim(),
       href: href && href !== src ? href : "",
+      width: shownWidthPx($.html(node)),
     });
   });
   return out.length ? out : null;
@@ -522,6 +580,9 @@ function splitIntoRows(args: {
 export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
   const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
   const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
+  // The source page's content column (theme.ts reads the same tally); 0 when
+  // the capture measured nothing.
+  const siteContentPx = Number(ir.styleSummary?.contentWidths?.[0]?.value) || 0;
 
   // Nav lookup: label+href pairs from every extracted nav tree; matching
   // standalone link elements are navConsumed (decision 6: default runs
@@ -848,6 +909,23 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       const grid = planSectionGrid(
         (section.elements || []).map((el) => ({ id: el.sourceId, box: el.box }))
       );
+      // How wide the source column holding a cell was, for sizing small
+      // pictures (importedImageCap). A side-by-side column is its own extent;
+      // a stacked one is the section's whole span, or the site's measured
+      // content width when that is wider (a section holding only a logo
+      // spans only the logo). 0 = unmeasured.
+      const boxes = (section.elements || []).map((el) => el.box).filter((b) => b && b.w >= 2);
+      const sectionSpanPx = boxes.length
+        ? Math.max(...boxes.map((b) => b!.x + b!.w)) - Math.min(...boxes.map((b) => b!.x))
+        : 0;
+      const columnPxFor = (cell: Cell): number => {
+        const band = grid.bands[cell.band];
+        if (band && band.columns.length > 1) {
+          const col = band.columns[cell.col];
+          if (col && col.x1 - col.x0 > 1) return col.x1 - col.x0;
+        }
+        return Math.max(sectionSpanPx, siteContentPx);
+      };
       const moduleCells: Cell[] = [];
       const bandDispositions = new Map<number, { mapped: number; placeholder: number; deduped: number }>();
       const dispositionsFor = (band: number) => {
@@ -1064,6 +1142,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               url,
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
               size: "100",
+              ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
               importSourceIds: el.sourceId,
             },
           });
@@ -1134,6 +1213,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
                 // image module gets. Without it the module renders at the
                 // file's natural size — a 1103px flyer overflowed the page.
                 size: "100",
+                // A layout table's pictures have no box of their own (the
+                // table has one); the <img> width attribute is the evidence.
+                ...cappedAt(importedImageCap(img.width, columnPxFor(currentCell), asset)),
                 ...(img.href ? { linkUrl: img.href, newTab: "true" } : {}),
                 importSourceIds: el.sourceId,
                 importFromLayoutTable: "true",
