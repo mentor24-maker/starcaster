@@ -1,3 +1,17 @@
+## 2026-10-07 — Site Import drops every picture that is also a link, so a client's clickable tiles and logos arrive as empty blocks (#780)
+
+When you imported a website, any picture that was also a link disappeared:
+the importer treated it as a text link, put it in a text block, and the
+block showed nothing. On the Dane of Earth home page that emptied the four
+project tiles in the teal grid and the Substack, Medium, Patreon and
+Buy-me-a-coffee logos; Delray's logo and social icons were the same. Now a
+link that holds nothing but one picture comes in as a picture with its link
+already set (and "open in a new tab" if the original did), while ordinary
+text links stay text links. One thing this exposes: imported pictures are
+always set to the full width of their column, so small icons now appear but
+too big — that was already true of every imported picture and is flagged
+separately.
+
 ## 2026-10-05 — Studio: the Mac Mini has no speech-to-text installed (#772)
 
 The Mac Mini can now turn what you say in a recording into text, on its own,
