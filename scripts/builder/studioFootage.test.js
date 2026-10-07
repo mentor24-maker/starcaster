@@ -127,6 +127,32 @@ test('hasDriveFile tells the screen whether a preview is even possible', () => {
   assert.equal(byId.b.hasDriveFile, false);
 });
 
+test('driveUrl opens the original in Drive\'s player; no Drive file is null, never a dead link (86bcdejzy)', () => {
+  const view = buildFootage({
+    sessions: [S1],
+    sources: [src('a', { driveFileId: '1AbC-d_9' }), src('b'), src('c', { driveFileId: '   ' })],
+  });
+  const byId = Object.fromEntries(view.sessions[0].sources.map((s) => [s.id, s]));
+  assert.equal(byId.a.driveUrl, 'https://drive.google.com/file/d/1AbC-d_9/view');
+  assert.equal(byId.b.driveUrl, null);
+  assert.equal(byId.c.driveUrl, null);
+});
+
+test('fileName is the Drive name ingest saved the download under; ingest\'s id fallback is not a name', () => {
+  const view = buildFootage({
+    sessions: [S1],
+    sources: [
+      src('named', { driveFileId: 'drv1', localPath: '/srv/studio-cache/iphone/drv1/IMG_1962.MOV' }),
+      src('unnamed', { driveFileId: 'drv2', localPath: '/srv/studio-cache/inbox/drv2/drv2.media' }),
+      src('notyet', { driveFileId: 'drv3' }),
+    ],
+  });
+  const byId = Object.fromEntries(view.sessions[0].sources.map((s) => [s.id, s]));
+  assert.equal(byId.named.fileName, 'IMG_1962.MOV');
+  assert.equal(byId.unnamed.fileName, '');
+  assert.equal(byId.notyet.fileName, '');
+});
+
 // ── the route, against the fake database ────────────────────────────────────
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
@@ -216,6 +242,23 @@ test('GET /api/studio/footage lists this project only, grouped by session', asyn
     const filtered = json((await call(route, '/api/studio/footage?lane=ipad', SCOPE_A)).res);
     assert.equal(filtered.data.shownSources, 1);
     assert.equal(filtered.data.sessions[0].sources[0].lane, 'ipad');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage carries each file\'s name and Drive link through the real store (86bcdejzy)', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    await sourceIn(stores, SCOPE_A, {
+      driveFileId: 'drv-play',
+      localPath: '/srv/studio-cache/iphone/drv-play/IMG_1962.MOV',
+    });
+    const body = json((await call(route, '/api/studio/footage', SCOPE_A)).res);
+    const file = body.data.sessions[0].sources[0];
+    assert.equal(file.fileName, 'IMG_1962.MOV');
+    assert.equal(file.driveUrl, 'https://drive.google.com/file/d/drv-play/view');
   } finally {
     restore();
   }
