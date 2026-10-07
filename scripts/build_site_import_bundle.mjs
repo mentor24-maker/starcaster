@@ -23,6 +23,7 @@ const bundles = [
   { entry: 'reconcile.ts', outfile: 'reconcile.js' },
   { entry: 'image-topup.ts', outfile: 'image-topup.js' },
   { entry: 'columns.ts', outfile: 'columns.js' },
+  { entry: 'surfaces.ts', outfile: 'surfaces.js' },
 ];
 
 for (const { entry, outfile } of bundles) {

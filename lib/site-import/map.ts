@@ -29,6 +29,16 @@ import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
+import { importSurfaceColor } from "./theme";
+import {
+  hasPaint,
+  keepCellFill,
+  planBands,
+  planCards,
+  readSurface,
+  type MappedBackground,
+  type SurfaceLook,
+} from "./surfaces";
 export { mergeMappedSections } from "./columns";
 export { deriveImportTheme, nextThemeName, siteNameFromUrl } from "./theme";
 
@@ -61,8 +71,32 @@ export type MappedSection = {
    *  side-by-side row (columns.ts). */
   layout: string;
   widthMode: "contained";
-  background: { mode: "none" | "color"; color: string; color2: string; imageUrl: string; styleKey: "" };
+  background: MappedBackground;
   modules: MappedModule[];
+  /**
+   * The source page's surfaces (surfaces.ts, task 86bce9wx3) — present only
+   * when it measured some, so a capture without them maps exactly as before.
+   * Row: the band's padding, frame and (with joinWithPrevious) one band
+   * across every row an IR section was split into. Cell maps are keyed by
+   * column: a card's fill, frame, corners, shadow and padding.
+   */
+  joinWithPrevious?: boolean;
+  paddingTop?: string;
+  paddingBottom?: string;
+  rowBorderWidth?: string;
+  rowBorderColor?: string;
+  rowBorderStyle?: string;
+  rowBorderRadius?: string;
+  cellBackgrounds?: Record<string, MappedBackground>;
+  cellBorderWidth?: Record<string, string>;
+  cellBorderColor?: Record<string, string>;
+  cellBorderStyle?: Record<string, string>;
+  cellBorderRadius?: Record<string, string>;
+  cellShadow?: Record<string, string>;
+  cellPaddingTop?: Record<string, string>;
+  cellPaddingRight?: Record<string, string>;
+  cellPaddingBottom?: Record<string, string>;
+  cellPaddingLeft?: Record<string, string>;
   /** Engine bookkeeping for the runner (stripped before write): */
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
@@ -352,6 +386,30 @@ function attrFromHtml(html: string, attr: string): string {
   return m ? decodeEntities(m[1]) : "";
 }
 
+/** A picture that was a link on the source site (normalize classifies an
+ *  <a> holding only one picture as "image", task 86bcebrwp) keeps that link:
+ *  its HTML starts with the anchor, so the first href is the anchor's own. */
+function imageLink(el: ElementIR): { linkUrl: string; newTab?: "true" } | null {
+  const html = String(el.html || "");
+  if (!/^\s*<a\b/i.test(html)) return null;
+  const linkUrl = attrFromHtml(html, "href").trim();
+  if (!linkUrl) return null;
+  const opening = html.slice(0, html.indexOf(">") + 1);
+  return /target\s*=\s*"_blank"/i.test(opening) ? { linkUrl, newTab: "true" } : { linkUrl };
+}
+
+/** The asset an image element shows. A linked picture's href can itself
+ *  name an asset (a thumbnail linking to its full-size file), and it comes
+ *  first in the HTML — so prefer the asset that matches the picture's src. */
+function shownAssetId(el: ElementIR, assetsById: Map<string, AssetRef>): string | undefined {
+  const src = attrFromHtml(el.html, "src");
+  if (src && el.assetRefs.length > 1) {
+    const match = el.assetRefs.find((id) => assetsById.get(id)?.originalUrl === src);
+    if (match) return match;
+  }
+  return el.assetRefs[0];
+}
+
 /**
  * How wide a picture was SHOWN on the source page, in px, or 0 when nothing
  * says. The `width` attribute of its <img> (what the author asked for) and its
@@ -498,6 +556,68 @@ const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
 type Dispositions = { mapped: number; placeholder: number; deduped: number };
 
 /**
+ * A band onto each Builder row of the run it became (planBands decides each
+ * element's band; a run is consecutive rows in one band). Every row carries
+ * the background, and rows after the first JOIN the first, so a band split
+ * into several rows still reads as one band (Builder paints a
+ * joined run with its first row's background). Padding goes on the band's
+ * outer edges only — top of the first row, bottom of the last — or a split
+ * band would gain the gap between every row. A frame (and the corners, which
+ * Builder draws only with a frame) is applied to a band that stayed one row:
+ * on a split band it would outline each row separately.
+ */
+function applyBand(
+  row: MappedSection,
+  look: SurfaceLook | null,
+  at: { first: boolean; last: boolean; rows: number }
+): void {
+  if (!look) return;
+  if (look.background) {
+    row.background = { ...look.background };
+    if (!at.first) row.joinWithPrevious = true;
+  }
+  if (at.first && look.padding.top) row.paddingTop = look.padding.top;
+  if (at.last && look.padding.bottom) row.paddingBottom = look.padding.bottom;
+  if (at.rows === 1 && look.border) {
+    row.rowBorderWidth = look.border.width;
+    row.rowBorderColor = look.border.color;
+    row.rowBorderStyle = look.border.style;
+    if (look.radius) row.rowBorderRadius = look.radius;
+  }
+}
+
+function setCell<K extends keyof MappedSection>(
+  row: MappedSection,
+  key: K,
+  column: string,
+  value: string
+): void {
+  const map = ((row[key] as Record<string, string> | undefined) || {}) as Record<string, string>;
+  map[column] = value;
+  (row as Record<string, unknown>)[key] = map;
+}
+
+/** One card's look onto one Builder column. */
+function applyCard(row: MappedSection, column: string, look: SurfaceLook): void {
+  if (look.background) {
+    const background = { ...look.background };
+    if (background.mode === "color") background.color = keepCellFill(background.color);
+    row.cellBackgrounds = { ...(row.cellBackgrounds || {}), [column]: background };
+  }
+  if (look.border) {
+    setCell(row, "cellBorderWidth", column, look.border.width);
+    setCell(row, "cellBorderColor", column, look.border.color);
+    setCell(row, "cellBorderStyle", column, look.border.style);
+  }
+  if (look.radius) setCell(row, "cellBorderRadius", column, look.radius);
+  if (look.shadow) setCell(row, "cellShadow", column, look.shadow);
+  if (look.padding.top) setCell(row, "cellPaddingTop", column, look.padding.top);
+  if (look.padding.right) setCell(row, "cellPaddingRight", column, look.padding.right);
+  if (look.padding.bottom) setCell(row, "cellPaddingBottom", column, look.padding.bottom);
+  if (look.padding.left) setCell(row, "cellPaddingLeft", column, look.padding.left);
+}
+
+/**
  * Split one IR section's modules into Builder sections, one per row that
  * column inference found (columns.ts). With no side-by-side rows this
  * returns exactly what the mapper always emitted: one single-column section
@@ -515,10 +635,30 @@ function splitIntoRows(args: {
   cellOf: (sourceId: string) => Cell;
   sourceElementIds: string[];
   dispositionsFor: (band: number) => Dispositions;
+  /** Element sourceId → the painted band it sits in ("" for none). */
+  bandOf: (sourceId: string) => string;
+  /** A band's look, by its container key. */
+  bandLookOf: (key: string) => SurfaceLook | null;
+  /** The section root's spacing, for a section with no band anywhere. */
+  rootLook: SurfaceLook | null;
+  /** Element sourceId → the look of the card it sits in; `onBand` when the
+   *  row is painted, so a card the page's colour still shows against it. */
+  cardLookOf: (sourceId: string, onBand: boolean) => { key: string; look: SurfaceLook } | null;
 }): MappedSection[] {
   const { section, baseId, modules, moduleCells, grid, cellOf } = args;
   const bands = Array.from(new Set(moduleCells.map((c) => c.band))).sort((a, b) => a - b);
   const out: MappedSection[] = [];
+
+  // Each Builder row's band: the one band every element in it sits in. Rows
+  // never merge across a band (columns.ts, GridItem.group), so a mixed row
+  // only happens where an element has no band of its own — it gets none.
+  const rowBand = bands.map((band) => {
+    const keys = new Set(
+      args.sourceElementIds.filter((id) => cellOf(id).band === band).map((id) => args.bandOf(id))
+    );
+    return keys.size === 1 ? Array.from(keys)[0] : "";
+  });
+  const anyBand = rowBand.some(Boolean);
 
   bands.forEach((band, i) => {
     const idx = modules.map((_, k) => k).filter((k) => moduleCells[k].band === band);
@@ -544,7 +684,7 @@ function splitIntoRows(args: {
     // Every import-owned section carries the section source marker (spec:
     // idempotency + provenance) — each row of a split section too.
     rowModules[0].settings.importSectionSourceId = section.sourceId;
-    out.push({
+    const row: MappedSection = {
       id: i === 0 ? baseId : `${baseId}b${band}`,
       title: `Imported: ${title || "section"}`,
       layout,
@@ -553,7 +693,39 @@ function splitIntoRows(args: {
       modules: rowModules,
       sourceElementIds: args.sourceElementIds.filter((id) => cellOf(id).band === band),
       dispositions: { ...args.dispositionsFor(band) },
-    });
+    };
+    // Consecutive rows in one band are one run: joined, padded at its ends.
+    const key = rowBand[i];
+    if (anyBand) {
+      if (key) {
+        let start = i;
+        while (start > 0 && rowBand[start - 1] === key) start--;
+        let end = i;
+        while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
+        applyBand(row, args.bandLookOf(key), { first: i === start, last: i === end, rows: end - start + 1 });
+      }
+    } else {
+      applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
+    }
+    const onBand = Boolean(row.background.mode !== "none");
+    // A column wears a card only when everything in it sat in that one card.
+    const byColumn = new Map<string, Set<string>>();
+    const lookByKey = new Map<string, SurfaceLook>();
+    const cellKeys = layout === "single" ? ["main"] : columnKeys(cols.length);
+    for (const id of row.sourceElementIds) {
+      const at = layout === "single" ? 0 : cols.indexOf(cellOf(id).col);
+      if (at < 0) continue; // a cell that built no module (nav links)
+      const card = args.cardLookOf(id, onBand);
+      const set = byColumn.get(cellKeys[at]) || new Set<string>();
+      set.add(card ? card.key : "");
+      byColumn.set(cellKeys[at], set);
+      if (card) lookByKey.set(card.key, card.look);
+    }
+    for (const [column, keys] of byColumn) {
+      const [only] = Array.from(keys);
+      if (keys.size === 1 && only) applyCard(row, column, lookByKey.get(only) as SurfaceLook);
+    }
+    out.push(row);
   });
 
   // Rows that produced no module (nav links, deduped repeats) still have to
@@ -595,6 +767,18 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
   };
   for (const nav of ir.taxonomy?.navs || []) collectNav(nav.items);
+
+  const surfaceColor = importSurfaceColor(ir);
+  const assetByUrl = new Map<string, AssetRef>();
+  for (const a of ir.assets || []) if (a.originalUrl && !assetByUrl.has(a.originalUrl)) assetByUrl.set(a.originalUrl, a);
+  /** A background picture → the promoted asset's URL (copied on --apply),
+   *  else the original, the way image modules fall back to their src. */
+  const resolveBackgroundImage = (url: string): string => {
+    const asset = assetByUrl.get(url);
+    if (!asset) return url;
+    promoteAsset(asset.id);
+    return asset.storageUrl || asset.originalUrl;
+  };
 
   const report: MapReport = {
     elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
@@ -836,7 +1020,8 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // Anything longer is body copy.
       const iconEl = texts.find((e) => collapse(e.textContent).length <= 3) || null;
       const bodyEl = texts.find((e) => e !== iconEl) || null;
-      const asset = imageEl?.assetRefs[0] ? promoteAsset(imageEl.assetRefs[0]) : null;
+      const imageAssetId = imageEl ? shownAssetId(imageEl, assetsById) : undefined;
+      const asset = imageAssetId ? promoteAsset(imageAssetId) : null;
       const rawSrc = imageEl ? attrFromHtml(imageEl.html, "src") : "";
       cards.push({
         id: `card-${gi + 1}`,
@@ -844,7 +1029,9 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         body: bodyEl ? collapse(bodyEl.textContent) : "",
         imageUrl: asset?.storageUrl || asset?.originalUrl || rawSrc,
         imageAlt: (imageEl ? attrFromHtml(imageEl.html, "alt") : "") || asset?.altText || "",
-        linkUrl: linkEl ? attrFromHtml(linkEl.html, "href") : "",
+        linkUrl: linkEl
+          ? attrFromHtml(linkEl.html, "href")
+          : (imageEl && imageLink(imageEl)?.linkUrl) || "",
         linkLabel: linkEl ? collapse(linkEl.textContent) : "",
         icon: iconEl ? collapse(iconEl.textContent) : "",
       });
@@ -906,9 +1093,74 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
       // in on the source page. Prose never merges across a cell boundary, and
       // every module is tagged with the cell it was built in, so the section
       // can be split into Builder rows once the modules exist.
-      const grid = planSectionGrid(
-        (section.elements || []).map((el) => ({ id: el.sourceId, box: el.box }))
+      // Bands and cards (surfaces.ts). Each element's band is decided on its
+      // own, so a page whose whole main area is one wrapper still keeps every
+      // band inside it; rows never merge across a band. A first plan grouped
+      // by band says which boxes hold one cell's worth of content (cards);
+      // the real plan then refuses to pour two different cards into one cell
+      // (columns.ts, GridItem.group).
+      const sectionEls = section.elements || [];
+      const containerStyles = section.containers || {};
+      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const bandLooks = new Map<string, SurfaceLook>();
+      const bandLookOf = (key: string): SurfaceLook | null => {
+        if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
+        return bandLooks.get(key) || null;
+      };
+      // A wrapper painted the page's own colour is not a band — keep looking
+      // inward (round 2 of 86bce9wx3). Failing a band that shows, the plain
+      // box with the spacing wins (round 3).
+      const bandOf = planBands(
+        sectionEls,
+        section.containerBoxes,
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && hasPaint(look));
+        },
+        (key) => {
+          const look = bandLookOf(key);
+          return Boolean(look && (look.padding.top || look.padding.bottom));
+        }
       );
+      const draft = planSectionGrid(
+        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
+      );
+      const cardOf = planCards(sectionEls, bandOf, (id) => {
+        const c = draft.cells.get(id);
+        return c ? `${c.band}:${c.col}` : "";
+      });
+      const grid = planSectionGrid(
+        sectionEls.map((el) => ({
+          id: el.sourceId,
+          box: el.box,
+          group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+        }))
+      );
+      // No painted band anywhere: the section root may still carry the spacing.
+      const rootLook = (() => {
+        const root = readSurface(section.rootStyles, rowCtx);
+        return root.padding.top || root.padding.bottom ? { padding: root.padding } : null;
+      })();
+      // A card the colour of the page vanishes against the page — but not
+      // against a painted band, so it keeps its fill there.
+      const cardLooks = new Map<string, SurfaceLook>();
+      const cardLookOf = (sourceId: string, onBand: boolean) => {
+        const key = cardOf.get(sourceId);
+        if (!key) return null;
+        const memo = `${onBand ? "band" : "page"}\u0001${key}`;
+        if (!cardLooks.has(memo)) {
+          cardLooks.set(
+            memo,
+            readSurface(containerStyles[key], {
+              surface: onBand ? "" : surfaceColor,
+              resolveImage: resolveBackgroundImage,
+              maxPadding: 50,
+            })
+          );
+        }
+        const look = cardLooks.get(memo) as SurfaceLook;
+        return hasPaint(look) ? { key, look } : null;
+      };
       // How wide the source column holding a cell was, for sizing small
       // pictures (importedImageCap). A side-by-side column is its own extent;
       // a stacked one is the section's whole span, or the site's measured
@@ -1130,7 +1382,8 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
 
         if (el.class === "image") {
           flushProse();
-          const asset = el.assetRefs[0] ? promoteAsset(el.assetRefs[0]) : null;
+          const assetId = shownAssetId(el, assetsById);
+          const asset = assetId ? promoteAsset(assetId) : null;
           const url = asset?.storageUrl || asset?.originalUrl || attrFromHtml(el.html, "src");
           modules.push({
             id: nextModuleId(el.sourceId),
@@ -1142,6 +1395,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
               url,
               alt: attrFromHtml(el.html, "alt") || asset?.altText || "",
               size: "100",
+              ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
               importSourceIds: el.sourceId,
             },
@@ -1256,6 +1510,10 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
         cellOf: (id) => grid.cells.get(id) || { band: 0, col: 0 },
         sourceElementIds,
         dispositionsFor,
+        bandOf: (id) => bandOf.get(id) || "",
+        bandLookOf,
+        rootLook,
+        cardLookOf,
       });
       mappedSections.push(...built);
       pageModules += modules.length;

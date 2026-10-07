@@ -47,6 +47,16 @@ Open the admin app, choose the project the Studio files into, then
 - **Preview.** The small picture is Google Drive's own preview of the file.
   "No preview yet" means Drive has not drawn one (it takes a few minutes after
   an upload), or the file did not come from Drive. It is never a broken image.
+- **Watching a file.** Click its preview or its name in the **File** column
+  and the original opens in Google Drive's player, in a new tab. It opens in
+  **mentor24's Drive**, so the browser has to be signed in to a Google account
+  that can see the Studio folder. Otherwise Drive asks you to sign in or to
+  request access, and nothing is wrong with the file. It plays the original
+  and not the small editing copy, because that copy lives on the Mac Mini's
+  disk, which the website cannot reach. A file marked *not from Drive* has no
+  Drive copy to open, so it has no link. *Open in Drive* in place of a name
+  means the Mini has not downloaded the file yet, and that download is where
+  the name comes from.
 - **Device** is the machine that made the file. *Not known yet* means the
   probe step has not read that file.
 - **Role** is what the file is *in an edit*: `subject` (you on camera),
@@ -214,6 +224,11 @@ For an agent session working on this, not for day-to-day use.
 - Catalog tables: `docs/SQL/video_studio_setup.sql` (`video_sessions`,
   `video_sources`); stores in `lib/videoSessionsStore.js` and
   `lib/videoSourcesStore.js`.
+- Transcripts (Phase 2): `docs/SQL/video_transcripts_setup.sql`
+  (`video_transcripts`, one row per source; apply after the catalog file);
+  store in `lib/videoTranscriptsStore.js`. No row means "not transcribed yet",
+  never a state. Search uses the `simple` text-search config on purpose — see
+  the note in the SQL.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).

@@ -34,6 +34,10 @@ type SourceRow = {
   date: string;
   dateSource: 'recorded' | 'session' | 'added' | 'none';
   hasDriveFile: boolean;
+  /** The name it had in Drive; '' when not known (lib/studioFootage.js). */
+  fileName: string;
+  /** Drive's own player for the ORIGINAL; null when there is no Drive file. */
+  driveUrl: string | null;
 };
 
 type SessionGroup = {
@@ -210,6 +214,50 @@ function Thumbnail({ source, attempt }: { source: SourceRow; attempt: number }):
         </span>
       )}
     </div>
+  );
+}
+
+/**
+ * Opens the original in Drive's player, in a new tab (task 86bcdejzy). The
+ * small editing copy sits on the Mac Mini's disk, which the website cannot
+ * reach, so Drive is the only place this screen can play a file from. A file
+ * with no Drive copy gets plain content, never a link that goes nowhere.
+ */
+function DriveLink({ source, label, children }: {
+  source: SourceRow;
+  label: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  if (!source.driveUrl) return <>{children}</>;
+  return (
+    <a
+      className="studio-footage-play"
+      href={source.driveUrl}
+      target="_blank"
+      rel="noopener"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </a>
+  );
+}
+
+/** The File column: the name, as a link when Drive can play it, or the reason it cannot. */
+function FileCell({ source }: { source: SourceRow }): React.ReactElement {
+  const name = source.fileName || (source.driveUrl ? 'Open in Drive' : 'Unnamed file');
+  if (!source.driveUrl) {
+    return (
+      <>
+        <span className="studio-footage-file-name">{name}</span>
+        <span className="studio-footage-file-note"> · not from Drive</span>
+      </>
+    );
+  }
+  return (
+    <DriveLink source={source} label={`Watch ${source.fileName || 'this file'} in Google Drive (opens a new tab)`}>
+      <span className="studio-footage-file-name">{name}</span>
+    </DriveLink>
   );
 }
 
@@ -415,6 +463,7 @@ export default function FootagePanel(): React.ReactElement {
               <thead>
                 <tr>
                   <th scope="col">Preview</th>
+                  <th scope="col">File</th>
                   <th scope="col">Device</th>
                   <th scope="col">Role</th>
                   <th scope="col">Length</th>
@@ -428,7 +477,15 @@ export default function FootagePanel(): React.ReactElement {
                   const note = DATE_SOURCE_NOTE[source.dateSource];
                   return (
                     <tr key={source.id}>
-                      <td className="studio-footage-thumb-cell"><Thumbnail source={source} attempt={attempt} /></td>
+                      <td className="studio-footage-thumb-cell">
+                        <DriveLink
+                          source={source}
+                          label={`Watch ${source.fileName || 'this file'} in Google Drive (opens a new tab)`}
+                        >
+                          <Thumbnail source={source} attempt={attempt} />
+                        </DriveLink>
+                      </td>
+                      <td className="studio-footage-file-cell"><FileCell source={source} /></td>
                       <td>{laneLabel(source.lane)}</td>
                       <td>{source.layerRole}</td>
                       <td>{duration(source.durationS)}</td>
