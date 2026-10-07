@@ -169,6 +169,13 @@ jobs:
 
       - name: Unit tests (builder server libs)
         run: npm run test:builder
+        env:
+          # The transcribe pass's real-speech proof needs whisper-cli, its
+          # 1.6 GB model and macOS `say` — none of which this runner has, and a
+          # 1.6 GB download per CI run is not worth it. Said out loud here so
+          # the skip is a decision on the record, not a silent one; the Mini,
+          # which has all three, takes that reading on every local run.
+          STUDIO_ALLOW_NO_WHISPER: '1'
 
       - name: Unit tests (agent hooks)
         # Blocking on purpose. These hooks enforce doctrine the agents kept
