@@ -13,15 +13,23 @@ const path = require('path');
  * boundary is tested through the real stores rather than asserted about them.
  */
 
-const { buildFootage, readFilters, effectiveDate, NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE } = require('../../lib/studioFootage');
+const fs = require('fs');
+const {
+  buildFootage, readFilters, effectiveDate, transcriptStateFor,
+  NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE,
+} = require('../../lib/studioFootage');
 
-const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'video_studio_setup.sql');
-const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
+const SQL_TEXT = ['video_studio_setup.sql', 'video_transcripts_setup.sql']
+  .map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8'))
+  .join('\n');
+const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
 const sessionsStorePath = require.resolve('../../lib/videoSessionsStore.js');
 const sourcesStorePath = require.resolve('../../lib/videoSourcesStore.js');
+const transcriptsStorePath = require.resolve('../../lib/videoTranscriptsStore.js');
 const googleDrivePath = require.resolve('../../lib/googleDrive.js');
 const routePath = require.resolve('../../routes/studio.js');
 
@@ -153,13 +161,44 @@ test('fileName is the Drive name ingest saved the download under; ingest\'s id f
   assert.equal(byId.notyet.fileName, '');
 });
 
+test('transcript state: the row\'s verdict, else plates are never transcribed, else not yet — never "working" (86bcdek0e)', () => {
+  const states = {
+    done: { state: 'done', reason: '' },
+    bad: { state: 'failed', reason: 'whisper-cli exited 1' },
+    quiet: { state: 'no_audio', reason: '' },
+    plated: { state: 'done', reason: '' },
+  };
+  assert.deepEqual(transcriptStateFor({ id: 'DONE' }, states), { state: 'done', reason: '' },
+    'ids are matched lower-cased, the way listTranscriptStates keys them');
+  assert.deepEqual(transcriptStateFor({ id: 'bad' }, states), { state: 'failed', reason: 'whisper-cli exited 1' });
+  assert.equal(transcriptStateFor({ id: 'quiet' }, states).state, 'no_audio');
+  assert.equal(transcriptStateFor({ id: 'p', layerRole: 'plate' }, states).state, 'plate');
+  assert.equal(transcriptStateFor({ id: 'plated', layerRole: 'plate' }, states).state, 'done',
+    'a plate that WAS transcribed says so — the row is the truth');
+  // The job queue is a file on the Mac Mini, so no row means "not yet", not "working".
+  assert.equal(transcriptStateFor({ id: 'new', layerRole: 'subject' }, states).state, 'not_yet');
+  // Could not read the states at all is its own answer, never "not yet".
+  assert.equal(transcriptStateFor({ id: 'done' }, null).state, 'unknown');
+
+  const view = buildFootage({ sessions: [S1], sources: [src('done'), src('x')], transcripts: states });
+  const byId = Object.fromEntries(view.sessions[0].sources.map((f) => [f.id, f.transcript.state]));
+  assert.deepEqual(byId, { done: 'done', x: 'not_yet' });
+});
+
 // ── the route, against the fake database ────────────────────────────────────
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
-function withRoute({ drive } = {}) {
-  const db = createFakeDb(parseSchemaFile(SQL_PATH));
+const ROUTE_MODULES = [projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, routePath];
+
+function withRoute({ drive, failTranscripts = false } = {}) {
+  const db = createFakeDb(parseSchemaText(SQL_TEXT));
+  const sbQuery = failTranscripts
+    ? (args) => (args.table === 'video_transcripts'
+      ? Promise.resolve({ ok: false, status: 404, error: 'relation "video_transcripts" does not exist' })
+      : db.sbQuery(args))
+    : db.sbQuery;
   const saved = {};
   const swap = (p, exports) => {
     saved[p] = require.cache[p];
@@ -167,21 +206,26 @@ function withRoute({ drive } = {}) {
   };
   swap(supabasePath, {
     isConfigured: () => true,
-    tableConfig: () => ({ videoSessions: 'video_sessions', videoSources: 'video_sources' }),
-    sbQuery: db.sbQuery,
+    tableConfig: () => ({
+      videoSessions: 'video_sessions',
+      videoSources: 'video_sources',
+      videoTranscripts: 'video_transcripts',
+    }),
+    sbQuery,
   });
   if (drive) swap(googleDrivePath, drive);
-  for (const p of [projectScopePath, sessionsStorePath, sourcesStorePath, routePath]) delete require.cache[p];
+  for (const p of ROUTE_MODULES) delete require.cache[p];
   const route = require(routePath);
   const sessions = require(sessionsStorePath);
   const sources = require(sourcesStorePath);
+  const transcripts = require(transcriptsStorePath);
   const restore = () => {
     for (const [p, entry] of Object.entries(saved)) {
       if (entry) require.cache[p] = entry; else delete require.cache[p];
     }
-    for (const p of [projectScopePath, sessionsStorePath, sourcesStorePath, routePath]) delete require.cache[p];
+    for (const p of ROUTE_MODULES) delete require.cache[p];
   };
-  return { route, sessions, sources, restore };
+  return { route, sessions, sources, transcripts, restore };
 }
 
 function call(route, url, scope) {
@@ -386,6 +430,119 @@ test('thumbnail: an expired token is replaced and the SAME request succeeds', as
     assert.equal(minted, 2);
   } finally {
     global.fetch = realFetch;
+    restore();
+  }
+});
+
+// ── transcripts (86bcdek0e) ─────────────────────────────────────────────────
+
+const SEGMENTS = [
+  { start: 0, end: 4.2, text: 'Hello and welcome.' },
+  { start: 4.2, end: 9, text: 'Today we talk about pricing.' },
+];
+
+test('transcript: the right project gets the transcript; words only when asked for', async () => {
+  const stores = withRoute();
+  const { route, transcripts, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const saved = await transcripts.upsertTranscript(made.id, {
+      state: 'done',
+      language: 'en',
+      text: 'Hello and welcome. Today we talk about pricing.',
+      segments: SEGMENTS,
+      words: [{ start: 0, end: 0.4, word: 'Hello', p: 0.9 }],
+    }, SCOPE_A);
+    assert.equal(saved.ok, true, saved.error);
+
+    const { handled, res } = await call(route, `/api/studio/sources/${made.id}/transcript`, SCOPE_A);
+    assert.equal(handled, true);
+    assert.equal(res.statusCode, 200);
+    const body = json(res).data;
+    assert.equal(body.state, 'done');
+    assert.equal(body.language, 'en');
+    assert.deepEqual(body.segments, SEGMENTS);
+    assert.equal(body.words, undefined, 'words are left out unless ?words=1');
+
+    const withWords = json((await call(route, `/api/studio/sources/${made.id}/transcript?words=1`, SCOPE_A)).res);
+    assert.equal(withWords.data.words.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+test('transcript: another project\'s source is a 404, never its transcript', async () => {
+  const stores = withRoute();
+  const { route, transcripts, restore } = stores;
+  try {
+    const theirs = await sourceIn(stores, SCOPE_B);
+    const saved = await transcripts.upsertTranscript(theirs.id, {
+      state: 'done', text: 'Project B secrets', segments: [{ start: 0, end: 1, text: 'Project B secrets' }],
+    }, SCOPE_B);
+    assert.equal(saved.ok, true, saved.error);
+
+    const { res } = await call(route, `/api/studio/sources/${theirs.id}/transcript`, SCOPE_A);
+    assert.equal(res.statusCode, 404);
+    assert.equal(json(res).error.code, 'NOT_FOUND');
+    assert.doesNotMatch(String(res.body), /Project B secrets/);
+  } finally {
+    restore();
+  }
+});
+
+test('transcript: our own source with no transcript yet is a 404 coded NO_TRANSCRIPT', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(route, `/api/studio/sources/${made.id}/transcript`, SCOPE_A);
+    assert.equal(res.statusCode, 404);
+    assert.equal(json(res).error.code, 'NO_TRANSCRIPT');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage carries each file\'s transcript state, this project\'s only', async () => {
+  const stores = withRoute();
+  const { route, transcripts, restore } = stores;
+  try {
+    const done = await sourceIn(stores, SCOPE_A, { driveFileId: 'd1' });
+    const failed = await sourceIn(stores, SCOPE_A, { driveFileId: 'd2' });
+    const plate = await sourceIn(stores, SCOPE_A, { driveFileId: 'd3', layerRole: 'plate' });
+    const fresh = await sourceIn(stores, SCOPE_A, { driveFileId: 'd4' });
+    for (const [id, data] of [
+      [done.id, { state: 'done', segments: SEGMENTS }],
+      [failed.id, { state: 'failed', reason: 'the audio track could not be decoded' }],
+    ]) {
+      const saved = await transcripts.upsertTranscript(id, data, SCOPE_A);
+      assert.equal(saved.ok, true, saved.error);
+    }
+    const body = json((await call(route, '/api/studio/footage', SCOPE_A)).res);
+    assert.equal(body.data.transcriptsError, '');
+    const byId = Object.fromEntries(body.data.sessions.flatMap((s) => s.sources).map((f) => [f.id, f.transcript]));
+    assert.deepEqual(byId[done.id], { state: 'done', reason: '' });
+    assert.deepEqual(byId[failed.id], { state: 'failed', reason: 'the audio track could not be decoded' });
+    assert.equal(byId[plate.id].state, 'plate');
+    assert.equal(byId[fresh.id].state, 'not_yet');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage still lists the files when the transcript states cannot be read', async () => {
+  const stores = withRoute({ failTranscripts: true });
+  const { route, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(route, '/api/studio/footage', SCOPE_A);
+    assert.equal(res.statusCode, 200);
+    const body = json(res).data;
+    assert.match(body.transcriptsError, /video_transcripts/);
+    assert.equal(body.sessions[0].sources[0].id, made.id);
+    assert.equal(body.sessions[0].sources[0].transcript.state, 'unknown',
+      'a failed read is "could not tell", never "not transcribed yet"');
+  } finally {
     restore();
   }
 });

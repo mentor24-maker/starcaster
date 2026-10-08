@@ -55,6 +55,7 @@ const { runIngest, STAGE_INGEST } = require('./ingest.js');
 const { watchDrive, STAGE_WATCH } = require('./drive.js');
 const { runProbe, STAGE_PROBE } = require('./probePass.js');
 const { runProxy, STAGE_PROXY } = require('./proxyPass.js');
+const { runTranscribe, STAGE_TRANSCRIBE } = require('./transcribePass.js');
 
 /** How long to wait after a tick that found nothing to do. */
 const DEFAULT_IDLE_MS = 30 * 1000;
@@ -140,6 +141,10 @@ const STAGE_RUNNERS = {
   [STAGE_PROXY]: {
     label: 'proxy',
     run: ({ queue, owner, env }) => runProxy({ queue, owner, env, max: 1 }),
+  },
+  [STAGE_TRANSCRIBE]: {
+    label: 'transcribe',
+    run: ({ queue, owner, env }) => runTranscribe({ queue, owner, env, max: 1 }),
   },
 };
 

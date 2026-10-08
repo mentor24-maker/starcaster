@@ -39,6 +39,8 @@ const crmConfigStore = require(path.join(ROOT, 'lib/crmConfigStore.js'));
 const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
 const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'));
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
+const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
+const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -1574,9 +1576,36 @@ for (const [name, slug, sections = []] of buildPages(ids)) {
  * (plain text and "not from Drive", never a dead link), a Drive file not
  * downloaded yet ("Open in Drive"), and a file with neither.
  *
+ * Transcripts (86bcdek0e): the hour-long file gets ~1,000 lines — what an hour
+ * of speech really is — including one unbroken run of characters that must
+ * wrap rather than widen the page; one file failed with a reason, one has no
+ * sound. Plates and the rest have none, so every state the column can say is
+ * on screen. check:screens opens the long one at every width (its
+ * `open` step), so the transcript view is measured, not just the table.
+ *
  * Idempotent by content hash: the hash is unique per project, so a re-seed
- * finds each file instead of duplicating it.
+ * finds each file instead of duplicating it. A transcript write is a full
+ * replacement, so re-seeding it changes nothing either.
  */
+const FIXTURE_TRANSCRIPTS = {
+  'fixture-footage-01': () => {
+    const segments = [];
+    for (let i = 0; i < 1000; i += 1) {
+      const start = i * 3.7;
+      const text = i === 7
+        ? `Here is the link we read out: ${'https://example.com/'.concat('a'.repeat(180))}`
+        : `Line ${i + 1}: keep the racket face square through contact, then let the follow-through finish high over the shoulder.`;
+      segments.push({ start, end: start + 3.6, text });
+    }
+    return { state: 'done', language: 'en', model: 'fixture', text: segments.map((x) => x.text).join(' '), segments };
+  },
+  'fixture-footage-02': () => ({ state: 'no_audio' }),
+  'fixture-footage-05': () => ({
+    state: 'failed',
+    reason: 'whisper-cli exited 1: the audio track could not be decoded (fixture)',
+  }),
+};
+
 async function seedStudioFootage(scope) {
   // Not `must`: a lookup's miss is `data: null`, and `must` answers
   // `res.data ?? res` — the whole envelope, which is truthy, so every miss
@@ -1617,8 +1646,12 @@ async function seedStudioFootage(scope) {
     }
     for (const file of shoot.files) {
       const existing = lookup(await videoSourcesStore.findSourceByContentHash(file.hash, scope), 'find footage file');
+      const transcript = FIXTURE_TRANSCRIPTS[file.hash];
       if (existing) {
         found += 1;
+        if (transcript) {
+          must(await videoTranscriptsStore.upsertTranscript(existing.id, transcript(), scope), 'transcript footage file');
+        }
         // A fixture seeded before the File column existed has no localPath,
         // so the column would only ever measure its fallbacks. Fill it in.
         if (file.localPath && !existing.localPath) {
@@ -1627,10 +1660,13 @@ async function seedStudioFootage(scope) {
         continue;
       }
       const { hash, ...rest } = file;
-      must(
+      const created = must(
         await videoSourcesStore.createSource({ sessionId: session.id, contentHash: hash, ...rest }, scope),
         'create footage file'
       );
+      if (transcript) {
+        must(await videoTranscriptsStore.upsertTranscript(created.id, transcript(), scope), 'transcript footage file');
+      }
       made += 1;
     }
   }
@@ -1642,6 +1678,53 @@ try {
   footageSeeded = await seedStudioFootage({ projectId: project.id, userId });
 } catch (err) {
   console.error(`  failed to seed Studio footage: ${err.message}`);
+}
+
+/**
+ * Target videos for Engage › YouTube Outreach (YouTube outreach 2/7,
+ * 86bcda63z). Without rows the screen shows its "No target videos yet"
+ * sentence, which fits any viewport — so check:screens would pass without
+ * measuring a table. One row carries a title long enough to have to wrap and
+ * a repeat schedule; the other is the minimal paste-and-save shape, paused.
+ *
+ * The YouTube lookup is replaced: the fixture must not depend on an API key
+ * or the network. Idempotent by video id — a re-seed finds each one.
+ */
+async function seedYoutubeOutreach(scope) {
+  const listed = await youtubeOutreachStore.listTargets(200, scope);
+  if (!listed.ok) throw new Error(`list outreach targets: ${listed.error}`);
+  const have = new Set(listed.data.map((t) => t.videoId));
+  const videos = [
+    {
+      input: {
+        videoUrl: 'https://www.youtube.com/watch?v=fixtureYT01',
+        objective: 'drive_link', linkPolicy: 'if_natural', linkUrl: 'https://example.com/clinics',
+        repeatMode: 'repeat', repeatEveryDays: 7, repeatMaxTimes: 4, priority: 'high',
+      },
+      details: { title: `${LONG} — full match highlights and coaching commentary`, channelName: 'Delray Beach Tennis Center Official Channel' },
+    },
+    {
+      input: { videoUrl: 'https://www.youtube.com/watch?v=fixtureYT02', status: 'paused', priority: 'low' },
+      details: { title: 'Serve clinic in five minutes', channelName: 'Coach cam' },
+    },
+  ];
+  let made = 0;
+  let found = 0;
+  for (const video of videos) {
+    const id = video.input.videoUrl.split('v=')[1];
+    if (have.has(id)) { found += 1; continue; }
+    const lookup = async () => ({ ok: true, data: { ...video.details, channelId: 'fixture', publishedAt: null, viewCount: 1234 } });
+    must(await youtubeOutreachStore.createTarget(video.input, scope, { lookup }), 'create outreach target');
+    made += 1;
+  }
+  return { made, found };
+}
+
+let outreachSeeded = null;
+try {
+  outreachSeeded = await seedYoutubeOutreach({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed YouTube outreach targets: ${err.message}`);
 }
 
 console.log(
@@ -1661,5 +1744,10 @@ console.log(
   footageSeeded
     ? `Studio footage seeded — ${footageSeeded.made} file(s) created, ${footageSeeded.found} already present.`
     : 'WARNING: Studio footage was NOT seeded; Assets › Footage will show its empty state and check:screens proves nothing there.'
+);
+console.log(
+  outreachSeeded
+    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present.`
+    : 'WARNING: YouTube outreach targets were NOT seeded; Engage › YouTube Outreach will show its empty state and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

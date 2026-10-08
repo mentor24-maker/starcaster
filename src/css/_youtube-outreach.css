@@ -1,0 +1,241 @@
+/* Engage › YouTube Outreach — the React island at #youtubeOutreachReactRoot
+   (components/youtube-outreach/youtube-outreach-panel.tsx). YouTube outreach
+   2 of 7.
+
+   Width: every flex/grid box here sets min-width: 0 (UI_RULES T8), the table
+   wrapper scrolls inside itself if it ever must (T7 rung 12, via .table-wrap),
+   and nothing carries a pixel min-width (T9) — so the page body never scrolls
+   sideways (T0).
+
+   The two edit forms follow W0's mechanism: the FORM is the grid and each
+   field is `display: contents`, so one pair of tracks measures the longest
+   label and the longest control across the whole form. No field carries a
+   width of its own. Text controls stop at --builder-field-long-max (W9). */
+
+.yt-outreach-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.yt-outreach-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.yt-outreach-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1 1 24rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.yt-outreach-add-label {
+  margin: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.yt-outreach-add input {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+}
+
+.yt-outreach-toolbar-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-left: auto;
+}
+
+.yt-outreach-error,
+.yt-outreach-notice,
+.yt-outreach-empty {
+  margin: 0;
+}
+
+.yt-outreach-error {
+  color: var(--status-warn-ink);
+}
+
+.yt-outreach-empty {
+  padding: var(--space-5);
+  border: 1px dashed var(--border-light);
+  border-radius: 10px;
+}
+
+/* ── The two edit cards ─────────────────────────────────────────────── */
+
+.yt-outreach-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.yt-outreach-card-title {
+  margin: 0;
+  /* A video title is what the card is FOR — wrap it, never clip it (T-1). */
+  overflow-wrap: anywhere;
+}
+
+.yt-outreach-card-note {
+  margin: 0;
+}
+
+.yt-outreach-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, var(--builder-field-long-max, 560px));
+  align-items: start;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.yt-outreach-field,
+.yt-outreach-field-control {
+  display: contents;
+}
+
+.yt-outreach-field-label {
+  grid-column: 1;
+  margin: 0;
+  padding-top: var(--space-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.yt-outreach-field-control > input:not([type='checkbox']),
+.yt-outreach-field-control > select,
+.yt-outreach-field-control > textarea,
+.yt-outreach-field-control > .yt-outreach-checks,
+.yt-outreach-field-control > .yt-outreach-check {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.yt-outreach-field-help {
+  grid-column: 2;
+  margin: calc(-1 * var(--space-3)) 0 0;
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.yt-outreach-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+}
+
+.yt-outreach-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: normal;
+}
+
+/* The app's `input { width: 100% }` reaches checkboxes too, which stretched
+   each box across the row and squeezed its words into a column. A checkbox
+   keeps its natural size (W0's stated exception); its words stay on a line. */
+.yt-outreach-check input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+
+.yt-outreach-check span {
+  display: inline;
+  white-space: nowrap;
+}
+
+.yt-outreach-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* On a narrow screen the label sits above its field. */
+@media (max-width: 720px) {
+  .yt-outreach-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .yt-outreach-field-label,
+  .yt-outreach-field-control > input:not([type='checkbox']),
+  .yt-outreach-field-control > select,
+  .yt-outreach-field-control > textarea,
+  .yt-outreach-field-control > .yt-outreach-checks,
+  .yt-outreach-field-control > .yt-outreach-check,
+  .yt-outreach-field-help {
+    grid-column: 1;
+  }
+}
+
+/* ── The list ───────────────────────────────────────────────────────── */
+
+.yt-outreach-table-wrap {
+  min-width: 0;
+}
+
+.yt-outreach-table {
+  width: 100%;
+}
+
+.yt-outreach-table td {
+  vertical-align: middle;
+}
+
+.yt-outreach-video {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.yt-outreach-thumb {
+  flex: 0 0 auto;
+  width: 120px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--border-light);
+}
+
+.yt-outreach-video-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.yt-outreach-video-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.yt-outreach-video-channel {
+  font-size: var(--text-base);
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms; in this
+   one-line row it pushed Add above the field it belongs to. */
+.yt-outreach-add .btn {
+  margin: 0;
+}

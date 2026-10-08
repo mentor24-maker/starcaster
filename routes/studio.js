@@ -6,6 +6,8 @@
  *   GET /api/studio/footage                    every file, grouped by session
  *       ?lane=iphone&from=<ISO>&to=<ISO>       filters (all optional)
  *   GET /api/studio/sources/:id/thumbnail      the file's picture, from Drive
+ *   GET /api/studio/sources/:id/transcript     what was said in it (?words=1
+ *                                              adds the per-word timings)
  *
  * Read-only. The pipeline writes the catalog from the Mac Mini
  * (workers/studio/); nothing here changes a row.
@@ -25,6 +27,7 @@ const { sendOk, sendErr, getUrlObj } = require('./http');
 const { listSessions } = require('../lib/videoSessionsStore');
 const { listSources, getSourceById } = require('../lib/videoSourcesStore');
 const { buildFootage, readFilters } = require('../lib/studioFootage');
+const { getTranscriptBySource, listTranscriptStates, MAX_STATE_IDS } = require('../lib/videoTranscriptsStore');
 const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
@@ -76,6 +79,22 @@ function forgetToken(stale) {
   if (!stale || cachedToken.value === stale) cachedToken = { value: '', at: 0 };
 }
 
+/**
+ * The transcript state of every listed source, read in batches the store
+ * accepts. Null when any batch fails: the list still loads and each file says
+ * "could not be read" — a transcript problem must not take the whole Footage
+ * screen down, and must not read as "not transcribed yet" either.
+ */
+async function readTranscriptStates(sourceRows, scope) {
+  const ids = sourceRows.map((row) => String(row?.id || '').trim()).filter(Boolean);
+  const batches = [];
+  for (let i = 0; i < ids.length; i += MAX_STATE_IDS) batches.push(ids.slice(i, i + MAX_STATE_IDS));
+  const results = await Promise.all(batches.map((batch) => listTranscriptStates(batch, scope)));
+  const failed = results.find((r) => !r.ok);
+  if (failed) return { states: null, error: failed.error || `status ${failed.status}` };
+  return { states: Object.assign({}, ...results.map((r) => r.data)), error: '' };
+}
+
 async function sendFootage(req, res, urlObj) {
   const params = urlObj.searchParams;
   const read = readFilters({
@@ -95,11 +114,60 @@ async function sendFootage(req, res, urlObj) {
   if (!sessions.ok) return sendErr(res, sessions.status || 500, `Could not read the sessions: ${sessions.error}`);
   if (!sources.ok) return sendErr(res, sources.status || 500, `Could not read the files: ${sources.error}`);
 
-  const view = buildFootage({ sessions: sessions.data, sources: sources.data, filters: read.filters });
+  const transcripts = await readTranscriptStates(sources.data, scope);
+  const view = buildFootage({
+    sessions: sessions.data,
+    sources: sources.data,
+    filters: read.filters,
+    transcripts: transcripts.states,
+  });
   // At the ceiling there may be more rows than were read, so the counts are a
   // floor and the screen has to say so.
   const truncated = sources.data.length >= READ_LIMIT || sessions.data.length >= READ_LIMIT;
-  return sendOk(res, 200, { ...view, truncated, readLimit: READ_LIMIT });
+  return sendOk(res, 200, {
+    ...view,
+    truncated,
+    readLimit: READ_LIMIT,
+    transcriptsError: transcripts.error,
+  });
+}
+
+/**
+ * One file's transcript. The source is looked up in THIS project first, so
+ * another project's source is a 404 exactly like one that does not exist —
+ * never its transcript. A source of ours with no transcript yet is also a 404,
+ * coded NO_TRANSCRIPT, because there is nothing to show; the list already says
+ * why per file. The full text and the per-word timings are left out unless
+ * asked for (?words=1): an hour of speech is ~1,000 segments, and the words
+ * would multiply that several times over for a view that never shows them.
+ */
+async function sendTranscript(req, res, sourceId, urlObj) {
+  const scope = requestScope(req);
+  const found = await getSourceById(sourceId, scope);
+  if (!found.ok) {
+    const status = found.status === 404 ? 404 : (found.status || 500);
+    return sendErr(res, status, found.error || 'Source not found', { code: status === 404 ? 'NOT_FOUND' : undefined });
+  }
+  const read = await getTranscriptBySource(found.data.id, scope);
+  if (!read.ok) {
+    return sendErr(res, read.status || 500, `Could not read the transcript: ${read.error}`);
+  }
+  if (!read.data) {
+    return sendErr(res, 404, 'This file has not been transcribed yet.', { code: 'NO_TRANSCRIPT' });
+  }
+  const t = read.data;
+  const body = {
+    sourceId: t.sourceId,
+    state: t.state,
+    reason: t.reason,
+    language: t.language,
+    model: t.model,
+    durationS: t.durationS,
+    segments: t.segments,
+    updatedAt: t.updatedAt,
+  };
+  if (urlObj.searchParams.get('words') === '1') body.words = t.words;
+  return sendOk(res, 200, body);
 }
 
 async function sendThumbnail(req, res, sourceId) {
@@ -189,6 +257,12 @@ async function handle(req, res, pathname, method) {
     // true means it has ALREADY sent the 429 (CLAUDE.md landmine 11).
     if (checkEndpointLimit(req, res, 'studio.thumbnail')) return true;
     await sendThumbnail(req, res, decodeURIComponent(thumb[1]));
+    return true;
+  }
+
+  const transcript = pathname.match(/^\/api\/studio\/sources\/([^/]+)\/transcript$/);
+  if (transcript) {
+    await sendTranscript(req, res, decodeURIComponent(transcript[1]), getUrlObj(req));
     return true;
   }
 

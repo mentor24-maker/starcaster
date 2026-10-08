@@ -7,6 +7,11 @@
  *         sideways. A table scrolling inside its OWN container is T7 rung
  *         12: legal, reported as a note, never a failure.
  *   T10 — bulk-action toolbars are right-aligned and stay inside their cell.
+ *   A box marked `data-ui-no-sideways` (text meant to wrap, inside its own
+ *         scroll box) never scrolls sideways. Its overflow is contained, so
+ *         the page-width check above cannot see a line that failed to wrap —
+ *         a reader just gets a sideways scrollbar (86bcdek0e, found by
+ *         breaking the transcript view on purpose and watching T0 pass).
  *
  * NOT A CI GATE. CI has no browsers — that is why smoke_capture.mjs is
  * marked manual too. This is a command you run before shipping UI work.
@@ -40,6 +45,14 @@ const SHOT_DIR = path.join(ROOT, '.ui-check');
 /**
  * The screens under test. Adding one is a line here, not a new script.
  * `label` is what a human reads in the report.
+ *
+ * `open` (optional) is a selector clicked before measuring, for content that
+ * only exists once something is opened — the Footage transcript view
+ * (86bcdek0e) is ~1,000 lines nobody would see on a bare page load. If nothing
+ * matches, the screen is SKIPPED (unmeasured), never reported as fitting.
+ * It must be a toggle carrying `aria-expanded`: navigation here does not reload
+ * the page, so the step opens it only if it is not open already, and closes it
+ * again after measuring so the plain entry at the next width sees it closed.
  */
 const SCREENS = [
   { id: 'builderManagePagesPage', label: 'Builder: Pages' },
@@ -49,11 +62,13 @@ const SCREENS = [
   { id: 'contactsPersonasPage', label: 'Contacts: Personas' },
   { id: 'assetsPage', label: 'Assets' },
   { id: 'assetsFootagePage', label: 'Assets: Footage' },
+  { id: 'assetsFootagePage', label: 'Assets: Footage, transcript open', open: '[data-testid="studio-transcript-open"]' },
   { id: 'contactsPage', label: 'Contacts' },
   { id: 'acquireYoutubePage', label: 'Acquire: YouTube' },
   { id: 'acquireWebPage', label: 'Acquire: Web' },
   { id: 'messagingContentPage', label: 'Messaging: Content' },
   { id: 'campaignsPage', label: 'Campaigns' },
+  { id: 'engageYoutubeOutreachPage', label: 'Engage: YouTube Outreach' },
 ];
 
 function arg(name, fallback) {
@@ -129,10 +144,31 @@ try {
 
       await revealPanels(page, { revealSelfHidden: REVEAL_HIDDEN });
       await page.waitForTimeout(900);
+      if (screen.open) {
+        const target = page.locator(screen.open).first();
+        if (!(await target.count())) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — nothing matches ${screen.open} (is the fixture seeded?)`);
+          skipped += 1;
+          continue;
+        }
+        if ((await target.getAttribute('aria-expanded')) !== 'true') await target.click();
+        await page.waitForTimeout(900);
+      }
       const m = await measureActiveScreen(page);
-      const shot = path.join(SHOT_DIR, `${screen.id}-${width}.png`);
+      // Measured BEFORE the `open` step closes what it opened.
+      const sideways = await page.evaluate(() => {
+        const sec = [...document.querySelectorAll('section.app-page')].find((x) => !x.classList.contains('hidden'));
+        return [...(sec?.querySelectorAll('[data-ui-no-sideways]') || [])]
+          .filter((el) => el.scrollWidth > el.clientWidth + 1)
+          .map((el) => `${el.getAttribute('data-ui-no-sideways') || el.className} (${el.scrollWidth}px of text in ${el.clientWidth}px)`);
+      });
+      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}-${width}.png`);
       await page.screenshot({ path: shot });
       checked += 1;
+      if (screen.open) {
+        const opened = page.locator(`${screen.open}[aria-expanded="true"]`).first();
+        if (await opened.count()) await opened.click();
+      }
 
       const problems = [];
       if (m.pageScrollsSideways) {
@@ -142,6 +178,7 @@ try {
           (worst ? ` — widest offender: ${worst.tag}.${worst.cls} reaching ${worst.right}px` : '')
         );
       }
+      for (const what of sideways) problems.push(`${what} scrolls sideways inside itself — its text is not wrapping`);
       for (const t of m.toolbars) {
         if (t.justify !== 'flex-end') problems.push(`toolbar "${t.id}" is ${t.justify}, not right-aligned (T10)`);
         if (t.overflowsHost) problems.push(`toolbar "${t.id}" overflows its cell (T10)`);
