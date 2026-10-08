@@ -237,3 +237,106 @@ test('an iCloud-only file (error -11) is named as such, not as "Unknown system e
   assert.match(idx.readErrorReason({ code: 'EACCES' }), /refused access/);
   assert.equal(idx.readErrorReason({ code: 'EIO' }), 'could not read: EIO');
 });
+
+// ---------------------------------------------------------------------------
+// Ticket 86bcfgyyw: iCloud Drive and the archived Trash join the default
+// places, MaxOne leaves them, and a file whose bytes are in iCloud is counted as
+// NOT CHECKED — never unique, never a duplicate.
+
+test('the default places drop MaxOne and add iCloud Drive, the archived Trash and a not-checked Photos line', () => {
+  const d = idx.defaultPlaces('HOME', ['Desktop - Dane’s MacBook Pro (2)', 'Music']);
+  const locations = d.roots.map((r) => r.location);
+  assert.ok(!locations.includes('maxone'), 'MaxOne is the Time Machine drive now, not an archive');
+  assert.ok(!d.roots.some((r) => r.root.startsWith('/Volumes/')));
+  assert.deepEqual(d.roots.filter((r) => r.location === 'mac').map((r) => r.root), [
+    'HOME/Desktop', 'HOME/Documents', 'HOME/Downloads', 'HOME/Desktop - Dane’s MacBook Pro (2)',
+  ]);
+  assert.deepEqual(d.roots.find((r) => r.location === 'icloud'), { location: 'icloud', root: 'HOME/Library/Mobile Documents/com~apple~CloudDocs' });
+  assert.deepEqual(d.roots.find((r) => r.location === 'mac-trash'), { location: 'mac-trash', root: 'HOME/.Trash/Archived-from-Mac-20261004-0327', optional: true });
+  assert.deepEqual(d.remotes, [['mentor24', 'm24:'], ['mentorofaio', 'gdrive:']]);
+  assert.equal(d.notChecked.length, 1);
+  assert.equal(d.notChecked[0].location, 'photos');
+  assert.match(d.notChecked[0].why, /^not checked/);
+});
+
+test('the older ".name.icloud" stub names the real file; nothing else is a stub', () => {
+  assert.equal(idx.icloudStubTarget('Zoom/2020-04-09 call/.zoom_0.mp4.icloud'), 'Zoom/2020-04-09 call/zoom_0.mp4');
+  assert.equal(idx.icloudStubTarget('.Report.pdf.icloud'), 'Report.pdf');
+  assert.equal(idx.icloudStubTarget('Report.pdf.icloud'), null);
+  assert.equal(idx.icloudStubTarget('.hidden'), null);
+});
+
+test('an iCloud-only file is NOT CHECKED: never unique, never a duplicate, never empty', () => {
+  const a = idx.analyze([
+    // Same size and even a hash matching a real file: still not a duplicate,
+    // because its bytes were never read here.
+    { location: 'icloud', path: 'Zoom/a.mp4', size: 50, hash: 'V', placeholder: true },
+    { location: 'mentorofaio', path: 'Studio/a.mp4', size: 50, hash: 'V' },
+    // A size nothing else has: would be "unique by size" if it were read.
+    { location: 'icloud', path: 'Zoom/b.mp4', size: 12345, placeholder: true },
+    // An old-style stub carries no size at all: not "empty".
+    { location: 'icloud', path: 'Zoom/c.mp4', size: 0, placeholder: true },
+  ]);
+  assert.deepEqual(a.notChecked.map((e) => e.path), ['Zoom/a.mp4', 'Zoom/b.mp4', 'Zoom/c.mp4']);
+  assert.equal(a.uniqueBySize.length, 0);
+  assert.equal(a.sets.length, 0);
+  assert.equal(a.empty, 0);
+  const place = idx.placeSummary([], a, []).length; // no entries → no rows
+  assert.equal(place, 0);
+});
+
+test('each place gets one line: where it belongs, only copy, not checked', () => {
+  const entries = [
+    // A Mac video with a copy on mentorofaio, where video belongs.
+    { location: 'mac', path: 'Desktop/talk.mov', size: 50, hash: 'V' },
+    { location: 'mentorofaio', path: 'Studio/talk.mov', size: 50, hash: 'V' },
+    // A Mac PDF whose only other copy is on the WRONG Drive: neither line.
+    { location: 'mac', path: 'Documents/tax.pdf', size: 30, hash: 'P' },
+    { location: 'mentorofaio', path: 'misc/tax.pdf', size: 30, hash: 'P' },
+    // The only copy anywhere: by size, and by hash.
+    { location: 'mac', path: 'Desktop/lone.jpg', size: 7777 },
+    { location: 'mac', path: 'Desktop/hashed-lone.jpg', size: 40, hash: 'L' },
+    // Not checked.
+    { location: 'icloud', path: 'Zoom/x.mp4', size: 900, placeholder: true },
+    { location: 'icloud', path: 'Docs/y.pdf', size: 40, hash: 'Y' },
+  ];
+  // hashed-lone shares a size with y.pdf, so both were hashed; neither matches.
+  const a = idx.analyze(entries);
+  const rows = Object.fromEntries(idx.placeSummary(entries, a, [
+    { location: 'mac', root: '~/Desktop' },
+    { location: 'photos', root: '~/Pictures/Photos Library.photoslibrary', error: 'not checked — no permission' },
+  ]).map((r) => [r.location, r]));
+  assert.equal(rows.mac.files, 4);
+  assert.equal(rows.mac.atHome, 1);
+  assert.equal(rows.mac.onlyHere, 2);
+  assert.equal(rows.mac.onlyHereBytes, 7777 + 40);
+  assert.equal(rows.mac.notChecked, 0);
+  assert.equal(rows.icloud.notChecked, 1);
+  assert.equal(rows.icloud.onlyHere, 1);
+  assert.equal(rows.mentorofaio.atHome, 1, 'the mentorofaio video IS where it belongs');
+  assert.deepEqual(rows.photos.problems, ['not checked — no permission']);
+
+  const { markdown } = idx.renderReport(entries, { ranAt: 'now', sources: [{ location: 'photos', root: 'Photos', error: 'not checked — no permission' }] });
+  assert.match(markdown, /## Each place, in one line/);
+  assert.match(markdown, /- \*\*mac\*\*: 4 files, .*; 1 \(50 B\) have a confirmed copy where they belong; 2 \(7\.8 KB\) are the only copy; 0 \(0 B\) not checked\./);
+  assert.match(markdown, /- \*\*photos\*\* \(Photos\): not checked — no permission\./);
+  assert.match(markdown, /\*\*In iCloud only, not checked:\*\* 1 files, 900 B/);
+  assert.match(markdown, /## In iCloud only — not checked\n\nThese files/);
+});
+
+test('end to end: an iCloud stub is listed as not checked and the run says so in its exit code', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archive-index-'));
+  const icloud = path.join(tmp, 'icloud');
+  fs.mkdirSync(path.join(icloud, 'Zoom'), { recursive: true });
+  fs.writeFileSync(path.join(icloud, 'Zoom', '.zoom_0.mp4.icloud'), 'bplist00 stub');
+  fs.writeFileSync(path.join(icloud, 'notes.txt'), 'here on the disk\n');
+  const out = path.join(tmp, 'out');
+  const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'archive_index.mjs'), '--root', `icloud=${icloud}`, '--out', out], { encoding: 'utf8' });
+  assert.equal(r.status, 1, 'one file was not checked, so not every entry was settled');
+  assert.match(r.stdout, /1 in iCloud only, not checked/);
+  const notChecked = fs.readFileSync(path.join(out, 'not-checked.tsv'), 'utf8').trim().split('\n').slice(1);
+  assert.deepEqual(notChecked.map((l) => l.split('\t').slice(0, 2)), [['icloud', 'Zoom/zoom_0.mp4']]);
+  const report = fs.readFileSync(path.join(out, 'report.md'), 'utf8');
+  assert.match(report, /- \*\*icloud\*\* \([^)]*\): 2 files, .*; 1 \(17 B\) are the only copy; 1 \(0 B\) not checked\./);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
