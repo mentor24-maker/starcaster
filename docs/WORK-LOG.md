@@ -1,3 +1,16 @@
+## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
+
+Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
+button. Starcaster writes the Note (or the reply) in the voice from Settings,
+and it lands on a new **Approvals** tab in a box Dane can edit, with
+**Approve**, **Reject** and **Write another**. Likes and restacks have no
+words, so they wait on Approvals with just Approve and Reject. The account's
+rules are checked on what was actually written: a link when links are set to
+Never, a word on the avoid list, or a Note that is too long is thrown away
+with the reason, and an edit that breaks a rule is refused the same way. For a
+reply, Starcaster reads the other person's Note from Substack itself; if it
+can't, the row asks Dane to paste it. Nothing is posted yet.
+
 ## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
 
 There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
