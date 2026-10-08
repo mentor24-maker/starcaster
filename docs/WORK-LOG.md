@@ -1,3 +1,15 @@
+## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
+
+There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
+where Dane feeds the Substack Notes agent. The **Ideas** tab takes ideas for
+Notes of his own, and turns any of his saved topics into an idea with one
+click. The **Engage** tab takes a link to someone else's Note and whether to
+reply to it, restack it or like it; a link that is not a Note is refused with
+the reason. The **Settings** tab holds the daily limit, spacing, active hours,
+voice, topics and words to avoid, under plain labels. Everything waits on the
+screen: nothing is drafted or posted yet. A line at the top says the Mini's
+Substack sign-in has not been checked yet, because the check that would tell
+it is a later ticket.
 ## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
 
 Each video on **Engage → YouTube Outreach** now has a **Write a draft**
