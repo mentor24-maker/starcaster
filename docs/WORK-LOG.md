@@ -1,3 +1,17 @@
+## 2026-10-07 — Approved merges stall silently when a pull request has a real conflict: the Mini holds its merge turn forever and the others queue behind it (#785)
+
+When Dane says "merge" on a pull request whose code really clashes with newer
+work on `main`, the Mini now says so within one pass instead of waiting.
+This morning three approved pieces of work clashed for real. The Mini had
+already asked git and knew it, but it still queued each one for its "one at a
+time" merge turn so it could attempt a fix that was bound to fail. That turn
+was busy all morning, so the three sat for two to three hours and nobody was
+told. Now a clash git has confirmed skips the queue and goes straight to the
+existing hand-off: a Loop Queue ticket for a build pass, plus a note on the
+ticket naming the clashing files. If GitHub had been told to merge it
+automatically, that order is withdrawn, so it cannot land out of turn once
+fixed. A false alarm (GitHub says it clashes, git says it doesn't) is
+handled as before: the Mini brings the branch up to date and merges it.
 ## 2026-10-07 — Footage screen: you can't read what was said in a recording (#787)
 
 The Footage screen now has a Transcript column. When a recording has been
