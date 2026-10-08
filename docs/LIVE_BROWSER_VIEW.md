@@ -45,13 +45,14 @@ different plan.
 Google sometimes refuses to sign in a browser it can tell is remote-controlled
 ("This browser or app may not be secure"). We tried Google's sign-in page in
 two kinds of remote-controlled Chrome on the Mini, each with a fresh,
-throwaway profile, using the test account's email address
-(`alphirebrowsertest@gmail.com`).
+throwaway profile, using the test account Dane set up (its address is kept in
+Doppler as `GOOGLE_TEST_EMAIL`, and is left out here because this repository
+is public).
 
 | How Chrome was started | What Google did after the email was entered |
 |---|---|
 | **Playwright starts Chrome** (the easiest way to build a live view; it marks the browser as automated, `navigator.webdriver = true`) | **Refused.** Page `…/signin/rejected`: *"Couldn't sign you in. This browser or app may not be secure."* |
-| **The door keeper starts the real Chrome itself**, with only its remote-control port switched on (`navigator.webdriver = false`). This is how OpenClaw's Chrome already runs. | **Not refused.** Google went on to check the address and answered *"Couldn't find this account"*: it does not recognise `alphirebrowsertest@gmail.com`. |
+| **The door keeper starts the real Chrome itself**, with only its remote-control port switched on (`navigator.webdriver = false`). This is how OpenClaw's Chrome already runs. | **Not refused.** Google went on to check the address and answered *"Couldn't find this account"*: it does not recognise the test address. |
 
 What that means:
 
@@ -129,16 +130,16 @@ Chrome control port (18800) stay unreachable, as they are now.
 
 ```
 $ lsof -nP -iTCP:18789 -sTCP:LISTEN
-node    93669 daneofearth   47u  IPv4 ...  TCP 127.0.0.1:18789 (LISTEN)
-node    93669 daneofearth   48u  IPv6 ...  TCP [::1]:18789 (LISTEN)
+node    ...  IPv4 ...  TCP 127.0.0.1:18789 (LISTEN)
+node    ...  IPv6 ...  TCP [::1]:18789 (LISTEN)
 
-$ curl -sS -m 5 http://192.168.0.36:18789/        # the Mini's home-network address
-curl: (7) Failed to connect to 192.168.0.36 port 18789 after 1 ms: Couldn't connect to server
+$ curl -sS -m 5 http://<Mini-home-network-address>:18789/        # the Mini's home-network address
+curl: (7) Failed to connect to <Mini-home-network-address> port 18789 after 1 ms: Couldn't connect to server
 $ curl -sS -m 5 http://127.0.0.1:18789/           # from inside the Mini, for contrast
 200
 
 $ lsof -nP -iTCP:18800 -sTCP:LISTEN               # OpenClaw's Chrome control port
-Google    94199 daneofearth   57u  IPv4 ...  TCP 127.0.0.1:18800 (LISTEN)
+Google    ...  IPv4 ...  TCP 127.0.0.1:18800 (LISTEN)
 ```
 
 The gateway listens only on the Mini's inside address. A connection to the
@@ -242,12 +243,12 @@ Before (4:32pm):
 
 ```
 $ launchctl list | grep -i starcaster
-570	0	com.starcaster.youtube-media
-93669	0	com.starcaster.openclaw
+(pid)	0	com.starcaster.youtube-media
+(pid)	0	com.starcaster.openclaw
 -	0	com.starcaster.pipeline-pulse
-46345	0	com.starcaster.studio-worker
-565	0	com.starcaster.loop-build
-567	0	com.starcaster.loop-review
+(pid)	0	com.starcaster.studio-worker
+(pid)	0	com.starcaster.loop-build
+(pid)	0	com.starcaster.loop-review
 -	7	com.starcaster.bus-relay
 -	0	com.starcaster.weekly-report
 -	0	com.starcaster.colima
@@ -257,12 +258,12 @@ After (4:37pm):
 
 ```
 $ launchctl list | grep -i starcaster
-570	0	com.starcaster.youtube-media
-93669	0	com.starcaster.openclaw
+(pid)	0	com.starcaster.youtube-media
+(pid)	0	com.starcaster.openclaw
 -	0	com.starcaster.pipeline-pulse
-46345	0	com.starcaster.studio-worker
-565	0	com.starcaster.loop-build
-567	0	com.starcaster.loop-review
+(pid)	0	com.starcaster.studio-worker
+(pid)	0	com.starcaster.loop-build
+(pid)	0	com.starcaster.loop-review
 -	0	com.starcaster.bus-relay
 -	0	com.starcaster.weekly-report
 -	0	com.starcaster.colima
@@ -270,7 +271,8 @@ $ pgrep -fl 'lbv|9333' || echo "no test chrome running"
 no test chrome running
 ```
 
-Same nine jobs. The middle number for `bus-relay` is the result of its last
+Same nine jobs. (Process ids are shown as `(pid)`, and the Mini's home-network
+address as a placeholder, because this repository is public.) The middle number for `bus-relay` is the result of its last
 run (7 before, 0 after). It ran on its own schedule in between; nothing here
 touched it.
 
