@@ -8,6 +8,8 @@
  *   GET /api/studio/sources/:id/thumbnail      the file's picture, from Drive
  *   GET /api/studio/sources/:id/transcript     what was said in it (?words=1
  *                                              adds the per-word timings)
+ *   GET /api/studio/search?q=<words>           every recording where those
+ *                                              words were said, and when
  *
  * Read-only. The pipeline writes the catalog from the Mac Mini
  * (workers/studio/); nothing here changes a row.
@@ -26,13 +28,23 @@
 const { sendOk, sendErr, getUrlObj } = require('./http');
 const { listSessions } = require('../lib/videoSessionsStore');
 const { listSources, getSourceById } = require('../lib/videoSourcesStore');
-const { buildFootage, readFilters } = require('../lib/studioFootage');
-const { getTranscriptBySource, listTranscriptStates, MAX_STATE_IDS } = require('../lib/videoTranscriptsStore');
+const { buildFootage, readFilters, buildSearchResults } = require('../lib/studioFootage');
+const {
+  getTranscriptBySource, listTranscriptStates, searchTranscripts, MAX_STATE_IDS,
+} = require('../lib/videoTranscriptsStore');
 const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 /** The most rows one read takes. resolveLimit's own ceiling. */
 const READ_LIMIT = 1000;
+
+/** A search shorter than this is refused rather than run: one letter matches
+ *  nearly every recording and says nothing. */
+const MIN_QUERY_CHARS = 2;
+const MAX_QUERY_CHARS = 200;
+
+/** The most recordings one search returns. searchTranscripts' ceiling is 100. */
+const SEARCH_LIMIT = 50;
 
 /** How long the browser keeps a thumbnail. Drive's preview of a finished
  *  video does not change, and every one re-fetched is a request against the
@@ -170,6 +182,67 @@ async function sendTranscript(req, res, sourceId, urlObj) {
   return sendOk(res, 200, body);
 }
 
+/**
+ * Search what was said (Studio Phase 2 · 6 of 6, 86bcdek0z). Every recording
+ * in THIS project whose transcript holds all the words, newest transcript
+ * first, each with the first few lines that say them and when.
+ *
+ * A query under MIN_QUERY_CHARS is a stated 400, never "every file". The
+ * answer also carries how many recordings have a finished transcript, so the
+ * screen can tell "nothing you said matches" from "nothing is transcribed
+ * yet" — the same empty list, two different reasons (landmine 17).
+ */
+async function sendSearch(req, res, urlObj) {
+  const q = String(urlObj.searchParams.get('q') || '').trim();
+  if (q.length < MIN_QUERY_CHARS) {
+    return sendErr(
+      res,
+      400,
+      q
+        ? `"${q}" is too short to search — type at least ${MIN_QUERY_CHARS} characters.`
+        : `Type at least ${MIN_QUERY_CHARS} characters to search what you said.`,
+      { code: 'QUERY_TOO_SHORT' }
+    );
+  }
+  if (q.length > MAX_QUERY_CHARS) {
+    return sendErr(res, 400, `Search for ${MAX_QUERY_CHARS} characters or fewer (got ${q.length}).`, { code: 'QUERY_TOO_LONG' });
+  }
+
+  const scope = requestScope(req);
+  const [hits, sessions, sources] = await Promise.all([
+    searchTranscripts(q, scope, SEARCH_LIMIT),
+    listSessions(READ_LIMIT, scope),
+    listSources(READ_LIMIT, scope),
+  ]);
+  if (!hits.ok) {
+    // The store's 400 is "there is no word in that" (e.g. only punctuation);
+    // anything else is the database, said as itself.
+    if (hits.status === 400) return sendErr(res, 400, `"${q}" has no words in it to search for.`, { code: 'QUERY_HAS_NO_WORDS' });
+    return sendErr(res, hits.status || 500, `Could not search the transcripts: ${hits.error}`);
+  }
+  if (!sessions.ok) return sendErr(res, sessions.status || 500, `Could not read the sessions: ${sessions.error}`);
+  if (!sources.ok) return sendErr(res, sources.status || 500, `Could not read the files: ${sources.error}`);
+
+  const states = await readTranscriptStates(sources.data, scope);
+  const transcribedCount = states.states
+    ? Object.values(states.states).filter((s) => s.state === 'done').length
+    : null;
+  const view = buildSearchResults({
+    hits: hits.data,
+    sources: sources.data,
+    sessions: sessions.data,
+    transcribedCount,
+  });
+  return sendOk(res, 200, {
+    query: q,
+    ...view,
+    truncated: hits.data.length >= SEARCH_LIMIT,
+    searchLimit: SEARCH_LIMIT,
+    countTruncated: sources.data.length >= READ_LIMIT,
+    countError: states.error,
+  });
+}
+
 async function sendThumbnail(req, res, sourceId) {
   const found = await getSourceById(sourceId, requestScope(req));
   if (!found.ok) {
@@ -252,6 +325,11 @@ async function handle(req, res, pathname, method) {
     return true;
   }
 
+  if (pathname === '/api/studio/search') {
+    await sendSearch(req, res, getUrlObj(req));
+    return true;
+  }
+
   const thumb = pathname.match(/^\/api\/studio\/sources\/([^/]+)\/thumbnail$/);
   if (thumb) {
     // true means it has ALREADY sent the 429 (CLAUDE.md landmine 11).
@@ -275,4 +353,4 @@ const manifest = {
   prefixes: ['/api/studio'],
 };
 
-module.exports = { handle, manifest, READ_LIMIT };
+module.exports = { handle, manifest, READ_LIMIT, SEARCH_LIMIT, MIN_QUERY_CHARS };

@@ -2,7 +2,9 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import FootagePanel, { PROJECT_SWITCH_EVENT, timestamp, transcriptSentence } from "./footage-panel";
+import FootagePanel, {
+  PROJECT_SWITCH_EVENT, timestamp, transcriptSentence, noMatchSentence, queryTooShort, queryWords,
+} from "./footage-panel";
 
 /**
  * Review round 1 of Studio 8/8 (86bbjv68z) found two defects by driving the
@@ -68,6 +70,8 @@ let footageReads: string[] = [];
 let thumbnailRequests: string[] = [];
 let thumbnailsWork = false;
 let transcriptReads: string[] = [];
+let searchReads: string[] = [];
+let searchAnswer: Record<string, unknown> = {};
 const TRANSCRIPT = {
   sourceId: "fx-1",
   state: "done",
@@ -111,8 +115,14 @@ beforeEach(() => {
   thumbnailRequests = [];
   thumbnailsWork = false;
   transcriptReads = [];
+  searchReads = [];
+  searchAnswer = {};
   (window as unknown as { App: unknown }).App = {
     api: async (path: string) => {
+      if (path.startsWith("/api/studio/search")) {
+        searchReads.push(path);
+        return { ok: true, data: searchAnswer };
+      }
       if (path.includes("/transcript")) {
         transcriptReads.push(path);
         return { ok: true, data: TRANSCRIPT };
@@ -309,5 +319,105 @@ describe("Footage panel — reading what was said (86bcdek0e)", () => {
     expect(timestamp(59.9)).toBe("0:59");
     expect(timestamp(0)).toBe("0:00");
     expect(timestamp(3600)).toBe("1:00:00");
+  });
+});
+
+describe("Footage panel — searching what was said (86bcdek0z)", () => {
+  function typeAndSearch(text: string) {
+    const input = container!.querySelector('[data-testid="studio-search-input"]') as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      setter.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const form = container!.querySelector("form.studio-footage-search") as HTMLFormElement;
+    act(() => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  }
+
+  it("a query under 2 characters runs no search and says why", async () => {
+    await mount();
+    typeAndSearch("a");
+    await flush();
+    expect(searchReads).toEqual([]);
+    expect(container?.querySelector('[data-testid="studio-search-note"]')?.textContent)
+      .toBe('"a" is too short to search — type at least 2 characters.');
+    typeAndSearch("   ");
+    await flush();
+    expect(searchReads).toEqual([]);
+    expect(queryTooShort("")).toBe("Type at least 2 characters to search what you said.");
+    expect(queryTooShort("ok")).toBe("");
+  });
+
+  it("shows each file, the minute it was said and the line, with the searched words highlighted", async () => {
+    searchAnswer = {
+      query: "Pricing lessons",
+      transcribedCount: 3,
+      momentsPerFile: 5,
+      truncated: false,
+      searchLimit: 50,
+      countTruncated: false,
+      countError: "",
+      results: [{
+        sourceId: "fx-1",
+        found: true,
+        fileName: "IMG_1962.MOV",
+        driveUrl: "https://drive.google.com/file/d/drv-fx-1/view",
+        sessionTitle: "Fixture shoot",
+        date: "2026-09-01T15:00:00Z",
+        dateSource: "recorded",
+        matchCount: 7,
+        moments: [{ start: 754.2, time: "12:34", text: "Now, about the PRICING of lessons." }],
+      }],
+    };
+    await mount();
+    typeAndSearch("Pricing lessons");
+    await flush();
+    expect(searchReads).toEqual(["/api/studio/search?q=Pricing%20lessons"]);
+    const results = container!.querySelector('[data-testid="studio-search-results"]')!;
+    const link = results.querySelector("a")!;
+    expect(link.textContent).toBe("IMG_1962.MOV");
+    expect(link.getAttribute("href")).toBe("https://drive.google.com/file/d/drv-fx-1/view");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(results.querySelector(".studio-footage-transcript-time")?.textContent).toBe("12:34");
+    expect([...results.querySelectorAll("mark")].map((m) => m.textContent)).toEqual(["PRICING", "lessons"]);
+    expect(results.textContent).toContain("Now, about the PRICING of lessons.");
+    expect(results.textContent).toContain("and 6 more lines in this recording");
+    expect(results.textContent).toContain("(of 3 transcribed)");
+  });
+
+  it("no results names the query AND how many recordings were searched", async () => {
+    searchAnswer = { query: "zebra", transcribedCount: 12, results: [], countError: "" };
+    await mount();
+    typeAndSearch("zebra");
+    await flush();
+    expect(container?.querySelector('[data-testid="studio-search-empty"]')?.textContent)
+      .toBe('Nothing you said matches "zebra". Searched 12 transcribed recordings.');
+  });
+
+  it("no match and nothing-transcribed-yet are different sentences; an unread count never reads as 0", () => {
+    expect(noMatchSentence("zebra", 1)).toBe('Nothing you said matches "zebra". Searched 1 transcribed recording.');
+    expect(noMatchSentence("zebra", 0)).toBe(
+      'Nothing you said matches "zebra" — no recording has been transcribed yet, so there was nothing to search.'
+    );
+    expect(noMatchSentence("zebra", null, "relation missing")).toBe(
+      'Nothing you said matches "zebra". How many recordings have transcripts could not be read: relation missing.'
+    );
+  });
+
+  it("splits words the way the server does", () => {
+    expect(queryWords("  Don't stop—now! ")).toEqual(["don", "t", "stop", "now"]);
+  });
+
+  it("a project switch clears the last client's search results", async () => {
+    searchAnswer = { query: "zebra", transcribedCount: 2, results: [], countError: "" };
+    await mount();
+    typeAndSearch("zebra");
+    await flush();
+    expect(container?.querySelector('[data-testid="studio-search-empty"]')).not.toBeNull();
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new CustomEvent(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    expect(container?.querySelector('[data-testid="studio-search-empty"]')).toBeNull();
+    expect((container!.querySelector('[data-testid="studio-search-input"]') as HTMLInputElement).value).toBe("");
   });
 });

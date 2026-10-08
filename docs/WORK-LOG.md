@@ -18,6 +18,29 @@ why in plain words. The worker is built so Substack Notes can plug into it
 later. It is not switched on yet: that waits until Dane signs the Mini's
 browser in to YouTube (after Oct 13). The database change rides along with
 4/7's pending SQL file.
+## 2026-10-08 — Footage screen: you can't search your recordings for something you said (#791)
+
+The Footage screen now has a "Search what you said" box at the top. Type a
+word or phrase you said and press Return, and every recording where you said it
+appears: the file name (click it to watch in Google Drive), which session it
+belongs to, and up to five moments, each with the minute it was said and the
+line itself, your words highlighted. If nothing matches, it says what you
+searched for and how many recordings it looked through, so "you never said
+that" and "nothing has been turned into text yet" are clearly different
+messages. A single letter is not searched; the box says why. This finishes
+the six-step transcription project.
+## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
+
+There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
+where Dane feeds the Substack Notes agent. The **Ideas** tab takes ideas for
+Notes of his own, and turns any of his saved topics into an idea with one
+click. The **Engage** tab takes a link to someone else's Note and whether to
+reply to it, restack it or like it; a link that is not a Note is refused with
+the reason. The **Settings** tab holds the daily limit, spacing, active hours,
+voice, topics and words to avoid, under plain labels. Everything waits on the
+screen: nothing is drafted or posted yet. A line at the top says the Mini's
+Substack sign-in has not been checked yet, because the check that would tell
+it is a later ticket.
 ## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
 
 Each video on **Engage → YouTube Outreach** now has a **Write a draft**
