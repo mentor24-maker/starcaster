@@ -71,3 +71,32 @@ create index if not exists idx_youtube_outreach_comments_target_id
   on public.youtube_outreach_comments (target_id);
 
 alter table public.youtube_outreach_comments enable row level security;
+
+-- ── Ticket 5/7 (86bcda68h): what the Mini's poster writes ──────────────────
+--
+-- Added as `add column if not exists` rather than folded into the create
+-- above, so this file is right whether or not the table already exists: on a
+-- database where 4/7's version was applied, these lines add the columns; on a
+-- fresh one they are no-ops after the create. Running it twice changes nothing.
+--
+--   posting_started_at  when the worker marked the row `posting`. A row still
+--                       `posting` well after this is one whose worker died
+--                       mid-post: it is NEVER retried, and the screen shows it
+--                       as "check this one by hand".
+--   screenshot_url      the screenshot OpenClaw took of the posted comment,
+--                       uploaded to Starcaster's storage. Blank with a reason
+--                       in post_note when it could not be kept.
+--   post_note           anything the worker wants Dane to read on the row that
+--                       is not an error: the screenshot problem, or why a
+--                       posted link could not be checked.
+--   wait_reason         why an APPROVED comment has not gone out yet, in plain
+--                       words ("waiting for tomorrow's allowance"), written by
+--                       the worker each pass. Blank means nothing is holding it.
+--   wait_checked_at     when the worker last looked — so a stale reason reads
+--                       as stale rather than as current.
+
+alter table public.youtube_outreach_comments add column if not exists posting_started_at timestamptz;
+alter table public.youtube_outreach_comments add column if not exists screenshot_url text not null default '';
+alter table public.youtube_outreach_comments add column if not exists post_note text not null default '';
+alter table public.youtube_outreach_comments add column if not exists wait_reason text not null default '';
+alter table public.youtube_outreach_comments add column if not exists wait_checked_at timestamptz;

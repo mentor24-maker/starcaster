@@ -9,6 +9,26 @@ Google refuses a browser started by the usual automation tool, but not a real
 Chrome that is only being watched, so the plan uses the second kind. The plan
 ends with five build tickets for Dane to approve. While checking, we found that
 Tailscale, the Mini's route to the internet, has been off since about Oct 5.
+## 2026-10-08 — YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (#792)
+
+The Mac Mini now has a worker that takes comments Dane has approved on
+**Engage → YouTube Outreach** and posts them through the Dane of Earth
+browser. Before each post it checks the account's limits: how many a day,
+how far apart, which hours, and no second comment on the same video. If a
+comment has to wait, its card says why ("waiting for tomorrow's
+allowance"). When the account itself has to wait, every comment behind it
+waits too, so comments go out oldest first and never closer together than the
+gap allows. A comment counts as **posted** only when the browser sends back
+a link and YouTube itself shows that comment, with the approved words, at
+that link. The browser just saying "done" is not enough. That is the lesson
+of the July Facebook false success. If the worker stops part-way through, the
+comment is never tried again. It is marked "check this one by hand" so
+nothing goes out twice under Dane's name. A new **Posted** section lists what
+went out, with a link to each comment and a screenshot. Failed comments say
+why in plain words. The worker is built so Substack Notes can plug into it
+later. It is not switched on yet: that waits until Dane signs the Mini's
+browser in to YouTube (after Oct 13). The database change rides along with
+4/7's pending SQL file.
 ## 2026-10-08 — Footage screen: you can't search your recordings for something you said (#791)
 
 The Footage screen now has a "Search what you said" box at the top. Type a
