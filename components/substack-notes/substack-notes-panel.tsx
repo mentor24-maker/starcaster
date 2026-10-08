@@ -153,6 +153,27 @@ export function statusLabel(item: Pick<NoteItem, 'kind' | 'status'>): string {
   return STATUS_LABELS[item.status] || item.status;
 }
 
+/**
+ * The words an item will post (or would have), for its Ideas / Engage row.
+ * Once a Note or reply leaves `idea`, its row is the only place left on the
+ * screen that can show them — an approved item leaves Approvals — so without
+ * this line Dane's edit was invisible after a reload. Restacks and likes have
+ * no words, so they get nothing.
+ */
+export function wordsLine(item: Pick<NoteItem, 'kind' | 'status' | 'draftText' | 'finalText'>): string {
+  if (item.kind !== 'note' && item.kind !== 'reply') return '';
+  const final = item.finalText || item.draftText;
+  switch (item.status) {
+    case 'draft': return item.draftText ? `Draft: ${item.draftText}` : '';
+    case 'rejected': return item.draftText ? `Rejected draft: ${item.draftText}` : '';
+    case 'approved':
+    case 'posting':
+    case 'failed': return final ? `Will post: ${final}` : '';
+    case 'posted': return final ? `Posted: ${final}` : '';
+    default: return '';
+  }
+}
+
 export function labelFor(options: Option[], value: string): string {
   return options.find((o) => o.value === value)?.label || value || '—';
 }
@@ -794,7 +815,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                               {editError ? <p className="substack-notes-error" role="alert">{editError}</p> : null}
                             </>
                           ) : (
-                            <span className="substack-notes-text">{item.ideaText || item.contentTitle || item.contentUrl}</span>
+                            <>
+                              <span className="substack-notes-text">{item.ideaText || item.contentTitle || item.contentUrl}</span>
+                              {wordsLine(item) ? <span className="substack-notes-text substack-notes-words">{wordsLine(item)}</span> : null}
+                            </>
                           )}
                         </td>
                         <td>{SOURCE_LABELS[item.source] || item.source}</td>
@@ -914,6 +938,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                                   ? `Their Note: ${item.targetText}`
                                   : 'Their Note: not read yet — Write a draft reads it from Substack, or paste it.'}
                               </span>
+                              {wordsLine(item) ? <span className="substack-notes-text substack-notes-words">{wordsLine(item)}</span> : null}
                             </>
                           ) : (
                             <span className="substack-notes-text">No words — a {action.toLowerCase()} is just the click.</span>

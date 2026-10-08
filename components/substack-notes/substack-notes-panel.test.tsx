@@ -431,6 +431,7 @@ describe("Substack Notes approvals (3/7)", () => {
 
     await reload();
     expect(row(id).textContent).toContain("Approved — waiting to post");
+    expect(row(id).querySelector(".substack-notes-words")?.textContent).toBe("Will post: Winter stars look closer because the air is drier.");
     await click(button("Approvals"));
     expect(container!.querySelector(`article[data-item-id="${id}"]`)).toBeNull();
   });
@@ -458,6 +459,19 @@ describe("Substack Notes approvals (3/7)", () => {
     expect(container!.querySelector(`article[data-item-id="${id}"]`)).toBeNull();
     await click(button("Ideas"));
     expect(row(id).textContent).toContain("Rejected");
+    expect(row(id).querySelector(".substack-notes-words")?.textContent).toBe("Rejected draft: Some words");
+  });
+
+  it("shows an approved reply's words on its Engage row, and nothing for a like", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-1", status: "approved", draftText: "First go", finalText: "Edited reply" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "approved" }),
+    ];
+    const [reply, like] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    await click(button("Engage"));
+    expect(row(reply).querySelector(".substack-notes-words")?.textContent).toBe("Will post: Edited reply");
+    expect(row(like).querySelector(".substack-notes-words")).toBeNull();
   });
 
   it("shows the server's reason when an edit breaks a rule, and the draft stays waiting", async () => {
