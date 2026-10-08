@@ -1,0 +1,274 @@
+/* Engage › Substack Notes — the React island at #substackNotesReactRoot
+   (components/substack-notes/substack-notes-panel.tsx). Substack Notes 2 of 7.
+
+   Copies _youtube-outreach.css's conventions rather than inventing new ones:
+   every flex/grid box sets min-width: 0 (UI_RULES T8), tables scroll inside
+   .table-wrap if they ever must (T7 rung 12), no pixel min-widths (T9), so the
+   page body never scrolls sideways (T0).
+
+   The settings and engage forms follow W0's mechanism: the FORM is the grid
+   and each field is `display: contents`, so one pair of tracks measures the
+   longest label and the longest control across the whole form. Text controls
+   stop at --builder-field-long-max (W9). */
+
+.substack-notes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.substack-notes-signin {
+  margin: 0;
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.substack-notes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.substack-notes-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.substack-notes-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.substack-notes-panel .btn {
+  margin: 0;
+}
+
+.substack-notes-error,
+.substack-notes-notice,
+.substack-notes-empty {
+  margin: 0;
+}
+
+.substack-notes-error {
+  color: var(--status-warn-ink);
+}
+
+.substack-notes-empty {
+  padding: var(--space-5);
+  border: 1px dashed var(--border-light);
+  border-radius: 10px;
+}
+
+/* ── Jot an idea ────────────────────────────────────────────────────── */
+
+.substack-notes-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.substack-notes-add-label {
+  flex: 0 0 100%;
+  margin: 0;
+  font-weight: 600;
+}
+
+.substack-notes-add textarea {
+  flex: 1 1 20rem;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────── */
+
+.substack-notes-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.substack-notes-card-title,
+.substack-notes-card-note {
+  margin: 0;
+}
+
+.substack-notes-topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.substack-notes-topic-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+/* A topic is a name: wrap it, never clip it (T-1). */
+.substack-notes-topic {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── Forms (settings, engage) ───────────────────────────────────────── */
+
+.substack-notes-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, var(--builder-field-long-max, 560px));
+  align-items: start;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.substack-notes-field,
+.substack-notes-field-control {
+  display: contents;
+}
+
+.substack-notes-field-label {
+  grid-column: 1;
+  margin: 0;
+  padding-top: var(--space-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.substack-notes-field-control > input:not([type='radio']),
+.substack-notes-field-control > select,
+.substack-notes-field-control > textarea,
+.substack-notes-field-control > .substack-notes-choices {
+  grid-column: 2;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.substack-notes-field-help {
+  grid-column: 2;
+  margin: calc(-1 * var(--space-3)) 0 0;
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.substack-notes-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  padding-top: var(--space-2);
+}
+
+.substack-notes-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: normal;
+}
+
+/* The app's `input { width: 100% }` reaches radios too; keep their natural size. */
+.substack-notes-choice input[type='radio'] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+
+.substack-notes-choice span {
+  white-space: nowrap;
+}
+
+.substack-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (max-width: 720px) {
+  .substack-notes-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .substack-notes-field-label,
+  .substack-notes-field-control > input:not([type='radio']),
+  .substack-notes-field-control > select,
+  .substack-notes-field-control > textarea,
+  .substack-notes-field-control > .substack-notes-choices,
+  .substack-notes-field-help {
+    grid-column: 1;
+  }
+}
+
+/* ── The lists ──────────────────────────────────────────────────────── */
+
+.substack-notes-table-wrap {
+  min-width: 0;
+}
+
+.substack-notes-table {
+  width: 100%;
+}
+
+.substack-notes-table td {
+  vertical-align: middle;
+}
+
+/* What Dane wrote is what the row is FOR — wrap it, never clip it. */
+.substack-notes-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.substack-notes-link {
+  overflow-wrap: anywhere;
+}
+
+.substack-notes-row-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.substack-notes-row-editor textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.substack-notes-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
