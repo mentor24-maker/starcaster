@@ -117,9 +117,20 @@ async function passForAdapter(adapter, now) {
       return report;
     }
     report.approved = listed.data.length;
+    // An ACCOUNT-wide wait (daily maximum, hours, gap) holds every later comment
+    // on that account for this pass. The gap's random extra is worked out per
+    // comment, so asking again for the next comment could draw a smaller one
+    // and let it jump the queue — posts too close together, newest first
+    // (round-1 review of 86bcda68h). An item's OWN hold still holds only it.
+    const heldAccounts = new Map(); // accountKey -> the reason the oldest waits
     for (const item of listed.data) {
-      const verdict = await adapter.checkLimits(item, now);
+      const account = text(item.accountKey);
+      let verdict = await adapter.checkLimits(item, now);
+      if (heldAccounts.has(account) && (verdict.ok || verdict.scope === 'account')) {
+        verdict = { ok: false, scope: 'account', reason: heldAccounts.get(account) };
+      }
       if (!verdict.ok) {
+        if (verdict.scope === 'account' && !heldAccounts.has(account)) heldAccounts.set(account, verdict.reason);
         report.waiting.push({ id: item.id, reason: verdict.reason });
         // Written only when it changes, so a comment waiting all night is one
         // write, not one every two minutes.

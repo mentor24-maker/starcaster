@@ -442,6 +442,51 @@ test('each site keeps its own limits: one site waiting does not stop another pos
   assert.match(poster.formatPass(pass), /quiet: comment quiet-1 POSTED and proven/);
 });
 
+test('an ACCOUNT wait holds the newer comments on that account too — a smaller random gap never jumps the queue', async () => {
+  // The round-1 send-back, reproduced against the real limits.js: last post 31
+  // minutes ago, minimum 30, jitter up to 15. Pick two ids whose per-comment
+  // jitter differs so the OLDEST is still held and the newer would be allowed.
+  const settings = { maxCommentsPerDay: 10, minMinutesBetween: 30, jitterMinutes: 15, activeStartHour: 0, activeEndHour: 24 };
+  const ids = Array.from({ length: 200 }, (_, i) => `comment-${i}`);
+  const oldest = ids.find((id) => limits.jitterMinutesFor(id, 15) >= 5);
+  const newer = ids.find((id) => limits.jitterMinutesFor(id, 15) === 0);
+  assert.ok(oldest && newer, 'the fixture needs one large and one zero jitter');
+  const now = NOON_UTC;
+  const history = [{ id: 'earlier', postedAt: new Date(now - 31 * MINUTE).toISOString() }];
+  const verdictFor = (id) => limits.checkAccountLimits({ settings, history, itemId: id, now, timeZone: 'UTC' });
+  assert.equal(verdictFor(oldest).ok, false, 'fixture: the oldest is held by the gap');
+  assert.equal(verdictFor(newer).ok, true, 'fixture: asked on its own, the newer one would be allowed');
+
+  const settled = [];
+  const adapter = {
+    name: 'youtube',
+    listApproved: async () => ({
+      ok: true,
+      data: [
+        { id: oldest, accountKey: 'dane_of_earth', waitReason: '' },
+        { id: newer, accountKey: 'dane_of_earth', waitReason: '' },
+        { id: 'elsewhere-1', accountKey: 'another_account', waitReason: '' },
+      ],
+    }),
+    checkLimits: async (item) => (item.accountKey === 'dane_of_earth' ? verdictFor(item.id) : { ok: true }),
+    noteWaiting: async (item, reason) => { settled.push(`${item.id} waits: ${reason}`); return { ok: true }; },
+    markPosting: async () => ({ ok: true }),
+    post: async () => ({ ok: true, url: 'https://example.test/c/1', screenshot: '' }),
+    verify: async () => ({ verdict: 'proven' }),
+    keepScreenshot: async () => ({ note: '' }),
+    markPosted: async (item) => { settled.push(`${item.id} posted`); return { ok: true }; },
+    markFailed: async () => ({ ok: true }),
+    flagForHandCheck: async () => ({ ok: true }),
+  };
+  const pass = await poster.runPass({ adapters: [adapter], now });
+  const held = verdictFor(oldest).reason;
+  assert.ok(!settled.includes(`${newer} posted`), `the newer comment jumped the gap: ${settled.join(' | ')}`);
+  assert.deepEqual(settled.slice(0, 2), [`${oldest} waits: ${held}`, `${newer} waits: ${held}`],
+    'both wait, and both name the time the ACCOUNT can post next');
+  // A wait on one account does not hold a different account.
+  assert.equal(pass.reports[0].posted.id, 'elsewhere-1');
+});
+
 test('a site that throws is reported and the next site still runs', async () => {
   const broken = { name: 'broken', listApproved: async () => { throw new Error('database unreachable'); } };
   const fine = { name: 'fine', listApproved: async () => ({ ok: true, data: [] }) };

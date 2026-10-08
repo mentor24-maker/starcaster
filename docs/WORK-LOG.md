@@ -5,7 +5,9 @@ The Mac Mini now has a worker that takes comments Dane has approved on
 browser. Before each post it checks the account's limits: how many a day,
 how far apart, which hours, and no second comment on the same video. If a
 comment has to wait, its card says why ("waiting for tomorrow's
-allowance"). A comment counts as **posted** only when the browser sends back
+allowance"). When the account itself has to wait, every comment behind it
+waits too, so comments go out oldest first and never closer together than the
+gap allows. A comment counts as **posted** only when the browser sends back
 a link and YouTube itself shows that comment, with the approved words, at
 that link. The browser just saying "done" is not enough. That is the lesson
 of the July Facebook false success. If the worker stops part-way through, the
