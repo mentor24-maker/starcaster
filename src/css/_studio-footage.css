@@ -99,7 +99,7 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
 }
 
 /* The shared rule centres the last header because it is normally an Actions
-   column. Here the last column is Stage, a value, so it reads left like the
+   column. Here the last column is Transcript, a value, so it reads left like the
    cells under it. Same selector shape as the shared rule, plus the class, so
    it wins on specificity rather than on file order. */
 table.studio-footage-table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:last-child {
@@ -172,4 +172,72 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   white-space: normal;
   overflow-wrap: anywhere;
   min-width: 12ch;
+}
+
+/* Transcript (86bcdek0e). The state is a sentence, so its cell wraps like the
+   File cell rather than pushing the table off a phone screen (T0). */
+.studio-footage-table td.studio-footage-transcript-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 12ch;
+}
+
+.studio-footage-transcript-state {
+  color: var(--muted, #6b7280);
+  font-size: var(--text-xs);
+}
+
+.studio-footage-transcript-open {
+  white-space: nowrap;
+}
+
+/* An hour of speech is ~1,000 lines: the list scrolls inside its own box and
+   every line wraps, so the page grows neither down nor sideways. */
+.studio-footage-transcript {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.studio-footage-transcript-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.studio-footage-transcript-head h4 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-footage-transcript-lines {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.studio-footage-transcript-lines li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+  line-height: 1.5;
+}
+
+.studio-footage-transcript-time {
+  flex: none;
+  min-width: 4ch;
+  color: var(--muted, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-footage-transcript-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

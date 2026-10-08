@@ -18,7 +18,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17). "No footage yet", "no
  * file matches these filters" and "the read failed" are three different
- * screens, each saying which it is.
+ * screens, each saying which it is. The same goes for transcripts (Studio
+ * Phase 2 · 5 of 6, 86bcdek0e): every file says which of its transcript
+ * states it is in, in a sentence, and only a finished one has a button.
  */
 
 const FOOTAGE_PATH = '/api/studio/footage';
@@ -38,6 +40,22 @@ type SourceRow = {
   fileName: string;
   /** Drive's own player for the ORIGINAL; null when there is no Drive file. */
   driveUrl: string | null;
+  /** lib/studioFootage.js transcriptStateFor. */
+  transcript: TranscriptState;
+};
+
+type TranscriptState = {
+  state: 'done' | 'failed' | 'no_audio' | 'plate' | 'not_yet' | 'unknown';
+  reason: string;
+};
+
+type Segment = { start: number; end: number; text: string };
+
+type Transcript = {
+  sourceId: string;
+  state: string;
+  language: string;
+  segments: Segment[];
 };
 
 type SessionGroup = {
@@ -58,6 +76,8 @@ type Footage = {
   sessions: SessionGroup[];
   truncated: boolean;
   readLimit: number;
+  /** Why the transcript states could not be read; '' when they were. */
+  transcriptsError?: string;
 };
 
 type AppShape = {
@@ -105,6 +125,16 @@ function laneLabel(lane: string): string {
 function duration(seconds: number | null): string {
   if (seconds === null || !Number.isFinite(seconds)) return '—';
   const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/** A segment's start as m:ss (h:mm:ss past an hour) — floored, so 0:59.9 is 0:59. */
+export function timestamp(seconds: number): string {
+  const total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
@@ -261,6 +291,111 @@ function FileCell({ source }: { source: SourceRow }): React.ReactElement {
   );
 }
 
+/**
+ * The sentence a file's transcript state reads as. "Not transcribed yet" never
+ * claims a job is running: the queue lives on the Mac Mini, out of the
+ * website's sight (lib/studioFootage.js transcriptStateFor).
+ */
+export function transcriptSentence(t: TranscriptState | undefined): string {
+  switch (t?.state) {
+    case 'done': return 'Transcribed';
+    case 'failed': return `Transcription failed: ${t.reason || 'no reason was recorded'}`;
+    case 'no_audio': return 'No transcript: this file has no sound';
+    case 'plate': return 'Not transcribed: files from Plates never are';
+    case 'not_yet': return 'Not transcribed yet';
+    default: return 'Could not read whether this was transcribed';
+  }
+}
+
+function TranscriptCell({ source, open, onOpen }: {
+  source: SourceRow;
+  open: boolean;
+  onOpen: () => void;
+}): React.ReactElement {
+  const t = source.transcript;
+  if (t?.state === 'done') {
+    return (
+      <button
+        type="button"
+        className="btn studio-footage-transcript-open"
+        data-testid="studio-transcript-open"
+        aria-expanded={open}
+        onClick={onOpen}
+      >
+        {open ? 'Hide transcript' : 'Transcript'}
+      </button>
+    );
+  }
+  const sentence = transcriptSentence(t);
+  return (
+    <span className="studio-footage-transcript-state" title={t?.state === 'failed' ? sentence : undefined}>
+      {sentence}
+    </span>
+  );
+}
+
+/**
+ * What was said in one file, a line per segment, each starting with its time.
+ * An hour is ~1,000 lines, so the list scrolls inside its own box and wraps
+ * every line — it never makes the page taller than the screen or wider than it
+ * (docs/UI_RULES.md T0).
+ */
+function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () => void }): React.ReactElement {
+  const [transcript, setTranscript] = useState<Transcript | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setTranscript(null);
+    setError('');
+    const api = getApp()?.api;
+    if (typeof api !== 'function') {
+      setError('The admin app is still loading — try again in a moment.');
+      return undefined;
+    }
+    (async () => {
+      try {
+        const body = await api(`/api/studio/sources/${encodeURIComponent(source.id)}/transcript`);
+        if (cancelled) return;
+        if (!body?.ok) setError(body?.error?.message || 'The transcript could not be read.');
+        else setTranscript(body.data as Transcript);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'The transcript could not be read.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [source.id]);
+
+  const name = source.fileName || 'this file';
+  return (
+    <div className="studio-footage-transcript" role="region" aria-label={`Transcript of ${name}`}>
+      <div className="studio-footage-transcript-head">
+        <h4>{`Transcript of ${name}`}</h4>
+        <button type="button" className="btn" onClick={onClose}>Close</button>
+      </div>
+      {error ? <p className="studio-footage-error" role="alert">{`Transcript not shown: ${error}`}</p> : null}
+      {!error && !transcript ? <p className="studio-footage-empty">Loading the transcript…</p> : null}
+      {transcript && !transcript.segments.length ? (
+        <p className="studio-footage-empty">This transcript is finished but has no lines in it — nothing was heard as speech.</p>
+      ) : null}
+      {transcript && transcript.segments.length ? (
+        <ol
+          className="studio-footage-transcript-lines"
+          data-testid="studio-transcript-lines"
+          data-ui-no-sideways="transcript lines"
+        >
+          {transcript.segments.map((segment, i) => (
+            <li key={i}>
+              <span className="studio-footage-transcript-time">{timestamp(segment.start)}</span>
+              <span className="studio-footage-transcript-text">{segment.text}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </div>
+  );
+}
+
 function stateSummary(counts: Record<string, number>): string {
   const order = ['ready', 'proxied', 'probed', 'downloaded', 'downloading', 'new', 'failed'];
   const keys = Object.keys(counts).sort((a, b) => {
@@ -281,6 +416,7 @@ export default function FootagePanel(): React.ReactElement {
   const [toDay, setToDay] = useState('');
   const [search, setSearch] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [openTranscript, setOpenTranscript] = useState('');
   const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -341,6 +477,7 @@ export default function FootagePanel(): React.ReactElement {
     const onSwitch = () => {
       requestSeq.current += 1;
       setData(null);
+      setOpenTranscript('');
       setError('');
       setLoading(false);
       if (lane) { setLane(''); return; } // the lane change re-runs load via the show effect
@@ -441,6 +578,7 @@ export default function FootagePanel(): React.ReactElement {
             : ''}
           {data.truncated ? ` Only the newest ${data.readLimit} rows were read, so these counts are a minimum.` : ''}
           {anyStandInDate ? ' A date marked * is not the file\'s own recording date yet — hover it to see which date it is.' : ''}
+          {data.transcriptsError ? ` Transcript status could not be read: ${data.transcriptsError}` : ''}
         </p>
       ) : null}
 
@@ -470,6 +608,7 @@ export default function FootagePanel(): React.ReactElement {
                   <th scope="col">Size</th>
                   <th scope="col">Recorded</th>
                   <th scope="col">Stage</th>
+                  <th scope="col">Transcript</th>
                 </tr>
               </thead>
               <tbody>
@@ -495,12 +634,22 @@ export default function FootagePanel(): React.ReactElement {
                         {note ? <span className="studio-footage-date-note"> *</span> : null}
                       </td>
                       <td>{source.state}</td>
+                      <td className="studio-footage-transcript-cell">
+                        <TranscriptCell
+                          source={source}
+                          open={openTranscript === source.id}
+                          onOpen={() => setOpenTranscript((id) => (id === source.id ? '' : source.id))}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          {session.sources.filter((f) => f.id === openTranscript && f.transcript?.state === 'done').map((f) => (
+            <TranscriptView key={f.id} source={f} onClose={() => setOpenTranscript('')} />
+          ))}
         </section>
       ))}
     </div>
