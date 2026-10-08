@@ -1,3 +1,21 @@
+## 2026-10-08 — YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (#792)
+
+The Mac Mini now has a worker that takes comments Dane has approved on
+**Engage → YouTube Outreach** and posts them through the Dane of Earth
+browser. Before each post it checks the account's limits: how many a day,
+how far apart, which hours, and no second comment on the same video. If a
+comment has to wait, its card says why ("waiting for tomorrow's
+allowance"). A comment counts as **posted** only when the browser sends back
+a link and YouTube itself shows that comment, with the approved words, at
+that link. The browser just saying "done" is not enough. That is the lesson
+of the July Facebook false success. If the worker stops part-way through, the
+comment is never tried again. It is marked "check this one by hand" so
+nothing goes out twice under Dane's name. A new **Posted** section lists what
+went out, with a link to each comment and a screenshot. Failed comments say
+why in plain words. The worker is built so Substack Notes can plug into it
+later. It is not switched on yet: that waits until Dane signs the Mini's
+browser in to YouTube (after Oct 13). The database change rides along with
+4/7's pending SQL file.
 ## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
 
 Each video on **Engage → YouTube Outreach** now has a **Write a draft**
