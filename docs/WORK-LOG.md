@@ -11,6 +11,37 @@ with the reason, and an edit that breaks a rule is refused the same way. For a
 reply, Starcaster reads the other person's Note from Substack itself; if it
 can't, the row asks Dane to paste it. Nothing is posted yet.
 
+## 2026-10-08 — YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (#792)
+
+The Mac Mini now has a worker that takes comments Dane has approved on
+**Engage → YouTube Outreach** and posts them through the Dane of Earth
+browser. Before each post it checks the account's limits: how many a day,
+how far apart, which hours, and no second comment on the same video. If a
+comment has to wait, its card says why ("waiting for tomorrow's
+allowance"). When the account itself has to wait, every comment behind it
+waits too, so comments go out oldest first and never closer together than the
+gap allows. A comment counts as **posted** only when the browser sends back
+a link and YouTube itself shows that comment, with the approved words, at
+that link. The browser just saying "done" is not enough. That is the lesson
+of the July Facebook false success. If the worker stops part-way through, the
+comment is never tried again. It is marked "check this one by hand" so
+nothing goes out twice under Dane's name. A new **Posted** section lists what
+went out, with a link to each comment and a screenshot. Failed comments say
+why in plain words. The worker is built so Substack Notes can plug into it
+later. It is not switched on yet: that waits until Dane signs the Mini's
+browser in to YouTube (after Oct 13). The database change rides along with
+4/7's pending SQL file.
+## 2026-10-08 — Footage screen: you can't search your recordings for something you said (#791)
+
+The Footage screen now has a "Search what you said" box at the top. Type a
+word or phrase you said and press Return, and every recording where you said it
+appears: the file name (click it to watch in Google Drive), which session it
+belongs to, and up to five moments, each with the minute it was said and the
+line itself, your words highlighted. If nothing matches, it says what you
+searched for and how many recordings it looked through, so "you never said
+that" and "nothing has been turned into text yet" are clearly different
+messages. A single letter is not searched; the box says why. This finishes
+the six-step transcription project.
 ## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
 
 There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
