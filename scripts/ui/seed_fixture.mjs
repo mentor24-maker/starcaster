@@ -41,6 +41,7 @@ const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'))
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
+const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -1717,7 +1718,28 @@ async function seedYoutubeOutreach(scope) {
     must(await youtubeOutreachStore.createTarget(video.input, scope, { lookup }), 'create outreach target');
     made += 1;
   }
-  return { made, found };
+
+  // One draft waiting on the Approvals tab (YouTube outreach 4/7, 86bcda661),
+  // long enough that its box and the "Followed" line must wrap. The AI and
+  // YouTube reads are stand-ins, like the lookup above. Idempotent: skipped
+  // when the target already has any comment.
+  const relisted = must(await youtubeOutreachStore.listTargets(200, scope), 'relist outreach targets');
+  const active = relisted.find((t) => t.videoId === 'fixtureYT01');
+  let drafts = 0;
+  if (active) {
+    const history = await youtubeOutreachCommentsStore.listComments(200, scope, { targetId: active.id });
+    if (!history.ok) throw new Error(`list outreach comments: ${history.error}`);
+    if (!history.data.length) {
+      const words = 'The way the second set turned on that one return game is exactly what we keep telling our junior players: '
+        + 'the score matters less than the next ball. Which drill do you use to practise staying calm on break points?';
+      must(await youtubeOutreachCommentsStore.writeDraftForTarget(active.id, scope, {
+        generate: async () => ({ ok: true, text: JSON.stringify({ comment: words }) }),
+        readVideo: async () => ({ description: '', topComments: [], note: '' }),
+      }), 'write outreach draft');
+      drafts = 1;
+    }
+  }
+  return { made, found, drafts };
 }
 
 let outreachSeeded = null;
@@ -1747,7 +1769,7 @@ console.log(
 );
 console.log(
   outreachSeeded
-    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present.`
+    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present, ${outreachSeeded.drafts} draft(s) written.`
     : 'WARNING: YouTube outreach targets were NOT seeded; Engage › YouTube Outreach will show its empty state and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

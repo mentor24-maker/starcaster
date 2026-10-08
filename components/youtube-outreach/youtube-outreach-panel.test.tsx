@@ -11,6 +11,8 @@ import YoutubeOutreachPanel, {
   targetPatchFromForm,
   targetToForm,
   withScheme,
+  followedSummary,
+  type OutreachComment,
   type OutreachSettings,
   type Target,
 } from "./youtube-outreach-panel";
@@ -71,7 +73,31 @@ function defaults(): OutreachSettings {
   };
 }
 
-type Store = { targets: Target[]; settings: OutreachSettings };
+type Store = { targets: Target[]; settings: OutreachSettings; comments: OutreachComment[] };
+let draftSeq = 0;
+/** What the fake "agent" writes next; a string starting "REFUSE:" is a server refusal instead. */
+let nextDraft = "Slowing the toss down in that clip fixed my serve. Does it work for a kick serve too?";
+
+function makeComment(t: Target, text: string): OutreachComment {
+  draftSeq += 1;
+  return {
+    id: `c${draftSeq}`,
+    targetId: t.id,
+    videoId: t.videoId,
+    videoTitle: t.videoTitle,
+    channelName: t.channelName,
+    followed: {
+      objective: t.objective, commentLength: t.commentLength, messageTypes: t.messageTypes,
+      linkPolicy: t.linkPolicy, mentionPolicy: t.mentionPolicy,
+    },
+    draftText: text,
+    finalText: "",
+    status: "draft",
+    approvedAt: null,
+    rejectedAt: null,
+    createdAt: `2026-10-07T12:00:0${draftSeq}Z`,
+  };
+}
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -90,6 +116,42 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   const store = stores[project];
   if (path === "/api/youtube-outreach/targets" && method === "GET") return { ok: true, data: store.targets };
   if (path === "/api/youtube-outreach/settings" && method === "GET") return { ok: true, data: store.settings };
+  if (path.startsWith("/api/youtube-outreach/comments?") && method === "GET") {
+    const query = new URLSearchParams(path.split("?")[1]);
+    const statuses = (query.get("status") || "").split(",").filter(Boolean);
+    const targetId = query.get("targetId") || "";
+    return {
+      ok: true,
+      data: store.comments.filter((c) => (!statuses.length || statuses.includes(c.status)) && (!targetId || c.targetId === targetId)),
+    };
+  }
+  const drafts = path.match(/^\/api\/youtube-outreach\/targets\/([^/]+)\/drafts$/);
+  if (drafts && method === "POST") {
+    const t = store.targets.find((x) => x.id === drafts[1]) || fail("Target not found in this project");
+    if (nextDraft.startsWith("REFUSE:")) fail(nextDraft.slice(7));
+    const made = makeComment(t, nextDraft);
+    store.comments = [made, ...store.comments];
+    return { ok: true, data: { ...made } };
+  }
+  const decision = path.match(/^\/api\/youtube-outreach\/comments\/([^/]+)\/(approve|reject|redraft)$/);
+  if (decision && method === "POST") {
+    const c = store.comments.find((x) => x.id === decision[1]) || fail("Comment not found in this project");
+    if (c.status !== "draft") fail(`This comment is ${c.status}, not waiting for approval, so it cannot be changed here.`);
+    if (decision[2] === "approve") {
+      if (/https?:\/\//.test(body.text)) fail("Not approved: it contains a link, and this video's link setting is Never.");
+      Object.assign(c, { status: "approved", finalText: body.text, approvedAt: "2026-10-07T12:30:00Z" });
+      return { ok: true, data: { ...c } };
+    }
+    if (decision[2] === "reject") {
+      Object.assign(c, { status: "rejected", rejectedAt: "2026-10-07T12:30:00Z" });
+      return { ok: true, data: { ...c } };
+    }
+    const t = store.targets.find((x) => x.id === c.targetId)!;
+    const made = makeComment(t, `${nextDraft} (again)`);
+    c.status = "rejected";
+    store.comments = [made, ...store.comments];
+    return { ok: true, data: { ...made } };
+  }
   if (path === "/api/youtube-outreach/targets" && method === "POST") {
     const id = String(body.videoUrl).split("v=")[1];
     if (store.targets.some((t) => t.id === id)) fail(`This video (${id}) is already on the dane_of_earth list.`);
@@ -188,9 +250,11 @@ async function submit(form: HTMLFormElement) {
 
 beforeEach(() => {
   stores = {
-    proj_doe: { targets: [], settings: defaults() },
-    proj_delray: { targets: [target("delray1", "Delray serve clinic")], settings: defaults() },
+    proj_doe: { targets: [], settings: defaults(), comments: [] },
+    proj_delray: { targets: [target("delray1", "Delray serve clinic")], settings: defaults(), comments: [] },
   };
+  draftSeq = 0;
+  nextDraft = "Slowing the toss down in that clip fixed my serve. Does it work for a kick serve too?";
   activeProject = "proj_doe";
   requests = [];
   (window as unknown as { App: unknown }).App = { api: vi.fn(fakeApi) };
@@ -326,7 +390,7 @@ describe("YouTube outreach screen", () => {
     expect(text()).not.toContain("Dane of Earth video");
     expect(text()).toContain("Delray serve clinic");
     expect(container!.querySelector("form.yt-outreach-editor")).toBeNull();
-    expect(requests.filter((r) => r.project === "proj_delray" && r.method === "GET")).toHaveLength(2);
+    expect(requests.filter((r) => r.project === "proj_delray" && r.method === "GET")).toHaveLength(3); // list, settings, approvals
   });
 
   it("drops a settings save that answers after a project switch", async () => {
@@ -406,6 +470,133 @@ describe("YouTube outreach screen", () => {
     await mount();
     expect(text()).toContain("The outreach list could not be read: The youtube_outreach_targets table is not available");
     expect(text()).not.toContain("No target videos yet");
+  });
+});
+
+describe("drafts and approval", () => {
+  function draftCard(id: string): HTMLElement {
+    const found = container!.querySelector(`article[data-comment-id="${id}"]`);
+    if (!found) throw new Error(`no draft card ${id} in: ${text()}`);
+    return found as HTMLElement;
+  }
+
+  async function writeDraftFor(id: string) {
+    await click(button("Write a draft", row(id)));
+  }
+
+  it("names why the Approvals tab is empty", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Approvals"));
+    expect(text()).toContain("Nothing waiting for approval. Click Write a draft on a target video to make one.");
+  });
+
+  it("Write a draft puts the draft on the Approvals tab with the settings it followed", async () => {
+    stores.proj_doe.targets = [target("abc", "First video", { commentLength: "short", objective: "appreciation" })];
+    await mount();
+    await writeDraftFor("abc");
+
+    expect(requests.some((r) => r.method === "POST" && r.path === "/api/youtube-outreach/targets/abc/drafts")).toBe(true);
+    const card = draftCard("c1");
+    expect(card.textContent).toContain("First video");
+    expect(card.textContent).toContain("Show appreciation · Short");
+    expect(card.querySelector("textarea")!.value).toBe(nextDraft);
+    expect(button("Approvals (1)")).toBeTruthy();
+    expect(text()).not.toContain("Nothing waiting for approval");
+  });
+
+  it("edit then Approve saves the edited words, and it reads back approved after a reload", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await writeDraftFor("abc");
+    type(draftCard("c1").querySelector("textarea")!, "My own edited wording for this comment.");
+    await click(button("Approve", draftCard("c1")));
+
+    expect(stores.proj_doe.comments[0].status).toBe("approved");
+    expect(stores.proj_doe.comments[0].finalText).toBe("My own edited wording for this comment.");
+
+    // Reload: a fresh mount reads only from the server.
+    act(() => root?.unmount());
+    container?.remove();
+    await mount();
+    await click(button("Approvals"));
+    expect(draftCard("c1").textContent).toContain("Approved — waiting to post");
+    expect(draftCard("c1").textContent).toContain("My own edited wording for this comment.");
+    expect(draftCard("c1").querySelector("textarea")).toBeNull();
+  });
+
+  it("an Approve the server refuses shows the rule on the card and leaves it a draft", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await writeDraftFor("abc");
+    type(draftCard("c1").querySelector("textarea")!, "See https://example.com");
+    await click(button("Approve", draftCard("c1")));
+
+    expect(draftCard("c1").textContent).toContain("Not approved: it contains a link, and this video's link setting is Never.");
+    expect(stores.proj_doe.comments[0].status).toBe("draft");
+    expect(draftCard("c1").querySelector("textarea")).not.toBeNull();
+  });
+
+  it("Reject takes it off the tab, and the video's History shows it rejected", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await writeDraftFor("abc");
+    await click(button("Reject", draftCard("c1")));
+
+    expect(container!.querySelector('article[data-comment-id="c1"]')).toBeNull();
+    expect(text()).toContain("Nothing waiting for approval");
+
+    await click(button("Target videos"));
+    await click(button("History", row("abc")));
+    const history = container!.querySelector("section.yt-outreach-history")!;
+    expect(history.textContent).toContain("Rejected");
+    expect(history.textContent).toContain(nextDraft);
+  });
+
+  it("Write another replaces the draft on the tab", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await writeDraftFor("abc");
+    await click(button("Write another", draftCard("c1")));
+
+    expect(container!.querySelector('article[data-comment-id="c1"]')).toBeNull();
+    expect(draftCard("c2").querySelector("textarea")!.value).toBe(`${nextDraft} (again)`);
+    expect(stores.proj_doe.comments.find((c) => c.id === "c1")!.status).toBe("rejected");
+  });
+
+  it("a refused draft says why on the list, and nothing appears to approve", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    nextDraft = "REFUSE:The draft broke a rule, so it was not kept: it contains a link (x.com), and this video's link setting is Never. Click Write a draft to try again.";
+    await mount();
+    await writeDraftFor("abc");
+    expect(text()).toContain('No draft for "First video": The draft broke a rule, so it was not kept: it contains a link');
+    await click(button("Approvals"));
+    expect(container!.querySelector("article.yt-outreach-draft")).toBeNull();
+  });
+
+  it("offers no Write a draft on a paused target", async () => {
+    stores.proj_doe.targets = [target("abc", "First video", { status: "paused" })];
+    await mount();
+    expect([...row("abc").querySelectorAll("button")].map((b) => b.textContent)).not.toContain("Write a draft");
+  });
+
+  it("drops the old project's drafts on a project switch", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await writeDraftFor("abc");
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    await click(button("Approvals"));
+    expect(container!.querySelector('article[data-comment-id="c1"]')).toBeNull();
+    expect(text()).toContain("Nothing waiting for approval");
+  });
+
+  it("summarises the followed settings in words", () => {
+    expect(followedSummary({
+      objective: "drive_link", commentLength: "long", messageTypes: ["insight", "question"],
+      linkPolicy: "allowed", linkUrl: "https://daneofearth.com", mentionPolicy: "subtle",
+    })).toBe("Send people to a link · Long · Share an insight, Ask a question · Link: Allowed (https://daneofearth.com) · Mention: In passing");
   });
 });
 

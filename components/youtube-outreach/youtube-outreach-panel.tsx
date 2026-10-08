@@ -32,10 +32,21 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * "these limits have not been saved yet" are each said in words — and a read
  * that fails names WHICH read, so a broken settings row never reads as a
  * broken list.
+ *
+ * DRAFTS AND APPROVAL (4/7, task 86bcda661). Each row has "Write a draft",
+ * which asks the server to write one comment following that row's settings;
+ * the Approvals tab lists what is waiting, each with the settings it followed
+ * and its text in an editable box. Approve sends the box's text; the server
+ * re-checks it against the link and avoid-word rules and refuses by name, so
+ * an edit cannot approve something the rules forbid. A rejected draft leaves
+ * the tab and stays in that video's History. Nothing here posts (5/7).
  */
 
 const TARGETS_PATH = '/api/youtube-outreach/targets';
 const SETTINGS_PATH = '/api/youtube-outreach/settings';
+const COMMENTS_PATH = '/api/youtube-outreach/comments';
+/** What the Approvals tab shows: drafts to decide, and approved ones waiting to post. */
+const APPROVALS_QUERY = `${COMMENTS_PATH}?status=draft,approved`;
 
 /** The window event public/js/projectContext.js emits on every project switch. */
 export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
@@ -90,6 +101,33 @@ export type OutreachSettings = {
   voice: string;
   saved: boolean;
   updatedAt: string;
+};
+
+/** A settings snapshot copied onto a comment when it was drafted. */
+export type FollowedSettings = {
+  objective?: string;
+  commentPlacement?: string;
+  messageTypes?: string[];
+  commentLength?: string;
+  linkPolicy?: string;
+  linkUrl?: string;
+  mentionPolicy?: string;
+};
+
+export type OutreachComment = {
+  id: string;
+  targetId: string;
+  videoId: string;
+  videoTitle: string;
+  channelName: string;
+  followed: FollowedSettings;
+  draftText: string;
+  finalText: string;
+  status: string;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  createdAt: string;
+  note?: string;
 };
 
 type AppShape = {
@@ -292,6 +330,132 @@ export function settingsPatchFromForm(form: SettingsForm): Record<string, unknow
 function thumbnailUrl(videoId: string): string {
   const safe = String(videoId || '').replace(/[^A-Za-z0-9_-]/g, '');
   return safe ? `https://i.ytimg.com/vi/${safe}/mqdefault.jpg` : '';
+}
+
+export const COMMENT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Waiting for approval',
+  approved: 'Approved — waiting to post',
+  rejected: 'Rejected',
+  posting: 'Posting…',
+  posted: 'Posted',
+  failed: 'Failed to post',
+};
+
+/** "Join the conversation · Medium · Ask a question · Link: Never · Mention: Never" */
+export function followedSummary(followed: FollowedSettings): string {
+  const parts: string[] = [];
+  if (followed.objective) parts.push(labelFor(OBJECTIVE_OPTIONS, followed.objective));
+  if (followed.commentLength) parts.push(labelFor(LENGTH_OPTIONS, followed.commentLength));
+  if (followed.messageTypes?.length) parts.push(followed.messageTypes.map((t) => labelFor(MESSAGE_TYPE_OPTIONS, t)).join(', '));
+  if (followed.linkPolicy) {
+    parts.push(`Link: ${labelFor(LINK_OPTIONS, followed.linkPolicy)}${followed.linkPolicy !== 'never' && followed.linkUrl ? ` (${followed.linkUrl})` : ''}`);
+  }
+  if (followed.mentionPolicy) parts.push(`Mention: ${labelFor(MENTION_OPTIONS, followed.mentionPolicy)}`);
+  return parts.join(' · ');
+}
+
+/** The words that will be posted: Dane's approved wording once there is one, the agent's before. */
+export function commentWords(comment: OutreachComment): string {
+  return comment.finalText || comment.draftText;
+}
+
+function VideoHeading({ comment }: { comment: OutreachComment }): React.ReactElement {
+  const thumb = thumbnailUrl(comment.videoId);
+  return (
+    <div className="yt-outreach-video">
+      {thumb ? <img className="yt-outreach-thumb" src={thumb} alt="" loading="lazy" /> : null}
+      <div className="yt-outreach-video-text">
+        <a
+          href={`https://www.youtube.com/watch?v=${encodeURIComponent(comment.videoId)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="yt-outreach-video-title"
+        >
+          {comment.videoTitle || comment.videoId}
+        </a>
+        <span className="yt-outreach-video-channel">{comment.channelName || 'Channel not known'}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── One comment on the Approvals tab ───────────────────────────────────────
+
+function DraftCard({ comment, busy, error, onApprove, onReject, onRedraft }: {
+  comment: OutreachComment;
+  busy: boolean;
+  error: string;
+  onApprove: (text: string) => void;
+  onReject: () => void;
+  onRedraft: () => void;
+}): React.ReactElement {
+  const [text, setText] = useState(() => commentWords(comment));
+  const deciding = comment.status === 'draft';
+  const boxId = `yto-draft-${comment.id}`;
+
+  return (
+    <article className="yt-outreach-card yt-outreach-draft" data-comment-id={comment.id} aria-label={`Draft for ${comment.videoTitle || comment.videoId}`}>
+      <VideoHeading comment={comment} />
+      <p className="yt-outreach-card-note">
+        <strong>Followed: </strong>
+        {followedSummary(comment.followed || {}) || 'the settings were not recorded'}
+      </p>
+      <p className="yt-outreach-draft-status">{COMMENT_STATUS_LABELS[comment.status] || comment.status}</p>
+      {deciding ? (
+        <>
+          <label className="yt-outreach-field-label" htmlFor={boxId}>Comment</label>
+          <textarea id={boxId} className="yt-outreach-draft-text" rows={5} value={text} onChange={(e) => setText(e.target.value)} />
+          <p className="yt-outreach-field-help">{`${text.trim().length} characters`}</p>
+        </>
+      ) : (
+        <p className="yt-outreach-draft-final">{commentWords(comment)}</p>
+      )}
+      {comment.note ? <p className="yt-outreach-card-note">{comment.note}</p> : null}
+      {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
+      {deciding ? (
+        <div className="yt-outreach-actions">
+          <button type="button" className="btn" disabled={busy} onClick={onRedraft}>Write another</button>
+          <button type="button" className="btn btn-danger" disabled={busy} onClick={onReject}>Reject</button>
+          <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => onApprove(text)}>
+            {busy ? 'Working…' : 'Approve'}
+          </button>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+// ── One video's comment history ────────────────────────────────────────────
+
+function HistoryCard({ target, comments, error, onClose }: {
+  target: Target;
+  comments: OutreachComment[] | null;
+  error: string;
+  onClose: () => void;
+}): React.ReactElement {
+  return (
+    <section className="yt-outreach-card yt-outreach-history" aria-label="Comment history">
+      <h3 className="yt-outreach-card-title">{`History: ${target.videoTitle || target.videoUrl}`}</h3>
+      {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
+      {!error && !comments ? <p className="yt-outreach-card-note">Loading…</p> : null}
+      {comments && !comments.length ? (
+        <p className="yt-outreach-card-note">No comments have been written for this video yet.</p>
+      ) : null}
+      {comments && comments.length ? (
+        <ul className="yt-outreach-history-list">
+          {comments.map((c) => (
+            <li key={c.id} data-comment-id={c.id}>
+              <span className="yt-outreach-history-status">{COMMENT_STATUS_LABELS[c.status] || c.status}</span>
+              <span className="yt-outreach-history-text">{commentWords(c)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="yt-outreach-actions">
+        <button type="button" className="btn" onClick={onClose}>Close</button>
+      </div>
+    </section>
+  );
 }
 
 // ── Small form pieces ──────────────────────────────────────────────────────
@@ -520,6 +684,14 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [settingsBusy, setSettingsBusy] = useState(false);
+  const [tab, setTab] = useState<'targets' | 'approvals'>('targets');
+  const [comments, setComments] = useState<OutreachComment[] | null>(null);
+  const [draftingId, setDraftingId] = useState('');
+  const [commentBusy, setCommentBusy] = useState('');
+  const [commentErrors, setCommentErrors] = useState<Record<string, string>>({});
+  const [historyId, setHistoryId] = useState('');
+  const [history, setHistory] = useState<OutreachComment[] | null>(null);
+  const [historyError, setHistoryError] = useState('');
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -531,7 +703,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     setLoading(true);
     // Read both, and say which one failed: a missing settings row must not
     // be reported as a missing list, or hide a list that read fine.
-    const [list, limits] = await Promise.allSettled([api(TARGETS_PATH), api(SETTINGS_PATH)]);
+    const [list, limits, waiting] = await Promise.allSettled([api(TARGETS_PATH), api(SETTINGS_PATH), api(APPROVALS_QUERY)]);
     if (seq !== requestSeq.current) return;
     const problems: string[] = [];
     if (list.status === 'fulfilled') {
@@ -546,6 +718,12 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       setSettings(null);
       setSettingsOpen(false);
       problems.push(`The account settings could not be read: ${errorText(limits.reason, 'unknown error')}`);
+    }
+    if (waiting.status === 'fulfilled') {
+      setComments(Array.isArray(waiting.value?.data) ? (waiting.value.data as OutreachComment[]) : []);
+    } else {
+      setComments(null);
+      problems.push(`The drafts waiting for approval could not be read: ${errorText(waiting.reason, 'unknown error')}`);
     }
     setError(problems.join(' '));
     setLoading(false);
@@ -580,6 +758,10 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       setLoading(false);
       setEditingId('');
       setSettingsOpen(false);
+      setComments(null);
+      setCommentErrors({});
+      setHistoryId('');
+      setHistory(null);
       const page = hostRef.current?.closest('.app-page');
       if (!page || !page.classList.contains('hidden')) void load();
     };
@@ -604,6 +786,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       const body = await api(TARGETS_PATH, { method: 'POST', body: JSON.stringify({ videoUrl: link }) });
       const created = body?.data as Target;
       setAddUrl('');
+      setTab('targets');
       setNotice(created?.detailsError
         ? `Added, but the title and channel could not be read: ${created.detailsError}`
         : `Added "${created?.videoTitle || videoUrl}".`);
@@ -634,13 +817,16 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     const api = getApi();
     if (!api) return;
     const name = target.videoTitle || target.videoUrl;
-    if (!window.confirm(`Remove "${name}" from the outreach list? Its settings are deleted with it.`)) return;
+    if (!window.confirm(`Remove "${name}" from the outreach list? Its settings and its comment drafts are deleted with it.`)) return;
     setRowBusy(target.id);
     setError('');
     try {
       await api(`${TARGETS_PATH}/${encodeURIComponent(target.id)}`, { method: 'DELETE' });
       setTargets((list) => (list || []).filter((t) => t.id !== target.id));
+      // Its drafts went with it (the database cascades), so drop them here too.
+      setComments((list) => (list || []).filter((c) => c.targetId !== target.id));
       if (editingId === target.id) setEditingId('');
+      if (historyId === target.id) setHistoryId('');
       setNotice(`Removed "${name}".`);
     } catch (err) {
       setError(`"${name}" was not removed: ${errorText(err, 'unknown error')}`);
@@ -691,7 +877,89 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     }
   };
 
+  const writeDraft = async (target: Target) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    const name = target.videoTitle || target.videoUrl;
+    setDraftingId(target.id);
+    setError('');
+    setNotice('');
+    try {
+      const body = await api(`${TARGETS_PATH}/${encodeURIComponent(target.id)}/drafts`, { method: 'POST' });
+      if (epoch !== projectEpoch.current) return;
+      const made = body?.data as OutreachComment;
+      setComments((list) => [made, ...(list || [])]);
+      if (historyId === target.id) setHistory((list) => (list ? [made, ...list] : list));
+      setNotice(`A draft for "${name}" is waiting on the Approvals tab.`);
+      setTab('approvals');
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setError(`No draft for "${name}": ${errorText(err, 'unknown error')}`);
+    } finally {
+      setDraftingId('');
+    }
+  };
+
+  const openHistory = async (target: Target) => {
+    const api = getApi();
+    if (!api) return;
+    if (historyId === target.id) {
+      setHistoryId('');
+      return;
+    }
+    const epoch = projectEpoch.current;
+    setHistoryId(target.id);
+    setHistory(null);
+    setHistoryError('');
+    try {
+      const body = await api(`${COMMENTS_PATH}?targetId=${encodeURIComponent(target.id)}`);
+      if (epoch !== projectEpoch.current) return;
+      setHistory(Array.isArray(body?.data) ? (body.data as OutreachComment[]) : []);
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setHistoryError(`The history could not be read: ${errorText(err, 'unknown error')}`);
+    }
+  };
+
+  /** Approve / reject / write another — each answered by the server, never assumed. */
+  const decide = async (comment: OutreachComment, action: 'approve' | 'reject' | 'redraft', text?: string) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setCommentBusy(comment.id);
+    setCommentErrors((errors) => ({ ...errors, [comment.id]: '' }));
+    setNotice('');
+    try {
+      const body = await api(`${COMMENTS_PATH}/${encodeURIComponent(comment.id)}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify(action === 'approve' ? { text } : {}),
+      });
+      if (epoch !== projectEpoch.current) return;
+      const next = body?.data as OutreachComment;
+      if (action === 'approve') {
+        setComments((list) => (list || []).map((c) => (c.id === comment.id ? next : c)));
+        setNotice('Approved. It will wait here until posting is switched on.');
+      } else if (action === 'reject') {
+        setComments((list) => (list || []).filter((c) => c.id !== comment.id));
+        setNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`);
+      } else {
+        setComments((list) => [next, ...(list || []).filter((c) => c.id !== comment.id)]);
+        setNotice('A new draft replaced the old one, which is kept in the history as rejected.');
+      }
+      if (historyId === comment.targetId) setHistoryId('');
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setCommentErrors((errors) => ({ ...errors, [comment.id]: errorText(err, 'unknown error') }));
+    } finally {
+      setCommentBusy('');
+    }
+  };
+
   const editing = (targets || []).find((t) => t.id === editingId) || null;
+  const historyTarget = (targets || []).find((t) => t.id === historyId) || null;
+  const waitingCount = (comments || []).filter((c) => c.status === 'draft').length;
+  const approvalsLabel = waitingCount ? `Approvals (${waitingCount})` : 'Approvals';
 
   return (
     <div ref={hostRef} className="yt-outreach-panel">
@@ -716,7 +984,16 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
             className="btn"
             disabled={!settings}
             aria-expanded={settingsOpen}
-            onClick={() => { setSettingsError(''); setSettingsOpen((open) => !open); }}
+            onClick={() => {
+              setSettingsError('');
+              // The settings card lives on the Target videos tab; open it there.
+              if (tab !== 'targets') {
+                setTab('targets');
+                setSettingsOpen(true);
+              } else {
+                setSettingsOpen((open) => !open);
+              }
+            }}
           >
             Account settings
           </button>
@@ -729,94 +1006,155 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       {notice ? <p className="yt-outreach-notice" role="status">{notice}</p> : null}
 
-      {settingsOpen && settings ? (
-        <SettingsEditor
-          key={settings.updatedAt || 'unsaved'}
-          settings={settings}
-          busy={settingsBusy}
-          error={settingsError}
-          onSave={(form) => void saveSettings(form)}
-          onCancel={() => setSettingsOpen(false)}
-        />
-      ) : null}
+      <div className="yt-outreach-tabs" role="tablist" aria-label="YouTube Outreach">
+        <button
+          type="button"
+          role="tab"
+          className={`btn${tab === 'targets' ? ' btn-primary' : ''}`}
+          aria-selected={tab === 'targets'}
+          onClick={() => setTab('targets')}
+        >
+          Target videos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`btn${tab === 'approvals' ? ' btn-primary' : ''}`}
+          aria-selected={tab === 'approvals'}
+          onClick={() => setTab('approvals')}
+        >
+          {approvalsLabel}
+        </button>
+      </div>
 
-      {editing ? (
-        <TargetEditor
-          key={editing.id}
-          target={editing}
-          busy={editBusy}
-          error={editError}
-          onSave={(form) => void saveTarget(editing, form)}
-          onCancel={() => setEditingId('')}
-        />
-      ) : null}
-
-      {targets && !targets.length ? (
-        <p className="yt-outreach-empty">No target videos yet. Paste a YouTube link above to add the first one.</p>
-      ) : null}
-
-      {targets && targets.length ? (
-        <div className="table-wrap yt-outreach-table-wrap">
-          <table className="yt-outreach-table">
-            <thead>
-              <tr>
-                <th scope="col">Video</th>
-                <th scope="col">Objective</th>
-                <th scope="col">Length</th>
-                <th scope="col">How often</th>
-                <th scope="col">Priority</th>
-                <th scope="col">Status</th>
-                <th scope="col" className="actions-col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {targets.map((target) => {
-                const thumb = thumbnailUrl(target.videoId);
-                const busy = rowBusy === target.id;
-                return (
-                  <tr key={target.id} data-target-id={target.id}>
-                    <td>
-                      <div className="yt-outreach-video">
-                        {thumb ? <img className="yt-outreach-thumb" src={thumb} alt="" loading="lazy" /> : null}
-                        <div className="yt-outreach-video-text">
-                          <a href={target.videoUrl} target="_blank" rel="noopener noreferrer" className="yt-outreach-video-title">
-                            {target.videoTitle || target.videoUrl}
-                          </a>
-                          <span className="yt-outreach-video-channel">
-                            {target.channelName || (target.detailsError ? `Title not read: ${target.detailsError}` : 'Channel not known')}
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{labelFor(OBJECTIVE_OPTIONS, target.objective)}</td>
-                    <td>{labelFor(LENGTH_OPTIONS, target.commentLength)}</td>
-                    <td>{repeatSummary(target)}</td>
-                    <td>{labelFor(PRIORITY_OPTIONS, target.priority)}</td>
-                    <td>{STATUS_LABELS[target.status] || target.status}</td>
-                    <td className="actions-col">
-                      <div className="table-actions-row">
-                        {target.status === 'paused' ? (
-                          <button type="button" className="btn" disabled={busy} onClick={() => void setStatus(target, 'resume')}>Resume</button>
-                        ) : target.status === 'active' ? (
-                          <button type="button" className="btn" disabled={busy} onClick={() => void setStatus(target, 'pause')}>Pause</button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="btn"
-                          disabled={busy}
-                          onClick={() => { setEditError(''); setEditingId(target.id); }}
-                        >
-                          Edit
-                        </button>
-                        <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void removeTarget(target)}>Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {tab === 'approvals' ? (
+        <div className="yt-outreach-approvals" role="tabpanel" aria-label="Approvals">
+          {comments && !waitingCount ? (
+            <p className="yt-outreach-empty">Nothing waiting for approval. Click Write a draft on a target video to make one.</p>
+          ) : null}
+          {(comments || []).map((comment) => (
+            <DraftCard
+              key={`${comment.id}:${comment.status}`}
+              comment={comment}
+              busy={commentBusy === comment.id}
+              error={commentErrors[comment.id] || ''}
+              onApprove={(text) => void decide(comment, 'approve', text)}
+              onReject={() => void decide(comment, 'reject')}
+              onRedraft={() => void decide(comment, 'redraft')}
+            />
+          ))}
         </div>
+      ) : null}
+
+      {tab === 'targets' ? (
+        <>
+          {settingsOpen && settings ? (
+            <SettingsEditor
+              key={settings.updatedAt || 'unsaved'}
+              settings={settings}
+              busy={settingsBusy}
+              error={settingsError}
+              onSave={(form) => void saveSettings(form)}
+              onCancel={() => setSettingsOpen(false)}
+            />
+          ) : null}
+
+          {historyTarget ? (
+            <HistoryCard
+              target={historyTarget}
+              comments={history}
+              error={historyError}
+              onClose={() => setHistoryId('')}
+            />
+          ) : null}
+
+          {editing ? (
+            <TargetEditor
+              key={editing.id}
+              target={editing}
+              busy={editBusy}
+              error={editError}
+              onSave={(form) => void saveTarget(editing, form)}
+              onCancel={() => setEditingId('')}
+            />
+          ) : null}
+
+          {targets && !targets.length ? (
+            <p className="yt-outreach-empty">No target videos yet. Paste a YouTube link above to add the first one.</p>
+          ) : null}
+
+          {targets && targets.length ? (
+            <div className="table-wrap yt-outreach-table-wrap">
+              <table className="yt-outreach-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Video</th>
+                    <th scope="col">Objective</th>
+                    <th scope="col">Length</th>
+                    <th scope="col">How often</th>
+                    <th scope="col">Priority</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" className="actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {targets.map((target) => {
+                    const thumb = thumbnailUrl(target.videoId);
+                    const busy = rowBusy === target.id;
+                    return (
+                      <tr key={target.id} data-target-id={target.id}>
+                        <td>
+                          <div className="yt-outreach-video">
+                            {thumb ? <img className="yt-outreach-thumb" src={thumb} alt="" loading="lazy" /> : null}
+                            <div className="yt-outreach-video-text">
+                              <a href={target.videoUrl} target="_blank" rel="noopener noreferrer" className="yt-outreach-video-title">
+                                {target.videoTitle || target.videoUrl}
+                              </a>
+                              <span className="yt-outreach-video-channel">
+                                {target.channelName || (target.detailsError ? `Title not read: ${target.detailsError}` : 'Channel not known')}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{labelFor(OBJECTIVE_OPTIONS, target.objective)}</td>
+                        <td>{labelFor(LENGTH_OPTIONS, target.commentLength)}</td>
+                        <td>{repeatSummary(target)}</td>
+                        <td>{labelFor(PRIORITY_OPTIONS, target.priority)}</td>
+                        <td>{STATUS_LABELS[target.status] || target.status}</td>
+                        <td className="actions-col">
+                          <div className="table-actions-row">
+                            {target.status === 'paused' ? (
+                              <button type="button" className="btn" disabled={busy} onClick={() => void setStatus(target, 'resume')}>Resume</button>
+                            ) : target.status === 'active' ? (
+                              <button type="button" className="btn" disabled={busy} onClick={() => void setStatus(target, 'pause')}>Pause</button>
+                            ) : null}
+                            {target.status === 'active' ? (
+                              <button type="button" className="btn btn-primary" disabled={busy || Boolean(draftingId)} onClick={() => void writeDraft(target)}>
+                                {draftingId === target.id ? 'Writing…' : 'Write a draft'}
+                              </button>
+                            ) : null}
+                            <button type="button" className="btn" disabled={busy} aria-expanded={historyId === target.id} onClick={() => void openHistory(target)}>
+                              History
+                            </button>
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={busy}
+                              onClick={() => { setEditError(''); setEditingId(target.id); }}
+                            >
+                              Edit
+                            </button>
+                            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void removeTarget(target)}>Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
