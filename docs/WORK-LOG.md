@@ -9,6 +9,47 @@ searched for and how many recordings it looked through, so "you never said
 that" and "nothing has been turned into text yet" are clearly different
 messages. A single letter is not searched; the box says why. This finishes
 the six-step transcription project.
+## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
+
+There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
+where Dane feeds the Substack Notes agent. The **Ideas** tab takes ideas for
+Notes of his own, and turns any of his saved topics into an idea with one
+click. The **Engage** tab takes a link to someone else's Note and whether to
+reply to it, restack it or like it; a link that is not a Note is refused with
+the reason. The **Settings** tab holds the daily limit, spacing, active hours,
+voice, topics and words to avoid, under plain labels. Everything waits on the
+screen: nothing is drafted or posted yet. A line at the top says the Mini's
+Substack sign-in has not been checked yet, because the check that would tell
+it is a later ticket.
+## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
+
+Each video on **Engage → YouTube Outreach** now has a **Write a draft**
+button. Starcaster reads the video's description and top comments, then
+writes one comment that follows that video's settings and the account's
+voice. The draft appears on a new **Approvals** tab with the settings it
+followed and its words in a box Dane can edit. He can **Approve**, **Reject**
+or **Write another**. The rules are checked on what the AI actually wrote,
+not just asked for: a link when the video says "never", any link other than
+the allowed one, or a word on the avoid list. A draft that breaks a rule is
+thrown away with the reason named, so it can never be approved by accident.
+The same check runs when Dane approves an edited draft. Rejected drafts
+leave the tab but stay in that video's **History**. Nothing is posted yet.
+Approved comments wait for the next ticket. Needs one new table: Dane runs
+`docs/SQL/youtube_outreach_comments_setup.sql` before merge.
+## 2026-10-07 — Substack Notes 1/7: a place to keep Dane's Notes, replies, restacks and likes, and their settings (storage and server) (#789)
+
+Starcaster now has somewhere to keep everything the coming Substack Notes
+agent will do for Dane of Earth: one record per action — a Note of his own,
+a reply to someone else's Note, a restack, or a like — plus the account's
+settings (how many actions a day, how far apart, which hours, his voice,
+his topics, words to avoid, and whether his Notes may carry a link). Each
+action moves along one fixed path, from idea to draft to approved to
+posted, and the server refuses a wrong step and says why: a Note can't be
+approved with no words in it, "posted" needs the link as proof, and a
+reply has to point at a real Substack Note. One client's records can never
+be read by another. Nothing is drafted or posted yet, and there is no
+screen; those are the next tickets. The database tables still need to be
+created by running `docs/SQL/substack_notes_setup.sql` in Supabase.
 ## 2026-10-07 — Approved merges stall silently when a pull request has a real conflict: the Mini holds its merge turn forever and the others queue behind it (#785)
 
 When Dane says "merge" on a pull request whose code really clashes with newer

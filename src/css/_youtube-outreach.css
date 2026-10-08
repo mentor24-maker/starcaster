@@ -239,3 +239,85 @@
 .yt-outreach-add .btn {
   margin: 0;
 }
+
+/* ── Tabs, drafts and history (YouTube outreach 4 of 7) ─────────────── */
+
+.yt-outreach-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.yt-outreach-tabs .btn,
+.yt-outreach-panel .table-actions-row .btn,
+.yt-outreach-actions .btn {
+  margin: 0;
+}
+
+.yt-outreach-approvals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.yt-outreach-draft-status,
+.yt-outreach-draft-final {
+  margin: 0;
+}
+
+.yt-outreach-draft-status {
+  font-weight: 600;
+}
+
+/* The comment is the thing being judged — wrap it, never clip it. */
+.yt-outreach-draft-final {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.yt-outreach-draft .yt-outreach-field-label {
+  padding-top: 0;
+}
+
+.yt-outreach-draft-text {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.yt-outreach-draft .yt-outreach-field-help {
+  margin: 0;
+}
+
+.yt-outreach-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yt-outreach-history-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.yt-outreach-history-status {
+  flex: 0 0 auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.yt-outreach-history-text {
+  flex: 1 1 20rem;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -68,6 +68,7 @@ const blog        = require('./blog');
 const events      = require('./events');
 const studio      = require('./studio');
 const youtubeOutreach = require('./youtubeOutreach');
+const substackNotes = require('./substackNotes');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
@@ -99,6 +100,10 @@ const ROUTE_MODULES = [
   channels,
   connections,
   contacts,
+  // Ahead of `engage`: it owns the narrower '/api/engage/substack-notes'
+  // prefix. engage falls through with `false` on paths it does not know today,
+  // so either order works — matching first removes the dependency.
+  substackNotes,
   engage,
   // Ahead of `builder` on purpose. Both claim '/api/builder/*'; builder
   // currently falls through with `false` on paths it doesn't recognise, so

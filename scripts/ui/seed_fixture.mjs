@@ -41,6 +41,8 @@ const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'))
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
+const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
+const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -1720,7 +1722,28 @@ async function seedYoutubeOutreach(scope) {
     must(await youtubeOutreachStore.createTarget(video.input, scope, { lookup }), 'create outreach target');
     made += 1;
   }
-  return { made, found };
+
+  // One draft waiting on the Approvals tab (YouTube outreach 4/7, 86bcda661),
+  // long enough that its box and the "Followed" line must wrap. The AI and
+  // YouTube reads are stand-ins, like the lookup above. Idempotent: skipped
+  // when the target already has any comment.
+  const relisted = must(await youtubeOutreachStore.listTargets(200, scope), 'relist outreach targets');
+  const active = relisted.find((t) => t.videoId === 'fixtureYT01');
+  let drafts = 0;
+  if (active) {
+    const history = await youtubeOutreachCommentsStore.listComments(200, scope, { targetId: active.id });
+    if (!history.ok) throw new Error(`list outreach comments: ${history.error}`);
+    if (!history.data.length) {
+      const words = 'The way the second set turned on that one return game is exactly what we keep telling our junior players: '
+        + 'the score matters less than the next ball. Which drill do you use to practise staying calm on break points?';
+      must(await youtubeOutreachCommentsStore.writeDraftForTarget(active.id, scope, {
+        generate: async () => ({ ok: true, text: JSON.stringify({ comment: words }) }),
+        readVideo: async () => ({ description: '', topComments: [], note: '' }),
+      }), 'write outreach draft');
+      drafts = 1;
+    }
+  }
+  return { made, found, drafts };
 }
 
 let outreachSeeded = null;
@@ -1728,6 +1751,46 @@ try {
   outreachSeeded = await seedYoutubeOutreach({ projectId: project.id, userId });
 } catch (err) {
   console.error(`  failed to seed YouTube outreach targets: ${err.message}`);
+}
+
+/**
+ * Ideas, Notes to engage with, and settings for Engage › Substack Notes
+ * (Substack Notes 2/7, 86bcet6g7). Without rows both tabs show their empty
+ * sentence and check:screens measures no table. One idea is long enough to
+ * have to wrap; the engage rows cover all three choices. Idempotent by text
+ * and link — a re-seed finds each one.
+ */
+async function seedSubstackNotes(scope) {
+  const listed = await substackNotesStore.listItems(200, scope);
+  if (!listed.ok) throw new Error(`list Substack Notes items: ${listed.error}`);
+  const have = new Set(listed.data.map((i) => `${i.kind}|${i.ideaText}|${i.targetUrl}`));
+  const items = [
+    { kind: 'note', source: 'jotted', ideaText: 'Why the stars feel closer in winter' },
+    { kind: 'note', source: 'topic', ideaText: `${LONG} — and what a winter night sky teaches about patience` },
+    { kind: 'reply', targetUrl: 'https://substack.com/@fixture/note/c-1001', ideaText: 'Agree, and add the winter angle' },
+    { kind: 'restack', targetUrl: 'https://substack.com/@fixture/note/c-1002' },
+    { kind: 'like', targetUrl: 'https://substack.com/@fixture/note/c-1003' },
+  ];
+  let made = 0;
+  let found = 0;
+  for (const input of items) {
+    if (have.has(`${input.kind}|${input.ideaText || ''}|${input.targetUrl || ''}`)) { found += 1; continue; }
+    must(await substackNotesStore.createItem(input, scope), 'create Substack Notes item');
+    made += 1;
+  }
+  must(await substackNotesStore.saveSettings({
+    substackUrl: 'https://daneofearth.substack.com',
+    topics: ['Night skies', 'Making music slowly'],
+    avoidWords: ['hustle'],
+  }, scope), 'save Substack Notes settings');
+  return { made, found };
+}
+
+let substackSeeded = null;
+try {
+  substackSeeded = await seedSubstackNotes({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed Substack Notes: ${err.message}`);
 }
 
 console.log(
@@ -1750,7 +1813,12 @@ console.log(
 );
 console.log(
   outreachSeeded
-    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present.`
+    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present, ${outreachSeeded.drafts} draft(s) written.`
     : 'WARNING: YouTube outreach targets were NOT seeded; Engage › YouTube Outreach will show its empty state and check:screens proves nothing there.'
+);
+console.log(
+  substackSeeded
+    ? `Substack Notes seeded — ${substackSeeded.made} item(s) created, ${substackSeeded.found} already present, settings saved.`
+    : 'WARNING: Substack Notes was NOT seeded; Engage › Substack Notes will show its empty states and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
