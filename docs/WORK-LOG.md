@@ -13,6 +13,73 @@ The same check runs when Dane approves an edited draft. Rejected drafts
 leave the tab but stay in that video's **History**. Nothing is posted yet.
 Approved comments wait for the next ticket. Needs one new table: Dane runs
 `docs/SQL/youtube_outreach_comments_setup.sql` before merge.
+## 2026-10-07 — Substack Notes 1/7: a place to keep Dane's Notes, replies, restacks and likes, and their settings (storage and server) (#789)
+
+Starcaster now has somewhere to keep everything the coming Substack Notes
+agent will do for Dane of Earth: one record per action — a Note of his own,
+a reply to someone else's Note, a restack, or a like — plus the account's
+settings (how many actions a day, how far apart, which hours, his voice,
+his topics, words to avoid, and whether his Notes may carry a link). Each
+action moves along one fixed path, from idea to draft to approved to
+posted, and the server refuses a wrong step and says why: a Note can't be
+approved with no words in it, "posted" needs the link as proof, and a
+reply has to point at a real Substack Note. One client's records can never
+be read by another. Nothing is drafted or posted yet, and there is no
+screen; those are the next tickets. The database tables still need to be
+created by running `docs/SQL/substack_notes_setup.sql` in Supabase.
+## 2026-10-07 — Approved merges stall silently when a pull request has a real conflict: the Mini holds its merge turn forever and the others queue behind it (#785)
+
+When Dane says "merge" on a pull request whose code really clashes with newer
+work on `main`, the Mini now says so within one pass instead of waiting.
+This morning three approved pieces of work clashed for real. The Mini had
+already asked git and knew it, but it still queued each one for its "one at a
+time" merge turn so it could attempt a fix that was bound to fail. That turn
+was busy all morning, so the three sat for two to three hours and nobody was
+told. Now a clash git has confirmed skips the queue and goes straight to the
+existing hand-off: a Loop Queue ticket for a build pass, plus a note on the
+ticket naming the clashing files. If GitHub had been told to merge it
+automatically, that order is withdrawn, so it cannot land out of turn once
+fixed. A false alarm (GitHub says it clashes, git says it doesn't) is
+handled as before: the Mini brings the branch up to date and merges it.
+## 2026-10-07 — Footage screen: you can't read what was said in a recording (#787)
+
+The Footage screen now has a Transcript column. When a recording has been
+turned into text, a Transcript button opens what was said, one line per phrase,
+each with the time it was said (like 0:12), in a box that scrolls on its own so
+an hour-long recording never stretches the page. Every other file says plainly
+why it has no transcript: it failed (and why), it has no sound, it came from
+the Plates folder (screen recordings are never transcribed), or it simply has
+not been done yet. The screen does not claim a file is "being transcribed",
+because that queue lives on the Mac Mini where the website cannot see it.
+Nothing is transcribed yet in the live system, so for now every file honestly
+reads "Not transcribed yet" until the transcribing step is switched on. The
+screen checker also learned to catch a box whose lines stop wrapping, which it
+could not see before.
+## 2026-10-07 — Studio: recordings reach 'ready' but nothing turns what you said into text (#786)
+
+Recordings dropped into Studio already got as far as "ready" on the Mac Mini,
+but nothing turned what was said in them into words. Now, when a recording
+becomes ready, the Mini runs its speech-to-text program on the recording's
+sound and saves the words — and the second each one was said — in the
+transcripts table. Plates (footage of a place) are skipped, and a recording
+with no sound is marked as such so the screen can say why it has no text. If
+the speech-to-text program is missing, the job just waits and tries again
+later rather than marking the recording as failed. A one-off catch-up command
+picks up the one recording that was already ready before this existed
+(IMG_1962). Tested on the Mini against IMG_1962's own audio: 251 words in
+about ten seconds. Reading the transcript on screen comes in a later ticket.
+## 2026-10-07 — Substack Notes 7/7: Starcaster checks the Mini is signed in to Substack as Dane of Earth and warns him when it is not; Dane signs in once after 10/13 (#790)
+
+The Mac Mini can now say whether its browser is signed in to Substack as
+Dane of Earth, the same way it already does for YouTube:
+`node scripts/openclaw_smoke.mjs --site substack`. It answers "signed in as
+Dane of Earth", "signed out" or "signed in as someone else", or says it
+could not take a reading at all. Run on the Mini today, it correctly says
+signed out, because Dane signs in to Substack after 10/13. The plain YouTube
+check is unchanged. Two parts of the ticket wait on screens and alarms that
+are not built yet. The "signed in" line on the Substack Notes screen comes
+with that screen (2/7). The hourly warning comes with YouTube outreach 7/7,
+which now carries a note to include Substack.
 
 ## 2026-10-07 — YouTube outreach 2/7: the screen where Dane adds target videos and sets how each is commented on (#783)
 

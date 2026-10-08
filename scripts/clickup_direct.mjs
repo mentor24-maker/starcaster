@@ -1241,16 +1241,24 @@ function gitConflictCrossCheck({ repo, base = 'origin/main', head }) {
   if (fetched.status !== 0) {
     return { known: false, why: `could not fetch ${head} (${String(fetched.stderr || '').trim().slice(0, 120)})` };
   }
-  const baseRef = spawnSync('git', ['rev-parse', '--verify', `${base}^{commit}`], { encoding: 'utf8' });
-  if (baseRef.status !== 0) return { known: false, why: `could not resolve ${base}` };
   const headSha = String(spawnSync('git', ['rev-parse', 'FETCH_HEAD'], { encoding: 'utf8' }).stdout || '').trim();
   if (!headSha) return { known: false, why: `could not resolve ${head} after fetching it` };
-  const out = spawnSync('git', ['merge-tree', '--write-tree', String(baseRef.stdout).trim(), headSha], { encoding: 'utf8' });
+  // The base is fetched too (task 86bcemvj5). A confirmed conflict now goes
+  // straight to the hand-off with no catch-up merge behind it, so this reading
+  // has to be against the main that exists, not whatever this checkout last saw.
+  const baseBranch = String(base).replace(/^origin\//, '');
+  const fetchedBase = spawnSync('git', ['fetch', '--quiet', 'origin', `${baseBranch}:refs/remotes/origin/${baseBranch}`], { encoding: 'utf8' });
+  if (fetchedBase.status !== 0) {
+    return { known: false, why: `could not fetch ${base} (${String(fetchedBase.stderr || '').trim().slice(0, 120)})` };
+  }
+  const baseRef = spawnSync('git', ['rev-parse', '--verify', `${base}^{commit}`], { encoding: 'utf8' });
+  if (baseRef.status !== 0) return { known: false, why: `could not resolve ${base}` };
+  const out = spawnSync('git', ['merge-tree', '--write-tree', '--name-only', String(baseRef.stdout).trim(), headSha], { encoding: 'utf8' });
   // 0 = merges cleanly, 1 = conflicts. Anything else is git failing to answer
   // (a bad object, an unsupported git), which is CANNOT TELL and not a clean
   // merge — the distinction this whole ticket is about.
   if (out.status === 0) return { known: true, conflicts: false, base, head: headSha.slice(0, 8) };
-  if (out.status === 1) return { known: true, conflicts: true, base, head: headSha.slice(0, 8) };
+  if (out.status === 1) return { known: true, conflicts: true, base, head: headSha.slice(0, 8), files: mergeOnComment.mergeTreeConflictFiles(out.stdout) };
   return { known: false, why: `git merge-tree exited ${out.status} (${String(out.stderr || '').trim().slice(0, 120)})` };
 }
 
@@ -1792,7 +1800,7 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
       gate = {
         ...gate,
         localVerdict: cross.known
-          ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}` }
+          ? { code: branchCatchUp.CODES.REAL_CONFLICT, reason: `git merge-tree reports a conflict merging ${cross.base} into ${cross.head}${cross.files && cross.files.length ? ` in ${cross.files.map((f) => `\`${f}\``).join(', ')}` : ''}` }
           : { code: branchCatchUp.CODES.FETCH_FAILED, reason: cross.why || 'the git cross-check could not be taken' },
       };
     }
@@ -1952,7 +1960,13 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
   // throwaway worktree: clean means the difference was the driver and the
   // branch is pushed so CI re-runs; anything else — including "could not
   // tell" — falls straight through to the hand-off below, unchanged.
-  if (gate.action === 'conflict' && !dryRun) {
+  //
+  // ...UNLESS GIT HAS ALREADY ANSWERED (2026-10-07, task 86bcemvj5). When the
+  // merge-tree cross-check above confirmed the conflict, this attempt can only
+  // fail, and queuing for the window to make it left three approved PRs
+  // waiting ~85 minutes behind a busy window with nobody told. A confirmed
+  // conflict skips straight to the hand-off below, which takes no window.
+  if (gate.action === 'conflict' && !dryRun && mergeOnComment.conflictRoute(gate) === 'catch-up') {
     // This pushes too, so it is a main move in waiting and takes the window
     // like the others. A blocked window here is a WAIT, not a hand-off: filing
     // a conflict ticket for a branch nobody has tried to catch up yet would be
@@ -2004,6 +2018,16 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
     // other merge until the bound expired. The window goes back now; this pull
     // request asks for it again once somebody has fixed the branch.
     releaseMergeWindow('it was handed off as a conflict');
+    // AN ARMED CONFLICT IS A MAIN MOVE NOBODY IS QUEUING (task 86bcemvj5). If
+    // auto-merge was armed before main moved under it, GitHub would land this
+    // PR the moment somebody fixes the branch — outside the window just given
+    // back, resetting whichever PR holds it then. Disarm it; the fixed branch
+    // comes back through the gate and arms again in its turn, on the same word.
+    if (prJson.autoMergeRequest && !dryRun) {
+      const disarmed = gh(['pr', 'merge', String(pr.number), '--repo', repo, '--disable-auto']);
+      if (disarmed.ok) console.error(`  AUTO-MERGE DISARMED on ${label}: it conflicts with main, so GitHub must not land it the moment the branch is fixed`);
+      else unchecked.push(`${task.id}: PR #${pr.number} was handed off as a conflict but its auto-merge could NOT be disarmed (${disarmed.stderr.slice(0, 200)}) — GitHub may land it outside the merge window once the branch is fixed`);
+    }
     // What the local attempt found, in the operator's terms. "It really does
     // overlap" and "I could not check" are different problems with different
     // fixes, and reading one as the other is how a machine problem gets
@@ -2282,7 +2306,15 @@ async function runMergeStep({ task, comments, mergeHandled, mergeRefused, mergeR
         // the top, where the conflict hand-off and the catch-up live — those
         // paths know how to explain themselves to the operator and this one
         // does not.
-        console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)`);
+        // Say what happens next (task 86bcemvj5). On 2026-10-07 this line was
+        // the only thing three conflicting PRs ever said, and "this pass did
+        // not cross-check it" read as a dead end. It is not: the conflict path
+        // runs first on every pass, asks git, and hands a confirmed conflict
+        // off without waiting for the merge window.
+        const thenWhat = next.action === 'conflict'
+          ? ' — the next pass checks it against git and hands a real conflict to the build loop'
+          : '';
+        console.error(`  MERGE WAITING on ${label}: ${next.reason} (found while re-running the review gate)${thenWhat}`);
         return { outcome: 'waiting', reason: next.reason, pr: pr.number, prUrl: pr.url, headSha: headShaOf(after, prJson), cannotTell: mergeOnComment.verdictCannotTell(next) };
       }
       console.error(`  ${label}: the re-run of the review gate came back clean — ${next.reason}`);

@@ -20,6 +20,7 @@
     "check:automerge-reach": "node scripts/check_automerge_reach.cjs",
     "check:vercel-bundle": "node scripts/check_vercel_bundle.cjs",
     "studio:worker": "node workers/studio/daemon.js",
+    "studio:backfill-transcripts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_transcripts.cjs",
     "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",

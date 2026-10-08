@@ -631,11 +631,16 @@ function githubGate(pr, { gitCrossCheck = null } = {}) {
       };
     }
     if (cc && cc.known && cc.conflicts === true) {
+      const files = Array.isArray(cc.files) ? cc.files.filter(Boolean) : [];
       return {
         action: 'conflict',
         // Both sources agree: this IS a reading, and a definite one.
         cannotTell: false,
-        reason: 'the branch conflicts with newer work on main — GitHub and git agree',
+        // Read by conflictRoute: a conflict git has CONFIRMED needs no catch-up
+        // attempt, and so no merge window (task 86bcemvj5).
+        gitConfirmed: true,
+        files,
+        reason: `the branch conflicts with newer work on main — GitHub and git agree${files.length ? ` (${files.join(', ')})` : ''}`,
       };
     }
     // No cross-check available. The hand-off still happens, because an
@@ -1260,6 +1265,44 @@ function mergedNotice({ commentId, pr, mergedAt, lane, files }) {
 }
 
 /**
+ * The conflicted paths from `git merge-tree --write-tree --name-only`: line one
+ * is the tree id, then one path per line up to the first blank line (after which
+ * come git's informational messages).
+ */
+function mergeTreeConflictFiles(stdout) {
+  const lines = String(stdout || '').split('\n');
+  const files = [];
+  for (const line of lines.slice(1)) {
+    if (!line.trim()) break;
+    if (!files.includes(line.trim())) files.push(line.trim());
+  }
+  return files;
+}
+
+/**
+ * Where a conflicting pull request goes next: the local catch-up attempt, or
+ * straight to the hand-off (2026-10-07, task 86bcemvj5).
+ *
+ * The catch-up attempt pushes when it succeeds, so it must hold the merge
+ * window — and a PR waiting for the window is a PR nobody has handed off. That
+ * was fine while the attempt was the only way to learn whether a conflict was
+ * real. It is not when `git merge-tree` has ALREADY said so: the attempt can
+ * only fail, so queuing for the right to make it buys nothing and costs the
+ * whole queue ahead. On 2026-10-07 three approved PRs with git-confirmed
+ * conflicts (#771, #779, #780) waited ~85 minutes behind a window that was
+ * busy the entire time, logging MERGE WAITING every pass, and Dane heard
+ * nothing until he asked.
+ *
+ *   'hand-off'       — git confirmed it: no window, no catch-up, no arming
+ *   'catch-up'       — GitHub said so and nothing confirmed it: try the merge here
+ *   'not-a-conflict' — anything else
+ */
+function conflictRoute(gate) {
+  if (!gate || gate.action !== 'conflict') return 'not-a-conflict';
+  return gate.gitConfirmed === true ? 'hand-off' : 'catch-up';
+}
+
+/**
  * GITHUB'S AUTO-MERGE, AND WHY THE RELAY STOPPED WAITING (2026-09-03, task
  * 86bbup3u1).
  *
@@ -1702,6 +1745,8 @@ module.exports = {
   verdictCannotTell,
   cannotTellEscalation,
   autoMergeDecision,
+  conflictRoute,
+  mergeTreeConflictFiles,
   autoMergeArmedTooLong,
   mergedElsewhereNotice,
   IN_PASS_POLL_MS,

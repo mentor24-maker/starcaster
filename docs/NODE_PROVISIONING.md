@@ -205,6 +205,8 @@ Dane connects with Screen Sharing (Finder → **Cmd+K** → `vnc://mac-mini.loca
 clicks **Sign in** in that window, and signs in as Dane of Earth, including any
 two-step code. Then `node scripts/openclaw_smoke.mjs` on the Mini says whether
 it took: 0 signed in as Dane of Earth, 1 signed out or someone else, 2 no reading.
+Substack is the same profile and the same steps, opening `https://substack.com`
+instead, checked with `node scripts/openclaw_smoke.mjs --site substack`.
 
 **Loopback may not be the whole fence while Tailscale runs in userspace mode.**
 That mode can deliver connections from other tailnet devices to the Mini's own loopback

@@ -188,7 +188,36 @@ a hand-run install, so a rebuilt Mini gets them back with
   and SHA-256 match the published ones, so a download that stopped part way
   can never pass as present. `npm run doctor:node` checks it the same way.
 
-Nothing in the pipeline runs it yet — that is Phase 2's next step.
+### How a recording gets transcribed (Phase 2 · 3 of 6)
+
+When the proxy step marks a recording `ready`, it puts a `transcribe` job on
+the queue — unless it is a **plate** (plates are footage of a place, not of
+anyone talking) or it has **no sound track**, in which case it writes a
+`no_audio` transcript row instead, so the Footage screen can say why there is
+no transcript. The daemon then runs `workers/studio/transcribePass.js`:
+whisper on the 16 kHz WAV, with the alignment flags below, and the result is
+written to `video_transcripts` and read back.
+
+- **whisper or the model missing** is the machine's fault: the job waits 15
+  minutes and tries again, no attempt is used up, and no row is written.
+- **whisper failing on the file** writes a `failed` row with the reason, and
+  the job retries on the queue's usual schedule.
+- Settings, all optional: `STUDIO_WHISPER_BIN` (default `whisper-cli`),
+  `STUDIO_WHISPER_MODEL` (default the model above), `STUDIO_WHISPER_LANGUAGE`
+  (default `en`), `STUDIO_WHISPER_DTW` (default `large.v3.turbo`; it must name
+  the same model).
+- **Time allowed:** ten minutes plus half a second per second of audio — about
+  seven times the measured speed. An hour of footage is allowed 40 minutes and
+  takes about 4.
+- **The heartbeat.** The daemon beats between jobs, and `studio-worker`'s quiet
+  window is 6 hours. At the measured speed (0.07) a single job would need about
+  85 hours of audio to block beats that long; even at the full time allowance
+  it would need a recording of about 11½ hours. Neither is a real recording.
+
+**Catching up:** recordings that reached `ready` before this existed were never
+queued. `npm run studio:backfill-transcripts` (on the Mini) lists every `ready`,
+non-plate recording with no transcript and no job waiting; it is a dry run
+until you add `-- --apply`, and a second `--apply` enqueues nothing.
 
 ### Measured on 2026-10-05
 
