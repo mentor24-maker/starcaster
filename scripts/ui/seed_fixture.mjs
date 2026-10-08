@@ -40,6 +40,7 @@ const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
 const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'));
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
+const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
 const PROJECT_NAME = process.env.UI_HARNESS_PROJECT || 'UI Harness Fixture';
@@ -1679,6 +1680,53 @@ try {
   console.error(`  failed to seed Studio footage: ${err.message}`);
 }
 
+/**
+ * Target videos for Engage › YouTube Outreach (YouTube outreach 2/7,
+ * 86bcda63z). Without rows the screen shows its "No target videos yet"
+ * sentence, which fits any viewport — so check:screens would pass without
+ * measuring a table. One row carries a title long enough to have to wrap and
+ * a repeat schedule; the other is the minimal paste-and-save shape, paused.
+ *
+ * The YouTube lookup is replaced: the fixture must not depend on an API key
+ * or the network. Idempotent by video id — a re-seed finds each one.
+ */
+async function seedYoutubeOutreach(scope) {
+  const listed = await youtubeOutreachStore.listTargets(200, scope);
+  if (!listed.ok) throw new Error(`list outreach targets: ${listed.error}`);
+  const have = new Set(listed.data.map((t) => t.videoId));
+  const videos = [
+    {
+      input: {
+        videoUrl: 'https://www.youtube.com/watch?v=fixtureYT01',
+        objective: 'drive_link', linkPolicy: 'if_natural', linkUrl: 'https://example.com/clinics',
+        repeatMode: 'repeat', repeatEveryDays: 7, repeatMaxTimes: 4, priority: 'high',
+      },
+      details: { title: `${LONG} — full match highlights and coaching commentary`, channelName: 'Delray Beach Tennis Center Official Channel' },
+    },
+    {
+      input: { videoUrl: 'https://www.youtube.com/watch?v=fixtureYT02', status: 'paused', priority: 'low' },
+      details: { title: 'Serve clinic in five minutes', channelName: 'Coach cam' },
+    },
+  ];
+  let made = 0;
+  let found = 0;
+  for (const video of videos) {
+    const id = video.input.videoUrl.split('v=')[1];
+    if (have.has(id)) { found += 1; continue; }
+    const lookup = async () => ({ ok: true, data: { ...video.details, channelId: 'fixture', publishedAt: null, viewCount: 1234 } });
+    must(await youtubeOutreachStore.createTarget(video.input, scope, { lookup }), 'create outreach target');
+    made += 1;
+  }
+  return { made, found };
+}
+
+let outreachSeeded = null;
+try {
+  outreachSeeded = await seedYoutubeOutreach({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed YouTube outreach targets: ${err.message}`);
+}
+
 console.log(
   `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
   `${refreshed} refreshed, ${existing.length} already present.`
@@ -1696,5 +1744,10 @@ console.log(
   footageSeeded
     ? `Studio footage seeded — ${footageSeeded.made} file(s) created, ${footageSeeded.found} already present.`
     : 'WARNING: Studio footage was NOT seeded; Assets › Footage will show its empty state and check:screens proves nothing there.'
+);
+console.log(
+  outreachSeeded
+    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present.`
+    : 'WARNING: YouTube outreach targets were NOT seeded; Engage › YouTube Outreach will show its empty state and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

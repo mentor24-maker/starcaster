@@ -68,6 +68,7 @@ const SCREENS = [
   { id: 'acquireWebPage', label: 'Acquire: Web' },
   { id: 'messagingContentPage', label: 'Messaging: Content' },
   { id: 'campaignsPage', label: 'Campaigns' },
+  { id: 'engageYoutubeOutreachPage', label: 'Engage: YouTube Outreach' },
 ];
 
 function arg(name, fallback) {
