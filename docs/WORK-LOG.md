@@ -1,3 +1,19 @@
+## 2026-10-08 — The duplicates report is out of date and does not cover iCloud Drive (#795)
+
+The report that finds duplicate copies of Dane's files (`npm run
+archive:index`) now looks in the right places. It no longer counts the old
+MaxOne drive, which was erased on 4 October and is now the Time Machine
+backup. It now covers **iCloud Drive**, where Zoom keeps 33 GB of
+recordings, and the 173 GB folder still sitting in the MacBook's Trash.
+Files whose contents live only in iCloud are never opened, because opening
+one downloads it. They are counted as "in iCloud only, not checked" and
+never treated as a lone copy or a spare one. Apple Photos is listed as "not
+checked" because macOS blocks reading it. The report now opens with one
+line per place: how many files and how much space, how many already have a
+copy where they belong, and how many are the **only copy** anywhere. The
+next ticket deletes MacBook copies from this report, so those only-copy
+files are the ones it must never touch. Read-only: nothing is moved or
+deleted.
 ## 2026-10-07 — YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (#788)
 
 Each video on **Engage → YouTube Outreach** now has a **Write a draft**
