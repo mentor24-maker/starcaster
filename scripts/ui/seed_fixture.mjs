@@ -1582,6 +1582,9 @@ for (const [name, slug, sections = []] of buildPages(ids)) {
  * sound. Plates and the rest have none, so every state the column can say is
  * on screen. check:screens opens the long one at every width (its
  * `open` step), so the transcript view is measured, not just the table.
+ * Its line 8 is also the only one that says "link": check:screens searches
+ * for it (86bcdek0z), so the search results are measured with the longest
+ * file name and the unbroken URL line together.
  *
  * Idempotent by content hash: the hash is unique per project, so a re-seed
  * finds each file instead of duplicating it. A transcript write is a full

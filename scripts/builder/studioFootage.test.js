@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const {
   buildFootage, readFilters, effectiveDate, transcriptStateFor,
+  buildSearchResults, clockOf, SEARCH_MOMENTS_PER_FILE,
   NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE,
 } = require('../../lib/studioFootage');
 
@@ -542,6 +543,135 @@ test('GET /api/studio/footage still lists the files when the transcript states c
     assert.equal(body.sessions[0].sources[0].id, made.id);
     assert.equal(body.sessions[0].sources[0].transcript.state, 'unknown',
       'a failed read is "could not tell", never "not transcribed yet"');
+  } finally {
+    restore();
+  }
+});
+
+// ── search what you said (86bcdek0z) ────────────────────────────────────────
+
+test('clockOf is m:ss, h:mm:ss past an hour, floored', () => {
+  assert.equal(clockOf(0), '0:00');
+  assert.equal(clockOf(59.9), '0:59');
+  assert.equal(clockOf(754.2), '12:34');
+  assert.equal(clockOf(3725.4), '1:02:05');
+  assert.equal(clockOf(NaN), '0:00');
+});
+
+test('search results name the file and session, keep the first few moments, and count the rest', () => {
+  const matches = Array.from({ length: 8 }, (_, i) => ({ start: 60 * i + 5, end: 60 * i + 9, text: `pricing ${i}` }));
+  const view = buildSearchResults({
+    hits: [
+      { sourceId: 'A1', matches },
+      { sourceId: 'gone', matches: [{ start: 1, end: 2, text: 'pricing' }] },
+    ],
+    sources: [src('a1', { driveFileId: 'drv-1', localPath: '/c/iphone/drv-1/IMG_1962.MOV', recordedAt: '2026-09-01T15:05:00Z' })],
+    sessions: [S1],
+    transcribedCount: 4,
+  });
+  const [hit, unread] = view.results;
+  assert.equal(hit.fileName, 'IMG_1962.MOV');
+  assert.equal(hit.driveUrl, 'https://drive.google.com/file/d/drv-1/view');
+  assert.equal(hit.sessionTitle, 'Monday shoot');
+  assert.equal(hit.dateSource, 'recorded');
+  assert.equal(hit.matchCount, 8);
+  assert.equal(hit.moments.length, SEARCH_MOMENTS_PER_FILE);
+  assert.deepEqual(hit.moments.slice(0, 2).map((m) => m.time), ['0:05', '1:05']);
+  assert.equal(unread.found, false, 'a hit past the read ceiling is kept, and says it was not read');
+  assert.equal(unread.moments[0].time, '0:01');
+  assert.equal(view.transcribedCount, 4);
+  assert.equal(buildSearchResults({ transcribedCount: null }).transcribedCount, null, 'could not count is null, never 0');
+});
+
+async function transcribed(stores, scope, segments, extra = {}) {
+  const made = await sourceIn(stores, scope, extra);
+  const saved = await stores.transcripts.upsertTranscript(made.id, {
+    state: 'done',
+    language: 'en',
+    text: segments.map((s) => s.text).join(' '),
+    segments,
+  }, scope);
+  assert.equal(saved.ok, true, saved.error);
+  return made;
+}
+
+test('GET /api/studio/search finds the file and the minute a word was said', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    const mine = await transcribed(stores, SCOPE_A, [
+      { start: 0, end: 4, text: 'Hello and welcome.' },
+      { start: 754.2, end: 760, text: 'Now, about the pricing of lessons.' },
+    ], { driveFileId: 'drv-1962', localPath: '/c/iphone/drv-1962/IMG_1962.MOV' });
+    await transcribed(stores, SCOPE_A, [{ start: 3, end: 5, text: 'Nothing relevant here.' }]);
+
+    const { handled, res } = await call(route, '/api/studio/search?q=Pricing', SCOPE_A);
+    assert.equal(handled, true);
+    assert.equal(res.statusCode, 200);
+    const body = json(res).data;
+    assert.equal(body.query, 'Pricing');
+    assert.equal(body.results.length, 1);
+    const [hit] = body.results;
+    assert.equal(hit.sourceId, mine.id);
+    assert.equal(hit.fileName, 'IMG_1962.MOV');
+    assert.equal(hit.driveUrl, 'https://drive.google.com/file/d/drv-1962/view');
+    assert.equal(hit.sessionTitle, 'Holding');
+    assert.deepEqual(hit.moments, [{ start: 754.2, time: '12:34', text: 'Now, about the pricing of lessons.' }]);
+    assert.equal(body.transcribedCount, 2);
+    assert.equal(body.countError, '');
+
+    const none = json((await call(route, '/api/studio/search?q=zebra', SCOPE_A)).res).data;
+    assert.deepEqual(none.results, []);
+    assert.equal(none.transcribedCount, 2, 'no match still says how many recordings were searched');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/search never searches another project\'s transcripts', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    await transcribed(stores, SCOPE_B, [{ start: 1, end: 2, text: 'Our secret pricing.' }]);
+    const body = json((await call(route, '/api/studio/search?q=pricing', SCOPE_A)).res).data;
+    assert.deepEqual(body.results, []);
+    assert.equal(body.transcribedCount, 0, 'project B\'s transcript is not counted under project A either');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/search refuses an empty, 1-character or wordless query — never every file', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    await transcribed(stores, SCOPE_A, [{ start: 1, end: 2, text: 'a b c pricing' }]);
+    for (const url of ['/api/studio/search', '/api/studio/search?q=', '/api/studio/search?q=%20%20', '/api/studio/search?q=a']) {
+      const { res } = await call(route, url, SCOPE_A);
+      assert.equal(res.statusCode, 400, url);
+      const body = json(res);
+      assert.equal(body.ok, false);
+      assert.equal(body.error.code, 'QUERY_TOO_SHORT', url);
+      assert.match(body.error.message, /at least 2 characters/);
+    }
+    const one = json((await call(route, '/api/studio/search?q=a', SCOPE_A)).res);
+    assert.match(one.error.message, /"a" is too short/, 'the refusal names what was typed');
+
+    const punct = await call(route, '/api/studio/search?q=!!', SCOPE_A);
+    assert.equal(punct.res.statusCode, 400);
+    assert.equal(json(punct.res).error.code, 'QUERY_HAS_NO_WORDS');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/search: a database that refuses the search says so — never an empty list', async () => {
+  const stores = withRoute({ failTranscripts: true });
+  const { route, restore } = stores;
+  try {
+    const { res } = await call(route, '/api/studio/search?q=pricing', SCOPE_A);
+    assert.equal(res.statusCode, 404);
+    assert.match(json(res).error.message, /Could not search the transcripts/);
   } finally {
     restore();
   }
