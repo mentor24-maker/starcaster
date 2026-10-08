@@ -1,3 +1,16 @@
+## 2026-10-07 — Substack Notes 7/7: Starcaster checks the Mini is signed in to Substack as Dane of Earth and warns him when it is not; Dane signs in once after 10/13 (#790)
+
+The Mac Mini can now say whether its browser is signed in to Substack as
+Dane of Earth, the same way it already does for YouTube:
+`node scripts/openclaw_smoke.mjs --site substack`. It answers "signed in as
+Dane of Earth", "signed out" or "signed in as someone else", or says it
+could not take a reading at all. Run on the Mini today, it correctly says
+signed out, because Dane signs in to Substack after 10/13. The plain YouTube
+check is unchanged. Two parts of the ticket wait on screens and alarms that
+are not built yet. The "signed in" line on the Substack Notes screen comes
+with that screen (2/7). The hourly warning comes with YouTube outreach 7/7,
+which now carries a note to include Substack.
+
 ## 2026-10-07 — YouTube outreach 2/7: the screen where Dane adds target videos and sets how each is commented on (#783)
 
 The YouTube outreach list now has a screen: **Engage → YouTube Outreach**.
