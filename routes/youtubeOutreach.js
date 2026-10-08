@@ -23,6 +23,13 @@
  *   POST   /api/youtube-outreach/comments/:id/reject
  *   POST   /api/youtube-outreach/comments/:id/redraft            "Write another"
  *
+ * The scheduled pass (6/7, task 86bcda6bg — lib/youtubeOutreachRunDue.js):
+ *
+ *   GET|POST /api/youtube-outreach/run-due   Vercel Cron only; drafts what is due
+ *
+ * GET /targets also carries each target's `nextDraft` — "Next draft: Oct 15",
+ * or why it is not due — from the same plan the pass would make.
+ *
  * `account` defaults to dane_of_earth. Auth and project scope are decided
  * centrally in routes/index.js; there is no public access to any of this.
  */
@@ -30,6 +37,8 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/youtubeOutreachStore');
 const commentsStore = require('../lib/youtubeOutreachCommentsStore');
+const runDue = require('../lib/youtubeOutreachRunDue');
+const { getProjectTimezoneForUser } = require('../lib/projectsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 const PREFIX = '/api/youtube-outreach';
@@ -88,10 +97,50 @@ async function handle(req, res, pathname, method) {
   const scope = requestScope(req);
   const urlObj = getUrlObj(req);
 
+  // CRON ONLY, like the bug-report sweep: it reads every project's targets at
+  // once, so a session is deliberately not enough. `req.cronPublish` is set in
+  // routes/index.js only for a CRON_PATHS path carrying Vercel's cron header
+  // or the CRON_SECRET bearer token. Vercel's scheduler sends GET.
+  if (pathname === `${PREFIX}/run-due`) {
+    if (method !== 'GET' && method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'The outreach drafting pass runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const result = await runDue.runDue();
+    if (!result.ok) {
+      console.error(`[youtube-outreach] run-due REFUSED: ${result.error}`);
+      return reply(res, result);
+    }
+    const { accounts, drafted, held, finished, failed, skippedForPassLimit } = result.data;
+    // Logged on every run, the quiet ones too: "nothing was due" and "never
+    // ran" must not look the same in the log.
+    console.log(`[youtube-outreach] run-due accounts=${accounts} drafted=${drafted.length} held_by_daily_max=${held.length} `
+      + `finished=${finished.length} left_for_next_pass=${skippedForPassLimit.length} failed=${failed.length}`);
+    for (const item of failed) {
+      console.error(`[youtube-outreach] run-due FAILED project=${item.projectId} account=${item.accountKey} target=${item.targetId || '-'}: ${item.error}`);
+    }
+    return reply(res, result);
+  }
+
   if (pathname === `${PREFIX}/targets`) {
     if (method === 'GET') {
       const limit = urlObj.searchParams.get('limit');
-      return reply(res, await store.listTargets(limit === null ? 200 : Number(limit), scope, accountOptions(urlObj)));
+      const options = accountOptions(urlObj);
+      const listed = await store.listTargets(limit === null ? 200 : Number(limit), scope, options);
+      if (!listed.ok) return reply(res, listed);
+      const planned = await runDue.describeSchedule(listed.data, scope, {
+        accountKey: options.accountKey,
+        projectTimeZone: getProjectTimezoneForUser,
+      });
+      // A schedule that could not be read says so on every row, rather than
+      // dropping the line (an absent "Next draft" reads as "nothing planned").
+      const data = listed.data.map((target) => ({
+        ...target,
+        nextDraft: planned.ok
+          ? (planned.data[target.id] || null)
+          : { due: false, finished: false, text: `Next draft: could not tell — ${planned.error || 'the schedule could not be read'}` },
+      }));
+      return reply(res, { ok: true, status: 200, data });
     }
     if (method === 'POST') {
       if (checkEndpointLimit(req, res, 'youtubeOutreach.targets.create')) return true;

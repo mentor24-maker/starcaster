@@ -48,6 +48,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/youtube-outreach/run-due",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/support/bug-reports/sweep-orphans",
       "schedule": "17 4 * * *"
     }

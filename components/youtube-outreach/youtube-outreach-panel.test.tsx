@@ -574,6 +574,21 @@ describe("drafts and approval", () => {
     expect(container!.querySelector("article.yt-outreach-draft")).toBeNull();
   });
 
+  it("shows each target's next draft, or why it is not due, under How often", async () => {
+    stores.proj_doe.targets = [
+      target("abc", "First video", { nextDraft: { due: false, finished: true, text: "Finished: posted 1 of 1" } }),
+      target("def", "Second video", {
+        repeatMode: "repeat", repeatEveryDays: 7, repeatMaxTimes: 3,
+        nextDraft: { due: false, finished: false, text: "Next draft: Oct 14" },
+      }),
+      target("ghi", "Third video", { nextDraft: { due: false, finished: false, text: "Not due: waiting for your approval on the last draft" } }),
+    ];
+    await mount();
+    expect(row("abc").querySelector(".yt-outreach-next-draft")?.textContent).toBe("Finished: posted 1 of 1");
+    expect(row("def").textContent).toContain("Repeats every 7 days, up to 3 timesNext draft: Oct 14");
+    expect(row("ghi").textContent).toContain("Not due: waiting for your approval on the last draft");
+  });
+
   it("offers no Write a draft on a paused target", async () => {
     stores.proj_doe.targets = [target("abc", "First video", { status: "paused" })];
     await mount();
