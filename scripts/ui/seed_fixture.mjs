@@ -1739,7 +1739,51 @@ async function seedYoutubeOutreach(scope) {
       drafts = 1;
     }
   }
-  return { made, found, drafts };
+  // What the Mini posted (YouTube outreach 5/7, 86bcda68h): one comment of each
+  // shape the Posted section draws — posted with a link and a screenshot,
+  // failed with a reason, stuck mid-post for a hand check — plus an approved
+  // one the worker is holding, with its reason. Driven through the same guarded
+  // moves the worker makes, so a fixture row cannot be a shape the worker could
+  // never write. Idempotent: skipped when the target already has comments.
+  const sentTarget = relisted.find((t) => t.videoId === 'fixtureYT03')
+    || must(await youtubeOutreachStore.createTarget(
+      { videoUrl: 'https://www.youtube.com/watch?v=fixtureYT03', priority: 'normal' },
+      scope,
+      { lookup: async () => ({ ok: true, data: { title: 'Footwork ladder drills for club players', channelName: 'Coach cam', channelId: 'fixture', publishedAt: null, viewCount: 99 } }) }
+    ), 'create posted-comments target');
+  let sent = 0;
+  const sentHistory = await youtubeOutreachCommentsStore.listComments(200, scope, { targetId: sentTarget.id });
+  if (!sentHistory.ok) throw new Error(`list outreach comments: ${sentHistory.error}`);
+  if (!sentHistory.data.length) {
+    const approve = async (words) => {
+      const draft = must(await youtubeOutreachCommentsStore.writeDraftForTarget(sentTarget.id, scope, {
+        generate: async () => ({ ok: true, text: JSON.stringify({ comment: words }) }),
+        readVideo: async () => ({ description: '', topComments: [], note: '' }),
+      }), 'write outreach draft');
+      return must(await youtubeOutreachCommentsStore.approveComment(draft.id, {}, scope), 'approve outreach draft');
+    };
+    const posted = await approve('The ladder pattern at the two minute mark is the one our juniors find hardest. Do you run it before or after hitting?');
+    must(await youtubeOutreachCommentsStore.markPosting(posted.id, scope), 'take outreach comment');
+    must(await youtubeOutreachCommentsStore.markPosted(posted.id, {
+      url: 'https://www.youtube.com/watch?v=fixtureYT03&lc=UgxFixturePostedCommentAaABAg',
+      screenshotUrl: '/images/logo_starcaster_600x200.png',
+    }, scope), 'settle outreach comment posted');
+    const failed = await approve('Great breakdown of the split step timing. We use a metronome app for this with our adult beginners.');
+    must(await youtubeOutreachCommentsStore.markPosting(failed.id, scope), 'take outreach comment');
+    must(await youtubeOutreachCommentsStore.markFailed(failed.id, {
+      error: 'OpenClaw did not post it: The comment box was disabled on this video, so there was nowhere to type.',
+    }, scope), 'settle outreach comment failed');
+    const stuck = await approve('Thank you for filming this from behind the baseline, it makes the footwork so much easier to follow.');
+    must(await youtubeOutreachCommentsStore.markPosting(stuck.id, scope), 'take outreach comment');
+    must(await youtubeOutreachCommentsStore.flagForHandCheck(stuck.id, {
+      error: 'OpenClaw: OpenClaw /v1/responses timed out after 300000ms — it may or may not have posted, so it will not be tried again. Check the video by hand.',
+    }, scope), 'flag outreach comment for a hand check');
+    const waiting = await approve('The recovery step after the wide forehand is the part I never see coached. Is that a drill you could film next?');
+    must(await youtubeOutreachCommentsStore.noteWaiting(waiting.id,
+      "Waiting for tomorrow's allowance — 1 of 1 comment a day already posted today (America/New_York).", scope), 'note why an outreach comment waits');
+    sent = 4;
+  }
+  return { made, found, drafts, sent };
 }
 
 let outreachSeeded = null;
@@ -1769,7 +1813,7 @@ console.log(
 );
 console.log(
   outreachSeeded
-    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present, ${outreachSeeded.drafts} draft(s) written.`
+    ? `YouTube outreach seeded — ${outreachSeeded.made} target(s) created, ${outreachSeeded.found} already present, ${outreachSeeded.drafts} draft(s) written, ${outreachSeeded.sent} posting-history comment(s) written.`
     : 'WARNING: YouTube outreach targets were NOT seeded; Engage › YouTube Outreach will show its empty state and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
