@@ -1242,8 +1242,13 @@ test('the relay merges through the SAME gate, not a second one', () => {
     `there must be exactly ONE place that merges a PR, found ${performing.length}`);
   // And the arming calls really are arming: an `--auto` that lost its flag
   // would merge immediately, past every wait this path exists to respect.
-  assert.equal(mergeInvocations.length - performing.length, 2,
-    'expected exactly two auto-merge control calls (arm and disarm)');
+  //
+  // THREE since task 86bcemvj5, and each is named: arm, disarm on a stale
+  // review gate, and disarm on a conflict hand-off. The third exists because a
+  // PR armed before main moved under it would otherwise be landed by GitHub the
+  // moment its branch is fixed, outside the merge window it just gave back.
+  assert.equal(mergeInvocations.length - performing.length, 3,
+    'expected exactly three auto-merge control calls (arm, disarm on a stale gate, disarm on a conflict hand-off)');
   const gateCalls = (RELAY.match(/githubGate\(/g) || []).length;
   assert.ok(gateCalls >= 1, 'the lane must not re-implement mergeability');
 });

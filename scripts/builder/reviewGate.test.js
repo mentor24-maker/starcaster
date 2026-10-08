@@ -956,7 +956,10 @@ test('the merge step checks staleness before merging, and never merges past a st
   // `assert.ok(staleAt < mergeAt)` reports false, i.e. the check runs on a PR
   // that has already merged.
   const staleAt = src.indexOf('reviewGate.reviewGateStaleness(');
-  const mergeAt = src.indexOf("gh(['pr', 'merge'");
+  // The PERFORMING merge, by its --squash flag: since task 86bcemvj5 the
+  // conflict hand-off also calls `gh pr merge --disable-auto`, which merges
+  // nothing and sits above this block.
+  const mergeAt = src.indexOf("gh(['pr', 'merge', String(pr.number), '--repo', repo, '--squash'");
   assert.ok(staleAt !== -1 && mergeAt !== -1 && staleAt < mergeAt,
     'the staleness check must run before the merge command, not after it');
 

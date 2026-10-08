@@ -14,11 +14,11 @@
  * WHAT `ready` MEANS IN PHASE 1. Every working copy the source can have exists
  * — the proxy (or the original, used directly because it is already small and
  * ordinary: a skipped proxy is not a missing one), the WAV unless the file has
- * no sound, the contact sheet unless it has no picture. Nothing in Phase 1
- * comes after this step, so the pass writes `ready` directly; `proxied` is left
- * for the day a later stage (transcription) needs to say "copies made, more to
- * do". Plates get the same copies — they are kept out of transcription later,
- * not out of this.
+ * no sound, the contact sheet unless it has no picture. The pass writes
+ * `ready` directly. Transcription (Phase 2, transcribePass.js) is queued from
+ * here but is not part of `ready`: a transcript has its own row and its own
+ * state, so `proxied` is still unused. Plates get the same copies — they are
+ * kept out of transcription, not out of this.
  *
  * THE LEASE IS SIZED TO THE ENCODE, ONCE, BEFORE IT STARTS. proxy.js runs
  * ffmpeg with spawnSync, so for the length of an encode — tens of minutes for
@@ -41,8 +41,10 @@
 
 const fs = require('node:fs');
 
-const { buildDerivatives, encodeTimeoutMs, FAILURES, ACTIONS } = require('./proxy.js');
+const { buildDerivatives, encodeTimeoutMs, FAILURES, ACTIONS, SKIP_REASONS } = require('./proxy.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
+const videoTranscriptsStore = require('../../lib/videoTranscriptsStore.js');
+const { enqueueTranscribe, TRANSCRIPT_NO_AUDIO } = require('./transcribePass.js');
 
 const STAGE_PROXY = 'proxy';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -72,6 +74,7 @@ function realCatalog() {
   return {
     getSourceById: videoSourcesStore.getSourceById,
     updateSource: videoSourcesStore.updateSource,
+    upsertTranscript: videoTranscriptsStore.upsertTranscript,
   };
 }
 
@@ -255,6 +258,37 @@ async function proxyJob({
       + `Fix: inspect row ${sourceId} by hand, then delete this blocked job.`);
   }
 
+  // Hand the source on to transcription BEFORE completing — the order ingest
+  // and probe use, for the same reason: a crash between the two re-runs this
+  // pass (which reuses every copy, and the queue dedupes the job), whereas the
+  // other order could finish here and leave the recording untranscribed for
+  // good. Plates are footage of a place, not of anyone speaking, so they stop
+  // at ready. A source with no sound gets a `no_audio` row rather than a job,
+  // so the Footage screen can say why it has no transcript (DOCTRINE 5.31).
+  let transcription = 'not asked for: plates are not transcribed';
+  if (laneFor(readBack.data) !== 'plates') {
+    const audioOut = (result.outputs && result.outputs.audio) || null;
+    if (audioOut && audioOut.action === ACTIONS.SKIPPED && audioOut.reason === SKIP_REASONS.NO_AUDIO) {
+      const saved = await catalog.upsertTranscript(sourceId, {
+        state: TRANSCRIPT_NO_AUDIO,
+        reason: 'this recording has no sound track, so there is nothing to transcribe',
+      }, scope);
+      if (!saved.ok || !saved.data || saved.data.state !== TRANSCRIPT_NO_AUDIO) {
+        const why = saved.ok ? `it came back as "${saved.data && saved.data.state}"` : saved.error;
+        if (!saved.ok && (saved.status === 400 || saved.status === 404)) {
+          return blockIt(`source ${sourceId} is ready but its "no sound" transcript was refused: ${why}`);
+        }
+        return releaseIt(`source ${sourceId} is ready but its "no sound" transcript could not be written: ${why}`);
+      }
+      transcription = 'no sound track — recorded as no_audio';
+    } else if (audioOut && text(audioOut.path)) {
+      const queued = enqueueTranscribe(queue, { sourceId, wavPath: audioOut.path });
+      transcription = queued.created ? 'transcription queued' : 'transcription already queued';
+    } else {
+      transcription = 'not queued: the copies named no sound file';
+    }
+  }
+
   const completed = queue.complete(job.id, owner);
   return {
     ...base,
@@ -262,6 +296,7 @@ async function proxyJob({
     jobAction: completed ? 'completed' : 'none',
     proxyPath,
     proxyAction: proxyOut.action,
+    transcription,
     reason: proxyOut.action === ACTIONS.SKIPPED
       ? `original used directly (${proxyOut.reason}), WAV and contact sheet made`
       : `proxy ${proxyOut.action}, WAV and contact sheet made`,
