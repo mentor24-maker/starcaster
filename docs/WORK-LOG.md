@@ -1,3 +1,14 @@
+## 2026-10-08 — Footage screen: you can't search your recordings for something you said (#791)
+
+The Footage screen now has a "Search what you said" box at the top. Type a
+word or phrase you said and press Return, and every recording where you said it
+appears: the file name (click it to watch in Google Drive), which session it
+belongs to, and up to five moments, each with the minute it was said and the
+line itself, your words highlighted. If nothing matches, it says what you
+searched for and how many recordings it looked through, so "you never said
+that" and "nothing has been turned into text yet" are clearly different
+messages. A single letter is not searched; the box says why. This finishes
+the six-step transcription project.
 ## 2026-10-08 — Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (#794)
 
 There is now an **Engage → Substack Notes** screen, next to YouTube Outreach,
