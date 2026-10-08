@@ -39,7 +39,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * and its text in an editable box. Approve sends the box's text; the server
  * re-checks it against the link and avoid-word rules and refuses by name, so
  * an edit cannot approve something the rules forbid. A rejected draft leaves
- * the tab and stays in that video's History. Nothing here posts (5/7).
+ * the tab and stays in that video's History.
+ *
+ * POSTING (5/7, task 86bcda68h). Nothing here posts — the Mini's worker does
+ * (workers/youtube-outreach/poster.js). An approved card shows the worker's own
+ * reason when it is holding a comment ("waiting for tomorrow's allowance"), and
+ * the Posted section below the cards lists what went out, with the link to the
+ * comment on YouTube and the screenshot taken of it. A failed row says why in
+ * the worker's words; a row the worker could not settle is shown as "check
+ * this one by hand", because it is never retried.
  */
 
 const TARGETS_PATH = '/api/youtube-outreach/targets';
@@ -47,6 +55,8 @@ const SETTINGS_PATH = '/api/youtube-outreach/settings';
 const COMMENTS_PATH = '/api/youtube-outreach/comments';
 /** What the Approvals tab shows: drafts to decide, and approved ones waiting to post. */
 const APPROVALS_QUERY = `${COMMENTS_PATH}?status=draft,approved`;
+/** What the Posted section shows: everything the worker has taken. */
+const POSTED_QUERY = `${COMMENTS_PATH}?status=posting,posted,failed`;
 
 /** The window event public/js/projectContext.js emits on every project switch. */
 export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
@@ -128,6 +138,15 @@ export type OutreachComment = {
   rejectedAt: string | null;
   createdAt: string;
   note?: string;
+  postedUrl?: string;
+  postedAt?: string | null;
+  postError?: string;
+  postingStartedAt?: string | null;
+  screenshotUrl?: string;
+  postNote?: string;
+  waitReason?: string;
+  waitCheckedAt?: string | null;
+  needsHandCheck?: boolean;
 };
 
 type AppShape = {
@@ -411,6 +430,13 @@ function DraftCard({ comment, busy, error, onApprove, onReject, onRedraft }: {
         <p className="yt-outreach-draft-final">{commentWords(comment)}</p>
       )}
       {comment.note ? <p className="yt-outreach-card-note">{comment.note}</p> : null}
+      {comment.status === 'approved' ? (
+        <p className="yt-outreach-card-note yt-outreach-wait">
+          {comment.waitReason
+            ? `${comment.waitReason}${comment.waitCheckedAt ? ` (checked ${whenText(comment.waitCheckedAt)})` : ''}`
+            : 'Waiting for the Mini to post it. If a limit holds it, the reason will show here.'}
+        </p>
+      ) : null}
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       {deciding ? (
         <div className="yt-outreach-actions">
@@ -422,6 +448,60 @@ function DraftCard({ comment, busy, error, onApprove, onReject, onRedraft }: {
         </div>
       ) : null}
     </article>
+  );
+}
+
+// ── What the Mini posted ───────────────────────────────────────────────────
+
+/** "Oct 8, 3:42 PM" in the viewer's own time, or '' when there is no time. */
+export function whenText(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  return at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+/** The words on a Posted row's status line. A `posting` row is either live work or a hand check. */
+export function postedStatusText(comment: OutreachComment): string {
+  if (comment.status === 'posted') return `Posted ${whenText(comment.postedAt)}`.trim();
+  if (comment.status === 'failed') return 'Failed to post';
+  if (comment.needsHandCheck) return 'Check this one by hand — it will not be tried again';
+  return 'Being posted now…';
+}
+
+function PostedRow({ comment }: { comment: OutreachComment }): React.ReactElement {
+  const videoLink = `https://www.youtube.com/watch?v=${encodeURIComponent(comment.videoId)}`;
+  const handCheck = comment.status === 'posting' && comment.needsHandCheck;
+  return (
+    <li className={`yt-outreach-posted-row is-${handCheck ? 'hand-check' : comment.status}`} data-comment-id={comment.id}>
+      {comment.screenshotUrl ? (
+        <a className="yt-outreach-posted-shot" href={comment.screenshotUrl} target="_blank" rel="noopener noreferrer">
+          <img src={comment.screenshotUrl} alt="Screenshot of the posted comment" loading="lazy" />
+        </a>
+      ) : null}
+      <div className="yt-outreach-posted-body">
+        <p className="yt-outreach-posted-status">{postedStatusText(comment)}</p>
+        <a className="yt-outreach-video-title" href={videoLink} target="_blank" rel="noopener noreferrer">
+          {comment.videoTitle || comment.videoId}
+        </a>
+        <p className="yt-outreach-posted-text">{commentWords(comment)}</p>
+        {comment.postError ? <p className="yt-outreach-error">{comment.postError}</p> : null}
+        {handCheck && !comment.postError ? (
+          <p className="yt-outreach-error">
+            The worker stopped part-way through posting this. Open the video and see whether the comment is there before writing another.
+          </p>
+        ) : null}
+        {comment.postNote ? <p className="yt-outreach-card-note">{comment.postNote}</p> : null}
+        <div className="yt-outreach-actions">
+          {comment.postedUrl ? (
+            <a className="btn" href={comment.postedUrl} target="_blank" rel="noopener noreferrer">View on YouTube</a>
+          ) : null}
+          {!comment.postedUrl && comment.status !== 'posted' ? (
+            <a className="btn" href={videoLink} target="_blank" rel="noopener noreferrer">Open the video</a>
+          ) : null}
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -686,6 +766,8 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [tab, setTab] = useState<'targets' | 'approvals'>('targets');
   const [comments, setComments] = useState<OutreachComment[] | null>(null);
+  const [posted, setPosted] = useState<OutreachComment[] | null>(null);
+  const [postedError, setPostedError] = useState('');
   const [draftingId, setDraftingId] = useState('');
   const [commentBusy, setCommentBusy] = useState('');
   const [commentErrors, setCommentErrors] = useState<Record<string, string>>({});
@@ -703,7 +785,9 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     setLoading(true);
     // Read both, and say which one failed: a missing settings row must not
     // be reported as a missing list, or hide a list that read fine.
-    const [list, limits, waiting] = await Promise.allSettled([api(TARGETS_PATH), api(SETTINGS_PATH), api(APPROVALS_QUERY)]);
+    const [list, limits, waiting, sent] = await Promise.allSettled([
+      api(TARGETS_PATH), api(SETTINGS_PATH), api(APPROVALS_QUERY), api(POSTED_QUERY),
+    ]);
     if (seq !== requestSeq.current) return;
     const problems: string[] = [];
     if (list.status === 'fulfilled') {
@@ -724,6 +808,16 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     } else {
       setComments(null);
       problems.push(`The drafts waiting for approval could not be read: ${errorText(waiting.reason, 'unknown error')}`);
+    }
+    // Said where the list would be, not in the banner: a Posted list that
+    // cannot be read must not hide the drafts above it, and must not read as
+    // "nothing has been posted".
+    if (sent.status === 'fulfilled') {
+      setPosted(Array.isArray(sent.value?.data) ? (sent.value.data as OutreachComment[]) : []);
+      setPostedError('');
+    } else {
+      setPosted(null);
+      setPostedError(`What has been posted could not be read: ${errorText(sent.reason, 'unknown error')}`);
     }
     setError(problems.join(' '));
     setLoading(false);
@@ -759,6 +853,8 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       setEditingId('');
       setSettingsOpen(false);
       setComments(null);
+      setPosted(null);
+      setPostedError('');
       setCommentErrors({});
       setHistoryId('');
       setHistory(null);
@@ -939,7 +1035,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       const next = body?.data as OutreachComment;
       if (action === 'approve') {
         setComments((list) => (list || []).map((c) => (c.id === comment.id ? next : c)));
-        setNotice('Approved. It will wait here until posting is switched on.');
+        setNotice('Approved. The Mini posts it from Dane of Earth\'s browser once the account\'s limits allow — if it is waiting, the card says why.');
       } else if (action === 'reject') {
         setComments((list) => (list || []).filter((c) => c.id !== comment.id));
         setNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`);
@@ -1043,6 +1139,19 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
               onRedraft={() => void decide(comment, 'redraft')}
             />
           ))}
+          <section className="yt-outreach-card yt-outreach-posted" aria-label="Posted">
+            <h3 className="yt-outreach-card-title">Posted</h3>
+            {postedError ? <p className="yt-outreach-error" role="alert">{postedError}</p> : null}
+            {!postedError && !posted ? <p className="yt-outreach-card-note">Loading…</p> : null}
+            {posted && !posted.length ? (
+              <p className="yt-outreach-empty">Nothing has been posted yet. Approved comments appear here once the Mini has posted them.</p>
+            ) : null}
+            {posted && posted.length ? (
+              <ul className="yt-outreach-posted-list">
+                {posted.map((comment) => <PostedRow key={comment.id} comment={comment} />)}
+              </ul>
+            ) : null}
+          </section>
         </div>
       ) : null}
 
