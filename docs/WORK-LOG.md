@@ -1,3 +1,17 @@
+## 2026-10-07 — Substack Notes 1/7: a place to keep Dane's Notes, replies, restacks and likes, and their settings (storage and server) (#789)
+
+Starcaster now has somewhere to keep everything the coming Substack Notes
+agent will do for Dane of Earth: one record per action — a Note of his own,
+a reply to someone else's Note, a restack, or a like — plus the account's
+settings (how many actions a day, how far apart, which hours, his voice,
+his topics, words to avoid, and whether his Notes may carry a link). Each
+action moves along one fixed path, from idea to draft to approved to
+posted, and the server refuses a wrong step and says why: a Note can't be
+approved with no words in it, "posted" needs the link as proof, and a
+reply has to point at a real Substack Note. One client's records can never
+be read by another. Nothing is drafted or posted yet, and there is no
+screen; those are the next tickets. The database tables still need to be
+created by running `docs/SQL/substack_notes_setup.sql` in Supabase.
 ## 2026-10-07 — Approved merges stall silently when a pull request has a real conflict: the Mini holds its merge turn forever and the others queue behind it (#785)
 
 When Dane says "merge" on a pull request whose code really clashes with newer
