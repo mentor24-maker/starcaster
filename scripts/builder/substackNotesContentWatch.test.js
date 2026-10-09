@@ -393,6 +393,61 @@ test('a new blog post is drafted with the address a visitor opens; drafts and sc
   }
 });
 
+test('a failed blog read in between does not make the next new blog post look like the back catalogue', async () => {
+  // Round-1 review of 86bcet775: the blog's failure paths cannot know its
+  // identity, and a failed read used to restart the source — so the next good
+  // read was a FIRST run and recorded the new post as seen, never drafted.
+  const failures = {
+    'the project could not be read': { getProject: async () => ({ ok: false, error: 'timeout' }) },
+    'the post-page lookup came back empty': { findPage: async () => null },
+    'the blog store threw': { listPosts: async () => { throw new Error('connection reset'); } },
+  };
+  for (const [why, broken] of Object.entries(failures)) {
+    const { db, store, watch, restore } = withDb();
+    try {
+      await saveSettings(store);
+      const t0 = Date.parse('2026-10-09T18:00:00Z');
+      const feeds = { [YT_URL]: youtubeXml, [SUB_URL]: daneXml };
+      const postA = { slug: 'post-a', title: 'Post A', status: 'published', publishedAt: '2026-09-01T00:00:00Z' };
+      await watch.watchAccount(SCOPE, 'dane_of_earth', { deps: makeDeps(feeds, { posts: [postA] }).deps, generate, now: t0 });
+
+      const down = makeDeps(feeds, { posts: [postA] });
+      Object.assign(down.deps, broken);
+      const failed = await watch.watchAccount(SCOPE, 'dane_of_earth', { deps: down.deps, generate, now: t0 + 3600000 });
+      const blogDown = failed.data.watch.sources.find((s) => s.key === 'blog');
+      assert.equal(blogDown.ok, false, `${why}: the failed read should show as not ok`);
+      assert.equal(blogDown.baselineCount, 1, `${why}: the "recorded when watching began" count was reset`);
+
+      const postB = { slug: 'post-b', title: 'Post B', status: 'published', publishedAt: '2026-10-09T20:00:00Z' };
+      const back = await watch.watchAccount(SCOPE, 'dane_of_earth', { deps: makeDeps(feeds, { posts: [postB, postA] }).deps, generate, now: t0 + 3 * 3600000 });
+      assert.deepEqual(back.data.recordedSeen, {}, `${why}: the next good read was treated as a first run`);
+      assert.deepEqual(back.data.drafted.map((d) => d.title), ['Post B'], `${why}: the new post was not drafted`);
+      const rows = (db.data.get('substack_notes_items') || []);
+      assert.deepEqual(rows.map((r) => r.content_url), ['https://daneofearth.starcaster.pro/blog-post?post=post-b']);
+    } finally {
+      restore();
+    }
+  }
+});
+
+test('a source that reads fine at a NEW address does start over (only a successful read restarts a source)', async () => {
+  const { db, store, watch, restore } = withDb();
+  try {
+    await saveSettings(store);
+    const t0 = Date.parse('2026-10-09T18:00:00Z');
+    const postA = { slug: 'post-a', title: 'Post A', status: 'published', publishedAt: '2026-09-01T00:00:00Z' };
+    const feeds = { [YT_URL]: youtubeXml, [SUB_URL]: daneXml };
+    await watch.watchAccount(SCOPE, 'dane_of_earth', { deps: makeDeps(feeds, { posts: [postA] }).deps, generate, now: t0 });
+    // The site moved to a new domain: every post has a new address, and none is new content.
+    const moved = await watch.watchAccount(SCOPE, 'dane_of_earth', { deps: makeDeps(feeds, { posts: [postA], domain: 'daneofearth.com' }).deps, generate, now: t0 + 3600000 });
+    assert.deepEqual(moved.data.recordedSeen, { blog: 1 });
+    assert.equal(moved.data.drafted.length, 0);
+    assert.equal((db.data.get('substack_notes_items') || []).length, 0);
+  } finally {
+    restore();
+  }
+});
+
 // ── Saying why a source is not watched ─────────────────────────────────────
 
 test('a source with no setting says why on screen, rather than silently not watching', async () => {

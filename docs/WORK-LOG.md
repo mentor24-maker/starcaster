@@ -11,7 +11,10 @@ waiting than the daily maximum allows. The Ideas tab shows what is being
 watched and when it last checked, and why a source is off ("no YouTube
 channel saved in Settings"). Settings has **Draft a Note for my latest piece**
 for anything older. It needs one small database change run in production
-before it starts.
+before it starts. If the blog cannot be read on one pass (a database hiccup),
+the watch keeps what it already knew, so a post published around then is
+still drafted on the next good pass instead of being quietly skipped.
+
 ## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
 
 Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
