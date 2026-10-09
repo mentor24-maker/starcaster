@@ -17,6 +17,29 @@ deleted. The first real run happens on the MacBook as part of that cleanup
 ticket (Dane's call, 9 October), because the MacBook was asleep every time
 a pass tried to reach it.
 
+## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
+
+Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
+button. Starcaster writes the Note (or the reply) in the voice from Settings,
+and it lands on a new **Approvals** tab in a box Dane can edit, with
+**Approve**, **Reject** and **Write another**. Likes and restacks have no
+words, so they wait on Approvals with just Approve and Reject. The account's
+rules are checked on what was actually written: a link when links are set to
+Never, a word on the avoid list, or a Note that is too long is thrown away
+with the reason, and an edit that breaks a rule is refused the same way. For a
+reply, Starcaster reads the other person's Note from Substack itself; if it
+can't, the row asks Dane to paste it. Nothing is posted yet.
+## 2026-10-08 — Live browser view 1: the plan for signing in to YouTube, Substack and other sites from inside Starcaster (#797)
+
+A written plan, no feature code yet: `docs/LIVE_BROWSER_VIEW.md`. It
+recommends a "Connect" window inside Starcaster showing a live picture of the
+Mini's Chrome, opened only with a one-time pass and closing itself after a few
+idle minutes. Measured on the Mini: typing is fast (about a fiftieth of a
+second from key to picture), and passwords and two-step codes go through.
+Google refuses a browser started by the usual automation tool, but not a real
+Chrome that is only being watched, so the plan uses the second kind. The plan
+ends with five build tickets for Dane to approve. While checking, we found that
+Tailscale, the Mini's route to the internet, has been off since about Oct 5.
 ## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
 
 The live site reaches the YouTube download helper on the Mac Mini through
