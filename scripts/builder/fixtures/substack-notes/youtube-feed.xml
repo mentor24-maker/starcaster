@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw"/>
+ <id>yt:channel:_x5XG1OV2P6uZZ5FSM9Ttw</id>
+ <yt:channelId>_x5XG1OV2P6uZZ5FSM9Ttw</yt:channelId>
+ <title>Google for Developers</title>
+ <link rel="alternate" href="https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw"/>
+ <author>
+  <name>Google for Developers</name>
+  <uri>https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw</uri>
+ </author>
+ <published>2007-08-23T00:34:43+00:00</published>
+  <entry>
+  <id>yt:video:7sKHiuE7J-Y</id>
+  <yt:videoId>7sKHiuE7J-Y</yt:videoId>
+  <yt:channelId>UC_x5XG1OV2P6uZZ5FSM9Ttw</yt:channelId>
+  <title>Building low-latency remote robotics with Gemini</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=7sKHiuE7J-Y"/>
+  <author>
+   <name>Google for Developers</name>
+   <uri>https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw</uri>
+  </author>
+  <published>2026-10-09T16:00:10+00:00</published>
+  <updated>2026-10-09T16:00:10+00:00</updated>
+  <media:group>
+   <media:title>Building low-latency remote robotics with Gemini</media:title>
+   <media:content url="https://www.youtube.com/v/7sKHiuE7J-Y?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/7sKHiuE7J-Y/hqdefault.jpg" width="480" height="360"/>
+   <media:description>(description trimmed for the fixture)</media:description>
+   <media:community>
+    <media:starRating count="41" average="5.00" min="1" max="5"/>
+    <media:statistics views="314"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:fL9OBJO3Gu8</id>
+  <yt:videoId>fL9OBJO3Gu8</yt:videoId>
+  <yt:channelId>UC_x5XG1OV2P6uZZ5FSM9Ttw</yt:channelId>
+  <title>Building with Gemma 4</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=fL9OBJO3Gu8"/>
+  <author>
+   <name>Google for Developers</name>
+   <uri>https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw</uri>
+  </author>
+  <published>2026-10-08T23:00:09+00:00</published>
+  <updated>2026-10-08T23:00:09+00:00</updated>
+  <media:group>
+   <media:title>Building with Gemma 4</media:title>
+   <media:content url="https://www.youtube.com/v/fL9OBJO3Gu8?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i3.ytimg.com/vi/fL9OBJO3Gu8/hqdefault.jpg" width="480" height="360"/>
+   <media:description>(description trimmed for the fixture)</media:description>
+   <media:community>
+    <media:starRating count="297" average="5.00" min="1" max="5"/>
+    <media:statistics views="26406"/>
+   </media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:XnIXupxiRo4</id>
+  <yt:videoId>XnIXupxiRo4</yt:videoId>
+  <yt:channelId>UC_x5XG1OV2P6uZZ5FSM9Ttw</yt:channelId>
+  <title>📷 Searching for images from text with EmbeddingGemma 2</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/XnIXupxiRo4"/>
+  <author>
+   <name>Google for Developers</name>
+   <uri>https://www.youtube.com/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw</uri>
+  </author>
+  <published>2026-10-08T16:00:00+00:00</published>
+  <updated>2026-10-08T21:49:06+00:00</updated>
+  <media:group>
+   <media:title>📷 Searching for images from text with EmbeddingGemma 2</media:title>
+   <media:content url="https://www.youtube.com/v/XnIXupxiRo4?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i1.ytimg.com/vi/XnIXupxiRo4/hqdefault.jpg" width="480" height="360"/>
+   <media:description>(description trimmed for the fixture)</media:description>
+   <media:community>
+    <media:starRating count="69" average="5.00" min="1" max="5"/>
+    <media:statistics views="1018"/>
+   </media:community>
+  </media:group>
+ </entry>
+</feed>
