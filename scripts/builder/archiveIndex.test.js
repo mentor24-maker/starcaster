@@ -290,7 +290,7 @@ test('each place gets one line: where it belongs, only copy, not checked', () =>
     // A Mac video with a copy on mentorofaio, where video belongs.
     { location: 'mac', path: 'Desktop/talk.mov', size: 50, hash: 'V' },
     { location: 'mentorofaio', path: 'Studio/talk.mov', size: 50, hash: 'V' },
-    // A Mac PDF whose only other copy is on the WRONG Drive: neither line.
+    // A Mac PDF whose only other copy is on the WRONG Drive: "elsewhere".
     { location: 'mac', path: 'Documents/tax.pdf', size: 30, hash: 'P' },
     { location: 'mentorofaio', path: 'misc/tax.pdf', size: 30, hash: 'P' },
     // The only copy anywhere: by size, and by hash.
@@ -310,6 +310,8 @@ test('each place gets one line: where it belongs, only copy, not checked', () =>
   assert.equal(rows.mac.atHome, 1);
   assert.equal(rows.mac.onlyHere, 2);
   assert.equal(rows.mac.onlyHereBytes, 7777 + 40);
+  assert.equal(rows.mac.elsewhere, 1);
+  assert.equal(rows.mac.elsewhereBytes, 30);
   assert.equal(rows.mac.notChecked, 0);
   assert.equal(rows.icloud.notChecked, 1);
   assert.equal(rows.icloud.onlyHere, 1);
@@ -318,10 +320,53 @@ test('each place gets one line: where it belongs, only copy, not checked', () =>
 
   const { markdown } = idx.renderReport(entries, { ranAt: 'now', sources: [{ location: 'photos', root: 'Photos', error: 'not checked — no permission' }] });
   assert.match(markdown, /## Each place, in one line/);
-  assert.match(markdown, /- \*\*mac\*\*: 4 files, .*; 1 \(50 B\) have a confirmed copy where they belong; 2 \(7\.8 KB\) are the only copy; 0 \(0 B\) not checked\./);
+  assert.match(markdown, /- \*\*mac\*\*: 4 files, .*; 1 \(50 B\) have a confirmed copy where they belong; 1 \(30 B\) have a copy elsewhere, not yet where they belong; 2 \(7\.8 KB\) are the only copy; 0 \(0 B\) not checked\./);
   assert.match(markdown, /- \*\*photos\*\* \(Photos\): not checked — no permission\./);
   assert.match(markdown, /\*\*In iCloud only, not checked:\*\* 1 files, 900 B/);
   assert.match(markdown, /## In iCloud only — not checked\n\nThese files/);
+});
+
+test('"only copy" means no copy in another PLACE: two copies on the Mac alone are both the only copy', () => {
+  // Round 1 of 86bcfgyyw: a hash group of two used to read as "has a copy",
+  // so content that exists only on the MacBook sat in no column at all.
+  const entries = [
+    { location: 'mac', path: 'Desktop/only.mov', size: 50, hash: 'V' },
+    { location: 'mac', path: 'Downloads/only (1).mov', size: 50, hash: 'V' },
+  ];
+  const [mac] = idx.placeSummary(entries, idx.analyze(entries), []);
+  assert.equal(mac.onlyHere, 2, 'deleting "the duplicate" here could delete the last copy');
+  assert.equal(mac.onlyHereBytes, 100);
+  assert.equal(mac.atHome + mac.elsewhere + mac.notChecked, 0);
+});
+
+test('mac and mac-trash are ONE place for "only copy": the cleanup empties both', () => {
+  const entries = [
+    { location: 'mac', path: 'Documents/lease.pdf', size: 30, hash: 'P' },
+    { location: 'mac-trash', path: 'Documents/lease.pdf', size: 30, hash: 'P' },
+    // A Drive copy inside a zip is not a place a loose file can be trusted to.
+    { location: 'mentor24', container: 'old.zip', path: 'lease.pdf', size: 30, hash: 'P' },
+  ];
+  const rows = Object.fromEntries(idx.placeSummary(entries, idx.analyze(entries), []).map((r) => [r.location, r]));
+  assert.equal(rows.mac.onlyHere, 1);
+  assert.equal(rows['mac-trash'].onlyHere, 1);
+  assert.equal(rows.mentor24, undefined, 'a zip member is not a loose file in the summary');
+});
+
+test('every file on a place line lands in exactly one column', () => {
+  const entries = [
+    { location: 'mac', path: 'a.pdf', size: 30, hash: 'P' },
+    { location: 'mentor24', path: 'a.pdf', size: 30, hash: 'P' }, // at home
+    { location: 'mac', path: 'b.pdf', size: 31, hash: 'Q' },
+    { location: 'mentorofaio', path: 'b.pdf', size: 31, hash: 'Q' }, // elsewhere
+    { location: 'mac', path: 'c.pdf', size: 7777 }, // only copy, by size
+    { location: 'mac', path: 'd.pdf', size: 30 }, // shares a size, never hashed
+    { location: 'mac', path: 'e.txt', size: 0 }, // empty
+    { location: 'mac', path: 'f.pdf', size: 9, error: 'EACCES' },
+    { location: 'mentor24', path: 'g.gdoc', size: 0, native: true },
+  ];
+  for (const r of idx.placeSummary(entries, idx.analyze(entries), [])) {
+    assert.equal(r.atHome + r.elsewhere + r.onlyHere + r.notChecked, r.files, `${r.location} adds up`);
+  }
 });
 
 test('end to end: an iCloud stub is listed as not checked and the run says so in its exit code', () => {
@@ -337,6 +382,6 @@ test('end to end: an iCloud stub is listed as not checked and the run says so in
   const notChecked = fs.readFileSync(path.join(out, 'not-checked.tsv'), 'utf8').trim().split('\n').slice(1);
   assert.deepEqual(notChecked.map((l) => l.split('\t').slice(0, 2)), [['icloud', 'Zoom/zoom_0.mp4']]);
   const report = fs.readFileSync(path.join(out, 'report.md'), 'utf8');
-  assert.match(report, /- \*\*icloud\*\* \([^)]*\): 2 files, .*; 1 \(17 B\) are the only copy; 1 \(0 B\) not checked\./);
+  assert.match(report, /- \*\*icloud\*\* \([^)]*\): 2 files, .*; 0 \(0 B\) have a copy elsewhere, not yet where they belong; 1 \(17 B\) are the only copy; 1 \(0 B\) not checked\./);
   fs.rmSync(tmp, { recursive: true, force: true });
 });

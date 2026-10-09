@@ -12,7 +12,12 @@ checked" because macOS blocks reading it. The report now opens with one
 line per place: how many files and how much space, how many already have a
 copy where they belong, and how many are the **only copy** anywhere. The
 next ticket deletes MacBook copies from this report, so those only-copy
-files are the ones it must never touch. Read-only: nothing is moved or
+files are the ones it must never touch. "Only copy" means no copy in any
+OTHER place, so two copies sitting on the MacBook alone both count, and a
+MacBook file whose other copy is in the Trash folder counts too (the cleanup
+empties both). A fourth number covers files with a copy somewhere, but not
+yet where they belong, so every file on a line is counted exactly once.
+Read-only: nothing is moved or
 deleted. The first real run happens on the MacBook as part of that cleanup
 ticket (Dane's call, 9 October), because the MacBook was asleep every time
 a pass tried to reach it.
