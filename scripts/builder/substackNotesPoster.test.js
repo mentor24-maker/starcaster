@@ -128,6 +128,13 @@ function standIns({ behave = 'ok' } = {}) {
         return answer({ done: true, [state]: false, alreadyDone: false, screenshotPath: null, problem: 'The button did not change.' });
       case 'said-no':
         return answer({ done: false, noteUrl: null, screenshotPath: null, problem: 'The Note box would not open.' });
+      case 'said-no-with-shot':
+        // The picture of the refusal is the one Dane most needs (a signed-out page).
+        return answer({ done: false, noteUrl: null, screenshotPath: '/tmp/openclaw-signed-out.png', problem: 'The browser is signed out of Substack.' });
+      case 'already-on':
+        if (clicking) return answer({ done: true, [state]: true, alreadyDone: true, screenshotPath: '/tmp/openclaw-shot.png', problem: null });
+        notes.set(String(seq), words);
+        return answer({ done: true, noteUrl: url, screenshotPath: '/tmp/openclaw-shot.png', problem: null });
       case 'timeout':
         return { ok: false, status: 504, error: 'OpenClaw /v1/responses timed out after 300000ms' };
       case 'hang':
@@ -173,7 +180,7 @@ async function readRow(env, id) {
 test('the poster\'s columns exist on substack_notes_items, and the file still applies cleanly twice', () => {
   const body = fs.readFileSync(SQL_PATH, 'utf8');
   const columns = parseSchemaText(body).tables.get('substack_notes_items').columns;
-  for (const name of ['posting_started_at', 'post_note', 'wait_reason', 'wait_checked_at', 'posted_url', 'screenshot_url', 'error']) {
+  for (const name of ['posting_started_at', 'post_note', 'wait_reason', 'wait_checked_at', 'already_done', 'posted_url', 'screenshot_url', 'error']) {
     assert.ok(columns.get(name), `substack_notes_items.${name} is missing`);
   }
   const twice = parseSchemaText(`${body}\n${body}`);
@@ -357,6 +364,64 @@ test('OpenClaw saying no is failed in its own words; a timeout or an unreadable 
     assert.equal(unread.status, 'posting');
     assert.equal(unread.needsHandCheck, true);
     assert.match(unread.error, /could not be checked/);
+  } finally {
+    env.restore();
+  }
+});
+
+test('a Substack item whose request timed out is left for a hand check that names Substack, never "the video"', async () => {
+  const env = withDb();
+  try {
+    await setLimits(env.store);
+    const note = await approved(env.store, 'note');
+    await poster.runPass({ adapters: [adapterFor(env, standIns({ behave: 'timeout' }))] });
+    const row = await readRow(env, note.id);
+    assert.equal(row.status, 'posting');
+    assert.equal(row.needsHandCheck, true);
+    assert.match(row.error, /Check Substack by hand\./);
+    assert.doesNotMatch(row.error, /video/i);
+  } finally {
+    env.restore();
+  }
+});
+
+test('a refusal keeps its screenshot: OpenClaw saying no with a picture gives a failed row with that picture', async () => {
+  const env = withDb();
+  try {
+    await setLimits(env.store);
+    const note = await approved(env.store, 'note');
+    const ins = standIns({ behave: 'said-no-with-shot' });
+    await poster.runPass({ adapters: [adapterFor(env, ins)] });
+    const row = await readRow(env, note.id);
+    assert.equal(row.status, 'failed');
+    assert.match(row.error, /signed out of Substack/);
+    assert.equal(row.screenshotUrl, `https://blob.example/note-${note.id}.png`);
+    assert.equal(ins.uploads.length, 1);
+  } finally {
+    env.restore();
+  }
+});
+
+test('a like that was already on clicks nothing, says so, and uses none of the daily maximum', async () => {
+  const env = withDb();
+  try {
+    await setLimits(env.store, { maxActionsPerDay: 1 });
+    const like = await approved(env.store, 'like');
+    const note = await approved(env.store, 'note');
+    const adapter = adapterFor(env, standIns({ behave: 'already-on' }));
+    await poster.runPass({ adapters: [adapter] });
+    await poster.runPass({ adapters: [adapter] });
+    const liked = await readRow(env, like.id);
+    assert.equal(liked.status, 'posted', liked.error);
+    assert.equal(liked.alreadyDone, true);
+    assert.match(liked.postNote, /already liked from this account, so nothing was clicked/);
+    const posted = await readRow(env, note.id);
+    assert.equal(posted.status, 'posted', posted.waitReason || posted.error);
+    assert.equal(posted.alreadyDone, false);
+    // ...and it still counts as liked: a second like of that Note is refused.
+    const again = await approved(env.store, 'like');
+    await poster.runPass({ adapters: [adapter] });
+    assert.match((await readRow(env, again.id)).waitReason, /already liked from here/);
   } finally {
     env.restore();
   }

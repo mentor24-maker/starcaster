@@ -14,6 +14,11 @@ and a new **Posted** tab lists what went out, with the link and a screenshot.
 Everything was tested against a stand-in browser. The first real post waits
 until Dane signs the Mini in to Substack (7/7).
 
+After review: a Substack item the Mini could not confirm now says "Check Substack
+by hand" instead of telling Dane to check a video; a refused item keeps its
+screenshot, which is the picture that shows why; and a like or restack that was
+already on clicks nothing and no longer uses up the daily allowance.
+
 ## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
 
 Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**

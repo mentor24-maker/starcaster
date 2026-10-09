@@ -150,8 +150,12 @@ alter table public.substack_notes_settings enable row level security;
 --                       words ("waiting for tomorrow's allowance"), written by
 --                       the worker when it changes. Blank means nothing holds it.
 --   wait_checked_at     when the worker last wrote that reason.
+--   already_done        a like or restack that was ALREADY on when the browser
+--                       arrived: nothing was clicked, so it is `posted` (the
+--                       Note is liked) but uses none of max_actions_per_day.
 
 alter table public.substack_notes_items add column if not exists posting_started_at timestamptz;
 alter table public.substack_notes_items add column if not exists post_note text not null default '';
 alter table public.substack_notes_items add column if not exists wait_reason text not null default '';
 alter table public.substack_notes_items add column if not exists wait_checked_at timestamptz;
+alter table public.substack_notes_items add column if not exists already_done boolean not null default false;

@@ -65,23 +65,30 @@ function text(value) {
  * to match. This IS rule 3, and it is the function the break-test targets.
  */
 async function settle(adapter, item, attempt) {
-  // The browser said it could not, in its own words: nothing went out.
-  if (!attempt.ok && !attempt.uncertain) {
-    const res = await adapter.markFailed(item, { error: attempt.error });
-    return { outcome: 'failed', why: attempt.error, write: res };
-  }
-  // The request broke off, or the answer could not be read: it MAY be live.
-  if (!attempt.ok) {
-    const res = await adapter.flagForHandCheck(item, {
-      error: `${attempt.error} — it may or may not have posted, so it will not be tried again. Check the video by hand.`,
-    });
-    return { outcome: 'hand-check', why: attempt.error, write: res };
-  }
-
+  // A screenshot is kept whatever the outcome — a failure is exactly when the
+  // picture helps most (a signed-out page, an error banner). Only an answer
+  // that never arrived has none to keep.
   const kept = attempt.screenshot !== undefined && typeof adapter.keepScreenshot === 'function'
     ? await adapter.keepScreenshot(item, attempt.screenshot)
     : { note: '' };
   const evidence = { screenshotUrl: kept.url || '', note: kept.note || '' };
+
+  // The browser said it could not, in its own words: nothing went out.
+  if (!attempt.ok && !attempt.uncertain) {
+    const res = await adapter.markFailed(item, { error: attempt.error, ...evidence });
+    return { outcome: 'failed', why: attempt.error, write: res };
+  }
+  // The request broke off, or the answer could not be read: it MAY be live.
+  // The closing words are the site's own ("Check the video by hand." would be
+  // nonsense on a Substack Note), so each adapter supplies them.
+  if (!attempt.ok) {
+    const where = text(adapter.handCheckWords) || 'Check it by hand.';
+    const res = await adapter.flagForHandCheck(item, {
+      error: `${attempt.error} — it may or may not have posted, so it will not be tried again. ${where}`,
+      ...evidence,
+    });
+    return { outcome: 'hand-check', why: attempt.error, write: res };
+  }
 
   if (!text(attempt.url)) {
     const why = 'The browser said it posted but returned no link to the comment, so it is not counted as posted.'
@@ -94,7 +101,9 @@ async function settle(adapter, item, attempt) {
   // and is proven from the page state the browser reported (adapters/substack.js).
   const check = await adapter.verify(item, attempt.url, attempt);
   if (check.verdict === 'proven') {
-    const res = await adapter.markPosted(item, { url: attempt.url, ...evidence });
+    // The attempt goes along so an adapter can record how it was proven
+    // (Substack: a like that was already on, which costs no allowance).
+    const res = await adapter.markPosted(item, { url: attempt.url, ...evidence }, attempt);
     return { outcome: 'posted', why: '', write: res };
   }
   if (check.verdict === 'refuted') {

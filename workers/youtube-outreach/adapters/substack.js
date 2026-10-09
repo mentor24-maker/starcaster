@@ -199,6 +199,7 @@ function createSubstackAdapter(options = {}) {
   return {
     name: 'substack',
     label: 'Substack',
+    handCheckWords: 'Check Substack by hand.',
     projectId,
 
     beginPass() {
@@ -243,9 +244,12 @@ function createSubstackAdapter(options = {}) {
           };
         }
       }
+      // A like or restack found already on clicked nothing, so it uses no
+      // allowance and starts no gap — it is still in `others` above, so the
+      // toggle guard keeps it from being clicked off.
       return limits.checkAccountLimits({
         settings: { ...ctx.settings, maxCommentsPerDay: ctx.settings.maxActionsPerDay },
-        history: others,
+        history: others.filter((h) => !h.alreadyDone),
         itemId: item.id,
         now,
         timeZone: ctx.timeZone,
@@ -255,7 +259,19 @@ function createSubstackAdapter(options = {}) {
 
     noteWaiting: (item, reason) => deps.store.noteWaiting(item.id, reason, scope),
     markPosting: (item) => deps.store.markPosting(item.id, scope),
-    markPosted: (item, proof) => deps.store.markPosted(item.id, proof, scope),
+    // A like or restack that was already on when the browser arrived clicked
+    // nothing, so it is recorded as such and costs no allowance (checkLimits).
+    markPosted(item, proof, attempt = {}) {
+      if (!DONE_STATE[item.kind] || attempt.pageState?.alreadyDone !== true) {
+        return deps.store.markPosted(item.id, proof, scope);
+      }
+      const already = `It was already ${DONE_STATE[item.kind]} from this account, so nothing was clicked and it does not count toward the daily maximum.`;
+      return deps.store.markPosted(item.id, {
+        ...proof,
+        alreadyDone: true,
+        note: [text(proof.note), already].filter(Boolean).join(' '),
+      }, scope);
+    },
     markFailed: (item, failure) => deps.store.markFailed(item.id, failure, scope),
     flagForHandCheck: (item, details) => deps.store.flagForHandCheck(item.id, details, scope),
 
@@ -282,10 +298,11 @@ function createSubstackAdapter(options = {}) {
       if (!answer || typeof answer !== 'object') {
         return { ok: false, uncertain: true, error: `OpenClaw answered, but not with the JSON it was asked for, so whether it went out is unknown. It said: ${said || '(nothing)'}` };
       }
-      if (answer.done !== true && answer.alreadyDone !== true) {
-        return { ok: false, error: `OpenClaw did not do it: ${text(answer.problem) || said || 'it gave no reason'}` };
-      }
       const screenshot = text(answer.screenshotPath);
+      if (answer.done !== true && answer.alreadyDone !== true) {
+        // The screenshot goes along: a refusal is when the picture helps most.
+        return { ok: false, error: `OpenClaw did not do it: ${text(answer.problem) || said || 'it gave no reason'}`, screenshot };
+      }
       if (DONE_STATE[item.kind]) {
         // No link of its own: the Note acted on is the link, and the state is the proof.
         return {
