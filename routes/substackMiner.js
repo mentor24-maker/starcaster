@@ -12,6 +12,8 @@
  *   PATCH  /api/acquire/substack-miner/candidates/:id      (PUT accepted too) details, or { status }
  *   GET    /api/acquire/substack-miner/settings
  *   PUT    /api/acquire/substack-miner/settings            (PATCH accepted too)
+ *   POST   /api/acquire/substack-miner/run                 { keywords?: [] } — the web-search pass
+ *                                                          (Substack Miner 2/7, lib/acquire/SubstackMinerRun.js)
  *
  * Auth and project scope are decided centrally in routes/index.js; /api/acquire
  * is closed to a client's own site admin (lib/projectAdminApiAuth.js), and this
@@ -20,6 +22,7 @@
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/substackMinerStore');
+const { runSubstackMinerSearch } = require('../lib/acquire/SubstackMinerRun');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -106,6 +109,13 @@ async function handle(req, res, pathname, method) {
       return reply(res, await store.updateCandidate(id, body, scope));
     }
     return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  if (pathname === `${PREFIX}/run`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await runSubstackMinerSearch({ keywords: body.keywords }, scope));
   }
 
   if (pathname === `${PREFIX}/settings`) {
