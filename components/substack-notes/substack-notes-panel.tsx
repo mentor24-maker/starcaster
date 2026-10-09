@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 
 /**
  * Engage › Substack Notes — where Dane feeds the Substack Notes agent: ideas
@@ -8,7 +9,15 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * A React island in the frozen vanilla app, mounted into
  * #substackNotesReactRoot by react-entry.js. Data: /api/engage/substack-notes
  * (routes/substackNotes.js over lib/substackNotesStore.js, slice 1/7).
- * Nothing here drafts or posts; everything added waits as an `idea`.
+ * Nothing here posts; everything added waits as an `idea`.
+ *
+ * DRAFTS AND APPROVAL (3/7, task 86bcet6pa). An idea or a reply row has
+ * "Write a draft"; the AI's words land on the Approvals tab in an editable
+ * box, beside Approve / Reject / Write another. A restack or a like has no
+ * words, so it is on Approvals from the moment it is added, with just Approve
+ * and Reject. Approve sends the box's text and the SERVER checks it against
+ * the account's rules (link setting, words to avoid, length), so an edit
+ * cannot approve something the rules forbid; its refusal is shown as said.
  *
  * The shape is components/youtube-outreach/youtube-outreach-panel.tsx's on
  * purpose: the server owns every rule and this screen shows its sentence when
@@ -61,7 +70,45 @@ export type NotesSettings = {
   linkPolicy: string;
   saved: boolean;
   updatedAt: string;
+  /**
+   * What the Mini found the last time it checked its Substack sign-in, written
+   * hourly by workers/youtube-outreach/health.js (YouTube outreach 7/7, task
+   * 86bcda6dt). A blank state means it has never checked.
+   */
+  browserCheck?: BrowserCheck;
 };
+
+export type SignInLine = { tone: 'ok' | 'warn' | 'alarm'; state: string; text: string };
+
+/**
+ * The line at the top of the screen: is the Mini's browser signed in to
+ * Substack as Dane of Earth, and when did it last look? It always says when,
+ * so "never checked", "stopped checking" and "signed out" each read as what
+ * they are rather than as an empty screen (CLAUDE.md landmine 17).
+ */
+export function signInLine(check: BrowserCheck | null | undefined, now: number = Date.now()): SignInLine {
+  const checkedAt = check?.checkedAt ? Date.parse(check.checkedAt) : NaN;
+  const ago = agoText(check?.checkedAt, now);
+  const message = (check?.message || '').trim().replace(/\.$/, '');
+  if (!check?.state || !Number.isFinite(checkedAt)) {
+    return {
+      tone: 'warn',
+      state: 'unknown',
+      text: 'Mini: has not checked its Substack sign-in yet, so nothing here says whether Substack posting would work — the posting worker on the Mini may not be running.',
+    };
+  }
+  if (now - checkedAt > MINI_STALE_MS) {
+    return {
+      tone: 'warn',
+      state: 'stale',
+      text: `The Mini last checked its Substack sign-in ${ago}, so the posting worker may have stopped. That check said: ${message}.`,
+    };
+  }
+  if (check.state === 'signed_in') return { tone: 'ok', state: check.state, text: `${message}, checked ${ago}.` };
+  if (check.state === 'cannot_tell') return { tone: 'warn', state: check.state, text: `${message} (checked ${ago}).` };
+  const since = check.signedInAt ? ` Last signed in: ${whenText(check.signedInAt)}.` : '';
+  return { tone: 'alarm', state: check.state, text: `${message}. Checked ${ago}.${since}` };
+}
 
 type AppShape = {
   api?: (path: string, options?: RequestInit) => Promise<Record<string, any>>;
@@ -90,6 +137,7 @@ const FIELD_WORDS: Array<[RegExp, string]> = [
   [/\btimeZone\b/g, 'Time zone'],
   [/\bavoidWords\b/g, 'Words to avoid'],
   [/\blinkPolicy\b/g, 'Links'],
+  [/\btargetText\b/g, 'Their Note'],
 ];
 
 export function plainError(message: string): string {
@@ -144,6 +192,27 @@ export function statusLabel(item: Pick<NoteItem, 'kind' | 'status'>): string {
   return STATUS_LABELS[item.status] || item.status;
 }
 
+/**
+ * The words an item will post (or would have), for its Ideas / Engage row.
+ * Once a Note or reply leaves `idea`, its row is the only place left on the
+ * screen that can show them — an approved item leaves Approvals — so without
+ * this line Dane's edit was invisible after a reload. Restacks and likes have
+ * no words, so they get nothing.
+ */
+export function wordsLine(item: Pick<NoteItem, 'kind' | 'status' | 'draftText' | 'finalText'>): string {
+  if (item.kind !== 'note' && item.kind !== 'reply') return '';
+  const final = item.finalText || item.draftText;
+  switch (item.status) {
+    case 'draft': return item.draftText ? `Draft: ${item.draftText}` : '';
+    case 'rejected': return item.draftText ? `Rejected draft: ${item.draftText}` : '';
+    case 'approved':
+    case 'posting':
+    case 'failed': return final ? `Will post: ${final}` : '';
+    case 'posted': return final ? `Posted: ${final}` : '';
+    default: return '';
+  }
+}
+
 export function labelFor(options: Option[], value: string): string {
   return options.find((o) => o.value === value)?.label || value || '—';
 }
@@ -152,6 +221,27 @@ function shortDate(iso: string): string {
   if (!iso) return '—';
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export const KIND_LABELS: Record<string, string> = {
+  note: 'Note',
+  reply: 'Reply',
+  restack: 'Restack',
+  like: 'Like',
+};
+
+/** On the Approvals tab: a drafted Note or reply, or a restack/like not yet decided. */
+export function awaitsApproval(item: Pick<NoteItem, 'kind' | 'status'>): boolean {
+  return item.kind === 'note' || item.kind === 'reply' ? item.status === 'draft' : item.status === 'idea';
+}
+
+/** What an item on Approvals came from, in a line. */
+export function cameFrom(item: NoteItem): string {
+  if (item.kind === 'note') {
+    if (item.source === 'new_content') return `New content: ${item.contentTitle || item.contentUrl}`;
+    return `${SOURCE_LABELS[item.source] || item.source} idea: ${item.ideaText}`;
+  }
+  return item.targetUrl;
 }
 
 /** Ideas are Notes of his own; everything aimed at someone else's Note is on the Engage tab. */
@@ -337,9 +427,59 @@ function TextEditor({ id, label, initial, busy, onSave, onCancel }: {
   );
 }
 
+// ── One item on the Approvals tab ──────────────────────────────────────────
+
+function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
+  item: NoteItem;
+  busy: boolean;
+  error: string;
+  onApprove: (text?: string) => void;
+  onReject: () => void;
+  onRedraft: () => void;
+}): React.ReactElement {
+  const hasWords = item.kind === 'note' || item.kind === 'reply';
+  const [text, setText] = useState(item.draftText);
+  const boxId = `sn-draft-${item.id}`;
+  const kind = KIND_LABELS[item.kind] || item.kind;
+
+  return (
+    <article className="substack-notes-card substack-notes-approval" data-item-id={item.id} aria-label={`${kind} waiting for approval`}>
+      <h3 className="substack-notes-card-title">{kind}</h3>
+      <p className="substack-notes-card-note">
+        <strong>From: </strong>
+        {item.kind === 'note' ? (
+          <span className="substack-notes-text">{cameFrom(item)}</span>
+        ) : (
+          <a href={item.targetUrl} target="_blank" rel="noopener noreferrer" className="substack-notes-link">{item.targetUrl}</a>
+        )}
+      </p>
+      {item.kind === 'reply' && item.targetText ? (
+        <p className="substack-notes-card-note substack-notes-text"><strong>Their Note: </strong>{item.targetText}</p>
+      ) : null}
+      {hasWords ? (
+        <>
+          <label className="substack-notes-add-label" htmlFor={boxId}>{kind}</label>
+          <textarea id={boxId} className="substack-notes-draft-text" rows={5} value={text} onChange={(e) => setText(e.target.value)} />
+          <p className="substack-notes-field-help">{`${text.trim().length} characters`}</p>
+        </>
+      ) : (
+        <p className="substack-notes-card-note">{`No words — a ${kind.toLowerCase()} is just the click.`}</p>
+      )}
+      {error ? <p className="substack-notes-error" role="alert">{error}</p> : null}
+      <div className="substack-notes-actions">
+        {hasWords ? <button type="button" className="btn" disabled={busy} onClick={onRedraft}>Write another</button> : null}
+        <button type="button" className="btn btn-danger" disabled={busy} onClick={onReject}>Reject</button>
+        <button type="button" className="btn btn-primary" disabled={busy || (hasWords && !text.trim())} onClick={() => onApprove(hasWords ? text : undefined)}>
+          {busy ? 'Working…' : 'Approve'}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 // ── The screen ─────────────────────────────────────────────────────────────
 
-type Tab = 'ideas' | 'engage' | 'settings';
+type Tab = 'ideas' | 'engage' | 'approvals' | 'settings';
 
 export default function SubstackNotesPanel(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -361,7 +501,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const [addError, setAddError] = useState('');
   const [rowBusy, setRowBusy] = useState('');
   const [editingId, setEditingId] = useState('');
+  // Which field the open row editor writes: the idea, or the pasted text of their Note.
+  const [editingField, setEditingField] = useState<'ideaText' | 'targetText'>('ideaText');
   const [editError, setEditError] = useState('');
+  const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
 
@@ -420,6 +563,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       setAddError('');
       setLoading(false);
       setEditingId('');
+      setRowError({ id: '', message: '' });
       // Half-typed words belong to the old client; Add must not file them here.
       setIdeaText('');
       setNoteUrl('');
@@ -479,6 +623,64 @@ export default function SubstackNotesPanel(): React.ReactElement {
     }
   };
 
+  const startEdit = (item: NoteItem, field: 'ideaText' | 'targetText') => {
+    setEditError('');
+    setEditingField(field);
+    setEditingId(item.id);
+  };
+
+  const replaceItem = (next: NoteItem) => setItems((list) => (list || []).map((i) => (i.id === next.id ? next : i)));
+
+  /** "Write a draft" and "Write another": the server writes, checks and saves it, or says why not. */
+  const writeDraft = async (item: NoteItem) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setRowBusy(item.id);
+    setRowError({ id: '', message: '' });
+    setNotice('');
+    try {
+      const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/draft`, { method: 'POST', body: '{}' });
+      if (epoch !== projectEpoch.current) return;
+      replaceItem(reply?.data as NoteItem);
+      setNotice(`A draft ${item.kind === 'reply' ? 'reply' : 'Note'} is waiting on the Approvals tab.`);
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setRowError({ id: item.id, message: `No draft written: ${errorText(err, 'unknown error')}` });
+    } finally {
+      setRowBusy('');
+    }
+  };
+
+  /** Approve / Reject on the Approvals tab — each answered by the server, never assumed. */
+  const decide = async (item: NoteItem, action: 'approve' | 'reject', text?: string) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setRowBusy(item.id);
+    setRowError({ id: '', message: '' });
+    setNotice('');
+    try {
+      const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/${action}`, {
+        method: 'POST',
+        body: JSON.stringify(action === 'approve' && text !== undefined ? { text } : {}),
+      });
+      if (epoch !== projectEpoch.current) return;
+      replaceItem(reply?.data as NoteItem);
+      setNotice(action === 'approve'
+        ? 'Approved. It will wait until posting is switched on.'
+        : 'Rejected. It stays on its row, marked rejected.');
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      const said = errorText(err, 'unknown error');
+      const lead = action === 'approve' ? 'Not approved' : 'Not rejected';
+      // The server's rule refusal already opens "Not approved:" — do not say it twice.
+      setRowError({ id: item.id, message: said.startsWith(lead) ? said : `${lead}: ${said}` });
+    } finally {
+      setRowBusy('');
+    }
+  };
+
   const saveText = async (item: NoteItem, text: string) => {
     const api = getApi();
     if (!api) return;
@@ -488,11 +690,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
     try {
       const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}`, {
         method: 'PATCH',
-        body: JSON.stringify({ ideaText: text }),
+        body: JSON.stringify({ [editingField]: text }),
       });
       if (epoch !== projectEpoch.current) return;
-      const next = reply?.data as NoteItem;
-      setItems((list) => (list || []).map((i) => (i.id === next.id ? next : i)));
+      replaceItem(reply?.data as NoteItem);
       setEditingId('');
       setNotice('Saved.');
     } catch (err) {
@@ -549,9 +750,11 @@ export default function SubstackNotesPanel(): React.ReactElement {
     setTab(next);
     setAddError('');
     setEditingId('');
+    setRowError({ id: '', message: '' });
   };
 
   const { ideas, engage } = splitItems(items || []);
+  const waiting = (items || []).filter(awaitsApproval);
   const topics = settings?.topics || [];
 
   const tabButton = (value: Tab, label: string) => (
@@ -566,16 +769,27 @@ export default function SubstackNotesPanel(): React.ReactElement {
     </button>
   );
 
+  // Only once the settings row has been read: before that there is nothing to
+  // say, and "has never checked" would be a guess.
+  const signIn = settings ? signInLine(settings.browserCheck) : null;
+
   return (
     <div ref={hostRef} className="substack-notes-panel">
-      <p className="substack-notes-signin" data-signin-state="unknown">
-        Mini's Substack sign-in: not checked yet — nothing reads it until the hourly sign-in check is built.
-      </p>
+      {signIn ? (
+        <p
+          className={`substack-notes-signin substack-notes-signin--${signIn.tone}`}
+          data-signin-state={signIn.state}
+          role={signIn.tone === 'alarm' ? 'alert' : 'status'}
+        >
+          {signIn.text}
+        </p>
+      ) : null}
 
       <div className="substack-notes-toolbar">
         <div className="substack-notes-tabs" role="tablist" aria-label="Substack Notes">
           {tabButton('ideas', ideas.length ? `Ideas (${ideas.length})` : 'Ideas')}
           {tabButton('engage', engage.length ? `Engage (${engage.length})` : 'Engage')}
+          {tabButton('approvals', waiting.length ? `Approvals (${waiting.length})` : 'Approvals')}
           {tabButton('settings', 'Settings')}
         </div>
         <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
@@ -650,7 +864,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                               {editError ? <p className="substack-notes-error" role="alert">{editError}</p> : null}
                             </>
                           ) : (
-                            <span className="substack-notes-text">{item.ideaText || item.contentTitle || item.contentUrl}</span>
+                            <>
+                              <span className="substack-notes-text">{item.ideaText || item.contentTitle || item.contentUrl}</span>
+                              {wordsLine(item) ? <span className="substack-notes-text substack-notes-words">{wordsLine(item)}</span> : null}
+                            </>
                           )}
                         </td>
                         <td>{SOURCE_LABELS[item.source] || item.source}</td>
@@ -658,9 +875,15 @@ export default function SubstackNotesPanel(): React.ReactElement {
                         <td>{statusLabel(item)}</td>
                         <td className="actions-col">
                           <div className="table-actions-row">
-                            <button type="button" className="btn" disabled={busy || editing} onClick={() => { setEditError(''); setEditingId(item.id); }}>Edit</button>
+                            {item.status === 'idea' ? (
+                              <button type="button" className="btn" disabled={busy || editing} onClick={() => void writeDraft(item)}>
+                                {busy ? 'Writing…' : 'Write a draft'}
+                              </button>
+                            ) : null}
+                            <button type="button" className="btn" disabled={busy || editing} onClick={() => startEdit(item, 'ideaText')}>Edit</button>
                             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void removeItem(item, 'idea')}>Delete</button>
                           </div>
+                          {rowError.id === item.id ? <p className="substack-notes-error" role="alert">{rowError.message}</p> : null}
                         </td>
                       </tr>
                     );
@@ -748,8 +971,8 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <>
                               <TextEditor
                                 id={`sn-edit-${item.id}`}
-                                label="What I want to say, roughly"
-                                initial={item.ideaText}
+                                label={editingField === 'targetText' ? 'Their Note, pasted' : 'What I want to say, roughly'}
+                                initial={editingField === 'targetText' ? item.targetText : item.ideaText}
                                 busy={busy}
                                 onSave={(text) => void saveText(item, text)}
                                 onCancel={() => setEditingId('')}
@@ -757,7 +980,15 @@ export default function SubstackNotesPanel(): React.ReactElement {
                               {editError ? <p className="substack-notes-error" role="alert">{editError}</p> : null}
                             </>
                           ) : item.kind === 'reply' ? (
-                            <span className="substack-notes-text">{item.ideaText || 'Nothing given — the agent will decide.'}</span>
+                            <>
+                              <span className="substack-notes-text">{item.ideaText || 'Nothing given — the agent will decide.'}</span>
+                              <span className="substack-notes-text substack-notes-their-note">
+                                {item.targetText
+                                  ? `Their Note: ${item.targetText}`
+                                  : 'Their Note: not read yet — Write a draft reads it from Substack, or paste it.'}
+                              </span>
+                              {wordsLine(item) ? <span className="substack-notes-text substack-notes-words">{wordsLine(item)}</span> : null}
+                            </>
                           ) : (
                             <span className="substack-notes-text">No words — a {action.toLowerCase()} is just the click.</span>
                           )}
@@ -765,11 +996,20 @@ export default function SubstackNotesPanel(): React.ReactElement {
                         <td>{statusLabel(item)}</td>
                         <td className="actions-col">
                           <div className="table-actions-row">
+                            {item.kind === 'reply' && item.status === 'idea' ? (
+                              <button type="button" className="btn" disabled={busy || editing} onClick={() => void writeDraft(item)}>
+                                {busy ? 'Writing…' : 'Write a draft'}
+                              </button>
+                            ) : null}
                             {item.kind === 'reply' ? (
-                              <button type="button" className="btn" disabled={busy || editing} onClick={() => { setEditError(''); setEditingId(item.id); }}>Edit</button>
+                              <>
+                                <button type="button" className="btn" disabled={busy || editing} onClick={() => startEdit(item, 'ideaText')}>Edit</button>
+                                <button type="button" className="btn" disabled={busy || editing} onClick={() => startEdit(item, 'targetText')}>Paste their Note</button>
+                              </>
                             ) : null}
                             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void removeItem(item, action.toLowerCase())}>Delete</button>
                           </div>
+                          {rowError.id === item.id ? <p className="substack-notes-error" role="alert">{rowError.message}</p> : null}
                         </td>
                       </tr>
                     );
@@ -778,6 +1018,26 @@ export default function SubstackNotesPanel(): React.ReactElement {
               </table>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {tab === 'approvals' ? (
+        <div className="substack-notes-tabpanel substack-notes-approvals" role="tabpanel" aria-label="Approvals">
+          {items && !waiting.length ? (
+            <p className="substack-notes-empty">Nothing waiting for approval. Click Write a draft on an idea, or add a Note to engage with.</p>
+          ) : null}
+          {!items ? <p className="substack-notes-empty">{loading ? 'Loading…' : 'The list has not been read, so nothing can be shown. Click Refresh.'}</p> : null}
+          {waiting.map((item) => (
+            <ApprovalCard
+              key={`${item.id}:${item.updatedAt}`}
+              item={item}
+              busy={rowBusy === item.id}
+              error={rowError.id === item.id ? rowError.message : ''}
+              onApprove={(text) => void decide(item, 'approve', text)}
+              onReject={() => void decide(item, 'reject')}
+              onRedraft={() => void writeDraft(item)}
+            />
+          ))}
         </div>
       ) : null}
 

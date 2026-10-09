@@ -25,6 +25,18 @@
   opacity: 0.75;
 }
 
+/* The Mini's sign-in reading (YouTube outreach 7/7): a bad or missing reading
+   is not muted, because it is the one line on the screen that needs acting on. */
+.substack-notes-signin--warn,
+.substack-notes-signin--alarm {
+  opacity: 1;
+  color: var(--status-warn-ink);
+}
+
+.substack-notes-signin--alarm {
+  font-weight: 600;
+}
+
 .substack-notes-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -271,4 +283,30 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/* ── Approvals (3/7) ────────────────────────────────────────────────── */
+
+.substack-notes-draft-text {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.substack-notes-approval .substack-notes-field-help {
+  margin: 0;
+}
+
+.substack-notes-their-note {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--muted);
+}
+
+/* The words a drafted Note or reply will post, on its Ideas / Engage row. */
+.substack-notes-words {
+  display: block;
+  margin-top: var(--space-2);
 }
