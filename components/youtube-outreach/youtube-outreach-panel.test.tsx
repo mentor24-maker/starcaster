@@ -13,6 +13,10 @@ import YoutubeOutreachPanel, {
   withScheme,
   followedSummary,
   postedStatusText,
+  miniStatus,
+  agoText,
+  MINI_STALE_MS,
+  type BrowserCheck,
   type OutreachComment,
   type OutreachSettings,
   type Target,
@@ -677,6 +681,65 @@ describe("what the Mini posted (5/7)", () => {
     await click(button("Approvals"));
     expect(text()).toContain("Nothing has been posted yet.");
     expect(postedStatusText({ status: "posting", needsHandCheck: false } as OutreachComment)).toBe("Being posted now…");
+  });
+});
+
+describe("the Mini's status banner (7/7)", () => {
+  const NOW = Date.parse("2026-10-08T18:00:00Z");
+  const SIGNED_OUT = "YouTube on the Mini is signed out of Dane of Earth — open Screen Sharing to the Mini and sign in again in the dane-of-earth browser.";
+  function check(overrides: Partial<BrowserCheck>): BrowserCheck {
+    return { state: "signed_in", message: "Mini: connected to YouTube as Dane of Earth.", checkedAt: "2026-10-08T17:48:00Z", signedInAt: "2026-10-08T17:48:00Z", ...overrides };
+  }
+  function posted(at: string): OutreachComment {
+    return { status: "posted", postedAt: at } as OutreachComment;
+  }
+
+  it("connected: says who, when it last checked, and when it last posted", () => {
+    const s = miniStatus(check({}), [posted("2026-10-07T21:12:00Z"), posted("2026-10-06T10:00:00Z")], NOW);
+    expect(s.tone).toBe("ok");
+    expect(s.lines[0]).toBe("Mini: connected to YouTube as Dane of Earth — last checked 12 minutes ago.");
+    expect(s.lines[1]).toMatch(/^Last comment posted Oct 7/);
+  });
+
+  it("nothing posted and broken never read the same", () => {
+    const quiet = miniStatus(check({}), [], NOW);
+    expect(quiet.tone).toBe("ok");
+    expect(quiet.lines[1]).toBe("No comment has been posted yet.");
+    const out = miniStatus(check({ state: "signed_out", message: SIGNED_OUT, signedInAt: "2026-10-08T15:00:00Z" }), [], NOW);
+    expect(out.tone).toBe("alarm");
+    expect(out.lines[0]).toContain(SIGNED_OUT.replace(/\.$/, ""));
+    expect(out.lines[0]).toContain("Checked 12 minutes ago.");
+    expect(out.lines[0]).toContain("Last signed in: ");
+  });
+
+  it("a check that has stopped coming is a warning, even if the last one was good", () => {
+    const at = new Date(NOW - MINI_STALE_MS - 60000).toISOString();
+    const s = miniStatus(check({ checkedAt: at }), [], NOW);
+    expect(s.tone).toBe("warn");
+    expect(s.lines[0]).toContain("the posting worker may have stopped");
+  });
+
+  it("never checked says so, rather than reading as fine", () => {
+    const s = miniStatus({ state: "", message: "", checkedAt: null, signedInAt: null }, null, NOW);
+    expect(s.tone).toBe("warn");
+    expect(s.lines).toEqual(["The Mini has not checked its YouTube sign-in yet, so nothing here says whether posting works — the posting worker on the Mini may not be running."]);
+    expect(miniStatus(undefined, null, NOW).tone).toBe("warn");
+  });
+
+  it("says how long ago in words", () => {
+    expect(agoText("2026-10-08T17:59:40Z", NOW)).toBe("just now");
+    expect(agoText("2026-10-08T17:59:00Z", NOW)).toBe("1 minute ago");
+    expect(agoText("2026-10-08T15:00:00Z", NOW)).toBe("3 hours ago");
+    expect(agoText("2026-10-05T18:00:00Z", NOW)).toBe("3 days ago");
+  });
+
+  it("shows the banner at the top of the screen, as an alert when signed out", async () => {
+    stores.proj_doe.settings = { ...stores.proj_doe.settings, browserCheck: check({ state: "signed_out", message: SIGNED_OUT, checkedAt: new Date().toISOString() }) };
+    await mount();
+    const banner = container!.querySelector(".yt-outreach-mini")!;
+    expect(banner.getAttribute("role")).toBe("alert");
+    expect(banner.textContent).toContain("signed out of Dane of Earth");
+    expect(banner.textContent).toContain("No comment has been posted yet.");
   });
 });
 

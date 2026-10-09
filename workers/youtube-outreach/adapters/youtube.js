@@ -18,6 +18,9 @@
  *                                    { ok: false, uncertain?, error }
  *   verify(item, url)                { verdict: 'proven' | 'refuted' | 'cannot-tell', reason }
  *   keepScreenshot(item, screenshot) { url } | { note }
+ *   browserChecks()                  [{ site, accountKey, profile, who, record(reading) }]
+ *                                    — one per account it posts with, for the
+ *                                    hourly sign-in check (../health.js, 7/7)
  *
  * PROOF IS TAKEN FROM YOUTUBE, NOT FROM THE BROWSER AGENT. OpenClaw's answer
  * is a claim; on 2026-07-19 an agent claimed a Facebook post succeeded and
@@ -316,6 +319,19 @@ function createYoutubeAdapter(options = {}) {
         };
       }
       return { verdict: 'proven', reason: '' };
+    },
+
+    // The hourly sign-in check (7/7, 86bcda6dt): one entry per account this
+    // adapter can post with, each writing its reading onto that account's
+    // settings row, where the screen reads it.
+    browserChecks() {
+      return Object.keys(profiles).map((accountKey) => ({
+        site: 'youtube',
+        accountKey,
+        profile: profiles[accountKey],
+        who: accountNames[accountKey] || accountKey,
+        record: (reading) => deps.targets.recordBrowserCheck(reading, scope, { accountKey }),
+      }));
     },
 
     async keepScreenshot(item, screenshot) {

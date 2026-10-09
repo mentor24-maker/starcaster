@@ -38,6 +38,11 @@
  *      A link nobody could check is left `posting` for a person, because
  *      calling it failed could hide a comment that is live.
  *
+ * AND ONCE AN HOUR, IT LOOKS AT ITS OWN BROWSER (7/7, task 86bcda6dt):
+ * is OpenClaw answering, and is each account's profile still signed in as
+ * the right account? The answer goes onto the account's settings row for the
+ * screen, and a bad one goes to the bus by name (./health.js).
+ *
  * NO TIMERS AT MODULE SCOPE (DOCTRINE 5.2). `runPass` is what the tests drive
  * and schedules nothing; `runPoster` is the loop and runs only when called.
  */
@@ -267,6 +272,21 @@ function buildAdapters(env = process.env, list = ADAPTERS) {
   return { adapters: built, problems };
 }
 
+/** The real hourly check: every adapter's accounts, through OpenClaw, alarms to the bus. */
+function defaultHealthCheck(node) {
+  const health = require('./health.js');
+  // The alarm names the machine the way the roll call does ("mac-mini"), not
+  // by its hostname, which nobody reading the bus would recognise.
+  let name = '';
+  try { name = require('../../lib/nodeRoles.js').thisNode().name || ''; } catch { /* hostname below */ }
+  const deps = health.liveDeps({ node: name || node, ledgerFile: health.defaultLedgerFile() });
+  return async (adapters) => {
+    const checks = adapters.flatMap((a) => (typeof a.browserChecks === 'function' ? a.browserChecks() : []));
+    if (!checks.length) return '';
+    return health.formatHealth(await health.runHealthCheck({ checks, deps }));
+  };
+}
+
 /**
  * The loop. Runs until SIGTERM/SIGINT, finishing the pass in flight first —
  * stopping mid-post would leave a row `posting` for a person to check, which
@@ -283,6 +303,10 @@ async function runPoster(options = {}) {
     write = (line) => process.stdout.write(`${line}\n`),
     recordBeat = null,
     node = os.hostname(),
+    healthEveryMs = require('./health.js').CHECK_EVERY_MS,
+    // (adapters) => Promise<string|''>: one sign-in check, returning its log
+    // lines. Injectable so the loop's tests never reach a browser or the bus.
+    checkHealth = null,
   } = options;
 
   let adapters = options.adapters;
@@ -304,7 +328,10 @@ async function runPoster(options = {}) {
   }
   write(`[outreach-poster] starting — sites: ${adapters.map((a) => a.name).join(', ')}; a pass every ${Math.round(passEveryMs / 1000)}s`);
 
+  const health = checkHealth || defaultHealthCheck(node);
+
   let lastBeat = 0;
+  let lastHealth = 0;
   let lastLine = '';
   let passes = 0;
   while (!stopping) {
@@ -328,6 +355,19 @@ async function runPoster(options = {}) {
         beat({ role: ROLE, node, at: new Date(beatAt).toISOString() });
       } catch (err) {
         write(`[outreach-poster] could not record the heartbeat: ${err.message} — posting continues`);
+      }
+    }
+
+    // THE HOURLY LOOK AT THE BROWSER. Runs on the first pass too, so a worker
+    // started against a signed-out browser says so within minutes, not an hour.
+    const healthAt = clock();
+    if (!lastHealth || healthAt - lastHealth >= healthEveryMs) {
+      lastHealth = healthAt;
+      try {
+        const lines = await health(adapters);
+        if (lines) write(lines);
+      } catch (err) {
+        write(`[outreach-health] the sign-in check could not run: ${err.message} — posting continues`);
       }
     }
 
