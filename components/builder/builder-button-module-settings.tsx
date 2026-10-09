@@ -16,7 +16,7 @@ import {
   paddingFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
-import { BuilderThemeColorField, type BuilderThemePalette } from "./builder-theme-color-field";
+import type { BuilderThemePalette } from "./builder-theme-color-field";
 import {
   applyButtonBackgroundSettings,
   getButtonBackgroundSettings,
@@ -85,11 +85,11 @@ const BUTTON_SIZE_PRESETS: Record<string, string> = {
  * border width/style → radius. Placement runs alignment → padding → margins.
  *
  * Not converted to `control: "theme-color"` (A2's empty-means-theme): the
- * three bespoke pickers each carry state a flat hex cannot — background
- * mode + opacity, text colour + hover in one popup, border colour's
- * `transparent`, which is a real value the Anchor variant depends on.
- * Rewriting them to be theme-aware is its own piece of work; wiring them
- * to a control that cannot store their values would have been data loss.
+ * two bespoke pickers each carry state a flat hex cannot — background mode
+ * + opacity, and border colour's `transparent`, which is a real value the
+ * Anchor variant depends on. Wiring them to a control that cannot store
+ * their values would have been data loss. Hover Fill IS a flat hex, so it
+ * became theme-aware on 2026-10-09 along with the Frame axis coming back.
  */
 export function BuilderButtonModuleSettings({
   module,
@@ -374,22 +374,51 @@ export function BuilderButtonModuleSettings({
             // would show 0 while the page renders the pair it was saved with.
             ...marginFields("getModuleOuterSpacingStyle", 160)
           ],
+        ]
+      },
+      {
+        title: "Frame",
+        strips: [
           [
+            // D9 rung 1 — the fill IS the button. This is the control PR #183
+            // (2026-08-09) dropped while rewriting the spacing rows: Frame was
+            // folded into Placement and the picker went with it, while the
+            // import, its handler and the renderer all stayed — so a page
+            // saved before August kept its fill and nobody could change one
+            // (task 86bcg65zu). Every mode getButtonBackgroundSettings reads is
+            // here: colour, gradient, image (gallery + upload where the host
+            // wires them; a table cell does not, and the URL field still
+            // works there), style, and opacity.
+            {
+              key: "buttonBackgroundMode",
+              label: "Background",
+              width: "color",
+              control: "custom",
+              rendersVia: "getButtonBackgroundSettings",
+              render: (ctx) => (
+                <BuilderButtonBackgroundPicker
+                  background={getButtonBackgroundSettings(ctx.settings)}
+                  onChange={updateButtonBackground}
+                  onChooseImage={onOpenButtonBackgroundGallery}
+                  onUploadImage={onUploadButtonBackgroundMedia}
+                  themeColors={ctx.themeColors}
+                />
+              )
+            }
+          ],
+          [
+            // A2: empty reads "theme" (--lp-button-hover) with an X to clear,
+            // exactly like Text Color. It used to pre-fill #0f4f8f, which the
+            // operator could change but never clear — a theme-aware renderer
+            // behind a control that could not hand the choice back.
             {
               key: "buttonHoverColor",
               label: "Hover Fill",
               width: "color",
-              control: "custom",
-              rendersVia: "getButtonModuleStyle",
-              render: (ctx) => (
-                <BuilderThemeColorField
-                  dialogLabel="Button hover color"
-                  fallback="#0f4f8f"
-                  themeColors={ctx.themeColors}
-                  value={ctx.settings.buttonHoverColor ?? "#0f4f8f"}
-                  onChange={(color) => ctx.set("buttonHoverColor", color)}
-                />
-              )
+              control: "theme-color",
+              dialogLabel: "Button hover color",
+              themeDefault: "#0f4f8f",
+              rendersVia: "getButtonModuleStyle"
             }
           ],
           // The border, in the order the A0 sweep settled on everywhere else:
