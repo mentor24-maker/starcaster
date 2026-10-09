@@ -38,6 +38,11 @@
  *      A link nobody could check is left `posting` for a person, because
  *      calling it failed could hide a comment that is live.
  *
+ * AND ONCE AN HOUR, IT LOOKS AT ITS OWN BROWSER (7/7, task 86bcda6dt):
+ * is OpenClaw answering, and is each account's profile still signed in as
+ * the right account? The answer goes onto the account's settings row for the
+ * screen, and a bad one goes to the bus by name (./health.js).
+ *
  * NO TIMERS AT MODULE SCOPE (DOCTRINE 5.2). `runPass` is what the tests drive
  * and schedules nothing; `runPoster` is the loop and runs only when called.
  */
@@ -288,6 +293,87 @@ function buildAdapters(env = process.env, list = ADAPTERS) {
 }
 
 /**
+ * SIGN-IN-ONLY CHECKS: accounts the hourly check watches whether or not an
+ * adapter posts with them yet (review round 1 of 86bcda6dt). Substack is here
+ * because Substack Notes 6/7, which adds its posting adapter, defers its
+ * sign-in alarm to this ticket — so waiting for an adapter would mean nothing
+ * ever checks Substack. When 6/7 lands, its adapter's own browserChecks() entry
+ * for the same site and account replaces this one (browserChecksFor), so the
+ * browser is never asked twice. Another account is one more entry.
+ *
+ * Each builder returns a list of checks or throws a sentence saying what is
+ * missing; a site that cannot be set up is named in the log and the others
+ * still run.
+ */
+const SIGN_IN_CHECKS = [
+  {
+    name: 'substack',
+    build: (env) => {
+      // Same project as YouTube outreach unless told otherwise: both are
+      // Dane of Earth's.
+      const projectId = text(env.SUBSTACK_NOTES_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID);
+      if (!projectId) throw new Error('no project to save the Substack reading on (SUBSTACK_NOTES_PROJECT_ID or YOUTUBE_OUTREACH_PROJECT_ID)');
+      const store = require('../../lib/substackNotesStore');
+      const accountKey = store.DEFAULT_ACCOUNT;
+      return [{
+        site: 'substack',
+        accountKey,
+        profile: 'dane-of-earth',
+        who: require('../../lib/openclawSignIn.js').SITES.substack.expected,
+        record: (reading) => store.recordBrowserCheck(reading, { projectId }, { accountKey }),
+      }];
+    },
+  },
+];
+
+/**
+ * Every check the hourly pass runs: each adapter's accounts, then the
+ * sign-in-only list. One per site and account — an adapter's own entry wins,
+ * because it writes the row the posting screen reads.
+ */
+function browserChecksFor(adapters, extra = []) {
+  const seen = new Set();
+  const out = [];
+  const fromAdapters = adapters.flatMap((a) => (typeof a.browserChecks === 'function' ? a.browserChecks() : []));
+  for (const check of [...fromAdapters, ...extra]) {
+    const key = `${check.site}:${check.accountKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(check);
+  }
+  return out;
+}
+
+/** Build the sign-in-only checks; a site that cannot be set up becomes a problem line. */
+function buildSignInChecks(env = process.env, list = SIGN_IN_CHECKS) {
+  const checks = [];
+  const problems = [];
+  for (const entry of list) {
+    try {
+      checks.push(...entry.build(env));
+    } catch (err) {
+      problems.push(`${entry.name}: ${err.message}`);
+    }
+  }
+  return { checks, problems };
+}
+
+/** The real hourly check: every account, through OpenClaw, alarms to the bus. */
+function defaultHealthCheck(node, extraChecks = []) {
+  const health = require('./health.js');
+  // The alarm names the machine the way the roll call does ("mac-mini"), not
+  // by its hostname, which nobody reading the bus would recognise.
+  let name = '';
+  try { name = require('../../lib/nodeRoles.js').thisNode().name || ''; } catch { /* hostname below */ }
+  const deps = health.liveDeps({ node: name || node, ledgerFile: health.defaultLedgerFile() });
+  return async (adapters) => {
+    const checks = browserChecksFor(adapters, extraChecks);
+    if (!checks.length) return '';
+    return health.formatHealth(await health.runHealthCheck({ checks, deps }));
+  };
+}
+
+/**
  * The loop. Runs until SIGTERM/SIGINT, finishing the pass in flight first —
  * stopping mid-post would leave a row `posting` for a person to check, which
  * is safe but avoidable.
@@ -303,6 +389,10 @@ async function runPoster(options = {}) {
     write = (line) => process.stdout.write(`${line}\n`),
     recordBeat = null,
     node = os.hostname(),
+    healthEveryMs = require('./health.js').CHECK_EVERY_MS,
+    // (adapters) => Promise<string|''>: one sign-in check, returning its log
+    // lines. Injectable so the loop's tests never reach a browser or the bus.
+    checkHealth = null,
   } = options;
 
   let adapters = options.adapters;
@@ -324,7 +414,15 @@ async function runPoster(options = {}) {
   }
   write(`[outreach-poster] starting — sites: ${adapters.map((a) => a.name).join(', ')}; a pass every ${Math.round(passEveryMs / 1000)}s`);
 
+  let health = checkHealth;
+  if (!health) {
+    const signInOnly = buildSignInChecks(env);
+    for (const problem of signInOnly.problems) write(`[outreach-health] a sign-in check is OFF — ${problem}`);
+    health = defaultHealthCheck(node, signInOnly.checks);
+  }
+
   let lastBeat = 0;
+  let lastHealth = 0;
   let lastLine = '';
   let passes = 0;
   while (!stopping) {
@@ -351,6 +449,19 @@ async function runPoster(options = {}) {
       }
     }
 
+    // THE HOURLY LOOK AT THE BROWSER. Runs on the first pass too, so a worker
+    // started against a signed-out browser says so within minutes, not an hour.
+    const healthAt = clock();
+    if (!lastHealth || healthAt - lastHealth >= healthEveryMs) {
+      lastHealth = healthAt;
+      try {
+        const lines = await health(adapters);
+        if (lines) write(lines);
+      } catch (err) {
+        write(`[outreach-health] the sign-in check could not run: ${err.message} — posting continues`);
+      }
+    }
+
     passes += 1;
     if (stopAfterPasses && passes >= stopAfterPasses) break;
     if (!stopping) await sleep(passEveryMs);
@@ -373,6 +484,9 @@ module.exports = {
   configureOpenClaw,
   buildAdapters,
   ADAPTERS,
+  SIGN_IN_CHECKS,
+  buildSignInChecks,
+  browserChecksFor,
   ROLE,
   DEFAULT_PASS_EVERY_MS,
 };

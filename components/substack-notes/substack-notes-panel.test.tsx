@@ -7,6 +7,7 @@ import SubstackNotesPanel, {
   plainError,
   postedItems,
   postedStatusText,
+  signInLine,
   settingsPatchFromForm,
   settingsToForm,
   splitItems,
@@ -593,5 +594,56 @@ describe("Substack Notes helpers", () => {
 
   it("swaps code field names for the labels on screen", () => {
     expect(plainError("maxActionsPerDay must be between 0 and 50")).toBe("Most actions per day must be between 0 and 50");
+  });
+});
+
+describe("the Mini's Substack sign-in line (YouTube outreach 7/7)", () => {
+  const NOW = Date.parse("2026-10-08T18:00:00Z");
+  const SIGNED_OUT = "Substack on the Mini is signed out of Dane of Earth. Sign in again in the dane-of-earth browser.";
+  const good = { state: "signed_in" as const, message: "Mini: signed in to Substack as Dane of Earth.", checkedAt: "2026-10-08T17:48:00Z", signedInAt: "2026-10-08T17:48:00Z" };
+
+  it("signed in: says who and when it last checked, in the words the Notes ticket asked for", () => {
+    const line = signInLine(good, NOW);
+    expect(line.tone).toBe("ok");
+    expect(line.text).toBe("Mini: signed in to Substack as Dane of Earth, checked 12 minutes ago.");
+  });
+
+  it("signed out: the bus sentence, when it checked, and when it was last signed in", () => {
+    const line = signInLine({ ...good, state: "signed_out", message: SIGNED_OUT, signedInAt: "2026-10-08T15:00:00Z" }, NOW);
+    expect(line.tone).toBe("alarm");
+    expect(line.text).toContain(SIGNED_OUT.replace(/\.$/, ""));
+    expect(line.text).toContain("Checked 12 minutes ago.");
+    expect(line.text).toContain("Last signed in: ");
+  });
+
+  it("never checked says the Mini has not checked yet, rather than reading as fine", () => {
+    const line = signInLine({ state: "", message: "", checkedAt: null, signedInAt: null }, NOW);
+    expect(line.tone).toBe("warn");
+    expect(line.state).toBe("unknown");
+    expect(line.text).toMatch(/^Mini: has not checked its Substack sign-in yet/);
+    expect(signInLine(undefined, NOW).state).toBe("unknown");
+  });
+
+  it("a reading that has stopped coming is a warning, even if the last one was good", () => {
+    const line = signInLine({ ...good, checkedAt: "2026-10-08T14:00:00Z" }, NOW);
+    expect(line.tone).toBe("warn");
+    expect(line.text).toContain("the posting worker may have stopped");
+  });
+
+  it("shows the saved reading at the top of the screen, as an alert when signed out", async () => {
+    stores.proj_doe.settings = {
+      ...defaults(),
+      browserCheck: { ...good, state: "signed_out", message: SIGNED_OUT, checkedAt: new Date().toISOString() },
+    };
+    await mount();
+    const line = el<HTMLParagraphElement>(".substack-notes-signin");
+    expect(line.getAttribute("role")).toBe("alert");
+    expect(line.getAttribute("data-signin-state")).toBe("signed_out");
+    expect(line.textContent).toContain("signed out of Dane of Earth");
+  });
+
+  it("a row the Mini has never written says so on screen", async () => {
+    await mount();
+    expect(el(".substack-notes-signin").textContent).toMatch(/has not checked its Substack sign-in yet/);
   });
 });
