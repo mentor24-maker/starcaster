@@ -13,7 +13,10 @@ line per place: how many files and how much space, how many already have a
 copy where they belong, and how many are the **only copy** anywhere. The
 next ticket deletes MacBook copies from this report, so those only-copy
 files are the ones it must never touch. Read-only: nothing is moved or
-deleted.
+deleted. The first real run happens on the MacBook as part of that cleanup
+ticket (Dane's call, 9 October), because the MacBook was asleep every time
+a pass tried to reach it.
+
 ## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
 
 The live site reaches the YouTube download helper on the Mac Mini through
