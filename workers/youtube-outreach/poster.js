@@ -15,8 +15,8 @@
  * (epic substack-notes), and the Mini should run one posting worker, not one
  * per site. So this file owns what every site shares — the loop, the beat, the
  * three rules below — and each site is an adapter in ./adapters/ (the contract
- * is written at the top of ./adapters/youtube.js). Substack Notes 6/7 adds a
- * file there and one line in ADAPTERS; it does not touch this one.
+ * is written at the top of ./adapters/youtube.js). Substack Notes 6/7 added
+ * ./adapters/substack.js and its line in ADAPTERS (task 86bcet7qr).
  *
  * THE THREE RULES THIS FILE OWNS, so no adapter can loosen them:
  *
@@ -90,7 +90,9 @@ async function settle(adapter, item, attempt) {
     return { outcome: 'failed', why, write: res };
   }
 
-  const check = await adapter.verify(item, attempt.url);
+  // The whole answer goes along: a like or a restack has no link of its own,
+  // and is proven from the page state the browser reported (adapters/substack.js).
+  const check = await adapter.verify(item, attempt.url, attempt);
   if (check.verdict === 'proven') {
     const res = await adapter.markPosted(item, { url: attempt.url, ...evidence });
     return { outcome: 'posted', why: '', write: res };
@@ -240,7 +242,7 @@ async function readProjectTimeZone(projectId) {
 }
 
 /**
- * THE ADAPTER LIST. One entry per site. Substack Notes 6/7 adds its line here.
+ * THE ADAPTER LIST. One entry per site. YouTube, then Substack (6/7).
  * Each builder returns an adapter or throws a sentence saying what is missing.
  */
 const ADAPTERS = [
@@ -249,6 +251,15 @@ const ADAPTERS = [
     build: (env) => require('./adapters/youtube.js').createYoutubeAdapter({
       projectId: text(env.YOUTUBE_OUTREACH_PROJECT_ID),
       expectedChannelId: text(env.YOUTUBE_OUTREACH_CHANNEL_ID),
+      projectTimeZone: readProjectTimeZone,
+    }),
+  },
+  {
+    name: 'substack',
+    // Dane of Earth is one project on both sites, so the YouTube setting serves
+    // when no Substack one is given; the installer needs nothing new.
+    build: (env) => require('./adapters/substack.js').createSubstackAdapter({
+      projectId: text(env.SUBSTACK_NOTES_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID),
       projectTimeZone: readProjectTimeZone,
     }),
   },

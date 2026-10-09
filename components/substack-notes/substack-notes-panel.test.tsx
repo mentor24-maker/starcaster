@@ -5,11 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubstackNotesPanel, {
   PROJECT_SWITCH_EVENT,
   plainError,
+  postedItems,
+  postedStatusText,
   settingsPatchFromForm,
   settingsToForm,
   splitItems,
   splitLines,
   statusLabel,
+  waitLine,
   withScheme,
   type NoteItem,
   type NotesSettings,
@@ -243,10 +246,10 @@ afterEach(() => {
 });
 
 describe("Substack Notes screen", () => {
-  it("opens on four tabs and says why each list is empty", async () => {
+  it("opens on five tabs and says why each list is empty", async () => {
     await mount();
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
-    expect(tabs).toEqual(["Ideas", "Engage", "Approvals", "Settings"]);
+    expect(tabs).toEqual(["Ideas", "Engage", "Approvals", "Posted", "Settings"]);
     expect(text()).toContain("No ideas yet. Type one above and click Add.");
     expect(text()).toContain("No topics yet.");
     await click(button("Engage"));
@@ -502,7 +505,65 @@ describe("Substack Notes approvals (3/7)", () => {
   });
 });
 
+describe("Substack Notes posting (6/7)", () => {
+  it("says why Posted is empty", async () => {
+    await mount();
+    await click(button("Posted"));
+    expect(text()).toContain("Nothing has been posted yet. Approved Notes, replies, restacks and likes appear here once the Mini has done them.");
+  });
+
+  it("lists what went out with its link and screenshot, what failed and why, and a row to check by hand", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "note", status: "posted", finalText: "Winter skies are the clearest.", postedUrl: "https://substack.com/@daneofearth/note/c-901", screenshotUrl: "https://blob.example/note.png", postedAt: "2026-10-09T15:00:00Z" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "failed", error: "OpenClaw said it clicked, but the page it reported back does not show the Note liked." }),
+      item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-3", status: "posting", finalText: "Same here.", needsHandCheck: true, postingStartedAt: "2026-10-09T14:00:00Z" }),
+      item({ kind: "note", status: "approved", finalText: "Not yet." }),
+    ];
+    const [note, like, reply, waiting] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    await click(button("Posted (3)"));
+    const posted = el<HTMLElement>(`li[data-item-id="${note}"]`);
+    expect(posted.textContent).toContain("Note posted");
+    expect(posted.textContent).toContain("Winter skies are the clearest.");
+    expect(posted.querySelector("img")?.getAttribute("src")).toBe("https://blob.example/note.png");
+    expect(posted.querySelector('a.btn')?.getAttribute("href")).toBe("https://substack.com/@daneofearth/note/c-901");
+    const failed = el<HTMLElement>(`li[data-item-id="${like}"]`);
+    expect(failed.textContent).toContain("Like failed");
+    expect(failed.textContent).toContain("does not show the Note liked");
+    const handCheck = el<HTMLElement>(`li[data-item-id="${reply}"]`);
+    expect(handCheck.className).toContain("is-hand-check");
+    expect(handCheck.textContent).toContain("check this one by hand — it will not be tried again");
+    expect(handCheck.querySelector('a.btn')?.getAttribute("href")).toBe("https://substack.com/@a/note/c-3");
+    expect(container!.querySelector(`li[data-item-id="${waiting}"]`)).toBeNull();
+  });
+
+  it("shows on an approved row why it is still waiting, in the worker's words", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "note", status: "approved", ideaText: "Stars", finalText: "Stars.", waitReason: "Waiting for tomorrow's allowance — 1 of 1 action a day already posted today (UTC).", waitCheckedAt: "2026-10-09T15:00:00Z" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "approved" }),
+    ];
+    const [note, like] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    expect(row(note).querySelector(".substack-notes-wait")?.textContent).toContain("Waiting for tomorrow's allowance — 1 of 1 action a day");
+    await click(button("Engage"));
+    expect(row(like).querySelector(".substack-notes-wait")?.textContent).toContain("The Mini takes it at its next pass");
+  });
+});
+
 describe("Substack Notes helpers", () => {
+  it("names what the Mini did on each Posted row", () => {
+    expect(postedStatusText({ kind: "like", status: "posted", postedAt: "" })).toBe("Liked");
+    expect(postedStatusText({ kind: "restack", status: "failed" })).toBe("Restack failed");
+    expect(postedStatusText({ kind: "note", status: "posting", needsHandCheck: false })).toBe("Note: being done now…");
+    expect(waitLine({ status: "draft", waitReason: "x" })).toBe("");
+    const list = postedItems([
+      item({ status: "posted", postedAt: "2026-10-01T00:00:00Z" }),
+      item({ status: "approved" }),
+      item({ status: "failed", updatedAt: "2026-10-05T00:00:00Z" }),
+    ]);
+    expect(list.map((i) => i.status)).toEqual(["failed", "posted"]);
+  });
+
   it("adds https:// to a pasted link without one", () => {
     expect(withScheme("substack.com/@a/note/c-1")).toBe("https://substack.com/@a/note/c-1");
     expect(withScheme("https://substack.com/@a/note/c-1")).toBe("https://substack.com/@a/note/c-1");

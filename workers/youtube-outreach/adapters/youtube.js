@@ -16,7 +16,8 @@
  *   markPosting / markPosted / markFailed / flagForHandCheck   envelopes
  *   post(item)                       ask OpenClaw; { ok, url, said, screenshot } |
  *                                    { ok: false, uncertain?, error }
- *   verify(item, url)                { verdict: 'proven' | 'refuted' | 'cannot-tell', reason }
+ *   verify(item, url, attempt)       { verdict: 'proven' | 'refuted' | 'cannot-tell', reason }
+ *                                    (attempt = post()'s whole answer; Substack's likes need it)
  *   keepScreenshot(item, screenshot) { url } | { note }
  *
  * PROOF IS TAKEN FROM YOUTUBE, NOT FROM THE BROWSER AGENT. OpenClaw's answer
