@@ -52,6 +52,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/engage/substack-notes/watch-content",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/support/bug-reports/sweep-orphans",
       "schedule": "17 4 * * *"
     }
