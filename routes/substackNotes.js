@@ -19,6 +19,11 @@
  *   POST   /api/engage/substack-notes/items/:id/approve   { text? }  (edited wording)
  *   POST   /api/engage/substack-notes/items/:id/reject
  *
+ * Topic drafts on a timer (5/7, task 86bcet77n — lib/substackNotesRunDue.js):
+ *
+ *   GET|POST /api/engage/substack-notes/run-due          Vercel Cron only; drafts from topics
+ *   GET      /api/engage/substack-notes/topic-schedule   ?account=  "Next topic draft: …" or why not
+ *
  * `account` defaults to dane_of_earth. Auth and project scope are decided
  * centrally in routes/index.js; /api/engage is closed to a client's own site
  * admin (lib/projectAdminApiAuth.js), and this sits under it on purpose.
@@ -26,6 +31,8 @@
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/substackNotesStore');
+const runDue = require('../lib/substackNotesRunDue');
+const { getProjectTimezoneForUser } = require('../lib/projectsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 const PREFIX = '/api/engage/substack-notes';
@@ -83,6 +90,39 @@ async function handle(req, res, pathname, method) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
   const scope = requestScope(req);
   const urlObj = getUrlObj(req);
+
+  // CRON ONLY, like YouTube outreach's pass: it reads every project's settings
+  // at once, so a session is deliberately not enough. `req.cronPublish` is set
+  // in routes/index.js only for a CRON_PATHS path carrying Vercel's cron
+  // header or the CRON_SECRET bearer token. Vercel's scheduler sends GET.
+  if (pathname === `${PREFIX}/run-due`) {
+    if (method !== 'GET' && method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'The Substack Notes topic-drafting pass runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const result = await runDue.runDue();
+    if (!result.ok) {
+      console.error(`[substack-notes] run-due REFUSED: ${result.error}`);
+      return reply(res, result);
+    }
+    const { accounts, drafted, idle, failed, skippedForPassLimit } = result.data;
+    // Logged on every run, the quiet ones too: "nothing was due" and "never
+    // ran" must not look the same in the log.
+    console.log(`[substack-notes] run-due accounts=${accounts} drafted=${drafted.length} idle=${idle.length} `
+      + `left_for_next_pass=${skippedForPassLimit.length} failed=${failed.length}`);
+    for (const item of failed) {
+      console.error(`[substack-notes] run-due FAILED project=${item.projectId} account=${item.accountKey} topic=${JSON.stringify(item.topic || '-')}: ${item.error}`);
+    }
+    return reply(res, result);
+  }
+
+  if (pathname === `${PREFIX}/topic-schedule`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await runDue.describeTopicSchedule(scope, {
+      accountKey: listOptions(urlObj).accountKey,
+      projectTimeZone: getProjectTimezoneForUser,
+    }));
+  }
 
   if (pathname === `${PREFIX}/items`) {
     if (method === 'GET') {
