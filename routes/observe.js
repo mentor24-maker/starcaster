@@ -136,50 +136,59 @@ async function pingGemini(req, res) {
 }
 
 /**
- * Ping the OpenClaw browser automation worker root endpoint or healthcheck.
+ * How OpenClaw on the Mini is doing, as the Mini last reported it.
+ *
+ * This used to fetch the gateway's address from the server — `localhost:1337`
+ * by default, with an `x-api-key` header the gateway does not accept (it wants
+ * `Authorization: Bearer`). It could never succeed: the gateway listens on the
+ * Mini's 127.0.0.1 only, and production runs on Vercel, so the card read
+ * "completely offline" whatever the Mini was doing — a probe that cannot
+ * succeed reads as an outage (YouTube outreach 7/7, task 86bcda6dt).
+ *
+ * So it reports the Mini's OWN reading instead: once an hour the posting
+ * worker checks the gateway and the browser's sign-in and writes the answer
+ * onto the active project's outreach settings row. A reading older than
+ * OPENCLAW_READING_STALE_MS is reported as stale, because the worker that
+ * writes it has stopped, and that is a finding in itself.
  */
+const OPENCLAW_READING_STALE_MS = 2 * 60 * 60 * 1000;
+
+function openclawCardFromCheck(check, now = Date.now()) {
+  const at = Date.parse(check?.checkedAt || '');
+  if (!check?.state || !Number.isFinite(at)) {
+    return {
+      status: 'error',
+      message: 'No reading from the Mini yet: the YouTube outreach worker has never checked OpenClaw for this project.',
+    };
+  }
+  const when = new Date(at).toISOString();
+  if (now - at > OPENCLAW_READING_STALE_MS) {
+    return {
+      status: 'error',
+      message: `The Mini has not reported since ${when} — the YouTube outreach worker may be stopped. Last reading: ${check.message}`,
+      diagnostics: { state: check.state, checkedAt: when },
+    };
+  }
+  return {
+    status: check.state === 'signed_in' ? 'healthy' : 'error',
+    message: `${check.message} (checked ${when})`,
+    diagnostics: { state: check.state, checkedAt: when, signedInAt: check.signedInAt || null },
+  };
+}
+
 async function pingOpenclaw(req, res) {
-  const openclawEnvUrl = String(process.env.OPENCLAW_BASE_URL || '').trim();
-  const storeUrl = String(getProviderValues('openclaw')?.base_url || '').trim();
-  const baseUrl = openclawEnvUrl || storeUrl || 'http://localhost:1337'; // default local
-
-  const openclawEnvKey = String(process.env.OPENCLAW_API_KEY || '').trim();
-  const storeKey = String(getProviderValues('openclaw')?.api_key || '').trim();
-  const apiKey = openclawEnvKey || storeKey;
-
-  try {
-    // Trim trailing slashes for clean /health endpoint connection
-    const cleanUrl = baseUrl.replace(/\/+$/, '');
-    
-    // Some basic python web servers respond to /health or we can just GET /
-    const response = await fetch(`${cleanUrl}/`, {
-      method: 'GET',
-      headers: apiKey ? { 'x-api-key': apiKey } : {},
-      signal: AbortSignal.timeout(6000),
-    });
-
-    if (!response.ok) {
-        return sendJson(res, 200, {
-            ok: true, 
-            data: {
-                status: response.status === 401 || response.status === 403 ? 'error' : 'error', 
-                message: `Connection failed with status ${response.status}`,
-                diagnostics: {}
-            }
-        });
-    }
-
-    return sendOk(res, 200, { status: 'healthy', message: 'Worker connection active.' });
-  } catch (err) {
+  const scope = {
+    projectId: String(req?.projectContext?.project?.id || '').trim(),
+    userId: String(req?.authUser?.id || '').trim(),
+  };
+  const settings = await require('../lib/youtubeOutreachStore').getSettings(scope);
+  if (!settings.ok) {
     return sendJson(res, 200, {
-        ok: true,
-        data: {
-            status: 'error',
-            message: 'Worker is completely offline or unreachable.',
-            diagnostics: { detail: err.message }
-        }
+      ok: true,
+      data: { status: 'error', message: `The Mini's last reading could not be read: ${settings.error}`, diagnostics: {} },
     });
   }
+  return sendJson(res, 200, { ok: true, data: openclawCardFromCheck(settings.data.browserCheck) });
 }
 
 // Ensure `sendJson` is accessible since it's used inside ping handles
@@ -246,4 +255,4 @@ async function handle(req, res, pathname, method) {
   return true;
 }
 
-module.exports = { handle, manifest };
+module.exports = { handle, manifest, openclawCardFromCheck, OPENCLAW_READING_STALE_MS };

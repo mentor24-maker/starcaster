@@ -2,14 +2,28 @@
 /**
  * scripts/archive_index.mjs — which copies of the archive are the same file.
  *
- *   npm run archive:index                   index all four places, write the report
+ *   npm run archive:index                   index the default places, write the report
  *   npm run archive:index -- --out <dir>    where the report goes (default ~/archive-index)
  *   npm run archive:index -- --root <label>=<folder>    index only these folders (repeatable)
  *   npm run archive:index -- --remote <label>=<rclone remote:>    and these Drives (repeatable)
  *
- * Giving any --root or --remote replaces the default four places entirely; that
+ * The default places (lib/archiveIndex.js defaultPlaces): the MacBook's Desktop,
+ * Documents and Downloads, iCloud Drive (`icloud`), the archived Trash folder
+ * from 2026-10-04 (`mac-trash`, skipped with a stated line once it is emptied),
+ * and both Google Drives. MaxOne is no longer one — it was erased on 2026-10-04
+ * and is the Time Machine drive now. Apple Photos is named as NOT CHECKED: its
+ * library cannot be read without a privacy permission (ticket 86bcfgyyw).
+ *
+ * Giving any --root or --remote replaces the default places entirely; that
  * is how the test plants a duplicate in a scratch folder without touching a
  * real drive.
+ *
+ * ICLOUD PLACEHOLDERS ARE NEVER READ. A file whose bytes are in iCloud and not
+ * on this disk downloads when it is opened, and iCloud Drive alone holds 33 GB
+ * of Zoom recordings. Such a file is found without opening it (`find -flags
+ * +dataless`, or the older ".name.icloud" stub; a file with no blocks on the
+ * disk when `find` cannot answer) and is COUNTED as "in iCloud only, not
+ * checked" — never as unique.
  *
  * READ-ONLY. It lists, reads zip tables of contents, and fingerprints bytes. It
  * moves nothing, deletes nothing, and unzips nothing to disk — zip members are
@@ -22,7 +36,9 @@
  *
  * EXIT CODES, the harness convention (docs/DOCTRINE.md §5.33):
  *   0  the report was written and every entry was settled
- *   1  the report was written, but some entries could not be read (listed in it)
+ *   1  the report was written, but something was not settled: an entry could
+ *      not be read, a file is in iCloud only, or a place was not checked —
+ *      every one of them is named in the report
  *   2  no report — a location could not be listed at all
  */
 
@@ -49,19 +65,13 @@ function splitPair(s) {
   return [s.slice(0, eq), s.slice(eq + 1)];
 }
 
-function defaultRoots() {
-  // The MacBook's own copies: the folders the 2026-09-06 audit found content
-  // in. "Desktop - Dane's MacBook Pro (2)" is matched by prefix because its
-  // apostrophe is a curly one, and a typed straight one would silently miss it.
-  const mac = ['Desktop', 'Documents', 'Downloads']
-    .concat(fs.readdirSync(HOME).filter((n) => n.startsWith('Desktop - ')))
-    .map((n) => path.join(HOME, n));
-  return [['maxone', '/Volumes/maxone'], ...mac.map((p) => ['mac', p])];
-}
-
 const explicit = argValues('--root').length || argValues('--remote').length;
-const ROOTS = explicit ? argValues('--root').map(splitPair) : defaultRoots();
-const REMOTES = explicit ? argValues('--remote').map(splitPair) : [['mentor24', 'm24:'], ['mentorofaio', 'gdrive:']];
+const DEFAULTS = explicit ? null : idx.defaultPlaces(HOME, fs.readdirSync(HOME));
+const ROOTS = explicit
+  ? argValues('--root').map(splitPair).map(([location, root]) => ({ location, root }))
+  : DEFAULTS.roots;
+const REMOTES = explicit ? argValues('--remote').map(splitPair) : DEFAULTS.remotes;
+const NOT_CHECKED = explicit ? [] : DEFAULTS.notChecked;
 
 const log = (s) => process.stderr.write(`${new Date().toLocaleTimeString('en-US', { timeZone: 'America/Denver' })}  ${s}\n`);
 
@@ -101,7 +111,19 @@ function python(args, input) {
 
 // ---------------------------------------------------------------------------
 // Local folders.
+
+// Files whose bytes live in iCloud, not on this disk. `find -flags` is the one
+// way to read that flag without opening the file (opening it downloads it) —
+// the same probe archive_mac.mjs uses. null when it could not be asked.
+function datalessSet(root) {
+  const r = spawnSync('find', [root, '-type', 'f', '-flags', '+dataless', '-print0'], { encoding: 'utf8', maxBuffer: 1 << 28 });
+  if (r.error || (r.status !== 0 && !r.stdout)) return null;
+  return new Set(r.stdout.split('\0').filter(Boolean).map((p) => path.relative(root, p).split(path.sep).join('/')));
+}
+
 function walk(location, root, entries, source) {
+  const dataless = datalessSet(root);
+  if (!dataless) source.error = 'could not ask macOS which files are in iCloud only; files with no bytes on the disk were still counted as not checked';
   const stack = [''];
   while (stack.length) {
     const rel = stack.pop();
@@ -121,6 +143,13 @@ function walk(location, root, entries, source) {
       if (d.isSymbolicLink()) { source.skipped['symlinks (not followed)'] = (source.skipped['symlinks (not followed)'] || 0) + 1; continue; }
       if (d.isDirectory()) { stack.push(childRel); continue; }
       if (!d.isFile()) continue;
+      const stubFor = idx.icloudStubTarget(childRel);
+      if (stubFor) {
+        // The older placeholder: the stub's own size says nothing about the file.
+        entries.push({ location, path: stubFor, size: 0, placeholder: true });
+        source.files += 1;
+        continue;
+      }
       let st;
       try { st = fs.statSync(path.join(root, childRel)); } catch (err) {
         entries.push({ location, path: childRel, size: 0, error: idx.readErrorReason(err) });
@@ -129,6 +158,16 @@ function walk(location, root, entries, source) {
       const e = { location, path: childRel, size: st.size, mtime: Math.floor(st.mtimeMs), abs: path.join(root, childRel) };
       entries.push(e);
       source.files += 1;
+      // Never opened: no zip listing, no fingerprint. macOS's own flag is the
+      // answer when `find` could give it. When it could not, a file with bytes
+      // to its name and no blocks on the disk is treated as in iCloud — wrongly
+      // calling one "not checked" costs a line in the report; wrongly reading
+      // one downloads it. (Not used alongside the flag: a compressed file can
+      // also have no blocks, and that one is perfectly readable.)
+      if (dataless ? dataless.has(childRel) : (st.size > 0 && st.blocks === 0)) {
+        e.placeholder = true;
+        continue;
+      }
       if (childRel.toLowerCase().endsWith('.zip')) {
         e.zipFile = true;
         const r = python(['list', e.abs]);
@@ -186,7 +225,7 @@ function md5File(file) {
 
 async function hashEverything(entries) {
   const needs = idx.sizesNeedingHash(entries);
-  const todo = entries.filter((e) => !e.hash && !e.error && !e.native && needs.has(e.size) && (e.abs || e.zipAbs));
+  const todo = entries.filter((e) => !e.hash && !e.error && !e.native && !e.placeholder && needs.has(e.size) && (e.abs || e.zipAbs));
   let fromCache = 0;
   const loose = [];
   const byZip = new Map();
@@ -237,11 +276,16 @@ async function main() {
   const entries = [];
   const sources = [];
 
-  for (const [location, root] of ROOTS) {
+  for (const { location, root, optional } of ROOTS) {
     const source = { location, root, files: 0, skipped: {} };
     sources.push(source);
     log(`listing ${location}: ${root}`);
     if (!fs.existsSync(root)) {
+      if (optional) {
+        source.error = 'not there (already emptied?) — nothing to index';
+        log(`  ${location} is not there; the report says so`);
+        continue;
+      }
       console.error(`CANNOT TELL — ${location} is not there: ${root}. No report written.`);
       process.exit(2);
     }
@@ -266,6 +310,9 @@ async function main() {
       process.exit(2);
     }
   }
+  for (const { location, root, why } of NOT_CHECKED) {
+    sources.push({ location, root, files: 0, skipped: {}, error: why, notChecked: true });
+  }
   log(`listed ${entries.length} entries`);
 
   await hashEverything(entries);
@@ -289,12 +336,15 @@ async function main() {
   for (const zr of zips) zipRows.push([zr.verdict, zr.location, zr.path, zr.size, zr.members, zr.missing.length, zr.missing.reduce((s, m) => s + m.size, 0), zr.unreadable.join('; ')]);
   fs.writeFileSync(path.join(OUT, 'zips.tsv'), tsv(zipRows));
   fs.writeFileSync(path.join(OUT, 'unreadable.tsv'), tsv([['location', 'zip', 'path', 'reason'], ...analysis.unreadable.map((e) => [e.location, e.container || '', e.path, e.error])]));
-  fs.writeFileSync(path.join(OUT, 'index.jsonl'), entries.map((e) => JSON.stringify({ location: e.location, container: e.container, path: e.path, size: e.size, hash: e.hash, native: e.native, error: e.error || e.listError })).join('\n') + '\n');
+  fs.writeFileSync(path.join(OUT, 'not-checked.tsv'), tsv([['location', 'path', 'bytes', 'reason'], ...analysis.notChecked.map((e) => [e.location, e.path, e.size, 'in iCloud only — not downloaded to this Mac, so it was not read'])]));
+  fs.writeFileSync(path.join(OUT, 'index.jsonl'), entries.map((e) => JSON.stringify({ location: e.location, container: e.container, path: e.path, size: e.size, hash: e.hash, native: e.native, placeholder: e.placeholder, error: e.error || e.listError })).join('\n') + '\n');
 
   console.log(`Report: ${path.join(OUT, 'report.md')}`);
-  console.log(`${analysis.uniqueCount} distinct files (${idx.humanBytes(analysis.uniqueBytes)}); ${analysis.sets.length} duplicate sets; ${zips.length} zips; ${analysis.unreadable.length} could not be read.`);
+  console.log(`${analysis.uniqueCount} distinct files (${idx.humanBytes(analysis.uniqueBytes)}); ${analysis.sets.length} duplicate sets; ${zips.length} zips; ${analysis.unreadable.length} could not be read; ${analysis.notChecked.length} in iCloud only, not checked.`);
+  for (const s of sources.filter((x) => x.notChecked)) console.log(`${s.location}: ${s.error}`);
   const blindZips = zips.filter((zr) => zr.verdict === 'CANNOT TELL').length;
-  process.exit(analysis.unreadable.length || blindZips ? 1 : 0);
+  const placesNotChecked = sources.filter((x) => x.notChecked).length;
+  process.exit(analysis.unreadable.length || blindZips || analysis.notChecked.length || placesNotChecked ? 1 : 0);
 }
 
 main().catch((err) => { console.error(`CANNOT TELL — ${err.stack || err.message}`); process.exit(2); });
