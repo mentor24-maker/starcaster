@@ -12,6 +12,7 @@ import YoutubeOutreachPanel, {
   targetToForm,
   withScheme,
   followedSummary,
+  postedStatusText,
   type OutreachComment,
   type OutreachSettings,
   type Target,
@@ -390,7 +391,7 @@ describe("YouTube outreach screen", () => {
     expect(text()).not.toContain("Dane of Earth video");
     expect(text()).toContain("Delray serve clinic");
     expect(container!.querySelector("form.yt-outreach-editor")).toBeNull();
-    expect(requests.filter((r) => r.project === "proj_delray" && r.method === "GET")).toHaveLength(3); // list, settings, approvals
+    expect(requests.filter((r) => r.project === "proj_delray" && r.method === "GET")).toHaveLength(4); // list, settings, approvals, posted
   });
 
   it("drops a settings save that answers after a project switch", async () => {
@@ -574,6 +575,21 @@ describe("drafts and approval", () => {
     expect(container!.querySelector("article.yt-outreach-draft")).toBeNull();
   });
 
+  it("shows each target's next draft, or why it is not due, under How often", async () => {
+    stores.proj_doe.targets = [
+      target("abc", "First video", { nextDraft: { due: false, finished: true, text: "Finished: posted 1 of 1" } }),
+      target("def", "Second video", {
+        repeatMode: "repeat", repeatEveryDays: 7, repeatMaxTimes: 3,
+        nextDraft: { due: false, finished: false, text: "Next draft: Oct 14" },
+      }),
+      target("ghi", "Third video", { nextDraft: { due: false, finished: false, text: "Not due: waiting for your approval on the last draft" } }),
+    ];
+    await mount();
+    expect(row("abc").querySelector(".yt-outreach-next-draft")?.textContent).toBe("Finished: posted 1 of 1");
+    expect(row("def").textContent).toContain("Repeats every 7 days, up to 3 timesNext draft: Oct 14");
+    expect(row("ghi").textContent).toContain("Not due: waiting for your approval on the last draft");
+  });
+
   it("offers no Write a draft on a paused target", async () => {
     stores.proj_doe.targets = [target("abc", "First video", { status: "paused" })];
     await mount();
@@ -597,6 +613,85 @@ describe("drafts and approval", () => {
       objective: "drive_link", commentLength: "long", messageTypes: ["insight", "question"],
       linkPolicy: "allowed", linkUrl: "https://daneofearth.com", mentionPolicy: "subtle",
     })).toBe("Send people to a link · Long · Share an insight, Ask a question · Link: Allowed (https://daneofearth.com) · Mention: In passing");
+  });
+});
+
+describe("what the Mini posted (5/7)", () => {
+  function sent(t: Target, overrides: Partial<OutreachComment>): OutreachComment {
+    return { ...makeComment(t, "Words that went out on YouTube."), finalText: "Words that went out on YouTube.", ...overrides };
+  }
+
+  function postedRow(id: string): HTMLElement {
+    const found = container!.querySelector(`li[data-comment-id="${id}"]`);
+    if (!found) throw new Error(`no posted row ${id} in: ${text()}`);
+    return found as HTMLElement;
+  }
+
+  it("an approved card says why the Mini is holding it", async () => {
+    const t = target("abc", "First video");
+    stores.proj_doe.targets = [t];
+    stores.proj_doe.comments = [sent(t, {
+      status: "approved",
+      waitReason: "Waiting for tomorrow's allowance — 1 of 1 comment a day already posted today (America/Denver).",
+      waitCheckedAt: "2026-10-08T18:00:00Z",
+    })];
+    await mount();
+    await click(button("Approvals"));
+    const card = container!.querySelector("article.yt-outreach-draft")!;
+    expect(card.textContent).toContain("Waiting for tomorrow's allowance — 1 of 1 comment a day already posted today");
+  });
+
+  it("an approved card nothing has looked at yet says so, rather than promising a time", async () => {
+    const t = target("abc", "First video");
+    stores.proj_doe.targets = [t];
+    stores.proj_doe.comments = [sent(t, { status: "approved" })];
+    await mount();
+    await click(button("Approvals"));
+    expect(text()).toContain("Waiting for the Mini to post it. If a limit holds it, the reason will show here.");
+  });
+
+  it("lists a posted comment with its link to YouTube and its screenshot", async () => {
+    const t = target("abc", "First video");
+    stores.proj_doe.targets = [t];
+    stores.proj_doe.comments = [sent(t, {
+      id: "p1",
+      status: "posted",
+      postedAt: "2026-10-08T18:00:00Z",
+      postedUrl: "https://www.youtube.com/watch?v=abc&lc=UgxDone",
+      screenshotUrl: "https://blob.example/comment-p1.png",
+    })];
+    await mount();
+    await click(button("Approvals"));
+    const row = postedRow("p1");
+    expect(row.textContent).toContain("Posted");
+    expect(row.textContent).toContain("Words that went out on YouTube.");
+    const view = [...row.querySelectorAll("a")].find((a) => a.textContent === "View on YouTube")!;
+    expect(view.getAttribute("href")).toBe("https://www.youtube.com/watch?v=abc&lc=UgxDone");
+    expect(row.querySelector("img")!.getAttribute("src")).toBe("https://blob.example/comment-p1.png");
+    expect(requests.some((r) => r.path === "/api/youtube-outreach/comments?status=posting,posted,failed")).toBe(true);
+  });
+
+  it("a failed row says why in plain words, and a stuck one asks for a hand check", async () => {
+    const t = target("abc", "First video");
+    stores.proj_doe.targets = [t];
+    stores.proj_doe.comments = [
+      sent(t, { id: "f1", status: "failed", postError: "OpenClaw did not post it: The comment box was disabled on this video." }),
+      sent(t, { id: "h1", status: "posting", needsHandCheck: true, postingStartedAt: "2026-10-08T17:00:00Z" }),
+    ];
+    await mount();
+    await click(button("Approvals"));
+    expect(postedRow("f1").textContent).toContain("Failed to post");
+    expect(postedRow("f1").textContent).toContain("The comment box was disabled on this video.");
+    expect(postedRow("h1").textContent).toContain("Check this one by hand — it will not be tried again");
+    expect(postedRow("h1").textContent).toContain("Open the video and see whether the comment is there");
+  });
+
+  it("says nothing has been posted yet, and says so differently when the list could not be read", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Approvals"));
+    expect(text()).toContain("Nothing has been posted yet.");
+    expect(postedStatusText({ status: "posting", needsHandCheck: false } as OutreachComment)).toBe("Being posted now…");
   });
 });
 

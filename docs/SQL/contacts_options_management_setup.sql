@@ -36,7 +36,8 @@ INSERT INTO public.contact_sources (key, label, sort_order) VALUES
   ('manual', 'Manual', 0),
   ('website', 'Website', 1),
   ('import', 'Import', 2),
-  ('youtube_miner', 'YouTube Miner', 3)
+  ('youtube_miner', 'YouTube Miner', 3),
+  ('substack_miner', 'Substack Miner', 4)
 ON CONFLICT (key) DO NOTHING;
 
 -- UPDATE LEGACY CONTACT TYPES TABLE

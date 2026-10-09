@@ -53,6 +53,12 @@ const SHOT_DIR = path.join(ROOT, '.ui-check');
  * It must be a toggle carrying `aria-expanded`: navigation here does not reload
  * the page, so the step opens it only if it is not open already, and closes it
  * again after measuring so the plain entry at the next width sees it closed.
+ *
+ * `search` (optional) types `text` into `input`, presses Return, and measures
+ * once `ready` appears — for results that only exist after a search, like the
+ * Footage screen's "Search what you said" (86bcdek0z). No `ready` means the
+ * screen is SKIPPED, never reported as fitting; `clear` is clicked afterwards
+ * so the next entry sees the bare page.
  */
 const SCREENS = [
   { id: 'builderManagePagesPage', label: 'Builder: Pages' },
@@ -63,12 +69,25 @@ const SCREENS = [
   { id: 'assetsPage', label: 'Assets' },
   { id: 'assetsFootagePage', label: 'Assets: Footage' },
   { id: 'assetsFootagePage', label: 'Assets: Footage, transcript open', open: '[data-testid="studio-transcript-open"]' },
+  {
+    id: 'assetsFootagePage',
+    label: 'Assets: Footage, search results',
+    // "link" is said on the fixture's line with an unbroken 180-character URL,
+    // in the file with the longest name — the two things that could widen it.
+    search: {
+      input: '[data-testid="studio-search-input"]',
+      text: 'link',
+      ready: '[data-testid="studio-search-results"]',
+      clear: '[data-testid="studio-search-clear"]',
+    },
+  },
   { id: 'contactsPage', label: 'Contacts' },
   { id: 'acquireYoutubePage', label: 'Acquire: YouTube' },
   { id: 'acquireWebPage', label: 'Acquire: Web' },
   { id: 'messagingContentPage', label: 'Messaging: Content' },
   { id: 'campaignsPage', label: 'Campaigns' },
   { id: 'engageYoutubeOutreachPage', label: 'Engage: YouTube Outreach' },
+  { id: 'engageSubstackNotesPage', label: 'Engage: Substack Notes' },
 ];
 
 function arg(name, fallback) {
@@ -154,6 +173,26 @@ try {
         if ((await target.getAttribute('aria-expanded')) !== 'true') await target.click();
         await page.waitForTimeout(900);
       }
+      if (screen.search) {
+        const input = page.locator(screen.search.input).first();
+        if (!(await input.count())) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — nothing matches ${screen.search.input}`);
+          skipped += 1;
+          continue;
+        }
+        await input.fill(screen.search.text);
+        await input.press('Enter');
+        const ready = await page.locator(screen.search.ready).first()
+          .waitFor({ state: 'visible', timeout: 8000 }).then(() => true, () => false);
+        if (!ready) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — searching "${screen.search.text}" showed no results (is the fixture seeded?)`);
+          skipped += 1;
+          const clear = page.locator(screen.search.clear).first();
+          if (await clear.count() && await clear.isEnabled()) await clear.click();
+          continue;
+        }
+        await page.waitForTimeout(300);
+      }
       const m = await measureActiveScreen(page);
       // Measured BEFORE the `open` step closes what it opened.
       const sideways = await page.evaluate(() => {
@@ -162,12 +201,16 @@ try {
           .filter((el) => el.scrollWidth > el.clientWidth + 1)
           .map((el) => `${el.getAttribute('data-ui-no-sideways') || el.className} (${el.scrollWidth}px of text in ${el.clientWidth}px)`);
       });
-      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}-${width}.png`);
+      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}${screen.search ? '-searched' : ''}-${width}.png`);
       await page.screenshot({ path: shot });
       checked += 1;
       if (screen.open) {
         const opened = page.locator(`${screen.open}[aria-expanded="true"]`).first();
         if (await opened.count()) await opened.click();
+      }
+      if (screen.search) {
+        const clear = page.locator(screen.search.clear).first();
+        if (await clear.count() && await clear.isEnabled()) await clear.click();
       }
 
       const problems = [];
