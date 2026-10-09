@@ -20,7 +20,7 @@ import {
   normalizeThemeHeroBanner
 } from "@/lib/builder-template";
 import type { BuilderEmailFunction } from "@/lib/builder-email-template";
-import { normalizeBuilderHexColor } from "@/lib/builder-hex-color";
+import { clampBuilderOpacity, normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
   PLAYER_GAME_FLOATING_IMAGE_LAYER_Z_INDEX,
   resolveGameOverlayContentZIndex
@@ -1160,7 +1160,10 @@ export function getButtonBackgroundSettings(settings: Record<string, string>): B
       color: settings.buttonBackgroundColor || settings.buttonColor || "#214c71",
       color2: settings.buttonBackgroundColor2 || "#eaf4ff",
       imageUrl: resolvePublicBuilderAssetUrl(settings.buttonBackgroundImageUrl),
-      styleKey: settings.buttonBackgroundStyleKey === "blue-yellow-circles" ? "blue-yellow-circles" : ""
+      styleKey: settings.buttonBackgroundStyleKey === "blue-yellow-circles" ? "blue-yellow-circles" : "",
+      // Absent reads 100: a button saved before this key existed painted a
+      // solid fill, and must keep doing so.
+      opacity: clampBuilderOpacity(settings.buttonBackgroundOpacity)
     };
   }
 
@@ -1169,7 +1172,8 @@ export function getButtonBackgroundSettings(settings: Record<string, string>): B
     color: settings.buttonColor || "#214c71",
     color2: "#eaf4ff",
     imageUrl: "",
-    styleKey: ""
+    styleKey: "",
+    opacity: 100
   };
 }
 
@@ -1198,6 +1202,10 @@ export function applyButtonBackgroundSettings(
     buttonBackgroundColor2: background.color2,
     buttonBackgroundImageUrl: background.imageUrl,
     buttonBackgroundStyleKey: background.styleKey,
+    // The picker has always offered an Opacity slider; until 2026-10-09 the
+    // button had no key to keep it in, so the slider moved and snapped back
+    // (task 86bcg65zu). Colour and gradient fills bake it into rgba.
+    buttonBackgroundOpacity: String(clampBuilderOpacity(background.opacity)),
     ...(background.mode === "color" ? { buttonColor: background.color } : {})
   };
 }
