@@ -1,3 +1,21 @@
+## 2026-10-08 — Substack Miner 1/7: a place to keep the Substack writers Starcaster finds, the keyword list, and a Substack address on every contact (storage and server) (#800)
+
+The Substack Miner now has somewhere to keep its work, though nothing fills it
+yet. There is a list of Substack writers Starcaster finds for Dane, one entry
+per writer. When a later search turns up the same writer again, it adds the new
+keywords and recommenders to that entry rather than making a second one. It
+never changes what Dane decided: a writer he approved stays approved and one he
+rejected stays rejected. There is also a settings list holding his keywords,
+how many results to bring back per keyword, and how long to pause between
+pages. Contacts now have a proper **Substack** box beside YouTube, X and
+Bluesky. Until now a Substack address could only live in a custom field, and
+that field still shows for any contact the move has not reached. "Substack
+Miner" is now a contact source. One trap was avoided: if new contacts got a
+blank Substack value by default, every new contact would have been refused
+until the database change runs in production. So the value is written only when
+someone actually gives one. Two database files are waiting to be run in
+production. Today they move no data, because no production contact has a
+Substack yet.
 ## 2026-10-08 — YouTube outreach 6/7: the agent drafts comments for due videos on its own, still waiting for approval (#793)
 
 Starcaster no longer waits for Dane to click **Write a draft**. Every ten
