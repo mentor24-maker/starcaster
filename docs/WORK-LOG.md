@@ -1,3 +1,14 @@
+## 2026-10-08 — Live browser view 1: the plan for signing in to YouTube, Substack and other sites from inside Starcaster (#797)
+
+A written plan, no feature code yet: `docs/LIVE_BROWSER_VIEW.md`. It
+recommends a "Connect" window inside Starcaster showing a live picture of the
+Mini's Chrome, opened only with a one-time pass and closing itself after a few
+idle minutes. Measured on the Mini: typing is fast (about a fiftieth of a
+second from key to picture), and passwords and two-step codes go through.
+Google refuses a browser started by the usual automation tool, but not a real
+Chrome that is only being watched, so the plan uses the second kind. The plan
+ends with five build tickets for Dane to approve. While checking, we found that
+Tailscale, the Mini's route to the internet, has been off since about Oct 5.
 ## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
 
 The live site reaches the YouTube download helper on the Mac Mini through
