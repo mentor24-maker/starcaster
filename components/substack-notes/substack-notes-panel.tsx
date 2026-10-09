@@ -24,6 +24,12 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
  * it refuses; it (re)loads when its page is SHOWN and when the project is
  * SWITCHED, and drops a reply that lands after a newer request or a switch.
  *
+ * WATCHING HIS NEW CONTENT (4/7, task 86bcet775). The Ideas tab says what is
+ * watched — "Watching: YouTube ✓, Substack ✓, Blog ✓ (last checked 9 minutes
+ * ago)" — and, for any source that is not, why. Settings has "Draft a Note for
+ * my latest piece". The pass itself runs on a schedule on the server
+ * (lib/substackNotesContentWatch.js); this screen only reads what it saved.
+ *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "no ideas yet", "no
  * Notes to engage with yet", "no topics yet", "nothing saved yet", and a read
  * that fails names WHICH read failed.
@@ -31,6 +37,8 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
 
 const ITEMS_PATH = '/api/engage/substack-notes/items';
 const SETTINGS_PATH = '/api/engage/substack-notes/settings';
+const WATCH_STATUS_PATH = '/api/engage/substack-notes/watch-status';
+const WATCH_LATEST_PATH = '/api/engage/substack-notes/watch-content/latest';
 
 /** The window event public/js/projectContext.js emits on every project switch. */
 export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
@@ -76,6 +84,27 @@ export type NotesSettings = {
    * 86bcda6dt). A blank state means it has never checked.
    */
   browserCheck?: BrowserCheck;
+};
+
+export type WatchSource = {
+  key: string;
+  label: string;
+  watched: boolean;
+  /** true read fine last time, false could not be read, null never checked yet. */
+  ok: boolean | null;
+  reason: string;
+  checkedAt: string;
+  since: string;
+  baselineCount: number;
+};
+
+export type WatchStatus = {
+  saved: boolean;
+  /** false: the database is missing the watch's column; null: cannot tell yet. */
+  setUp: boolean | null;
+  checkedAt: string;
+  sources: WatchSource[];
+  lastPass: { at?: string; drafted?: number; notDrafted?: number; waitingForRoom?: number; failed?: string[] } | null;
 };
 
 export type SignInLine = { tone: 'ok' | 'warn' | 'alarm'; state: string; text: string };
@@ -250,6 +279,82 @@ export function splitItems(items: NoteItem[]): { ideas: NoteItem[]; engage: Note
     ideas: items.filter((i) => i.kind === 'note'),
     engage: items.filter((i) => i.kind !== 'note'),
   };
+}
+
+// ── What is being watched ──────────────────────────────────────────────────
+
+/** "just now", "9 minutes ago", "3 hours ago", "2 days ago". */
+export function timeAgo(iso: string, now: number): string {
+  const at = Date.parse(iso || '');
+  if (!Number.isFinite(at)) return '';
+  const minutes = Math.max(0, Math.round((now - at) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} days ago`;
+}
+
+function sourceMark(source: WatchSource): string {
+  if (!source.watched) return 'off';
+  if (source.ok === null) return 'not checked yet';
+  return source.ok ? '✓' : '✗';
+}
+
+/**
+ * The Ideas tab's watch line, and one sentence for every source that is not
+ * simply working — off, unreadable, or not checked yet — so an empty Approvals
+ * tab never leaves Dane guessing whether anything is looking.
+ */
+export function watchLines(status: WatchStatus, now: number): { summary: string; details: string[] } {
+  if (!status.saved) {
+    return { summary: 'Watching for new content: not yet — save the Settings tab first.', details: [] };
+  }
+  if (status.setUp === false) {
+    return {
+      summary: 'Watching for new content: not set up yet.',
+      details: ['The database is missing its last step (docs/SQL/substack_notes_content_unique.sql), so nothing new is being drafted.'],
+    };
+  }
+  const marks = status.sources.map((s) => `${s.label} ${sourceMark(s)}`).join(', ');
+  const ago = timeAgo(status.checkedAt, now);
+  const when = ago ? `last checked ${ago}` : 'not checked yet — the first check runs within 15 minutes';
+  const details: string[] = [];
+  for (const s of status.sources) {
+    if (!s.watched) details.push(`${s.label}: not watched — ${s.reason}.`);
+    else if (s.ok === false) details.push(`${s.label}: could not be read last time — ${s.reason}.`);
+  }
+  const started = status.sources.filter((s) => s.watched && s.since);
+  if (started.length) {
+    const counts = started.map((s) => `${s.label} ${s.baselineCount}`).join(', ');
+    details.push(`Already out when watching began, so recorded as seen and not drafted: ${counts}. Use "Draft a Note for my latest piece" on Settings for an older one.`);
+  }
+  const waiting = Number(status.lastPass?.waitingForRoom) || 0;
+  if (waiting) {
+    details.push(`${waiting} new piece${waiting === 1 ? ' is' : 's are'} waiting for room under the daily maximum, and will be drafted on a later check.`);
+  }
+  return { summary: `Watching: ${marks} (${when})`, details };
+}
+
+/** What "Draft a Note for my latest piece" did, in a sentence. */
+export function latestMessage(data: Record<string, any> | null | undefined): string {
+  const latest = data?.latest;
+  const item = data?.latestItem as NoteItem | null | undefined;
+  const title = latest?.entry?.title || item?.contentTitle || latest?.entry?.url || 'your latest piece';
+  if (latest?.status === 'draft') {
+    if (item?.status === 'draft') return `A draft Note about "${title}" is waiting on the Approvals tab.`;
+    const why = (data?.notDrafted || []).find((n: { url?: string }) => n.url === latest.entry?.url)?.error;
+    if (item) return `A Note about "${title}" was added to Ideas, but no draft was written${why ? `: ${why}` : ''}. Click Write a draft on its row.`;
+    return `No Note was made for "${title}"${data?.failed?.[0]?.error ? `: ${data.failed[0].error}` : ''}.`;
+  }
+  if (latest?.status === 'exists') {
+    return `Your latest piece, "${title}", already has a Note${item ? ` (${statusLabel(item).toLowerCase()})` : ''}, so no second one was made.`;
+  }
+  const reasons = ((data?.watch?.sources || []) as WatchSource[])
+    .filter((s) => !s.watched || s.ok === false)
+    .map((s) => `${s.label}: ${s.reason}`);
+  return `No video, article or post was found to draft from${reasons.length ? ` (${reasons.join('; ')})` : ''}.`;
 }
 
 // ── Settings form ──────────────────────────────────────────────────────────
@@ -507,6 +612,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const [watch, setWatch] = useState<WatchStatus | null>(null);
+  const [watchError, setWatchError] = useState('');
+  const [latestBusy, setLatestBusy] = useState(false);
+  const [latestNote, setLatestNote] = useState('');
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -516,7 +625,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
     }
     const seq = ++requestSeq.current;
     setLoading(true);
-    const [list, saved] = await Promise.allSettled([api(ITEMS_PATH), api(SETTINGS_PATH)]);
+    const [list, saved, watched] = await Promise.allSettled([api(ITEMS_PATH), api(SETTINGS_PATH), api(WATCH_STATUS_PATH)]);
     if (seq !== requestSeq.current) return;
     const problems: string[] = [];
     if (list.status === 'fulfilled') {
@@ -530,6 +639,14 @@ export default function SubstackNotesPanel(): React.ReactElement {
     } else {
       setSettings(null);
       problems.push(`The settings could not be read: ${errorText(saved.reason, 'unknown error')}`);
+    }
+    // Said on the Ideas tab where the line would be, not in the page-wide error.
+    if (watched.status === 'fulfilled') {
+      setWatch((watched.value?.data as WatchStatus) || null);
+      setWatchError('');
+    } else {
+      setWatch(null);
+      setWatchError(`What is being watched for new content could not be read: ${errorText(watched.reason, 'unknown error')}`);
     }
     setError(problems.join(' '));
     setLoading(false);
@@ -558,6 +675,9 @@ export default function SubstackNotesPanel(): React.ReactElement {
       projectEpoch.current += 1;
       setItems(null);
       setSettings(null);
+      setWatch(null);
+      setWatchError('');
+      setLatestNote('');
       setError('');
       setNotice('');
       setAddError('');
@@ -746,6 +866,27 @@ export default function SubstackNotesPanel(): React.ReactElement {
     }
   };
 
+  /** "Draft a Note for my latest piece": the server reads the sources now and drafts the newest. */
+  const draftLatest = async () => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setLatestBusy(true);
+    setLatestNote('');
+    setNotice('');
+    try {
+      const reply = await api(WATCH_LATEST_PATH, { method: 'POST', body: '{}' });
+      if (epoch !== projectEpoch.current) return;
+      setLatestNote(latestMessage(reply?.data));
+      void load();
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setLatestNote(`Nothing was drafted: ${errorText(err, 'unknown error')}`);
+    } finally {
+      setLatestBusy(false);
+    }
+  };
+
   const switchTab = (next: Tab) => {
     setTab(next);
     setAddError('');
@@ -756,6 +897,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const { ideas, engage } = splitItems(items || []);
   const waiting = (items || []).filter(awaitsApproval);
   const topics = settings?.topics || [];
+  const watchText = watch ? watchLines(watch, Date.now()) : null;
 
   const tabButton = (value: Tab, label: string) => (
     <button
@@ -810,6 +952,23 @@ export default function SubstackNotesPanel(): React.ReactElement {
             </button>
           </form>
           {addError ? <p className="substack-notes-error" role="alert">{addError}</p> : null}
+
+          <section className="substack-notes-card substack-notes-watch" aria-label="New content">
+            {watchText ? (
+              <>
+                <p className="substack-notes-card-note substack-notes-watch-summary">{watchText.summary}</p>
+                {watchText.details.length ? (
+                  <ul className="substack-notes-watch-details">
+                    {watchText.details.map((line) => <li key={line}>{line}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            ) : (
+              <p className={watchError ? 'substack-notes-error' : 'substack-notes-card-note'} role={watchError ? 'alert' : undefined}>
+                {watchError || (loading ? 'Checking what is being watched…' : 'What is being watched has not been read. Click Refresh.')}
+              </p>
+            )}
+          </section>
 
           <section className="substack-notes-card substack-notes-topics" aria-label="Topics">
             <h3 className="substack-notes-card-title">Topics</h3>
@@ -1054,6 +1213,22 @@ export default function SubstackNotesPanel(): React.ReactElement {
           ) : (
             <p className="substack-notes-empty">{loading ? 'Loading the settings…' : 'The settings have not been read, so there is nothing to edit. Click Refresh.'}</p>
           )}
+          {settings ? (
+            <section className="substack-notes-card substack-notes-latest" aria-label="Your latest piece">
+              <h3 className="substack-notes-card-title">Your latest piece</h3>
+              <p className="substack-notes-card-note">
+                {settings.saved
+                  ? 'New videos, articles and blog posts get a draft Note on their own. This drafts one now for the newest of them, even one from before watching began. It waits on the Approvals tab.'
+                  : 'Save the settings above first — they say where your videos and articles are.'}
+              </p>
+              {latestNote ? <p className="substack-notes-notice" role="status">{latestNote}</p> : null}
+              <div className="substack-notes-actions">
+                <button type="button" className="btn" disabled={latestBusy || !settings.saved} onClick={() => void draftLatest()}>
+                  {latestBusy ? 'Drafting…' : 'Draft a Note for my latest piece'}
+                </button>
+              </div>
+            </section>
+          ) : null}
         </div>
       ) : null}
     </div>
