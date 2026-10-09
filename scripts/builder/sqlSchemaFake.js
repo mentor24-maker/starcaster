@@ -385,7 +385,7 @@ function parseColumn(definition) {
   };
 }
 
-/** `content_hash is not null and content_hash <> ''` → a predicate function. */
+/** `content_hash is not null and content_hash <> ''` (or `source = 'x'`) → a predicate function. */
 function parsePartialPredicate(text) {
   const clauses = String(text).split(/\band\b/i).map((clause) => clause.trim()).filter(Boolean);
   const tests = clauses.map((clause) => {
@@ -395,6 +395,8 @@ function parsePartialPredicate(text) {
     if (match) return (row) => row[match[1]] === null || row[match[1]] === undefined;
     match = /^([a-z_][a-z0-9_]*)\s*<>\s*'([^']*)'$/i.exec(clause);
     if (match) return (row) => row[match[1]] !== match[2];
+    match = /^([a-z_][a-z0-9_]*)\s*=\s*'([^']*)'$/i.exec(clause);
+    if (match) return (row) => row[match[1]] === match[2];
     throw new Error(`sqlSchemaFake: unsupported index predicate "${clause}"`);
   });
   return (row) => tests.every((test) => test(row));
