@@ -711,6 +711,76 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'button-centered-sits-in-the-middle-of-its-column',
+    why:
+      'A Button set to Centered sat at the left edge of every page (task 86bcg6j0z, operator ' +
+      '2026-10-09). The button is inline-flex inside a block wrapper; the generated centring rule ' +
+      'puts justify-self on the button (a no-op outside a grid) and text-align on the button ' +
+      '(which centres its label, not the button). Commit 77b0738a fixed it on the wrapper in June; ' +
+      'the regeneration in 2bd30183 deleted the rule and nothing noticed for three months, because ' +
+      'nothing measured WHERE the button was. This does: its box against its wrapper\'s box.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Read My Manifesto', settings: { alignment: 'center' } }],
+    },
+    selector: '.builder-preview-module.is-align-center > .builder-preview-button',
+    read: ['display'],
+    probes: {
+      place: {
+        subject: '.builder-preview-module.is-align-center > .builder-preview-button',
+        against: '.builder-preview-module.is-align-center',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.place;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the centred button did not render, so this contract can no longer fail for the right reason.`;
+      const sb = probe.subjectBox;
+      const ab = probe.againstBox;
+      const room = (ab.right - ab.left) - (sb.right - sb.left);
+      if (room < 40) {
+        return `the button is ${sb.right - sb.left}px wide in a ${ab.right - ab.left}px wrapper — a button that fills its column cannot be off-centre, so this measurement proves nothing.`;
+      }
+      const offset = (sb.left + sb.right) / 2 - (ab.left + ab.right) / 2;
+      return Math.abs(offset) <= 2
+        ? null
+        : `a button set to Centered sits ${Math.round(offset)}px off the middle of its column (button ${Math.round(sb.left)}-${Math.round(sb.right)}, column ${Math.round(ab.left)}-${Math.round(ab.right)}) — its Alignment is not reaching the wrapper.`;
+    },
+  },
+  {
+    id: 'button-right-aligned-sits-at-the-right-edge-of-its-column',
+    why:
+      'The other value of the same control. A fix that centres by stretching, or by a rule that ' +
+      'only knows "center", would pass the contract above and leave Right exactly as broken.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Read My Manifesto', settings: { alignment: 'right' } }],
+    },
+    selector: '.builder-preview-module.is-align-right > .builder-preview-button',
+    read: ['display'],
+    probes: {
+      place: {
+        subject: '.builder-preview-module.is-align-right > .builder-preview-button',
+        against: '.builder-preview-module.is-align-right',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.place;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the right-aligned button did not render, so this contract can no longer fail for the right reason.`;
+      const sb = probe.subjectBox;
+      const ab = probe.againstBox;
+      const room = (ab.right - ab.left) - (sb.right - sb.left);
+      if (room < 40) {
+        return `the button is ${sb.right - sb.left}px wide in a ${ab.right - ab.left}px wrapper — a button that fills its column cannot be off its edge, so this measurement proves nothing.`;
+      }
+      const gap = ab.right - sb.right;
+      return Math.abs(gap) <= 2
+        ? null
+        : `a button set to Right sits ${Math.round(gap)}px short of the right edge of its column (button ${Math.round(sb.left)}-${Math.round(sb.right)}, column ${Math.round(ab.left)}-${Math.round(ab.right)}) — its Alignment is not reaching the wrapper.`;
+    },
+  },
+  {
     id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
     why:
       'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +

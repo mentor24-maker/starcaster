@@ -11610,3 +11610,32 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-font-select { display: grid; gap: 6px; width: 100%; }
 .builder-font-select-google { width: 100%; }
 .builder-font-select-error { margin: 0; font-size: var(--text-xs); color: var(--c-error); }
+
+/*
+ * A button's Alignment reaches its WRAPPER, not the button (task 86bcg6j0z).
+ *
+ * `.builder-preview-button` is inline-flex inside `.builder-preview-module`,
+ * which is a plain block. The generated rule for `.is-align-center` puts
+ * `justify-self: center` on the button — a no-op outside a grid — and
+ * `text-align: center` on the button, which centres its label, not the
+ * button. So a button set to Centered sat at the left edge of every page.
+ *
+ * Commit 77b0738a (2026-06-14) fixed exactly this with the two rules below,
+ * written into `_builder-react.css`, the file `npm run extract:builder-css`
+ * rewrites end to end. Commit 2bd30183 (2026-06-30) regenerated it and the
+ * rules were gone — the same regeneration that took out the CRM modal
+ * styles. This file is where hand-written rules survive.
+ *
+ * Scoped with :has() to a wrapper holding a button directly, so no other
+ * module's inner text inherits a wrapper text-align it did not have before.
+ * The render contracts `button-centered-sits-in-the-middle-of-its-column`
+ * and `button-right-aligned-sits-at-the-right-edge-of-its-column` measure
+ * the button's box against its wrapper's, which is what "centred" means.
+ */
+.builder-react-root .builder-preview-module.is-align-center:has(> .builder-preview-button) {
+  text-align: center;
+}
+
+.builder-react-root .builder-preview-module.is-align-right:has(> .builder-preview-button) {
+  text-align: right;
+}
