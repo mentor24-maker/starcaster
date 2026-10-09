@@ -104,6 +104,11 @@ const CONTACT_CREATE_SCHEMA = {
   bluesky:     { type: 'string', required: false, maxLength: 500, default: '' },
   patreon:     { type: 'string', required: false, maxLength: 500, default: '' },
   linkedin:    { type: 'string', required: false, maxLength: 500, default: '' },
+  // No default, unlike its neighbours: a default writes the column on EVERY
+  // create, and until docs/SQL/people_add_substack_column.sql has run that
+  // column does not exist, so every new contact would be refused. Written only
+  // when a caller actually sends one.
+  substack:    { type: 'string', required: false, maxLength: 500 },
   source:      { type: 'string', required: false, maxLength: 200, default: '' },
   status:      { type: 'string', required: false, maxLength: 100, default: '' },
   notes:       { type: 'string', required: false, default: '' },
@@ -157,8 +162,20 @@ const CAMPAIGN_UPDATE_SCHEMA = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * A contact's Substack: the `substack` column first, the old
+ * custom_fields.substack second, for rows the column copy has not reached.
+ */
+function substackValue(contact) {
+  return contact?.substack
+    || contact?.customFields?.substack
+    || contact?.custom_fields?.substack
+    || '';
+}
+
 function segmentFieldValue(contact, key) {
   const field = String(key || '').trim();
+  if (field === 'substack') return String(substackValue(contact)).trim();
   if (field === 'social') {
     return [
       contact?.youtube,
@@ -169,7 +186,7 @@ function segmentFieldValue(contact, key) {
       contact?.bluesky,
       contact?.patreon,
       contact?.linkedin,
-      contact?.customFields?.substack || contact?.custom_fields?.substack,
+      substackValue(contact),
       contact?.customFields?.medium || contact?.custom_fields?.medium,
     ]
       .map((value) => String(value || '').trim())
@@ -1240,4 +1257,4 @@ const manifest = {
   prefixes: ['/api/contacts', '/api/contact-personas', '/api/segments', '/api/campaigns'],
 };
 
-module.exports = { handle, manifest };
+module.exports = { handle, manifest, segmentFieldValue, CONTACT_CREATE_SCHEMA };

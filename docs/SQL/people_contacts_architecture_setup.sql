@@ -34,6 +34,7 @@ create table if not exists public.people (
   bluesky         text        not null default '',
   patreon         text        not null default '',
   linkedin        text        not null default '',
+  substack        text        not null default '',
   custom_fields   jsonb       not null default '{}'::jsonb,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
@@ -72,6 +73,7 @@ alter table public.contacts add column if not exists x text null default '';
 alter table public.contacts add column if not exists bluesky text null default '';
 alter table public.contacts add column if not exists patreon text null default '';
 alter table public.contacts add column if not exists linkedin text null default '';
+alter table public.contacts add column if not exists substack text null default '';
 alter table public.contacts add column if not exists custom_fields jsonb null default '{}'::jsonb;
 alter table public.contacts add column if not exists updated_at timestamptz null default now();
 
