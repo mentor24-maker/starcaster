@@ -1,3 +1,24 @@
+## 2026-10-08 — YouTube outreach 7/7: Dane is told by name when the Mini stops posting or YouTube signs it out (#798)
+
+The Mac Mini's posting worker now checks its own browser once an hour and
+says so out loud when something is wrong. If YouTube has signed the Dane of
+Earth browser out, the bus gets one message telling Dane exactly what to do
+("open Screen Sharing to the Mini and sign in again"). If it is signed in as
+somebody else, the message names who. If OpenClaw itself has stopped
+answering, that is a different message, because the fix is restarting a
+service, not signing in. Each message repeats at most every six hours, and
+the next good check posts one line saying it cleared. The YouTube Outreach
+screen now shows the same news at the top, with when the Mini last checked
+and when it last posted, so a quiet day and a broken browser never look the
+same. Observe's OpenClaw card shows that same reading; it used to try to
+reach the Mini from the internet, which can never work. The same hourly
+check watches Substack too, even though nothing posts there yet: a signed-out
+Substack browser gets its own bus message ("Substack on the Mini is signed
+out of Dane of Earth. Sign in again in the dane-of-earth browser."), and the
+Substack Notes screen now says "Mini: signed in to Substack as Dane of Earth,
+checked 12 minutes ago" — or that the Mini has not checked yet. The worker
+itself is installed after the Mini's browser is signed in to YouTube (after
+Oct 13).
 ## 2026-10-08 — The duplicates report is out of date and does not cover iCloud Drive (#795)
 
 The report that finds duplicate copies of Dane's files (`npm run
