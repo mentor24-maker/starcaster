@@ -5,8 +5,10 @@ import {
   type BuilderTemplateSection,
 } from "@/lib/builder-template";
 import {
+  applyButtonBackgroundSettings,
   buildClonedPageCreatePayload,
   columnHasOnlyOverlayImageModules,
+  getButtonBackgroundSettings,
   getCellContentAlignmentStyle,
   getHeadingModuleStyle,
   getImageOverlayStyle,
@@ -1060,6 +1062,35 @@ describe("getButtonModuleStyle email safety", () => {
       expect(String(value)).not.toContain("var(");
     }
     expect(style.background).toBe("#214c71");
+  });
+});
+
+describe("button fill opacity", () => {
+  it("keeps the opacity the picker wrote, which had no key before 2026-10-09", () => {
+    // The shared picker always offered an Opacity slider; applyButtonBackgroundSettings
+    // dropped the value and getButtonBackgroundSettings never read one, so the
+    // slider moved and snapped back to 100 on every render (task 86bcg65zu).
+    const saved = applyButtonBackgroundSettings(
+      {},
+      { mode: "color", color: "#ff6600", color2: "#eaf4ff", imageUrl: "", styleKey: "", opacity: 40 }
+    );
+    expect(saved.buttonBackgroundOpacity).toBe("40");
+    expect(getButtonBackgroundSettings(saved).opacity).toBe(40);
+  });
+
+  it("reads a fill saved before the key existed as fully opaque", () => {
+    expect(getButtonBackgroundSettings({ buttonBackgroundMode: "color", buttonBackgroundColor: "#ff6600" }).opacity).toBe(100);
+    expect(getButtonBackgroundSettings({}).opacity).toBe(100);
+  });
+
+  it("paints a half-transparent colour fill as rgba, not the solid hex", () => {
+    const style = getButtonModuleStyle({
+      buttonBackgroundMode: "color",
+      buttonBackgroundColor: "#ff6600",
+      buttonBackgroundOpacity: "50"
+    }) as Record<string, string>;
+    expect(style.background).toContain("rgba(");
+    expect(style.background).not.toBe("#ff6600");
   });
 });
 
