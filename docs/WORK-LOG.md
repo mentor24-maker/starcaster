@@ -1,3 +1,15 @@
+## 2026-10-09 — New Zoom recordings never reach Studio (#810)
+
+A small job on the MacBook now looks in iCloud Drive's Zoom folder every 15
+minutes and sends each new recording's video into the Studio Inbox, where the
+Mini picks it up and puts it on the Footage screen. It waits until a recording
+is finished and fully downloaded, sends each one only once (even if it is
+renamed or copied), and deletes nothing. It goes straight into the Inbox
+rather than a "Zoom" sub-folder, because Studio ignores sub-folders. Older
+recordings are not sent on their own: a separate command lists them, and
+sending them is Dane's call. It still has to be switched on at the MacBook,
+which the build could not reach.
+
 ## 2026-10-09 — Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it waits for his approval (#803)
 
 Every 15 minutes Starcaster now looks at Dane's YouTube channel, his Substack
