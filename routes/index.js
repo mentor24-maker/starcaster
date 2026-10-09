@@ -172,6 +172,7 @@ const CRON_PATHS = new Set([
   '/api/support/bug-reports/sweep-orphans',
   '/api/youtube-outreach/run-due',
   '/api/engage/substack-notes/run-due',
+  '/api/engage/substack-notes/watch-content',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

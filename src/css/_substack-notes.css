@@ -148,6 +148,16 @@
   overflow-wrap: anywhere;
 }
 
+/* What the new-content watch is looking at (4/7): one line, then a reason per source. */
+.substack-notes-watch-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  opacity: 0.85;
+}
+
 /* ── Forms (settings, engage) ───────────────────────────────────────── */
 
 .substack-notes-form {
