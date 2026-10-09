@@ -272,8 +272,74 @@ function buildAdapters(env = process.env, list = ADAPTERS) {
   return { adapters: built, problems };
 }
 
-/** The real hourly check: every adapter's accounts, through OpenClaw, alarms to the bus. */
-function defaultHealthCheck(node) {
+/**
+ * SIGN-IN-ONLY CHECKS: accounts the hourly check watches whether or not an
+ * adapter posts with them yet (review round 1 of 86bcda6dt). Substack is here
+ * because Substack Notes 6/7, which adds its posting adapter, defers its
+ * sign-in alarm to this ticket — so waiting for an adapter would mean nothing
+ * ever checks Substack. When 6/7 lands, its adapter's own browserChecks() entry
+ * for the same site and account replaces this one (browserChecksFor), so the
+ * browser is never asked twice. Another account is one more entry.
+ *
+ * Each builder returns a list of checks or throws a sentence saying what is
+ * missing; a site that cannot be set up is named in the log and the others
+ * still run.
+ */
+const SIGN_IN_CHECKS = [
+  {
+    name: 'substack',
+    build: (env) => {
+      // Same project as YouTube outreach unless told otherwise: both are
+      // Dane of Earth's.
+      const projectId = text(env.SUBSTACK_NOTES_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID);
+      if (!projectId) throw new Error('no project to save the Substack reading on (SUBSTACK_NOTES_PROJECT_ID or YOUTUBE_OUTREACH_PROJECT_ID)');
+      const store = require('../../lib/substackNotesStore');
+      const accountKey = store.DEFAULT_ACCOUNT;
+      return [{
+        site: 'substack',
+        accountKey,
+        profile: 'dane-of-earth',
+        who: require('../../lib/openclawSignIn.js').SITES.substack.expected,
+        record: (reading) => store.recordBrowserCheck(reading, { projectId }, { accountKey }),
+      }];
+    },
+  },
+];
+
+/**
+ * Every check the hourly pass runs: each adapter's accounts, then the
+ * sign-in-only list. One per site and account — an adapter's own entry wins,
+ * because it writes the row the posting screen reads.
+ */
+function browserChecksFor(adapters, extra = []) {
+  const seen = new Set();
+  const out = [];
+  const fromAdapters = adapters.flatMap((a) => (typeof a.browserChecks === 'function' ? a.browserChecks() : []));
+  for (const check of [...fromAdapters, ...extra]) {
+    const key = `${check.site}:${check.accountKey}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(check);
+  }
+  return out;
+}
+
+/** Build the sign-in-only checks; a site that cannot be set up becomes a problem line. */
+function buildSignInChecks(env = process.env, list = SIGN_IN_CHECKS) {
+  const checks = [];
+  const problems = [];
+  for (const entry of list) {
+    try {
+      checks.push(...entry.build(env));
+    } catch (err) {
+      problems.push(`${entry.name}: ${err.message}`);
+    }
+  }
+  return { checks, problems };
+}
+
+/** The real hourly check: every account, through OpenClaw, alarms to the bus. */
+function defaultHealthCheck(node, extraChecks = []) {
   const health = require('./health.js');
   // The alarm names the machine the way the roll call does ("mac-mini"), not
   // by its hostname, which nobody reading the bus would recognise.
@@ -281,7 +347,7 @@ function defaultHealthCheck(node) {
   try { name = require('../../lib/nodeRoles.js').thisNode().name || ''; } catch { /* hostname below */ }
   const deps = health.liveDeps({ node: name || node, ledgerFile: health.defaultLedgerFile() });
   return async (adapters) => {
-    const checks = adapters.flatMap((a) => (typeof a.browserChecks === 'function' ? a.browserChecks() : []));
+    const checks = browserChecksFor(adapters, extraChecks);
     if (!checks.length) return '';
     return health.formatHealth(await health.runHealthCheck({ checks, deps }));
   };
@@ -328,7 +394,12 @@ async function runPoster(options = {}) {
   }
   write(`[outreach-poster] starting — sites: ${adapters.map((a) => a.name).join(', ')}; a pass every ${Math.round(passEveryMs / 1000)}s`);
 
-  const health = checkHealth || defaultHealthCheck(node);
+  let health = checkHealth;
+  if (!health) {
+    const signInOnly = buildSignInChecks(env);
+    for (const problem of signInOnly.problems) write(`[outreach-health] a sign-in check is OFF — ${problem}`);
+    health = defaultHealthCheck(node, signInOnly.checks);
+  }
 
   let lastBeat = 0;
   let lastHealth = 0;
@@ -393,6 +464,9 @@ module.exports = {
   configureOpenClaw,
   buildAdapters,
   ADAPTERS,
+  SIGN_IN_CHECKS,
+  buildSignInChecks,
+  browserChecksFor,
   ROLE,
   DEFAULT_PASS_EVERY_MS,
 };

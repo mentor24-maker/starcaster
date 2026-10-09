@@ -25,6 +25,18 @@
   opacity: 0.75;
 }
 
+/* The Mini's sign-in reading (YouTube outreach 7/7): a bad or missing reading
+   is not muted, because it is the one line on the screen that needs acting on. */
+.substack-notes-signin--warn,
+.substack-notes-signin--alarm {
+  opacity: 1;
+  color: var(--status-warn-ink);
+}
+
+.substack-notes-signin--alarm {
+  font-weight: 600;
+}
+
 .substack-notes-toolbar {
   display: flex;
   flex-wrap: wrap;

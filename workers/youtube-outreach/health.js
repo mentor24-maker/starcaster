@@ -5,7 +5,9 @@
  * task 86bcda6dt). Without it, a signed-out browser leaves every approved
  * comment sitting at `approved` forever, which looks exactly like a quiet week.
  *
- * Once an hour, for every account an adapter posts with, it asks two separate
+ * Once an hour, for every account an adapter posts with — and every account
+ * listed as a sign-in-only check, which is how Substack is watched before
+ * anything posts there (poster.js SIGN_IN_CHECKS) — it asks two separate
  * questions, in this order:
  *
  *   1. Is OpenClaw answering at all? (lib/openclawSignIn.js probeGateway)
@@ -59,11 +61,34 @@ function text(value) {
 }
 
 /**
+ * Sentences a site words its own way. Substack's come from Substack Notes 7/7
+ * (86bcet7r8), which is Live and already prints the signed-out one from the
+ * by-hand check (lib/openclawSignIn.js SITES.substack.signedOut): the bus, the
+ * screen and the smoke check say ONE sentence for one fact, rather than this
+ * worker inventing a second, Screen-Sharing-flavoured one for the same browser.
+ * The signed-in one is the line that ticket asked its screen to show.
+ */
+const SITE_WORDING = {
+  substack: {
+    signed_in: ({ label, who }) => `Mini: signed in to ${label} as ${who}.`,
+    signed_out: ({ label, who, profile }) => `${label} on the Mini is signed out of ${who}. Sign in again in the ${profile} browser.`,
+  },
+};
+
+/** The bus title each site's alarms carry, so a Substack alarm never reads as YouTube's. */
+const SITE_TITLES = { youtube: 'YouTube outreach', substack: 'Substack Notes' };
+
+/** The gateway is shared by every site, so its alarm names the machine's job, not a site. */
+const GATEWAY_TITLE = 'Posting browser';
+
+/**
  * The sentence for one check, as the screen shows it and the bus reads it.
  * `who` is the account name the profile must be signed in as.
  */
 function sentence(state, { site = 'youtube', who = 'Dane of Earth', profile = 'dane-of-earth', detail = '' } = {}) {
   const label = signIn.SITES[site]?.label || site;
+  const own = SITE_WORDING[site]?.[state];
+  if (own) return own({ label, who, profile, detail });
   switch (state) {
     case 'signed_in':
       return `Mini: connected to ${label} as ${who}.`;
@@ -117,14 +142,21 @@ function decideAlarm({ entry, state, now, everyMs = REPOST_EVERY_MS }) {
   return entry ? { action: 'clear', entry: undefined, was: entry.state } : { action: 'quiet', entry: undefined };
 }
 
-/** The bus wording, prefixed so a reader knows which machine and which job. */
-function alarmPost(node, message) {
-  return `⚠️ **YouTube outreach (${node || 'the Mini'})** — ${message}\n\n`
+/**
+ * The bus wording, prefixed so a reader knows which machine and which job.
+ * `title` defaults to YouTube's for the callers that predate other sites.
+ */
+function alarmPost(node, message, title = SITE_TITLES.youtube) {
+  return `⚠️ **${title} (${node || 'the Mini'})** — ${message}\n\n`
     + `_Repeated at most once every ${Math.round(REPOST_EVERY_MS / 3600000)} hours until a check comes back good; checked hourly._`;
 }
 
-function clearPost(node, message) {
-  return `✅ **YouTube outreach (${node || 'the Mini'})** — cleared: ${message}`;
+function clearPost(node, message, title = SITE_TITLES.youtube) {
+  return `✅ **${title} (${node || 'the Mini'})** — cleared: ${message}`;
+}
+
+function titleFor(site) {
+  return SITE_TITLES[site] || signIn.SITES[site]?.label || site;
 }
 
 // ── The ledger: which alarms are open, and when each last posted ───────────
@@ -147,7 +179,8 @@ function writeLedger(file, ledger) {
  * One check of every account, plus the alarms it calls for.
  *
  *   checks  [{ site, accountKey, profile, who, record(reading) }] — from the
- *           adapters' browserChecks(); `record` writes the settings row.
+ *           adapters' browserChecks() plus the sign-in-only checks in
+ *           poster.js SIGN_IN_CHECKS; `record` writes the settings row.
  *   deps    { probe(), ask(request), extractJson(text), post(text),
  *             readLedger(), writeLedger(ledger), node }
  *
@@ -203,6 +236,7 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
       key: GATEWAY_KEY,
       decision: decideAlarm({ entry: ledger[GATEWAY_KEY], state: anyGatewayDown ? 'gateway_down' : 'signed_in', now }),
       message: gw ? gw.message : 'OpenClaw on the Mini is answering again.',
+      title: GATEWAY_TITLE,
     });
   }
   for (const r of results) {
@@ -210,12 +244,12 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
     // sign-in alarm is neither confirmed nor cleared by that.
     if (r.state === 'gateway_down') continue;
     const key = `${r.site}:${r.accountKey}`;
-    decisions.push({ key, decision: decideAlarm({ entry: ledger[key], state: r.state, now }), message: r.message });
+    decisions.push({ key, decision: decideAlarm({ entry: ledger[key], state: r.state, now }), message: r.message, title: titleFor(r.site) });
   }
 
-  for (const { key, decision, message } of decisions) {
+  for (const { key, decision, message, title } of decisions) {
     if (decision.action === 'quiet') continue;
-    const body = decision.action === 'post' ? alarmPost(deps.node, message) : clearPost(deps.node, message);
+    const body = decision.action === 'post' ? alarmPost(deps.node, message, title) : clearPost(deps.node, message, title);
     try {
       await deps.post(body);
     } catch (err) {
@@ -274,6 +308,8 @@ module.exports = {
   REPOST_EVERY_MS,
   ALARM_STATES,
   GATEWAY_KEY,
+  GATEWAY_TITLE,
+  SITE_TITLES,
   sentence,
   readCall,
   decideAlarm,
