@@ -21,9 +21,17 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * screens, each saying which it is. The same goes for transcripts (Studio
  * Phase 2 · 5 of 6, 86bcdek0e): every file says which of its transcript
  * states it is in, in a sentence, and only a finished one has a button.
+ *
+ * SEARCH WHAT YOU SAID (6 of 6, 86bcdek0z) sits above the list and searches
+ * the transcripts, not the session names. "Nothing matches" always says how
+ * many recordings were searched, so it never looks like "nothing transcribed".
  */
 
 const FOOTAGE_PATH = '/api/studio/footage';
+const SEARCH_PATH = '/api/studio/search';
+
+/** routes/studio.js MIN_QUERY_CHARS — a shorter query is not sent at all. */
+export const MIN_QUERY_CHARS = 2;
 
 type SourceRow = {
   id: string;
@@ -396,6 +404,141 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
   );
 }
 
+type SearchMoment = { start: number; time: string; text: string };
+
+type SearchHit = {
+  sourceId: string;
+  found: boolean;
+  fileName: string;
+  driveUrl: string | null;
+  sessionTitle: string;
+  date: string;
+  dateSource: SourceRow['dateSource'];
+  matchCount: number;
+  moments: SearchMoment[];
+};
+
+type SearchAnswer = {
+  query: string;
+  results: SearchHit[];
+  /** Recordings with a finished transcript; null when it could not be counted. */
+  transcribedCount: number | null;
+  momentsPerFile: number;
+  truncated: boolean;
+  searchLimit: number;
+  countTruncated: boolean;
+  countError: string;
+};
+
+/** The words in a query, the way lib/videoTranscriptsStore.js searchWords splits them. */
+export function queryWords(query: string): string[] {
+  return String(query || '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/** Why a query is not sent, or '' when it may be. */
+export function queryTooShort(query: string): string {
+  const q = query.trim();
+  if (q.length >= MIN_QUERY_CHARS) return '';
+  return q
+    ? `"${q}" is too short to search — type at least ${MIN_QUERY_CHARS} characters.`
+    : `Type at least ${MIN_QUERY_CHARS} characters to search what you said.`;
+}
+
+/**
+ * The sentence for a search with no results. It names the query AND how much
+ * was searched (landmine 17), so "you never said it" and "nothing has been
+ * transcribed yet" are two different sentences.
+ */
+export function noMatchSentence(query: string, transcribedCount: number | null, countError = ''): string {
+  const q = query.trim();
+  if (transcribedCount === null) {
+    return `Nothing you said matches "${q}". How many recordings have transcripts could not be read`
+      + `${countError ? `: ${countError}` : ''}.`;
+  }
+  if (transcribedCount === 0) {
+    return `Nothing you said matches "${q}" — no recording has been transcribed yet, so there was nothing to search.`;
+  }
+  return `Nothing you said matches "${q}". Searched ${transcribedCount} transcribed recording${transcribedCount === 1 ? '' : 's'}.`;
+}
+
+/** A line with every searched word wrapped in <mark>. */
+export function Highlighted({ text, words }: { text: string; words: string[] }): React.ReactElement {
+  const wanted = new Set(words);
+  const parts = text.split(/([\p{L}\p{N}]+)/u);
+  return (
+    <>
+      {parts.map((part, i) => (wanted.has(part.toLowerCase()) ? <mark key={i}>{part}</mark> : part))}
+    </>
+  );
+}
+
+function SearchResults({ answer }: { answer: SearchAnswer }): React.ReactElement {
+  const words = queryWords(answer.query);
+  if (!answer.results.length) {
+    return (
+      <p className="studio-footage-empty" data-testid="studio-search-empty">
+        {noMatchSentence(answer.query, answer.transcribedCount, answer.countError)}
+      </p>
+    );
+  }
+  const count = answer.results.length;
+  return (
+    <div className="studio-footage-search-results" data-testid="studio-search-results">
+      <p className="studio-footage-summary">
+        {`"${answer.query}" was said in ${count}${answer.truncated ? '+' : ''} recording${count === 1 ? '' : 's'}`}
+        {answer.transcribedCount !== null ? ` (of ${answer.transcribedCount} transcribed)` : ''}
+        {'.'}
+        {answer.truncated ? ` Only the newest ${answer.searchLimit} are shown — add a word to narrow it.` : ''}
+      </p>
+      <ul className="studio-footage-search-list">
+        {answer.results.map((hit) => {
+          const name = hit.fileName || (hit.found ? 'Unnamed file' : 'A file older than this page read');
+          const more = hit.matchCount - hit.moments.length;
+          return (
+            <li key={hit.sourceId} className="studio-footage-search-hit">
+              <div className="studio-footage-search-file">
+                {hit.driveUrl ? (
+                  <a
+                    className="studio-footage-play"
+                    href={hit.driveUrl}
+                    target="_blank"
+                    rel="noopener"
+                    title={`Watch ${hit.fileName || 'this file'} in Google Drive (opens a new tab)`}
+                  >
+                    <span className="studio-footage-file-name">{name}</span>
+                  </a>
+                ) : (
+                  <span className="studio-footage-file-name">{name}</span>
+                )}
+                <span className="studio-footage-session-meta">
+                  {[hit.sessionTitle, shortDate(hit.date)].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              {hit.moments.length ? (
+                <ol className="studio-footage-transcript-lines studio-footage-search-moments" data-ui-no-sideways="search moments">
+                  {hit.moments.map((m, i) => (
+                    <li key={i}>
+                      <span className="studio-footage-transcript-time">{m.time}</span>
+                      <span className="studio-footage-transcript-text"><Highlighted text={m.text} words={words} /></span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="studio-footage-file-note">
+                  Said in this recording, but no single line holds every word — open its transcript to read it.
+                </p>
+              )}
+              {more > 0 ? (
+                <p className="studio-footage-file-note">{`…and ${more} more line${more === 1 ? '' : 's'} in this recording.`}</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function stateSummary(counts: Record<string, number>): string {
   const order = ['ready', 'proxied', 'probed', 'downloaded', 'downloading', 'new', 'failed'];
   const keys = Object.keys(counts).sort((a, b) => {
@@ -418,6 +561,52 @@ export default function FootagePanel(): React.ReactElement {
   const [attempt, setAttempt] = useState(0);
   const [openTranscript, setOpenTranscript] = useState('');
   const requestSeq = useRef(0);
+  const [said, setSaid] = useState('');
+  const [answer, setAnswer] = useState<SearchAnswer | null>(null);
+  const [searchNote, setSearchNote] = useState('');
+  const [searching, setSearching] = useState(false);
+  const searchSeq = useRef(0);
+
+  const clearSearch = useCallback(() => {
+    searchSeq.current += 1;
+    setSaid('');
+    setAnswer(null);
+    setSearchNote('');
+    setSearching(false);
+  }, []);
+
+  const runSearch = useCallback(async (raw: string) => {
+    const tooShort = queryTooShort(raw);
+    const seq = ++searchSeq.current;
+    if (tooShort) {
+      setAnswer(null);
+      setSearchNote(tooShort);
+      return;
+    }
+    const api = getApp()?.api;
+    if (typeof api !== 'function') {
+      setSearchNote('The admin app is still loading — try again in a moment.');
+      return;
+    }
+    setSearching(true);
+    setSearchNote('');
+    try {
+      const body = await api(`${SEARCH_PATH}?q=${encodeURIComponent(raw.trim())}`);
+      if (seq !== searchSeq.current) return;
+      if (!body?.ok) {
+        setAnswer(null);
+        setSearchNote(body?.error?.message || 'The search could not be run.');
+      } else {
+        setAnswer(body.data as SearchAnswer);
+      }
+    } catch (err) {
+      if (seq !== searchSeq.current) return;
+      setAnswer(null);
+      setSearchNote(err instanceof Error ? err.message : 'The search could not be run.');
+    } finally {
+      if (seq === searchSeq.current) setSearching(false);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     const api = getApp()?.api;
@@ -480,13 +669,14 @@ export default function FootagePanel(): React.ReactElement {
       setOpenTranscript('');
       setError('');
       setLoading(false);
+      clearSearch();
       if (lane) { setLane(''); return; } // the lane change re-runs load via the show effect
       const page = hostRef.current?.closest('.app-page');
       if (!page || !page.classList.contains('hidden')) void load();
     };
     window.addEventListener(PROJECT_SWITCH_EVENT, onSwitch);
     return () => window.removeEventListener(PROJECT_SWITCH_EVENT, onSwitch);
-  }, [load, lane]);
+  }, [load, lane, clearSearch]);
 
   const sessions = useMemo(() => {
     const all = data?.sessions || [];
@@ -518,6 +708,41 @@ export default function FootagePanel(): React.ReactElement {
 
   return (
     <div ref={hostRef} className="studio-footage-panel">
+      <form
+        className="studio-footage-search"
+        role="search"
+        aria-label="Search what you said"
+        onSubmit={(e) => { e.preventDefault(); void runSearch(said); }}
+      >
+        <label className="studio-footage-filter studio-footage-search-field">
+          <span>Search what you said</span>
+          <input
+            type="search"
+            value={said}
+            data-testid="studio-search-input"
+            placeholder="A word or phrase you said in a recording"
+            onChange={(e) => setSaid(e.target.value)}
+          />
+        </label>
+        <div className="studio-footage-filter-actions">
+          <button type="submit" className="btn" disabled={searching}>
+            {searching ? 'Searching…' : 'Search'}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            data-testid="studio-search-clear"
+            disabled={!said && !answer && !searchNote}
+            onClick={clearSearch}
+          >
+            Clear search
+          </button>
+        </div>
+      </form>
+
+      {searchNote ? <p className="studio-footage-error" role="alert" data-testid="studio-search-note">{searchNote}</p> : null}
+      {answer ? <SearchResults answer={answer} /> : null}
+
       <div className="studio-footage-filters" role="group" aria-label="Filter footage">
         <label className="studio-footage-filter">
           <span>Session</span>

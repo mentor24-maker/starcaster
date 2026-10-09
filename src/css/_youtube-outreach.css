@@ -329,3 +329,61 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ── Posted (5/7, task 86bcda68h) ─────────────────────────────────────────── */
+
+.yt-outreach-wait {
+  font-style: italic;
+}
+
+.yt-outreach-posted-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.yt-outreach-posted-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.yt-outreach-posted-shot {
+  flex: 0 0 auto;
+  display: block;
+  width: 160px;
+  max-width: 100%;
+}
+
+.yt-outreach-posted-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.yt-outreach-posted-body {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.yt-outreach-posted-body p {
+  margin: 0;
+}
+
+.yt-outreach-posted-status {
+  font-weight: 600;
+}
+
+.yt-outreach-posted-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
