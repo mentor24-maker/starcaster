@@ -1,3 +1,85 @@
+## 2026-10-09 — Substack Miner 2/7: Starcaster searches the web for Substack writers who use Dane's keywords and lists them as candidates (#801)
+
+Starcaster can now go and find Substack writers by itself. Given Dane's
+keywords, it asks the web search engine for Substack pages mentioning each one,
+keeps only real Substack publications, reads each new writer's front page once
+for their name, a short description and their subscriber count, and adds them to
+the Substack Miner list as candidates, remembering every keyword that found
+them. It only reads public pages, one at a time, a second and a half apart, and
+posts nothing. Tried on "Game B" and "metamodern" it found 39 writers; running it
+again added none and just updated the ones already listed. When it cannot do its
+job it says why instead of reporting "found nothing": no search key, a search
+that failed, or a page that would not load (that writer is still saved). There
+is no screen yet; slice 4 adds the button.
+
+## 2026-10-08 — YouTube outreach 7/7: Dane is told by name when the Mini stops posting or YouTube signs it out (#798)
+
+The Mac Mini's posting worker now checks its own browser once an hour and
+says so out loud when something is wrong. If YouTube has signed the Dane of
+Earth browser out, the bus gets one message telling Dane exactly what to do
+("open Screen Sharing to the Mini and sign in again"). If it is signed in as
+somebody else, the message names who. If OpenClaw itself has stopped
+answering, that is a different message, because the fix is restarting a
+service, not signing in. Each message repeats at most every six hours, and
+the next good check posts one line saying it cleared. The YouTube Outreach
+screen now shows the same news at the top, with when the Mini last checked
+and when it last posted, so a quiet day and a broken browser never look the
+same. Observe's OpenClaw card shows that same reading; it used to try to
+reach the Mini from the internet, which can never work. The same hourly
+check watches Substack too, even though nothing posts there yet: a signed-out
+Substack browser gets its own bus message ("Substack on the Mini is signed
+out of Dane of Earth. Sign in again in the dane-of-earth browser."), and the
+Substack Notes screen now says "Mini: signed in to Substack as Dane of Earth,
+checked 12 minutes ago" — or that the Mini has not checked yet. The worker
+itself is installed after the Mini's browser is signed in to YouTube (after
+Oct 13).
+## 2026-10-08 — The duplicates report is out of date and does not cover iCloud Drive (#795)
+
+The report that finds duplicate copies of Dane's files (`npm run
+archive:index`) now looks in the right places. It no longer counts the old
+MaxOne drive, which was erased on 4 October and is now the Time Machine
+backup. It now covers **iCloud Drive**, where Zoom keeps 33 GB of
+recordings, and the 173 GB folder still sitting in the MacBook's Trash.
+Files whose contents live only in iCloud are never opened, because opening
+one downloads it. They are counted as "in iCloud only, not checked" and
+never treated as a lone copy or a spare one. Apple Photos is listed as "not
+checked" because macOS blocks reading it. The report now opens with one
+line per place: how many files and how much space, how many already have a
+copy where they belong, and how many are the **only copy** anywhere. The
+next ticket deletes MacBook copies from this report, so those only-copy
+files are the ones it must never touch. "Only copy" means no copy in any
+OTHER place, so two copies sitting on the MacBook alone both count, and a
+MacBook file whose other copy is in the Trash folder counts too (the cleanup
+empties both). A fourth number covers files with a copy somewhere, but not
+yet where they belong, so every file on a line is counted exactly once.
+Read-only: nothing is moved or
+deleted. The first real run happens on the MacBook as part of that cleanup
+ticket (Dane's call, 9 October), because the MacBook was asleep every time
+a pass tried to reach it.
+
+## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
+
+Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
+button. Starcaster writes the Note (or the reply) in the voice from Settings,
+and it lands on a new **Approvals** tab in a box Dane can edit, with
+**Approve**, **Reject** and **Write another**. Likes and restacks have no
+words, so they wait on Approvals with just Approve and Reject. The account's
+rules are checked on what was actually written: a link when links are set to
+Never, a word on the avoid list, or a Note that is too long is thrown away
+with the reason, and an edit that breaks a rule is refused the same way. For a
+reply, Starcaster reads the other person's Note from Substack itself; if it
+can't, the row asks Dane to paste it. Nothing is posted yet.
+## 2026-10-08 — Live browser view 1: the plan for signing in to YouTube, Substack and other sites from inside Starcaster (#797)
+
+A written plan, no feature code yet: `docs/LIVE_BROWSER_VIEW.md`. It
+recommends a "Connect" window inside Starcaster showing a live picture of the
+Mini's Chrome, opened only with a one-time pass and closing itself after a few
+idle minutes. Measured on the Mini: typing is fast (about a fiftieth of a
+second from key to picture), and passwords and two-step codes go through.
+Google refuses a browser started by the usual automation tool, but not a real
+Chrome that is only being watched, so the plan uses the second kind. The plan
+ends with five build tickets for Dane to approve. While checking, we found that
+Tailscale, the Mini's route to the internet, has been off since about Oct 5.
 ## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
 
 The live site reaches the YouTube download helper on the Mac Mini through
