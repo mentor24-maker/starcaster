@@ -166,6 +166,7 @@ const CRON_PATHS = new Set([
   '/api/promote/social/posts/publish-due',
   '/api/engage/social/posts/publish-due',
   '/api/support/bug-reports/sweep-orphans',
+  '/api/youtube-outreach/run-due',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

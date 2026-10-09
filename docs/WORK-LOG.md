@@ -1,3 +1,16 @@
+## 2026-10-08 — YouTube outreach 6/7: the agent drafts comments for due videos on its own, still waiting for approval (#793)
+
+Starcaster no longer waits for Dane to click **Write a draft**. Every ten
+minutes a scheduled pass looks at each active video on **Engage → YouTube
+Outreach**, and when one is due it writes a draft and puts it on the
+**Approvals** tab. Nothing is approved or posted by the timer; Dane still
+approves every comment. Each video gets at most one waiting comment, so drafts
+do not pile up while he is away. It also never writes more drafts than the
+account could still post today. A one-off video is finished and marked
+**Done** once its comment is posted. A repeating one comes due again every few
+days until it reaches its count or stop date. Each row now says when the next
+draft is due, or why not: paused, finished, or waiting for his approval.
+
 ## 2026-10-08 — YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (#792)
 
 The Mac Mini now has a worker that takes comments Dane has approved on
