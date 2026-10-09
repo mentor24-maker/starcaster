@@ -1,3 +1,17 @@
+## 2026-10-09 — Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it waits for his approval (#803)
+
+Every 15 minutes Starcaster now looks at Dane's YouTube channel, his Substack
+and his Starcaster blog. When something new appears, it writes a draft Note
+pointing to it and puts it on **Engage → Substack Notes → Approvals**, where he
+approves, edits or rejects it as usual. Nothing posts. Each piece gets one
+Note only, ever, even if it is deleted. The first look does not draft his old
+work: everything already out is recorded as seen and the Ideas tab says how
+many (eight articles on his Substack). It also never leaves more drafts
+waiting than the daily maximum allows. The Ideas tab shows what is being
+watched and when it last checked, and why a source is off ("no YouTube
+channel saved in Settings"). Settings has **Draft a Note for my latest piece**
+for anything older. It needs one small database change run in production
+before it starts.
 ## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
 
 Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
