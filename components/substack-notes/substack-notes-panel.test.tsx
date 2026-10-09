@@ -121,6 +121,25 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     };
     return { ok: true, data: { ...store.settings } };
   }
+  const decision = path.match(/^\/api\/engage\/substack-notes\/items\/([^/]+)\/(draft|approve|reject)$/);
+  if (decision && method === "POST") {
+    const found = store.items.find((i) => i.id === decision[1]) || fail("Item not found in this project");
+    if (decision[2] === "draft") {
+      found.draftText = `Draft about: ${found.ideaText || found.targetUrl}`;
+      found.status = "draft";
+    } else if (decision[2] === "approve") {
+      const words = body?.text ?? found.draftText;
+      // The server's avoid-list rule, in its own words (lib/substackNotesDrafter.js checkNoteText).
+      const avoided = store.settings.avoidWords.filter((w) => words && new RegExp(`\\b${w}\\b`, "i").test(words));
+      if (avoided.length) fail(`Not approved: it uses "${avoided[0]}", which is on the account's words-to-avoid list.`);
+      found.finalText = words || "";
+      found.status = "approved";
+    } else {
+      found.status = "rejected";
+    }
+    found.updatedAt = `2026-10-08T12:00:${String(requests.length).padStart(2, "0")}Z`;
+    return { ok: true, data: { ...found } };
+  }
   const one = path.match(/^\/api\/engage\/substack-notes\/items\/([^/]+)$/);
   if (one) {
     const found = store.items.find((i) => i.id === one[1]) || fail("Item not found in this project");
@@ -224,10 +243,10 @@ afterEach(() => {
 });
 
 describe("Substack Notes screen", () => {
-  it("opens on three tabs and says why each list is empty", async () => {
+  it("opens on four tabs and says why each list is empty", async () => {
     await mount();
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
-    expect(tabs).toEqual(["Ideas", "Engage", "Settings"]);
+    expect(tabs).toEqual(["Ideas", "Engage", "Approvals", "Settings"]);
     expect(text()).toContain("No ideas yet. Type one above and click Add.");
     expect(text()).toContain("No topics yet.");
     await click(button("Engage"));
@@ -385,6 +404,101 @@ describe("Substack Notes screen", () => {
     expect(text()).toContain("The settings could not be read: table missing");
     expect(text()).not.toContain("The ideas and Notes could not be read");
     expect(text()).toContain("No ideas yet.");
+  });
+});
+
+describe("Substack Notes approvals (3/7)", () => {
+  it("says why Approvals is empty", async () => {
+    await mount();
+    await click(button("Approvals"));
+    expect(text()).toContain("Nothing waiting for approval. Click Write a draft on an idea, or add a Note to engage with.");
+  });
+
+  it("writes a draft from an idea; an edit then Approve reads approved with the edited text after a reload", async () => {
+    stores.proj_doe.items = [item({ ideaText: "Why the stars feel closer in winter" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write a draft", row(id)));
+    expect(requests.some((r) => r.method === "POST" && r.path.endsWith(`/items/${id}/draft`))).toBe(true);
+    expect(text()).toContain("A draft Note is waiting on the Approvals tab.");
+
+    await click(button("Approvals"));
+    const box = el<HTMLTextAreaElement>(`#sn-draft-${id}`);
+    expect(box.value).toBe("Draft about: Why the stars feel closer in winter");
+    type(box, "Winter stars look closer because the air is drier.");
+    await click(button("Approve", el(`article[data-item-id="${id}"]`)));
+    expect(stores.proj_doe.items[0]).toMatchObject({ status: "approved", finalText: "Winter stars look closer because the air is drier." });
+
+    await reload();
+    expect(row(id).textContent).toContain("Approved — waiting to post");
+    expect(row(id).querySelector(".substack-notes-words")?.textContent).toBe("Will post: Winter stars look closer because the air is drier.");
+    await click(button("Approvals"));
+    expect(container!.querySelector(`article[data-item-id="${id}"]`)).toBeNull();
+  });
+
+  it("shows a Like on Approvals with just Approve and Reject, and no text box", async () => {
+    stores.proj_doe.items = [item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-9" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals (1)"));
+    const card = el<HTMLElement>(`article[data-item-id="${id}"]`);
+    expect(card.querySelector("textarea")).toBeNull();
+    expect([...card.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Reject", "Approve"]);
+    await click(button("Approve", card));
+    expect(requests.find((r) => r.path.endsWith("/approve"))?.body).toEqual({});
+    expect(stores.proj_doe.items[0].status).toBe("approved");
+  });
+
+  it("Reject takes it off Approvals and leaves its row marked Rejected", async () => {
+    stores.proj_doe.items = [item({ ideaText: "Night music", status: "draft", draftText: "Some words" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals"));
+    await click(button("Reject", el(`article[data-item-id="${id}"]`)));
+    expect(stores.proj_doe.items[0].status).toBe("rejected");
+    expect(container!.querySelector(`article[data-item-id="${id}"]`)).toBeNull();
+    await click(button("Ideas"));
+    expect(row(id).textContent).toContain("Rejected");
+    expect(row(id).querySelector(".substack-notes-words")?.textContent).toBe("Rejected draft: Some words");
+  });
+
+  it("shows an approved reply's words on its Engage row, and nothing for a like", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-1", status: "approved", draftText: "First go", finalText: "Edited reply" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "approved" }),
+    ];
+    const [reply, like] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    await click(button("Engage"));
+    expect(row(reply).querySelector(".substack-notes-words")?.textContent).toBe("Will post: Edited reply");
+    expect(row(like).querySelector(".substack-notes-words")).toBeNull();
+  });
+
+  it("shows the server's reason when an edit breaks a rule, and the draft stays waiting", async () => {
+    stores.proj_doe.settings = { ...defaults(), avoidWords: ["synergy"], saved: true, updatedAt: "x" };
+    stores.proj_doe.items = [item({ ideaText: "Teams", status: "draft", draftText: "Good words" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals"));
+    type(el<HTMLTextAreaElement>(`#sn-draft-${id}`), "Pure synergy");
+    await click(button("Approve", el(`article[data-item-id="${id}"]`)));
+    expect(text()).toContain("which is on the account's words-to-avoid list");
+    expect(text()).not.toContain("Not approved: Not approved");
+    expect(stores.proj_doe.items[0].status).toBe("draft");
+    expect(el(`article[data-item-id="${id}"]`)).toBeTruthy();
+  });
+
+  it("lets Dane paste the text of the Note a reply answers", async () => {
+    stores.proj_doe.items = [item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-9" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Engage"));
+    expect(row(id).textContent).toContain("Their Note: not read yet");
+    await click(button("Paste their Note", row(id)));
+    type(el<HTMLTextAreaElement>(`#sn-edit-${id}`), "Winter is the best season for stargazing.");
+    await submit(el<HTMLFormElement>("form.substack-notes-row-editor"));
+    expect(stores.proj_doe.items[0].targetText).toBe("Winter is the best season for stargazing.");
+    expect(stores.proj_doe.items[0].ideaText).toBe("");
   });
 });
 
