@@ -12,6 +12,17 @@ job it says why instead of reporting "found nothing": no search key, a search
 that failed, or a page that would not load (that writer is still saved). There
 is no screen yet; slice 4 adds the button.
 
+## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
+
+The live site reaches the YouTube download helper on the Mac Mini through
+Tailscale, a private tunnel that gives the Mini a public web address.
+Tailscale had been started by hand, so when it stopped on October 5 nothing
+brought it back, and downloads quietly stopped working (the second time; the
+first lasted 24 days in September). It now runs under the Mac's own "keep
+this program running" service, which restarts it after a crash or a reboot.
+That was tested by killing it on purpose and watching it come straight back.
+`./scripts/install_tailscale.sh --status` says in one screen whether it is
+running, connected, and publicly reachable.
 ## 2026-10-08 — Substack Miner 1/7: a place to keep the Substack writers Starcaster finds, the keyword list, and a Substack address on every contact (storage and server) (#800)
 
 The Substack Miner now has somewhere to keep its work, though nothing fills it

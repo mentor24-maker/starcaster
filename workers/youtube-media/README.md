@@ -232,14 +232,11 @@ Vercel and that domain carries live email.
 ```bash
 brew install tailscale
 
-# Userspace mode: no root needed, and Funnel only exposes one local port
-# outward — it never routes traffic into the machine's network stack.
-mkdir -p ~/.tailscale
-nohup /opt/homebrew/opt/tailscale/bin/tailscaled \
-  --tun=userspace-networking \
-  --statedir="$HOME/.tailscale" \
-  --socket="$HOME/.tailscale/tailscaled.sock" \
-  > ~/Library/Logs/tailscaled.log 2>&1 &
+# Runs tailscaled under launchd (com.starcaster.tailscaled), in userspace mode:
+# no root needed, and Funnel only exposes one local port outward — it never
+# routes traffic into the machine's network stack. launchd restarts it after a
+# crash or a reboot.
+./scripts/install_tailscale.sh
 
 TS="/opt/homebrew/bin/tailscale --socket $HOME/.tailscale/tailscaled.sock"
 $TS login --hostname=mac-mini      # prints a URL Dane opens in a browser
@@ -250,6 +247,14 @@ $TS funnel status                  # shows the public https://<host>.ts.net
 Two of those steps are **Dane's browser and nobody else's**: signing in, and
 enabling Funnel for the tailnet the first time (the CLI prints that second
 URL itself and refuses until it is done).
+
+**Never start tailscaled by hand with `nohup ... &`** — that is how this step
+used to read, and a hand-started copy survives nothing. Production lost the
+helper for 24 days from 2026-09-10 and again from 2026-10-05 that way.
+`./scripts/install_tailscale.sh --status` says whether launchd is holding it,
+whether the tailnet is connected and whether Funnel is on; the Funnel route is
+kept in tailscaled's own state file, so it comes back on every restart without
+re-running `funnel --bg`.
 
 **Give DNS a few minutes and check from off the tailnet before believing it.**
 "Could not resolve host" here has *two* causes and they need opposite
