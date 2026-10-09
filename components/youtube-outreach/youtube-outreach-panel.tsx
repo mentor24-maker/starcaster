@@ -115,6 +115,20 @@ export type OutreachSettings = {
   voice: string;
   saved: boolean;
   updatedAt: string;
+  /** What the Mini found the last time it checked its browser (7/7). */
+  browserCheck?: BrowserCheck;
+};
+
+/**
+ * The Mini's hourly look at its own browser (YouTube outreach 7/7, task
+ * 86bcda6dt), written onto the settings row by workers/youtube-outreach/health.js.
+ * A blank state means it has never checked.
+ */
+export type BrowserCheck = {
+  state: '' | 'signed_in' | 'signed_out' | 'wrong_account' | 'gateway_down' | 'cannot_tell';
+  message: string;
+  checkedAt: string | null;
+  signedInAt: string | null;
 };
 
 /** A settings snapshot copied onto a comment when it was drafted. */
@@ -463,6 +477,70 @@ export function whenText(iso: string | null | undefined): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return '';
   return at.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+/** "12 minutes ago", "3 hours ago" — how long since a time, in words. */
+export function agoText(iso: string | null | undefined, now: number = Date.now()): string {
+  const at = iso ? Date.parse(iso) : NaN;
+  if (!Number.isFinite(at)) return '';
+  const minutes = Math.max(0, Math.round((now - at) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} days ago`;
+}
+
+/** The Mini checks hourly; a reading older than this means the checker stopped. */
+export const MINI_STALE_MS = 2 * 60 * 60 * 1000;
+
+export type MiniStatus = { tone: 'ok' | 'warn' | 'alarm'; lines: string[] };
+
+/**
+ * The banner at the top of the screen: is the Mini able to post, and when did
+ * it last post and last check? It always names both times, so "nothing posted
+ * today" and "broken" never look the same (CLAUDE.md landmine 17).
+ * `posted` is the Posted list (null when it could not be read).
+ */
+export function miniStatus(
+  check: BrowserCheck | null | undefined,
+  posted: OutreachComment[] | null,
+  now: number = Date.now(),
+): MiniStatus {
+  let tone: MiniStatus['tone'];
+  let head: string;
+  const checkedAt = check?.checkedAt ? Date.parse(check.checkedAt) : NaN;
+  const ago = agoText(check?.checkedAt, now);
+  const message = (check?.message || '').trim().replace(/\.$/, '');
+  if (!check?.state || !Number.isFinite(checkedAt)) {
+    tone = 'warn';
+    head = 'The Mini has not checked its YouTube sign-in yet, so nothing here says whether posting works — the posting worker on the Mini may not be running.';
+  } else if (now - checkedAt > MINI_STALE_MS) {
+    tone = 'warn';
+    head = `The Mini last checked its YouTube sign-in ${ago}, so the posting worker may have stopped. That check said: ${message}.`;
+  } else if (check.state === 'signed_in') {
+    tone = 'ok';
+    head = `${message} — last checked ${ago}.`;
+  } else if (check.state === 'cannot_tell') {
+    tone = 'warn';
+    head = `${message} (checked ${ago}).`;
+  } else {
+    tone = 'alarm';
+    const since = check.signedInAt ? ` Last signed in: ${whenText(check.signedInAt)}.` : '';
+    head = `${message}. Checked ${ago}.${since}`;
+  }
+  const lines = [head];
+  if (posted) {
+    const times = posted
+      .filter((c) => c.status === 'posted' && c.postedAt)
+      .map((c) => Date.parse(c.postedAt as string))
+      .filter((t) => Number.isFinite(t));
+    lines.push(times.length
+      ? `Last comment posted ${whenText(new Date(Math.max(...times)).toISOString())}.`
+      : 'No comment has been posted yet.');
+  }
+  return { tone, lines };
 }
 
 /** The words on a Posted row's status line. A `posting` row is either live work or a hand check. */
@@ -1060,6 +1138,9 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   const historyTarget = (targets || []).find((t) => t.id === historyId) || null;
   const waitingCount = (comments || []).filter((c) => c.status === 'draft').length;
   const approvalsLabel = waitingCount ? `Approvals (${waitingCount})` : 'Approvals';
+  // Only once the settings row has been read: before that there is nothing to
+  // say, and "has never checked" would be a guess.
+  const mini = settings ? miniStatus(settings.browserCheck, posted) : null;
 
   return (
     <div ref={hostRef} className="yt-outreach-panel">
@@ -1103,6 +1184,11 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
         </div>
       </div>
 
+      {mini ? (
+        <div className={`yt-outreach-mini yt-outreach-mini--${mini.tone}`} role={mini.tone === 'alarm' ? 'alert' : 'status'}>
+          {mini.lines.map((line) => <p key={line}>{line}</p>)}
+        </div>
+      ) : null}
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       {notice ? <p className="yt-outreach-notice" role="status">{notice}</p> : null}
 

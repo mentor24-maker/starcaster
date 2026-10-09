@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 
 /**
  * Engage › Substack Notes — where Dane feeds the Substack Notes agent: ideas
@@ -77,6 +78,12 @@ export type NotesSettings = {
   linkPolicy: string;
   saved: boolean;
   updatedAt: string;
+  /**
+   * What the Mini found the last time it checked its Substack sign-in, written
+   * hourly by workers/youtube-outreach/health.js (YouTube outreach 7/7, task
+   * 86bcda6dt). A blank state means it has never checked.
+   */
+  browserCheck?: BrowserCheck;
 };
 
 export type WatchSource = {
@@ -99,6 +106,38 @@ export type WatchStatus = {
   sources: WatchSource[];
   lastPass: { at?: string; drafted?: number; notDrafted?: number; waitingForRoom?: number; failed?: string[] } | null;
 };
+
+export type SignInLine = { tone: 'ok' | 'warn' | 'alarm'; state: string; text: string };
+
+/**
+ * The line at the top of the screen: is the Mini's browser signed in to
+ * Substack as Dane of Earth, and when did it last look? It always says when,
+ * so "never checked", "stopped checking" and "signed out" each read as what
+ * they are rather than as an empty screen (CLAUDE.md landmine 17).
+ */
+export function signInLine(check: BrowserCheck | null | undefined, now: number = Date.now()): SignInLine {
+  const checkedAt = check?.checkedAt ? Date.parse(check.checkedAt) : NaN;
+  const ago = agoText(check?.checkedAt, now);
+  const message = (check?.message || '').trim().replace(/\.$/, '');
+  if (!check?.state || !Number.isFinite(checkedAt)) {
+    return {
+      tone: 'warn',
+      state: 'unknown',
+      text: 'Mini: has not checked its Substack sign-in yet, so nothing here says whether Substack posting would work — the posting worker on the Mini may not be running.',
+    };
+  }
+  if (now - checkedAt > MINI_STALE_MS) {
+    return {
+      tone: 'warn',
+      state: 'stale',
+      text: `The Mini last checked its Substack sign-in ${ago}, so the posting worker may have stopped. That check said: ${message}.`,
+    };
+  }
+  if (check.state === 'signed_in') return { tone: 'ok', state: check.state, text: `${message}, checked ${ago}.` };
+  if (check.state === 'cannot_tell') return { tone: 'warn', state: check.state, text: `${message} (checked ${ago}).` };
+  const since = check.signedInAt ? ` Last signed in: ${whenText(check.signedInAt)}.` : '';
+  return { tone: 'alarm', state: check.state, text: `${message}. Checked ${ago}.${since}` };
+}
 
 type AppShape = {
   api?: (path: string, options?: RequestInit) => Promise<Record<string, any>>;
@@ -872,11 +911,21 @@ export default function SubstackNotesPanel(): React.ReactElement {
     </button>
   );
 
+  // Only once the settings row has been read: before that there is nothing to
+  // say, and "has never checked" would be a guess.
+  const signIn = settings ? signInLine(settings.browserCheck) : null;
+
   return (
     <div ref={hostRef} className="substack-notes-panel">
-      <p className="substack-notes-signin" data-signin-state="unknown">
-        Mini's Substack sign-in: not checked yet — nothing reads it until the hourly sign-in check is built.
-      </p>
+      {signIn ? (
+        <p
+          className={`substack-notes-signin substack-notes-signin--${signIn.tone}`}
+          data-signin-state={signIn.state}
+          role={signIn.tone === 'alarm' ? 'alert' : 'status'}
+        >
+          {signIn.text}
+        </p>
+      ) : null}
 
       <div className="substack-notes-toolbar">
         <div className="substack-notes-tabs" role="tablist" aria-label="Substack Notes">

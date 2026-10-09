@@ -219,7 +219,7 @@
 .yt-outreach-video-text {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-1, 4px);
   min-width: 0;
 }
 
@@ -386,4 +386,32 @@
 .yt-outreach-posted-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ── The Mini's status banner (7/7, task 86bcda6dt) ─────────────────── */
+/* Always shown once settings load: last check and last post, so a quiet  */
+/* week and a broken browser never look the same.                         */
+
+.yt-outreach-mini {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.yt-outreach-mini p {
+  margin: 0;
+  color: inherit;
+}
+
+.yt-outreach-mini--warn,
+.yt-outreach-mini--alarm {
+  color: var(--status-warn-ink);
+  border-color: currentColor;
+}
+
+.yt-outreach-mini--alarm {
+  font-weight: 600;
 }
