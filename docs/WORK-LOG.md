@@ -1,3 +1,17 @@
+## 2026-10-09 — Substack Miner 2/7: Starcaster searches the web for Substack writers who use Dane's keywords and lists them as candidates (#801)
+
+Starcaster can now go and find Substack writers by itself. Given Dane's
+keywords, it asks the web search engine for Substack pages mentioning each one,
+keeps only real Substack publications, reads each new writer's front page once
+for their name, a short description and their subscriber count, and adds them to
+the Substack Miner list as candidates, remembering every keyword that found
+them. It only reads public pages, one at a time, a second and a half apart, and
+posts nothing. Tried on "Game B" and "metamodern" it found 39 writers; running it
+again added none and just updated the ones already listed. When it cannot do its
+job it says why instead of reporting "found nothing": no search key, a search
+that failed, or a page that would not load (that writer is still saved). There
+is no screen yet; slice 4 adds the button.
+
 ## 2026-10-08 — Substack Miner 1/7: a place to keep the Substack writers Starcaster finds, the keyword list, and a Substack address on every contact (storage and server) (#800)
 
 The Substack Miner now has somewhere to keep its work, though nothing fills it
