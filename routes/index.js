@@ -69,6 +69,7 @@ const events      = require('./events');
 const studio      = require('./studio');
 const youtubeOutreach = require('./youtubeOutreach');
 const substackNotes = require('./substackNotes');
+const substackMiner = require('./substackMiner');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
@@ -89,6 +90,9 @@ const ROUTE_MODULES = [
   projects,
   invitations,
   settings,
+  // Ahead of `acquire`: it owns the narrower '/api/acquire/substack-miner'
+  // prefix, the same arrangement as substackNotes and engage below.
+  substackMiner,
   acquire,
   promoLeads,
   // Ahead of `assets` on purpose: both claim '/api/assets/*'. `assets` falls
@@ -166,6 +170,7 @@ const CRON_PATHS = new Set([
   '/api/promote/social/posts/publish-due',
   '/api/engage/social/posts/publish-due',
   '/api/support/bug-reports/sweep-orphans',
+  '/api/youtube-outreach/run-due',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

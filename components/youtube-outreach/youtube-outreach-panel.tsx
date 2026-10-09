@@ -95,7 +95,11 @@ export type Target = {
   notes: string;
   status: string;
   createdAt: string;
+  /** From the server's schedule (6/7): "Next draft: Oct 15", or why it is not due. */
+  nextDraft?: NextDraft | null;
 };
+
+export type NextDraft = { due: boolean; finished: boolean; text: string };
 
 export type OutreachSettings = {
   accountKey: string;
@@ -1313,7 +1317,14 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
                         </td>
                         <td>{labelFor(OBJECTIVE_OPTIONS, target.objective)}</td>
                         <td>{labelFor(LENGTH_OPTIONS, target.commentLength)}</td>
-                        <td>{repeatSummary(target)}</td>
+                        <td>
+                          {repeatSummary(target)}
+                          {target.nextDraft?.text ? (
+                            <span className="yt-outreach-next-draft" data-due={target.nextDraft.due ? 'true' : 'false'}>
+                              {target.nextDraft.text}
+                            </span>
+                          ) : null}
+                        </td>
                         <td>{labelFor(PRIORITY_OPTIONS, target.priority)}</td>
                         <td>{STATUS_LABELS[target.status] || target.status}</td>
                         <td className="actions-col">

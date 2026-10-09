@@ -19,6 +19,94 @@ Substack Notes screen now says "Mini: signed in to Substack as Dane of Earth,
 checked 12 minutes ago" — or that the Mini has not checked yet. The worker
 itself is installed after the Mini's browser is signed in to YouTube (after
 Oct 13).
+## 2026-10-08 — The duplicates report is out of date and does not cover iCloud Drive (#795)
+
+The report that finds duplicate copies of Dane's files (`npm run
+archive:index`) now looks in the right places. It no longer counts the old
+MaxOne drive, which was erased on 4 October and is now the Time Machine
+backup. It now covers **iCloud Drive**, where Zoom keeps 33 GB of
+recordings, and the 173 GB folder still sitting in the MacBook's Trash.
+Files whose contents live only in iCloud are never opened, because opening
+one downloads it. They are counted as "in iCloud only, not checked" and
+never treated as a lone copy or a spare one. Apple Photos is listed as "not
+checked" because macOS blocks reading it. The report now opens with one
+line per place: how many files and how much space, how many already have a
+copy where they belong, and how many are the **only copy** anywhere. The
+next ticket deletes MacBook copies from this report, so those only-copy
+files are the ones it must never touch. "Only copy" means no copy in any
+OTHER place, so two copies sitting on the MacBook alone both count, and a
+MacBook file whose other copy is in the Trash folder counts too (the cleanup
+empties both). A fourth number covers files with a copy somewhere, but not
+yet where they belong, so every file on a line is counted exactly once.
+Read-only: nothing is moved or
+deleted. The first real run happens on the MacBook as part of that cleanup
+ticket (Dane's call, 9 October), because the MacBook was asleep every time
+a pass tried to reach it.
+
+## 2026-10-08 — Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (#796)
+
+Ideas and replies on **Engage → Substack Notes** now have a **Write a draft**
+button. Starcaster writes the Note (or the reply) in the voice from Settings,
+and it lands on a new **Approvals** tab in a box Dane can edit, with
+**Approve**, **Reject** and **Write another**. Likes and restacks have no
+words, so they wait on Approvals with just Approve and Reject. The account's
+rules are checked on what was actually written: a link when links are set to
+Never, a word on the avoid list, or a Note that is too long is thrown away
+with the reason, and an edit that breaks a rule is refused the same way. For a
+reply, Starcaster reads the other person's Note from Substack itself; if it
+can't, the row asks Dane to paste it. Nothing is posted yet.
+## 2026-10-08 — Live browser view 1: the plan for signing in to YouTube, Substack and other sites from inside Starcaster (#797)
+
+A written plan, no feature code yet: `docs/LIVE_BROWSER_VIEW.md`. It
+recommends a "Connect" window inside Starcaster showing a live picture of the
+Mini's Chrome, opened only with a one-time pass and closing itself after a few
+idle minutes. Measured on the Mini: typing is fast (about a fiftieth of a
+second from key to picture), and passwords and two-step codes go through.
+Google refuses a browser started by the usual automation tool, but not a real
+Chrome that is only being watched, so the plan uses the second kind. The plan
+ends with five build tickets for Dane to approve. While checking, we found that
+Tailscale, the Mini's route to the internet, has been off since about Oct 5.
+## 2026-10-08 — YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it (#799)
+
+The live site reaches the YouTube download helper on the Mac Mini through
+Tailscale, a private tunnel that gives the Mini a public web address.
+Tailscale had been started by hand, so when it stopped on October 5 nothing
+brought it back, and downloads quietly stopped working (the second time; the
+first lasted 24 days in September). It now runs under the Mac's own "keep
+this program running" service, which restarts it after a crash or a reboot.
+That was tested by killing it on purpose and watching it come straight back.
+`./scripts/install_tailscale.sh --status` says in one screen whether it is
+running, connected, and publicly reachable.
+## 2026-10-08 — Substack Miner 1/7: a place to keep the Substack writers Starcaster finds, the keyword list, and a Substack address on every contact (storage and server) (#800)
+
+The Substack Miner now has somewhere to keep its work, though nothing fills it
+yet. There is a list of Substack writers Starcaster finds for Dane, one entry
+per writer. When a later search turns up the same writer again, it adds the new
+keywords and recommenders to that entry rather than making a second one. It
+never changes what Dane decided: a writer he approved stays approved and one he
+rejected stays rejected. There is also a settings list holding his keywords,
+how many results to bring back per keyword, and how long to pause between
+pages. Contacts now have a proper **Substack** box beside YouTube, X and
+Bluesky. Until now a Substack address could only live in a custom field, and
+that field still shows for any contact the move has not reached. "Substack
+Miner" is now a contact source. One trap was avoided: if new contacts got a
+blank Substack value by default, every new contact would have been refused
+until the database change runs in production. So the value is written only when
+someone actually gives one. Two database files are waiting to be run in
+production. Today they move no data, because no production contact has a
+Substack yet.
+## 2026-10-08 — YouTube outreach 6/7: the agent drafts comments for due videos on its own, still waiting for approval (#793)
+
+Starcaster no longer waits for Dane to click **Write a draft**. Every ten
+minutes a scheduled pass looks at each active video on **Engage → YouTube
+Outreach**, and when one is due it writes a draft and puts it on the
+**Approvals** tab. Nothing is approved or posted by the timer; Dane still
+approves every comment. Each video gets at most one waiting comment, so drafts
+do not pile up while he is away. It also never writes more drafts than the
+account could still post today. A one-off video is finished and marked
+**Done** once its comment is posted. A repeating one comes due again every few
+days until it reaches its count or stop date. Each row now says when the next
+draft is due, or why not: paused, finished, or waiting for his approval.
 
 ## 2026-10-08 — YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (#792)
 

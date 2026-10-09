@@ -234,6 +234,14 @@
   overflow-wrap: anywhere;
 }
 
+/* "Next draft: Oct 15" or why it is not due (6/7), under How often. */
+.yt-outreach-next-draft {
+  display: block;
+  font-size: var(--text-base);
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
 /* The app's buttons carry a top margin meant for stacked forms; in this
    one-line row it pushed Add above the field it belongs to. */
 .yt-outreach-add .btn {
