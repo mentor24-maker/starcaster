@@ -12,6 +12,8 @@
  *   PATCH  /api/acquire/substack-miner/candidates/:id      (PUT accepted too) details, or { status }
  *   GET    /api/acquire/substack-miner/settings
  *   PUT    /api/acquire/substack-miner/settings            (PATCH accepted too)
+ *   POST   /api/acquire/substack-miner/snowball            { handles?: [] } — read who approved writers recommend
+ *                                                          (Substack Miner 3/7, lib/acquire/SubstackRecommendationsRun.js)
  *
  * Auth and project scope are decided centrally in routes/index.js; /api/acquire
  * is closed to a client's own site admin (lib/projectAdminApiAuth.js), and this
@@ -19,7 +21,9 @@
  */
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/substackMinerStore');
+const { runSubstackSnowball } = require('../lib/acquire/SubstackRecommendationsRun');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -116,6 +120,14 @@ async function handle(req, res, pathname, method) {
       return reply(res, await store.saveSettings(body, scope));
     }
     return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  if (pathname === `${PREFIX}/snowball`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.snowball')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await runSubstackSnowball({ handles: body.handles }, scope));
   }
 
   return sendErr(res, 404, 'Unknown Substack Miner endpoint', { code: 'NOT_FOUND' }), true;
