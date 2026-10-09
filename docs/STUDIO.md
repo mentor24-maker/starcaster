@@ -11,12 +11,12 @@ This is Phase 1: the pipeline and the list. Nothing here edits a video yet.
 ## What happens to a video, step by step
 
 1. **You put a file in one of two Drive folders.** Both live in
-   **mentorofaio's** Google Drive, under My Drive › Studio (since 2026-10-09;
-   see "Which Google account owns what" below).
-   - [`/Studio/Inbox/`](https://drive.google.com/drive/folders/1sWzJXxTblzrJGrJwLR3pllZcJwSoiLOH)
+   **mentorofaio's** Google Drive, under My Drive › Projects › Starcaster › Studio
+   (since 2026-10-09; see "Which Google account owns what" below).
+   - [`/Studio/Inbox/`](https://drive.google.com/drive/folders/1NBKTjYhQsrVr8seF2r2IXXqBt8-Go0GV)
      — camera footage: you on camera, the wide shot, a phone take. The
      pipeline works out which is which from the file itself.
-   - [`/Studio/Plates/`](https://drive.google.com/drive/folders/13AuzSLoeoCjDZovvc02RRZpYc0dSftKF)
+   - [`/Studio/Plates/`](https://drive.google.com/drive/folders/1XvwqpBHsjB5_QEOCa0_IBl9sWQJYW3dZ)
      — screen recordings and anything else that is a picture to put *into* an
      edit. Files here are never sent for transcription, because a screen
      recording has no speech and transcribing silence costs money.
@@ -46,15 +46,25 @@ Two Google accounts are involved, and the split is deliberate (Dane's
 decision, 2026-10-08; moved 2026-10-09):
 
 - **mentorofaio@gmail.com owns the folders.** It has the 2 TB plan with room
-  for the video that is coming. `My Drive › Studio` (folder id
-  `1a5HdgIna44ikNDC2xD3XHVOaA1EmHLvV`) holds `Inbox`
-  (`1sWzJXxTblzrJGrJwLR3pllZcJwSoiLOH`) and `Plates`
-  (`13AuzSLoeoCjDZovvc02RRZpYc0dSftKF`). `Studio` is shared with mentor24 as
-  Editor, and the two children inherit that.
+  for the video that is coming. `My Drive › Projects › Starcaster › Studio`
+  (folder id `17HZZDNlGAcxWUxbMBdlywnn-Tjf4pfD7`) holds `Inbox`
+  (`1NBKTjYhQsrVr8seF2r2IXXqBt8-Go0GV`) and `Plates`
+  (`1XvwqpBHsjB5_QEOCa0_IBl9sWQJYW3dZ`).
 - **mentor24@gmail.com is the worker's sign-in.** Its Drive token is what the
-  worker watches and downloads with. It sees the folders only through that
-  share, which is why the share is load-bearing: remove it and the watcher
-  reports both folders as unreadable and stops.
+  worker watches and downloads with. It sees the Studio folders because the
+  `Starcaster` folder above them has been shared with mentor24 as Editor since
+  2026-07-04 and everything inside inherits that. That share is load-bearing:
+  remove it and the watcher reports both folders as unreadable and stops.
+- **Do not share a new Studio folder directly; put it under `Starcaster`.**
+  On 2026-10-09 a `Studio` folder created at the top of mentorofaio's My Drive
+  and shared straight to mentor24 was accepted by Drive on paper — mentor24
+  held Editor on it and on everything in it — yet Drive never listed its
+  contents to mentor24, in the browser or the API, and not one event from it
+  reached the changes feed the worker reads, not even the owner renaming the
+  Inbox. Two hours of checking did not change that. A folder created inside
+  the already-shared `Starcaster` folder was visible to mentor24 within a
+  minute, contents, parents and feed events included. The cause is Google's,
+  not ours; the rule that follows is ours.
 - **An upload counts against the account that UPLOADS it**, not the folder's
   owner. So anything that puts footage into the Inbox on a schedule must do it
   signed in as mentorofaio — on the MacBook that is rclone's `gdrive:` remote.
