@@ -10,13 +10,16 @@ This is Phase 1: the pipeline and the list. Nothing here edits a video yet.
 
 ## What happens to a video, step by step
 
-1. **You put a file in one of two Drive folders.**
-   - `/Studio/Inbox/` — camera footage: you on camera, the wide shot, a phone
-     take. The pipeline works out which is which from the file itself.
-   - `/Studio/Plates/` — screen recordings and anything else that is a picture
-     to put *into* an edit. Files here are never sent for transcription,
-     because a screen recording has no speech and transcribing silence costs
-     money.
+1. **You put a file in one of two Drive folders.** Both live in
+   **mentorofaio's** Google Drive, under My Drive › Studio (since 2026-10-09;
+   see "Which Google account owns what" below).
+   - [`/Studio/Inbox/`](https://drive.google.com/drive/folders/1sWzJXxTblzrJGrJwLR3pllZcJwSoiLOH)
+     — camera footage: you on camera, the wide shot, a phone take. The
+     pipeline works out which is which from the file itself.
+   - [`/Studio/Plates/`](https://drive.google.com/drive/folders/13AuzSLoeoCjDZovvc02RRZpYc0dSftKF)
+     — screen recordings and anything else that is a picture to put *into* an
+     edit. Files here are never sent for transcription, because a screen
+     recording has no speech and transcribing silence costs money.
 2. **The watcher notices it.** It asks Drive "what changed since last time?"
    rather than listing the folder, so a quiet hour costs one question however
    big the archive gets. (Studio 3/8.)
@@ -37,6 +40,38 @@ Each file is filed under a **session** — one shoot, one talk, one screen
 capture. New files go into a holding session named for the folder and the day
 until they are sorted.
 
+## Which Google account owns what
+
+Two Google accounts are involved, and the split is deliberate (Dane's
+decision, 2026-10-08; moved 2026-10-09):
+
+- **mentorofaio@gmail.com owns the folders.** It has the 2 TB plan with room
+  for the video that is coming. `My Drive › Studio` (folder id
+  `1a5HdgIna44ikNDC2xD3XHVOaA1EmHLvV`) holds `Inbox`
+  (`1sWzJXxTblzrJGrJwLR3pllZcJwSoiLOH`) and `Plates`
+  (`13AuzSLoeoCjDZovvc02RRZpYc0dSftKF`). `Studio` is shared with mentor24 as
+  Editor, and the two children inherit that.
+- **mentor24@gmail.com is the worker's sign-in.** Its Drive token is what the
+  worker watches and downloads with. It sees the folders only through that
+  share, which is why the share is load-bearing: remove it and the watcher
+  reports both folders as unreadable and stops.
+- **An upload counts against the account that UPLOADS it**, not the folder's
+  owner. So anything that puts footage into the Inbox on a schedule must do it
+  signed in as mentorofaio — on the MacBook that is rclone's `gdrive:` remote.
+  A file dragged in from a browser signed in as mentor24 lands in the right
+  folder but spends mentor24's storage, which had about 30 GB left when the
+  move was made.
+- **mentor24's old folder** was renamed `Studio (old — moved to mentorofaio
+  2026-10-09)` and left where it is. The one file it held, IMG_1962, keeps
+  its catalog row: that row points at the file's Drive id, which a rename
+  does not change.
+
+The watcher reads an account-wide "what changed?" feed rather than listing
+folders, and a file another account puts into a folder shared with mentor24
+does show up in mentor24's feed — that was proved by hand on 2026-10-09
+before the folder ids were switched, and it is why no code changed for the
+move.
+
 ## The Footage screen
 
 Open the admin app, choose the project the Studio files into, then
@@ -48,10 +83,11 @@ Open the admin app, choose the project the Studio files into, then
   "No preview yet" means Drive has not drawn one (it takes a few minutes after
   an upload), or the file did not come from Drive. It is never a broken image.
 - **Watching a file.** Click its preview or its name in the **File** column
-  and the original opens in Google Drive's player, in a new tab. It opens in
-  **mentor24's Drive**, so the browser has to be signed in to a Google account
-  that can see the Studio folder. Otherwise Drive asks you to sign in or to
-  request access, and nothing is wrong with the file. It plays the original
+  and the original opens in Google Drive's player, in a new tab. The Studio
+  folders belong to **mentorofaio** and are shared with **mentor24**, so the
+  browser has to be signed in to one of those two accounts. Otherwise Drive
+  asks you to sign in or to request access, and nothing is wrong with the
+  file. It plays the original
   and not the small editing copy, because that copy lives on the Mac Mini's
   disk, which the website cannot reach. A file marked *not from Drive* has no
   Drive copy to open, so it has no link. *Open in Drive* in place of a name
@@ -142,7 +178,9 @@ token="$T" --scope ~/Studio >/dev/null'`.
 **Google Drive's sign-in** (`GOOGLE_DRIVE_CLIENT_ID`, `_SECRET`,
 `_REFRESH_TOKEN`) is in `prd` too, for mentor24@gmail.com, renewed 2026-10-05.
 When Google expires it, the worker stops and says so; renewing it is one
-browser login by Dane.
+browser login by Dane. The folders it watches belong to mentorofaio and are
+shared with it (see "Which Google account owns what"); the folder ids in `prd`
+have pointed at mentorofaio's folders since 2026-10-09.
 
 **Why `prd` and not `dev`:** on the Mini, the `dev` config points the database
 at a copy on that machine. A worker run under it would look perfectly healthy
@@ -161,7 +199,7 @@ Required — the worker cannot do its job without these:
 | Setting | What it controls |
 |---|---|
 | `STUDIO_PROJECT_ID` | Which StarCaster project the footage is filed under. Without it the pipeline refuses to file anything, rather than filing it under no project |
-| `STUDIO_DRIVE_INBOX_FOLDER_ID`, `STUDIO_DRIVE_PLATES_FOLDER_ID` | The two Drive folders it watches |
+| `STUDIO_DRIVE_INBOX_FOLDER_ID`, `STUDIO_DRIVE_PLATES_FOLDER_ID` | The two Drive folders it watches — mentorofaio's `Studio/Inbox` and `Studio/Plates`, shared with the worker's account. A wrong id shows up as "nothing new arrives" plus a blocked watch job naming the folder |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | The database the catalog is written to (`SUPABASE_SERVICE_ROLE_KEY` is accepted in place of the key) |
 | `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN` | The Google Drive sign-in it reads and downloads with |
 
