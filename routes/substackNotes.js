@@ -13,6 +13,12 @@
  *   GET    /api/engage/substack-notes/settings       ?account=
  *   PUT    /api/engage/substack-notes/settings       ?account=   (PATCH accepted too)
  *
+ * Drafts and approval (3/7, task 86bcet6pa — lib/substackNotesDrafter.js):
+ *
+ *   POST   /api/engage/substack-notes/items/:id/draft     write a draft (AI); "Write another" too
+ *   POST   /api/engage/substack-notes/items/:id/approve   { text? }  (edited wording)
+ *   POST   /api/engage/substack-notes/items/:id/reject
+ *
  * `account` defaults to dane_of_earth. Auth and project scope are decided
  * centrally in routes/index.js; /api/engage is closed to a client's own site
  * admin (lib/projectAdminApiAuth.js), and this sits under it on purpose.
@@ -20,6 +26,7 @@
 
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/substackNotesStore');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 const PREFIX = '/api/engage/substack-notes';
 
@@ -34,6 +41,7 @@ function errorCode(status) {
   if (status === 400) return 'VALIDATION_ERROR';
   if (status === 404) return 'NOT_FOUND';
   if (status === 409) return 'CONFLICT';
+  if (status === 422) return 'RULE_BROKEN';
   return undefined;
 }
 
@@ -41,7 +49,7 @@ function errorCode(status) {
 function reply(res, result, okStatus) {
   if (!result.ok) {
     const status = result.status || 500;
-    sendErr(res, status, result.error || 'The Substack Notes list could not be read or saved', { code: errorCode(status) });
+    sendErr(res, status, result.error || 'The Substack Notes list could not be read or saved', { code: result.code || errorCode(status) });
     return true;
   }
   sendOk(res, okStatus || result.status || 200, result.data);
@@ -87,6 +95,20 @@ async function handle(req, res, pathname, method) {
       return reply(res, await store.createItem(body, scope), 201);
     }
     return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  const decision = pathname.match(/^\/api\/engage\/substack-notes\/items\/([^/]+)\/(draft|approve|reject)$/);
+  if (decision) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const id = decodeURIComponent(decision[1]);
+    if (decision[2] === 'approve') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.approveItem(id, body, scope));
+    }
+    if (decision[2] === 'reject') return reply(res, await store.rejectItem(id, scope));
+    if (checkEndpointLimit(req, res, 'substackNotes.drafts.create')) return true;
+    return reply(res, await store.writeDraftForItem(id, scope));
   }
 
   const one = pathname.match(/^\/api\/engage\/substack-notes\/items\/([^/]+)$/);

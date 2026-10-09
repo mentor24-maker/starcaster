@@ -1814,12 +1814,18 @@ async function seedSubstackNotes(scope) {
     { kind: 'reply', targetUrl: 'https://substack.com/@fixture/note/c-1001', ideaText: 'Agree, and add the winter angle' },
     { kind: 'restack', targetUrl: 'https://substack.com/@fixture/note/c-1002' },
     { kind: 'like', targetUrl: 'https://substack.com/@fixture/note/c-1003' },
+    // A draft waiting on the Approvals tab (3/7, 86bcet6pa), so the card has a box to measure.
+    { kind: 'note', source: 'jotted', ideaText: 'Fixture: a drafted Note', draft: `${LONG}. Winter air is drier, so the stars look sharper tonight.` },
   ];
   let made = 0;
   let found = 0;
   for (const input of items) {
     if (have.has(`${input.kind}|${input.ideaText || ''}|${input.targetUrl || ''}`)) { found += 1; continue; }
-    must(await substackNotesStore.createItem(input, scope), 'create Substack Notes item');
+    const { draft, ...create } = input;
+    const created = must(await substackNotesStore.createItem(create, scope), 'create Substack Notes item');
+    if (draft) {
+      must(await substackNotesStore.updateItem(created.id, { draftText: draft, status: 'draft' }, scope), 'draft Substack Notes item');
+    }
     made += 1;
   }
   must(await substackNotesStore.saveSettings({
