@@ -295,3 +295,49 @@ test('a database failure on save stops the run and is returned as-is', async () 
   const run = await runSubstackMinerSearch({ keywords: ['Game B'] }, SCOPE, { ...deps({ fetchWebSearchBatch: search.fetchWebSearchBatch }), store });
   assert.deepEqual(run, { ok: false, status: 503, error: 'table missing' });
 });
+
+// ── The time budget (round-1 review: the clock started after the searches) ──
+
+/** A clock that moves forward `stepMs` every time a search is answered. */
+function slowSearch(table, clock, stepMs) {
+  const search = fakeSearch(table);
+  return {
+    calls: search.calls,
+    async fetchWebSearchBatch(query, pageIndex) {
+      clock.t += stepMs;
+      return search.fetchWebSearchBatch(query, pageIndex);
+    },
+  };
+}
+
+test('time spent searching counts against the budget: pages go unread and are named', async () => {
+  const clock = { t: 0 };
+  const search = slowSearch({
+    'Game B': ['https://alpha.substack.com/', 'https://beta.substack.com/'],
+  }, clock, 1000);
+  const store = fakeStore();
+  const d = deps({ fetchWebSearchBatch: search.fetchWebSearchBatch, now: () => clock.t, timeBudgetMs: 500 });
+  const run = await runSubstackMinerSearch({ keywords: ['Game B'] }, SCOPE, { ...d, store });
+  assert.equal(run.ok, true);
+  assert.deepEqual(d.pagesRead, [], 'no page is read once the search alone spent the budget');
+  assert.deepEqual(run.data.unreadablePages.map((p) => p.handle), ['alpha', 'beta']);
+  assert.match(run.data.unreadablePages[0].reason, /ran out of time/);
+  assert.equal(run.data.added, 2, 'writers found but not read are still saved');
+});
+
+test('keywords not reached before the budget ran out are named, not skipped silently', async () => {
+  const clock = { t: 0 };
+  const search = slowSearch({
+    'Game B': ['https://alpha.substack.com/'],
+    metamodern: ['https://beta.substack.com/'],
+    sensemaking: ['https://gamma.substack.com/'],
+  }, clock, 1000);
+  const store = fakeStore();
+  const d = deps({ fetchWebSearchBatch: search.fetchWebSearchBatch, now: () => clock.t, timeBudgetMs: 1500 });
+  const run = await runSubstackMinerSearch({ keywords: ['Game B', 'metamodern', 'sensemaking'] }, SCOPE, { ...d, store });
+  assert.equal(run.ok, true);
+  assert.deepEqual(run.data.keywordsSearched, ['Game B', 'metamodern']);
+  assert.deepEqual(run.data.keywordsNotSearched, ['sensemaking']);
+  assert.equal(search.calls.length, 2, 'no search is sent for a keyword past the budget');
+  assert.deepEqual([...store.byHandle.keys()].sort(), ['alpha', 'beta']);
+});

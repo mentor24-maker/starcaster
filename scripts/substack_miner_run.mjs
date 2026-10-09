@@ -76,4 +76,5 @@ console.log(JSON.stringify(run.data, null, 2));
 const s = run.data;
 console.log(`\n${s.engine}: ${s.resultsSeen} results, ${s.droppedNotSubstack} not a Substack publication, `
   + `${s.handlesFound} writers — ${s.added} added, ${s.merged} already listed, `
-  + `${s.unreadablePages.length} front page(s) not read, ${s.searchErrors.length} search(es) failed.`);
+  + `${s.unreadablePages.length} front page(s) not read, ${s.searchErrors.length} search(es) failed`
+  + (s.keywordsNotSearched.length ? `, ${s.keywordsNotSearched.length} keyword(s) not searched (out of time).` : '.'));
