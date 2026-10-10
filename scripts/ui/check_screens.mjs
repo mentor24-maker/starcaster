@@ -88,6 +88,7 @@ const SCREENS = [
   { id: 'campaignsPage', label: 'Campaigns' },
   { id: 'engageYoutubeOutreachPage', label: 'Engage: YouTube Outreach' },
   { id: 'engageSubstackNotesPage', label: 'Engage: Substack Notes' },
+  { id: 'acquireSubstackPage', label: 'Acquire: Substack Miner' },
 ];
 
 function arg(name, fallback) {
