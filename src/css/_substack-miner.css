@@ -148,6 +148,24 @@
   white-space: nowrap;
 }
 
+/* "Found in Notes" (Substack Miner 6/7): the chip opens to the Note that
+   surfaced the writer. */
+.substack-miner-found-note {
+  margin-top: var(--space-2);
+}
+
+.substack-miner-found-note summary {
+  display: inline-block;
+  cursor: pointer;
+}
+
+.substack-miner-found-note-text {
+  display: block;
+  margin-top: var(--space-2);
+  opacity: 0.75;
+  overflow-wrap: break-word;
+}
+
 .substack-miner-recommended summary {
   cursor: pointer;
 }

@@ -1,3 +1,20 @@
+## 2026-10-10 — Substack Miner 6/7: find writers by searching Substack Notes (#818)
+
+Some of the writers Dane wants talk mostly on Substack Notes, which ordinary
+web search cannot see. Now the Mac Mini's signed-in browser can search Notes
+for one of his keywords at a time: it opens Substack search, switches to the
+Notes tab, and reads the first page. Each Note's author is added to the
+Substack Miner list with the keyword, and the Note is kept as the reason they
+were found. Because an author's @name is not always their publication's name,
+Starcaster looks up which publication is theirs. Someone with no publication is
+listed as "not added" rather than guessed at. Running the same search twice
+adds nothing, a writer Dane already approved or rejected stays that way, and if
+the browser is not signed in the pass says so and writes nothing. The
+Candidates screen shows a "Found in Notes" chip that opens to the Note. Before
+building, the agent session checked whether this could skip the browser the way
+5/7 did. It cannot: Substack's public search will not narrow to Notes. It is
+ready for its first real run once the Mini is signed in to Substack (after
+10/13).
 ## 2026-10-10 — Substack Miner 5/7: each approved writer's newest Notes, lined up to like or reply (#817)
 
 For every Substack writer Dane has approved, Starcaster now reads their three
