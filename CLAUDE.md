@@ -123,7 +123,12 @@ ordinary, but a script rewrites them end to end:
 An edit here is not wiped on the next build — it survives, ships, works, and
 then disappears whenever someone regenerates. Nothing tests CSS, so the
 deletion is silent: commit `2bd3018` took the CRM modal styles out this way
-and Contacts delete was broken for a month. The same PreToolUse hook blocks
+and Contacts delete was broken for a month. The same commit also took out
+the rule that let a Button's Alignment move the button (`77b0738a`, June
+14), and no button could be centred on any site until 2026-10-09 — three
+months, found by the operator, because nothing measured WHERE a button
+was. Two render contracts measure it now (`button-centered-…`,
+`button-right-aligned-…` in `scripts/ui/render-contracts.mjs`). The same PreToolUse hook blocks
 these edits now, and `check_conventions.cjs` blocks the commit behind it.
 
 ## Landmines
