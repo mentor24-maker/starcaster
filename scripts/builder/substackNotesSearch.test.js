@@ -78,7 +78,10 @@ function fakeFetch(calls = []) {
   };
 }
 
-const deps = (extra = {}) => ({ fetchJson: fakeFetch(), sleep: async () => {}, ...extra });
+// A fixed midday clock: the pass refuses outside the account's active hours
+// (8am-10pm UTC), so a test left on the real clock fails every CI run at night.
+const MIDDAY = Date.UTC(2026, 9, 10, 13, 0, 0);
+const deps = (extra = {}) => ({ fetchJson: fakeFetch(), sleep: async () => {}, now: () => MIDDAY, ...extra });
 
 /** Five Notes by four authors (Ada twice), the ticket's first acceptance case. */
 const FIVE = [

@@ -217,6 +217,16 @@
   margin: 0;
 }
 
+/* The subscriber import's file picker is as wide as its button, not the card
+   (the admin's global input rule would stretch it). Substack Miner 7/7. */
+.substack-miner-card input[type="file"].substack-miner-file {
+  width: auto;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
 .substack-miner-actions {
   display: flex;
   flex-wrap: wrap;
