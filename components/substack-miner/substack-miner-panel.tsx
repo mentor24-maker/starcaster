@@ -46,6 +46,9 @@ export type Candidate = {
   status: string;
   contactId: string;
   note: string;
+  /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
+  recentNotes?: { url: string; text: string; postedAt: string }[];
+  lastNotesReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -110,6 +113,21 @@ function shortDate(iso: string | null): string {
   if (Number.isNaN(date.getTime())) return '—';
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * When this writer's Notes were last read (Substack Miner 5/7). Only approved
+ * writers are read, so a candidate says nothing rather than "never".
+ */
+export function notesReadText(c: Candidate): string {
+  if (c.lastNotesReadAt) return shortDate(c.lastNotesReadAt);
+  return c.status === 'approved' ? 'Not yet' : '—';
+}
+
+function notesReadTitle(c: Candidate): string {
+  if (!c.lastNotesReadAt) return c.status === 'approved' ? 'This writer\'s Notes have not been read yet.' : '';
+  const n = (c.recentNotes || []).length;
+  return `Notes read on ${c.lastNotesReadAt} — ${n} kept`;
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -537,6 +555,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Recommended by</th>
                     <th scope="col">Found via</th>
                     <th scope="col">Last seen</th>
+                    <th scope="col">Notes read</th>
                     <th scope="col">Note</th>
                     <th scope="col" className="actions-col">Actions</th>
                   </tr>
@@ -564,6 +583,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         <td><RecommendedBy handles={c.recommendedBy || []} /></td>
                         <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
                         <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
+                        <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
                         <td>
                           <input
                             type="text"
