@@ -19,6 +19,11 @@
  *                                                          lib/acquire/SubstackNotesCapture.js)
  *   POST   /api/acquire/substack-miner/read-notes          { anyHour?: true } — read every approved writer's newest
  *                                                          Notes not read in 7 days (lib/acquire/SubstackNotesReadRun.js)
+ *   POST   /api/acquire/substack-miner/notes-search        { keyword, notes: [{ authorHandle, authorName, url, text }] }
+ *                                                          — what the Mini's Notes search found for one keyword: each
+ *                                                          author's publication added (or merged) as a candidate, the
+ *                                                          Note kept as evidence (Substack Miner 6/7,
+ *                                                          lib/acquire/SubstackNotesSearch.js)
  *   GET    /api/acquire/substack-miner/settings
  *   PUT    /api/acquire/substack-miner/settings            (PATCH accepted too)
  *   POST   /api/acquire/substack-miner/snowball            { handles?: [] } — read who approved writers recommend
@@ -39,6 +44,7 @@ const { runSubstackMinerSearch } = require('../lib/acquire/SubstackMinerRun');
 const { approveCandidate } = require('../lib/acquire/SubstackContactCapture');
 const { captureCandidateNotes } = require('../lib/acquire/SubstackNotesCapture');
 const { runSubstackNotesRead } = require('../lib/acquire/SubstackNotesReadRun');
+const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -158,6 +164,14 @@ async function handle(req, res, pathname, method) {
     // The project's own zone decides the active hours when the account sets none.
     const projectTimeZone = async () => String(req?.projectContext?.project?.timezone || '');
     return reply(res, await runSubstackNotesRead({ anyHour: body.anyHour === true }, scope, { projectTimeZone }));
+  }
+
+  if (pathname === `${PREFIX}/notes-search`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.notesSearch')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await captureNotesSearch(body, scope));
   }
 
   if (pathname === `${PREFIX}/settings`) {

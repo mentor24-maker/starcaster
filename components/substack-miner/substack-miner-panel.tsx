@@ -47,7 +47,8 @@ export type Candidate = {
   contactId: string;
   note: string;
   /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
-  recentNotes?: { url: string; text: string; postedAt: string }[];
+  /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
+  recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
   lastNotesReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -128,6 +129,32 @@ function notesReadTitle(c: Candidate): string {
   if (!c.lastNotesReadAt) return c.status === 'approved' ? 'This writer\'s Notes have not been read yet.' : '';
   const n = (c.recentNotes || []).length;
   return `Notes read on ${c.lastNotesReadAt} — ${n} kept`;
+}
+
+/**
+ * The Note a Notes search found this writer by (Substack Miner 6/7), or null.
+ * A writer first found another way still gets the chip once a Notes search
+ * turns them up, because the Note is the evidence either way.
+ */
+export function foundInNotes(c: Candidate): { url: string; text: string; keyword: string } | null {
+  const note = (c.recentNotes || []).find((n) => n.foundBy === 'notes_search');
+  if (!note) return null;
+  return { url: note.url, text: note.text, keyword: note.keyword || '' };
+}
+
+function FoundInNotes({ c }: { c: Candidate }) {
+  const note = foundInNotes(c);
+  if (!note) return null;
+  const why = note.keyword ? `Found searching Notes for "${note.keyword}"` : 'Found in a Notes search';
+  return (
+    <details className="substack-miner-found-note">
+      <summary className="substack-miner-chip" title={`${why}: ${note.text}`}>Found in Notes</summary>
+      <span className="substack-miner-found-note-text">
+        {why}: “{note.text}”{' '}
+        <a href={note.url} target="_blank" rel="noopener noreferrer">Open the Note</a>
+      </span>
+    </details>
+  );
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -571,6 +598,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                           {/* The handle beneath the name, as a slug beneath a title (UI_RULES T7 rung 3). */}
                           <span className="substack-miner-handle">{c.handle}</span>
                           {c.description ? <span className="substack-miner-description">{c.description}</span> : null}
+                          <FoundInNotes c={c} />
                         </td>
                         <td>{c.subscriberText || '—'}</td>
                         <td>
