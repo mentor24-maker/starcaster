@@ -115,6 +115,17 @@ function checkNoteUrl(text: string): string {
   return text;
 }
 
+/** The server's plan in miniature (lib/substackNotesSchedule.js) — enough to show the screen relays it. */
+function topicPlanOf(store: Store) {
+  const none = (reason: string, words: string) => ({ due: false, reason, text: words, nextAt: null });
+  if (!store.settings.autoTopicDrafts) return none("off", "No topic drafts: switched off in Settings");
+  if (!store.settings.topics.length) return none("no_topics", "No topic drafts: no topics saved in Settings");
+  const waiting = store.items.filter((i) => (i.kind === "note" || i.kind === "reply" ? i.status === "draft" : i.status === "idea")).length;
+  const cap = Number(store.settings.maxActionsPerDay);
+  if (waiting >= cap) return none("full", `No topic draft for now: ${waiting} already waiting for your approval (the most per day is ${cap})`);
+  return { due: true, reason: "due", text: `Next topic draft: about 12:30 PM ("${store.settings.topics[0]}")`, nextAt: "2026-10-08T18:30:00.000Z" };
+}
+
 async function fakeApi(path: string, options: RequestInit = {}) {
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? JSON.parse(String(options.body)) : null;
@@ -123,6 +134,7 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   const store = stores[project];
   if (path === "/api/engage/substack-notes/items" && method === "GET") return { ok: true, data: store.items.map((i) => ({ ...i })) };
   if (path === "/api/engage/substack-notes/settings" && method === "GET") return { ok: true, data: { ...store.settings } };
+  if (path === "/api/engage/substack-notes/topic-schedule" && method === "GET") return { ok: true, data: topicPlanOf(store) };
   if (path === "/api/engage/substack-notes/watch-status" && method === "GET") return { ok: true, data: store.watch || watchFor(store.settings) };
   if (path === "/api/engage/substack-notes/watch-content/latest" && method === "POST") {
     if (!store.latest) fail("Nothing is saved in Substack Notes Settings for this account yet, so there is nothing to watch. Save the settings first.");
@@ -431,6 +443,61 @@ describe("Substack Notes screen", () => {
     await mount();
     expect(text()).toContain("The settings could not be read: table missing");
     expect(text()).not.toContain("The ideas and Notes could not be read");
+    expect(text()).toContain("No ideas yet.");
+  });
+});
+
+describe("Substack Notes topic drafts on a timer (5/7)", () => {
+  it("the switch is off until Dane turns it on, and survives a reload", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky", "living off grid"], maxActionsPerDay: 2, saved: true, updatedAt: "x" };
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic drafts: switched off in Settings");
+
+    await click(button("Settings"));
+    const box = el<HTMLInputElement>("#sn-auto-topic-drafts");
+    expect(box.checked).toBe(false);
+    expect(text()).toContain("Draft Notes from my topics on their own");
+    await click(box);
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body.autoTopicDrafts).toBe(true);
+    expect(stores.proj_doe.settings.autoTopicDrafts).toBe(true);
+
+    await reload();
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+    await click(button("Settings"));
+    expect(el<HTMLInputElement>("#sn-auto-topic-drafts").checked).toBe(true);
+  });
+
+  it("does not send the switch when it did not change, so other settings save before its database column exists", async () => {
+    await mount();
+    await click(button("Settings"));
+    type(el<HTMLInputElement>("#sn-max-per-day"), "2");
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body).not.toHaveProperty("autoTopicDrafts");
+    expect(settingsPatchFromForm({ ...settingsToForm(defaults()), autoTopicDrafts: false }, { autoTopicDrafts: true })).toMatchObject({ autoTopicDrafts: false });
+  });
+
+  it("says why there is no topic draft when approvals are full, and updates after a decision", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky"], maxActionsPerDay: 1, autoTopicDrafts: true, saved: true, updatedAt: "x" };
+    stores.proj_doe.items = [item({ kind: "note", source: "jotted", ideaText: "x", status: "draft", draftText: "A draft." })];
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic draft for now: 1 already waiting for your approval (the most per day is 1)");
+    await click(button("Approvals"));
+    await click(button("Reject"));
+    await click(button("Ideas"));
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+  });
+
+  it("names it when the plan could not be read", async () => {
+    const api = (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api;
+    api.mockImplementation(async (path: string, options: RequestInit) => {
+      if (path.endsWith("/topic-schedule")) throw new Error("database busy");
+      return fakeApi(path, options);
+    });
+    await mount();
+    expect(text()).toContain("The next topic draft could not be worked out: database busy");
     expect(text()).toContain("No ideas yet.");
   });
 });

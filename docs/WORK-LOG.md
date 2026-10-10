@@ -1,3 +1,17 @@
+## 2026-10-09 — Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (#805)
+
+On **Engage → Substack Notes → Settings** there is a new switch, **Draft Notes
+from my topics on their own**. It starts off. When Dane turns it on, Starcaster
+checks every half hour and, if there is room, drafts a Note from one of his
+topics and puts it on the **Approvals** tab. He still approves every one. It
+never lets more items wait for approval than his **Most actions per day**, and
+everything counts toward that, likes and replies included. His own ideas get
+drafted before any topic does, and it never writes more topic drafts in one day
+than that limit. Topics take turns, so the same one never comes up twice in a
+row. The **Ideas** tab says when the next topic draft is coming, or why none
+is: switched off, no topics, or approvals already full. The switch needs one
+small database change run in production before it can be saved. Until then,
+every other setting still saves normally.
 ## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
 
 Every Substack publication has a public page listing the other publications it

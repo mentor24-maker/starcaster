@@ -52,6 +52,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/engage/substack-notes/run-due",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/engage/substack-notes/watch-content",
       "schedule": "*/15 * * * *"
     },
