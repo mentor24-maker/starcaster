@@ -1,3 +1,17 @@
+## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
+
+The Substack Miner now has its screen, under Acquire › Substack Miner (the
+empty "Substack" page that menu link used to open). The Candidates tab lists
+every Substack writer Starcaster has found — with their keywords, how many
+other writers recommend them, and how they were found — most-recommended
+first, with Approve, Reject and a short note on each row. Approving a writer
+adds them to Contacts (one contact per publication; a contact already there
+is linked rather than copied), and the row then links straight to it. The Run
+tab holds the keyword list and the three ways to find more writers: search
+the web, read who approved writers recommend, or paste a list by hand — each
+says in plain words what it did and what it could not do. Tried end to end
+in the local app: pasted a writer, approved them, opened the contact, and
+reloaded to see it stick.
 ## 2026-10-09 — New Zoom recordings never reach Studio (#810)
 
 A small job on the MacBook now looks in iCloud Drive's Zoom folder every 15
