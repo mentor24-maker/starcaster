@@ -346,6 +346,12 @@ async function handle(req, res, pathname, method) {
     if ('styles' in body && body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles)) {
       patch.styles = body.styles;
     }
+    // Only the keys the caller changed, merged onto the stored styles by the
+    // store. The Builder's Form Appearance panel sends this, so its Padding or
+    // Border change cannot carry a stale copy of every colour back with it.
+    if (body.stylesPatch && typeof body.stylesPatch === 'object' && !Array.isArray(body.stylesPatch)) {
+      patch.stylesPatch = body.stylesPatch;
+    }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
