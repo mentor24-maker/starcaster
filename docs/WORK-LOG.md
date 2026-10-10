@@ -12,6 +12,52 @@ the web, read who approved writers recommend, or paste a list by hand — each
 says in plain words what it did and what it could not do. Tried end to end
 in the local app: pasted a writer, approved them, opened the contact, and
 reloaded to see it stick.
+## 2026-10-09 — New Zoom recordings never reach Studio (#810)
+
+A small job on the MacBook now looks in iCloud Drive's Zoom folder every 15
+minutes and sends each new recording's video into the Studio Inbox, where the
+Mini picks it up and puts it on the Footage screen. It waits until a recording
+is finished and fully downloaded, sends each one only once (even if it is
+renamed or copied), and deletes nothing. It goes straight into the Inbox
+rather than a "Zoom" sub-folder, because Studio ignores sub-folders. Older
+recordings are not sent on their own: a separate command lists them, and
+sending them is Dane's call. It still has to be switched on at the MacBook,
+which the build could not reach.
+
+## 2026-10-09 — Substack Notes 6/7: approved Notes, replies, restacks and likes happen on Substack from the Mini's browser, with proof (#804)
+
+Approved Substack items now actually happen. The Mac Mini's posting worker (the
+same one that posts YouTube comments) takes the oldest approved Note, reply,
+restack or like and does it on Substack as Dane of Earth, through the Mini's
+signed-in browser. It must show proof first. A Note or reply counts only when
+the browser returns its link and Substack itself shows the approved words
+there. A like or restack counts only when the page shows it done. Anything
+else is marked failed with the reason, and anything it could not check is left
+for Dane to look at, never tried twice. A Note already liked is never clicked
+again, since a second click would undo the like. The daily maximum counts all
+four kinds together. An approved item that has to wait now says why on its row,
+and a new **Posted** tab lists what went out, with the link and a screenshot.
+Everything was tested against a stand-in browser. The first real post waits
+until Dane signs the Mini in to Substack (7/7).
+
+After review: a Substack item the Mini could not confirm now says "Check Substack
+by hand" instead of telling Dane to check a video; a refused item keeps its
+screenshot, which is the picture that shows why; and a like or restack that was
+already on clicks nothing and no longer uses up the daily allowance.
+## 2026-10-09 — Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (#805)
+
+On **Engage → Substack Notes → Settings** there is a new switch, **Draft Notes
+from my topics on their own**. It starts off. When Dane turns it on, Starcaster
+checks every half hour and, if there is room, drafts a Note from one of his
+topics and puts it on the **Approvals** tab. He still approves every one. It
+never lets more items wait for approval than his **Most actions per day**, and
+everything counts toward that, likes and replies included. His own ideas get
+drafted before any topic does, and it never writes more topic drafts in one day
+than that limit. Topics take turns, so the same one never comes up twice in a
+row. The **Ideas** tab says when the next topic draft is coming, or why none
+is: switched off, no topics, or approvals already full. The switch needs one
+small database change run in production before it can be saved. Until then,
+every other setting still saves normally.
 ## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
 
 Every Substack publication has a public page listing the other publications it
