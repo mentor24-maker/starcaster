@@ -12,6 +12,7 @@ import FootagePanel from './components/studio/footage-panel';
 import WordPressExportPanel from './components/settings/wordpress-export-panel';
 import YoutubeOutreachPanel from './components/youtube-outreach/youtube-outreach-panel';
 import SubstackNotesPanel from './components/substack-notes/substack-notes-panel';
+import SubstackMinerPanel from './components/substack-miner/substack-miner-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -75,6 +76,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (substackNotesHost) {
     createRoot(substackNotesHost).render(<SubstackNotesPanel />);
+  }
+
+  const substackMinerHost = document.getElementById('substackMinerReactRoot');
+
+  if (substackMinerHost) {
+    createRoot(substackMinerHost).render(<SubstackMinerPanel />);
   }
 
   const noWorkspaceHost = document.getElementById('noWorkspaceReactRoot');

@@ -1,0 +1,223 @@
+/* Acquire › Substack Miner — the React island at #substackMinerReactRoot
+   (components/substack-miner/substack-miner-panel.tsx). Substack Miner 4 of 7.
+
+   Copies _substack-notes.css's conventions rather than inventing new ones:
+   every flex/grid box sets min-width: 0 (UI_RULES T8), the table scrolls
+   inside .table-wrap if it ever must (T7 rung 12), no pixel min-widths (T9),
+   so the page body never scrolls sideways (T0). A writer's name and handle
+   wrap and are never clipped (T-1). */
+
+.substack-miner-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.substack-miner-counts {
+  margin: 0;
+  font-weight: 600;
+}
+
+.substack-miner-note {
+  margin: 0;
+  opacity: 0.75;
+}
+
+.substack-miner-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.substack-miner-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.substack-miner-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.substack-miner-panel .btn {
+  margin: 0;
+}
+
+.substack-miner-error,
+.substack-miner-empty {
+  margin: 0;
+}
+
+.substack-miner-error {
+  color: var(--status-warn-ink);
+}
+
+.substack-miner-empty {
+  padding: var(--space-5);
+  border: 1px dashed var(--border-light);
+  border-radius: 10px;
+}
+
+/* ── Filters ────────────────────────────────────────────────────────── */
+
+.substack-miner-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  min-width: 0;
+}
+
+.substack-miner-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  font-weight: 600;
+}
+
+.substack-miner-filter span {
+  white-space: nowrap;
+}
+
+.substack-miner-filter select {
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  font-weight: normal;
+}
+
+/* ── The table ──────────────────────────────────────────────────────── */
+
+.substack-miner-table-wrap {
+  min-width: 0;
+}
+
+.substack-miner-table {
+  width: 100%;
+}
+
+.substack-miner-table td {
+  vertical-align: middle;
+}
+
+/* Names and handles wrap between words (and at a handle's dashes), and break
+   inside a word only when one word cannot fit. `anywhere` would let the
+   browser squeeze the column down to one letter. */
+.substack-miner-link,
+.substack-miner-name-cell,
+.substack-miner-handle {
+  overflow-wrap: break-word;
+}
+
+
+.substack-miner-handle {
+  display: block;
+  margin-top: var(--space-1);
+  opacity: 0.75;
+}
+
+.substack-miner-description {
+  display: block;
+  margin-top: var(--space-2);
+  opacity: 0.75;
+  overflow-wrap: break-word;
+}
+
+.substack-miner-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.substack-miner-chip {
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.substack-miner-recommended summary {
+  cursor: pointer;
+}
+
+.substack-miner-recommended ul {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.substack-miner-note-input {
+  width: 10ch;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.substack-miner-contact {
+  margin: var(--space-2) 0 0;
+}
+
+/* ── Run tab cards ──────────────────────────────────────────────────── */
+
+.substack-miner-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.substack-miner-card-title,
+.substack-miner-card-note {
+  margin: 0;
+}
+
+.substack-miner-card-title {
+  font-weight: 600;
+}
+
+.substack-miner-card textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.substack-miner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.substack-miner-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.substack-miner-result p,
+.substack-miner-result ul {
+  margin: 0;
+}
+
+.substack-miner-result ul {
+  padding-left: var(--space-5);
+  opacity: 0.85;
+}

@@ -10,6 +10,9 @@
  *   POST   /api/acquire/substack-miner/candidates/import   { candidates: [{ handle, publicationUrl, name, whyFit, keywordsHit }] }
  *   GET    /api/acquire/substack-miner/candidates/:id
  *   PATCH  /api/acquire/substack-miner/candidates/:id      (PUT accepted too) details, or { status }
+ *                                                          { status: 'approved' } also puts the writer in
+ *                                                          Contacts (Substack Miner 4/7,
+ *                                                          lib/acquire/SubstackContactCapture.js)
  *   GET    /api/acquire/substack-miner/settings
  *   PUT    /api/acquire/substack-miner/settings            (PATCH accepted too)
  *   POST   /api/acquire/substack-miner/snowball            { handles?: [] } — read who approved writers recommend
@@ -27,6 +30,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/substackMinerStore');
 const { runSubstackSnowball } = require('../lib/acquire/SubstackRecommendationsRun');
 const { runSubstackMinerSearch } = require('../lib/acquire/SubstackMinerRun');
+const { approveCandidate } = require('../lib/acquire/SubstackContactCapture');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -110,6 +114,7 @@ async function handle(req, res, pathname, method) {
     if (method === 'PATCH' || method === 'PUT') {
       const body = await readBody(req, res);
       if (!body) return true;
+      if (body.status === 'approved') return reply(res, await approveCandidate(id, body, scope));
       return reply(res, await store.updateCandidate(id, body, scope));
     }
     return sendErr(res, 405, 'Method not allowed'), true;

@@ -42,6 +42,8 @@ const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
+const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
+const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
 const CLEAN = process.argv.includes('--clean');
@@ -1843,6 +1845,45 @@ try {
   console.error(`  failed to seed Substack Notes: ${err.message}`);
 }
 
+/**
+ * Writers in every status for Acquire › Substack Miner (Substack Miner 4/7,
+ * 86bcfprxq), so each filter has a table to measure: candidates with a long
+ * name and many keywords (the row that has to wrap), one recommended by
+ * several writers, one approved through the real approve path (so it has a
+ * contact), and one rejected. Idempotent by handle — the store merges a
+ * second find, and a status already reached is left alone.
+ */
+async function seedSubstackMiner(scope) {
+  const writers = [
+    { handle: 'fixture-night-skies', name: `${LONG} Newsletter`, description: 'Writes about the night sky, slowly.', keywordsHit: ['night skies', 'astronomy', 'slow living', 'stargazing', 'winter'], foundVia: 'web_search' },
+    { handle: 'fixture-recommended', name: 'Much Recommended', keywordsHit: ['notes'], foundVia: 'recommendations', recommendedBy: ['fixture-night-skies', 'fixture-approved', 'someone-else'] },
+    { handle: 'fixture-approved', name: 'Approved Writer', description: 'Seed: writes about how the Substack algorithm works', foundVia: 'seed' },
+    { handle: 'fixture-rejected', name: 'Rejected Writer', foundVia: 'seed' },
+  ];
+  for (const input of writers) {
+    must(await substackMinerStore.upsertCandidate(input, scope), 'save Substack Miner writer');
+  }
+  const listed = must(await substackMinerStore.listCandidates(1000, scope), 'list Substack Miner writers');
+  const byHandle = new Map(listed.map((c) => [c.handle, c]));
+  const approved = byHandle.get('fixture-approved');
+  if (approved && approved.status === 'candidate') {
+    must(await substackContactCapture.approveCandidate(approved.id, { status: 'approved' }, scope), 'approve Substack Miner writer');
+  }
+  const rejected = byHandle.get('fixture-rejected');
+  if (rejected && rejected.status === 'candidate') {
+    must(await substackMinerStore.updateCandidate(rejected.id, { status: 'rejected' }, scope), 'reject Substack Miner writer');
+  }
+  must(await substackMinerStore.saveSettings({ keywords: ['night skies', 'substack growth'] }, scope), 'save Substack Miner keywords');
+  return { total: writers.length };
+}
+
+let minerSeeded = null;
+try {
+  minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed the Substack Miner: ${err.message}`);
+}
+
 console.log(
   `fixture ready: ${PROJECT_NAME} (${project.id}) — ${created} page(s) created, ` +
   `${refreshed} refreshed, ${existing.length} already present.`
@@ -1870,5 +1911,10 @@ console.log(
   substackSeeded
     ? `Substack Notes seeded — ${substackSeeded.made} item(s) created, ${substackSeeded.found} already present, settings saved.`
     : 'WARNING: Substack Notes was NOT seeded; Engage › Substack Notes will show its empty states and check:screens proves nothing there.'
+);
+console.log(
+  minerSeeded
+    ? `Substack Miner seeded — ${minerSeeded.total} writer(s) across candidate / approved / rejected, keywords saved.`
+    : 'WARNING: the Substack Miner was NOT seeded; Acquire › Substack Miner will show its empty states and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
