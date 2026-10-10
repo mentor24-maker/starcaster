@@ -17,7 +17,16 @@
  *   2. uploads it into this project's own storage,
  *   3. creates an asset row with the real dimensions and byte size,
  *   4. builds the scaled-down copies (the same ladder as everywhere else),
- *   5. rewrites every reference on every page to the new address.
+ *   5. rewrites every reference on every page to the new address — in the
+ *      draft AND in the page's published copy (builder_published_pages).
+ *
+ * The published copy is what a visitor is actually served once a page has been
+ * published (lib/publishedPageRead.js). Rewriting only the draft left every
+ * published page pointing at the old host while the run reported success —
+ * and republishing to fix that would also put any half-finished draft edit
+ * live. So the copy is rewritten in place, and if it was in step with its
+ * draft before the run it is stamped in step after it, so the page does not
+ * suddenly read as "has unpublished changes" (task 86bcgdac6).
  *
  * WordPress serves the same picture at many widths via `?w=`. Those are all one
  * file here: the largest available is fetched once, and every `?w=` variant of
@@ -30,6 +39,8 @@
  *    skipped, and rewriting is a no-op once no page points at the old host.
  *  - Assets are created first and pages rewritten second, so a failure part way
  *    leaves pages pointing at images that still work.
+ *  - Every page and published copy is read back afterwards, and the run exits 2
+ *    if any reference to the old host survived.
  *
  * Usage:
  *   node scripts/import_external_page_images.js --project=proj_… --host=delraytennis.com
@@ -103,6 +114,66 @@ function mimeFromName(name) {
   if (ext === 'webp') return 'image/webp';
   if (ext === 'gif') return 'image/gif';
   return 'image/jpeg';
+}
+
+/** A published copy's payload is stored as a JSON string; older rows hold an object. */
+function parsePayload(payload) {
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) return { value: payload, wasString: false };
+  if (typeof payload === 'string') {
+    try {
+      const value = JSON.parse(payload);
+      if (value && typeof value === 'object' && !Array.isArray(value)) return { value, wasString: true };
+    } catch (_) {}
+  }
+  return null;
+}
+
+/**
+ * Rewrite one published copy, and decide its new source stamp.
+ *
+ * `sourceUpdatedAt` is what makes a page read as published-and-current:
+ * lib/builderPublishStore.js calls a page pending when its draft is newer than
+ * the stamp. The draft is about to be stamped `now`, so a copy that was in step
+ * before is stamped `now` too. A copy that was ALREADY behind its draft keeps
+ * its old stamp — it really does have unpublished changes, and saying otherwise
+ * would hide them from the Publish button. Pass `now` as null when the draft
+ * itself is not being rewritten: its stamp stays put, so the copy's must too.
+ *
+ * Returns null when the copy holds no reference to rewrite.
+ */
+function rewritePublishedCopy(buildRow, draftUpdatedAt, urlSwaps, now) {
+  const parsed = parsePayload(buildRow && buildRow.payload);
+  if (!parsed) return null;
+  const stats = { swapped: 0 };
+  const next = rewriteValue(parsed.value, urlSwaps, stats);
+  if (!stats.swapped) return null;
+
+  const builtAt = Date.parse(String(buildRow.source_updated_at || '')) || 0;
+  const draftAt = Date.parse(String(draftUpdatedAt || '')) || 0;
+  const inStep = Boolean(now) && builtAt > 0 && builtAt >= draftAt;
+  if (inStep && next && typeof next === 'object' && 'updatedAt' in next) next.updatedAt = now;
+
+  return {
+    swapped: stats.swapped,
+    payload: parsed.wasString ? JSON.stringify(next) : next,
+    sourceUpdatedAt: inStep ? now : buildRow.source_updated_at || null,
+    inStep,
+  };
+}
+
+/** How many references to the host remain anywhere in these rows. */
+function countHostReferences(rows, host) {
+  const needle = String(host).toLowerCase();
+  let count = 0;
+  for (const row of rows) {
+    for (const raw of JSON.stringify(row).match(IMAGE_URL_RE) || []) {
+      try {
+        const h = new URL(raw).hostname.toLowerCase();
+        if (h === needle || h.endsWith(`.${needle}`)) count += 1;
+      } catch (_) {}
+    }
+  }
+  return count;
 }
 
 /** Every image URL on the target host, grouped into one entry per real file. */
@@ -227,6 +298,23 @@ async function run() {
   }
   const pageRows = Array.isArray(pagesRes.data) ? pagesRes.data : [];
 
+  // The published copies are what visitors are served, so they are scanned
+  // and rewritten too. A copy whose draft was deleted is skipped: nothing can
+  // reach it (lib/publishedPageRead.js keys the read on the draft's id).
+  const buildsRes = await sbQuery({
+    table: tableConfig().builderPublishedPages,
+    query: `select=page_id,slug,payload,source_updated_at&project_id=eq.${encodeURIComponent(projectId)}&limit=1000`,
+  });
+  if (!buildsRes.ok) {
+    console.error('[import] Could not load the published copies:', buildsRes.error);
+    process.exitCode = 1;
+    return;
+  }
+  const draftIds = new Set(pageRows.map((r) => String(r.id)));
+  const buildRows = (Array.isArray(buildsRes.data) ? buildsRes.data : []).filter((b) => draftIds.has(String(b.page_id)));
+  const buildByPage = new Map(buildRows.map((b) => [String(b.page_id), b]));
+  const scanRows = [...pageRows, ...buildRows.map((b) => ({ slug: b.slug, payload: b.payload }))];
+
   // Anything already imported carries its origin in `comments`, so a re-run
   // recognises it instead of uploading a second copy.
   const existingRes = await sbQuery({
@@ -241,14 +329,14 @@ async function run() {
     if (match) alreadyImported.set(fileKey(match[1]), row.location);
   }
 
-  let files = collectExternalImages(pageRows, host);
+  let files = collectExternalImages(scanRows, host);
   const totalRefs = files.reduce((sum, f) => sum + f.refs, 0);
   const pending = files.filter((f) => !alreadyImported.has(f.key));
   if (limit) files = pending.slice(0, limit);
   else files = pending;
 
   console.log(
-    `[import] mode=${apply ? 'APPLY' : 'DRY RUN'} pages=${pageRows.length} ` +
+    `[import] mode=${apply ? 'APPLY' : 'DRY RUN'} pages=${pageRows.length} published copies=${buildRows.length} ` +
       `files=${pending.length + alreadyImported.size} references=${totalRefs} ` +
       `already imported=${alreadyImported.size} to do=${files.length}`
   );
@@ -348,7 +436,7 @@ async function run() {
 
   // Rewrite by full URL including every ?w= variant, so no reference is missed.
   const urlSwaps = [];
-  for (const entry of collectExternalImages(pageRows, host)) {
+  for (const entry of collectExternalImages(scanRows, host)) {
     const replacement = swaps.get(entry.key);
     if (!replacement) continue;
     for (const variant of entry.variants) urlSwaps.push([variant, replacement]);
@@ -357,11 +445,14 @@ async function run() {
   // the short one first would leave a dangling "?w=1024" on the new address.
   urlSwaps.sort((a, b) => b[0].length - a[0].length);
 
+  const now = new Date().toISOString();
   const touched = [];
   for (const row of pageRows) {
     const stats = { swapped: 0 };
     const next = rewriteValue(row.layout_sections, urlSwaps, stats);
-    if (stats.swapped) touched.push({ row, next, swapped: stats.swapped });
+    const build = buildByPage.get(String(row.id));
+    const copy = build ? rewritePublishedCopy(build, row.updated_at, urlSwaps, stats.swapped ? now : null) : null;
+    if (stats.swapped || copy) touched.push({ row, next, swapped: stats.swapped, build, copy });
   }
 
   if (!touched.length) {
@@ -382,7 +473,15 @@ async function run() {
         projectId,
         host,
         swaps: urlSwaps,
-        pages: touched.map((t) => ({ id: t.row.id, slug: t.row.slug, layout_sections: t.row.layout_sections })),
+        pages: touched.map((t) => ({
+          id: t.row.id,
+          slug: t.row.slug,
+          updated_at: t.row.updated_at,
+          layout_sections: t.row.layout_sections,
+          published_copy: t.build
+            ? { payload: t.build.payload, source_updated_at: t.build.source_updated_at }
+            : null,
+        })),
       },
       null,
       2
@@ -391,23 +490,70 @@ async function run() {
   console.log(`[import] backup written: ${path.relative(path.join(__dirname, '..'), backupFile)}`);
 
   let written = 0;
+  let copiesWritten = 0;
   for (const t of touched) {
-    const res = await sbQuery({
-      method: 'PATCH',
-      table: tableConfig().builderPages,
-      query: `id=eq.${encodeURIComponent(t.row.id)}`,
-      body: { layout_sections: t.next, updated_at: new Date().toISOString() },
-    });
-    if (!res.ok) {
-      console.error(`[import] page /${t.row.slug || t.row.id} FAILED: ${res.error}`);
-      continue;
+    // The draft is stamped only when its content changed — a page whose draft
+    // was already clean must not start reading as edited.
+    let copy = t.copy;
+    if (t.swapped) {
+      const res = await sbQuery({
+        method: 'PATCH',
+        table: tableConfig().builderPages,
+        query: `id=eq.${encodeURIComponent(t.row.id)}&select=updated_at`,
+        headers: { Prefer: 'return=representation' },
+        body: { layout_sections: t.next, updated_at: now },
+      });
+      if (!res.ok) {
+        console.error(`[import] page /${t.row.slug || t.row.id} FAILED: ${res.error}`);
+        continue;
+      }
+      // A trigger on the table replaces updated_at with the database's own
+      // clock, so the stamp written is not the stamp stored. The copy has to
+      // carry the stored one or every rewritten page reads as having
+      // unpublished changes — which the first rehearsal of this did.
+      const stored = Array.isArray(res.data) && res.data[0] && res.data[0].updated_at;
+      if (copy && stored) copy = rewritePublishedCopy(t.build, t.row.updated_at, urlSwaps, stored);
+    }
+    if (copy) {
+      const res = await sbQuery({
+        method: 'PATCH',
+        table: tableConfig().builderPublishedPages,
+        query: `project_id=eq.${encodeURIComponent(projectId)}&page_id=eq.${encodeURIComponent(t.row.id)}`,
+        body: { payload: copy.payload, source_updated_at: copy.sourceUpdatedAt },
+      });
+      if (!res.ok) {
+        console.error(`[import] published copy of /${t.row.slug || t.row.id} FAILED: ${res.error}`);
+        continue;
+      }
+      copiesWritten += 1;
     }
     written += 1;
   }
 
+  // Read everything back. The PATCH answering 2xx proves a write happened, not
+  // that the old host is gone from what visitors are served.
+  const pagesAfter = await sbQuery({
+    table: tableConfig().builderPages,
+    query: `select=id,slug,layout_sections&project_id=eq.${encodeURIComponent(projectId)}&limit=1000`,
+  });
+  const buildsAfter = await sbQuery({
+    table: tableConfig().builderPublishedPages,
+    query: `select=page_id,payload&project_id=eq.${encodeURIComponent(projectId)}&limit=1000`,
+  });
+  let remaining = null;
+  if (pagesAfter.ok && buildsAfter.ok) {
+    const liveBuilds = (buildsAfter.data || []).filter((b) => draftIds.has(String(b.page_id)));
+    remaining = countHostReferences([...(pagesAfter.data || []), ...liveBuilds], host);
+  }
+
   console.log('');
   console.log(`[import] done. ${imported} image(s) imported (${mb(originalBytes)}), ${failed} failed.`);
-  console.log(`[import] ${written} of ${touched.length} page(s) rewritten to the new addresses.`);
+  console.log(`[import] ${written} of ${touched.length} page(s) rewritten to the new addresses (${copiesWritten} published copies).`);
+  if (remaining === null) {
+    console.log('[import] READ-BACK FAILED — could not re-read the pages, so whether the old host is gone is unknown.');
+  } else {
+    console.log(`[import] read back: ${remaining} image reference(s) to ${host} remain across drafts and published copies.`);
+  }
   if (failures.length) {
     console.log('');
     console.log('[import] could not be fetched — these stay pointing at the old site:');
@@ -416,10 +562,14 @@ async function run() {
     }
   }
   console.log(`[import] rollback: restore layout_sections from ${path.basename(backupFile)}`);
-  if (failed) process.exitCode = 2;
+  if (failed || remaining !== 0) process.exitCode = 2;
 }
 
-run().catch((err) => {
-  console.error('[import] fatal:', err?.message || err);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  run().catch((err) => {
+    console.error('[import] fatal:', err?.message || err);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { collectExternalImages, rewritePublishedCopy, countHostReferences, parsePayload };
