@@ -1,3 +1,19 @@
+## 2026-10-10 — Substack Miner 5/7: each approved writer's newest Notes, lined up to like or reply (#817)
+
+For every Substack writer Dane has approved, Starcaster now reads their three
+newest Notes and puts the newest one on Engage › Substack Notes as two rows
+waiting for him: a Like and a Reply. Nothing is liked or posted at this step.
+Reading the same Notes again adds nothing, and a writer read in the last week
+is skipped and named. The ticket planned to use the Mac Mini's signed-in
+browser for this. Before building, the agent session found that Substack's
+public feed hands the Notes to a plain request, so it works now, with no
+browser, no sign-in and no wait for the 10/13 sign-in. That correction is on
+the ticket. The first real run caught a bug the tests had missed: it read the
+wrong field and found no Notes for a writer who has twelve. After the fix it
+read her three newest and lined up the pair. The Candidates screen gains a
+"Notes read" column. Two new database columns need applying in production
+before this is used there.
+
 ## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
 
 The Substack Miner now has its screen, under Acquire › Substack Miner (the
