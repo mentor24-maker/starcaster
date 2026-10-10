@@ -12,6 +12,32 @@ row. The **Ideas** tab says when the next topic draft is coming, or why none
 is: switched off, no topics, or approvals already full. The switch needs one
 small database change run in production before it can be saved. Until then,
 every other setting still saves normally.
+## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
+
+Every Substack publication has a public page listing the other publications it
+recommends. Starcaster now reads that page for each writer Dane has approved
+and adds every Substack writer listed there to the candidate list, remembering
+who recommended them — so a handful of approved writers snowballs into many
+more without anybody searching. Dane's decisions are never changed: a writer
+he rejected stays rejected however often they are recommended. It reads one
+page at a time, at most 100 a run, and its summary says which pages it read,
+which failed and why, and which it left for next time. Tried on a real page:
+19 writers found, and running it again added no duplicates. There is no screen
+yet; that is slice 4.
+## 2026-10-09 — The MacBook still holds hundreds of GB of files already safe on Google Drive (#806)
+
+The archive tool (`npm run archive:mac`) can now free the MacBook of files
+that are already safely on Google Drive. It does not do it on its own: each
+step is first a dry run that changes nothing, and Dane approves the list
+before anything happens. One command handles the 173 GB still sitting in
+the MacBook's Trash from 4 October. A file goes only if an identical copy is
+on mentor24 or mentorofaio at that moment, and a file with no Drive copy is
+put back where it came from. The other command handles the MacBook copies
+the duplicates report flagged, and moves them to the Trash rather than
+deleting them. Every file is checked against Drive again just before it
+goes, so a copy that disappeared after the dry run keeps the original safe.
+Every change is logged with the command that undoes it. The live runs on the
+MacBook come next, each one waiting for Dane's approval.
 ## 2026-10-09 — Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it waits for his approval (#803)
 
 Every 15 minutes Starcaster now looks at Dane's YouTube channel, his Substack
