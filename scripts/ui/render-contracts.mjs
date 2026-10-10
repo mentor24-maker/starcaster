@@ -781,6 +781,91 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'heading-nudged-over-an-image-stacks-behind-it-in-page-order',
+    why:
+      'THE CONTROL for the contract below. A heading nudged DOWN over the image after it (Vertical ' +
+      'Offset -60) paints behind the image, because two overlapping flow modules stack in page order ' +
+      'and the image comes later (task 86bcgc7xq, operator 2026-10-10: "the image is overwriting the ' +
+      'headline"). This contract pins that baseline with the browser\'s own hit test, so the one below ' +
+      'cannot pass by the heading never overlapping the picture at all.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Headline over the picture', settings: { verticalOffset: '-60', fontSize: '40' } },
+        // The image is nudged too, which POSITIONS it (the nudge is a transform on a
+        // relative box). A plain in-flow image paints under any positioned
+        // neighbour regardless of order; one that is positioned, carries an
+        // effect, or sits in a layered column stacks in page order — the case
+        // the operator hit.
+        { type: 'image', settings: { ...PICTURE, size: '100', verticalOffset: '20' } },
+      ],
+    },
+    selector: '.builder-preview-module:has(> .builder-preview-heading)',
+    read: ['z-index'],
+    probes: {
+      stack: {
+        subject: '.builder-preview-heading',
+        against: '.builder-preview-image-shell',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.stack;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the pair did not render, so this contract can no longer fail for the right reason.`;
+      if (!(probe.overlap > 0)) {
+        return `the heading and the image do not overlap (overlap ${probe.overlap}px) — a nudge of -60 should put the heading over the picture; with no overlap, who is on top cannot be measured.`;
+      }
+      if (sample.styles['z-index'] !== 'auto') {
+        return `the heading wrapper carries z-index ${sample.styles['z-index']} with no Z-Index set — a module with no value must render exactly as before.`;
+      }
+      return probe.onAgainst
+        ? null
+        : `with no Z-Index set the hit test found \`${probe.hit}\` over the overlap — the image should win in page order, so the control that proves the contract below is no longer a control.`;
+    },
+  },
+  {
+    id: 'heading-with-a-z-index-paints-in-front-of-the-image-it-is-nudged-over',
+    why:
+      'The fix for task 86bcgc7xq: a Z-Index on the heading lands on its module wrapper and puts the ' +
+      'headline IN FRONT of the image it overlaps. Measured by the browser\'s own hit test at the ' +
+      'middle of the overlap, which is the only thing that can tell "in front" from "a z-index was ' +
+      'written somewhere the stacking never reads".',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Headline over the picture', settings: { verticalOffset: '-60', fontSize: '40', zIndex: '2' } },
+        // The image is nudged too, which POSITIONS it (the nudge is a transform on a
+        // relative box). A plain in-flow image paints under any positioned
+        // neighbour regardless of order; one that is positioned, carries an
+        // effect, or sits in a layered column stacks in page order — the case
+        // the operator hit.
+        { type: 'image', settings: { ...PICTURE, size: '100', verticalOffset: '20' } },
+      ],
+    },
+    selector: '.builder-preview-module:has(> .builder-preview-heading)',
+    read: ['z-index', 'position'],
+    probes: {
+      stack: {
+        subject: '.builder-preview-heading',
+        against: '.builder-preview-image-shell',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.stack;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the pair did not render, so this contract can no longer fail for the right reason.`;
+      if (!(probe.overlap > 0)) {
+        return `the heading and the image do not overlap (overlap ${probe.overlap}px) — with no overlap, who is on top cannot be measured.`;
+      }
+      if (sample.styles['z-index'] !== '2' || sample.styles.position !== 'relative') {
+        return `Z-Index 2 did not reach the heading's wrapper (z-index ${sample.styles['z-index']}, position ${sample.styles.position}).`;
+      }
+      return probe.onSubject
+        ? null
+        : `the heading has Z-Index 2 and the hit test still found \`${probe.hit}\` over the overlap — the setting reached the wrapper but the image is still painting on top.`;
+    },
+  },
+  {
     id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
     why:
       'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +
