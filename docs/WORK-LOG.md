@@ -1,3 +1,15 @@
+## 2026-10-09 — Videos in the Photos 'Studio' album never reach Studio (#813)
+
+The same 15-minute job on the MacBook that sends Zoom recordings now also
+sends any video Dane puts into an Apple Photos album called **Studio** — from
+the iPhone or the Mac — to the Studio Inbox. Nothing outside that album is
+ever sent (so family videos stay out), photos in the album are skipped, and a
+video taken out and put back is not sent twice. It sends the original, fetched
+from iCloud when needed, and never changes anything in Photos. Until Dane
+turns on the Mac's privacy switch for the Photos library, the job says
+"CANNOT READ PHOTOS" with the exact switch to turn on, and the bus hears
+about it — it never pretends there was nothing new.
+
 ## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
 
 The Substack Miner now has its screen, under Acquire › Substack Miner (the
