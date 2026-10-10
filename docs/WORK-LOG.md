@@ -1,3 +1,18 @@
+## 2026-10-10 — Dane of Earth: getting ready for Hostinger switching off on 10/23 (#822)
+
+The Dane of Earth site still loaded 43 of its pictures from the old WordPress
+server, which goes dark when Hostinger ends on October 23rd. The script that
+moved Delray's pictures already existed, but it only fixed the draft of each
+page, and visitors are shown the published copy, so it would have said "done"
+while the live site kept every picture on the old server. It now fixes both
+copies and checks its own work afterwards. A second small script unpublishes
+three junk pages from the import (`/test`, the raw `/feed` file, and a duplicate
+post titled "404 Not Found") without deleting them. Old WordPress addresses
+like `/category/strands/` will also redirect to their StarCaster pages once
+daneofearth.org points here. Both scripts were rehearsed on a copy of the real
+pages: 44 pictures moved, none failed, none left behind. Running them on the
+live site has to happen from the MacBook Pro, because the Mac Mini cannot write
+to production.
 ## 2026-10-09 — Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (#815)
 
 The Substack Miner's top line now says whether the push is working, not just
