@@ -379,3 +379,198 @@ test('backfill: a path sent at one size and since grown is offered again, not sk
   const dry = await intake.runBackfill({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, now: T0 });
   assert.equal(dry.count, 1, 'the grown recording was hidden as already sent');
 });
+
+// --- Apple Photos: the Studio album (ticket 86bcfgyy6) ----------------------
+
+/**
+ * A fake Photos library. `query` deliberately returns EVERY item, not only the
+ * album's — a stand-in for an osxphotos that reads `--album` loosely — so the
+ * "only the album" test proves the filter in lib/mediaIntake.js itself.
+ */
+function fakePhotos(items, { albums = ['Studio', 'Family'] } = {}) {
+  const exported = [];
+  const created = [];
+  return {
+    exported,
+    created,
+    items,
+    async albums() { return albums; },
+    async createAlbum(name) { created.push(name); },
+    async query() { return items.map(({ body, ...rest }) => rest); },
+    async exportOriginal(item, dir) {
+      exported.push(item.uuid);
+      const src = items.find((i) => i.uuid === item.uuid);
+      const p = path.join(dir, src.original_filename);
+      fs.writeFileSync(p, src.body);
+      return p;
+    },
+  };
+}
+
+function photoItem(uuid, { albums = ['Studio'], ismovie = true, body = `bytes of ${uuid}`, name = `${uuid}.MOV` } = {}) {
+  return { uuid, albums, ismovie, body, original_filename: name, date: '2026-10-09T18:04:11.123000-06:00' };
+}
+
+function photosRun(s, photos, uploader, extra = {}) {
+  return intake.runPhotos({
+    photos, ledgerFile: s.ledgerFile, uploader, stagingDir: path.join(s.dir, 'state', 'photos-export'), ...extra,
+  });
+}
+
+test('photos: a video in the Studio album is sent once; a photo is skipped and counted', async () => {
+  const s = scratch();
+  const up = fakeUploader(s.drive);
+  const photos = fakePhotos([
+    photoItem('V1', { name: 'IMG_0001.MOV' }),
+    photoItem('P1', { ismovie: false, name: 'IMG_0002.HEIC' }),
+    photoItem('P2', { ismovie: false, name: 'IMG_0003.HEIC' }),
+  ]);
+  const first = await photosRun(s, photos, up);
+  assert.deepStrictEqual(first.sent.map((x) => x.as), ['Photos - 2026-10-09 18.04.11 - IMG_0001.MOV']);
+  assert.strictEqual(first.photosSkipped, 2);
+  assert.deepStrictEqual(photos.exported, ['V1'], 'photos are never exported');
+  assert.ok(fs.existsSync(path.join(s.drive, 'Photos - 2026-10-09 18.04.11 - IMG_0001.MOV')));
+  assert.match(intake.renderPhotos(first), /sent 1, already sent 0, failed 0, photos skipped \(only videos are sent\) 2/);
+
+  const second = await photosRun(s, photos, up);
+  assert.strictEqual(second.sent.length, 0);
+  assert.strictEqual(second.alreadySent.length, 1);
+  assert.strictEqual(up.calls.length, 1, 'uploaded exactly once');
+  assert.deepStrictEqual(fs.readdirSync(path.join(s.dir, 'state', 'photos-export')), [], 'the export copy is deleted');
+});
+
+test('photos: only the Studio album — a family video is never exported or sent', async () => {
+  const s = scratch();
+  const up = fakeUploader(s.drive);
+  const photos = fakePhotos([
+    photoItem('FAM', { albums: ['Family'] }),
+    photoItem('NONE', { albums: [] }),
+    photoItem('V1', { albums: ['Family', 'Studio'] }),
+  ]);
+  const report = await photosRun(s, photos, up);
+  assert.deepStrictEqual(photos.exported, ['V1']);
+  assert.strictEqual(report.sent.length, 1);
+  assert.strictEqual(report.outsideAlbum, 2);
+});
+
+test('photos: re-adding a sent video to the album sends nothing and does not even export it', async () => {
+  const s = scratch();
+  const up = fakeUploader(s.drive);
+  const items = [photoItem('V1')];
+  const photos = fakePhotos(items);
+  await photosRun(s, photos, up);
+  items.length = 0; // taken out of the album
+  await photosRun(s, photos, up);
+  items.push(photoItem('V1')); // and put back — Photos keeps its id
+  const back = await photosRun(s, photos, up);
+  assert.strictEqual(back.sent.length, 0);
+  assert.strictEqual(back.alreadySent.length, 1);
+  assert.deepStrictEqual(photos.exported, ['V1'], 'exported once, ever');
+  assert.strictEqual(up.calls.length, 1);
+});
+
+test('photos: the same bytes under a second Photos id are not sent again', async () => {
+  const s = scratch();
+  const up = fakeUploader(s.drive);
+  const photos = fakePhotos([photoItem('V1', { body: 'same' }), photoItem('V2', { body: 'same', name: 'copy.MOV' })]);
+  const report = await photosRun(s, photos, up);
+  assert.strictEqual(report.sent.length, 1);
+  assert.strictEqual(report.alreadySent.length, 1);
+  assert.strictEqual(up.calls.length, 1);
+  const { ledger } = intake.readLedger(s.ledgerFile);
+  assert.ok(ledger.photos.V1 && ledger.photos.V2, 'both ids recorded, so neither is exported again');
+});
+
+test('photos: a failed export or upload is a failure, recorded nowhere, and tried again next pass', async () => {
+  const s = scratch();
+  const photos = fakePhotos([photoItem('V1')]);
+  const bad = await photosRun(s, photos, fakeUploader(s.drive, { corrupt: true }));
+  assert.strictEqual(bad.failed.length, 1);
+  assert.match(bad.failed[0].why, /checksum/);
+  assert.deepStrictEqual(intake.readLedger(s.ledgerFile).ledger.photos, {});
+  const good = await photosRun(s, photos, fakeUploader(s.drive));
+  assert.strictEqual(good.sent.length, 1);
+});
+
+test('photos: no Studio album — it is made, and nothing is sent; failing to make it is a failure', async () => {
+  const s = scratch();
+  const photos = fakePhotos([photoItem('V1')], { albums: ['Family'] });
+  const made = await photosRun(s, photos, fakeUploader(s.drive));
+  assert.strictEqual(made.albumCreated, true);
+  assert.deepStrictEqual(photos.created, ['Studio']);
+  assert.strictEqual(made.sent.length, 0);
+  assert.match(intake.renderPhotos(made), /so one was made/);
+
+  const refused = fakePhotos([], { albums: [] });
+  refused.createAlbum = async () => { throw new Error('not allowed to send Apple events'); };
+  const r = await photosRun(s, refused, fakeUploader(s.drive));
+  assert.strictEqual(r.failed.length, 1);
+  assert.match(r.failed[0].why, /no album called "Studio".*not allowed/);
+});
+
+test('photos: without the permission the pass reports CANNOT READ PHOTOS with the fix — never "0 new videos"', async () => {
+  const s = scratch();
+  const calls = [];
+  const eperm = Object.assign(new Error('Operation not permitted'), { code: 'EPERM' });
+  const photos = intake.osxphotosAdapter({
+    run: async (...a) => { calls.push(a); return { status: 0, stdout: '{}' }; },
+    library: '/L/Photos Library.photoslibrary',
+    io: { ...fs, readdirSync: () => { throw eperm; } },
+  });
+  await assert.rejects(photosRun(s, photos, fakeUploader(s.drive)), (err) => {
+    assert.ok(err instanceof intake.PhotosUnreadable);
+    assert.match(err.message, /^CANNOT READ PHOTOS — macOS refused access/);
+    assert.match(err.fix, /Privacy & Security › Full Disk Access/);
+    return true;
+  });
+  assert.strictEqual(calls.length, 0, 'osxphotos is not even asked once the library is known to be blocked');
+});
+
+test('photos adapter: osxphotos refusing, hanging or missing all read as CANNOT READ PHOTOS', async () => {
+  const io = { ...fs, readdirSync: () => [] };
+  const cases = [
+    [{ status: 2, stderr: "Error: Invalid value for '--library': Path '/L' is not readable." }, /refused the library/],
+    [{ status: null, timedOut: true, stdout: '' }, /did not answer within/],
+    [{ status: 127, stderr: 'spawn osxphotos ENOENT' }, /not installed/],
+    [{ status: 0, stdout: 'not json' }, /did not print JSON/],
+  ];
+  for (const [res, why] of cases) {
+    const photos = intake.osxphotosAdapter({ run: async () => res, library: '/L', io });
+    await assert.rejects(photos.albums(), (err) => {
+      assert.ok(err instanceof intake.PhotosUnreadable, `${why}: ${err && err.message}`);
+      assert.match(err.message, /^CANNOT READ PHOTOS — /);
+      assert.match(err.message, why);
+      return true;
+    });
+  }
+});
+
+test('photos adapter: every osxphotos call names the library (without it, osxphotos hangs when blocked)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oxp-'));
+  const calls = [];
+  const photos = intake.osxphotosAdapter({
+    library: '/L',
+    io: { ...fs, readdirSync: (p) => (p === '/L' ? [] : fs.readdirSync(p)) },
+    run: async (bin, args) => {
+      calls.push(args);
+      if (args[0] === 'albums') return { status: 0, stdout: '{"albums": {"Studio": 1}, "shared albums": {}}' };
+      if (args[0] === 'query') return { status: 0, stdout: '[]' };
+      fs.writeFileSync(path.join(args[1], 'IMG_1.MOV'), 'x');
+      fs.writeFileSync(path.join(args[1], '.osxphotos_export.db'), 'db');
+      return { status: 0, stdout: '' };
+    },
+  });
+  assert.deepStrictEqual(await photos.albums(), ['Studio']);
+  await photos.query('Studio');
+  const file = await photos.exportOriginal({ uuid: 'U', original_filename: 'IMG_1.MOV' }, dir);
+  assert.strictEqual(file, path.join(dir, 'IMG_1.MOV'));
+  for (const args of calls) assert.deepStrictEqual(args.slice(-2), ['--library', '/L'], args.join(' '));
+  assert.ok(calls[1].includes('--album') && calls[1].includes('Studio'));
+  assert.ok(calls[2].includes('--download-missing') && calls[2].includes('--skip-edited'), 'originals, from iCloud if needed');
+});
+
+test('photos: the Drive name carries the date taken, and no slash survives', () => {
+  assert.strictEqual(intake.photosDriveName({ date: '2026-10-09T18:04:11-06:00', original_filename: 'a/b.MOV' }),
+    'Photos - 2026-10-09 18.04.11 - a-b.MOV');
+  assert.strictEqual(intake.photosDriveName({ original_filename: 'IMG_9.MOV' }), 'Photos - IMG_9.MOV');
+});

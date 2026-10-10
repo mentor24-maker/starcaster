@@ -192,7 +192,7 @@ heading('TOOLCHAIN — the commands a node needs');
 // had not merged yet, which is a statement about git, not about the machine.
 const pinnedNode = provision.pinnedNodeVersion();
 
-for (const tool of provision.REQUIRED_TOOLS) {
+for (const tool of provision.toolsForNode(node.name)) {
   const probe = sh(tool.command, tool.versionArgs);
 
   if (!probe.ran) {
