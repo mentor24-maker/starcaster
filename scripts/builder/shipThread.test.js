@@ -460,3 +460,36 @@ test('CLAUDE.md no longer answers yes AND no about merges and the switch', () =>
     assert.ok(doctrine.includes(d), `§6.17 records ${d}`);
   }
 });
+
+/**
+ * Task 86bcg8c2n (2026-10-09): Node's spawnSync holds 1 MiB of a child's
+ * output by default and KILLS the child past that. The server suite's TAP
+ * output crossed 1 MiB, ship killed its own test run at test 4,964 of 5,109,
+ * and said "the server tests check failed" — twice, on a suite that passed by
+ * hand. Every ship on every branch stopped there.
+ */
+test('every check runs with a raised output limit, so a long suite is not killed mid-run', () => {
+  assert.match(code, /CHECK_OUTPUT_LIMIT\s*=\s*64\s*\*\s*1024\s*\*\s*1024/, 'the limit is 64 MiB, stated as arithmetic');
+  assert.match(
+    code,
+    /spawnSync\(cmd,\s*argv,\s*\{[^}]*maxBuffer:\s*CHECK_OUTPUT_LIMIT[^}]*\}\)/,
+    'quiet() must pass maxBuffer — a spawnSync without it is the 1 MiB default'
+  );
+});
+
+test('a run ship cut off is reported as a ship defect, not as the check failing', () => {
+  assert.match(code, /result\.error\s*===\s*'ENOBUFS'/, 'ENOBUFS is told apart from every other stop');
+  assert.match(code, /describeCheckStop\(label,\s*result\)/, 'the checks loop asks for that distinction');
+  assert.match(code, /error:\s*result\.error\s*\?/, 'quiet() surfaces the spawn error so the loop can read it');
+  assert.match(code, /signal:\s*result\.signal/, 'quiet() surfaces the signal so a killed run is named');
+});
+
+test('Node really does kill a child past maxBuffer — the premise the fix rests on', () => {
+  const { spawnSync } = require('node:child_process');
+  const script = "process.stdout.write('x'.repeat(2 * 1024 * 1024))";
+  const small = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', maxBuffer: 1024 * 1024 });
+  const large = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  assert.equal(small.error && small.error.code, 'ENOBUFS', 'at the default-sized limit the child is killed');
+  assert.equal(small.status, null, 'and reports no exit status at all');
+  assert.equal(large.status, 0, 'with the raised limit the same child finishes');
+});
