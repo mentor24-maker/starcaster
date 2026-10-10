@@ -1722,7 +1722,14 @@ function BuilderSectionPreview({
   // gets an overlay (defaulting to a dark neutral) because text sits on it.
   const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
   const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
-  const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
+  // Only a tint the theme actually names (or the banner's own dark default)
+  // becomes a layer. `normalizeBuilderHexColor("")` answers WHITE — its job is
+  // to give a colour picker something to show — so routing an empty tint
+  // through it laid a 45% white wash over every photo section on every site
+  // and forced the text on it to white, from the day treatments shipped
+  // (2026-08-09) until 2026-10-10. "No tint set" has to stay no tint.
+  const heroTintSource = heroOverlay?.trim() || (bannerImage ? "#101820" : "");
+  const heroTint = heroTintSource ? normalizeBuilderHexColor(heroTintSource) : "";
   /*
    * The tint as a COLOUR of its own, not only baked into the gradient below.
    *
