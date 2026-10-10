@@ -1,3 +1,15 @@
+## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
+
+Every Substack publication has a public page listing the other publications it
+recommends. Starcaster now reads that page for each writer Dane has approved
+and adds every Substack writer listed there to the candidate list, remembering
+who recommended them — so a handful of approved writers snowballs into many
+more without anybody searching. Dane's decisions are never changed: a writer
+he rejected stays rejected however often they are recommended. It reads one
+page at a time, at most 100 a run, and its summary says which pages it read,
+which failed and why, and which it left for next time. Tried on a real page:
+19 writers found, and running it again added no duplicates. There is no screen
+yet; that is slice 4.
 ## 2026-10-09 — The MacBook still holds hundreds of GB of files already safe on Google Drive (#806)
 
 The archive tool (`npm run archive:mac`) can now free the MacBook of files
