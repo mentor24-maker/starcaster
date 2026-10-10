@@ -479,4 +479,12 @@ describe("Substack Miner helpers", () => {
     expect(statsNotes({ found: 1, approved: 1, rejected: 0, inContacts: 1, engaged: null, subscribed: 0, approvedWithContact: 1, truncated: false, unknown: [{ count: "engaged", reason: "The Substack Notes actions could not be read: x" }] }, "").join(" "))
       .toContain("Engaged could not be counted.");
   });
+
+  it("when no approved writer has a contact, Subscribed-is-0 says so instead of asking for an import", () => {
+    const none = statsNotes({ found: 2, approved: 2, rejected: 0, inContacts: 0, engaged: 0, subscribed: 0, approvedWithContact: 0, truncated: false, unknown: [] }, "").join(" ");
+    expect(none).toContain("none of the 2 approved writers has a contact yet");
+    expect(none).not.toContain("Import the subscriber list");
+    const some = statsNotes({ found: 1, approved: 1, rejected: 0, inContacts: 1, engaged: 0, subscribed: 0, approvedWithContact: 1, truncated: false, unknown: [] }, "").join(" ");
+    expect(some).toContain("Import the subscriber list");
+  });
 });

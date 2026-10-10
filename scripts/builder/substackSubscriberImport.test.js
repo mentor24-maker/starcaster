@@ -21,12 +21,20 @@ const OTHER = { projectId: 'proj_b', userId: 'user_2' };
 
 function fakeContacts(byProject) {
   const writes = [];
+  const reads = [];
   const store = {
     writes,
+    reads,
     rowToContact: (row) => (row ? { ...row, customFields: { ...(row.customFields || {}) } } : null),
     async listContacts({ scope } = {}) {
       if (!scope?.projectId) throw new Error('listContacts without a scope would read every project');
       return { ok: true, status: 200, data: (byProject[scope.projectId] || []).map((c) => ({ ...c })) };
+    },
+    async listContactsByIds(ids, scope) {
+      if (!scope?.projectId) throw new Error('listContactsByIds without a scope would read every project');
+      reads.push(ids);
+      const wanted = new Set(ids);
+      return { ok: true, status: 200, data: (byProject[scope.projectId] || []).filter((c) => wanted.has(c.id)).map((c) => ({ ...c })) };
     },
     async updateContact(id, patch, scope) {
       const list = byProject[scope.projectId] || [];
@@ -139,7 +147,7 @@ test('a 3-row CSV with 2 matching emails marks those 2 and reports 1 unmatched',
   assert.equal(d.approvedWriterMatches, 1, 'the writer contact belongs to an approved writer');
   assert.equal(contacts.writes.length, 2);
   const dane = byProject.proj_a.find((c) => c.id === 'c_dane');
-  assert.equal(dane.customFields[SUBSCRIBED_FIELD], '2026-10-01T00:00:00.000Z');
+  assert.deepEqual(dane.customFields[SUBSCRIBED_FIELD], { proj_a: '2026-10-01T00:00:00.000Z' });
   assert.equal(dane.customFields.keep, 'me', 'the other custom fields are kept');
   // Never touches the other project's contact with the same email.
   assert.deepEqual(byProject.proj_b[0].customFields, {});
@@ -160,14 +168,14 @@ test('a second import never moves a date already set', async () => {
   const { byProject, deps } = setup();
   await importSubscribers({ csv: CSV }, SCOPE, deps);
   await importSubscribers({ csv: 'email,subscription_date\ndane@alphire.agency,2027-01-01\n' }, SCOPE, deps);
-  assert.equal(byProject.proj_a[0].customFields[SUBSCRIBED_FIELD], '2026-10-01T00:00:00.000Z');
+  assert.equal(byProject.proj_a[0].customFields[SUBSCRIBED_FIELD].proj_a, '2026-10-01T00:00:00.000Z');
 });
 
 test('no date column marks with the import time and says which column was missing', async () => {
   const { byProject, deps } = setup();
   const res = await importSubscribers({ csv: 'email\ndane@alphire.agency\n' }, SCOPE, deps);
   assert.equal(res.data.dateColumn, '');
-  assert.equal(byProject.proj_a[0].customFields[SUBSCRIBED_FIELD], '2026-10-09T12:00:00.000Z');
+  assert.equal(byProject.proj_a[0].customFields[SUBSCRIBED_FIELD].proj_a, '2026-10-09T12:00:00.000Z');
 });
 
 test('every row is accounted for: matched + unmatched + unreadable = rows read', async () => {
@@ -199,9 +207,9 @@ test('no project, an unknown field, and a missing csv are refused', async () => 
 function statsDeps({ items = [], notesFail = false } = {}) {
   const byProject = {
     proj_a: [
-      { id: 'c_sub', email: 'sub@x.co', customFields: { [SUBSCRIBED_FIELD]: '2026-10-01T00:00:00.000Z' } },
+      { id: 'c_sub', email: 'sub@x.co', customFields: { [SUBSCRIBED_FIELD]: { proj_a: '2026-10-01T00:00:00.000Z' } } },
       { id: 'c_plain', email: 'plain@x.co', customFields: {} },
-      { id: 'c_cand', email: 'cand@x.co', customFields: { [SUBSCRIBED_FIELD]: '2026-10-01T00:00:00.000Z' } },
+      { id: 'c_cand', email: 'cand@x.co', customFields: { [SUBSCRIBED_FIELD]: { proj_a: '2026-10-01T00:00:00.000Z' } } },
     ],
   };
   const candidates = [
@@ -266,4 +274,69 @@ test('Note addresses compare without case, www or a trailing slash', () => {
   assert.equal(noteKey('https://www.Substack.com/@A/note/c-1/'), noteKey('https://substack.com/@a/note/c-1'));
   assert.equal(noteHandle('https://substack.com/@Kind.Of/note/c-9'), 'kind.of');
   assert.equal(noteHandle('https://substack.com/note/c-9'), '');
+});
+
+// ── One person, two projects (round-1 review of PR #815) ─────────────────────
+
+/**
+ * With the people table, custom_fields lives on the PERSON, so two projects'
+ * contacts for one email read and write the same object. This fake shares it
+ * the same way: each contact's customFields is a getter onto one person row.
+ */
+function sharedPersonStores() {
+  const person = { customFields: {} };
+  const contactOf = (id) => ({
+    id,
+    email: 'shared@x.co',
+    get customFields() { return person.customFields; },
+    set customFields(value) { person.customFields = value; },
+  });
+  const byProject = { proj_a: [contactOf('c_a')], proj_b: [contactOf('c_b')] };
+  const contacts = fakeContacts(byProject);
+  contacts.rowToContact = (row) => (row ? { id: row.id, email: row.email, customFields: { ...person.customFields } } : null);
+  contacts.listContacts = async ({ scope } = {}) => ({ ok: true, status: 200, data: byProject[scope.projectId] });
+  contacts.listContactsByIds = async (ids, scope) => ({ ok: true, status: 200, data: byProject[scope.projectId].filter((c) => ids.includes(c.id)) });
+  const minerA = fakeMiner([{ id: 'wa', handle: 'shared', status: 'approved', contactId: 'c_a' }]);
+  const minerB = fakeMiner([{ id: 'wb', handle: 'shared', status: 'approved', contactId: 'c_b' }]);
+  return { person, contacts, minerA, minerB };
+}
+
+test('an import in project A leaves project B\'s Subscribed count at 0 when one person is a contact in both', async () => {
+  const { person, contacts, minerA, minerB } = sharedPersonStores();
+  const notes = fakeNotes([]);
+  const res = await importSubscribers({ csv: 'email,subscription_date\nshared@x.co,2026-10-01\n' }, SCOPE,
+    { contactsStore: contacts, minerStore: minerA });
+  assert.equal(res.data.newlyMarked, 1);
+  assert.deepEqual(person.customFields[SUBSCRIBED_FIELD], { proj_a: '2026-10-01T00:00:00.000Z' });
+
+  const a = await minerStats(SCOPE, { contactsStore: contacts, minerStore: minerA, notesStore: notes });
+  const b = await minerStats(OTHER, { contactsStore: contacts, minerStore: minerB, notesStore: notes });
+  assert.equal(a.data.subscribed, 1);
+  assert.equal(b.data.subscribed, 0, 'project B never imported anything');
+
+  // B importing its own list is its own mark, and leaves A's date alone.
+  const again = await importSubscribers({ csv: 'email,subscription_date\nshared@x.co,2026-10-05\n' }, OTHER,
+    { contactsStore: contacts, minerStore: minerB });
+  assert.equal(again.data.newlyMarked, 1, 'A\'s mark does not read as already marked in B');
+  assert.deepEqual(person.customFields[SUBSCRIBED_FIELD], {
+    proj_a: '2026-10-01T00:00:00.000Z',
+    proj_b: '2026-10-05T00:00:00.000Z',
+  });
+});
+
+test('a bare date left in the field (no project key) marks no project', async () => {
+  const deps = statsDeps();
+  const res = await minerStats(SCOPE, {
+    ...deps,
+    contactsStore: fakeContacts({ proj_a: [{ id: 'c_sub', email: 'sub@x.co', customFields: { [SUBSCRIBED_FIELD]: '2026-10-01' } }] }),
+  });
+  assert.equal(res.data.subscribed, 0);
+});
+
+test('Subscribed looks up only the approved writers\' contacts, by id, never the whole contact list', async () => {
+  const deps = statsDeps();
+  deps.contactsStore.listContacts = async () => { throw new Error('stats must not list every contact'); };
+  const res = await minerStats(SCOPE, deps);
+  assert.equal(res.data.subscribed, 1);
+  assert.deepEqual(deps.contactsStore.reads, [['c_sub', 'c_plain']]);
 });

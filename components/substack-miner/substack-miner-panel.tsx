@@ -186,7 +186,11 @@ export function headerText(stats: MinerStats | null, candidates: Candidate[]): s
 export function statsNotes(stats: MinerStats | null, statsError: string): string[] {
   if (!stats) return statsError ? [`Engaged and Subscribed could not be counted: ${statsError}`] : [];
   const out = stats.unknown.map((u) => `${u.count === 'engaged' ? 'Engaged' : 'Subscribed'} could not be counted. ${u.reason}`);
-  if (stats.approved && stats.subscribed === 0 && !stats.unknown.some((u) => u.count === 'subscribed')) {
+  if (stats.approved && stats.subscribed === 0 && !stats.approvedWithContact) {
+    // Importing cannot move this: the mark lives on a contact, and none of
+    // the approved writers has one.
+    out.push(`Subscribed is 0: none of the ${stats.approved} approved writer${stats.approved === 1 ? ' has' : 's has'} a contact yet, so there is nothing for a subscriber list to match. Approving a writer adds their contact.`);
+  } else if (stats.approved && stats.subscribed === 0 && !stats.unknown.some((u) => u.count === 'subscribed')) {
     out.push('Subscribed is 0: none of the approved writers\' contacts is marked as a subscriber yet. Import the subscriber list on the Run tab; a writer only matches once their contact has the email they subscribed with.');
   }
   return out;
