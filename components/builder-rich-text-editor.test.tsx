@@ -229,3 +229,81 @@ describe("BuilderRichTextEditor HTML view", () => {
     expect(container.textContent).not.toContain("One");
   });
 });
+
+/**
+ * Fire a paste at the editor the way the browser does: a `paste` event on the
+ * contenteditable carrying a clipboard with an HTML flavour. ProseMirror reads
+ * `event.clipboardData.getData("text/html")` and parses it through the schema,
+ * which is the exact path a Google Doc takes into a Paragraph module.
+ */
+async function pasteHtml(container: HTMLElement, html: string, text: string) {
+  const surface = container.querySelector<HTMLElement>(".ProseMirror");
+
+  if (!surface) {
+    throw new Error("the editor surface is not mounted");
+  }
+
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      types: ["text/html", "text/plain"],
+      getData: (type: string) => (type === "text/html" ? html : type === "text/plain" ? text : ""),
+      files: [],
+      items: []
+    }
+  });
+
+  await act(async () => {
+    surface.dispatchEvent(event);
+  });
+}
+
+describe("BuilderRichTextEditor pasting from a Google Doc", () => {
+  it("does not keep the blank line Google Docs puts between every paragraph", async () => {
+    // Task 86bcg88kk: the pasted HTML carries each blank line of the document
+    // as a bare <br /> BETWEEN the <p>s. Parsed as-is, each one becomes an
+    // empty paragraph and the live page shows double spacing — the stored text
+    // of daneofearth.starcaster.pro/danes-manifest-part-1 had <p><br></p>
+    // between every paragraph of its second half.
+    const { emitted, onValue } = track();
+    const container = await mountControlled("", onValue);
+    const docsParagraph = (copy: string) =>
+      `<p dir="ltr" style="line-height:1.38;margin-top:0pt;margin-bottom:0pt;"><span style="font-size:11pt;color:#000000;">${copy}</span></p>`;
+
+    await pasteHtml(
+      container,
+      "<meta charset='utf-8'>" +
+        '<b style="font-weight:normal;" id="docs-internal-guid-1234">' +
+        docsParagraph("First paragraph.") +
+        "<br />" +
+        docsParagraph("Second paragraph.") +
+        "<br />" +
+        docsParagraph("Third paragraph.") +
+        "</b>",
+      "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
+    );
+
+    const saved = emitted.at(-1) ?? "";
+
+    expect(saved).toContain("First paragraph.");
+    expect(saved).toContain("Second paragraph.");
+    expect(saved).toContain("Third paragraph.");
+    expect(saved).not.toMatch(/<p[^>]*>(?:\s|&nbsp;|<br\s*\/?>)*<\/p>/);
+    expect(saved.match(/<p\b/g)).toHaveLength(3);
+  });
+
+  it("still keeps a blank line the operator makes by hand", async () => {
+    // Typing is not a paste. The cleaner runs on the clipboard only, so an
+    // empty paragraph the editor already holds is never touched.
+    const { emitted, onValue } = track();
+    const container = await mountControlled("<p>Above</p><p></p><p>Below</p>", onValue);
+
+    await pasteHtml(container, "<p>Pasted</p>", "Pasted");
+
+    const saved = emitted.at(-1) ?? "";
+
+    expect(saved).toContain("Above");
+    expect(saved).toContain("Below");
+    expect(saved).toMatch(/<p><\/p>/);
+  });
+});

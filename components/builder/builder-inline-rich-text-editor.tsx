@@ -8,6 +8,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef, useState } from "react";
 import { headingHtmlFromEditor, prepareHeadingHtmlForEditor } from "@/lib/builder-template";
+import { cleanPastedRichTextHtml } from "@/lib/rich-text-paste";
 import {
   setEditorContentWithoutHistory,
   shouldWriteValueIntoEditor
@@ -122,6 +123,13 @@ export function BuilderInlineRichTextEditor({
       EnterIsLineBreak
     ],
     content: prepareHeadingHtmlForEditor(value),
+    editorProps: {
+      // Same cleaner as the paragraph editor: a Google Doc's blank lines
+      // arrive as bare <br>s between <p>s, and here each paragraph break is
+      // flattened to a <br /> on storage — so an empty pasted paragraph would
+      // reach the heading as a doubled line break (task 86bcg88kk).
+      transformPastedHTML: cleanPastedRichTextHtml
+    },
     onUpdate: ({ editor: currentEditor }) => {
       const next = headingHtmlFromEditor(currentEditor.getHTML());
       lastEmittedRef.current = next;
