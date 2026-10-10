@@ -184,7 +184,8 @@
 .substack-notes-field-control > input:not([type='radio']),
 .substack-notes-field-control > select,
 .substack-notes-field-control > textarea,
-.substack-notes-field-control > .substack-notes-choices {
+.substack-notes-field-control > .substack-notes-choices,
+.substack-notes-field-control > .substack-notes-check {
   grid-column: 2;
   width: 100%;
   min-width: 0;
@@ -225,6 +226,22 @@
   white-space: nowrap;
 }
 
+/* The "Draft from topics" switch: one checkbox and its words, on one line.
+   Same reason as the radios above for keeping the box its natural size. */
+.substack-notes-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  font-weight: normal;
+}
+
+.substack-notes-check input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+
 .substack-notes-actions {
   display: flex;
   flex-wrap: wrap;
@@ -242,6 +259,7 @@
   .substack-notes-field-control > select,
   .substack-notes-field-control > textarea,
   .substack-notes-field-control > .substack-notes-choices,
+  .substack-notes-field-control > .substack-notes-check,
   .substack-notes-field-help {
     grid-column: 1;
   }
@@ -319,4 +337,65 @@
 .substack-notes-words {
   display: block;
   margin-top: var(--space-2);
+}
+
+/* Why an approved item has not gone out yet, under its status (6/7). */
+.substack-notes-wait {
+  display: block;
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* The Posted tab: what the Mini did, with its screenshot (6/7). */
+.substack-notes-posted-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.substack-notes-posted-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.substack-notes-posted-shot {
+  flex: 0 0 auto;
+  display: block;
+  width: 160px;
+  max-width: 100%;
+}
+
+.substack-notes-posted-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.substack-notes-posted-body {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.substack-notes-posted-body p {
+  margin: 0;
+}
+
+.substack-notes-posted-body .substack-notes-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.substack-notes-posted-status {
+  font-weight: 600;
 }

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubstackNotesPanel, {
   PROJECT_SWITCH_EVENT,
   plainError,
+  postedItems,
+  postedStatusText,
   signInLine,
   settingsPatchFromForm,
   settingsToForm,
@@ -12,6 +14,7 @@ import SubstackNotesPanel, {
   splitItems,
   splitLines,
   statusLabel,
+  waitLine,
   timeAgo,
   watchLines,
   withScheme,
@@ -115,6 +118,17 @@ function checkNoteUrl(text: string): string {
   return text;
 }
 
+/** The server's plan in miniature (lib/substackNotesSchedule.js) — enough to show the screen relays it. */
+function topicPlanOf(store: Store) {
+  const none = (reason: string, words: string) => ({ due: false, reason, text: words, nextAt: null });
+  if (!store.settings.autoTopicDrafts) return none("off", "No topic drafts: switched off in Settings");
+  if (!store.settings.topics.length) return none("no_topics", "No topic drafts: no topics saved in Settings");
+  const waiting = store.items.filter((i) => (i.kind === "note" || i.kind === "reply" ? i.status === "draft" : i.status === "idea")).length;
+  const cap = Number(store.settings.maxActionsPerDay);
+  if (waiting >= cap) return none("full", `No topic draft for now: ${waiting} already waiting for your approval (the most per day is ${cap})`);
+  return { due: true, reason: "due", text: `Next topic draft: about 12:30 PM ("${store.settings.topics[0]}")`, nextAt: "2026-10-08T18:30:00.000Z" };
+}
+
 async function fakeApi(path: string, options: RequestInit = {}) {
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? JSON.parse(String(options.body)) : null;
@@ -123,6 +137,7 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   const store = stores[project];
   if (path === "/api/engage/substack-notes/items" && method === "GET") return { ok: true, data: store.items.map((i) => ({ ...i })) };
   if (path === "/api/engage/substack-notes/settings" && method === "GET") return { ok: true, data: { ...store.settings } };
+  if (path === "/api/engage/substack-notes/topic-schedule" && method === "GET") return { ok: true, data: topicPlanOf(store) };
   if (path === "/api/engage/substack-notes/watch-status" && method === "GET") return { ok: true, data: store.watch || watchFor(store.settings) };
   if (path === "/api/engage/substack-notes/watch-content/latest" && method === "POST") {
     if (!store.latest) fail("Nothing is saved in Substack Notes Settings for this account yet, so there is nothing to watch. Save the settings first.");
@@ -271,10 +286,10 @@ afterEach(() => {
 });
 
 describe("Substack Notes screen", () => {
-  it("opens on four tabs and says why each list is empty", async () => {
+  it("opens on five tabs and says why each list is empty", async () => {
     await mount();
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
-    expect(tabs).toEqual(["Ideas", "Engage", "Approvals", "Settings"]);
+    expect(tabs).toEqual(["Ideas", "Engage", "Approvals", "Posted", "Settings"]);
     expect(text()).toContain("No ideas yet. Type one above and click Add.");
     expect(text()).toContain("No topics yet.");
     await click(button("Engage"));
@@ -435,6 +450,61 @@ describe("Substack Notes screen", () => {
   });
 });
 
+describe("Substack Notes topic drafts on a timer (5/7)", () => {
+  it("the switch is off until Dane turns it on, and survives a reload", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky", "living off grid"], maxActionsPerDay: 2, saved: true, updatedAt: "x" };
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic drafts: switched off in Settings");
+
+    await click(button("Settings"));
+    const box = el<HTMLInputElement>("#sn-auto-topic-drafts");
+    expect(box.checked).toBe(false);
+    expect(text()).toContain("Draft Notes from my topics on their own");
+    await click(box);
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body.autoTopicDrafts).toBe(true);
+    expect(stores.proj_doe.settings.autoTopicDrafts).toBe(true);
+
+    await reload();
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+    await click(button("Settings"));
+    expect(el<HTMLInputElement>("#sn-auto-topic-drafts").checked).toBe(true);
+  });
+
+  it("does not send the switch when it did not change, so other settings save before its database column exists", async () => {
+    await mount();
+    await click(button("Settings"));
+    type(el<HTMLInputElement>("#sn-max-per-day"), "2");
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body).not.toHaveProperty("autoTopicDrafts");
+    expect(settingsPatchFromForm({ ...settingsToForm(defaults()), autoTopicDrafts: false }, { autoTopicDrafts: true })).toMatchObject({ autoTopicDrafts: false });
+  });
+
+  it("says why there is no topic draft when approvals are full, and updates after a decision", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky"], maxActionsPerDay: 1, autoTopicDrafts: true, saved: true, updatedAt: "x" };
+    stores.proj_doe.items = [item({ kind: "note", source: "jotted", ideaText: "x", status: "draft", draftText: "A draft." })];
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic draft for now: 1 already waiting for your approval (the most per day is 1)");
+    await click(button("Approvals"));
+    await click(button("Reject"));
+    await click(button("Ideas"));
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+  });
+
+  it("names it when the plan could not be read", async () => {
+    const api = (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api;
+    api.mockImplementation(async (path: string, options: RequestInit) => {
+      if (path.endsWith("/topic-schedule")) throw new Error("database busy");
+      return fakeApi(path, options);
+    });
+    await mount();
+    expect(text()).toContain("The next topic draft could not be worked out: database busy");
+    expect(text()).toContain("No ideas yet.");
+  });
+});
+
 describe("Substack Notes approvals (3/7)", () => {
   it("says why Approvals is empty", async () => {
     await mount();
@@ -530,7 +600,65 @@ describe("Substack Notes approvals (3/7)", () => {
   });
 });
 
+describe("Substack Notes posting (6/7)", () => {
+  it("says why Posted is empty", async () => {
+    await mount();
+    await click(button("Posted"));
+    expect(text()).toContain("Nothing has been posted yet. Approved Notes, replies, restacks and likes appear here once the Mini has done them.");
+  });
+
+  it("lists what went out with its link and screenshot, what failed and why, and a row to check by hand", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "note", status: "posted", finalText: "Winter skies are the clearest.", postedUrl: "https://substack.com/@daneofearth/note/c-901", screenshotUrl: "https://blob.example/note.png", postedAt: "2026-10-09T15:00:00Z" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "failed", error: "OpenClaw said it clicked, but the page it reported back does not show the Note liked." }),
+      item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-3", status: "posting", finalText: "Same here.", needsHandCheck: true, postingStartedAt: "2026-10-09T14:00:00Z" }),
+      item({ kind: "note", status: "approved", finalText: "Not yet." }),
+    ];
+    const [note, like, reply, waiting] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    await click(button("Posted (3)"));
+    const posted = el<HTMLElement>(`li[data-item-id="${note}"]`);
+    expect(posted.textContent).toContain("Note posted");
+    expect(posted.textContent).toContain("Winter skies are the clearest.");
+    expect(posted.querySelector("img")?.getAttribute("src")).toBe("https://blob.example/note.png");
+    expect(posted.querySelector('a.btn')?.getAttribute("href")).toBe("https://substack.com/@daneofearth/note/c-901");
+    const failed = el<HTMLElement>(`li[data-item-id="${like}"]`);
+    expect(failed.textContent).toContain("Like failed");
+    expect(failed.textContent).toContain("does not show the Note liked");
+    const handCheck = el<HTMLElement>(`li[data-item-id="${reply}"]`);
+    expect(handCheck.className).toContain("is-hand-check");
+    expect(handCheck.textContent).toContain("check this one by hand — it will not be tried again");
+    expect(handCheck.querySelector('a.btn')?.getAttribute("href")).toBe("https://substack.com/@a/note/c-3");
+    expect(container!.querySelector(`li[data-item-id="${waiting}"]`)).toBeNull();
+  });
+
+  it("shows on an approved row why it is still waiting, in the worker's words", async () => {
+    stores.proj_doe.items = [
+      item({ kind: "note", status: "approved", ideaText: "Stars", finalText: "Stars.", waitReason: "Waiting for tomorrow's allowance — 1 of 1 action a day already posted today (UTC).", waitCheckedAt: "2026-10-09T15:00:00Z" }),
+      item({ kind: "like", source: "target", targetUrl: "https://substack.com/@a/note/c-2", status: "approved" }),
+    ];
+    const [note, like] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    expect(row(note).querySelector(".substack-notes-wait")?.textContent).toContain("Waiting for tomorrow's allowance — 1 of 1 action a day");
+    await click(button("Engage"));
+    expect(row(like).querySelector(".substack-notes-wait")?.textContent).toContain("The Mini takes it at its next pass");
+  });
+});
+
 describe("Substack Notes helpers", () => {
+  it("names what the Mini did on each Posted row", () => {
+    expect(postedStatusText({ kind: "like", status: "posted", postedAt: "" })).toBe("Liked");
+    expect(postedStatusText({ kind: "restack", status: "failed" })).toBe("Restack failed");
+    expect(postedStatusText({ kind: "note", status: "posting", needsHandCheck: false })).toBe("Note: being done now…");
+    expect(waitLine({ status: "draft", waitReason: "x" })).toBe("");
+    const list = postedItems([
+      item({ status: "posted", postedAt: "2026-10-01T00:00:00Z" }),
+      item({ status: "approved" }),
+      item({ status: "failed", updatedAt: "2026-10-05T00:00:00Z" }),
+    ]);
+    expect(list.map((i) => i.status)).toEqual(["failed", "posted"]);
+  });
+
   it("adds https:// to a pasted link without one", () => {
     expect(withScheme("substack.com/@a/note/c-1")).toBe("https://substack.com/@a/note/c-1");
     expect(withScheme("https://substack.com/@a/note/c-1")).toBe("https://substack.com/@a/note/c-1");

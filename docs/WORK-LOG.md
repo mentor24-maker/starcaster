@@ -10,6 +10,52 @@ recordings are not sent on their own: a separate command lists them, and
 sending them is Dane's call. It still has to be switched on at the MacBook,
 which the build could not reach.
 
+## 2026-10-09 — Substack Notes 6/7: approved Notes, replies, restacks and likes happen on Substack from the Mini's browser, with proof (#804)
+
+Approved Substack items now actually happen. The Mac Mini's posting worker (the
+same one that posts YouTube comments) takes the oldest approved Note, reply,
+restack or like and does it on Substack as Dane of Earth, through the Mini's
+signed-in browser. It must show proof first. A Note or reply counts only when
+the browser returns its link and Substack itself shows the approved words
+there. A like or restack counts only when the page shows it done. Anything
+else is marked failed with the reason, and anything it could not check is left
+for Dane to look at, never tried twice. A Note already liked is never clicked
+again, since a second click would undo the like. The daily maximum counts all
+four kinds together. An approved item that has to wait now says why on its row,
+and a new **Posted** tab lists what went out, with the link and a screenshot.
+Everything was tested against a stand-in browser. The first real post waits
+until Dane signs the Mini in to Substack (7/7).
+
+After review: a Substack item the Mini could not confirm now says "Check Substack
+by hand" instead of telling Dane to check a video; a refused item keeps its
+screenshot, which is the picture that shows why; and a like or restack that was
+already on clicks nothing and no longer uses up the daily allowance.
+## 2026-10-09 — Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (#805)
+
+On **Engage → Substack Notes → Settings** there is a new switch, **Draft Notes
+from my topics on their own**. It starts off. When Dane turns it on, Starcaster
+checks every half hour and, if there is room, drafts a Note from one of his
+topics and puts it on the **Approvals** tab. He still approves every one. It
+never lets more items wait for approval than his **Most actions per day**, and
+everything counts toward that, likes and replies included. His own ideas get
+drafted before any topic does, and it never writes more topic drafts in one day
+than that limit. Topics take turns, so the same one never comes up twice in a
+row. The **Ideas** tab says when the next topic draft is coming, or why none
+is: switched off, no topics, or approvals already full. The switch needs one
+small database change run in production before it can be saved. Until then,
+every other setting still saves normally.
+## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
+
+Every Substack publication has a public page listing the other publications it
+recommends. Starcaster now reads that page for each writer Dane has approved
+and adds every Substack writer listed there to the candidate list, remembering
+who recommended them — so a handful of approved writers snowballs into many
+more without anybody searching. Dane's decisions are never changed: a writer
+he rejected stays rejected however often they are recommended. It reads one
+page at a time, at most 100 a run, and its summary says which pages it read,
+which failed and why, and which it left for next time. Tried on a real page:
+19 writers found, and running it again added no duplicates. There is no screen
+yet; that is slice 4.
 ## 2026-10-09 — The MacBook still holds hundreds of GB of files already safe on Google Drive (#806)
 
 The archive tool (`npm run archive:mac`) can now free the MacBook of files

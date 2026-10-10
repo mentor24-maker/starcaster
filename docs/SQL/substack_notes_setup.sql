@@ -131,3 +131,31 @@ create unique index if not exists idx_substack_notes_settings_project_account
   on public.substack_notes_settings (project_id, account_key);
 
 alter table public.substack_notes_settings enable row level security;
+
+-- ── Ticket 6/7 (86bcet7qr): what the Mini's poster writes ──────────────────
+--
+-- Added as `add column if not exists`, the same way YouTube outreach 5/7 added
+-- its poster's columns, so this file is right whether or not the table already
+-- exists and running it twice changes nothing. posted_url, screenshot_url,
+-- posted_at and error were already here from 1/7.
+--
+--   posting_started_at  when the worker marked the row `posting`. A row still
+--                       `posting` well after this is one whose worker died
+--                       mid-post: it is NEVER retried, and the screen shows it
+--                       as "check this one by hand".
+--   post_note           anything the worker wants Dane to read on the row that
+--                       is not an error: why the screenshot was not kept, or
+--                       what OpenClaw said alongside a success.
+--   wait_reason         why an APPROVED item has not gone out yet, in plain
+--                       words ("waiting for tomorrow's allowance"), written by
+--                       the worker when it changes. Blank means nothing holds it.
+--   wait_checked_at     when the worker last wrote that reason.
+--   already_done        a like or restack that was ALREADY on when the browser
+--                       arrived: nothing was clicked, so it is `posted` (the
+--                       Note is liked) but uses none of max_actions_per_day.
+
+alter table public.substack_notes_items add column if not exists posting_started_at timestamptz;
+alter table public.substack_notes_items add column if not exists post_note text not null default '';
+alter table public.substack_notes_items add column if not exists wait_reason text not null default '';
+alter table public.substack_notes_items add column if not exists wait_checked_at timestamptz;
+alter table public.substack_notes_items add column if not exists already_done boolean not null default false;

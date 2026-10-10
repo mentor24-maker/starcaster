@@ -24,6 +24,13 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
  * it refuses; it (re)loads when its page is SHOWN and when the project is
  * SWITCHED, and drops a reply that lands after a newer request or a switch.
  *
+ * POSTED (6/7, task 86bcet7qr). The Mini's posting worker
+ * (workers/youtube-outreach/adapters/substack.js) takes approved items. An
+ * approved row says why it is still waiting, in the worker's words ("waiting
+ * for tomorrow's allowance"); the Posted tab lists what went out, when, the
+ * link and the screenshot, what failed and why, and any row the worker could
+ * not prove either way as "check this one by hand" — it is never retried.
+ *
  * WATCHING HIS NEW CONTENT (4/7, task 86bcet775). The Ideas tab says what is
  * watched — "Watching: YouTube ✓, Substack ✓, Blog ✓ (last checked 9 minutes
  * ago)" — and, for any source that is not, why. Settings has "Draft a Note for
@@ -37,6 +44,7 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
 
 const ITEMS_PATH = '/api/engage/substack-notes/items';
 const SETTINGS_PATH = '/api/engage/substack-notes/settings';
+const TOPIC_PLAN_PATH = '/api/engage/substack-notes/topic-schedule';
 const WATCH_STATUS_PATH = '/api/engage/substack-notes/watch-status';
 const WATCH_LATEST_PATH = '/api/engage/substack-notes/watch-content/latest';
 
@@ -60,6 +68,13 @@ export type NoteItem = {
   error: string;
   createdAt: string;
   updatedAt: string;
+  screenshotUrl?: string;
+  postedAt?: string | null;
+  postingStartedAt?: string | null;
+  postNote?: string;
+  waitReason?: string;
+  waitCheckedAt?: string | null;
+  needsHandCheck?: boolean;
 };
 
 export type NotesSettings = {
@@ -76,6 +91,8 @@ export type NotesSettings = {
   topics: string[];
   avoidWords: string[];
   linkPolicy: string;
+  /** Substack Notes 5/7: draft from the topics on a timer. Off until he switches it on. */
+  autoTopicDrafts?: boolean;
   saved: boolean;
   updatedAt: string;
   /**
@@ -86,6 +103,13 @@ export type NotesSettings = {
   browserCheck?: BrowserCheck;
 };
 
+/** "Next topic draft: about 12:30 PM", or why there is none — the plan the timer would make now. */
+export type TopicPlan = {
+  due: boolean;
+  reason: string;
+  text: string;
+  nextAt: string | null;
+};
 export type WatchSource = {
   key: string;
   label: string;
@@ -167,6 +191,7 @@ const FIELD_WORDS: Array<[RegExp, string]> = [
   [/\bavoidWords\b/g, 'Words to avoid'],
   [/\blinkPolicy\b/g, 'Links'],
   [/\btargetText\b/g, 'Their Note'],
+  [/\bautoTopicDrafts\b/g, 'Draft Notes from my topics on their own'],
 ];
 
 export function plainError(message: string): string {
@@ -273,6 +298,36 @@ export function cameFrom(item: NoteItem): string {
   return item.targetUrl;
 }
 
+// ── What the Mini did ──────────────────────────────────────────────────────
+
+/** Everything the worker has taken: on the Posted tab, newest first. */
+export function postedItems(items: NoteItem[]): NoteItem[] {
+  const at = (i: NoteItem) => Date.parse(i.postedAt || i.postingStartedAt || i.updatedAt || '') || 0;
+  return items
+    .filter((i) => i.status === 'posting' || i.status === 'posted' || i.status === 'failed')
+    .sort((a, b) => at(b) - at(a));
+}
+
+/** The status line on a Posted row. A `posting` row is either live work or a hand check. */
+export function postedStatusText(item: Pick<NoteItem, 'kind' | 'status' | 'postedAt' | 'needsHandCheck'>): string {
+  const what = KIND_LABELS[item.kind] || item.kind;
+  if (item.status === 'posted') {
+    const verb = item.kind === 'like' ? 'Liked' : item.kind === 'restack' ? 'Restacked' : `${what} posted`;
+    return `${verb} ${whenText(item.postedAt)}`.trim();
+  }
+  if (item.status === 'failed') return `${what} failed`;
+  if (item.needsHandCheck) return `${what}: check this one by hand — it will not be tried again`;
+  return `${what}: being done now…`;
+}
+
+/** Under an approved item's status: why it has not gone out yet. */
+export function waitLine(item: Pick<NoteItem, 'status' | 'waitReason' | 'waitCheckedAt'>): string {
+  if (item.status !== 'approved') return '';
+  if (!item.waitReason) return 'The Mini takes it at its next pass. If a limit holds it, the reason shows here.';
+  const checked = whenText(item.waitCheckedAt);
+  return checked ? `${item.waitReason} (checked ${checked})` : item.waitReason;
+}
+
 /** Ideas are Notes of his own; everything aimed at someone else's Note is on the Engage tab. */
 export function splitItems(items: NoteItem[]): { ideas: NoteItem[]; engage: NoteItem[] } {
   return {
@@ -372,6 +427,7 @@ export type SettingsForm = {
   topics: string;
   avoidWords: string;
   linkPolicy: string;
+  autoTopicDrafts: boolean;
 };
 
 function numberText(value: number | null): string {
@@ -392,6 +448,7 @@ export function settingsToForm(settings: NotesSettings): SettingsForm {
     topics: (settings.topics || []).join('\n'),
     avoidWords: (settings.avoidWords || []).join('\n'),
     linkPolicy: settings.linkPolicy || 'if_natural',
+    autoTopicDrafts: settings.autoTopicDrafts === true,
   };
 }
 
@@ -400,8 +457,13 @@ export function splitLines(text: string): string[] {
   return text.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
-export function settingsPatchFromForm(form: SettingsForm): Record<string, unknown> {
-  return {
+/**
+ * The PUT body. The switch is sent only when it CHANGED from what was saved:
+ * its database column is added by hand (docs/SQL/substack_notes_auto_topic_drafts.sql),
+ * and until that runs, naming it would refuse every other setting too.
+ */
+export function settingsPatchFromForm(form: SettingsForm, saved?: Pick<NotesSettings, 'autoTopicDrafts'>): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
     substackUrl: withScheme(form.substackUrl),
     youtubeChannelId: form.youtubeChannelId.trim(),
     maxActionsPerDay: form.maxActionsPerDay.trim(),
@@ -415,6 +477,8 @@ export function settingsPatchFromForm(form: SettingsForm): Record<string, unknow
     avoidWords: splitLines(form.avoidWords),
     linkPolicy: form.linkPolicy,
   };
+  if (form.autoTopicDrafts !== (saved?.autoTopicDrafts === true)) patch.autoTopicDrafts = form.autoTopicDrafts;
+  return patch;
 }
 
 // ── Small form pieces ──────────────────────────────────────────────────────
@@ -444,7 +508,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
   settings: NotesSettings;
   busy: boolean;
   error: string;
-  onSave: (form: SettingsForm) => void;
+  onSave: (form: SettingsForm, saved: NotesSettings) => void;
 }): React.ReactElement {
   const [form, setForm] = useState<SettingsForm>(() => settingsToForm(settings));
   const set = <K extends keyof SettingsForm>(key: K, value: SettingsForm[K]) => setForm((f) => ({ ...f, [key]: value }));
@@ -453,7 +517,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
     <form
       className="substack-notes-card substack-notes-settings"
       aria-label="Substack Notes settings"
-      onSubmit={(e) => { e.preventDefault(); onSave(form); }}
+      onSubmit={(e) => { e.preventDefault(); onSave(form, settings); }}
     >
       <p className="substack-notes-card-note">
         {settings.saved
@@ -490,6 +554,21 @@ function SettingsEditor({ settings, busy, error, onSave }: {
         </Field>
         <Field label="Topics" htmlFor="sn-topics" help="One per line. They appear on the Ideas tab, ready to use.">
           <textarea id="sn-topics" rows={4} value={form.topics} onChange={(e) => set('topics', e.target.value)} />
+        </Field>
+        <Field
+          label="Draft from topics"
+          htmlFor="sn-auto-topic-drafts"
+          help="Every half hour, Starcaster drafts a Note from your topics while there is room under Most actions per day. Your own ideas go first, and you still approve every one."
+        >
+          <label className="substack-notes-check">
+            <input
+              id="sn-auto-topic-drafts"
+              type="checkbox"
+              checked={form.autoTopicDrafts}
+              onChange={(e) => set('autoTopicDrafts', e.target.checked)}
+            />
+            <span>Draft Notes from my topics on their own</span>
+          </label>
         </Field>
         <Field label="Words to avoid" htmlFor="sn-avoid-words" help="One per line.">
           <textarea id="sn-avoid-words" rows={3} value={form.avoidWords} onChange={(e) => set('avoidWords', e.target.value)} />
@@ -584,7 +663,44 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
 
 // ── The screen ─────────────────────────────────────────────────────────────
 
-type Tab = 'ideas' | 'engage' | 'approvals' | 'settings';
+type Tab = 'ideas' | 'engage' | 'approvals' | 'posted' | 'settings';
+
+function PostedRow({ item }: { item: NoteItem }): React.ReactElement {
+  const handCheck = item.status === 'posting' && Boolean(item.needsHandCheck);
+  const words = item.finalText || item.draftText;
+  const linkLabel = item.kind === 'like' || item.kind === 'restack' ? 'Open the Note' : 'View on Substack';
+  return (
+    <li className={`substack-notes-posted-row is-${handCheck ? 'hand-check' : item.status}`} data-item-id={item.id}>
+      {item.screenshotUrl ? (
+        <a className="substack-notes-posted-shot" href={item.screenshotUrl} target="_blank" rel="noopener noreferrer">
+          <img src={item.screenshotUrl} alt={`Screenshot of the ${(KIND_LABELS[item.kind] || item.kind).toLowerCase()} on Substack`} loading="lazy" />
+        </a>
+      ) : null}
+      <div className="substack-notes-posted-body">
+        <p className="substack-notes-posted-status">{postedStatusText(item)}</p>
+        {words ? <p className="substack-notes-text">{words}</p> : null}
+        {item.kind !== 'note' && item.targetUrl ? (
+          <p className="substack-notes-card-note">
+            {'On '}
+            <a href={item.targetUrl} target="_blank" rel="noopener noreferrer" className="substack-notes-link">{item.targetUrl}</a>
+          </p>
+        ) : null}
+        {item.error ? <p className="substack-notes-error">{item.error}</p> : null}
+        {handCheck && !item.error ? (
+          <p className="substack-notes-error">
+            The Mini stopped part-way through this. Open Substack and see whether it happened before doing it again.
+          </p>
+        ) : null}
+        {item.postNote ? <p className="substack-notes-card-note">{item.postNote}</p> : null}
+        {item.postedUrl || (handCheck && item.targetUrl) ? (
+          <div className="substack-notes-actions">
+            <a className="btn" href={item.postedUrl || item.targetUrl} target="_blank" rel="noopener noreferrer">{linkLabel}</a>
+          </div>
+        ) : null}
+      </div>
+    </li>
+  );
+}
 
 export default function SubstackNotesPanel(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -612,6 +728,8 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  const [topicPlan, setTopicPlan] = useState<TopicPlan | null>(null);
+  const [topicPlanError, setTopicPlanError] = useState('');
   const [watch, setWatch] = useState<WatchStatus | null>(null);
   const [watchError, setWatchError] = useState('');
   const [latestBusy, setLatestBusy] = useState(false);
@@ -625,8 +743,15 @@ export default function SubstackNotesPanel(): React.ReactElement {
     }
     const seq = ++requestSeq.current;
     setLoading(true);
-    const [list, saved, watched] = await Promise.allSettled([api(ITEMS_PATH), api(SETTINGS_PATH), api(WATCH_STATUS_PATH)]);
+    const [list, saved, plan, watched] = await Promise.allSettled([api(ITEMS_PATH), api(SETTINGS_PATH), api(TOPIC_PLAN_PATH), api(WATCH_STATUS_PATH)]);
     if (seq !== requestSeq.current) return;
+    if (plan.status === 'fulfilled') {
+      setTopicPlan((plan.value?.data as TopicPlan) || null);
+      setTopicPlanError('');
+    } else {
+      setTopicPlan(null);
+      setTopicPlanError(`The next topic draft could not be worked out: ${errorText(plan.reason, 'unknown error')}`);
+    }
     const problems: string[] = [];
     if (list.status === 'fulfilled') {
       setItems(Array.isArray(list.value?.data) ? (list.value.data as NoteItem[]) : []);
@@ -652,6 +777,27 @@ export default function SubstackNotesPanel(): React.ReactElement {
     setLoading(false);
   }, []);
 
+  /**
+   * Re-ask the server for the topic plan after anything that changes it — a
+   * save, a new idea, an approval — so the line never describes a state the
+   * screen has moved past.
+   */
+  const refreshTopicPlan = useCallback(async () => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    try {
+      const reply = await api(TOPIC_PLAN_PATH);
+      if (epoch !== projectEpoch.current) return;
+      setTopicPlan((reply?.data as TopicPlan) || null);
+      setTopicPlanError('');
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setTopicPlan(null);
+      setTopicPlanError(`The next topic draft could not be worked out: ${errorText(err, 'unknown error')}`);
+    }
+  }, []);
+
   // Load each time the page is shown.
   useEffect(() => {
     const page = hostRef.current?.closest('.app-page');
@@ -675,6 +821,8 @@ export default function SubstackNotesPanel(): React.ReactElement {
       projectEpoch.current += 1;
       setItems(null);
       setSettings(null);
+      setTopicPlan(null);
+      setTopicPlanError('');
       setWatch(null);
       setWatchError('');
       setLatestNote('');
@@ -709,6 +857,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       const made = reply?.data as NoteItem;
       setItems((list) => [made, ...(list || [])]);
       setNotice(done);
+      void refreshTopicPlan();
       return true;
     } catch (err) {
       if (epoch !== projectEpoch.current) return false;
@@ -763,6 +912,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/draft`, { method: 'POST', body: '{}' });
       if (epoch !== projectEpoch.current) return;
       replaceItem(reply?.data as NoteItem);
+      void refreshTopicPlan();
       setNotice(`A draft ${item.kind === 'reply' ? 'reply' : 'Note'} is waiting on the Approvals tab.`);
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
@@ -787,8 +937,9 @@ export default function SubstackNotesPanel(): React.ReactElement {
       });
       if (epoch !== projectEpoch.current) return;
       replaceItem(reply?.data as NoteItem);
+      void refreshTopicPlan();
       setNotice(action === 'approve'
-        ? 'Approved. It will wait until posting is switched on.'
+        ? 'Approved. The Mini does it within its limits; the Posted tab shows when it has.'
         : 'Rejected. It stays on its row, marked rejected.');
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
@@ -835,6 +986,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
       if (epoch !== projectEpoch.current) return;
       setItems((list) => (list || []).filter((i) => i.id !== item.id));
+      void refreshTopicPlan();
       if (editingId === item.id) setEditingId('');
       setNotice(`Deleted the ${what}.`);
     } catch (err) {
@@ -845,7 +997,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
     }
   };
 
-  const saveSettings = async (form: SettingsForm) => {
+  const saveSettings = async (form: SettingsForm, saved: NotesSettings) => {
     const api = getApi();
     if (!api) return;
     const epoch = projectEpoch.current;
@@ -853,11 +1005,12 @@ export default function SubstackNotesPanel(): React.ReactElement {
     setSettingsError('');
     setNotice('');
     try {
-      const reply = await api(SETTINGS_PATH, { method: 'PUT', body: JSON.stringify(settingsPatchFromForm(form)) });
+      const reply = await api(SETTINGS_PATH, { method: 'PUT', body: JSON.stringify(settingsPatchFromForm(form, saved)) });
       // Answered after a switch: these are the OLD project's settings.
       if (epoch !== projectEpoch.current) return;
       setSettings(reply.data as NotesSettings);
       setNotice('Settings saved.');
+      void refreshTopicPlan();
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
       setSettingsError(`Not saved: ${errorText(err, 'unknown error')}`);
@@ -896,6 +1049,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
 
   const { ideas, engage } = splitItems(items || []);
   const waiting = (items || []).filter(awaitsApproval);
+  const posted = postedItems(items || []);
   const topics = settings?.topics || [];
   const watchText = watch ? watchLines(watch, Date.now()) : null;
 
@@ -932,6 +1086,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
           {tabButton('ideas', ideas.length ? `Ideas (${ideas.length})` : 'Ideas')}
           {tabButton('engage', engage.length ? `Engage (${engage.length})` : 'Engage')}
           {tabButton('approvals', waiting.length ? `Approvals (${waiting.length})` : 'Approvals')}
+          {tabButton('posted', posted.length ? `Posted (${posted.length})` : 'Posted')}
           {tabButton('settings', 'Settings')}
         </div>
         <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
@@ -976,6 +1131,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
               <p className="substack-notes-card-note">No topics yet. Add some on the Settings tab, one per line.</p>
             ) : null}
             {!settings ? <p className="substack-notes-card-note">The topics live in the settings, which have not been read.</p> : null}
+            {topicPlan ? (
+              <p className="substack-notes-card-note substack-notes-topic-plan" data-topic-plan={topicPlan.reason}>{topicPlan.text}</p>
+            ) : null}
+            {topicPlanError ? <p className="substack-notes-error" role="alert">{topicPlanError}</p> : null}
             {topics.length ? (
               <ul className="substack-notes-topic-list">
                 {topics.map((topic) => (
@@ -1031,7 +1190,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                         </td>
                         <td>{SOURCE_LABELS[item.source] || item.source}</td>
                         <td>{shortDate(item.createdAt)}</td>
-                        <td>{statusLabel(item)}</td>
+                        <td>
+                          {statusLabel(item)}
+                          {waitLine(item) ? <span className="substack-notes-text substack-notes-wait">{waitLine(item)}</span> : null}
+                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {item.status === 'idea' ? (
@@ -1152,7 +1314,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <span className="substack-notes-text">No words — a {action.toLowerCase()} is just the click.</span>
                           )}
                         </td>
-                        <td>{statusLabel(item)}</td>
+                        <td>
+                          {statusLabel(item)}
+                          {waitLine(item) ? <span className="substack-notes-text substack-notes-wait">{waitLine(item)}</span> : null}
+                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {item.kind === 'reply' && item.status === 'idea' ? (
@@ -1200,6 +1365,20 @@ export default function SubstackNotesPanel(): React.ReactElement {
         </div>
       ) : null}
 
+      {tab === 'posted' ? (
+        <div className="substack-notes-tabpanel substack-notes-posted" role="tabpanel" aria-label="Posted">
+          {items && !posted.length ? (
+            <p className="substack-notes-empty">Nothing has been posted yet. Approved Notes, replies, restacks and likes appear here once the Mini has done them.</p>
+          ) : null}
+          {!items ? <p className="substack-notes-empty">{loading ? 'Loading…' : 'The list has not been read, so nothing can be shown. Click Refresh.'}</p> : null}
+          {posted.length ? (
+            <ul className="substack-notes-posted-list">
+              {posted.map((item) => <PostedRow key={item.id} item={item} />)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       {tab === 'settings' ? (
         <div className="substack-notes-tabpanel" role="tabpanel" aria-label="Settings">
           {settings ? (
@@ -1208,7 +1387,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
               settings={settings}
               busy={settingsBusy}
               error={settingsError}
-              onSave={(form) => void saveSettings(form)}
+              onSave={(form, saved) => void saveSettings(form, saved)}
             />
           ) : (
             <p className="substack-notes-empty">{loading ? 'Loading the settings…' : 'The settings have not been read, so there is nothing to edit. Click Refresh.'}</p>

@@ -9,14 +9,19 @@
  * Substack Notes 6/7 implements a second time):
  *
  *   name, label                      'youtube', 'YouTube'
+ *   handCheckWords                   the sentence ending a "check this by hand"
+ *                                    error: 'Check the video by hand.'
  *   beginPass()                      forget anything cached from the last pass
  *   listApproved()                   envelope: approved items, oldest first
  *   checkLimits(item, now)           { ok } | { ok: false, scope, reason }
  *   noteWaiting(item, reason)        envelope
  *   markPosting / markPosted / markFailed / flagForHandCheck   envelopes
+ *                                    (markPosted also gets post()'s answer as a third argument)
  *   post(item)                       ask OpenClaw; { ok, url, said, screenshot } |
- *                                    { ok: false, uncertain?, error }
- *   verify(item, url)                { verdict: 'proven' | 'refuted' | 'cannot-tell', reason }
+ *                                    { ok: false, uncertain?, error, screenshot? }
+ *                                    (a screenshot on a refusal is kept on the failed row)
+ *   verify(item, url, attempt)       { verdict: 'proven' | 'refuted' | 'cannot-tell', reason }
+ *                                    (attempt = post()'s whole answer; Substack's likes need it)
  *   keepScreenshot(item, screenshot) { url } | { note }
  *   browserChecks()                  [{ site, accountKey, profile, who, record(reading) }]
  *                                    — one per account it posts with, for the
@@ -206,6 +211,7 @@ function createYoutubeAdapter(options = {}) {
   return {
     name: 'youtube',
     label: 'YouTube',
+    handCheckWords: 'Check the video by hand.',
     projectId,
 
     beginPass() {
