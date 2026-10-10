@@ -62,6 +62,12 @@ const SCHEDULED_LAUNCHERS = {
     job: 'pipeline-pulse',
     why: 'Hourly. Reads a lot of tickets to produce its report.',
   },
+  'run_media_intake.sh': {
+    job: 'media-intake',
+    why: 'Every fifteen minutes on the MacBook. The pass itself never touches '
+      + 'ClickUp; only the heartbeat after a clean pass and the failure post '
+      + 'after a bad one do, so it spends little — but it is unattended.',
+  },
   'run_weekly_report.sh': {
     job: 'weekly-report',
     why: 'Once a week, but it reads the whole board when it runs.',

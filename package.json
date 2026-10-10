@@ -106,6 +106,7 @@
     "stale-ready": "doppler run --project starcaster --config dev --no-check-version -- node scripts/stale_ready.mjs",
     "worker-watch": "doppler run --project starcaster --config dev --no-check-version -- node scripts/worker_watch.mjs",
     "stale-answer": "doppler run --project starcaster --config dev --no-check-version -- node scripts/stale_answer.mjs",
+    "media:intake": "node scripts/media_intake.mjs",
     "report:failure": "doppler run --project starcaster --config dev --no-check-version -- node scripts/report_job_failure.mjs",
     "provision:node": "bash scripts/provision_node.sh",
     "provision:node:apply": "bash scripts/provision_node.sh --apply",

@@ -82,6 +82,54 @@ does show up in mentor24's feed — that was proved by hand on 2026-10-09
 before the folder ids were switched, and it is why no code changed for the
 move.
 
+## Zoom recordings arrive by themselves (Media intake · 2 of 5)
+
+Zoom saves each recording on the MacBook, into **iCloud Drive › Documents ›
+Zoom**, one folder per meeting. A small job on the **MacBook** (it is the only
+machine signed in to that iCloud Drive) looks there every 15 minutes and sends
+each new video to the Inbox above — no copying by hand.
+
+- **Only new recordings.** "New" means recorded after the job was first
+  installed. Everything older is *history*, and it is never sent by the
+  schedule (see below).
+- **Only the video.** Each meeting folder also holds an audio-only `.m4a`
+  (the same sound the video already has), a chat log and a few Zoom files;
+  none of those are sent.
+- **Only when it is finished and fully on the disk.** A recording touched in
+  the last two minutes waits; so does one iCloud has not finished
+  downloading. Neither is ever sent half-done.
+- **Never twice.** A ledger on the MacBook remembers every file it sent by its
+  fingerprint, so renaming or copying a recording does not send it again. A
+  file only counts as sent once Google Drive's own fingerprint of the upload
+  matches.
+- **Straight into the Inbox, named after the meeting** —
+  `Zoom - 2026-10-08 15.10.19 my meeting 612342203 - video1234.mp4`. Not into
+  a sub-folder: the watcher only follows files directly inside the Inbox.
+- **It deletes and moves nothing**, on either side.
+- **It uploads as mentorofaio** (through `rclone`'s `gdrive:` sign-in on the
+  MacBook), so the storage comes out of the 2 TB account.
+  `--status` asks rclone which account `gdrive:` is signed in as, and the
+  installer refuses a different one; when rclone cannot say, it reports
+  CANNOT TELL rather than a pass.
+- **History waits for a finished file too.** The `--backfill` step applies the
+  same two-minute rule, so a meeting Zoom is still converting is never sent
+  half-done.
+
+```
+./scripts/install_media_intake.sh --status     # on the MacBook: installed? loaded? last pass? beating?
+npm run media:intake -- --backfill zoom        # list the history: count, size, oldest, newest (sends nothing)
+npm run media:intake -- --backfill zoom --apply   # send history, oldest first, at most 5 GB a run — Dane's call
+```
+
+The log is `~/Library/Logs/media-intake.log` on the MacBook. A pass that fails
+posts to the bus (once per 6 hours); a clean one records a heartbeat for the
+`media-intake` role. A pass that found another run still going is **skipped,
+and records no heartbeat** — so a run that never lets go shows up as the role
+going quiet. The "one run at a time" lock is released if the job is stopped
+(macOS stops jobs at shutdown), and a leftover lock — more than 3 hours old, or
+naming a process that is not a media-intake run — is taken over and said so in
+the log, so a restart mid-pass cannot stop uploads for good.
+
 ## The Footage screen
 
 Open the admin app, choose the project the Studio files into, then
