@@ -10,6 +10,20 @@ page at a time, at most 100 a run, and its summary says which pages it read,
 which failed and why, and which it left for next time. Tried on a real page:
 19 writers found, and running it again added no duplicates. There is no screen
 yet; that is slice 4.
+## 2026-10-09 — The MacBook still holds hundreds of GB of files already safe on Google Drive (#806)
+
+The archive tool (`npm run archive:mac`) can now free the MacBook of files
+that are already safely on Google Drive. It does not do it on its own: each
+step is first a dry run that changes nothing, and Dane approves the list
+before anything happens. One command handles the 173 GB still sitting in
+the MacBook's Trash from 4 October. A file goes only if an identical copy is
+on mentor24 or mentorofaio at that moment, and a file with no Drive copy is
+put back where it came from. The other command handles the MacBook copies
+the duplicates report flagged, and moves them to the Trash rather than
+deleting them. Every file is checked against Drive again just before it
+goes, so a copy that disappeared after the dry run keeps the original safe.
+Every change is logged with the command that undoes it. The live runs on the
+MacBook come next, each one waiting for Dane's approval.
 ## 2026-10-09 — Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it waits for his approval (#803)
 
 Every 15 minutes Starcaster now looks at Dane's YouTube channel, his Substack

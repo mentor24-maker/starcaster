@@ -11,6 +11,17 @@
  *   npm run archive:mac -- clear           DRY RUN: which files could leave the Mac right now, and why the rest stay
  *   npm run archive:mac -- clear --apply   move exactly those files into the Trash (only after Dane approves the dry run)
  *
+ * Dedupe (ticket 86bcfgyza) — each a DRY RUN unless --apply, and --apply does
+ * exactly the dry run's list after re-checking every file against both Drives:
+ *   npm run archive:mac -- trash           the archived Trash folder of 2026-10-04: which files are on a
+ *                                          Drive now (emptied), which are not (put back where they came from)
+ *   npm run archive:mac -- report          archive:index's proposed MacBook removals, re-verified: which
+ *                                          may move to the Trash now
+ *   Every change is written to <state>/restore.log as the command that undoes it.
+ *
+ *   --archived <dir>      the archived Trash folder   (default ~/.Trash/Archived-from-Mac-20261004-0327)
+ *   --report <dir>        archive:index's output      (default ~/archive-index)
+ *
  * Options (tests use these to point everything at scratch folders):
  *   --home <dir>          whose Desktop/Downloads      (default your home folder)
  *   --state <dir>         plan, ledger, logs, record   (default ~/archive-index/mac)
@@ -408,9 +419,263 @@ function cmdClear() {
   return kept ? 1 : 0;
 }
 
-const commands = { plan: cmdPlan, run: cmdRun, status: cmdStatus, clear: cmdClear };
+// ---------------------------------------------------------------------------
+// Dedupe (ticket 86bcfgyza): `trash` and `report`. Both are a dry run unless
+// --apply, both write their dry run to <state>, and --apply acts ONLY on what
+// that dry run listed, re-fingerprinting each file and re-reading both Drives
+// first. Every change lands in <state>/restore.log as the command that undoes it.
+
+const RESTORE_LOG = path.join(STATE, 'restore.log');
+
+function logRestore(change) {
+  const what = change.kind === 'deleted' ? change.original : `${change.from} → ${change.to}`;
+  fs.appendFileSync(RESTORE_LOG, `# ${new Date().toISOString()}  ${change.kind}  ${what}\n${mac.restoreLine(change)}\n`);
+}
+
+// The file as it is on disk right now: { size, hash?, dataless?, error? } or null.
+function readNow(abs, cache, dataless) {
+  let st;
+  try { st = fs.statSync(abs); } catch { return null; }
+  if (!st.isFile()) return null;
+  if (dataless) return { size: st.size, dataless: true };
+  if (st.size === 0) return { size: 0, hash: '' };
+  const fp = fingerprint(abs, st.size, Math.floor(st.mtimeMs), cache);
+  return fp.error ? { size: st.size, error: fp.error } : { size: st.size, hash: fp.hash };
+}
+
+function readDry(file, what) {
+  if (!fs.existsSync(file)) cannotTell(`no ${what} dry run at ${file} — run it without --apply first, and have Dane approve it. Nothing changed.`);
+  const dry = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const hours = (Date.now() - Date.parse(dry.at)) / 3600000;
+  console.log(`Acting on the dry run of ${dry.at} (${hours.toFixed(1)} hours ago): ${dry.rows.length} row(s). Anything not on it is left alone.`);
+  return dry;
+}
+
+function tally(why, w) { why.set(w, (why.get(w) || 0) + 1); }
+
+function printWhy(why) {
+  for (const [w, n] of [...why].sort((a, b) => b[1] - a[1])) console.log(`  ${n} × ${w}`);
+}
+
+/**
+ * Batch 1 — the archived Trash folder. Dry run: every file in it, fingerprinted
+ * now, against a fresh listing of both Drives → DELETE / RESTORE / HOLD.
+ * --apply: deletes the dry run's DELETE rows that are still byte-identical to a
+ * Drive copy, puts the RESTORE rows back where they came from, and touches
+ * nothing else.
+ */
+function cmdTrash() {
+  const apply = has('--apply');
+  const archived = path.resolve(argValues('--archived')[0] || path.join(HOME, mac.ARCHIVED_TRASH));
+  const dryFile = path.join(STATE, 'trash-dry-run.json');
+  fs.mkdirSync(STATE, { recursive: true });
+  if (!fs.existsSync(archived)) {
+    console.log(`${archived} is not there — already emptied. Nothing to do.`);
+    return 0;
+  }
+  const dry = apply ? readDry(dryFile, 'trash') : null;
+  if (dry && path.resolve(dry.archived) !== archived) cannotTell(`the dry run was of ${dry.archived}, not ${archived}. Nothing changed.`);
+  const dl = datalessSet(archived);
+  if (!dl) cannotTell(`could not ask which files in ${archived} are cloud placeholders. Nothing changed.`);
+  const drive = driveListing();
+  const presentOnDrive = (h, size) => drive.has(`${h}:${size}`);
+  const cache = loadCache();
+  const original = (rel) => path.join(HOME, rel);
+  const freeAt = (abs) => { try { fs.lstatSync(abs); return false; } catch { return true; } };
+
+  if (!apply) {
+    const files = [];
+    const left = { symlinks: 0, skippedDirs: [] };
+    walk(archived, '.', files, left);
+    const rows = [];
+    const why = new Map();
+    const n = { DELETE: [0, 0], RESTORE: [0, 0], HOLD: [0, 0] };
+    for (const f of files.sort((a, b) => (a.rel < b.rel ? -1 : 1))) {
+      const now = f.error ? { size: f.size, error: f.error } : readNow(path.join(archived, f.rel), cache, dl.has(f.rel));
+      const v = mac.trashVerdict(now, presentOnDrive, freeAt(original(f.rel)));
+      if (v.action === 'GONE') continue;
+      const row = { rel: f.rel, size: now.size, hash: now.hash || '', action: v.action, why: v.why, driveCopy: v.action === 'DELETE' ? drive.get(`${now.hash}:${now.size}`) : '' };
+      rows.push(row);
+      n[v.action][0] += 1;
+      n[v.action][1] += row.size;
+      if (v.action !== 'DELETE') tally(why, `${v.action === 'RESTORE' ? 'go back to the Mac' : 'held back'}: ${v.why}`);
+    }
+    saveCache(cache);
+    fs.writeFileSync(dryFile, JSON.stringify({ at: new Date().toISOString(), archived, rows }));
+    fs.writeFileSync(path.join(STATE, 'trash-dry-run.tsv'), tsv([['action', 'file', 'bytes', 'Drive copy / reason'], ...rows.map((r) => [r.action, r.rel, r.size, r.driveCopy || r.why])]));
+    const total = rows.reduce((s, r) => s + r.size, 0);
+    console.log(`Archived Trash folder ${archived}: ${rows.length} file(s), ${idx.humanBytes(total)}.`);
+    console.log(`  ${n.DELETE[0]} re-verified on a Drive just now, ${idx.humanBytes(n.DELETE[1])} — would be emptied from the Trash`);
+    console.log(`  ${n.RESTORE[0]} with no Drive copy, ${idx.humanBytes(n.RESTORE[1])} — would go back where they came from`);
+    console.log(`  ${n.HOLD[0]} held back, ${idx.humanBytes(n.HOLD[1])} — left in the Trash, untouched`);
+    printWhy(why);
+    if (left.skippedDirs.length || left.symlinks) console.log(`  ${left.skippedDirs.length} .git/node_modules-type folder(s) and ${left.symlinks} link(s) not walked — left untouched`);
+    console.log(`Dry run: ${path.join(STATE, 'trash-dry-run.tsv')} — nothing changed. Add --apply (after Dane approves) to do exactly this list.`);
+    return n.HOLD[0] ? 1 : 0;
+  }
+
+  let deleted = 0, deletedBytes = 0, restored = 0, restoredBytes = 0, held = 0, heldBytes = 0;
+  const why = new Map();
+  const record = [['outcome', 'file', 'bytes', 'Drive copy / reason']];
+  for (const r of dry.rows) {
+    const abs = path.join(archived, r.rel);
+    if (r.action === 'DELETE') {
+      // The second look: the dry run's verdict is never enough on its own.
+      const now = readNow(abs, cache, dl.has(r.rel));
+      const v = mac.stillSafe(r, now, presentOnDrive);
+      if (v.gone) { record.push(['already gone', r.rel, r.size, '']); continue; }
+      if (!v.ok) { held += 1; heldBytes += r.size; tally(why, `held back: ${v.why}`); record.push([`HELD BACK — ${v.why}`, r.rel, r.size, '']); continue; }
+      const copy = drive.get(`${now.hash}:${now.size}`);
+      try {
+        fs.unlinkSync(abs);
+        deleted += 1;
+        deletedBytes += r.size;
+        logRestore({ kind: 'deleted', original: original(r.rel), driveCopy: copy });
+        record.push(['emptied from the Trash', r.rel, r.size, copy]);
+      } catch (e) {
+        held += 1; heldBytes += r.size; tally(why, `macOS would not delete it (${e.code || e.message})`);
+        record.push([`KEPT — macOS would not delete it (${e.code || e.message})`, r.rel, r.size, '']);
+      }
+    } else if (r.action === 'RESTORE') {
+      const to = original(r.rel);
+      if (!fs.existsSync(abs)) { record.push(['already gone', r.rel, r.size, '']); continue; }
+      if (!freeAt(to)) { held += 1; heldBytes += r.size; tally(why, 'held back: another file now sits where it came from'); record.push(['HELD BACK — its old place is taken', r.rel, r.size, '']); continue; }
+      try {
+        fs.mkdirSync(path.dirname(to), { recursive: true });
+        fs.renameSync(abs, to);
+        restored += 1;
+        restoredBytes += r.size;
+        logRestore({ kind: 'moved back', from: abs, to });
+        record.push(['put back on the Mac', r.rel, r.size, to]);
+      } catch (e) {
+        held += 1; heldBytes += r.size; tally(why, `macOS would not move it back (${e.code || e.message})`);
+        record.push([`KEPT — macOS would not move it back (${e.code || e.message})`, r.rel, r.size, '']);
+      }
+    } else {
+      held += 1; heldBytes += r.size; tally(why, `held back: ${r.why}`);
+      record.push([`HELD BACK — ${r.why}`, r.rel, r.size, '']);
+    }
+  }
+  saveCache(cache);
+  pruneEmptyDirs(archived);
+  fs.writeFileSync(path.join(STATE, 'trash-record.tsv'), tsv(record));
+  log(`trash --apply: emptied ${deleted} file(s), ${idx.humanBytes(deletedBytes)}; put back ${restored}, ${idx.humanBytes(restoredBytes)}; held ${held}`);
+  console.log(`Emptied ${deleted} file(s), ${idx.humanBytes(deletedBytes)}, from the Trash; put ${restored} file(s), ${idx.humanBytes(restoredBytes)}, back on the Mac; ${held} file(s), ${idx.humanBytes(heldBytes)}, held back.`);
+  printWhy(why);
+  console.log(`Record: ${path.join(STATE, 'trash-record.tsv')}. Undo commands: ${RESTORE_LOG}`);
+  return held ? 1 : 0;
+}
+
+// Remove folders left empty under `root` (deepest first), and `root` itself if
+// it ends up empty. Never a folder with anything in it.
+function pruneEmptyDirs(root) {
+  const visit = (dir) => {
+    let items;
+    try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const d of items) if (d.isDirectory() && !d.isSymbolicLink()) visit(path.join(dir, d.name));
+    try {
+      const rest = fs.readdirSync(dir).filter((n) => n !== '.DS_Store');
+      if (!rest.length) { fs.rmSync(path.join(dir, '.DS_Store'), { force: true }); fs.rmdirSync(dir); }
+    } catch { /* not empty, or not ours to remove */ }
+  };
+  visit(root);
+}
+
+/**
+ * Batch 2 — the MacBook copies archive:index proposed as extra
+ * (<report>/proposed-removals.tsv, location "mac"). Dry run: each one found on
+ * disk, fingerprinted now, matched to the report's bytes and to a fresh Drive
+ * listing → MOVE / HOLD. --apply moves exactly the dry run's MOVE rows that
+ * still pass the second look into the Trash — moved, not deleted, so a mistake
+ * is one drag back.
+ */
+function cmdReport() {
+  const apply = has('--apply');
+  const reportDir = path.resolve(argValues('--report')[0] || path.join(HOME, 'archive-index'));
+  const dryFile = path.join(STATE, 'report-dry-run.json');
+  fs.mkdirSync(STATE, { recursive: true });
+  const macFolders = ['Desktop', 'Documents', 'Downloads'].concat(fs.readdirSync(HOME).filter((n) => n.startsWith(mac.OLD_DESKTOP_PREFIX)).sort());
+  const tsvFile = path.join(reportDir, 'proposed-removals.tsv');
+  const dry = apply ? readDry(dryFile, 'report') : null;
+  if (!apply && !fs.existsSync(tsvFile)) cannotTell(`no report at ${tsvFile} — run npm run archive:index first. Nothing changed.`);
+  const drive = driveListing();
+  const presentOnDrive = (h, size) => drive.has(`${h}:${size}`);
+  const cache = loadCache();
+  const datalessAt = (abs) => {
+    const r = spawnSync('find', [abs, '-type', 'f', '-flags', '+dataless', '-print'], { encoding: 'utf8' });
+    return r.status === 0 && r.stdout.trim() !== '';
+  };
+
+  if (!apply) {
+    const parsed = mac.reportRows(fs.readFileSync(tsvFile, 'utf8'));
+    if (parsed.error) cannotTell(`${tsvFile}: ${parsed.error}. Nothing changed.`);
+    const reportAt = fs.statSync(tsvFile).mtime;
+    const rows = [];
+    const why = new Map();
+    let gone = 0, move = 0, moveBytes = 0, hold = 0, holdBytes = 0;
+    for (const r of parsed.rows) {
+      const candidates = [];
+      for (const folder of macFolders) {
+        const abs = path.join(HOME, folder, r.path);
+        const now = readNow(abs, cache, fs.existsSync(abs) && datalessAt(abs));
+        if (now) candidates.push({ folder, ...now });
+      }
+      if (!candidates.length) { gone += 1; continue; }
+      for (const v of mac.reportVerdicts(r, candidates, presentOnDrive)) {
+        const c = candidates.find((x) => x.folder === v.folder);
+        rows.push({ folder: v.folder, rel: r.path, size: c.size, hash: c.hash || '', action: v.action, why: v.why, driveCopy: v.action === 'MOVE' ? drive.get(`${c.hash}:${c.size}`) : '' });
+        if (v.action === 'MOVE') { move += 1; moveBytes += c.size; } else { hold += 1; holdBytes += c.size; tally(why, `held back: ${v.why.replace(/ \(the report's keeper: .*\)$/, '')}`); }
+      }
+    }
+    saveCache(cache);
+    fs.writeFileSync(dryFile, JSON.stringify({ at: new Date().toISOString(), report: tsvFile, rows }));
+    fs.writeFileSync(path.join(STATE, 'report-dry-run.tsv'), tsv([['action', 'folder', 'file', 'bytes', 'Drive copy / reason'], ...rows.map((x) => [x.action, x.folder, x.rel, x.size, x.driveCopy || x.why])]));
+    console.log(`Report ${tsvFile} (written ${reportAt.toLocaleString('en-US', { timeZone: 'America/Denver' })}): ${parsed.rows.length} MacBook copy(ies) proposed as extra; ${gone} already gone.`);
+    const others = Object.entries(parsed.other).map(([k, v]) => `${v} in ${k}`).join(', ');
+    if (others) console.log(`  Not touched here: ${others} (only MacBook copies are ever removed; mac-trash is the "trash" command's).`);
+    console.log(`  ${move} re-verified on a Drive just now, ${idx.humanBytes(moveBytes)} — would move to the Trash`);
+    console.log(`  ${hold} held back, ${idx.humanBytes(holdBytes)} — stay on the Mac`);
+    printWhy(why);
+    console.log(`Dry run: ${path.join(STATE, 'report-dry-run.tsv')} — nothing changed. Add --apply (after Dane approves) to do exactly this list.`);
+    return hold ? 1 : 0;
+  }
+
+  const trash = path.resolve(argValues('--trash')[0] || path.join(HOME, '.Trash', `Deduped-from-Mac-${new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', '-')}`));
+  let moved = 0, movedBytes = 0, held = 0, heldBytes = 0;
+  const why = new Map();
+  const record = [['outcome', 'folder', 'file', 'bytes', 'Drive copy / reason']];
+  for (const r of dry.rows) {
+    if (r.action !== 'MOVE') { held += 1; heldBytes += r.size; tally(why, `held back: ${r.why}`); record.push([`HELD BACK — ${r.why}`, r.folder, r.rel, r.size, '']); continue; }
+    const abs = path.join(HOME, r.folder, r.rel);
+    const now = readNow(abs, cache, fs.existsSync(abs) && datalessAt(abs));
+    const v = mac.stillSafe(r, now, presentOnDrive);
+    if (v.gone) { record.push(['already gone', r.folder, r.rel, r.size, '']); continue; }
+    if (!v.ok) { held += 1; heldBytes += r.size; tally(why, `held back: ${v.why}`); record.push([`HELD BACK — ${v.why}`, r.folder, r.rel, r.size, '']); continue; }
+    const to = path.join(trash, r.folder, r.rel);
+    try {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.renameSync(abs, to);
+      moved += 1;
+      movedBytes += r.size;
+      logRestore({ kind: 'moved to the Trash', from: abs, to });
+      record.push(['moved to the Trash', r.folder, r.rel, r.size, drive.get(`${now.hash}:${now.size}`)]);
+    } catch (e) {
+      held += 1; heldBytes += r.size; tally(why, `macOS would not move it (${e.code || e.message})`);
+      record.push([`KEPT — macOS would not move it (${e.code || e.message})`, r.folder, r.rel, r.size, '']);
+    }
+  }
+  saveCache(cache);
+  fs.writeFileSync(path.join(STATE, 'report-record.tsv'), tsv(record));
+  log(`report --apply: moved ${moved} file(s), ${idx.humanBytes(movedBytes)}, into ${trash}; held ${held}`);
+  console.log(`Moved ${moved} file(s), ${idx.humanBytes(movedBytes)}, into the Trash (${trash}); ${held} file(s), ${idx.humanBytes(heldBytes)}, held back.`);
+  printWhy(why);
+  console.log(`Record: ${path.join(STATE, 'report-record.tsv')}. Undo commands: ${RESTORE_LOG}`);
+  return held ? 1 : 0;
+}
+
+const commands = { plan: cmdPlan, run: cmdRun, status: cmdStatus, clear: cmdClear, trash: cmdTrash, report: cmdReport };
 if (!commands[cmd]) {
-  console.error('usage: npm run archive:mac -- plan | run | status | clear [--apply]');
+  console.error('usage: npm run archive:mac -- plan | run | status | clear [--apply] | trash [--apply] | report [--apply]');
   process.exit(2);
 }
 process.exit(commands[cmd]());
