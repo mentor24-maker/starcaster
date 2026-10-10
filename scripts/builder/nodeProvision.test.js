@@ -111,6 +111,23 @@ test('whisper-cpp is required, and a pass may install it', () => {
   assert.ok(!tool.manual, 'nothing about whisper needs a person');
 });
 
+test('osxphotos is asked of the machine that owns media-intake, and only that one', () => {
+  // Media intake · 3 of 5 (86bcfgyy6) reads the Photos album with it. The Mini
+  // has no Photos library, so a FAIL there would be a check nobody can act on.
+  const tool = provision.REQUIRED_TOOLS.find((t) => t.id === 'osxphotos');
+  assert.ok(tool, 'osxphotos is missing from REQUIRED_TOOLS');
+  assert.strictEqual(tool.role, 'media-intake');
+  assert.ok(tool.manual && /pipx install osxphotos/.test(tool.fixHint), 'not a brew formula — the hint says how');
+  const owner = nodeRoles.roleOwner('media-intake');
+  assert.ok(provision.toolsForNode(owner).some((t) => t.id === 'osxphotos'));
+  for (const other of nodeRoles.KNOWN_NODES.filter((n) => n !== owner)) {
+    assert.ok(!provision.toolsForNode(other).some((t) => t.id === 'osxphotos'), `${other} would be asked for osxphotos`);
+  }
+  // Every tool without a role is still asked of every machine, known or not.
+  const shared = provision.REQUIRED_TOOLS.filter((t) => !t.role).map((t) => t.id);
+  assert.deepStrictEqual(provision.toolsForNode('not-a-machine').map((t) => t.id), shared);
+});
+
 // --- model files ------------------------------------------------------------
 
 const crypto = require('node:crypto');

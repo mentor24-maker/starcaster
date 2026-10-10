@@ -53,6 +53,10 @@ export type Candidate = {
   status: string;
   contactId: string;
   note: string;
+  /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
+  /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
+  recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
+  lastNotesReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -130,6 +134,47 @@ function shortDate(iso: string | null): string {
   if (Number.isNaN(date.getTime())) return '—';
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * When this writer's Notes were last read (Substack Miner 5/7). Only approved
+ * writers are read, so a candidate says nothing rather than "never".
+ */
+export function notesReadText(c: Candidate): string {
+  if (c.lastNotesReadAt) return shortDate(c.lastNotesReadAt);
+  return c.status === 'approved' ? 'Not yet' : '—';
+}
+
+function notesReadTitle(c: Candidate): string {
+  if (!c.lastNotesReadAt) return c.status === 'approved' ? 'This writer\'s Notes have not been read yet.' : '';
+  const n = (c.recentNotes || []).length;
+  return `Notes read on ${c.lastNotesReadAt} — ${n} kept`;
+}
+
+/**
+ * The Note a Notes search found this writer by (Substack Miner 6/7), or null.
+ * A writer first found another way still gets the chip once a Notes search
+ * turns them up, because the Note is the evidence either way.
+ */
+export function foundInNotes(c: Candidate): { url: string; text: string; keyword: string } | null {
+  const note = (c.recentNotes || []).find((n) => n.foundBy === 'notes_search');
+  if (!note) return null;
+  return { url: note.url, text: note.text, keyword: note.keyword || '' };
+}
+
+function FoundInNotes({ c }: { c: Candidate }) {
+  const note = foundInNotes(c);
+  if (!note) return null;
+  const why = note.keyword ? `Found searching Notes for "${note.keyword}"` : 'Found in a Notes search';
+  return (
+    <details className="substack-miner-found-note">
+      <summary className="substack-miner-chip" title={`${why}: ${note.text}`}>Found in Notes</summary>
+      <span className="substack-miner-found-note-text">
+        {why}: “{note.text}”{' '}
+        <a href={note.url} target="_blank" rel="noopener noreferrer">Open the Note</a>
+      </span>
+    </details>
+  );
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -677,6 +722,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Recommended by</th>
                     <th scope="col">Found via</th>
                     <th scope="col">Last seen</th>
+                    <th scope="col">Notes read</th>
                     <th scope="col">Note</th>
                     <th scope="col" className="actions-col">Actions</th>
                   </tr>
@@ -692,6 +738,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                           {/* The handle beneath the name, as a slug beneath a title (UI_RULES T7 rung 3). */}
                           <span className="substack-miner-handle">{c.handle}</span>
                           {c.description ? <span className="substack-miner-description">{c.description}</span> : null}
+                          <FoundInNotes c={c} />
                         </td>
                         <td>{c.subscriberText || '—'}</td>
                         <td>
@@ -704,6 +751,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         <td><RecommendedBy handles={c.recommendedBy || []} /></td>
                         <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
                         <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
+                        <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
                         <td>
                           <input
                             type="text"

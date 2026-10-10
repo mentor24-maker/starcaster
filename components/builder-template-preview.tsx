@@ -161,6 +161,7 @@ import {
   getSectionWidthStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
+  getModuleStackStyle,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
   getTextModuleRhythmStyle,
@@ -1722,7 +1723,14 @@ function BuilderSectionPreview({
   // gets an overlay (defaulting to a dark neutral) because text sits on it.
   const bannerImage = !isImageSection && heroBannerUrl ? `url("${heroBannerUrl}")` : "";
   const heroImageSource = bannerImage || (isImageSection ? String(sectionStyle?.backgroundImage || "") : "");
-  const heroTint = normalizeBuilderHexColor(heroOverlay || (bannerImage ? "#101820" : ""));
+  // Only a tint the theme actually names (or the banner's own dark default)
+  // becomes a layer. `normalizeBuilderHexColor("")` answers WHITE — its job is
+  // to give a colour picker something to show — so routing an empty tint
+  // through it laid a 45% white wash over every photo section on every site
+  // and forced the text on it to white, from the day treatments shipped
+  // (2026-08-09) until 2026-10-10. "No tint set" has to stay no tint.
+  const heroTintSource = heroOverlay?.trim() || (bannerImage ? "#101820" : "");
+  const heroTint = heroTintSource ? normalizeBuilderHexColor(heroTintSource) : "";
   /*
    * The tint as a COLOUR of its own, not only baked into the gradient below.
    *
@@ -2213,6 +2221,14 @@ function BuilderSectionPreview({
                       // and button had their own because they were the only
                       // two with split sides. Now everything has four.
                       : getModuleOuterSpacingStyle(module.settings)),
+                    // Z-Index (task 86bcgc7xq): which of two overlapping
+                    // flow modules paints on top. On the wrapper because it
+                    // is the box that is a sibling of the other modules. The
+                    // overlay decor keeps its own zIndex on its own shell
+                    // and is skipped here, or the wrapper would clamp it.
+                    ...(isPageOverlayFlowModule || isSectionOverlayModule
+                      ? {}
+                      : getModuleStackStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize

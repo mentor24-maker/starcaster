@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubstackMinerPanel, {
   emptyText,
+  foundInNotes,
   headerCounts,
+  notesReadText,
   parseSeedLines,
   searchSummaryText,
   seedSummaryText,
@@ -250,6 +252,42 @@ afterEach(() => {
   container = null;
   root = null;
   vi.restoreAllMocks();
+});
+
+describe("Notes read column (Substack Miner 5/7)", () => {
+  it("shows the date an approved writer's Notes were read, Not yet before then, and nothing for a candidate", () => {
+    const read = notesReadText(writer({ status: "approved", lastNotesReadAt: "2026-10-09T12:00:00Z" }));
+    expect(read).toMatch(/Oct/);
+    expect(notesReadText(writer({ status: "approved", lastNotesReadAt: null }))).toBe("Not yet");
+    expect(notesReadText(writer({ status: "candidate" }))).toBe("—");
+  });
+});
+
+describe("Found in Notes (Substack Miner 6/7)", () => {
+  const found = { url: "https://substack.com/@ada/note/c-1", text: "Dear Substack, connect me with the polymaths", postedAt: "", keyword: "polymath", foundBy: "notes_search" };
+
+  it("finds the Note a Notes search turned the writer up by, and nothing for a Note merely read", () => {
+    expect(foundInNotes(writer({ recentNotes: [found] }))).toEqual({ url: found.url, text: found.text, keyword: "polymath" });
+    expect(foundInNotes(writer({ recentNotes: [{ url: found.url, text: "read", postedAt: "2026-10-01T00:00:00Z" }] }))).toBeNull();
+  });
+
+  it("a writer found in Notes shows the chip, the Note on hover, and the Note when opened; filtering by Notes search keeps it", async () => {
+    stores.proj_doe.writers.push(writer({ handle: "adawrites", name: "Ada Writes", foundVia: "notes_search", recentNotes: [found] }));
+    stores.proj_doe.writers.push(writer({ handle: "plain", name: "Plain", foundVia: "web_search" }));
+    await mount();
+    const chip = el('[data-handle="adawrites"] .substack-miner-found-note summary');
+    expect(chip.textContent).toBe("Found in Notes");
+    expect(chip.getAttribute("title")).toContain("Dear Substack, connect me with the polymaths");
+    expect(el('[data-handle="adawrites"] .substack-miner-found-note-text').textContent).toContain('Found searching Notes for "polymath"');
+    expect(container!.querySelector('[data-handle="plain"] .substack-miner-found-note')).toBeNull();
+    const select = el('select[aria-label="Found via"]') as HTMLSelectElement;
+    await act(async () => {
+      select.value = "notes_search";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(container!.querySelector('[data-handle="adawrites"]')).not.toBeNull();
+    expect(container!.querySelector('[data-handle="plain"]')).toBeNull();
+  });
 });
 
 describe("Substack Miner screen", () => {

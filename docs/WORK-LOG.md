@@ -13,6 +13,59 @@ file twice changes nothing. If a number could not be counted, the screen
 shows "?" and the reason, never a misleading 0. Tried on the local copy of
 the database: a matching email was marked once, then reported as already
 marked, and an approved writer's contact moved Subscribed from 0 to 1.
+## 2026-10-10 — Substack Miner 6/7: find writers by searching Substack Notes (#818)
+
+Some of the writers Dane wants talk mostly on Substack Notes, which ordinary
+web search cannot see. Now the Mac Mini's signed-in browser can search Notes
+for one of his keywords at a time: it opens Substack search, switches to the
+Notes tab, and reads the first page. Each Note's author is added to the
+Substack Miner list with the keyword, and the Note is kept as the reason they
+were found. Because an author's @name is not always their publication's name,
+Starcaster looks up which publication is theirs. Someone with no publication is
+listed as "not added" rather than guessed at. Running the same search twice
+adds nothing, a writer Dane already approved or rejected stays that way, and if
+the browser is not signed in the pass says so and writes nothing. The
+Candidates screen shows a "Found in Notes" chip that opens to the Note. Before
+building, the agent session checked whether this could skip the browser the way
+5/7 did. It cannot: Substack's public search will not narrow to Notes. It is
+ready for its first real run once the Mini is signed in to Substack (after
+10/13).
+## 2026-10-10 — Substack Miner 5/7: each approved writer's newest Notes, lined up to like or reply (#817)
+
+For every Substack writer Dane has approved, Starcaster now reads their three
+newest Notes and puts the newest one on Engage › Substack Notes as two rows
+waiting for him: a Like and a Reply. Nothing is liked or posted at this step.
+Reading the same Notes again adds nothing, and a writer read in the last week
+is skipped and named. The ticket planned to use the Mac Mini's signed-in
+browser for this. Before building, the agent session found that Substack's
+public feed hands the Notes to a plain request, so it works now, with no
+browser, no sign-in and no wait for the 10/13 sign-in. That correction is on
+the ticket. The first real run caught a bug the tests had missed: it read the
+wrong field and found no Notes for a writer who has twelve. After the fix it
+read her three newest and lined up the pair. The Candidates screen gains a
+"Notes read" column. Two new database columns need applying in production
+before this is used there.
+## 2026-10-09 — Videos in the Photos 'Studio' album never reach Studio (#813)
+
+The same 15-minute job on the MacBook that sends Zoom recordings now also
+sends any video Dane puts into an Apple Photos album called **Studio** — from
+the iPhone or the Mac — to the Studio Inbox. Nothing outside that album is
+ever sent (so family videos stay out), photos in the album are skipped, and a
+video taken out and put back is not sent twice. It sends the original, fetched
+from iCloud when needed, and never changes anything in Photos. Until Dane
+turns on the Mac's privacy switch for the Photos library, the job says
+"CANNOT READ PHOTOS" with the exact switch to turn on, and the bus hears
+about it — it never pretends there was nothing new.
+## 2026-10-09 — A Paragraph module silently cuts its text off at 10,000 characters, so a long article ends mid-sentence on the live site (#816)
+
+A Paragraph module could only hold 10,000 characters. Anything longer was
+quietly cut off every time the page saved, so Dane's manifesto went live
+ending mid-sentence ("I also have a highly fertile") with no warning. The
+limit is now 200,000 characters — about a long book chapter — everywhere a
+page's text is saved or loaded, including email templates. And if a paste
+ever does go past it, the editor now says so under the text box, with how
+much would be lost, instead of trimming in silence. The manifesto's missing
+tail was never stored, so it needs re-pasting once this is live.
 
 ## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
 

@@ -222,10 +222,10 @@ heading "TOOLCHAIN"
 # check on a machine that does not work.
 TOOLS="$(ask_inventory 'the toolchain' -e '
   const p = require(process.argv[1] + "/lib/nodeProvision.js");
-  for (const t of p.REQUIRED_TOOLS) {
+  for (const t of p.toolsForNode(process.argv[2])) {
     console.log([t.id, t.command, t.brew || "-", t.manual ? "manual" : "auto", (t.fixHint || "-")].join("\t"));
   }
-' "$REPO")" || exit 1
+' "$REPO" "$NODE_IS")" || exit 1
 
 while IFS=$'\t' read -r id command brew manual hint; do
   [ -n "$id" ] || continue

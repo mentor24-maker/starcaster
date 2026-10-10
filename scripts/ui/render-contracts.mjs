@@ -781,6 +781,91 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'heading-nudged-over-an-image-stacks-behind-it-in-page-order',
+    why:
+      'THE CONTROL for the contract below. A heading nudged DOWN over the image after it (Vertical ' +
+      'Offset -60) paints behind the image, because two overlapping flow modules stack in page order ' +
+      'and the image comes later (task 86bcgc7xq, operator 2026-10-10: "the image is overwriting the ' +
+      'headline"). This contract pins that baseline with the browser\'s own hit test, so the one below ' +
+      'cannot pass by the heading never overlapping the picture at all.',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Headline over the picture', settings: { verticalOffset: '-60', fontSize: '40' } },
+        // The image is nudged too, which POSITIONS it (the nudge is a transform on a
+        // relative box). A plain in-flow image paints under any positioned
+        // neighbour regardless of order; one that is positioned, carries an
+        // effect, or sits in a layered column stacks in page order — the case
+        // the operator hit.
+        { type: 'image', settings: { ...PICTURE, size: '100', verticalOffset: '20' } },
+      ],
+    },
+    selector: '.builder-preview-module:has(> .builder-preview-heading)',
+    read: ['z-index'],
+    probes: {
+      stack: {
+        subject: '.builder-preview-heading',
+        against: '.builder-preview-image-shell',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.stack;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the pair did not render, so this contract can no longer fail for the right reason.`;
+      if (!(probe.overlap > 0)) {
+        return `the heading and the image do not overlap (overlap ${probe.overlap}px) — a nudge of -60 should put the heading over the picture; with no overlap, who is on top cannot be measured.`;
+      }
+      if (sample.styles['z-index'] !== 'auto') {
+        return `the heading wrapper carries z-index ${sample.styles['z-index']} with no Z-Index set — a module with no value must render exactly as before.`;
+      }
+      return probe.onAgainst
+        ? null
+        : `with no Z-Index set the hit test found \`${probe.hit}\` over the overlap — the image should win in page order, so the control that proves the contract below is no longer a control.`;
+    },
+  },
+  {
+    id: 'heading-with-a-z-index-paints-in-front-of-the-image-it-is-nudged-over',
+    why:
+      'The fix for task 86bcgc7xq: a Z-Index on the heading lands on its module wrapper and puts the ' +
+      'headline IN FRONT of the image it overlaps. Measured by the browser\'s own hit test at the ' +
+      'middle of the overlap, which is the only thing that can tell "in front" from "a z-index was ' +
+      'written somewhere the stacking never reads".',
+    section: {
+      layout: 'single',
+      modules: [
+        { type: 'heading', text: 'Headline over the picture', settings: { verticalOffset: '-60', fontSize: '40', zIndex: '2' } },
+        // The image is nudged too, which POSITIONS it (the nudge is a transform on a
+        // relative box). A plain in-flow image paints under any positioned
+        // neighbour regardless of order; one that is positioned, carries an
+        // effect, or sits in a layered column stacks in page order — the case
+        // the operator hit.
+        { type: 'image', settings: { ...PICTURE, size: '100', verticalOffset: '20' } },
+      ],
+    },
+    selector: '.builder-preview-module:has(> .builder-preview-heading)',
+    read: ['z-index', 'position'],
+    probes: {
+      stack: {
+        subject: '.builder-preview-heading',
+        against: '.builder-preview-image-shell',
+      },
+    },
+    expect(sample) {
+      const probe = sample.probes?.stack;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the pair did not render, so this contract can no longer fail for the right reason.`;
+      if (!(probe.overlap > 0)) {
+        return `the heading and the image do not overlap (overlap ${probe.overlap}px) — with no overlap, who is on top cannot be measured.`;
+      }
+      if (sample.styles['z-index'] !== '2' || sample.styles.position !== 'relative') {
+        return `Z-Index 2 did not reach the heading's wrapper (z-index ${sample.styles['z-index']}, position ${sample.styles.position}).`;
+      }
+      return probe.onSubject
+        ? null
+        : `the heading has Z-Index 2 and the hit test still found \`${probe.hit}\` over the overlap — the setting reached the wrapper but the image is still painting on top.`;
+    },
+  },
+  {
     id: 'module-device-styles-phone-alignment-can-un-centre-a-module',
     why:
       'REVIEW ROUND 1, and it needs a browser because the generated CSS looked perfectly right. ' +
@@ -3071,6 +3156,75 @@ export const RENDER_CONTRACTS = [
             `${Math.round(sectionBottom - layerBottom)}px ABOVE the row's — a bare strip across the ` +
             'bottom of the band.';
         }
+      }
+      return null;
+    },
+  },
+
+  /*
+   * NO TINT SET MEANS NO TINT (86bcgcm3j).
+   *
+   * The contract below this one proves a theme's tint survives parallax. This
+   * pair proves the other half: a row with NO theme tint paints the photo
+   * bare. From 2026-08-09 to 2026-10-10 it did not — the empty tint went
+   * through the hex normaliser, whose fallback is white, so every photo row on
+   * every tenant site wore `rgba(255, 255, 255, 0.45)` and white text. A navy
+   * starfield on daneofearth.starcaster.pro rendered as charcoal grey. The
+   * tinted twin is here so the untinted assertion cannot pass on a build
+   * where the treatment stopped rendering at all.
+   */
+  {
+    id: 'photo-row-without-a-theme-tint-paints-the-photo-bare',
+    why:
+      'A theme\'s "Photo overlay tint" is optional, and with none set the photo must render exactly as ' +
+      'uploaded. A default white wash at 45% turned every dark photo background grey on every site and ' +
+      'forced white text onto it.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      modules: [{ type: 'heading', text: 'Text over an untinted picture', settings: {} }],
+    },
+    selector: '.builder-preview-section',
+    read: ['backgroundImage', 'color'],
+    expect(sample) {
+      const image = sample.styles.backgroundImage || '';
+      if (!image.includes('url(')) {
+        return `the row is not painting a photo at all (background-image \`${image.slice(0, 120)}\`), so ` +
+          'nothing is proven — the image fixture stopped reaching the preview.';
+      }
+      if (image.includes('linear-gradient(')) {
+        return `a row with no theme tint is wearing one: background-image is \`${image.slice(0, 160)}\`. ` +
+          'An empty tint is being turned into a colour (the hex normaliser\'s white fallback) and laid over the photo.';
+      }
+      if (sample.styles.color === 'rgb(255, 255, 255)') {
+        return 'the row\'s text is forced to white although it wears no tint — the hero treatment is still ' +
+          'applying its inverse text colour to an untinted row.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'photo-row-with-a-theme-tint-wears-it',
+    why:
+      'The pair to the contract above. A theme that names a tint must still get it, at its own strength, ' +
+      'with the inverse text colour on top — otherwise "no gradient" above would also pass on a build ' +
+      'where the treatment had stopped rendering altogether.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
+      modules: [{ type: 'heading', text: 'Text over a tinted picture', settings: {} }],
+    },
+    selector: '.builder-preview-section',
+    read: ['backgroundImage', 'color'],
+    expect(sample) {
+      const image = sample.styles.backgroundImage || '';
+      if (!image.includes('linear-gradient(rgba(255, 0, 0, 0.75), rgba(255, 0, 0, 0.75)), url(')) {
+        return `the themed row is not wearing its red tint in front of the photo: background-image is ` +
+          `\`${image.slice(0, 160)}\`.`;
+      }
+      if (sample.styles.color !== 'rgb(255, 255, 255)') {
+        return `the tinted row's text is ${sample.styles.color}, not the inverse white the tint exists to make readable.`;
       }
       return null;
     },

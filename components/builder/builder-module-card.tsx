@@ -41,11 +41,13 @@ import type {
 } from "@/lib/builder-template";
 import {
   getBuilderBackgroundStyle,
+  describeModuleTextOverflow,
   isPlainTextVariant,
   normalizeBuilderAssetUrl,
   formatHeadingContent,
   formatPlainTextContent,
   formatRichTextContent,
+  normalizeModuleZIndexValue,
   normalizeSignedOffsetValue
 } from "@/lib/builder-template";
 import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
@@ -227,6 +229,10 @@ const MODULE_NUDGE_SIDES = [
   { key: "horizontalOffset", label: "H Offset", hint: "Positive moves right; negative moves left." },
   { key: "verticalOffset", label: "V Offset", hint: "Positive moves up; negative moves down." }
 ] as const;
+
+/** The Floating Image's own words for the same number. */
+const MODULE_Z_INDEX_HINT =
+  "Higher values stack in front of neighbouring modules; lower values stack behind. 0 keeps page order.";
 
 type BuilderModuleCardProps = {
   module: BuilderTemplateModule;
@@ -3552,6 +3558,32 @@ export function BuilderModuleCard({
                 </BuilderModuleField>
               ))
             : null}
+          {/* Which overlapping module paints on top (task 86bcgc7xq). It
+              sits with the nudges because it only matters once a nudge has
+              put this module over a neighbour — and last on the strip for
+              the same D9 reason they are. The same label, range and words as
+              the Floating Image's field, so it is learned once. */}
+          {isCarouselModule || isStandardImage ? (
+            <BuilderModuleField label="Z-Index" width="num">
+              <input
+                type="number"
+                min={-999}
+                max={999999}
+                step={1}
+                title={MODULE_Z_INDEX_HINT}
+                value={module.settings.zIndex ?? "0"}
+                onChange={(event) =>
+                  onUpdateModule((current) => ({
+                    ...current,
+                    settings: {
+                      ...current.settings,
+                      zIndex: normalizeModuleZIndexValue(event.target.value)
+                    }
+                  }))
+                }
+              />
+            </BuilderModuleField>
+          ) : null}
           {module.type === "text" ? (
             <BuilderModuleField label="Width" width="select-sm">
               <select
@@ -4322,6 +4354,7 @@ export function BuilderModuleCard({
              stops offering a control that never did anything. */
           module.type !== "carousel" &&
           module.type !== "admin-nav-link" ? (
+            <>
             <label className="field">
               <span>Content</span>
               {module.type === "text" && !isPlainTextVariant(module.settings) ? (
@@ -4341,6 +4374,15 @@ export function BuilderModuleCard({
                 />
               )}
             </label>
+            {describeModuleTextOverflow(module.text) ? (
+              // Saving cuts module text at BUILDER_MODULE_TEXT_MAX_LENGTH; say so
+              // before it happens rather than after the live page ends mid-sentence.
+              <div className="builder-module-runtime-note" role="alert">
+                <strong>Too long to save whole</strong>
+                <p>{describeModuleTextOverflow(module.text)}</p>
+              </div>
+            ) : null}
+            </>
           ) : null}
           </BuilderModuleChromeSlotProvider>
           )}
