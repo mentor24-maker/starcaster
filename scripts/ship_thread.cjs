@@ -107,12 +107,50 @@ function run(cmd, argv, { cwd = root, allowFail = false } = {}) {
   return result.status === 0;
 }
 
+/**
+ * How much of a check's output ship will hold. Node's `spawnSync` keeps at
+ * most `maxBuffer` bytes of what a child prints — 1 MiB by default — and when
+ * the child prints more it KILLS it (SIGTERM, error ENOBUFS) and reports no
+ * exit status. On 2026-10-09 the server test suite's TAP output reached
+ * 1,058,532 bytes, so ship killed its own test run at test 4,964 of 5,109 and
+ * printed "The server tests check failed" with no failing test in sight — the
+ * same suite passed when run by hand, twice (task 86bcg8c2n). 64 MiB is sixty
+ * times the suite's current output; a check that prints more than that is
+ * saying something else is wrong.
+ */
+const CHECK_OUTPUT_LIMIT = 64 * 1024 * 1024;
+
 function quiet(cmd, argv, { cwd = root } = {}) {
-  const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8' });
+  const result = spawnSync(cmd, argv, { cwd, encoding: 'utf8', maxBuffer: CHECK_OUTPUT_LIMIT });
   // `code` matters for the ClickUp trail step below, which treats exit 4 (the
   // PR body carries no ticket link) differently from every other failure —
   // they need opposite advice, and "not zero" cannot tell them apart.
-  return { ok: result.status === 0, code: result.status, out: `${result.stdout || ''}${result.stderr || ''}`.trim() };
+  // `signal` and `error` say whether the child FINISHED at all: a run ship cut
+  // off is a ship defect, and must not be reported as the check failing.
+  return {
+    ok: result.status === 0,
+    code: result.status,
+    signal: result.signal || null,
+    error: result.error ? result.error.code || String(result.error) : null,
+    out: `${result.stdout || ''}${result.stderr || ''}`.trim()
+  };
+}
+
+/**
+ * The one line that says WHAT stopped a check — a failed run and a run that
+ * never finished need opposite advice, and "the check failed" covers both.
+ */
+function describeCheckStop(label, result) {
+  if (result.error === 'ENOBUFS') {
+    return `Ship itself cut the ${label} run off: its output passed the ${CHECK_OUTPUT_LIMIT} byte limit ship holds (ENOBUFS). That is a ship defect, not a failing test — raise CHECK_OUTPUT_LIMIT in scripts/ship_thread.cjs.`;
+  }
+  if (result.signal) {
+    return `The ${label} run was killed by ${result.signal} before it finished, so nothing it printed is a verdict.`;
+  }
+  if (result.error) {
+    return `The ${label} check could not be started (${result.error}).`;
+  }
+  return `The ${label} check failed.`;
 }
 
 /**
@@ -398,7 +436,7 @@ if (DRY) {
   for (const [cmd, argv, label] of CHECKS) {
     const result = quiet(cmd, argv);
     if (!result.ok) {
-      fail(`The ${label} check failed. Nothing has been pushed.\n\n${result.out.split('\n').slice(-25).join('\n')}`);
+      fail(`${describeCheckStop(label, result)} Nothing has been pushed.\n\n${result.out.split('\n').slice(-25).join('\n')}`);
     }
     say(`    ✓ ${label}`);
   }
