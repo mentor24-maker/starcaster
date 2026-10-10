@@ -1,3 +1,19 @@
+## 2026-10-09 — Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (#815)
+
+The Substack Miner's top line now says whether the push is working, not just
+how many writers were found. Two new numbers sit beside found / approved /
+rejected. **Engaged** is approved writers who have had a Note liked, replied
+to or restacked, where the action actually went out. **Subscribed** is
+approved writers who are now Dane of Earth subscribers. Substack has no way
+for software to read a subscriber list, so Dane downloads Substack's own
+export and drops it into a new **Import subscribers** box on the Run tab.
+Every email that belongs to a contact marks that contact as a subscriber, and
+emails with no contact are counted and named, never added. Importing the same
+file twice changes nothing. If a number could not be counted, the screen
+shows "?" and the reason, never a misleading 0. Tried on the local copy of
+the database: a matching email was marked once, then reported as already
+marked, and an approved writer's contact moved Subscribed from 0 to 1.
+
 ## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
 
 The Substack Miner now has its screen, under Acquire › Substack Miner (the
