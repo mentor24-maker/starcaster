@@ -15,8 +15,8 @@
  * (epic substack-notes), and the Mini should run one posting worker, not one
  * per site. So this file owns what every site shares — the loop, the beat, the
  * three rules below — and each site is an adapter in ./adapters/ (the contract
- * is written at the top of ./adapters/youtube.js). Substack Notes 6/7 adds a
- * file there and one line in ADAPTERS; it does not touch this one.
+ * is written at the top of ./adapters/youtube.js). Substack Notes 6/7 added
+ * ./adapters/substack.js and its line in ADAPTERS (task 86bcet7qr).
  *
  * THE THREE RULES THIS FILE OWNS, so no adapter can loosen them:
  *
@@ -70,23 +70,30 @@ function text(value) {
  * to match. This IS rule 3, and it is the function the break-test targets.
  */
 async function settle(adapter, item, attempt) {
-  // The browser said it could not, in its own words: nothing went out.
-  if (!attempt.ok && !attempt.uncertain) {
-    const res = await adapter.markFailed(item, { error: attempt.error });
-    return { outcome: 'failed', why: attempt.error, write: res };
-  }
-  // The request broke off, or the answer could not be read: it MAY be live.
-  if (!attempt.ok) {
-    const res = await adapter.flagForHandCheck(item, {
-      error: `${attempt.error} — it may or may not have posted, so it will not be tried again. Check the video by hand.`,
-    });
-    return { outcome: 'hand-check', why: attempt.error, write: res };
-  }
-
+  // A screenshot is kept whatever the outcome — a failure is exactly when the
+  // picture helps most (a signed-out page, an error banner). Only an answer
+  // that never arrived has none to keep.
   const kept = attempt.screenshot !== undefined && typeof adapter.keepScreenshot === 'function'
     ? await adapter.keepScreenshot(item, attempt.screenshot)
     : { note: '' };
   const evidence = { screenshotUrl: kept.url || '', note: kept.note || '' };
+
+  // The browser said it could not, in its own words: nothing went out.
+  if (!attempt.ok && !attempt.uncertain) {
+    const res = await adapter.markFailed(item, { error: attempt.error, ...evidence });
+    return { outcome: 'failed', why: attempt.error, write: res };
+  }
+  // The request broke off, or the answer could not be read: it MAY be live.
+  // The closing words are the site's own ("Check the video by hand." would be
+  // nonsense on a Substack Note), so each adapter supplies them.
+  if (!attempt.ok) {
+    const where = text(adapter.handCheckWords) || 'Check it by hand.';
+    const res = await adapter.flagForHandCheck(item, {
+      error: `${attempt.error} — it may or may not have posted, so it will not be tried again. ${where}`,
+      ...evidence,
+    });
+    return { outcome: 'hand-check', why: attempt.error, write: res };
+  }
 
   if (!text(attempt.url)) {
     const why = 'The browser said it posted but returned no link to the comment, so it is not counted as posted.'
@@ -95,9 +102,13 @@ async function settle(adapter, item, attempt) {
     return { outcome: 'failed', why, write: res };
   }
 
-  const check = await adapter.verify(item, attempt.url);
+  // The whole answer goes along: a like or a restack has no link of its own,
+  // and is proven from the page state the browser reported (adapters/substack.js).
+  const check = await adapter.verify(item, attempt.url, attempt);
   if (check.verdict === 'proven') {
-    const res = await adapter.markPosted(item, { url: attempt.url, ...evidence });
+    // The attempt goes along so an adapter can record how it was proven
+    // (Substack: a like that was already on, which costs no allowance).
+    const res = await adapter.markPosted(item, { url: attempt.url, ...evidence }, attempt);
     return { outcome: 'posted', why: '', write: res };
   }
   if (check.verdict === 'refuted') {
@@ -245,7 +256,7 @@ async function readProjectTimeZone(projectId) {
 }
 
 /**
- * THE ADAPTER LIST. One entry per site. Substack Notes 6/7 adds its line here.
+ * THE ADAPTER LIST. One entry per site. YouTube, then Substack (6/7).
  * Each builder returns an adapter or throws a sentence saying what is missing.
  */
 const ADAPTERS = [
@@ -254,6 +265,15 @@ const ADAPTERS = [
     build: (env) => require('./adapters/youtube.js').createYoutubeAdapter({
       projectId: text(env.YOUTUBE_OUTREACH_PROJECT_ID),
       expectedChannelId: text(env.YOUTUBE_OUTREACH_CHANNEL_ID),
+      projectTimeZone: readProjectTimeZone,
+    }),
+  },
+  {
+    name: 'substack',
+    // Dane of Earth is one project on both sites, so the YouTube setting serves
+    // when no Substack one is given; the installer needs nothing new.
+    build: (env) => require('./adapters/substack.js').createSubstackAdapter({
+      projectId: text(env.SUBSTACK_NOTES_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID),
       projectTimeZone: readProjectTimeZone,
     }),
   },

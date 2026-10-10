@@ -1,3 +1,23 @@
+## 2026-10-09 — Substack Notes 6/7: approved Notes, replies, restacks and likes happen on Substack from the Mini's browser, with proof (#804)
+
+Approved Substack items now actually happen. The Mac Mini's posting worker (the
+same one that posts YouTube comments) takes the oldest approved Note, reply,
+restack or like and does it on Substack as Dane of Earth, through the Mini's
+signed-in browser. It must show proof first. A Note or reply counts only when
+the browser returns its link and Substack itself shows the approved words
+there. A like or restack counts only when the page shows it done. Anything
+else is marked failed with the reason, and anything it could not check is left
+for Dane to look at, never tried twice. A Note already liked is never clicked
+again, since a second click would undo the like. The daily maximum counts all
+four kinds together. An approved item that has to wait now says why on its row,
+and a new **Posted** tab lists what went out, with the link and a screenshot.
+Everything was tested against a stand-in browser. The first real post waits
+until Dane signs the Mini in to Substack (7/7).
+
+After review: a Substack item the Mini could not confirm now says "Check Substack
+by hand" instead of telling Dane to check a video; a refused item keeps its
+screenshot, which is the picture that shows why; and a like or restack that was
+already on clicks nothing and no longer uses up the daily allowance.
 ## 2026-10-09 — Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (#805)
 
 On **Engage → Substack Notes → Settings** there is a new switch, **Draft Notes

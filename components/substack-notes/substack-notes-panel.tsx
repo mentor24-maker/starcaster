@@ -24,6 +24,13 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
  * it refuses; it (re)loads when its page is SHOWN and when the project is
  * SWITCHED, and drops a reply that lands after a newer request or a switch.
  *
+ * POSTED (6/7, task 86bcet7qr). The Mini's posting worker
+ * (workers/youtube-outreach/adapters/substack.js) takes approved items. An
+ * approved row says why it is still waiting, in the worker's words ("waiting
+ * for tomorrow's allowance"); the Posted tab lists what went out, when, the
+ * link and the screenshot, what failed and why, and any row the worker could
+ * not prove either way as "check this one by hand" — it is never retried.
+ *
  * WATCHING HIS NEW CONTENT (4/7, task 86bcet775). The Ideas tab says what is
  * watched — "Watching: YouTube ✓, Substack ✓, Blog ✓ (last checked 9 minutes
  * ago)" — and, for any source that is not, why. Settings has "Draft a Note for
@@ -61,6 +68,13 @@ export type NoteItem = {
   error: string;
   createdAt: string;
   updatedAt: string;
+  screenshotUrl?: string;
+  postedAt?: string | null;
+  postingStartedAt?: string | null;
+  postNote?: string;
+  waitReason?: string;
+  waitCheckedAt?: string | null;
+  needsHandCheck?: boolean;
 };
 
 export type NotesSettings = {
@@ -282,6 +296,36 @@ export function cameFrom(item: NoteItem): string {
     return `${SOURCE_LABELS[item.source] || item.source} idea: ${item.ideaText}`;
   }
   return item.targetUrl;
+}
+
+// ── What the Mini did ──────────────────────────────────────────────────────
+
+/** Everything the worker has taken: on the Posted tab, newest first. */
+export function postedItems(items: NoteItem[]): NoteItem[] {
+  const at = (i: NoteItem) => Date.parse(i.postedAt || i.postingStartedAt || i.updatedAt || '') || 0;
+  return items
+    .filter((i) => i.status === 'posting' || i.status === 'posted' || i.status === 'failed')
+    .sort((a, b) => at(b) - at(a));
+}
+
+/** The status line on a Posted row. A `posting` row is either live work or a hand check. */
+export function postedStatusText(item: Pick<NoteItem, 'kind' | 'status' | 'postedAt' | 'needsHandCheck'>): string {
+  const what = KIND_LABELS[item.kind] || item.kind;
+  if (item.status === 'posted') {
+    const verb = item.kind === 'like' ? 'Liked' : item.kind === 'restack' ? 'Restacked' : `${what} posted`;
+    return `${verb} ${whenText(item.postedAt)}`.trim();
+  }
+  if (item.status === 'failed') return `${what} failed`;
+  if (item.needsHandCheck) return `${what}: check this one by hand — it will not be tried again`;
+  return `${what}: being done now…`;
+}
+
+/** Under an approved item's status: why it has not gone out yet. */
+export function waitLine(item: Pick<NoteItem, 'status' | 'waitReason' | 'waitCheckedAt'>): string {
+  if (item.status !== 'approved') return '';
+  if (!item.waitReason) return 'The Mini takes it at its next pass. If a limit holds it, the reason shows here.';
+  const checked = whenText(item.waitCheckedAt);
+  return checked ? `${item.waitReason} (checked ${checked})` : item.waitReason;
 }
 
 /** Ideas are Notes of his own; everything aimed at someone else's Note is on the Engage tab. */
@@ -619,7 +663,44 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
 
 // ── The screen ─────────────────────────────────────────────────────────────
 
-type Tab = 'ideas' | 'engage' | 'approvals' | 'settings';
+type Tab = 'ideas' | 'engage' | 'approvals' | 'posted' | 'settings';
+
+function PostedRow({ item }: { item: NoteItem }): React.ReactElement {
+  const handCheck = item.status === 'posting' && Boolean(item.needsHandCheck);
+  const words = item.finalText || item.draftText;
+  const linkLabel = item.kind === 'like' || item.kind === 'restack' ? 'Open the Note' : 'View on Substack';
+  return (
+    <li className={`substack-notes-posted-row is-${handCheck ? 'hand-check' : item.status}`} data-item-id={item.id}>
+      {item.screenshotUrl ? (
+        <a className="substack-notes-posted-shot" href={item.screenshotUrl} target="_blank" rel="noopener noreferrer">
+          <img src={item.screenshotUrl} alt={`Screenshot of the ${(KIND_LABELS[item.kind] || item.kind).toLowerCase()} on Substack`} loading="lazy" />
+        </a>
+      ) : null}
+      <div className="substack-notes-posted-body">
+        <p className="substack-notes-posted-status">{postedStatusText(item)}</p>
+        {words ? <p className="substack-notes-text">{words}</p> : null}
+        {item.kind !== 'note' && item.targetUrl ? (
+          <p className="substack-notes-card-note">
+            {'On '}
+            <a href={item.targetUrl} target="_blank" rel="noopener noreferrer" className="substack-notes-link">{item.targetUrl}</a>
+          </p>
+        ) : null}
+        {item.error ? <p className="substack-notes-error">{item.error}</p> : null}
+        {handCheck && !item.error ? (
+          <p className="substack-notes-error">
+            The Mini stopped part-way through this. Open Substack and see whether it happened before doing it again.
+          </p>
+        ) : null}
+        {item.postNote ? <p className="substack-notes-card-note">{item.postNote}</p> : null}
+        {item.postedUrl || (handCheck && item.targetUrl) ? (
+          <div className="substack-notes-actions">
+            <a className="btn" href={item.postedUrl || item.targetUrl} target="_blank" rel="noopener noreferrer">{linkLabel}</a>
+          </div>
+        ) : null}
+      </div>
+    </li>
+  );
+}
 
 export default function SubstackNotesPanel(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -858,7 +939,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       replaceItem(reply?.data as NoteItem);
       void refreshTopicPlan();
       setNotice(action === 'approve'
-        ? 'Approved. It will wait until posting is switched on.'
+        ? 'Approved. The Mini does it within its limits; the Posted tab shows when it has.'
         : 'Rejected. It stays on its row, marked rejected.');
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
@@ -968,6 +1049,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
 
   const { ideas, engage } = splitItems(items || []);
   const waiting = (items || []).filter(awaitsApproval);
+  const posted = postedItems(items || []);
   const topics = settings?.topics || [];
   const watchText = watch ? watchLines(watch, Date.now()) : null;
 
@@ -1004,6 +1086,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
           {tabButton('ideas', ideas.length ? `Ideas (${ideas.length})` : 'Ideas')}
           {tabButton('engage', engage.length ? `Engage (${engage.length})` : 'Engage')}
           {tabButton('approvals', waiting.length ? `Approvals (${waiting.length})` : 'Approvals')}
+          {tabButton('posted', posted.length ? `Posted (${posted.length})` : 'Posted')}
           {tabButton('settings', 'Settings')}
         </div>
         <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
@@ -1107,7 +1190,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                         </td>
                         <td>{SOURCE_LABELS[item.source] || item.source}</td>
                         <td>{shortDate(item.createdAt)}</td>
-                        <td>{statusLabel(item)}</td>
+                        <td>
+                          {statusLabel(item)}
+                          {waitLine(item) ? <span className="substack-notes-text substack-notes-wait">{waitLine(item)}</span> : null}
+                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {item.status === 'idea' ? (
@@ -1228,7 +1314,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <span className="substack-notes-text">No words — a {action.toLowerCase()} is just the click.</span>
                           )}
                         </td>
-                        <td>{statusLabel(item)}</td>
+                        <td>
+                          {statusLabel(item)}
+                          {waitLine(item) ? <span className="substack-notes-text substack-notes-wait">{waitLine(item)}</span> : null}
+                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {item.kind === 'reply' && item.status === 'idea' ? (
@@ -1273,6 +1362,20 @@ export default function SubstackNotesPanel(): React.ReactElement {
               onRedraft={() => void writeDraft(item)}
             />
           ))}
+        </div>
+      ) : null}
+
+      {tab === 'posted' ? (
+        <div className="substack-notes-tabpanel substack-notes-posted" role="tabpanel" aria-label="Posted">
+          {items && !posted.length ? (
+            <p className="substack-notes-empty">Nothing has been posted yet. Approved Notes, replies, restacks and likes appear here once the Mini has done them.</p>
+          ) : null}
+          {!items ? <p className="substack-notes-empty">{loading ? 'Loading…' : 'The list has not been read, so nothing can be shown. Click Refresh.'}</p> : null}
+          {posted.length ? (
+            <ul className="substack-notes-posted-list">
+              {posted.map((item) => <PostedRow key={item.id} item={item} />)}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

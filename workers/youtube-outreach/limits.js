@@ -114,8 +114,11 @@ function sentAt(row) {
  * Account-wide limits. `history` is every comment on this account that went
  * out or may have (posted AND posting). Returns `{ ok: true }` or
  * `{ ok: false, scope: 'account', reason }`.
+ *
+ * `noun` is what the reasons call one of them: "comment" on YouTube, "action"
+ * on Substack, where a Note, a reply, a restack and a like all count.
  */
-function checkAccountLimits({ settings, history, itemId, now, timeZone }) {
+function checkAccountLimits({ settings, history, itemId, now, timeZone, noun = 'comment' }) {
   const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC';
   const today = localParts(now, zone);
   const where = `(${zone})`;
@@ -126,7 +129,7 @@ function checkAccountLimits({ settings, history, itemId, now, timeZone }) {
     return {
       ok: false,
       scope: 'account',
-      reason: `Waiting for active hours — comments only go out between ${hourText(start)} and ${hourText(end)} ${where}.`,
+      reason: `Waiting for active hours — ${noun}s only go out between ${hourText(start)} and ${hourText(end)} ${where}.`,
     };
   }
 
@@ -138,7 +141,7 @@ function checkAccountLimits({ settings, history, itemId, now, timeZone }) {
       return {
         ok: false,
         scope: 'account',
-        reason: `Waiting for tomorrow's allowance — ${usedToday} of ${cap} comment${cap === 1 ? '' : 's'} a day already posted today ${where}.`,
+        reason: `Waiting for tomorrow's allowance — ${usedToday} of ${cap} ${noun}${cap === 1 ? '' : 's'} a day already posted today ${where}.`,
       };
     }
   }
@@ -151,7 +154,7 @@ function checkAccountLimits({ settings, history, itemId, now, timeZone }) {
     return {
       ok: false,
       scope: 'account',
-      reason: `Waiting for the gap between comments — the next can go out after ${clockText(nextAt, zone)} ${where} `
+      reason: `Waiting for the gap between ${noun}s — the next can go out after ${clockText(nextAt, zone)} ${where} `
         + `(at least ${minGap} minutes apart, plus a little random extra).`,
     };
   }
