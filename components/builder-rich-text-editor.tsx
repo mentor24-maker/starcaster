@@ -25,6 +25,7 @@ import {
   resolveRichTextImageSrc
 } from "@/lib/rich-text-image";
 import { RichTextEmojiPicker } from "@/components/builder/rich-text-emoji-picker";
+import { cleanPastedRichTextHtml } from "@/lib/rich-text-paste";
 import {
   RichTextAlignCenterIcon,
   RichTextAlignLeftIcon,
@@ -238,6 +239,13 @@ export function BuilderRichTextEditor({
       })
     ],
     content: prepareRichTextHtmlForEditor(value) || "<p></p>",
+    editorProps: {
+      // Runs on PASTED markup only, before the editor parses it. A Google Doc
+      // carries a blank line between every paragraph as a bare <br> between
+      // the <p>s; left alone each one becomes an empty paragraph and the live
+      // page shows double spacing (task 86bcg88kk). Typing is never touched.
+      transformPastedHTML: cleanPastedRichTextHtml
+    },
     onUpdate: ({ editor: currentEditor }) => {
       const storageHtml = prepareRichTextHtmlForStorage(currentEditor.getHTML());
       lastEmittedStorageRef.current = storageHtml;
