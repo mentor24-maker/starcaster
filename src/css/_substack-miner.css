@@ -148,6 +148,24 @@
   white-space: nowrap;
 }
 
+/* "Found in Notes" (Substack Miner 6/7): the chip opens to the Note that
+   surfaced the writer. */
+.substack-miner-found-note {
+  margin-top: var(--space-2);
+}
+
+.substack-miner-found-note summary {
+  display: inline-block;
+  cursor: pointer;
+}
+
+.substack-miner-found-note-text {
+  display: block;
+  margin-top: var(--space-2);
+  opacity: 0.75;
+  overflow-wrap: break-word;
+}
+
 .substack-miner-recommended summary {
   cursor: pointer;
 }
@@ -196,6 +214,16 @@
   min-width: 0;
   max-width: var(--builder-field-long-max, 560px);
   box-sizing: border-box;
+  margin: 0;
+}
+
+/* The subscriber import's file picker is as wide as its button, not the card
+   (the admin's global input rule would stretch it). Substack Miner 7/7. */
+.substack-miner-card input[type="file"].substack-miner-file {
+  width: auto;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
   margin: 0;
 }
 

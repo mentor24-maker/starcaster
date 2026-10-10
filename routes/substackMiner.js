@@ -19,12 +19,23 @@
  *                                                          lib/acquire/SubstackNotesCapture.js)
  *   POST   /api/acquire/substack-miner/read-notes          { anyHour?: true } — read every approved writer's newest
  *                                                          Notes not read in 7 days (lib/acquire/SubstackNotesReadRun.js)
+ *   POST   /api/acquire/substack-miner/notes-search        { keyword, notes: [{ authorHandle, authorName, url, text }] }
+ *                                                          — what the Mini's Notes search found for one keyword: each
+ *                                                          author's publication added (or merged) as a candidate, the
+ *                                                          Note kept as evidence (Substack Miner 6/7,
+ *                                                          lib/acquire/SubstackNotesSearch.js)
  *   GET    /api/acquire/substack-miner/settings
  *   PUT    /api/acquire/substack-miner/settings            (PATCH accepted too)
  *   POST   /api/acquire/substack-miner/snowball            { handles?: [] } — read who approved writers recommend
  *                                                          (Substack Miner 3/7, lib/acquire/SubstackRecommendationsRun.js)
  *   POST   /api/acquire/substack-miner/run                 { keywords?: [] } — the web-search pass
  *                                                          (Substack Miner 2/7, lib/acquire/SubstackMinerRun.js)
+ *   GET    /api/acquire/substack-miner/stats               the header's counts: found, approved, rejected,
+ *                                                          in Contacts, engaged, subscribed
+ *                                                          (Substack Miner 7/7, lib/acquire/SubstackMinerStats.js)
+ *   POST   /api/acquire/substack-miner/subscribers/import  { csv } — Substack's subscriber export; marks the
+ *                                                          matching contacts subscribed (Substack Miner 7/7,
+ *                                                          lib/acquire/SubstackSubscriberImport.js)
  *
  * Auth and project scope are decided centrally in routes/index.js; /api/acquire
  * is closed to a client's own site admin (lib/projectAdminApiAuth.js), and this
@@ -37,8 +48,11 @@ const store = require('../lib/substackMinerStore');
 const { runSubstackSnowball } = require('../lib/acquire/SubstackRecommendationsRun');
 const { runSubstackMinerSearch } = require('../lib/acquire/SubstackMinerRun');
 const { approveCandidate } = require('../lib/acquire/SubstackContactCapture');
+const { minerStats } = require('../lib/acquire/SubstackMinerStats');
+const { importSubscribers } = require('../lib/acquire/SubstackSubscriberImport');
 const { captureCandidateNotes } = require('../lib/acquire/SubstackNotesCapture');
 const { runSubstackNotesRead } = require('../lib/acquire/SubstackNotesReadRun');
+const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -160,6 +174,14 @@ async function handle(req, res, pathname, method) {
     return reply(res, await runSubstackNotesRead({ anyHour: body.anyHour === true }, scope, { projectTimeZone }));
   }
 
+  if (pathname === `${PREFIX}/notes-search`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.notesSearch')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await captureNotesSearch(body, scope));
+  }
+
   if (pathname === `${PREFIX}/settings`) {
     if (method === 'GET') return reply(res, await store.getSettings(scope));
     if (method === 'PUT' || method === 'PATCH') {
@@ -176,6 +198,19 @@ async function handle(req, res, pathname, method) {
     const body = await readBody(req, res);
     if (!body) return true;
     return reply(res, await runSubstackSnowball({ handles: body.handles }, scope));
+  }
+
+  if (pathname === `${PREFIX}/stats`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await minerStats(scope));
+  }
+
+  if (pathname === `${PREFIX}/subscribers/import`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.subscribers.import')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await importSubscribers(body, scope));
   }
 
   return sendErr(res, 404, 'Unknown Substack Miner endpoint', { code: 'NOT_FOUND' }), true;

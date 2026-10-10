@@ -21,6 +21,11 @@ import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-not
  * it refuses; it (re)loads when its page is SHOWN and when the project is
  * SWITCHED, and drops a reply that lands after a newer request or a switch.
  *
+ * IS THE PUSH WORKING (Substack Miner 7/7, task 86bcfprya): the header adds
+ * Engaged and Subscribed from GET /stats (lib/acquire/SubstackMinerStats.js),
+ * and the Run tab's Import subscribers box sends Substack's subscriber export
+ * to lib/acquire/SubstackSubscriberImport.js, which marks matching contacts.
+ *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Add
  * keywords on the Run tab…", "Nothing approved yet.", and a filter that hides
  * every row says which filter.
@@ -29,6 +34,8 @@ import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-not
 const BASE = '/api/acquire/substack-miner';
 const CANDIDATES_PATH = `${BASE}/candidates`;
 const SETTINGS_PATH = `${BASE}/settings`;
+const STATS_PATH = `${BASE}/stats`;
+const SUBSCRIBERS_IMPORT_PATH = `${BASE}/subscribers/import`;
 /** The store's own ceiling for one list (lib/storeLimit.js). */
 export const LIST_LIMIT = 1000;
 
@@ -47,7 +54,8 @@ export type Candidate = {
   contactId: string;
   note: string;
   /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
-  recentNotes?: { url: string; text: string; postedAt: string }[];
+  /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
+  recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
   lastNotesReadAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -59,6 +67,19 @@ export type MinerSettings = {
   pauseMsBetweenFetches: number | null;
   saved: boolean;
   updatedAt: string;
+};
+
+/** GET /stats (lib/acquire/SubstackMinerStats.js). A count it could not take is null. */
+export type MinerStats = {
+  found: number;
+  approved: number;
+  rejected: number;
+  inContacts: number;
+  engaged: number | null;
+  subscribed: number | null;
+  approvedWithContact: number;
+  truncated: boolean;
+  unknown: Array<{ count: string; reason: string }>;
 };
 
 export type ContactLink = { id: string; name: string; mode: string; contact?: Record<string, unknown> };
@@ -130,6 +151,32 @@ function notesReadTitle(c: Candidate): string {
   return `Notes read on ${c.lastNotesReadAt} — ${n} kept`;
 }
 
+/**
+ * The Note a Notes search found this writer by (Substack Miner 6/7), or null.
+ * A writer first found another way still gets the chip once a Notes search
+ * turns them up, because the Note is the evidence either way.
+ */
+export function foundInNotes(c: Candidate): { url: string; text: string; keyword: string } | null {
+  const note = (c.recentNotes || []).find((n) => n.foundBy === 'notes_search');
+  if (!note) return null;
+  return { url: note.url, text: note.text, keyword: note.keyword || '' };
+}
+
+function FoundInNotes({ c }: { c: Candidate }) {
+  const note = foundInNotes(c);
+  if (!note) return null;
+  const why = note.keyword ? `Found searching Notes for "${note.keyword}"` : 'Found in a Notes search';
+  return (
+    <details className="substack-miner-found-note">
+      <summary className="substack-miner-chip" title={`${why}: ${note.text}`}>Found in Notes</summary>
+      <span className="substack-miner-found-note-text">
+        {why}: “{note.text}”{' '}
+        <a href={note.url} target="_blank" rel="noopener noreferrer">Open the Note</a>
+      </span>
+    </details>
+  );
+}
+
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -165,6 +212,57 @@ export function emptyText(candidates: Candidate[], status: string, foundVia: str
   return foundVia
     ? `No candidates waiting${via}. Try another "Found via" choice.`
     : 'No candidates waiting — every writer found has been approved or rejected. Run a search or read recommendations on the Run tab for more.';
+}
+
+/**
+ * The header line. Found, approved, rejected and in Contacts are counted from
+ * the writers on screen, which an Approve or Reject updates in place; Engaged
+ * and Subscribed come from GET /stats, and read "?" when it could not count
+ * them — never 0, which would be a different answer.
+ */
+export function headerText(stats: MinerStats | null, candidates: Candidate[]): string {
+  const c = headerCounts(candidates);
+  const n = (value: number | null | undefined) => (value === null || value === undefined ? '?' : String(value));
+  return `${c.found} found · ${c.approved} approved · ${c.rejected} rejected · ${c.inContacts} in Contacts`
+    + ` · ${n(stats?.engaged)} engaged · ${n(stats?.subscribed)} subscribed`;
+}
+
+/** Why Engaged or Subscribed reads as it does, when the number alone would mislead. */
+export function statsNotes(stats: MinerStats | null, statsError: string): string[] {
+  if (!stats) return statsError ? [`Engaged and Subscribed could not be counted: ${statsError}`] : [];
+  const out = stats.unknown.map((u) => `${u.count === 'engaged' ? 'Engaged' : 'Subscribed'} could not be counted. ${u.reason}`);
+  if (stats.approved && stats.subscribed === 0 && !stats.approvedWithContact) {
+    // Importing cannot move this: the mark lives on a contact, and none of
+    // the approved writers has one.
+    out.push(`Subscribed is 0: none of the ${stats.approved} approved writer${stats.approved === 1 ? ' has' : 's has'} a contact yet, so there is nothing for a subscriber list to match. Approving a writer adds their contact.`);
+  } else if (stats.approved && stats.subscribed === 0 && !stats.unknown.some((u) => u.count === 'subscribed')) {
+    out.push('Subscribed is 0: none of the approved writers\' contacts is marked as a subscriber yet. Import the subscriber list on the Run tab; a writer only matches once their contact has the email they subscribed with.');
+  }
+  return out;
+}
+
+// ── The subscriber import ──────────────────────────────────────────────────
+
+export function subscriberSummaryText(d: Record<string, any> | null | undefined): string[] {
+  if (!d) return [];
+  const out = [
+    `${plural(Number(d.rowsRead) || 0, 'row')} read: ${Number(d.matched) || 0} matched a contact `
+    + `(${Number(d.newlyMarked) || 0} newly marked, ${Number(d.alreadyMarked) || 0} already marked), `
+    + `${Number(d.unmatched) || 0} unmatched${Number(d.unreadable) ? `, ${Number(d.unreadable)} could not be read` : ''}.`,
+  ];
+  out.push(d.dateColumn
+    ? `Emails from the "${d.emailColumn}" column, subscription dates from "${d.dateColumn}".`
+    : `Emails from the "${d.emailColumn}" column. The file has no subscription-date column, so contacts newly marked carry today's date.`);
+  if (Number(d.matched)) {
+    out.push(Number(d.approvedWriterMatches)
+      ? `${plural(Number(d.approvedWriterMatches), 'matched row')} belong${Number(d.approvedWriterMatches) === 1 ? 's' : ''} to an approved writer, so Subscribed counts ${Number(d.approvedWriterMatches) === 1 ? 'it' : 'them'}.`
+      : 'None of the matched contacts is an approved writer\'s, so Subscribed does not change.');
+  }
+  if (d.approvedWritersKnown === false) out.push('The approved writers could not be read, so the line above may be wrong.');
+  if ((d.unmatchedEmails || []).length) out.push(`Unmatched (no contact in this project has the email): ${(d.unmatchedEmails as string[]).join(', ')}${Number(d.unmatched) > d.unmatchedEmails.length ? ', …' : ''}.`);
+  for (const p of (d.problems || []) as Array<{ line: number; reason: string }>) out.push(`Line ${p.line} was skipped: ${p.reason}.`);
+  if (d.contactsTruncated) out.push(`Only the first ${Number(d.contactsSearched).toLocaleString()} contacts were searched; some subscribers may have matched a contact beyond them.`);
+  return out;
 }
 
 // ── The seed list ──────────────────────────────────────────────────────────
@@ -286,6 +384,11 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [seedText, setSeedText] = useState('');
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedLines, setSeedLines] = useState<string[]>([]);
+  const [stats, setStats] = useState<MinerStats | null>(null);
+  const [statsError, setStatsError] = useState('');
+  const [csvText, setCsvText] = useState('');
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvLines, setCsvLines] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -295,8 +398,17 @@ export default function SubstackMinerPanel(): React.ReactElement {
     }
     const seq = ++requestSeq.current;
     setLoading(true);
-    const [list, saved] = await Promise.allSettled([api(`${CANDIDATES_PATH}?limit=${LIST_LIMIT}`), api(SETTINGS_PATH)]);
+    const [list, saved, counted] = await Promise.allSettled([
+      api(`${CANDIDATES_PATH}?limit=${LIST_LIMIT}`), api(SETTINGS_PATH), api(STATS_PATH),
+    ]);
     if (seq !== requestSeq.current) return;
+    if (counted.status === 'fulfilled') {
+      setStats((counted.value?.data as MinerStats) || null);
+      setStatsError('');
+    } else {
+      setStats(null);
+      setStatsError(errorText(counted.reason, 'unknown error'));
+    }
     const problems: string[] = [];
     if (list.status === 'fulfilled') {
       setCandidates(Array.isArray(list.value?.data) ? (list.value.data as Candidate[]) : []);
@@ -314,6 +426,23 @@ export default function SubstackMinerPanel(): React.ReactElement {
     }
     setError(problems.join(' '));
     setLoading(false);
+  }, []);
+
+  /** Re-read only the counts — after an Approve or Reject, which can move Subscribed. */
+  const refreshStats = useCallback(async () => {
+    const api = getApi();
+    if (!api) return;
+    const seq = requestSeq.current;
+    try {
+      const reply = await api(STATS_PATH);
+      if (seq !== requestSeq.current) return;
+      setStats((reply?.data as MinerStats) || null);
+      setStatsError('');
+    } catch (err) {
+      if (seq !== requestSeq.current) return;
+      setStats(null);
+      setStatsError(errorText(err, 'unknown error'));
+    }
   }, []);
 
   // Load each time the page is shown.
@@ -352,6 +481,11 @@ export default function SubstackMinerPanel(): React.ReactElement {
       // A half-pasted seed list belongs to the old project; Add must not file it here.
       setSeedText('');
       setSeedLines([]);
+      setStats(null);
+      setStatsError('');
+      // A pasted subscriber list belongs to the old project too.
+      setCsvText('');
+      setCsvLines([]);
       const page = hostRef.current?.closest('.app-page');
       if (!page || !page.classList.contains('hidden')) void load();
     };
@@ -376,6 +510,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       const data = reply?.data as Record<string, any>;
       const { contact, ...row } = data || {};
       replaceRow(row as Candidate);
+      void refreshStats();
       return data;
     } catch (err) {
       if (epoch !== projectEpoch.current) return null;
@@ -481,6 +616,35 @@ export default function SubstackMinerPanel(): React.ReactElement {
     }
   };
 
+  const importSubscribers = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const api = getApi();
+    if (!api || !csvText.trim()) return;
+    const epoch = projectEpoch.current;
+    setCsvBusy(true);
+    setCsvLines([]);
+    try {
+      const reply = await api(SUBSCRIBERS_IMPORT_PATH, { method: 'POST', body: JSON.stringify({ csv: csvText }) });
+      if (epoch !== projectEpoch.current) return;
+      setCsvLines(subscriberSummaryText(reply?.data));
+      void load();
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setCsvLines([`Nothing was imported: ${errorText(err, 'unknown error')}`]);
+    } finally {
+      if (epoch === projectEpoch.current) setCsvBusy(false);
+    }
+  };
+
+  const readCsvFile = (file: File | undefined) => {
+    if (!file) return;
+    const epoch = projectEpoch.current;
+    file.text().then(
+      (text) => { if (epoch === projectEpoch.current) { setCsvText(text); setCsvLines([]); } },
+      (err) => { if (epoch === projectEpoch.current) setCsvLines([`The file could not be read: ${errorText(err, 'unknown error')}`]); },
+    );
+  };
+
   const all = candidates || [];
   const counts = headerCounts(all);
   const rows = visibleCandidates(all, statusFilter, foundViaFilter);
@@ -503,9 +667,12 @@ export default function SubstackMinerPanel(): React.ReactElement {
     <div ref={hostRef} className="substack-miner-panel">
       <p className="substack-miner-counts" data-testid="substack-miner-counts">
         {candidates
-          ? `${counts.found} found · ${counts.approved} approved · ${counts.rejected} rejected · ${counts.inContacts} in Contacts`
+          ? headerText(stats, all)
           : (loading ? 'Reading the writers found…' : 'The writers found have not been read.')}
       </p>
+      {candidates ? statsNotes(stats, statsError).map((line) => (
+        <p key={line} className="substack-miner-note" data-testid="substack-miner-stats-note">{line}</p>
+      )) : null}
       {candidates && candidates.length >= LIST_LIMIT ? (
         <p className="substack-miner-note">Showing the {LIST_LIMIT.toLocaleString()} most recently seen writers; the counts above cover those only.</p>
       ) : null}
@@ -571,6 +738,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                           {/* The handle beneath the name, as a slug beneath a title (UI_RULES T7 rung 3). */}
                           <span className="substack-miner-handle">{c.handle}</span>
                           {c.description ? <span className="substack-miner-description">{c.description}</span> : null}
+                          <FoundInNotes c={c} />
                         </td>
                         <td>{c.subscriberText || '—'}</td>
                         <td>
@@ -713,6 +881,28 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </button>
             </div>
             <RunResult lines={seedLines} label="What adding the seeds did" />
+          </form>
+
+          <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
+            <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import subscribers</label>
+            <p className="substack-miner-card-note">
+              Download the subscriber list from your Substack dashboard (Subscribers, then Export) and choose the file or paste it here.
+              Each email that belongs to a contact marks that contact as a subscriber; emails with no contact are counted, never added.
+            </p>
+            <input
+              type="file"
+              className="substack-miner-file"
+              accept=".csv,text/csv"
+              aria-label="Choose the subscriber export"
+              onChange={(e) => { readCsvFile(e.target.files?.[0]); e.target.value = ''; }}
+            />
+            <textarea id="sm-subscribers" rows={5} value={csvText} onChange={(e) => setCsvText(e.target.value)} placeholder="email,subscription_date" />
+            <div className="substack-miner-actions">
+              <button type="submit" className="btn btn-primary" disabled={csvBusy || !csvText.trim()}>
+                {csvBusy ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+            <RunResult lines={csvLines} label="What the subscriber import did" />
           </form>
         </div>
       ) : null}

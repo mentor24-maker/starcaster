@@ -15,6 +15,38 @@ ones. The page copy is ignored now and removed when the panel next opens.
 Also, after creating a new form, reloading the page reopens that form instead
 of a blank "Create Form".
 
+## 2026-10-09 — Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (#815)
+
+The Substack Miner's top line now says whether the push is working, not just
+how many writers were found. Two new numbers sit beside found / approved /
+rejected. **Engaged** is approved writers who have had a Note liked, replied
+to or restacked, where the action actually went out. **Subscribed** is
+approved writers who are now Dane of Earth subscribers. Substack has no way
+for software to read a subscriber list, so Dane downloads Substack's own
+export and drops it into a new **Import subscribers** box on the Run tab.
+Every email that belongs to a contact marks that contact as a subscriber, and
+emails with no contact are counted and named, never added. Importing the same
+file twice changes nothing. If a number could not be counted, the screen
+shows "?" and the reason, never a misleading 0. Tried on the local copy of
+the database: a matching email was marked once, then reported as already
+marked, and an approved writer's contact moved Subscribed from 0 to 1.
+## 2026-10-10 — Substack Miner 6/7: find writers by searching Substack Notes (#818)
+
+Some of the writers Dane wants talk mostly on Substack Notes, which ordinary
+web search cannot see. Now the Mac Mini's signed-in browser can search Notes
+for one of his keywords at a time: it opens Substack search, switches to the
+Notes tab, and reads the first page. Each Note's author is added to the
+Substack Miner list with the keyword, and the Note is kept as the reason they
+were found. Because an author's @name is not always their publication's name,
+Starcaster looks up which publication is theirs. Someone with no publication is
+listed as "not added" rather than guessed at. Running the same search twice
+adds nothing, a writer Dane already approved or rejected stays that way, and if
+the browser is not signed in the pass says so and writes nothing. The
+Candidates screen shows a "Found in Notes" chip that opens to the Note. Before
+building, the agent session checked whether this could skip the browser the way
+5/7 did. It cannot: Substack's public search will not narrow to Notes. It is
+ready for its first real run once the Mini is signed in to Substack (after
+10/13).
 ## 2026-10-10 — Substack Miner 5/7: each approved writer's newest Notes, lined up to like or reply (#817)
 
 For every Substack writer Dane has approved, Starcaster now reads their three
