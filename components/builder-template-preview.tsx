@@ -85,7 +85,10 @@ import {
   crmFormStylesToRenderStyles,
   publicFormFields
 } from "../lib/crmFormStyles.js";
-import { resolveCrmFormStyleSnapshot } from "./builder/builder-crm-form-module-settings";
+import {
+  CRM_FORM_STYLES_EVENT,
+  type CrmFormStylesEventDetail
+} from "./builder/builder-crm-form-module-settings";
 import { BugReportModule } from "./builder/builder-bug-report-module";
 import {
   ADMIN_LOGIN_PATH,
@@ -601,6 +604,19 @@ function CrmFormPreview({
       .catch(() => {});
   }, [crmFormId]);
 
+  // The Builder's Form Appearance panel announces each change so the canvas
+  // follows it at once, without a copy of the styles stored in the page.
+  useEffect(() => {
+    if (!crmFormId || typeof window === "undefined") return;
+    const onStyles = (event: Event) => {
+      const detail = (event as CustomEvent<CrmFormStylesEventDetail>).detail;
+      if (!detail || detail.formId !== crmFormId) return;
+      setForm((current) => (current ? { ...current, styles: detail.styles } : current));
+    };
+    window.addEventListener(CRM_FORM_STYLES_EVENT, onStyles);
+    return () => window.removeEventListener(CRM_FORM_STYLES_EVENT, onStyles);
+  }, [crmFormId]);
+
   async function submitCrmForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -651,9 +667,11 @@ function CrmFormPreview({
 
   const renderContext = buildCrmFormRenderContext(themePalette, theme?.typography);
   const themeContextStyle = getCrmFormThemeContextStyle(themePalette, theme);
-  const styleSnapshot = resolveCrmFormStyleSnapshot(settings);
-  const effectiveStyles = styleSnapshot ?? form.styles;
-  const renderStyles = crmFormStylesToRenderStyles(effectiveStyles, form.accentColor, renderContext);
+  // The FORM RECORD, always — never a copy kept in the page's settings. Pages
+  // saved before 2026-10-10 still carry `crmFormStyleSnapshot`; it is ignored,
+  // because it froze the colours at the moment the panel was opened and kept
+  // showing them on the live site after the CRM editor changed them.
+  const renderStyles = crmFormStylesToRenderStyles(form.styles, form.accentColor, renderContext);
   // A dropdown with nothing to choose is not a usable field on a published
   // page, so it is left out rather than drawn empty: an empty `<select>` that
   // the tenant also marked required cannot be satisfied, and browser
