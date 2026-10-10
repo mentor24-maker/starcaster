@@ -3320,6 +3320,38 @@ export function normalizeBuilderModuleSettingsForType(
   return settings;
 }
 
+/**
+ * The most characters one module's `text` keeps. Every page read and write
+ * runs through `normalizeBuilderModuleFromRecord`, so a cap here is a cut on
+ * SAVE, not just on display — the draft row stores the cut text too.
+ *
+ * It was 10,000 (safeText's default) until 2026-10-09, and Dane's manifesto
+ * page published ending mid-sentence at exactly 9,999 characters with nothing
+ * warning anyone (task 86bcg88kp). 200,000 is a long book chapter; the editor
+ * warns before a paste ever reaches it. `lib/builder/migrate-from-legacy.js`
+ * keeps its own copy of this number (it is CommonJS and runs before the
+ * template bundle) — `scripts/builder/moduleTextLimit.test.js` holds the two
+ * equal.
+ */
+export const BUILDER_MODULE_TEXT_MAX_LENGTH = 200000;
+
+/**
+ * What the editor says when a module's text is past the limit, or null when it
+ * fits. The count includes the text's formatting markup, because that is what
+ * is stored and what the limit cuts.
+ */
+export function describeModuleTextOverflow(text: unknown): string | null {
+  const length = String(text ?? "").trim().length;
+  if (length <= BUILDER_MODULE_TEXT_MAX_LENGTH) return null;
+  const fmt = (n: number) => n.toLocaleString("en-US");
+  return (
+    `This text is ${fmt(length)} characters long, counting its formatting. ` +
+    `A module keeps the first ${fmt(BUILDER_MODULE_TEXT_MAX_LENGTH)}, so the last ` +
+    `${fmt(length - BUILDER_MODULE_TEXT_MAX_LENGTH)} will be cut off when the page saves. ` +
+    `Move the rest into a second Paragraph module below this one.`
+  );
+}
+
 function normalizeBuilderModuleFromRecord(
   module: Record<string, unknown>,
   fallbackId: string,
@@ -3333,11 +3365,11 @@ function normalizeBuilderModuleFromRecord(
     type,
     column: safeText(module.column, 40) || fallbackColumn,
     name: safeText(module.name, 255),
-    text: safeText(module.text, 10000),
+    text: safeText(module.text, BUILDER_MODULE_TEXT_MAX_LENGTH),
     settings: normalizeBuilderModuleSettingsForType(type, rawSettings, {
       id: safeText(module.id, 120) || fallbackId,
       name: safeText(module.name, 255),
-      text: safeText(module.text, 10000)
+      text: safeText(module.text, BUILDER_MODULE_TEXT_MAX_LENGTH)
     })
   };
 }

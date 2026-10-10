@@ -9,6 +9,16 @@ from iCloud when needed, and never changes anything in Photos. Until Dane
 turns on the Mac's privacy switch for the Photos library, the job says
 "CANNOT READ PHOTOS" with the exact switch to turn on, and the bus hears
 about it — it never pretends there was nothing new.
+## 2026-10-09 — A Paragraph module silently cuts its text off at 10,000 characters, so a long article ends mid-sentence on the live site (#816)
+
+A Paragraph module could only hold 10,000 characters. Anything longer was
+quietly cut off every time the page saved, so Dane's manifesto went live
+ending mid-sentence ("I also have a highly fertile") with no warning. The
+limit is now 200,000 characters — about a long book chapter — everywhere a
+page's text is saved or loaded, including email templates. And if a paste
+ever does go past it, the editor now says so under the text box, with how
+much would be lost, instead of trimming in silence. The manifesto's missing
+tail was never stored, so it needs re-pasting once this is live.
 
 ## 2026-10-09 — Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (#811)
 
