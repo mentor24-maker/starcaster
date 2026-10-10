@@ -281,3 +281,101 @@ test('the installer\'s plist is valid, runs the runner every 15 minutes, and nam
     execFileSync('plutil', ['-lint', file]);
   }
 });
+
+// --- round 1 of review: the lock must not outlive its run ---------------------
+
+test('a lock naming a live, unrelated process taken hours ago is taken over', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-lock-'));
+  const lockFile = path.join(dir, 'run.lock');
+  // What a shutdown mid-pass leaves: the old run's number, now reused by a
+  // system process that answers EPERM (read as alive).
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: 1, startedAt: new Date(T0 - 5 * 60 * MIN).toISOString() }));
+  const lock = intake.acquireLock(dir, { now: T0, pid: 4242, alive: () => true, commandOf: () => '/sbin/launchd' });
+  assert.equal(lock.ok, true, 'a leftover lock turned the pass away');
+  assert.equal(lock.tookOver.holder, 1);
+  assert.equal(JSON.parse(fs.readFileSync(lockFile, 'utf8')).pid, 4242);
+  lock.release();
+  assert.ok(!fs.existsSync(lockFile));
+});
+
+test('a fresh lock held by an unrelated live process is taken over — pid reuse after a restart', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-lock-'));
+  fs.writeFileSync(path.join(dir, 'run.lock'), JSON.stringify({ pid: 77, startedAt: new Date(T0 - 5 * MIN).toISOString() }));
+  const lock = intake.acquireLock(dir, { now: T0, pid: 4242, alive: () => true, commandOf: () => '/usr/libexec/syspolicyd' });
+  assert.equal(lock.ok, true);
+  assert.match(lock.tookOver.why, /not a media-intake run/);
+});
+
+test('the first version\'s bare-number lock is aged by the file\'s own time', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-lock-'));
+  const lockFile = path.join(dir, 'run.lock');
+  fs.writeFileSync(lockFile, '1');
+  const old = new Date(T0 - 4 * 60 * MIN);
+  fs.utimesSync(lockFile, old, old);
+  const lock = intake.acquireLock(dir, { now: T0, pid: 4242, alive: () => true, commandOf: () => null });
+  assert.equal(lock.ok, true);
+  assert.match(lock.tookOver.why, /longer than any pass runs/);
+});
+
+test('a real run still holding the lock is respected', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-lock-'));
+  fs.writeFileSync(path.join(dir, 'run.lock'), JSON.stringify({ pid: 77, startedAt: new Date(T0 - 10 * MIN).toISOString() }));
+  const lock = intake.acquireLock(dir, {
+    now: T0, pid: 4242, alive: () => true, commandOf: () => 'node scripts/media_intake.mjs --backfill zoom --apply',
+  });
+  assert.equal(lock.ok, false);
+  assert.equal(lock.holder, 77);
+});
+
+test('a run that was taken over does not delete its successor\'s lock on the way out', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-lock-'));
+  const first = intake.acquireLock(dir, { now: T0, pid: 100, alive: () => true, commandOf: () => 'node media_intake.mjs' });
+  const second = intake.acquireLock(dir, { now: T0 + 4 * 60 * MIN, pid: 200, alive: () => true, commandOf: () => 'node media_intake.mjs' });
+  assert.equal(second.ok, true);
+  first.release();
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'run.lock'), 'utf8')).pid, 200);
+});
+
+test('the runner records no beat for a pass skipped because of the lock', () => {
+  const runner = fs.readFileSync(path.join(__dirname, '..', 'run_media_intake.sh'), 'utf8');
+  const script = fs.readFileSync(path.join(__dirname, '..', 'media_intake.mjs'), 'utf8');
+  assert.match(script, /still going[^\n]*\n\s*process\.exit\(3\)/, 'a locked pass must exit 3, not 0');
+  const beatAt = runner.indexOf('--beat');
+  const beatGuard = runner.lastIndexOf('if [ "$status" -eq 0 ]', beatAt);
+  assert.ok(beatGuard >= 0 && beatGuard < beatAt, 'the beat is only for exit 0');
+  assert.match(runner, /"\$status" -eq 3[\s\S]*?exit 0/);
+  assert.match(script, /process\.once\(signal/, 'the lock is released on SIGTERM');
+});
+
+// --- round 1 of review: history must not send a recording still being written
+
+test('backfill --apply waits for a recording still being written, then sends the finished one', async () => {
+  const s = scratch();
+  // Before the first scheduled pass: no cutover, so a meeting Zoom is
+  // converting right now counts as history too.
+  const p = record(s.root, MEETING, 'video1.mp4', 'half', T0 - 30 * 1000);
+  const up = fakeUploader(s.drive);
+  const r = await intake.runBackfill({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, apply: true, now: T0 });
+  assert.equal(r.sent.length, 0, intake.renderBackfill(r));
+  assert.match(r.waiting[0].why, /still being written/);
+  assert.equal(up.calls.length, 0, 'a half-written recording was uploaded');
+
+  fs.writeFileSync(p, 'half and the rest');
+  const t = new Date(T0 + 1 * MIN);
+  fs.utimesSync(p, t, t);
+  const later = await intake.runBackfill({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, apply: true, now: T0 + 10 * MIN });
+  assert.equal(later.sent.length, 1, intake.renderBackfill(later));
+  assert.equal(fs.readFileSync(path.join(s.drive, later.sent[0].as), 'utf8'), 'half and the rest');
+});
+
+test('backfill: a path sent at one size and since grown is offered again, not skipped as known', async () => {
+  const s = scratch();
+  const p = record(s.root, MEETING, 'video1.mp4', 'part', T0 - 10 * MIN);
+  const up = fakeUploader(s.drive);
+  await intake.runBackfill({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, apply: true, now: T0 });
+  fs.writeFileSync(p, 'part plus more');
+  const t = new Date(T0 - 5 * MIN);
+  fs.utimesSync(p, t, t);
+  const dry = await intake.runBackfill({ root: s.root, ledgerFile: s.ledgerFile, uploader: up, now: T0 });
+  assert.equal(dry.count, 1, 'the grown recording was hidden as already sent');
+});

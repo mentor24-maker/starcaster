@@ -81,6 +81,15 @@ render_plist() {
 PLIST_BODY
 }
 
+# Which Google account is gdrive: signed in as? The uploads must spend
+# mentorofaio's storage, not mentor24's nearly-full one, and a remote named
+# gdrive: says nothing about whose it is. `rclone config userinfo` asks the
+# provider; not every rclone backend answers it, so an empty reply is CANNOT
+# TELL, never a pass. Prints the account (or nothing).
+drive_account() {
+  rclone config userinfo gdrive: 2>/dev/null | grep -Eio '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+' | head -n 1 || true
+}
+
 # `launchctl list <label>` rather than `launchctl list | grep -q`: under
 # pipefail the grep's early exit SIGPIPEs launchctl and reads as "not loaded"
 # (scripts/install_studio_worker.sh, is_loaded, round 2 of 86bbjv68y).
@@ -104,7 +113,13 @@ status() {
   if [ -f "$PLIST" ]; then echo "schedule: INSTALLED at $PLIST (every 15 minutes)"; else echo "schedule: not installed on this machine"; fi
   if is_loaded; then echo "loaded:   yes"; else echo "loaded:   no"; fi
   if command -v rclone >/dev/null 2>&1; then
-    if rclone listremotes 2>/dev/null | grep -qx 'gdrive:'; then echo "rclone:   found, remote gdrive: configured"
+    if rclone listremotes 2>/dev/null | grep -qx 'gdrive:'; then
+      echo "rclone:   found, remote gdrive: configured"
+      local account
+      account="$(drive_account)"
+      if [ -z "$account" ]; then echo "account:  CANNOT TELL — rclone did not say which Google account gdrive: is (check: rclone about gdrive:)"
+      elif printf '%s' "$account" | grep -qi '^mentorofaio@'; then echo "account:  $account — the right one"
+      else echo "account:  $account — WRONG: uploads would spend this account's storage, not mentorofaio's"; fi
     else echo "rclone:   found, but NO remote named gdrive: — every upload would fail"; fi
   else
     echo "rclone:   NOT FOUND — every upload would fail (brew install rclone)"
@@ -153,6 +168,13 @@ install_it() {
     echo "rclone has no remote named gdrive: — set one up signed in as mentorofaio (rclone config), then run this again." >&2
     exit 1
   fi
+  local account
+  account="$(drive_account)"
+  if [ -n "$account" ] && ! printf '%s' "$account" | grep -qi '^mentorofaio@'; then
+    echo "Refusing to install: gdrive: is signed in as $account, not mentorofaio — every upload would spend $account's storage." >&2
+    exit 1
+  fi
+  [ -z "$account" ] && echo "Note: rclone could not say which account gdrive: is signed in as (CANNOT TELL) — installing anyway; check it with: rclone about gdrive:"
   mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
   render_plist > "$PLIST"
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true

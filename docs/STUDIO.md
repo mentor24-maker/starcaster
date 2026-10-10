@@ -108,6 +108,12 @@ each new video to the Inbox above — no copying by hand.
 - **It deletes and moves nothing**, on either side.
 - **It uploads as mentorofaio** (through `rclone`'s `gdrive:` sign-in on the
   MacBook), so the storage comes out of the 2 TB account.
+  `--status` asks rclone which account `gdrive:` is signed in as, and the
+  installer refuses a different one; when rclone cannot say, it reports
+  CANNOT TELL rather than a pass.
+- **History waits for a finished file too.** The `--backfill` step applies the
+  same two-minute rule, so a meeting Zoom is still converting is never sent
+  half-done.
 
 ```
 ./scripts/install_media_intake.sh --status     # on the MacBook: installed? loaded? last pass? beating?
@@ -117,7 +123,12 @@ npm run media:intake -- --backfill zoom --apply   # send history, oldest first, 
 
 The log is `~/Library/Logs/media-intake.log` on the MacBook. A pass that fails
 posts to the bus (once per 6 hours); a clean one records a heartbeat for the
-`media-intake` role.
+`media-intake` role. A pass that found another run still going is **skipped,
+and records no heartbeat** — so a run that never lets go shows up as the role
+going quiet. The "one run at a time" lock is released if the job is stopped
+(macOS stops jobs at shutdown), and a leftover lock — more than 3 hours old, or
+naming a process that is not a media-intake run — is taken over and said so in
+the log, so a restart mid-pass cannot stop uploads for good.
 
 ## The Footage screen
 

@@ -9,6 +9,10 @@
 # same way the relay's do (scripts/run_bus_relay.sh):
 #
 #   exit 0     -> a beat for `media-intake` (clears its failure alarm too)
+#   exit 3     -> nothing: the pass was skipped because another run holds the
+#                 lock. A skipped pass is not a clean pass, so it does not beat;
+#                 if the lock never lets go, the missing beats are the alarm
+#                 (`npm run heartbeat -- --stale-check`). Round 1 of review.
 #   otherwise  -> one bus post per 6 hours (scripts/report_job_failure.mjs)
 #
 # A machine that does not own the role exits 0 from the pass having done
@@ -30,6 +34,9 @@ node scripts/media_intake.mjs || status=$?
 
 if [ "$status" -eq 0 ]; then
   npm run --silent heartbeat -- --beat --role media-intake || true
+elif [ "$status" -eq 3 ]; then
+  echo "=== media-intake pass skipped (another run holds the lock) — no beat recorded"
+  exit 0
 else
   echo "=== media-intake pass exited $status"
   npm run --silent report:failure -- --job media-intake --status "$status" --log "$LOG" || true

@@ -13,8 +13,10 @@
  * run by a schedule.
  *
  * Exit: 0 the pass finished and nothing failed; 1 something failed (named);
- * 2 usage. scripts/run_media_intake.sh turns 0 into a heartbeat and anything
- * else into a bus post.
+ * 2 usage; 3 skipped — another run holds the lock. scripts/run_media_intake.sh
+ * turns 0 into a heartbeat, 3 into nothing at all (a skipped pass is not a
+ * clean one, so it must not beat — a lock that never lets go then shows up as
+ * a role gone quiet), and anything else into a bus post.
  *
  * Settings (all optional):
  *   MEDIA_INTAKE_ZOOM_ROOT    the Zoom folder            (default: iCloud Drive › Documents › Zoom)
@@ -99,8 +101,18 @@ let lock = { ok: true, release() {} };
 if (!backfill || flag('apply')) {
   lock = intake.acquireLock(stateDir);
   if (!lock.ok) {
-    say(`another media-intake run (pid ${lock.holder}) is still going — leaving this pass to it.`);
-    process.exit(0);
+    say(`SKIPPED — another media-intake run (pid ${lock.holder}) is still going; leaving this pass to it.`);
+    process.exit(3);
+  }
+  if (lock.tookOver) say(`took over a leftover lock from pid ${lock.tookOver.holder}: ${lock.tookOver.why}.`);
+  // launchd stops a job with SIGTERM (at shutdown, or on --uninstall), and
+  // node's default for that signal exits without reaching the `finally` below.
+  for (const [signal, status] of [['SIGTERM', 143], ['SIGINT', 130], ['SIGHUP', 129]]) {
+    process.once(signal, () => {
+      lock.release();
+      say(`stopped by ${signal} — lock released; the next pass carries on from the ledger.`);
+      process.exit(status);
+    });
   }
 }
 
