@@ -2,7 +2,12 @@ import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import { NAV_STYLE_DEFAULTS } from "@/lib/builder-nav-style";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
-import { createEmptyModule, isPlainTextVariant, normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import {
+  createEmptyModule,
+  isPlainTextVariant,
+  normalizeBuilderAssetUrl,
+  normalizeModuleZIndexValue
+} from "@/lib/builder-template";
 import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
@@ -651,6 +656,32 @@ export function BuilderNavigationModuleSettings({
                   step: 5,
                   fallback: "0",
                   rendersVia: "getModuleNudgeTransform (builder-utils.ts)"
+                }
+              ],
+              // Which overlapping module paints on top (task 86bcgc7xq). A
+              // bar nudged down over the module below it stacks in page
+              // order otherwise. Same label and range as the Floating Image's
+              // field; 0 keeps page order. A typed box rather than
+              // `control: "number"`, which is a dropdown of every value in
+              // the range — a million options here (see the Heading panel).
+              [
+                {
+                  key: "zIndex",
+                  label: "Z-Index",
+                  width: "num",
+                  control: "custom",
+                  rendersVia: "getModuleStackStyle (builder-utils.ts)",
+                  render: (ctx) => (
+                    <input
+                      type="number"
+                      min={-999}
+                      max={999999}
+                      step={1}
+                      title="Higher values stack in front of neighbouring modules; lower values stack behind. 0 keeps page order."
+                      value={ctx.settings.zIndex ?? "0"}
+                      onChange={(event) => ctx.set("zIndex", normalizeModuleZIndexValue(event.target.value))}
+                    />
+                  )
                 }
               ]
             ]

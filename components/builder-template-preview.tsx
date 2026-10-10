@@ -161,6 +161,7 @@ import {
   getSectionWidthStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
+  getModuleStackStyle,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
   getTextModuleRhythmStyle,
@@ -2213,6 +2214,14 @@ function BuilderSectionPreview({
                       // and button had their own because they were the only
                       // two with split sides. Now everything has four.
                       : getModuleOuterSpacingStyle(module.settings)),
+                    // Z-Index (task 86bcgc7xq): which of two overlapping
+                    // flow modules paints on top. On the wrapper because it
+                    // is the box that is a sibling of the other modules. The
+                    // overlay decor keeps its own zIndex on its own shell
+                    // and is skipped here, or the wrapper would clamp it.
+                    ...(isPageOverlayFlowModule || isSectionOverlayModule
+                      ? {}
+                      : getModuleStackStyle(module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize

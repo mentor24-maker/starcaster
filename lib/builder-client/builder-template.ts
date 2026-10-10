@@ -1225,6 +1225,17 @@ export function normalizeSignedOffsetValue(value: unknown, fallback = "0", min =
 }
 
 /**
+ * The Z-Index a flow module may carry (heading, image, carousel, navigation —
+ * task 86bcgc7xq). "0" means page order and renders nothing; the range is the
+ * one the Floating Image field has always offered, so the two controls read
+ * the same number the same way. Blank, missing or unreadable all become "0",
+ * never a key deletion, so a value typed into the panel survives the save.
+ */
+export function normalizeModuleZIndexValue(value: unknown) {
+  return normalizeSignedOffsetValue(value, "0", -999, 999999);
+}
+
+/**
  * THE ROW SETTINGS A TABLET OR PHONE MAY CHANGE, and how each is cleaned.
  *
  * Device settings follow desktop until changed (Dane, 2026-09-15), so a
@@ -2598,17 +2609,35 @@ export function normalizeModuleSettings(value: unknown) {
   );
 }
 
+/**
+ * `zIndex` left this list on 2026-10-10 (task 86bcgc7xq): a standard image
+ * now offers its own Z-Index under Placement, so the key is no longer a
+ * leftover of the overlay mode that `resolveModuleType` turns into a
+ * `floating-image` anyway. Before that every normalize deleted it, which is
+ * why no inline image on a saved page carries one today.
+ */
 const OVERLAY_ONLY_IMAGE_SETTINGS = [
   "positionMode",
   "overlayAnchor",
   "offsetX",
-  "offsetY",
-  "zIndex"
+  "offsetY"
 ] as const;
 
 function stripOverlayOnlyImageSettings(settings: Record<string, string>) {
   for (const key of OVERLAY_ONLY_IMAGE_SETTINGS) {
     delete settings[key];
+  }
+}
+
+/**
+ * Clamp a flow module's Z-Index when it HAS one. Only a key that is present
+ * is touched: stamping "0" onto every heading, image, carousel and menu on
+ * every page would put the key on all of them for nothing (the same reason
+ * the text module's line height is left alone when unset).
+ */
+function normalizeFlowModuleZIndex(settings: Record<string, string>) {
+  if (settings.zIndex !== undefined) {
+    settings.zIndex = normalizeModuleZIndexValue(settings.zIndex);
   }
 }
 
@@ -3024,12 +3053,14 @@ export function normalizeBuilderModuleSettingsForType(
 
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    normalizeFlowModuleZIndex(settings);
   }
 
   if (type === "image") {
     stripOverlayOnlyImageSettings(settings);
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    normalizeFlowModuleZIndex(settings);
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     normalizeImageEffectSettings(settings);
   }
@@ -3104,6 +3135,7 @@ export function normalizeBuilderModuleSettingsForType(
     // page can carry anything in these keys.
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    normalizeFlowModuleZIndex(settings);
   }
 
   if (type === "feature-cards") {
@@ -3142,6 +3174,7 @@ export function normalizeBuilderModuleSettingsForType(
   if (type === "heading") {
     settings.horizontalOffset = normalizeSignedOffsetValue(settings.horizontalOffset, "0");
     settings.verticalOffset = normalizeSignedOffsetValue(settings.verticalOffset, "0");
+    normalizeFlowModuleZIndex(settings);
     settings.fontFamily = isAllowedFontKey(settings.fontFamily ?? "") ? settings.fontFamily ?? "" : "";
     settings.fontWeight = normalizeHeadingFontWeight(settings.fontWeight, settings.bold);
     settings.textAlign = HEADING_TEXT_ALIGN_KEYS.has(settings.textAlign ?? "")
