@@ -130,6 +130,45 @@ going quiet. The "one run at a time" lock is released if the job is stopped
 naming a process that is not a media-intake run — is taken over and said so in
 the log, so a restart mid-pass cannot stop uploads for good.
 
+## Videos in the Photos "Studio" album arrive by themselves (Media intake · 3 of 5)
+
+Put a video into an album called **Studio** in Apple Photos — on the iPhone
+(**Photos › Albums**, then a video's share button › **Add to Album** ›
+**Studio**) or on the Mac — and the same 15-minute job on the MacBook sends it
+to the Inbox. iCloud Photos carries it from the phone to the Mac's library.
+
+- **Only that album.** Nothing outside **Studio** is ever sent, so family
+  videos stay out. The album is checked twice: by the tool that reads Photos
+  and again by the job itself.
+- **Only videos.** Photos in the album are skipped, and the log says how many.
+- **The original,** fetched from iCloud first when only iCloud has it. The job
+  exports a copy into its own folder, uploads it and deletes that copy.
+  **Nothing in Photos is ever deleted, moved or changed** — removing a video
+  from Photos removes it from the iPhone too.
+- **Never twice.** The ledger remembers each video by its Photos id *and* its
+  fingerprint: taking a video out of the album and putting it back sends
+  nothing, and neither does the same video imported twice.
+- **Straight into the Inbox**, named after when it was taken —
+  `Photos - 2026-10-09 18.04.11 - IMG_1234.MOV` — not into a `Photos/`
+  sub-folder, because the watcher only follows files directly in the Inbox.
+- **No album yet?** The job makes one called **Studio** and sends nothing that
+  pass.
+
+**It needs a permission only Dane can give.** macOS keeps the Photos library
+behind a privacy switch. Until it is on, every pass logs
+
+```
+CANNOT READ PHOTOS — macOS refused access to …/Photos Library.photoslibrary (EPERM)
+  FIX: On the MacBook: System Settings › Privacy & Security › Full Disk Access — turn ON the switch for "node" …
+```
+
+and exits non-zero, so the bus hears about it (once per 6 hours) — it never
+reports "0 new videos". The Zoom half still runs either way. The tool that
+reads Photos is **osxphotos** (`brew install pipx && pipx install osxphotos`;
+`npm run doctor:node` lists it on the MacBook only). It is always given the
+library's path: measured 2026-10-09, without one it hangs silently when the
+library is blocked, so every call also has a time limit.
+
 ## The Footage screen
 
 Open the admin app, choose the project the Studio files into, then

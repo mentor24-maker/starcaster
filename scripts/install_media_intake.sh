@@ -28,6 +28,9 @@
 #   - read access to the Zoom folder from a scheduled job. macOS may refuse a
 #     background job iCloud Drive until node has Full Disk Access; the pass
 #     says so by name (EPERM) in the log rather than reporting "nothing new".
+#   - for the Photos "Studio" album (86bcfgyy6): osxphotos (pipx), and the same
+#     Full Disk Access for the Photos library. Without it every pass logs
+#     CANNOT READ PHOTOS with the switch to turn on, and exits non-zero.
 #
 # Every path is derived, never written down (vault doctrine/NODES.md, P1).
 
