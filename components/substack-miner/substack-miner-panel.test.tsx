@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubstackMinerPanel, {
   emptyText,
   headerCounts,
+  notesReadText,
   parseSeedLines,
   searchSummaryText,
   seedSummaryText,
@@ -216,6 +217,15 @@ afterEach(() => {
   container = null;
   root = null;
   vi.restoreAllMocks();
+});
+
+describe("Notes read column (Substack Miner 5/7)", () => {
+  it("shows the date an approved writer's Notes were read, Not yet before then, and nothing for a candidate", () => {
+    const read = notesReadText(writer({ status: "approved", lastNotesReadAt: "2026-10-09T12:00:00Z" }));
+    expect(read).toMatch(/Oct/);
+    expect(notesReadText(writer({ status: "approved", lastNotesReadAt: null }))).toBe("Not yet");
+    expect(notesReadText(writer({ status: "candidate" }))).toBe("—");
+  });
 });
 
 describe("Substack Miner screen", () => {

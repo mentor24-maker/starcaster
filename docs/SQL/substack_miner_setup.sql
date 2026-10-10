@@ -101,3 +101,18 @@ create unique index if not exists idx_substack_miner_settings_project
   on public.substack_miner_settings (project_id);
 
 alter table public.substack_miner_settings enable row level security;
+
+-- ── Substack Miner 5/7 (86bcfpry0): each approved writer's newest Notes ──────
+--
+-- Added as `add column if not exists`, so this file is right whether or not the
+-- table already exists and running it twice changes nothing.
+--
+--   recent_notes        the writer's newest Notes as last read, newest first,
+--                       at most 10: [{ "url", "text", "postedAt" }]. The newest
+--                       one is lined up on the Substack Notes screen as a like
+--                       and a reply (lib/acquire/SubstackNotesCapture.js).
+--   last_notes_read_at  when they were last read. A writer read in the last 7
+--                       days is skipped by the reading pass. Null: never read.
+
+alter table public.substack_candidates add column if not exists recent_notes jsonb not null default '[]'::jsonb;
+alter table public.substack_candidates add column if not exists last_notes_read_at timestamptz;

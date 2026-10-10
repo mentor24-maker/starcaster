@@ -91,6 +91,7 @@
     "check:nav-controls": "node scripts/ui/check_nav_controls.mjs",
     "check:panels": "node scripts/ui/check_panels.mjs",
     "test:hooks": "node --test scripts/hooks/*.test.js",
+    "substack-miner:read-notes": "node scripts/substack_miner_read_notes.mjs",
     "sql:handoff": "node scripts/sql_handoff.cjs",
     "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs",
     "db:use": "node scripts/db_use.mjs",
