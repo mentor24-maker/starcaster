@@ -9,6 +9,8 @@ import SubstackMinerPanel, {
   searchSummaryText,
   seedSummaryText,
   snowballSummaryText,
+  statsNotes,
+  subscriberSummaryText,
   visibleCandidates,
   type Candidate,
 } from "./substack-miner-panel";
@@ -51,7 +53,8 @@ function writer(overrides: Partial<Candidate>): Candidate {
   };
 }
 
-type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: Array<{ id: string; substack: string; firstName: string }> };
+type FakeContact = { id: string; substack: string; firstName: string; email?: string; subscribedAt?: string };
+type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean };
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -101,6 +104,37 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   }
   if (path === "/api/acquire/substack-miner/snowball" && method === "POST") {
     return { ok: true, data: { sourcesRequested: 1, sourcesRead: 1, sources: [], notRead: [], linksFound: 5, added: 5, merged: 0, skippedNotSubstack: 0, refused: [] } };
+  }
+  if (path === "/api/acquire/substack-miner/stats" && method === "GET") {
+    if (store.statsFail) fail("substack_notes_items is not available");
+    const approved = store.writers.filter((w) => w.status === "approved");
+    const marked = new Set(store.contacts.filter((c) => c.subscribedAt).map((c) => c.id));
+    return { ok: true, data: {
+      found: store.writers.length,
+      approved: approved.length,
+      rejected: store.writers.filter((w) => w.status === "rejected").length,
+      inContacts: store.writers.filter((w) => w.contactId).length,
+      engaged: 0,
+      subscribed: approved.filter((w) => marked.has(w.contactId)).length,
+      approvedWithContact: approved.filter((w) => w.contactId).length,
+      truncated: false,
+      unknown: [],
+    } };
+  }
+  if (path === "/api/acquire/substack-miner/subscribers/import" && method === "POST") {
+    const lines = String(body.csv).trim().split("\n").slice(1).filter(Boolean);
+    const d = { rowsRead: lines.length, matched: 0, newlyMarked: 0, alreadyMarked: 0, unmatched: 0, unreadable: 0, approvedWriterMatches: 0, emailColumn: "email", dateColumn: "subscription_date", contactsSearched: store.contacts.length, contactsTruncated: false, approvedWritersKnown: true, problems: [], unmatchedEmails: [] as string[] };
+    for (const line of lines) {
+      const [email, date] = line.split(",");
+      const hit = store.contacts.find((c) => c.email === email.trim().toLowerCase());
+      if (!hit) { d.unmatched += 1; d.unmatchedEmails.push(email); continue; }
+      d.matched += 1;
+      if (store.writers.some((w) => w.status === "approved" && w.contactId === hit.id)) d.approvedWriterMatches += 1;
+      if (hit.subscribedAt) { d.alreadyMarked += 1; continue; }
+      hit.subscribedAt = date;
+      d.newlyMarked += 1;
+    }
+    return { ok: true, data: d };
   }
   const contact = path.match(/^\/api\/contacts\/([^/]+)$/);
   if (contact && method === "GET") {
@@ -223,7 +257,7 @@ describe("Substack Miner screen", () => {
     await mount();
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
     expect(tabs).toEqual(["Candidates", "Run"]);
-    expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("0 found · 0 approved · 0 rejected · 0 in Contacts");
+    expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("0 found · 0 approved · 0 rejected · 0 in Contacts · 0 engaged · 0 subscribed");
     expect(text()).toContain("No candidates yet. Add keywords on the Run tab and click Search the web.");
     await show("approved");
     expect(text()).toContain("Nothing approved yet.");
@@ -269,7 +303,7 @@ describe("Substack Miner screen", () => {
     expect(row.textContent).toContain("Added to Contacts");
     await click(row.querySelector<HTMLAnchorElement>(".substack-miner-contact a")!);
     expect(openViewPage).toHaveBeenCalledWith(expect.objectContaining({ id: stores.proj_doe.contacts[0].id }));
-    expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("1 found · 1 approved · 0 rejected · 1 in Contacts");
+    expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("1 found · 1 approved · 0 rejected · 1 in Contacts · 0 engaged · 0 subscribed");
   });
 
   it("a second writer with the same publication links the same contact", async () => {
@@ -355,6 +389,54 @@ describe("Substack Miner screen", () => {
   });
 });
 
+describe("Substack Miner 7/7: is the push working", () => {
+  const CSV = "email,subscription_date\ndane@alphire.agency,2026-10-01\nnobody-matches@example.com,2026-10-01";
+
+  it("importing the How-to-test CSV reports 2 read, 1 matched, 1 newly marked, 1 unmatched; again reports already marked", async () => {
+    stores.proj_doe.contacts = [{ id: "c_alphire", substack: "", firstName: "Dane", email: "dane@alphire.agency" }];
+    await mount();
+    await click(button("Run"));
+    type(el<HTMLTextAreaElement>("#sm-subscribers"), CSV);
+    await submit(el<HTMLFormElement>('form[aria-label="Import subscribers"]'));
+    const sent = requests.find((r) => r.path.endsWith("/subscribers/import"));
+    expect(sent?.body).toEqual({ csv: CSV });
+    expect(text()).toContain("2 rows read: 1 matched a contact (1 newly marked, 0 already marked), 1 unmatched.");
+    expect(text()).toContain("None of the matched contacts is an approved writer's, so Subscribed does not change.");
+    await submit(el<HTMLFormElement>('form[aria-label="Import subscribers"]'));
+    expect(text()).toContain("(0 newly marked, 1 already marked)");
+  });
+
+  it("Subscribed in the header counts an approved writer whose contact was marked", async () => {
+    stores.proj_doe.contacts = [{ id: "c_w", substack: "https://w.substack.com", firstName: "W", email: "w@example.com" }];
+    stores.proj_doe.writers = [writer({ handle: "w", status: "approved", contactId: "c_w" })];
+    await mount();
+    expect(el('[data-testid="substack-miner-counts"]').textContent).toContain("0 subscribed");
+    expect(text()).toContain("Subscribed is 0: none of the approved writers' contacts is marked");
+    await click(button("Run"));
+    type(el<HTMLTextAreaElement>("#sm-subscribers"), "email,subscription_date\nw@example.com,2026-10-01");
+    await submit(el<HTMLFormElement>('form[aria-label="Import subscribers"]'));
+    expect(el('[data-testid="substack-miner-counts"]').textContent).toContain("1 subscribed");
+    expect(text()).not.toContain("Subscribed is 0");
+  });
+
+  it("when the counts cannot be read the header shows ? and says why, never 0", async () => {
+    stores.proj_doe.statsFail = true;
+    await mount();
+    expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("0 found · 0 approved · 0 rejected · 0 in Contacts · ? engaged · ? subscribed");
+    expect(text()).toContain("Engaged and Subscribed could not be counted: substack_notes_items is not available");
+  });
+
+  it("a project switch drops a half-pasted subscriber list", async () => {
+    await mount();
+    await click(button("Run"));
+    type(el<HTMLTextAreaElement>("#sm-subscribers"), CSV);
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    expect(el<HTMLTextAreaElement>("#sm-subscribers").value).toBe("");
+  });
+});
+
 describe("Substack Miner helpers", () => {
   it("sorts by recommended-by count, most first", () => {
     const rows = [writer({ handle: "a" }), writer({ handle: "b", recommendedBy: ["x", "y"] }), writer({ handle: "c", recommendedBy: ["x"] })];
@@ -387,5 +469,14 @@ describe("Substack Miner helpers", () => {
     expect(snow.join(" ")).toContain("bad: recommendations page could not be read (HTTP 404)");
     expect(snow.join(" ")).toContain("2 recommendations on a publication's own domain were skipped");
     expect(seedSummaryText({ added: 0, merged: 1, refusals: [] }, [])[0]).toContain("1 already here");
+    const subs = subscriberSummaryText({ rowsRead: 3, matched: 1, newlyMarked: 1, alreadyMarked: 0, unmatched: 1, unreadable: 1, emailColumn: "Email", dateColumn: "", approvedWriterMatches: 1, problems: [{ line: 4, reason: "the email is blank" }], unmatchedEmails: ["x@y.co"], contactsTruncated: true, contactsSearched: 5000 }).join(" ");
+    expect(subs).toContain("1 could not be read");
+    expect(subs).toContain("no subscription-date column, so contacts newly marked carry today's date");
+    expect(subs).toContain("1 matched row belongs to an approved writer");
+    expect(subs).toContain("Line 4 was skipped: the email is blank.");
+    expect(subs).toContain("x@y.co");
+    expect(subs).toContain("Only the first 5,000 contacts were searched");
+    expect(statsNotes({ found: 1, approved: 1, rejected: 0, inContacts: 1, engaged: null, subscribed: 0, approvedWithContact: 1, truncated: false, unknown: [{ count: "engaged", reason: "The Substack Notes actions could not be read: x" }] }, "").join(" "))
+      .toContain("Engaged could not be counted.");
   });
 });
