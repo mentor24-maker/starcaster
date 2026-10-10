@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { normalizeModuleZIndexValue } from "@/lib/builder-template";
 import { BuilderInlineRichTextEditor } from "./builder-inline-rich-text-editor";
 import { BuilderModuleOffsetFields } from "./builder-module-offset-fields";
 import {
@@ -344,6 +345,36 @@ export function BuilderHeadingModuleSettings({
                   verticalOffset={ctx.settings.verticalOffset ?? "0"}
                   onHorizontalOffsetChange={(horizontalOffset) => ctx.set("horizontalOffset", horizontalOffset)}
                   onVerticalOffsetChange={(verticalOffset) => ctx.set("verticalOffset", verticalOffset)}
+                />
+              )
+            }
+          ],
+          // Which overlapping module paints on top (task 86bcgc7xq, operator
+          // 2026-10-10: a headline nudged over an image vanished behind it).
+          // After the Offsets because it only matters once they have put
+          // the heading over a neighbour. Same label and range as the
+          // Floating Image's field; 0 keeps page order.
+          //
+          // A typed box, NOT `control: "number"`: that control is a dropdown
+          // listing every value from min to max, and this range is a million
+          // values — the first build froze the editor for as long as
+          // `check:panels` was willing to wait (25 minutes, twice).
+          [
+            {
+              key: "zIndex",
+              label: "Z-Index",
+              width: "num",
+              control: "custom",
+              rendersVia: "getModuleStackStyle (builder-utils.ts)",
+              render: (ctx) => (
+                <input
+                  type="number"
+                  min={-999}
+                  max={999999}
+                  step={1}
+                  title="Higher values stack in front of neighbouring modules; lower values stack behind. 0 keeps page order."
+                  value={ctx.settings.zIndex ?? "0"}
+                  onChange={(event) => ctx.set("zIndex", normalizeModuleZIndexValue(event.target.value))}
                 />
               )
             }
