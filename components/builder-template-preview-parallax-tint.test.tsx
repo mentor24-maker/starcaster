@@ -110,18 +110,19 @@ describe("parallax carries the tint it covers", () => {
     expect(tintOf(layerTag(html))).toBe(TINT_GRADIENT_STOPS);
   });
 
-  it("matches the row on an UNTHEMED page too, which is not the same as no tint", () => {
-    // Surprising and pre-existing: `heroTint` falls back to the default hex
-    // colour, so every image row already wears a white 45% wash whether a
-    // theme is assigned or not. That wash is a tint like any other, and the
-    // layer was covering it with the bare photo on every page in the product
-    // — not only themed ones. The invariant is "the layer wears what the row
-    // wears", never "the layer wears a theme's tint".
+  it("wears NO tint on an unthemed page, and the layer wears none either", () => {
+    // Until 2026-10-10 this test asserted the opposite: that an unthemed row
+    // "already wears a white 45% wash", and the layer had to match it. That
+    // wash was the bug — `heroTint` routed an EMPTY tint through
+    // `normalizeBuilderHexColor`, whose fallback is white — and this test had
+    // locked it in as the baseline. The invariant it was protecting is still
+    // right ("the layer wears what the row wears"); the row simply wears
+    // nothing here.
     const html = renderSection(PARALLAX_PHOTO, undefined);
-    const rowTint = tintOf(sectionTag(html));
 
-    expect(rowTint).toBe("rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.45)");
-    expect(tintOf(layerTag(html))).toBe(rowTint);
+    expect(tintOf(sectionTag(html))).toBeNull();
+    expect(layerTag(html)).not.toBe("");
+    expect(tintOf(layerTag(html))).toBeNull();
   });
 
   it("still paints the picture underneath the tint, not instead of it", () => {
@@ -152,5 +153,70 @@ describe("parallax carries the tint it covers", () => {
     expect(tintOf(sectionTag(html))).toBeNull();
     expect(layerTag(html)).not.toBe("");
     expect(tintOf(layerTag(html))).toBeNull();
+  });
+});
+
+/**
+ * NO TINT SET MEANS NO TINT (86bcgcm3j).
+ *
+ * A theme's "Photo overlay tint" is optional. With none set, every photo row
+ * on every tenant site was still being covered by `rgba(255, 255, 255, 0.45)`
+ * and its text forced to `--lp-inverse-text` (white), because the empty tint
+ * went through `normalizeBuilderHexColor`, whose job is to hand a colour
+ * picker SOMETHING to show — and that something is white. A navy starfield
+ * rendered as charcoal grey on daneofearth.starcaster.pro, with a white
+ * headline on it that could not be read.
+ */
+describe("a photo row with no theme tint set", () => {
+  const PHOTO_ROW = { mode: "image", imageUrl: PHOTO };
+
+  /** The inline `color` the row carries, or null. */
+  function forcedColorOf(tag: string): string | null {
+    const style = /style="([^"]*)"/.exec(tag)?.[1] ?? "";
+    const match = /(?:^|;)\s*color:\s*([^;]+)/.exec(style);
+    return match ? match[1].trim() : null;
+  }
+
+  it("paints the photo bare — no gradient in front of it — and forces no text colour", () => {
+    const tag = sectionTag(renderSection(PHOTO_ROW, undefined));
+
+    expect(tag).toContain(`url(&quot;${PHOTO}&quot;)`);
+    expect(tag).not.toContain("linear-gradient(");
+    expect(forcedColorOf(tag)).toBeNull();
+  });
+
+  it("stays bare when the page HAS a theme that simply names no tint", () => {
+    const tag = sectionTag(renderSection(PHOTO_ROW, { treatments: { cardOverlap: true } } as BuilderThemeStyles));
+
+    expect(tag).not.toContain("linear-gradient(");
+    expect(forcedColorOf(tag)).toBeNull();
+  });
+
+  it("treats a blank tint string as no tint", () => {
+    const tag = sectionTag(
+      renderSection(PHOTO_ROW, { treatments: { heroOverlay: "   ", heroOverlayOpacity: 0.6 } } as BuilderThemeStyles)
+    );
+
+    expect(tag).not.toContain("linear-gradient(");
+    expect(forcedColorOf(tag)).toBeNull();
+  });
+
+  it("still tints, and still lightens the text, when the theme DOES name one", () => {
+    // The pair to the three above: without this, "no gradient" would also
+    // pass on a build where the treatment had stopped rendering entirely.
+    const tag = sectionTag(renderSection(PHOTO_ROW, TINTED_THEME));
+
+    expect(tintOf(tag)).toBe(TINT_GRADIENT_STOPS);
+    expect(forcedColorOf(tag)).toBe("var(--lp-inverse-text, #ffffff)");
+  });
+
+  it("keeps the dark default tint on a theme hero banner, which always carries text", () => {
+    // A banner turns a backgroundless row into a photo row; its default
+    // (#101820) is deliberate and named, not the colour picker's fallback.
+    const html = renderSection({ mode: "none" }, { heroBanner: { url: PHOTO } } as BuilderThemeStyles);
+    const tag = sectionTag(html);
+
+    expect(tag).toContain(`url(&quot;${PHOTO}&quot;)`);
+    expect(tintOf(tag)).toBe("rgba(16, 24, 32, 0.45), rgba(16, 24, 32, 0.45)");
   });
 });

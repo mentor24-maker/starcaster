@@ -3161,6 +3161,75 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * NO TINT SET MEANS NO TINT (86bcgcm3j).
+   *
+   * The contract below this one proves a theme's tint survives parallax. This
+   * pair proves the other half: a row with NO theme tint paints the photo
+   * bare. From 2026-08-09 to 2026-10-10 it did not — the empty tint went
+   * through the hex normaliser, whose fallback is white, so every photo row on
+   * every tenant site wore `rgba(255, 255, 255, 0.45)` and white text. A navy
+   * starfield on daneofearth.starcaster.pro rendered as charcoal grey. The
+   * tinted twin is here so the untinted assertion cannot pass on a build
+   * where the treatment stopped rendering at all.
+   */
+  {
+    id: 'photo-row-without-a-theme-tint-paints-the-photo-bare',
+    why:
+      'A theme\'s "Photo overlay tint" is optional, and with none set the photo must render exactly as ' +
+      'uploaded. A default white wash at 45% turned every dark photo background grey on every site and ' +
+      'forced white text onto it.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      modules: [{ type: 'heading', text: 'Text over an untinted picture', settings: {} }],
+    },
+    selector: '.builder-preview-section',
+    read: ['backgroundImage', 'color'],
+    expect(sample) {
+      const image = sample.styles.backgroundImage || '';
+      if (!image.includes('url(')) {
+        return `the row is not painting a photo at all (background-image \`${image.slice(0, 120)}\`), so ` +
+          'nothing is proven — the image fixture stopped reaching the preview.';
+      }
+      if (image.includes('linear-gradient(')) {
+        return `a row with no theme tint is wearing one: background-image is \`${image.slice(0, 160)}\`. ` +
+          'An empty tint is being turned into a colour (the hex normaliser\'s white fallback) and laid over the photo.';
+      }
+      if (sample.styles.color === 'rgb(255, 255, 255)') {
+        return 'the row\'s text is forced to white although it wears no tint — the hero treatment is still ' +
+          'applying its inverse text colour to an untinted row.';
+      }
+      return null;
+    },
+  },
+  {
+    id: 'photo-row-with-a-theme-tint-wears-it',
+    why:
+      'The pair to the contract above. A theme that names a tint must still get it, at its own strength, ' +
+      'with the inverse text colour on top — otherwise "no gradient" above would also pass on a build ' +
+      'where the treatment had stopped rendering altogether.',
+    section: {
+      layout: 'single',
+      background: { mode: 'image', imageUrl: BANNER },
+      themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
+      modules: [{ type: 'heading', text: 'Text over a tinted picture', settings: {} }],
+    },
+    selector: '.builder-preview-section',
+    read: ['backgroundImage', 'color'],
+    expect(sample) {
+      const image = sample.styles.backgroundImage || '';
+      if (!image.includes('linear-gradient(rgba(255, 0, 0, 0.75), rgba(255, 0, 0, 0.75)), url(')) {
+        return `the themed row is not wearing its red tint in front of the photo: background-image is ` +
+          `\`${image.slice(0, 160)}\`.`;
+      }
+      if (sample.styles.color !== 'rgb(255, 255, 255)') {
+        return `the tinted row's text is ${sample.styles.color}, not the inverse white the tint exists to make readable.`;
+      }
+      return null;
+    },
+  },
+
   {
     id: 'image-parallax-carries-the-tint-it-covers',
     why:
