@@ -148,6 +148,16 @@
   overflow-wrap: anywhere;
 }
 
+/* What the new-content watch is looking at (4/7): one line, then a reason per source. */
+.substack-notes-watch-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  opacity: 0.85;
+}
+
 /* ── Forms (settings, engage) ───────────────────────────────────────── */
 
 .substack-notes-form {
@@ -174,7 +184,8 @@
 .substack-notes-field-control > input:not([type='radio']),
 .substack-notes-field-control > select,
 .substack-notes-field-control > textarea,
-.substack-notes-field-control > .substack-notes-choices {
+.substack-notes-field-control > .substack-notes-choices,
+.substack-notes-field-control > .substack-notes-check {
   grid-column: 2;
   width: 100%;
   min-width: 0;
@@ -215,6 +226,22 @@
   white-space: nowrap;
 }
 
+/* The "Draft from topics" switch: one checkbox and its words, on one line.
+   Same reason as the radios above for keeping the box its natural size. */
+.substack-notes-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  font-weight: normal;
+}
+
+.substack-notes-check input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
+
 .substack-notes-actions {
   display: flex;
   flex-wrap: wrap;
@@ -232,6 +259,7 @@
   .substack-notes-field-control > select,
   .substack-notes-field-control > textarea,
   .substack-notes-field-control > .substack-notes-choices,
+  .substack-notes-field-control > .substack-notes-check,
   .substack-notes-field-help {
     grid-column: 1;
   }

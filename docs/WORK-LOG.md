@@ -18,6 +18,76 @@ After review: a Substack item the Mini could not confirm now says "Check Substac
 by hand" instead of telling Dane to check a video; a refused item keeps its
 screenshot, which is the picture that shows why; and a like or restack that was
 already on clicks nothing and no longer uses up the daily allowance.
+## 2026-10-09 — Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (#805)
+
+On **Engage → Substack Notes → Settings** there is a new switch, **Draft Notes
+from my topics on their own**. It starts off. When Dane turns it on, Starcaster
+checks every half hour and, if there is room, drafts a Note from one of his
+topics and puts it on the **Approvals** tab. He still approves every one. It
+never lets more items wait for approval than his **Most actions per day**, and
+everything counts toward that, likes and replies included. His own ideas get
+drafted before any topic does, and it never writes more topic drafts in one day
+than that limit. Topics take turns, so the same one never comes up twice in a
+row. The **Ideas** tab says when the next topic draft is coming, or why none
+is: switched off, no topics, or approvals already full. The switch needs one
+small database change run in production before it can be saved. Until then,
+every other setting still saves normally.
+## 2026-10-09 — Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (#802)
+
+Every Substack publication has a public page listing the other publications it
+recommends. Starcaster now reads that page for each writer Dane has approved
+and adds every Substack writer listed there to the candidate list, remembering
+who recommended them — so a handful of approved writers snowballs into many
+more without anybody searching. Dane's decisions are never changed: a writer
+he rejected stays rejected however often they are recommended. It reads one
+page at a time, at most 100 a run, and its summary says which pages it read,
+which failed and why, and which it left for next time. Tried on a real page:
+19 writers found, and running it again added no duplicates. There is no screen
+yet; that is slice 4.
+## 2026-10-09 — The MacBook still holds hundreds of GB of files already safe on Google Drive (#806)
+
+The archive tool (`npm run archive:mac`) can now free the MacBook of files
+that are already safely on Google Drive. It does not do it on its own: each
+step is first a dry run that changes nothing, and Dane approves the list
+before anything happens. One command handles the 173 GB still sitting in
+the MacBook's Trash from 4 October. A file goes only if an identical copy is
+on mentor24 or mentorofaio at that moment, and a file with no Drive copy is
+put back where it came from. The other command handles the MacBook copies
+the duplicates report flagged, and moves them to the Trash rather than
+deleting them. Every file is checked against Drive again just before it
+goes, so a copy that disappeared after the dry run keeps the original safe.
+Every change is logged with the command that undoes it. The live runs on the
+MacBook come next, each one waiting for Dane's approval.
+## 2026-10-09 — Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it waits for his approval (#803)
+
+Every 15 minutes Starcaster now looks at Dane's YouTube channel, his Substack
+and his Starcaster blog. When something new appears, it writes a draft Note
+pointing to it and puts it on **Engage → Substack Notes → Approvals**, where he
+approves, edits or rejects it as usual. Nothing posts. Each piece gets one
+Note only, ever, even if it is deleted. The first look does not draft his old
+work: everything already out is recorded as seen and the Ideas tab says how
+many (eight articles on his Substack). It also never leaves more drafts
+waiting than the daily maximum allows. The Ideas tab shows what is being
+watched and when it last checked, and why a source is off ("no YouTube
+channel saved in Settings"). Settings has **Draft a Note for my latest piece**
+for anything older. It needs one small database change run in production
+before it starts. If the blog cannot be read on one pass (a database hiccup),
+the watch keeps what it already knew, so a post published around then is
+still drafted on the next good pass instead of being quietly skipped.
+## 2026-10-09 — Substack Miner 2/7: Starcaster searches the web for Substack writers who use Dane's keywords and lists them as candidates (#801)
+
+Starcaster can now go and find Substack writers by itself. Given Dane's
+keywords, it asks the web search engine for Substack pages mentioning each one,
+keeps only real Substack publications, reads each new writer's front page once
+for their name, a short description and their subscriber count, and adds them to
+the Substack Miner list as candidates, remembering every keyword that found
+them. It only reads public pages, one at a time, a second and a half apart, and
+posts nothing. Tried on "Game B" and "metamodern" it found 39 writers; running it
+again added none and just updated the ones already listed. When it cannot do its
+job it says why instead of reporting "found nothing": no search key, a search
+that failed, or a page that would not load (that writer is still saved). There
+is no screen yet; slice 4 adds the button.
+
 ## 2026-10-08 — YouTube outreach 7/7: Dane is told by name when the Mini stops posting or YouTube signs it out (#798)
 
 The Mac Mini's posting worker now checks its own browser once an hour and

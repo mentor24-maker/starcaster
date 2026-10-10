@@ -10,13 +10,17 @@ import SubstackNotesPanel, {
   signInLine,
   settingsPatchFromForm,
   settingsToForm,
+  latestMessage,
   splitItems,
   splitLines,
   statusLabel,
   waitLine,
+  timeAgo,
+  watchLines,
   withScheme,
   type NoteItem,
   type NotesSettings,
+  type WatchStatus,
 } from "./substack-notes-panel";
 
 /**
@@ -75,7 +79,24 @@ function item(overrides: Partial<NoteItem>): NoteItem {
   };
 }
 
-type Store = { items: NoteItem[]; settings: NotesSettings };
+type Store = { items: NoteItem[]; settings: NotesSettings; watch?: WatchStatus; latest?: Record<string, any> };
+
+/** What the server's watch-status says when nothing has been checked yet (lib/substackNotesContentWatch.js describeWatch). */
+function watchFor(settings: NotesSettings): WatchStatus {
+  const off = (key: string, label: string, reason: string) => ({ key, label, watched: false, ok: false, reason, checkedAt: "", since: "", baselineCount: 0 });
+  const fresh = (key: string, label: string) => ({ key, label, watched: true, ok: null, reason: "not checked yet", checkedAt: "", since: "", baselineCount: 0 });
+  return {
+    saved: settings.saved,
+    setUp: null,
+    checkedAt: "",
+    lastPass: null,
+    sources: [
+      settings.youtubeChannelId ? fresh("youtube", "YouTube") : off("youtube", "YouTube", "no YouTube channel saved in Settings"),
+      settings.substackUrl ? fresh("substack", "Substack") : off("substack", "Substack", "no Substack address saved in Settings"),
+      fresh("blog", "Blog"),
+    ],
+  };
+}
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -97,6 +118,17 @@ function checkNoteUrl(text: string): string {
   return text;
 }
 
+/** The server's plan in miniature (lib/substackNotesSchedule.js) — enough to show the screen relays it. */
+function topicPlanOf(store: Store) {
+  const none = (reason: string, words: string) => ({ due: false, reason, text: words, nextAt: null });
+  if (!store.settings.autoTopicDrafts) return none("off", "No topic drafts: switched off in Settings");
+  if (!store.settings.topics.length) return none("no_topics", "No topic drafts: no topics saved in Settings");
+  const waiting = store.items.filter((i) => (i.kind === "note" || i.kind === "reply" ? i.status === "draft" : i.status === "idea")).length;
+  const cap = Number(store.settings.maxActionsPerDay);
+  if (waiting >= cap) return none("full", `No topic draft for now: ${waiting} already waiting for your approval (the most per day is ${cap})`);
+  return { due: true, reason: "due", text: `Next topic draft: about 12:30 PM ("${store.settings.topics[0]}")`, nextAt: "2026-10-08T18:30:00.000Z" };
+}
+
 async function fakeApi(path: string, options: RequestInit = {}) {
   const method = (options.method || "GET").toUpperCase();
   const body = options.body ? JSON.parse(String(options.body)) : null;
@@ -105,6 +137,13 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   const store = stores[project];
   if (path === "/api/engage/substack-notes/items" && method === "GET") return { ok: true, data: store.items.map((i) => ({ ...i })) };
   if (path === "/api/engage/substack-notes/settings" && method === "GET") return { ok: true, data: { ...store.settings } };
+  if (path === "/api/engage/substack-notes/topic-schedule" && method === "GET") return { ok: true, data: topicPlanOf(store) };
+  if (path === "/api/engage/substack-notes/watch-status" && method === "GET") return { ok: true, data: store.watch || watchFor(store.settings) };
+  if (path === "/api/engage/substack-notes/watch-content/latest" && method === "POST") {
+    if (!store.latest) fail("Nothing is saved in Substack Notes Settings for this account yet, so there is nothing to watch. Save the settings first.");
+    if (store.latest.latestItem && store.latest.latest?.status === "draft") store.items = [store.latest.latestItem, ...store.items];
+    return { ok: true, data: store.latest };
+  }
   if (path === "/api/engage/substack-notes/items" && method === "POST") {
     if (body.source === "target") checkNoteUrl(body.targetUrl);
     if (body.source !== "target" && !body.ideaText) fail(`ideaText is required when source is ${body.source}`);
@@ -411,6 +450,61 @@ describe("Substack Notes screen", () => {
   });
 });
 
+describe("Substack Notes topic drafts on a timer (5/7)", () => {
+  it("the switch is off until Dane turns it on, and survives a reload", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky", "living off grid"], maxActionsPerDay: 2, saved: true, updatedAt: "x" };
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic drafts: switched off in Settings");
+
+    await click(button("Settings"));
+    const box = el<HTMLInputElement>("#sn-auto-topic-drafts");
+    expect(box.checked).toBe(false);
+    expect(text()).toContain("Draft Notes from my topics on their own");
+    await click(box);
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body.autoTopicDrafts).toBe(true);
+    expect(stores.proj_doe.settings.autoTopicDrafts).toBe(true);
+
+    await reload();
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+    await click(button("Settings"));
+    expect(el<HTMLInputElement>("#sn-auto-topic-drafts").checked).toBe(true);
+  });
+
+  it("does not send the switch when it did not change, so other settings save before its database column exists", async () => {
+    await mount();
+    await click(button("Settings"));
+    type(el<HTMLInputElement>("#sn-max-per-day"), "2");
+    await submit(el<HTMLFormElement>("form.substack-notes-settings"));
+    const put = requests.filter((r) => r.method === "PUT").pop();
+    expect(put?.body).not.toHaveProperty("autoTopicDrafts");
+    expect(settingsPatchFromForm({ ...settingsToForm(defaults()), autoTopicDrafts: false }, { autoTopicDrafts: true })).toMatchObject({ autoTopicDrafts: false });
+  });
+
+  it("says why there is no topic draft when approvals are full, and updates after a decision", async () => {
+    stores.proj_doe.settings = { ...defaults(), topics: ["night sky"], maxActionsPerDay: 1, autoTopicDrafts: true, saved: true, updatedAt: "x" };
+    stores.proj_doe.items = [item({ kind: "note", source: "jotted", ideaText: "x", status: "draft", draftText: "A draft." })];
+    await mount();
+    expect(el("[data-topic-plan]").textContent).toBe("No topic draft for now: 1 already waiting for your approval (the most per day is 1)");
+    await click(button("Approvals"));
+    await click(button("Reject"));
+    await click(button("Ideas"));
+    expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
+  });
+
+  it("names it when the plan could not be read", async () => {
+    const api = (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api;
+    api.mockImplementation(async (path: string, options: RequestInit) => {
+      if (path.endsWith("/topic-schedule")) throw new Error("database busy");
+      return fakeApi(path, options);
+    });
+    await mount();
+    expect(text()).toContain("The next topic draft could not be worked out: database busy");
+    expect(text()).toContain("No ideas yet.");
+  });
+});
+
 describe("Substack Notes approvals (3/7)", () => {
   it("says why Approvals is empty", async () => {
     await mount();
@@ -594,6 +688,107 @@ describe("Substack Notes helpers", () => {
 
   it("swaps code field names for the labels on screen", () => {
     expect(plainError("maxActionsPerDay must be between 0 and 50")).toBe("Most actions per day must be between 0 and 50");
+  });
+});
+
+describe("Substack Notes new-content watch (4/7)", () => {
+  const NOW = Date.parse("2026-10-09T18:00:00Z");
+
+  function watching(overrides: Partial<WatchStatus> = {}): WatchStatus {
+    return {
+      saved: true,
+      setUp: true,
+      checkedAt: new Date(NOW - 9 * 60000).toISOString(),
+      lastPass: null,
+      sources: [
+        { key: "youtube", label: "YouTube", watched: true, ok: true, reason: "", checkedAt: "", since: "2026-10-01T00:00:00Z", baselineCount: 15 },
+        { key: "substack", label: "Substack", watched: true, ok: true, reason: "", checkedAt: "", since: "2026-10-01T00:00:00Z", baselineCount: 1 },
+        { key: "blog", label: "Blog", watched: true, ok: true, reason: "", checkedAt: "", since: "2026-10-01T00:00:00Z", baselineCount: 0 },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("says what it watches and when it last checked, and how much was already out when it began", () => {
+    const lines = watchLines(watching(), NOW);
+    expect(lines.summary).toBe("Watching: YouTube ✓, Substack ✓, Blog ✓ (last checked 9 minutes ago)");
+    expect(lines.details.join(" ")).toContain("recorded as seen and not drafted: YouTube 15, Substack 1, Blog 0");
+  });
+
+  it("names the reason a source is not watched, or could not be read", () => {
+    const status = watching();
+    status.sources[1] = { ...status.sources[1], watched: false, ok: false, reason: "no Substack address saved in Settings", since: "" };
+    status.sources[0] = { ...status.sources[0], ok: false, reason: "YouTube's feed for this channel answered 404" };
+    const lines = watchLines(status, NOW);
+    expect(lines.summary).toBe("Watching: YouTube ✗, Substack off, Blog ✓ (last checked 9 minutes ago)");
+    expect(lines.details).toContain("Substack: not watched — no Substack address saved in Settings.");
+    expect(lines.details).toContain("YouTube: could not be read last time — YouTube's feed for this channel answered 404.");
+  });
+
+  it("says when it has not checked yet, when the database is not set up, and when Settings are not saved", () => {
+    expect(watchLines(watching({ checkedAt: "" }), NOW).summary).toContain("not checked yet — the first check runs within 15 minutes");
+    expect(watchLines(watching({ setUp: false }), NOW).details[0]).toContain("substack_notes_content_unique.sql");
+    expect(watchLines(watching({ saved: false }), NOW).summary).toContain("save the Settings tab first");
+  });
+
+  it("says when new pieces are waiting for room under the daily maximum", () => {
+    const lines = watchLines(watching({ lastPass: { waitingForRoom: 2 } }), NOW);
+    expect(lines.details).toContain("2 new pieces are waiting for room under the daily maximum, and will be drafted on a later check.");
+  });
+
+  it("shows the watch line on the Ideas tab, with the reason for a source that is off", async () => {
+    stores.proj_doe.settings = { ...defaults(), youtubeChannelId: "UC_x5XG1OV2P6uZZ5FSM9Ttw", saved: true, updatedAt: "x" };
+    await mount();
+    const card = el<HTMLElement>(".substack-notes-watch");
+    expect(card.textContent).toContain("Watching: YouTube not checked yet, Substack off, Blog not checked yet");
+    expect(card.textContent).toContain("Substack: not watched — no Substack address saved in Settings.");
+  });
+
+  it("says which read failed when the watch line cannot be read, without hiding the rest of the screen", async () => {
+    const api = (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api;
+    api.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/api/engage/substack-notes/watch-status") throw new Error("Service unavailable");
+      return fakeApi(path, options);
+    });
+    await mount();
+    expect(el<HTMLElement>(".substack-notes-watch").textContent).toContain("What is being watched for new content could not be read: Service unavailable");
+    expect(text()).toContain("No ideas yet.");
+  });
+
+  it("Draft a Note for my latest piece: posts, says what it did, and the draft is on Approvals after the reload", async () => {
+    stores.proj_doe.settings = { ...defaults(), youtubeChannelId: "UC_x5XG1OV2P6uZZ5FSM9Ttw", saved: true, updatedAt: "x" };
+    const made = item({ source: "new_content", contentUrl: "https://www.youtube.com/watch?v=7sKHiuE7J-Y", contentTitle: "Robotics with Gemini", draftText: "New video out.", status: "draft" });
+    stores.proj_doe.latest = { latest: { status: "draft", entry: { url: made.contentUrl, title: made.contentTitle } }, latestItem: made, notDrafted: [], failed: [] };
+    await mount();
+    await click(button("Settings"));
+    await click(button("Draft a Note for my latest piece"));
+    expect(requests.some((r) => r.method === "POST" && r.path === "/api/engage/substack-notes/watch-content/latest")).toBe(true);
+    expect(text()).toContain('A draft Note about "Robotics with Gemini" is waiting on the Approvals tab.');
+    await click(button("Approvals"));
+    expect(text()).toContain("New content: Robotics with Gemini");
+  });
+
+  it("the latest-piece button waits for saved Settings", async () => {
+    await mount();
+    await click(button("Settings"));
+    expect(button("Draft a Note for my latest piece").disabled).toBe(true);
+    expect(text()).toContain("Save the settings above first");
+  });
+
+  it("says plainly when the latest piece already has a Note, or nothing was found", () => {
+    const made = item({ source: "new_content", contentTitle: "Old video", status: "approved" });
+    expect(latestMessage({ latest: { status: "exists", entry: { title: "Old video" } }, latestItem: made }))
+      .toBe('Your latest piece, "Old video", already has a Note (approved — waiting to post), so no second one was made.');
+    expect(latestMessage({ latest: { status: "none" }, watch: { sources: [{ key: "blog", label: "Blog", watched: false, ok: false, reason: "the site has no blog post page" }] } }))
+      .toBe("No video, article or post was found to draft from (Blog: the site has no blog post page).");
+  });
+
+  it("reads elapsed time the way a person says it", () => {
+    expect(timeAgo(new Date(NOW - 20000).toISOString(), NOW)).toBe("just now");
+    expect(timeAgo(new Date(NOW - 60000).toISOString(), NOW)).toBe("1 minute ago");
+    expect(timeAgo(new Date(NOW - 3 * 3600000).toISOString(), NOW)).toBe("3 hours ago");
+    expect(timeAgo(new Date(NOW - 3 * 86400000).toISOString(), NOW)).toBe("3 days ago");
+    expect(timeAgo("", NOW)).toBe("");
   });
 });
 
