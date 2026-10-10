@@ -40,6 +40,7 @@ import {
   normalizeBackgroundSettings,
   normalizeBuilderAssetUrl,
   resolvePublicBuilderAssetUrl,
+  normalizeModuleZIndexValue,
   normalizeSignedOffsetValue,
   normalizeSpacingValue
 } from "@/lib/builder-template";
@@ -1067,6 +1068,31 @@ export function getModuleNudgeTransform(settings: Record<string, string>) {
   }
 
   return `translate(${offsetX}px, ${-offsetY}px)`;
+}
+
+/**
+ * The Z-Index setting, for the module WRAPPER (task 86bcgc7xq, operator
+ * 2026-10-10: "I am trying to use vertical offset to place the headline
+ * above the image. But it appears that the image is overwriting the
+ * headline").
+ *
+ * The nudge above moves a module over its neighbours but says nothing about
+ * which one paints on top, so two overlapping modules stack in page order —
+ * the later one wins, whatever the operator meant. This lands on the
+ * `.builder-preview-module` wrapper, which is the box that is a sibling of
+ * the other modules in the column, so the number orders the whole module
+ * against them. An unset or 0 value emits nothing at all: page order, which
+ * is exactly what every page rendered before the setting existed.
+ *
+ * A floating image, confetti and the other overlay decor keep their own
+ * `zIndex` on their own shells; the preview skips this helper for those.
+ */
+export function getModuleStackStyle(settings: Record<string, string>): CSSProperties {
+  const zIndex = Number.parseInt(normalizeModuleZIndexValue(settings.zIndex), 10);
+  if (!Number.isFinite(zIndex) || zIndex === 0) {
+    return {};
+  }
+  return { position: "relative", zIndex };
 }
 
 export function getFloatingImageModuleShellStyle(
