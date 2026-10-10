@@ -41,6 +41,7 @@ import type {
 } from "@/lib/builder-template";
 import {
   getBuilderBackgroundStyle,
+  describeModuleTextOverflow,
   isPlainTextVariant,
   normalizeBuilderAssetUrl,
   formatHeadingContent,
@@ -4322,6 +4323,7 @@ export function BuilderModuleCard({
              stops offering a control that never did anything. */
           module.type !== "carousel" &&
           module.type !== "admin-nav-link" ? (
+            <>
             <label className="field">
               <span>Content</span>
               {module.type === "text" && !isPlainTextVariant(module.settings) ? (
@@ -4341,6 +4343,15 @@ export function BuilderModuleCard({
                 />
               )}
             </label>
+            {describeModuleTextOverflow(module.text) ? (
+              // Saving cuts module text at BUILDER_MODULE_TEXT_MAX_LENGTH; say so
+              // before it happens rather than after the live page ends mid-sentence.
+              <div className="builder-module-runtime-note" role="alert">
+                <strong>Too long to save whole</strong>
+                <p>{describeModuleTextOverflow(module.text)}</p>
+              </div>
+            ) : null}
+            </>
           ) : null}
           </BuilderModuleChromeSlotProvider>
           )}
