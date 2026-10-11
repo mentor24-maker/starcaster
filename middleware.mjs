@@ -14,9 +14,12 @@
 import { rewrite } from '@vercel/functions';
 import { resolveSiteRedirect } from './lib/siteRedirects.mjs';
 
-// Apex only (www. is normalized away): other starcaster.pro subdomains are
-// tenant staging hosts. Keep in sync with lib/publicSiteHosts.js.
-const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|starcaster\.pro)$/;
+// The admin app lives at app.starcaster.pro. The apex (www. is normalized
+// away) and every other starcaster.pro subdomain are tenant hosts — the apex
+// is the company's own Builder-built site. Keep in sync with
+// lib/publicSiteHosts.js; scripts/builder/publicSiteHosts.test.js fails if
+// the two drift.
+const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|app\.starcaster\.pro)$/;
 
 function normalizeHost(value) {
   const text = String(value || '').split(',')[0].trim();

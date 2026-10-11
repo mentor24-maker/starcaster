@@ -66,7 +66,11 @@ export function isAllowedRichTextImageSrc(src: string) {
       return true;
     }
 
-    if (url.origin === "https://www.starcaster.pro" || url.origin === "http://localhost:3000") {
+    if (
+      url.origin === "https://app.starcaster.pro" ||
+      url.origin === "https://www.starcaster.pro" ||
+      url.origin === "http://localhost:3000"
+    ) {
       return url.pathname.startsWith("/gallery/") || url.pathname.startsWith("/api/admin/media-file/");
     }
   } catch {

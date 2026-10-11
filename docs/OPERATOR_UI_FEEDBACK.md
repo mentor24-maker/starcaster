@@ -197,7 +197,7 @@ doctrine rule until he confirms or amends it.
 
 - **[site-import, 2026-08-06]** — "The first thing we need to fix is that
   the eye icon in the CRUD links to the
-  https://www.starcaster.pro/builder-preview.html, which has caching
+  https://app.starcaster.pro/builder-preview.html, which has caching
   issues. Let's open those in a dedicated tab as a standalone page. Also
   truncate the slug column so we can fit the whole table on the page, and
   link the slug to the same page the eye icon links to."

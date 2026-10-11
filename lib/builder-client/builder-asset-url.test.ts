@@ -22,6 +22,17 @@ describe("normalizeBuilderAssetUrl", () => {
     ).toBe("/gallery/wave-401685.png");
   });
 
+  it("treats the admin host and the company apex as our own origins", () => {
+    // The admin app lives at app.starcaster.pro (task 86bcgjq5k); a gallery
+    // URL copied from it is the same asset as one from starcaster.pro.
+    expect(normalizeBuilderAssetUrl("https://app.starcaster.pro/api/admin/media-file/gallery/wave.png")).toBe(
+      "/gallery/wave.png"
+    );
+    expect(normalizeBuilderAssetUrl("https://www.starcaster.pro/api/admin/media-file/gallery/wave.png")).toBe(
+      "/gallery/wave.png"
+    );
+  });
+
   it("keeps tenant site gallery paths", () => {
     expect(normalizeBuilderAssetUrl("https://www.example.com/gallery/wave.png")).toBe("/gallery/wave.png");
     expect(normalizeBuilderAssetUrl("https://example.com/gallery/wave.png")).toBe("/gallery/wave.png");
