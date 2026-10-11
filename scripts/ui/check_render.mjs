@@ -911,15 +911,39 @@ try {
      * than sampling the un-hovered page — silently measuring the wrong state
      * is how a check reports green over a dead feature.
      */
+    /*
+     * `hover` may also be a LIST, hovered in order — a sub-link only exists
+     * once its trigger has opened the panel, so reaching it takes two moves
+     * (86bcgddcy). Each move jumps straight to the next element, never
+     * crossing anything between, which is what keeps the panel open.
+     */
+    /*
+     * Optional CLICK, before any hover — a phone menu's sub-links only exist
+     * once the hamburger has opened it (86bcgddcy, round 3). Same rule as
+     * hover: a selector that matches nothing fails the contract rather than
+     * measuring the closed menu.
+     */
     let hoverError = null;
-    if (contract.hover) {
+    for (const spot of contract.click ? [].concat(contract.click) : []) {
       try {
-        await page.hover(contract.hover, { timeout: 4000 });
+        await page.click(spot, { timeout: 4000 });
         await page.waitForTimeout(120);
       } catch (err) {
-        hoverError = `${contract.id}: could not hover \`${contract.hover}\` — ` +
+        hoverError = `${contract.id}: could not click \`${spot}\` — ` +
+          'the element the contract needs to press did not appear, so the state it measures was ' +
+          `never entered. ${String(err && err.message || err).split('\n')[0]}`;
+        break;
+      }
+    }
+    for (const spot of !hoverError && contract.hover ? [].concat(contract.hover) : []) {
+      try {
+        await page.hover(spot, { timeout: 4000 });
+        await page.waitForTimeout(120);
+      } catch (err) {
+        hoverError = `${contract.id}: could not hover \`${spot}\` — ` +
           'the element the contract needs to put the pointer on did not appear, so the state it ' +
           `measures was never entered. ${String(err && err.message || err).split('\n')[0]}`;
+        break;
       }
     }
 
@@ -962,7 +986,7 @@ try {
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
     // The frame needs no reset: `render` writes the device key on every
     // contract, so the next one cannot inherit this one's box.
-    if (contract.hover) await page.mouse.move(0, 0);
+    if (contract.hover || contract.click) await page.mouse.move(0, 0);
 
     if (hoverError) {
       failures.push(hoverError);

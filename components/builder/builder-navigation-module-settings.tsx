@@ -1,6 +1,15 @@
 import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
-import { NAV_STYLE_DEFAULTS } from "@/lib/builder-nav-style";
+import {
+  NAV_INVISIBLE_CONTRAST,
+  NAV_STYLE_DEFAULTS,
+  getNavDropdownBackground,
+  getNavDropdownHoverSurface,
+  isNavVertical,
+  navColorContrast,
+  resolveNavDropdownHoverColor,
+  resolveNavDropdownTextColor
+} from "@/lib/builder-nav-style";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   createEmptyModule,
@@ -147,6 +156,43 @@ function serializeNavItems(items: NavItem[]) {
 
 /** Every setting on this panel reaches the page through one helper. */
 const RENDERS_VIA = "getNavModuleStyle (builder-nav-style.ts)";
+
+/**
+ * Says so when the drop-down's links would be unreadable on its fill — the
+ * case that gave daneofearth.starcaster.pro a blank white drop-down with
+ * nothing in the builder pointing at it (task 86bcgddcy).
+ */
+function dropdownTextNote(settings: Record<string, string>): string | null {
+  // A vertical menu draws no panel, so there is nothing to be invisible on.
+  if (isNavVertical(settings)) return null;
+  const resolved = resolveNavDropdownTextColor(settings);
+  if (resolved.source === "contrast") {
+    return `The menu's text colour (${resolved.inherited}) would be invisible on the panel background, so the drop-down links show in ${resolved.color}. On phones, where there is no panel, they keep the menu's colour.`;
+  }
+  if (resolved.source === "panel") {
+    const contrast = navColorContrast(resolved.color, getNavDropdownBackground(settings));
+    if (contrast !== null && contrast < NAV_INVISIBLE_CONTRAST) {
+      return "This colour matches the panel Background, so the drop-down links will be invisible. Clear it or pick a contrasting colour.";
+    }
+  }
+  return null;
+}
+
+/** The same warning for a HOVERED sub-link, measured against what is behind it. */
+function dropdownHoverNote(settings: Record<string, string>): string | null {
+  if (isNavVertical(settings)) return null;
+  const resolved = resolveNavDropdownHoverColor(settings);
+  if (resolved.source === "contrast") {
+    return `The menu's hover colour (${resolved.inherited}) would be invisible on the panel, so a hovered drop-down link shows in ${resolved.color}. On phones, where there is no panel, it keeps the menu's hover colour.`;
+  }
+  if (resolved.source === "panel") {
+    const contrast = navColorContrast(resolved.color, getNavDropdownHoverSurface(settings));
+    if (contrast !== null && contrast < NAV_INVISIBLE_CONTRAST) {
+      return "This hover colour matches what is behind the link, so a hovered drop-down link will be invisible. Clear it or pick a contrasting colour.";
+    }
+  }
+  return null;
+}
 
 const isVerticalMenu = (settings: Record<string, string>) => settings.navDirection === "vertical";
 const isMegaMenu = (settings: Record<string, string>) =>
@@ -966,7 +1012,7 @@ export function BuilderNavigationModuleSettings({
              * The part reads short on purpose. Every one of these existed
              * already, under a "Sub" prefix that the heading now says better;
              * the ones Main Menu has and this does not — underline, italic,
-             * link height, the four label/hover/current colours, the hover
+             * link height, the label and current-page colours, the hover
              * effect and the text shadow — are not built yet. Padding the part
              * with controls that do nothing would hide that.
              */
@@ -1046,9 +1092,73 @@ export function BuilderNavigationModuleSettings({
                   label: "Text Color",
                   width: "color",
                   control: "theme-color",
-                  themeDefault: "#334861",
+                  // What an EMPTY field actually renders, from the renderer's
+                  // own function — it used to be a hardcoded #334861 while
+                  // the page drew the menu's text colour (task 86bcgddcy).
+                  themeDefault: resolveNavDropdownTextColor({ ...module.settings, navDropdownTextColor: "" }).color,
                   dialogLabel: "Drop-down link color",
                   rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownTextColorNote",
+                  label: "",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  visibleWhen: (settings) => dropdownTextNote(settings) !== null,
+                  render: ({ settings }) => (
+                    <p className="panel-copy builder-panel-field-note" data-nav-dropdown-text-note="">
+                      {dropdownTextNote(settings)}
+                    </p>
+                  )
+                }
+              ],
+              [
+                {
+                  /*
+                   * New 2026-10-10 (86bcgddcy, round 2). A hovered sub-link
+                   * took Main Menu > Hover Text, which is chosen for the bar —
+                   * usually the opposite background from the panel. Empty
+                   * still follows it, unless that would be invisible here.
+                   */
+                  key: "navDropdownHoverColor",
+                  label: "Hover Text",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: resolveNavDropdownHoverColor({ ...module.settings, navDropdownHoverColor: "" }).color,
+                  dialogLabel: "Drop-down link hover color",
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  // List drop-downs only: a mega link is bare text in a column
+                  // and has never had a hover fill.
+                  key: "navDropdownHoverBackground",
+                  label: "Hover Fill",
+                  width: "color",
+                  control: "theme-color",
+                  themeDefault: module.settings.navHoverBackground || "transparent",
+                  dialogLabel: "Drop-down link hover background",
+                  visibleWhen: isListMenu,
+                  rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownHoverColorNote",
+                  label: "",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  visibleWhen: (settings) => dropdownHoverNote(settings) !== null,
+                  render: ({ settings }) => (
+                    <p className="panel-copy builder-panel-field-note" data-nav-dropdown-hover-note="">
+                      {dropdownHoverNote(settings)}
+                    </p>
+                  )
                 }
               ]
             ]

@@ -49,6 +49,32 @@ const FLARE_STREAK_MIN_LUMA = 0.02;
  * tall; without them there is nothing to scroll and the whole effect is
  * unobservable.
  */
+/*
+ * A computed colour as numbers, and the WCAG contrast between two of them —
+ * shared by the two drop-down readability contracts (86bcgddcy).
+ */
+const parseRgb = (value) => {
+  const m = String(value).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/);
+  return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+};
+const contrastRatio = (a, b) => {
+  const lum = ({ r, g, b }) => {
+    const c = [r, g, b].map((v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const NAV_SUBMENU_ITEMS = JSON.stringify([
+  { id: 'home', label: 'Home', href: '/' },
+  { id: 'proj', label: 'Projects', href: '/projects' },
+  { id: 'p1', label: 'WaveCenter', href: '/wavecenter', parentId: 'proj' },
+  { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
+]);
+
 const PARALLAX_IMAGE_SECTION = {
   layout: 'single',
   spacers: 2,
@@ -3957,6 +3983,229 @@ export const RENDER_CONTRACTS = [
           `(${sample.styles.borderBottomLeftRadius}), with Panel Radius set to 20. Only the top edge ` +
           "meets the item — squaring the bottom throws away the operator's Panel Radius where it is " +
           'still visible.';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * DROP-DOWN LINKS THAT VANISH — 86bcgddcy.
+   *
+   * daneofearth.starcaster.pro, 2026-10-10: hovering "Projects" opened a blank
+   * white box. The links were there, drawn in the menu's white text on the
+   * panel's white fill, and the builder's swatch had been showing a dark slate
+   * for that empty field the whole time. Nothing measured the colour a
+   * sub-link actually paints against the panel behind it.
+   */
+  {
+    id: 'nav-dropdown-links-stay-readable-on-a-white-text-menu',
+    why:
+      'A menu with white text over a dark header is the common case, and the drop-down panel fills ' +
+      'white by default. With the panel\'s own Text Color left empty, the sub-links used to inherit ' +
+      'the menu\'s white and disappear — a visitor sees an empty box and reads the menu as broken. ' +
+      'This reads the sub-link\'s colour and the panel\'s fill out of a real browser and fails ' +
+      'when the two are indistinguishable.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+      },
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item' },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the dropdown panel is still closed while its trigger is hovered, so no sub-link was ' +
+          'measured. Fix the scene, never the assertion.';
+      }
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no sub-link was found inside the open panel — the contract measured nothing.';
+      const text = parseRgb(link.color);
+      const fill = parseRgb(sample.styles.backgroundColor);
+      if (!text || !fill) {
+        return `could not read the colours (text ${link.color}, panel ${sample.styles.backgroundColor}).`;
+      }
+      if (fill.a < 0.5) {
+        return `the panel fill reads as ${sample.styles.backgroundColor}, mostly see-through, so a ` +
+          'contrast against it says nothing about what a visitor sees. Fix the scene.';
+      }
+      const ratio = contrastRatio(text, fill);
+      if (ratio < 3) {
+        return `a sub-link paints ${link.color} on a panel of ${sample.styles.backgroundColor} — a ` +
+          `contrast of ${ratio.toFixed(2)}:1. With Main Menu text set to white and the panel's own ` +
+          'Text Color left empty, the drop-down opens as a blank box (86bcgddcy).';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * ...AND THE ONE UNDER THE MOUSE — 86bcgddcy, round 2.
+   *
+   * The same site, 4:18pm the same day: with a dark Panel Text Color set, the
+   * links showed at rest and each one turned white the moment the pointer
+   * reached it. A sub-link carries `.site-nav-link`, so it hovered in the
+   * BAR's Hover Text — white, chosen for a dark header — on the white panel.
+   * The contract above reads a resting link and could never see it.
+   */
+  {
+    id: 'nav-dropdown-hovered-link-stays-readable-on-a-white-text-menu',
+    why:
+      'Main Menu Hover Text is picked for the bar, which is usually dark; the drop-down panel is ' +
+      'white by default. A hovered sub-link took the bar\'s colour, so on a white-text menu every ' +
+      'link vanished as the visitor pointed at it. This opens the panel, puts the real pointer on a ' +
+      'sub-link, and fails when its text cannot be told from what is behind it.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    hover: [
+      '.site-nav-dropdown > .site-nav-dropdown-trigger',
+      '.site-nav-dropdown-menu .site-nav-dropdown-item',
+    ],
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color', 'backgroundColor'],
+      // `:hover` in the selector, so a pointer that slipped off the link
+      // finds nothing instead of measuring a resting one.
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item:hover' },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the dropdown panel closed when the pointer moved onto a sub-link, so no hovered ' +
+          'link was measured. Fix the scene, never the assertion.';
+      }
+      const link = sample.series?.[0]?.link;
+      if (!link) {
+        return 'no sub-link is under the pointer — the contract measured nothing. Fix the scene.';
+      }
+      const text = parseRgb(link.color);
+      const own = parseRgb(link.backgroundColor);
+      const panel = parseRgb(sample.styles.backgroundColor);
+      if (!text || !panel) {
+        return `could not read the colours (text ${link.color}, panel ${sample.styles.backgroundColor}).`;
+      }
+      // What is actually behind the text: the link's hover fill when it is
+      // solid, the panel when it is not.
+      const behind = own && own.a >= 0.5 ? own : panel;
+      if (behind.a < 0.5) {
+        return `what is behind the hovered link reads as see-through (${link.backgroundColor} on ` +
+          `${sample.styles.backgroundColor}), so a contrast against it says nothing. Fix the scene.`;
+      }
+      const ratio = contrastRatio(text, behind);
+      if (ratio < 3) {
+        return `a hovered sub-link paints ${link.color} on ${behind === own ? link.backgroundColor : sample.styles.backgroundColor} — ` +
+          `a contrast of ${ratio.toFixed(2)}:1. With Main Menu text and Hover Text set to white, the ` +
+          'link disappears the moment the visitor points at it (86bcgddcy).';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * ...BUT NOT ON A PHONE — 86bcgddcy, round 3.
+   *
+   * Below 720px there is no white panel: legacy.css turns the drop-down into a
+   * transparent accordion on the header, so the sub-links sit beside the
+   * top-level links. The contrast guard above judged them against the white
+   * panel anyway and drew them #334861 — dark slate on a dark header, measured
+   * at 390px in review. Here they must match the top-level links.
+   */
+  {
+    id: 'nav-dropdown-links-follow-the-menu-on-a-phone',
+    why:
+      'On a phone the drop-down is an in-flow list on the header, not a white panel. A white-text ' +
+      'menu that leaves the panel colours empty must draw its sub-links white like the top-level ' +
+      'links; the desktop contrast guard drew them dark, unreadable on a dark header. This opens the ' +
+      'hamburger at 390px and compares a sub-link with a top-level link.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    emulate: { viewport: { width: 390, height: 844 } },
+    click: '.site-nav-toggle',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: {
+        top: '.site-nav-items > .site-nav-link',
+        sub: '.site-nav-dropdown-menu .site-nav-dropdown-item',
+      },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the drop-down list is hidden after opening the hamburger, so no sub-link was measured. ' +
+          'Fix the scene, never the assertion.';
+      }
+      const bg = parseRgb(sample.styles.backgroundColor);
+      if (bg && bg.a >= 0.5) {
+        return `the drop-down draws a fill (${sample.styles.backgroundColor}) at 390px — this contract ` +
+          'assumes the phone accordion has none. Fix the scene, or the contract no longer measures a phone.';
+      }
+      const { top, sub } = sample.series?.[0] || {};
+      if (!top || !sub) return 'a top-level link or a sub-link was not found in the open phone menu — measured nothing.';
+      if (top.color !== sub.color) {
+        return `on a phone a sub-link paints ${sub.color} while the top-level links paint ${top.color}. ` +
+          'There is no panel there, so the sub-links sit on the header and must follow the menu ' +
+          '(86bcgddcy, round 3).';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'nav-dropdown-hovered-link-follows-the-menu-on-a-phone',
+    why:
+      'The hovered half of the phone case: a sub-link under the finger or pointer on a phone sits on ' +
+      'the header, so it takes the menu\'s Hover Text, not the colour the desktop guard picks for ' +
+      'a white panel.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    emulate: { viewport: { width: 390, height: 844 } },
+    click: '.site-nav-toggle',
+    hover: '.site-nav-dropdown-menu .site-nav-dropdown-item',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item:hover' },
+    },
+    expect(sample) {
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no sub-link is under the pointer in the open phone menu — measured nothing. Fix the scene.';
+      if (link.color !== 'rgb(255, 255, 255)') {
+        return `on a phone a hovered sub-link paints ${link.color}, not the menu's white Hover Text. ` +
+          'There is no panel behind it there (86bcgddcy, round 3).';
       }
       return null;
     },
