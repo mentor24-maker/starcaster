@@ -106,6 +106,11 @@ export const NAV_STYLE_DEFAULTS = {
   dropdownTextOnLight: "#334861",
   dropdownTextOnDark: "#ffffff",
   /*
+   * Main Menu > Hover Text when it is empty — the same #0a8fc4 its swatch has
+   * always shown. A hovered sub-link follows it unless the panel names its own.
+   */
+  hoverColor: "#0a8fc4",
+  /*
    * The panel's own frame. The two panel styles have never looked the same
    * here: a list dropdown has always drawn a hairline (`legacy.css`
    * `.site-nav-dropdown-menu`), a mega panel has always drawn none and leant
@@ -259,17 +264,72 @@ export function resolveNavDropdownTextColor(settings: NavSettings): {
   const linkColor = color(settings.navColor);
   const inherited = linkColor ?? NAV_STYLE_DEFAULTS.dropdownTextColor;
   const fill = getNavDropdownBackground(settings);
-  const contrast = navColorContrast(inherited, fill);
-  if (contrast !== null && contrast < NAV_INVISIBLE_CONTRAST) {
-    const onLight = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnLight, fill) ?? 0;
-    const onDark = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnDark, fill) ?? 0;
-    return {
-      color: onLight >= onDark ? NAV_STYLE_DEFAULTS.dropdownTextOnLight : NAV_STYLE_DEFAULTS.dropdownTextOnDark,
-      source: "contrast",
-      inherited
-    };
+  if (isInvisibleOn(inherited, fill)) {
+    return { color: contrastingTextOn(fill), source: "contrast", inherited };
   }
   return { color: inherited, source: linkColor ? "menu" : "default" };
+}
+
+function isInvisibleOn(text: string, fill: string): boolean {
+  const contrast = navColorContrast(text, fill);
+  return contrast !== null && contrast < NAV_INVISIBLE_CONTRAST;
+}
+
+/** Dark text on a light fill, light text on a dark one. */
+function contrastingTextOn(fill: string): string {
+  const onLight = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnLight, fill) ?? 0;
+  const onDark = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnDark, fill) ?? 0;
+  return onLight >= onDark ? NAV_STYLE_DEFAULTS.dropdownTextOnLight : NAV_STYLE_DEFAULTS.dropdownTextOnDark;
+}
+
+/**
+ * A hovered sub-link's fill: Text > Panel > Hover Fill, else the main menu's
+ * Hover Fill — which is what every sub-link has always taken, so a menu that
+ * never touches the panel's own control looks exactly as it did.
+ */
+export function getNavDropdownHoverBackground(settings: NavSettings): string {
+  return color(settings.navDropdownHoverBackground) ?? color(settings.navHoverBackground) ?? "transparent";
+}
+
+/**
+ * The colour a HOVERED sub-link is drawn in, and where it came from — the
+ * second half of 86bcgddcy. A sub-link carries `.site-nav-link`, so it used to
+ * take the main menu's Hover Text: on a white-text menu, white on the white
+ * panel the moment the mouse reached it. Same shape and same guard as
+ * resolveNavDropdownTextColor, measured against what is actually behind the
+ * text: the hover fill where it is a solid colour, the panel otherwise.
+ *
+ *  - "panel"    — Text > Panel > Hover Text is set. Honoured; the panel warns.
+ *  - "menu"     — empty, so it follows Main Menu > Hover Text (or, failing
+ *                 that, Main Menu > Text Color, as the bar's own hover does).
+ *  - "default"  — none of those is set: NAV_STYLE_DEFAULTS.hoverColor.
+ *  - "contrast" — what it would have followed is unreadable behind it.
+ */
+export function resolveNavDropdownHoverColor(settings: NavSettings): {
+  color: string;
+  source: NavDropdownTextSource;
+  inherited?: string;
+} {
+  const explicit = color(settings.navDropdownHoverColor);
+  if (explicit) return { color: explicit, source: "panel" };
+
+  const menuHover = color(settings.navHoverColor) ?? color(settings.navColor);
+  const inherited = menuHover ?? NAV_STYLE_DEFAULTS.hoverColor;
+  const fill = getNavDropdownHoverSurface(settings);
+  if (isInvisibleOn(inherited, fill)) {
+    return { color: contrastingTextOn(fill), source: "contrast", inherited };
+  }
+  return { color: inherited, source: menuHover ? "menu" : "default" };
+}
+
+/**
+ * What is behind a hovered sub-link's text: its hover fill when that is a
+ * colour we can read, the panel otherwise (a transparent or translucent fill
+ * lets the panel show through).
+ */
+export function getNavDropdownHoverSurface(settings: NavSettings): string {
+  const hoverFill = getNavDropdownHoverBackground(settings);
+  return navColorContrast(hoverFill, hoverFill) === null ? getNavDropdownBackground(settings) : hoverFill;
 }
 
 /** The drop-down panel's fill as rendered. */
@@ -493,6 +553,12 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
      * showed a colour the page never used.
      */
     "--site-nav-dropdown-color": resolveNavDropdownTextColor(settings).color,
+    // Hovered sub-links read these instead of the bar's hover pair (86bcgddcy).
+    "--site-nav-dropdown-hover-color": resolveNavDropdownHoverColor(settings).color,
+    "--site-nav-dropdown-hover-bg": getNavDropdownHoverBackground(settings),
+    // A mega link has always hovered in the theme accent; only the panel's own
+    // Hover Text, when set, replaces it.
+    "--site-nav-mega-hover-color": color(settings.navDropdownHoverColor),
     "--site-nav-dropdown-radius": `${num(
       settings.navDropdownRadius,
       NAV_STYLE_DEFAULTS.dropdownRadius,

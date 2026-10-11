@@ -49,6 +49,32 @@ const FLARE_STREAK_MIN_LUMA = 0.02;
  * tall; without them there is nothing to scroll and the whole effect is
  * unobservable.
  */
+/*
+ * A computed colour as numbers, and the WCAG contrast between two of them —
+ * shared by the two drop-down readability contracts (86bcgddcy).
+ */
+const parseRgb = (value) => {
+  const m = String(value).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/);
+  return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+};
+const contrastRatio = (a, b) => {
+  const lum = ({ r, g, b }) => {
+    const c = [r, g, b].map((v) => {
+      const x = v / 255;
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+const NAV_SUBMENU_ITEMS = JSON.stringify([
+  { id: 'home', label: 'Home', href: '/' },
+  { id: 'proj', label: 'Projects', href: '/projects' },
+  { id: 'p1', label: 'WaveCenter', href: '/wavecenter', parentId: 'proj' },
+  { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
+]);
+
 const PARALLAX_IMAGE_SECTION = {
   layout: 'single',
   spacers: 2,
@@ -3982,12 +4008,7 @@ export const RENDER_CONTRACTS = [
     module: {
       type: 'navigation',
       settings: {
-        navItems: JSON.stringify([
-          { id: 'home', label: 'Home', href: '/' },
-          { id: 'proj', label: 'Projects', href: '/projects' },
-          { id: 'p1', label: 'WaveCenter', href: '/wavecenter', parentId: 'proj' },
-          { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
-        ]),
+        navItems: NAV_SUBMENU_ITEMS,
         navColor: '#ffffff',
       },
     },
@@ -4007,12 +4028,8 @@ export const RENDER_CONTRACTS = [
       }
       const link = sample.series?.[0]?.link;
       if (!link) return 'no sub-link was found inside the open panel — the contract measured nothing.';
-      const rgb = (value) => {
-        const m = String(value).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/);
-        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
-      };
-      const text = rgb(link.color);
-      const fill = rgb(sample.styles.backgroundColor);
+      const text = parseRgb(link.color);
+      const fill = parseRgb(sample.styles.backgroundColor);
       if (!text || !fill) {
         return `could not read the colours (text ${link.color}, panel ${sample.styles.backgroundColor}).`;
       }
@@ -4020,19 +4037,81 @@ export const RENDER_CONTRACTS = [
         return `the panel fill reads as ${sample.styles.backgroundColor}, mostly see-through, so a ` +
           'contrast against it says nothing about what a visitor sees. Fix the scene.';
       }
-      const lum = ({ r, g, b }) => {
-        const c = [r, g, b].map((v) => {
-          const x = v / 255;
-          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
-        });
-        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-      };
-      const [hi, lo] = [lum(text), lum(fill)].sort((a, b) => b - a);
-      const ratio = (hi + 0.05) / (lo + 0.05);
+      const ratio = contrastRatio(text, fill);
       if (ratio < 3) {
         return `a sub-link paints ${link.color} on a panel of ${sample.styles.backgroundColor} — a ` +
           `contrast of ${ratio.toFixed(2)}:1. With Main Menu text set to white and the panel's own ` +
           'Text Color left empty, the drop-down opens as a blank box (86bcgddcy).';
+      }
+      return null;
+    },
+  },
+
+  /*
+   * ...AND THE ONE UNDER THE MOUSE — 86bcgddcy, round 2.
+   *
+   * The same site, 4:18pm the same day: with a dark Panel Text Color set, the
+   * links showed at rest and each one turned white the moment the pointer
+   * reached it. A sub-link carries `.site-nav-link`, so it hovered in the
+   * BAR's Hover Text — white, chosen for a dark header — on the white panel.
+   * The contract above reads a resting link and could never see it.
+   */
+  {
+    id: 'nav-dropdown-hovered-link-stays-readable-on-a-white-text-menu',
+    why:
+      'Main Menu Hover Text is picked for the bar, which is usually dark; the drop-down panel is ' +
+      'white by default. A hovered sub-link took the bar\'s colour, so on a white-text menu every ' +
+      'link vanished as the visitor pointed at it. This opens the panel, puts the real pointer on a ' +
+      'sub-link, and fails when its text cannot be told from what is behind it.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    hover: [
+      '.site-nav-dropdown > .site-nav-dropdown-trigger',
+      '.site-nav-dropdown-menu .site-nav-dropdown-item',
+    ],
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color', 'backgroundColor'],
+      // `:hover` in the selector, so a pointer that slipped off the link
+      // finds nothing instead of measuring a resting one.
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item:hover' },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the dropdown panel closed when the pointer moved onto a sub-link, so no hovered ' +
+          'link was measured. Fix the scene, never the assertion.';
+      }
+      const link = sample.series?.[0]?.link;
+      if (!link) {
+        return 'no sub-link is under the pointer — the contract measured nothing. Fix the scene.';
+      }
+      const text = parseRgb(link.color);
+      const own = parseRgb(link.backgroundColor);
+      const panel = parseRgb(sample.styles.backgroundColor);
+      if (!text || !panel) {
+        return `could not read the colours (text ${link.color}, panel ${sample.styles.backgroundColor}).`;
+      }
+      // What is actually behind the text: the link's hover fill when it is
+      // solid, the panel when it is not.
+      const behind = own && own.a >= 0.5 ? own : panel;
+      if (behind.a < 0.5) {
+        return `what is behind the hovered link reads as see-through (${link.backgroundColor} on ` +
+          `${sample.styles.backgroundColor}), so a contrast against it says nothing. Fix the scene.`;
+      }
+      const ratio = contrastRatio(text, behind);
+      if (ratio < 3) {
+        return `a hovered sub-link paints ${link.color} on ${behind === own ? link.backgroundColor : sample.styles.backgroundColor} — ` +
+          `a contrast of ${ratio.toFixed(2)}:1. With Main Menu text and Hover Text set to white, the ` +
+          'link disappears the moment the visitor points at it (86bcgddcy).';
       }
       return null;
     },

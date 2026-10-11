@@ -911,15 +911,22 @@ try {
      * than sampling the un-hovered page — silently measuring the wrong state
      * is how a check reports green over a dead feature.
      */
+    /*
+     * `hover` may also be a LIST, hovered in order — a sub-link only exists
+     * once its trigger has opened the panel, so reaching it takes two moves
+     * (86bcgddcy). Each move jumps straight to the next element, never
+     * crossing anything between, which is what keeps the panel open.
+     */
     let hoverError = null;
-    if (contract.hover) {
+    for (const spot of contract.hover ? [].concat(contract.hover) : []) {
       try {
-        await page.hover(contract.hover, { timeout: 4000 });
+        await page.hover(spot, { timeout: 4000 });
         await page.waitForTimeout(120);
       } catch (err) {
-        hoverError = `${contract.id}: could not hover \`${contract.hover}\` — ` +
+        hoverError = `${contract.id}: could not hover \`${spot}\` — ` +
           'the element the contract needs to put the pointer on did not appear, so the state it ' +
           `measures was never entered. ${String(err && err.message || err).split('\n')[0]}`;
+        break;
       }
     }
 
