@@ -2563,13 +2563,20 @@ function BuilderModulePreview({
   }
 
   if (module.type === "code") {
+    // A site-import placeholder (`importClass`) is labelled "Imported form"
+    // and captioned "rebuild with a real module" — both written for whoever
+    // rebuilds the page, never for its visitors (task 86bcgdm83).
+    const importPlaceholder = Boolean(module.settings.importClass);
     return (
       <div className={`builder-preview-code builder-preview-code-${variant || "default"}`}>
-        {module.settings.label ? (
+        {module.settings.label && !(liveSite && importPlaceholder) ? (
           <div className="builder-preview-code-label">{module.settings.label}</div>
         ) : null}
         {module.text ? (
           <BuilderCodeEmbed html={sanitizeEmbedHtml(module.text)} activation={module.settings.embedActivation} />
+        ) : null}
+        {module.settings.importPlaceholder ? (
+          <BuilderOnlyNote liveSite={liveSite}>{module.settings.importPlaceholder}</BuilderOnlyNote>
         ) : null}
       </div>
     );
