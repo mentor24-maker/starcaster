@@ -164,7 +164,7 @@ import {
   getSectionWidthStyle,
   getModuleNudgeTransform,
   getModuleOuterSpacingStyle,
-  getModuleStackStyle,
+  getModuleStackStyleFor,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
   getTextModuleRhythmStyle,
@@ -2246,7 +2246,7 @@ function BuilderSectionPreview({
                     // and is skipped here, or the wrapper would clamp it.
                     ...(isPageOverlayFlowModule || isSectionOverlayModule
                       ? {}
-                      : getModuleStackStyle(module.settings)),
+                      : getModuleStackStyleFor(module.type, module.settings)),
                     ...getOverlayFlowCollapsedModuleStyle(isPageOverlayFlowModule),
                     ...getSectionScopedOverlayModuleStyle(isSectionOverlayModule),
                     "--builder-mobile-font-size": module.settings.mobileFontSize

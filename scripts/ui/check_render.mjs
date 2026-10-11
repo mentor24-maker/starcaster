@@ -514,7 +514,8 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
      * 86bbqb0ac).
      *
      * Each probe names two selectors, intersects their boxes and asks the
-     * browser what is at the middle of the overlap.
+     * browser what is at the middle of the overlap — or at `at: { x, y }`,
+     * fractions of the overlap, when the middle is not the question.
      *
      * WHAT IT CANNOT SEE, and this is not a footnote: `elementFromPoint` skips
      * anything with `pointer-events: none`, which every tint screen in this
@@ -550,8 +551,13 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
         const bottom = Math.min(sb.bottom, ab.bottom);
         const overlapX = right - left;
         const overlapY = bottom - top;
-        const x = (left + right) / 2;
-        const y = (top + bottom) / 2;
+        // `at` picks a point other than the middle, as fractions of the
+        // overlap (task 86bcgef6g: "outside the hotspot's circle" is a corner
+        // of its square, not its centre). Absent means the middle.
+        const atX = Number.isFinite(spec.at?.x) ? spec.at.x : 0.5;
+        const atY = Number.isFinite(spec.at?.y) ? spec.at.y : 0.5;
+        const x = left + (right - left) * atX;
+        const y = top + (bottom - top) * atY;
         const hit = overlapX > 0 && overlapY > 0 ? document.elementFromPoint(x, y) : null;
         probesOut[name] = {
           subject: true,

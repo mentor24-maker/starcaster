@@ -5,7 +5,7 @@ import {
   normalizeLayoutSections,
   normalizeModuleZIndexValue
 } from "@/lib/builder-template";
-import { getModuleStackStyle } from "./builder/builder-utils";
+import { MODULE_STACK_TYPES, getModuleStackStyle } from "./builder/builder-utils";
 import { BuilderTemplatePreview } from "./builder-template-preview";
 
 /**
@@ -112,5 +112,20 @@ describe("module Z-Index — render", () => {
   it("stacks behind on a negative value", () => {
     const html = renderRows([row([{ type: "heading", text: "Headline", settings: { zIndex: "-1" } }])]);
     expect(moduleWrapperTag(html)).toContain("z-index:-1");
+  });
+});
+
+describe("a module whose zIndex means something else (task 86bcgef6g)", () => {
+  it("Galaxy and TractorNav keep their -9999 on their canvas, never on the wrapper", () => {
+    // Their zIndex places the CANVAS. On the wrapper it clamped to -999 and
+    // sent every In Place galaxy behind its own column, unclickable.
+    for (const type of ["galaxy", "tractor-nav"]) {
+      const html = renderRows([row([{ type, text: "", settings: { placement: "inline", zIndex: "-9999" } }])]);
+      expect(moduleWrapperTag(html), type).not.toMatch(/z-index/);
+    }
+  });
+
+  it("only the four types that offer the setting reach it", () => {
+    expect([...MODULE_STACK_TYPES].sort()).toEqual(["carousel", "heading", "image", "navigation"]);
   });
 });

@@ -1,3 +1,16 @@
+## 2026-10-10 — The Galaxy can be a link, and In Place galaxies can be dragged again (#825)
+
+Dane wanted a spot on the Dane of Earth home page galaxy to work as a link. The
+Galaxy's settings now have a Link section: type an address, click a small
+picture of the galaxy to mark the spot, and set how big the clickable circle
+is. Visitors who click inside the circle go to the link, and a click outside
+still turns the galaxy. The builder sees a faint dashed circle, and visitors
+see nothing but the pointing-hand cursor. While building it, the agent session
+found that this morning's Z-Index change (#820) had pushed every In Place
+galaxy behind its own column. It still showed, but nobody could click or drag
+it, including on the live site. That is fixed in the same change. A browser
+check now clicks the circle's centre, its corner, and the far edge of the
+galaxy, and fails if any of the three lands on the wrong thing.
 ## 2026-10-10 — Menu drop-down links no longer vanish on a white-text menu (#823)
 
 On daneofearth.starcaster.pro, hovering "Projects" in the top menu opened an

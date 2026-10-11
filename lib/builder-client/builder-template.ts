@@ -2904,7 +2904,8 @@ export function normalizeBuilderModuleSettingsForType(
        placement read. Deliberately NOT filled: c1..c5 and haze (empty means
        "follow the default colour", the theme-colour control's reset — a
        backfill here would undo every reset on the next load) and posterUrl
-       (empty means "no poster"). The values match GALAXY_SETTING_DEFAULTS in
+       (empty means "no poster"), and linkUrl / linkLabel (task 86bcgef6g).
+       The values match GALAXY_SETTING_DEFAULTS in
        galaxy-field.ts and GALAXY_LOOK_DEFAULTS in galaxy-render.ts; they are
        written out rather than imported so this server bundle stays small. */
     const galaxyDefaults: Record<string, string> = {
@@ -2923,7 +2924,11 @@ export function normalizeBuilderModuleSettingsForType(
       intro: "unfurl", introDelay: "0", introDuration: "5", scrollDisperse: "true", scrollDistance: "800",
       /* Task 86bcd9qtc: the resting pose. Mirrors GALAXY_POSE_DEFAULTS —
          0 and 0 are the face-on galaxy every page had before. */
-      viewAngle: "0", ovalDirection: "0"
+      viewAngle: "0", ovalDirection: "0",
+      /* Task 86bcgef6g: the link hotspot. Mirrors GALAXY_LINK_DEFAULTS.
+         linkUrl and linkLabel are NOT filled: an empty address means "no
+         hotspot", an empty label means "use the address". */
+      linkNewTab: "false", linkX: "50", linkY: "50", linkRadius: "80"
     };
     /* Task 86bcd9qtc: the Converge fly-in was retired. A page that saved it
        gets Unfurl, the intro the runtime already reads it as — written back

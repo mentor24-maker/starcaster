@@ -7501,6 +7501,54 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   outline-offset: -4px;
 }
 
+/*
+ * Galaxy link hotspot (task 86bcgef6g) — a round link laid one rung above
+ * the drag surface. Its geometry is inline (the centre and radius are
+ * settings); this is only what a visitor feels and what the builder sees.
+ * On a published page it is invisible but for the pointer: the dashed
+ * outline and faint fill come from `--builder`, which the runtime adds only
+ * when the page is not `liveSite` — the same gate as BuilderOnlyNote.
+ */
+.builder-react-root .galaxy-link-hotspot {
+  cursor: pointer;
+  background: transparent;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.builder-react-root .galaxy-link-hotspot--builder {
+  outline: 1px dashed rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.builder-react-root .galaxy-link-hotspot:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
+/*
+ * The panel's Click point box (task 86bcgef6g): a still of the galaxy with
+ * the hotspot drawn over it. Its height and the circle's size and centre are
+ * inline because they ARE the settings; the box fills its slot like any
+ * other `full` control.
+ */
+.builder-react-root .builder-galaxy-link-picker {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  cursor: crosshair;
+}
+
+.builder-react-root .builder-galaxy-link-picker-circle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  outline: 1px dashed rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
 /* ------------------------------------------------------------------ *
  * Builder Preview strip (86bbq2y7x)
  *

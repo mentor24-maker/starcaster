@@ -284,6 +284,38 @@ existing page draws the same pixels; a test holds that.
 Both default to 0. Capped at 75° because past that the disc's 2% thickness
 starts to show as a band of stars rather than a thin oval.
 
+## Link hotspot (task 86bcgef6g)
+
+A **Link** section under Placement makes a round spot on an In Place galaxy
+clickable: `linkUrl`, `linkLabel` (the aria-label; falls back to the URL),
+`linkNewTab`, a centre `linkX`/`linkY` in PERCENT of the block (so it stays
+in the same relative place on a phone) and `linkRadius` in pixels (20–600).
+`readGalaxyLink` in `galaxy-field.ts` clamps all of it and returns null for no
+address (or a `javascript:` one), so the runtime never sees NaN.
+
+The runtime renders an `<a data-galaxy-link>` after the drag surface, one
+z-index rung above it, with `border-radius: 50%` — the browser hit-tests the
+rounded shape, so a press in the corner of its square still turns the galaxy.
+In the Builder it carries `galaxy-link-hotspot--builder` (dashed outline,
+faint fill); a `liveSite` page never gets that class. Window Center renders no
+hotspot at all: that galaxy sits behind the page and a link over it would
+float over the page's text.
+
+The point is picked in the PANEL, not on the canvas: the running galaxy lives
+in the preview's own document, so the Click point box draws a still with
+`GalaxyCardPreview` at the block's ratio (the cell treated as 1200px wide
+against Height) and maps a click with `galaxyLinkPointFromClick`. X % / Y %
+beside it are the escape hatch when that ratio is off.
+
+**Trap found building it:** a module's `zIndex` setting is NOT always the
+flow Z-Index #820 added for headings, images, carousels and menus. Galaxy and
+TractorNav store their own, defaulting to -9999, for where the CANVAS sits.
+#820 put every module's `zIndex` on its wrapper, which clamped to -999 and
+sent every In Place galaxy behind its own column: still visible, no click or
+drag reaching it. The wrapper style is now limited to `MODULE_STACK_TYPES` in
+`builder-utils.ts`. The `galaxy-link-hotspot-is-clickable` contracts are what
+saw it — they ask `elementFromPoint`, not z-index.
+
 ## Look (task 86bc7f5hm)
 
 Everything here lives in `lib/builder-client/galaxy-render.ts`, and one frame
