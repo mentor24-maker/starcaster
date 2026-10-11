@@ -1,3 +1,16 @@
+## 2026-10-10 — Menu drop-down links no longer vanish on a white-text menu (#823)
+
+On daneofearth.starcaster.pro, hovering "Projects" in the top menu opened an
+empty white box: the links were drawn in white on a white panel. The builder
+had been promising dark text for an empty drop-down Text Color, while the
+live page used the menu's own white text. Now one rule decides the colour for
+both the page and the builder's swatch, so they always agree. If the colour
+the drop-down would inherit cannot be read on the panel (white on white, dark
+on dark), it switches to a readable one, and the builder says so under the
+field. A colour you set yourself is left alone, but the builder now warns
+when it matches the panel background, which is the case on Dane's own menu
+and the one setting he needs to clear.
+
 ## 2026-10-09 — Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (#815)
 
 The Substack Miner's top line now says whether the push is working, not just
