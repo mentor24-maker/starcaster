@@ -4740,4 +4740,97 @@ export const RENDER_CONTRACTS = [
     absent: true,
     emulate: { liveSite: true },
   },
+  /*
+   * The link hotspot (task 86bcgef6g). Whether a click is the link's or the
+   * galaxy's is decided by the browser's hit test, not by any z-index the
+   * markup declares, so these ask `elementFromPoint` at three points: the
+   * circle's centre (the link), a corner of its square (the galaxy — it is a
+   * CIRCLE), and the block's far left (the galaxy).
+   */
+  ...[
+    { id: 'galaxy-link-hotspot-is-clickable', liveSite: false },
+    { id: 'galaxy-link-hotspot-is-clickable-on-a-live-site', liveSite: true },
+  ].map(({ id, liveSite }) => ({
+    id,
+    why:
+      'Dane asked for a spot on an In Place galaxy that visitors can click. The galaxy is covered ' +
+      'edge to edge by its drag surface, so a link one rung too low is drawn, outlined, and takes ' +
+      'no click at all — and a square hit area would steal drags meant for the galaxy from the ' +
+      'corners of a circle the builder drew. ' +
+      (liveSite
+        ? 'On a published page the circle must also be INVISIBLE: the dashed outline is for whoever ' +
+          'builds the page, and on a visitor\'s screen it is builder chrome (landmine 16).'
+        : 'In the Builder the circle must be VISIBLE, or nobody can tell where the link is.'),
+    module: {
+      type: 'galaxy',
+      settings: {
+        placement: 'inline', interaction: 'rotate', height: '300', intro: 'none',
+        linkUrl: '/about', linkX: '50', linkY: '50', linkRadius: '80',
+      },
+    },
+    selector: 'a[data-galaxy-link]',
+    read: ['outlineStyle', 'backgroundColor', 'width', 'height', 'cursor'],
+    ...(liveSite ? { emulate: { liveSite: true } } : {}),
+    probes: {
+      centre: { subject: 'a[data-galaxy-link]', against: '.galaxy-drag-surface' },
+      corner: { subject: 'a[data-galaxy-link]', against: '.galaxy-drag-surface', at: { x: 0.04, y: 0.04 } },
+      outside: { subject: '.galaxy-drag-surface', against: '.galaxy-drag-surface', at: { x: 0.03, y: 0.5 } },
+    },
+    expect(sample) {
+      const { centre, corner, outside } = sample.probes || {};
+      if (!centre || !corner || !outside) return 'a probe was not taken — the contract measured nothing.';
+      for (const probe of [centre, corner, outside]) {
+        if (probe.missing) return `the probe could not find \`${probe.missing}\` — the hotspot or the drag surface did not render.`;
+        if (!(probe.overlap > 0)) return 'the hotspot and the drag surface do not overlap, so no point tested means anything.';
+      }
+      if (sample.styles.width !== '160px' || sample.styles.height !== '160px') {
+        return `the hotspot is ${sample.styles.width} × ${sample.styles.height}, not 160px × 160px — its size is not twice Radius 80.`;
+      }
+      if (!centre.onSubject) {
+        return `a click at the centre of the hotspot lands on \`${centre.hit}\`, not the link — the circle sits ` +
+          'under the drag surface, so it is drawn but nobody can click it.';
+      }
+      if (corner.onSubject || !corner.onAgainst) {
+        return `a click in the corner of the hotspot's square lands on \`${corner.hit}\`, not the drag surface — ` +
+          'the hit area is a square, so it takes drags from outside the circle the builder drew.';
+      }
+      if (!outside.onSubject) {
+        return `a click far from the hotspot lands on \`${outside.hit}\`, not the drag surface — the galaxy can no longer be turned there.`;
+      }
+      if (sample.styles.cursor !== 'pointer') {
+        return `the cursor over the hotspot is \`${sample.styles.cursor}\`, not a pointing hand — nothing tells a visitor it is a link.`;
+      }
+      const clear = /^rgba\(0, 0, 0, 0\)$|^transparent$/.test(sample.styles.backgroundColor);
+      if (liveSite) {
+        if (sample.styles.outlineStyle !== 'none' || !clear) {
+          return `on a published page the hotspot shows outline \`${sample.styles.outlineStyle}\` and fill ` +
+            `\`${sample.styles.backgroundColor}\` — the builder's outline is leaking onto a visitor's screen.`;
+        }
+      } else if (sample.styles.outlineStyle !== 'dashed' || clear) {
+        return `in the Builder the hotspot shows outline \`${sample.styles.outlineStyle}\` and fill ` +
+          `\`${sample.styles.backgroundColor}\` — the builder cannot see where the link is.`;
+      }
+      return null;
+    },
+  })),
+  {
+    id: 'galaxy-without-link-adds-nothing',
+    why:
+      'Every galaxy saved before the hotspot existed has no Link to, and must render exactly as it did: ' +
+      'no anchor, no outline. Paired with `galaxy-link-hotspot-is-clickable`, which would make this ' +
+      'pass for the wrong reason if the hotspot never rendered at all.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none' } },
+    selector: 'a[data-galaxy-link]',
+    absent: true,
+  },
+  {
+    id: 'galaxy-window-center-has-no-link-hotspot',
+    why:
+      'A Window Center galaxy sits behind the page at z-index -9999; a clickable circle lifted over it ' +
+      'would float over the page\'s own text and steal its clicks. So the hotspot is In Place only, ' +
+      'even when Link to is set.',
+    module: { type: 'galaxy', settings: { placement: 'window', intro: 'none', linkUrl: '/about' } },
+    selector: 'a[data-galaxy-link]',
+    absent: true,
+  },
 ];

@@ -983,6 +983,87 @@ export function resolveGalaxyInteraction(inline: boolean, value: string | undefi
     : defaultGalaxyInteraction(inline);
 }
 
+// ---------------------------------------------------------------------------
+
+/**
+ * The clickable hotspot (task 86bcgef6g): a round link laid over an In Place
+ * galaxy. The centre is a PERCENT of the block's width and height, so the
+ * spot stays in the same relative place on a phone; the radius is pixels.
+ * `linkUrl` and `linkLabel` are deliberately absent here — empty means "no
+ * hotspot" and "use the URL", so the normalizer never fills them (§5.27).
+ */
+export const GALAXY_LINK_DEFAULTS: Record<string, string> = {
+  linkNewTab: "false",
+  linkX: "50",
+  linkY: "50",
+  linkRadius: "80"
+};
+
+export const GALAXY_LINK_RANGES: Record<string, { min: number; max: number }> = {
+  linkX: { min: 0, max: 100 },
+  linkY: { min: 0, max: 100 },
+  linkRadius: { min: 20, max: 600 }
+};
+
+/**
+ * The designer treats the cell as this wide when it draws the Click point
+ * box: the box's aspect is this against Height, and the radius is drawn at
+ * box width over this.
+ */
+export const GALAXY_LINK_REFERENCE_WIDTH = 1200;
+
+export interface GalaxyLink {
+  url: string;
+  newTab: boolean;
+  label: string;
+  /** Centre, 0..100 percent of the block. */
+  x: number;
+  y: number;
+  /** Pixels. */
+  radius: number;
+}
+
+function readLinkNumber(value: string | undefined, key: string): number {
+  const { min, max } = GALAXY_LINK_RANGES[key];
+  const parsed = Number.parseFloat(String(value ?? "").trim());
+  const fallback = Number(GALAXY_LINK_DEFAULTS[key]);
+  return Math.max(min, Math.min(max, Number.isFinite(parsed) ? parsed : fallback));
+}
+
+/**
+ * The hotspot as it will render, or null for none. A junk number reads as
+ * its default and an out-of-range one is clamped, so nothing downstream ever
+ * sees NaN. A `javascript:` address is treated as no link at all.
+ */
+export function readGalaxyLink(bag: Record<string, string | undefined> = {}): GalaxyLink | null {
+  const url = String(bag.linkUrl ?? "").trim();
+  if (!url || /^javascript:/i.test(url.replace(/\s+/g, ""))) return null;
+  const label = String(bag.linkLabel ?? "").trim();
+  return {
+    url,
+    newTab: bag.linkNewTab === "true",
+    label: label || url,
+    x: readLinkNumber(bag.linkX, "linkX"),
+    y: readLinkNumber(bag.linkY, "linkY"),
+    radius: readLinkNumber(bag.linkRadius, "linkRadius")
+  };
+}
+
+/**
+ * Where a click in the designer's Click point box lands, as whole percents of
+ * the box — clamped, because a click on the box's very edge can report a
+ * coordinate a hair outside it.
+ */
+export function galaxyLinkPointFromClick(
+  clientX: number,
+  clientY: number,
+  box: { left: number; top: number; width: number; height: number }
+): { x: number; y: number } {
+  const share = (offset: number, size: number) =>
+    size > 0 && Number.isFinite(offset) ? Math.max(0, Math.min(100, Math.round((offset / size) * 100))) : 50;
+  return { x: share(clientX - box.left, box.width), y: share(clientY - box.top, box.height) };
+}
+
 /**
  * Move `current` toward `target`, frame-rate independent: the gap shrinks by
  * e^(-damping × dt) each frame. To first order that is the reference's

@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { GalaxyCardPreview } from "@/components/builder-galaxy-module";
 import {
   BuilderSchemaModuleSettings,
   type BuilderSchemaField,
@@ -10,6 +12,9 @@ import { type BuilderThemePalette } from "./builder-theme-color-field";
 import { PROXIMITY_PLACEMENT_OPTIONS, proximityIsInline } from "@/lib/effect-placement";
 import {
   GALAXY_DEFAULT_PALETTE,
+  GALAXY_LINK_DEFAULTS,
+  GALAXY_LINK_RANGES,
+  GALAXY_LINK_REFERENCE_WIDTH,
   GALAXY_MOTION_DEFAULTS,
   GALAXY_POSE_DEFAULTS,
   GALAXY_POSE_RANGES,
@@ -17,6 +22,8 @@ import {
   GALAXY_SETTING_DEFAULTS,
   GALAXY_SETTING_RANGES,
   galaxyInteractionsFor,
+  galaxyLinkPointFromClick,
+  readGalaxyLink,
   resolveGalaxyInteraction,
   type GalaxyInteraction
 } from "@/lib/galaxy-field";
@@ -123,6 +130,61 @@ function introOn(settings: Record<string, string>): boolean {
 /** Scroll Distance exists only while Scroll Away is on. Absent means on. */
 function scrollOn(settings: Record<string, string>): boolean {
   return (settings.scrollDisperse || GALAXY_MOTION_DEFAULTS.scrollDisperse) !== "false";
+}
+
+/** The hotspot's fields exist only In Place, and past the address only once there is one. */
+function linkOn(settings: Record<string, string>): boolean {
+  return proximityIsInline(settings.placement) && Boolean((settings.linkUrl ?? "").trim());
+}
+
+/**
+ * The Click point box (task 86bcgef6g). The running galaxy lives in another
+ * document (the preview iframe), so the point is picked here instead, on a
+ * still drawn by the card's own painter at the block's ratio — the cell
+ * treated as GALAXY_LINK_REFERENCE_WIDTH wide against Height. A click sets
+ * X % and Y %; the circle is the radius at the same scale.
+ */
+function GalaxyLinkPicker({ settings, setMany }: { settings: Record<string, string>; setMany: (values: Record<string, string>) => void }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxWidth, setBoxWidth] = useState(0);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const read = () => setBoxWidth(box.clientWidth);
+    read();
+    if (typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+
+  const width = boxWidth || 300;
+  const blockHeight = Math.max(120, Math.min(1200, Number.parseInt(settings.height || "480", 10) || 480));
+  const boxHeight = Math.max(40, Math.round((width * blockHeight) / GALAXY_LINK_REFERENCE_WIDTH));
+  // Read with a stand-in address so the circle shows the clamped numbers the page will use.
+  const link = readGalaxyLink({ ...settings, linkUrl: "#" });
+  const diameter = Math.max(4, ((link?.radius ?? 80) * 2 * width) / GALAXY_LINK_REFERENCE_WIDTH);
+
+  return (
+    <div
+      ref={boxRef}
+      className="builder-galaxy-link-picker"
+      data-galaxy-link-picker="true"
+      style={{ height: boxHeight }}
+      onClick={(event) => {
+        const point = galaxyLinkPointFromClick(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect());
+        setMany({ linkX: String(point.x), linkY: String(point.y) });
+      }}
+    >
+      <GalaxyCardPreview settings={settings} height={boxHeight} padded={false} />
+      <span
+        className="builder-galaxy-link-picker-circle"
+        aria-hidden="true"
+        style={{ left: `${link?.x ?? 50}%`, top: `${link?.y ?? 50}%`, width: diameter, height: diameter }}
+      />
+    </div>
+  );
 }
 
 export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColors = [] }: Props) {
@@ -379,6 +441,140 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
               )
             }
           ]
+        ],
+        /*
+         * The clickable hotspot (task 86bcgef6g). A section under Placement
+         * rather than a fifth axis: four is the ceiling, and where the circle
+         * sits is a placement question. Every field is In Place only, because
+         * a Window galaxy sits behind the page; the note says so instead.
+         */
+        sections: [
+          {
+            title: "Link",
+            strips: [
+              [
+                {
+                  key: "linkUrl",
+                  label: "Link to",
+                  width: "text-md",
+                  control: "text",
+                  placeholder: "https://",
+                  visibleWhen: (settings) => proximityIsInline(settings.placement),
+                  rendersVia: "GalaxyRuntime"
+                }
+              ],
+              [
+                {
+                  key: "linkLabel",
+                  label: "Link label",
+                  width: "text-md",
+                  control: "text",
+                  placeholder: "Read aloud instead of the address",
+                  visibleWhen: linkOn,
+                  rendersVia: "GalaxyRuntime"
+                },
+                {
+                  key: "linkNewTab",
+                  label: "Open in new tab",
+                  width: "check",
+                  control: "checkbox",
+                  trueValue: "true",
+                  falseValue: "false",
+                  fallback: GALAXY_LINK_DEFAULTS.linkNewTab,
+                  visibleWhen: linkOn,
+                  rendersVia: "GalaxyRuntime"
+                }
+              ],
+              [
+                {
+                  key: "linkPicker",
+                  label: "Click point",
+                  width: "full",
+                  control: "custom",
+                  visibleWhen: linkOn,
+                  rendersVia: "GalaxyRuntime",
+                  render: ({ settings, setMany }) => <GalaxyLinkPicker settings={settings} setMany={setMany} />
+                }
+              ],
+              [
+                {
+                  key: "linkPickerNote",
+                  label: "",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  visibleWhen: linkOn,
+                  render: () => (
+                    <span className="builder-module-offset-hint">
+                      The circle in this box is a guide: open Live Preview to see
+                      exactly where it lands on the page.
+                    </span>
+                  )
+                }
+              ],
+              [
+                {
+                  key: "linkX",
+                  label: "X %",
+                  width: "num",
+                  control: "number",
+                  min: GALAXY_LINK_RANGES.linkX.min,
+                  max: GALAXY_LINK_RANGES.linkX.max,
+                  fallback: GALAXY_LINK_DEFAULTS.linkX,
+                  visibleWhen: linkOn,
+                  rendersVia: "GalaxyRuntime"
+                },
+                {
+                  key: "linkY",
+                  label: "Y %",
+                  width: "num",
+                  control: "number",
+                  min: GALAXY_LINK_RANGES.linkY.min,
+                  max: GALAXY_LINK_RANGES.linkY.max,
+                  fallback: GALAXY_LINK_DEFAULTS.linkY,
+                  visibleWhen: linkOn,
+                  rendersVia: "GalaxyRuntime"
+                }
+              ],
+              [
+                slider("linkRadius", "Radius", {
+                  min: GALAXY_LINK_RANGES.linkRadius.min,
+                  max: GALAXY_LINK_RANGES.linkRadius.max,
+                  step: 5,
+                  suffix: "px",
+                  fallback: GALAXY_LINK_DEFAULTS.linkRadius,
+                  visibleWhen: linkOn
+                })
+              ],
+              [
+                {
+                  key: "linkNote",
+                  label: "",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  visibleWhen: (settings) => !linkOn(settings),
+                  render: ({ settings }) => (
+                    <span className="builder-module-offset-hint">
+                      {!proximityIsInline(settings.placement) ? (
+                        <>
+                          <strong>In Place only:</strong> a Window Center galaxy
+                          sits behind the page, so a clickable spot on it would
+                          float over the page&rsquo;s own text. Set Sits to In
+                          Place to give it a link.
+                        </>
+                      ) : (
+                        <>
+                          Add an address to make a round spot on the galaxy
+                          clickable. A click outside the circle still turns it.
+                        </>
+                      )}
+                    </span>
+                  )
+                }
+              ]
+            ]
+          }
         ]
       },
       {

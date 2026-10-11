@@ -1204,6 +1204,14 @@ const buildPanelCheckSection = (ids) => {
           introDuration: '5',
           scrollDisperse: 'true',
           scrollDistance: '800',
+          // A link (task 86bcgef6g), so every field of the Link section —
+          // hidden until there is an address — is showing and measured.
+          linkUrl: '/about',
+          linkLabel: 'About',
+          linkNewTab: 'false',
+          linkX: '40',
+          linkY: '55',
+          linkRadius: '90',
         },
       };
     })(),
