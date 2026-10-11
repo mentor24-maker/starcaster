@@ -10,6 +10,15 @@ on dark), it switches to a readable one, and the builder says so under the
 field. A colour you set yourself is left alone, but the builder now warns
 when it matches the panel background, which is the case on Dane's own menu
 and the one setting he needs to clear.
+
+The same fix covers the link under the mouse. Once Dane picked a dark text
+colour, the links showed but each one turned white the moment he pointed at
+it, because a drop-down link borrowed the main menu's Hover Text, which is
+chosen for the dark bar, not the white panel. The drop-down now has its own
+Hover Text and Hover Fill under Text > Panel. Left empty, a hovered link
+follows the menu's hover colour unless that would be invisible, and then it
+switches to a readable one and the builder says why.
+
 ## 2026-10-10 — CRM form colors stop reverting to their defaults (#821)
 
 Dane set his contact form's colors, and the next time he opened it every color
