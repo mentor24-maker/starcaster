@@ -5019,6 +5019,34 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--site-nav-dropdown-hover-color, var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4)));
 }
 
+/* Where NO panel is drawn the sub-links sit on the header, beside the top-level
+   links, and the panel-guarded colours above are wrong there: a white-text menu
+   got dark slate sub-links on a dark header at 390px (86bcgddcy, review round 2).
+   Every vertical menu, and every horizontal one below 720px, where legacy.css
+   makes the drop-down a transparent in-flow accordion. These read the
+   unguarded pair from getNavDropdownInlineColors(); empty means the top-level
+   link colour, exactly as before the guard existed. One more class than the
+   rules above, so they win. */
+.builder-react-root .site-nav--vertical .site-nav-dropdown-item {
+  color: var(--site-nav-dropdown-inline-color, var(--site-nav-link-color, #163a5e));
+}
+
+.builder-react-root .site-nav--vertical .site-nav-dropdown-item:hover,
+.builder-react-root .site-nav--vertical .site-nav-dropdown-item:focus-visible {
+  color: var(--site-nav-dropdown-inline-hover-color, var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4)));
+}
+
+@media (max-width: 720px) {
+  .builder-react-root .site-nav:not(.site-nav--vertical) .site-nav-dropdown-item {
+    color: var(--site-nav-dropdown-inline-color, var(--site-nav-link-color, #163a5e));
+  }
+
+  .builder-react-root .site-nav:not(.site-nav--vertical) .site-nav-dropdown-item:hover,
+  .builder-react-root .site-nav:not(.site-nav--vertical) .site-nav-dropdown-item:focus-visible {
+    color: var(--site-nav-dropdown-inline-hover-color, var(--site-nav-link-hover-color, var(--site-nav-link-color, #0a8fc4)));
+  }
+}
+
 /* The same Sub-level type controls, restated for the list dropdown. Its links
    carry `.site-nav-link` as well, so without these they take the TOP-level
    weight, case and spacing — which is the half of "the same font settings for

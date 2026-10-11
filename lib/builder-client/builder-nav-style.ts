@@ -106,6 +106,12 @@ export const NAV_STYLE_DEFAULTS = {
   dropdownTextOnLight: "#334861",
   dropdownTextOnDark: "#ffffff",
   /*
+   * Main Menu > Text Color when it is empty — the #163a5e its swatch shows and
+   * the stylesheet falls back to. A sub-link with no panel behind it (a phone,
+   * a vertical menu) follows it; see getNavDropdownInlineColors.
+   */
+  menuTextColor: "#163a5e",
+  /*
    * Main Menu > Hover Text when it is empty — the same #0a8fc4 its swatch has
    * always shown. A hovered sub-link follows it unless the panel names its own.
    */
@@ -262,6 +268,10 @@ export function resolveNavDropdownTextColor(settings: NavSettings): {
   if (explicit) return { color: explicit, source: "panel" };
 
   const linkColor = color(settings.navColor);
+  // A vertical menu draws no panel, so there is nothing to guard against.
+  if (isNavVertical(settings)) {
+    return { color: linkColor ?? NAV_STYLE_DEFAULTS.menuTextColor, source: linkColor ? "menu" : "default" };
+  }
   const inherited = linkColor ?? NAV_STYLE_DEFAULTS.dropdownTextColor;
   const fill = getNavDropdownBackground(settings);
   if (isInvisibleOn(inherited, fill)) {
@@ -315,6 +325,7 @@ export function resolveNavDropdownHoverColor(settings: NavSettings): {
 
   const menuHover = color(settings.navHoverColor) ?? color(settings.navColor);
   const inherited = menuHover ?? NAV_STYLE_DEFAULTS.hoverColor;
+  if (isNavVertical(settings)) return { color: inherited, source: menuHover ? "menu" : "default" };
   const fill = getNavDropdownHoverSurface(settings);
   if (isInvisibleOn(inherited, fill)) {
     return { color: contrastingTextOn(fill), source: "contrast", inherited };
@@ -330,6 +341,31 @@ export function resolveNavDropdownHoverColor(settings: NavSettings): {
 export function getNavDropdownHoverSurface(settings: NavSettings): string {
   const hoverFill = getNavDropdownHoverBackground(settings);
   return navColorContrast(hoverFill, hoverFill) === null ? getNavDropdownBackground(settings) : hoverFill;
+}
+
+/** A vertical menu's sub-items are an indented list, never a hanging panel. */
+export function isNavVertical(settings: NavSettings): boolean {
+  return settings.navDirection === "vertical";
+}
+
+/**
+ * The sub-link colours where NO panel is drawn: below 720px, where legacy.css
+ * turns the drop-down into a transparent in-flow accordion, and in every
+ * vertical menu. There the links sit on the header, beside the top-level
+ * links, so they follow what they followed before the contrast guard existed —
+ * the panel's own colour if set, else the main menu's. Undefined means "no
+ * colour named": the stylesheet then uses the top-level link colour, which is
+ * what a theme sets on an ancestor this function cannot see.
+ *
+ * Round 2 of 86bcgddcy measured the alternative at 390px: the guard, which
+ * judges against the white panel, drew #334861 sub-links on a dark header.
+ */
+export function getNavDropdownInlineColors(settings: NavSettings): { color?: string; hoverColor?: string } {
+  return {
+    color: color(settings.navDropdownTextColor) ?? color(settings.navColor),
+    hoverColor:
+      color(settings.navDropdownHoverColor) ?? color(settings.navHoverColor) ?? color(settings.navColor)
+  };
 }
 
 /** The drop-down panel's fill as rendered. */
@@ -398,6 +434,7 @@ export function getNavUnderline(settings: NavSettings): { rest: string; hover: s
  */
 export function getNavModuleStyle(settings: NavSettings): CSSProperties {
   const underline = getNavUnderline(settings);
+  const inline = getNavDropdownInlineColors(settings);
   const linkColor = color(settings.navColor);
   const hoverColor = color(settings.navHoverColor);
   // Which panel is on screen decides only one thing here: the frame each has
@@ -556,6 +593,9 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
     // Hovered sub-links read these instead of the bar's hover pair (86bcgddcy).
     "--site-nav-dropdown-hover-color": resolveNavDropdownHoverColor(settings).color,
     "--site-nav-dropdown-hover-bg": getNavDropdownHoverBackground(settings),
+    // The same links where no panel is drawn (phones, vertical menus): unguarded.
+    "--site-nav-dropdown-inline-color": inline.color,
+    "--site-nav-dropdown-inline-hover-color": inline.hoverColor,
     // A mega link has always hovered in the theme accent; only the panel's own
     // Hover Text, when set, replaces it.
     "--site-nav-mega-hover-color": color(settings.navDropdownHoverColor),

@@ -19,6 +19,13 @@ Hover Text and Hover Fill under Text > Panel. Left empty, a hovered link
 follows the menu's hover colour unless that would be invisible, and then it
 switches to a readable one and the builder says why.
 
+On a phone, and in a menu laid out vertically, there is no white panel at
+all: the drop-down links are listed on the header itself, under their parent.
+There the readability switch was judging against a panel nobody can see and
+made white-text menus draw dark links on a dark header. Those links now
+simply match the rest of the menu, as they did before, and the builder no
+longer shows the warning on a vertical menu.
+
 ## 2026-10-10 — Dane of Earth: getting ready for Hostinger switching off on 10/23 (#822)
 
 The Dane of Earth site still loaded 43 of its pictures from the old WordPress

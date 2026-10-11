@@ -5,6 +5,7 @@ import {
   NAV_STYLE_DEFAULTS,
   getNavDropdownBackground,
   getNavDropdownHoverSurface,
+  isNavVertical,
   navColorContrast,
   resolveNavDropdownHoverColor,
   resolveNavDropdownTextColor
@@ -162,9 +163,11 @@ const RENDERS_VIA = "getNavModuleStyle (builder-nav-style.ts)";
  * nothing in the builder pointing at it (task 86bcgddcy).
  */
 function dropdownTextNote(settings: Record<string, string>): string | null {
+  // A vertical menu draws no panel, so there is nothing to be invisible on.
+  if (isNavVertical(settings)) return null;
   const resolved = resolveNavDropdownTextColor(settings);
   if (resolved.source === "contrast") {
-    return `The menu's text colour (${resolved.inherited}) would be invisible on the panel background, so the drop-down links show in ${resolved.color}.`;
+    return `The menu's text colour (${resolved.inherited}) would be invisible on the panel background, so the drop-down links show in ${resolved.color}. On phones, where there is no panel, they keep the menu's colour.`;
   }
   if (resolved.source === "panel") {
     const contrast = navColorContrast(resolved.color, getNavDropdownBackground(settings));
@@ -177,9 +180,10 @@ function dropdownTextNote(settings: Record<string, string>): string | null {
 
 /** The same warning for a HOVERED sub-link, measured against what is behind it. */
 function dropdownHoverNote(settings: Record<string, string>): string | null {
+  if (isNavVertical(settings)) return null;
   const resolved = resolveNavDropdownHoverColor(settings);
   if (resolved.source === "contrast") {
-    return `The menu's hover colour (${resolved.inherited}) would be invisible on the panel, so a hovered drop-down link shows in ${resolved.color}.`;
+    return `The menu's hover colour (${resolved.inherited}) would be invisible on the panel, so a hovered drop-down link shows in ${resolved.color}. On phones, where there is no panel, it keeps the menu's hover colour.`;
   }
   if (resolved.source === "panel") {
     const contrast = navColorContrast(resolved.color, getNavDropdownHoverSurface(settings));

@@ -7,6 +7,7 @@ import {
   getNavModuleClassNames,
   getNavModuleStyle,
   getNavTextShadow,
+  getNavDropdownInlineColors,
   getNavUnderline,
   isNavMegaMenu,
   navColorContrast,
@@ -624,5 +625,43 @@ describe("hovered drop-down links stay readable (86bcgddcy, round 2)", () => {
     expect(vars["--site-nav-dropdown-hover-color"]).toBe("#ff4500");
     expect(vars["--site-nav-mega-hover-color"]).toBe("#ff4500");
     expect(style()["--site-nav-mega-hover-color"]).toBeUndefined();
+  });
+});
+
+describe("where no panel is drawn, sub-links keep the menu's colour (86bcgddcy, round 3)", () => {
+  it("a vertical white-text menu with empty panel colours gives #ffffff sub-links, not the guard's dark", () => {
+    const settings = { navDirection: "vertical", navColor: "#ffffff" };
+    expect(getNavDropdownInlineColors(settings).color).toBe("#ffffff");
+    expect(resolveNavDropdownTextColor(settings)).toEqual({ color: "#ffffff", source: "menu" });
+    expect(style(settings)["--site-nav-dropdown-inline-color"]).toBe("#ffffff");
+    expect(style(settings)["--site-nav-dropdown-color"]).toBe("#ffffff");
+  });
+
+  it("a vertical menu's hovered sub-link follows the bar's hover colour unguarded", () => {
+    const settings = { navDirection: "vertical", navColor: "#ffffff", navHoverColor: "#ffffff" };
+    expect(resolveNavDropdownHoverColor(settings)).toEqual({ color: "#ffffff", source: "menu" });
+    expect(style(settings)["--site-nav-dropdown-inline-hover-color"]).toBe("#ffffff");
+  });
+
+  it("the horizontal panel keeps its guard; the inline pair beside it is unguarded", () => {
+    const vars = style({ navColor: "#ffffff" });
+    expect(vars["--site-nav-dropdown-color"]).toBe("#334861");
+    expect(vars["--site-nav-dropdown-inline-color"]).toBe("#ffffff");
+    expect(vars["--site-nav-dropdown-inline-hover-color"]).toBe("#ffffff");
+  });
+
+  it("the panel's own colours still win where no panel is drawn", () => {
+    expect(
+      getNavDropdownInlineColors({ navColor: "#ffffff", navDropdownTextColor: "#ffcc00", navDropdownHoverColor: "#ff4500" })
+    ).toEqual({ color: "#ffcc00", hoverColor: "#ff4500" });
+  });
+
+  it("names no colour when nothing is set, so the stylesheet uses the top-level link colour", () => {
+    expect(getNavDropdownInlineColors({})).toEqual({ color: undefined, hoverColor: undefined });
+    expect(style()["--site-nav-dropdown-inline-color"]).toBeUndefined();
+    expect(resolveNavDropdownTextColor({ navDirection: "vertical" })).toEqual({
+      color: NAV_STYLE_DEFAULTS.menuTextColor,
+      source: "default"
+    });
   });
 });

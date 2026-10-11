@@ -4118,6 +4118,100 @@ export const RENDER_CONTRACTS = [
   },
 
   /*
+   * ...BUT NOT ON A PHONE — 86bcgddcy, round 3.
+   *
+   * Below 720px there is no white panel: legacy.css turns the drop-down into a
+   * transparent accordion on the header, so the sub-links sit beside the
+   * top-level links. The contrast guard above judged them against the white
+   * panel anyway and drew them #334861 — dark slate on a dark header, measured
+   * at 390px in review. Here they must match the top-level links.
+   */
+  {
+    id: 'nav-dropdown-links-follow-the-menu-on-a-phone',
+    why:
+      'On a phone the drop-down is an in-flow list on the header, not a white panel. A white-text ' +
+      'menu that leaves the panel colours empty must draw its sub-links white like the top-level ' +
+      'links; the desktop contrast guard drew them dark, unreadable on a dark header. This opens the ' +
+      'hamburger at 390px and compares a sub-link with a top-level link.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    emulate: { viewport: { width: 390, height: 844 } },
+    click: '.site-nav-toggle',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: {
+        top: '.site-nav-items > .site-nav-link',
+        sub: '.site-nav-dropdown-menu .site-nav-dropdown-item',
+      },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the drop-down list is hidden after opening the hamburger, so no sub-link was measured. ' +
+          'Fix the scene, never the assertion.';
+      }
+      const bg = parseRgb(sample.styles.backgroundColor);
+      if (bg && bg.a >= 0.5) {
+        return `the drop-down draws a fill (${sample.styles.backgroundColor}) at 390px — this contract ` +
+          'assumes the phone accordion has none. Fix the scene, or the contract no longer measures a phone.';
+      }
+      const { top, sub } = sample.series?.[0] || {};
+      if (!top || !sub) return 'a top-level link or a sub-link was not found in the open phone menu — measured nothing.';
+      if (top.color !== sub.color) {
+        return `on a phone a sub-link paints ${sub.color} while the top-level links paint ${top.color}. ` +
+          'There is no panel there, so the sub-links sit on the header and must follow the menu ' +
+          '(86bcgddcy, round 3).';
+      }
+      return null;
+    },
+  },
+
+  {
+    id: 'nav-dropdown-hovered-link-follows-the-menu-on-a-phone',
+    why:
+      'The hovered half of the phone case: a sub-link under the finger or pointer on a phone sits on ' +
+      'the header, so it takes the menu\'s Hover Text, not the colour the desktop guard picks for ' +
+      'a white panel.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: NAV_SUBMENU_ITEMS,
+        navColor: '#ffffff',
+        navHoverColor: '#ffffff',
+      },
+    },
+    emulate: { viewport: { width: 390, height: 844 } },
+    click: '.site-nav-toggle',
+    hover: '.site-nav-dropdown-menu .site-nav-dropdown-item',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item:hover' },
+    },
+    expect(sample) {
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no sub-link is under the pointer in the open phone menu — measured nothing. Fix the scene.';
+      if (link.color !== 'rgb(255, 255, 255)') {
+        return `on a phone a hovered sub-link paints ${link.color}, not the menu's white Hover Text. ` +
+          'There is no panel behind it there (86bcgddcy, round 3).';
+      }
+      return null;
+    },
+  },
+
+  /*
    * A COLUMN'S BORDER STYLE — 86bc16vve.
    *
    * `buildBuilderColumnStyle` wrote the border as `${width}px solid ${color}`
