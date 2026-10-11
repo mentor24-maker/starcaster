@@ -1,3 +1,16 @@
+## 2026-10-10 — Imported sites stop showing visitors a note meant for the builder (#824)
+
+When the site importer met something it could not rebuild (a form, a video, a
+table), it put a screenshot in its place with a note, "Imported form — rebuild
+with a real module." The note was meant for whoever finishes the page, but it
+was saved as part of the page itself, so visitors saw it on 21 Dane of Earth
+pages and 2 on another site. The importer now saves the note as a setting that
+only the Builder shows, and the heading "IMPORTED FORM" above those boxes is
+hidden from visitors too. A cleanup script takes the note off the pages already
+imported, in both the draft and the copy visitors are shown. It still has to be
+run on production by a session that has production access, which this machine
+does not.
+
 ## 2026-10-10 — Dane of Earth: getting ready for Hostinger switching off on 10/23 (#822)
 
 The Dane of Earth site still loaded 43 of its pictures from the old WordPress
