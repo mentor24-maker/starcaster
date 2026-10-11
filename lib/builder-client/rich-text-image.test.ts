@@ -19,6 +19,15 @@ describe("resolveRichTextImageSrc", () => {
     );
   });
 
+  it("accepts absolute gallery URLs on the admin host as well as the apex", () => {
+    expect(resolveRichTextImageSrc("https://app.starcaster.pro/gallery/sample.png", "storage")).toBe(
+      "/gallery/sample.png"
+    );
+    expect(resolveRichTextImageSrc("https://www.starcaster.pro/gallery/sample.png", "storage")).toBe(
+      "/gallery/sample.png"
+    );
+  });
+
   it("rejects unsafe sources", () => {
     expect(resolveRichTextImageSrc("javascript:alert(1)", "editor")).toBe("");
   });

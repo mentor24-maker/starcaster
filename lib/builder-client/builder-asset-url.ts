@@ -45,6 +45,7 @@ export function galleryAssetPathFromUrl(url: URL): string {
 function isStarcasterSiteOrigin(origin: string) {
   return (
     origin === "http://localhost:3000" ||
+    origin === "https://app.starcaster.pro" ||
     origin === "https://www.starcaster.pro" ||
     origin === "https://starcaster.pro"
   );

@@ -117,8 +117,10 @@ Apply manually per environment:
 
 ### Vercel
 
-1. Add the custom domain as a **domain alias** on the StarCaster Vercel project.
-2. Point DNS (A/CNAME) per Vercel instructions.
+1. Add the custom domain as a **domain alias** on the StarCaster Vercel project
+   (`vercel domains add <host> starcaster --scope dane-of-earth`).
+2. Point DNS (A/CNAME) per Vercel instructions. A `*.starcaster.pro` host needs
+   no DNS step: the zone is on Vercel and carries a wildcard ALIAS.
 3. Deploy from `main`; middleware and serverless ship with the app.
 
 ### Published pages
@@ -154,11 +156,31 @@ System hosts receive the **StarCaster admin app**, not a tenant site:
 
 - `localhost`, `127.*`, `0.0.0.0`
 - `*.vercel.app`
-- `starcaster.pro`, `*.starcaster.pro`
+- `app.starcaster.pro` — the admin app's address since 2026-10-11 (task 86bcgjq5k)
 
-`middleware.mjs` duplicates the same regex — **keep in sync** when adding system hosts.
+Everything else is a tenant host, resolved through the project's Domain field.
+That includes **`starcaster.pro` itself** (the company's own site, built in the
+Builder under the "Starcaster" project; `www.` is normalized away) and every
+other `*.starcaster.pro` subdomain (per-client staging hosts such as
+`delraytennis.starcaster.pro`).
 
-Client-side checks in `src/layout.html` and `public/index.html` mirror this list for fallback scripts.
+Three copies of the list exist: `lib/publicSiteHosts.js`, `middleware.mjs`, and
+the fallback script in `src/layout.html`. `scripts/builder/publicSiteHosts.test.js`
+fails when they drift.
+
+**One exception on the apex.** `/privacy-policy`, `/terms-of-service` and
+`/data-deletion` on `starcaster.pro` are served as the platform's static pages
+(`X-Site-Handler: platform-page`) whatever the Starcaster site publishes,
+because those addresses are registered with Meta and TikTok app review. The
+list is `PLATFORM_PAGE_PATHS` in `lib/publicSiteHosts.js`. About and Explore
+are not pinned: they live on the admin host, and the company site's own pages
+come from the Builder.
+
+**The OAuth callback origin did not move.** Providers have
+`https://starcaster.pro/api/.../oauth/callback` on file, and `/api/*` reaches
+the same code on every host, so `CONNECTIONS_OAUTH_ORIGIN` pins
+`https://starcaster.pro` in production while `PUBLIC_APP_ORIGIN` (invite
+links, where the browser lands after a sign-in) is `https://app.starcaster.pro`.
 
 ---
 
@@ -245,7 +267,7 @@ curl -sI "https://benvin.org/api/_site/benvin.org?path=%2F"
 3. Publish Builder pages (empty slug or `home` for homepage).
 4. Vercel: add `client.com` as domain alias; configure DNS.
 5. Deploy latest `main`.
-6. Verify: `curl -sI https://client.com/ | grep siteRoot` (body) and Marinoff-style content in browser.
+6. Verify: `curl -s -o /dev/null -w '%header{x-site-handler}' https://client.com/` prints `resolved` (`domain-miss` means step 2 was skipped), then look at it in a browser.
 
 ---
 
