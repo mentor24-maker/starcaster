@@ -561,3 +561,22 @@ test('card grid: --no-cards veto is honoured, and the blocks stay separate modul
   const vetoElsewhere = mapSite(irWithElements(els), { existingSlugs: [], skipCardGridPaths: ['/other/'] });
   assert.equal(vetoElsewhere.cardGrids.length, 1, 'a veto on another path leaves this one alone');
 });
+
+test('a placeholder carries its rebuild caption as a setting, never as page text', () => {
+  // The caption ("Imported form — rebuild with a real module.") is a note for
+  // whoever rebuilds the page. Written into `text`, it was page content and
+  // shipped to visitors on 24 live pages (task 86bcgdm83); as a setting, the
+  // code module renders it through BuilderOnlyNote, inside the Builder only.
+  const out = mapSite(completenessIr(), { existingSlugs: ['about-team'] });
+  const placeholders = out.pages
+    .flatMap((p) => p.sections.flatMap((s) => s.modules))
+    .filter((m) => m.type === 'code' && m.settings.importClass);
+  assert.equal(placeholders.length, 6);
+  for (const m of placeholders) {
+    assert.doesNotMatch(m.text, /rebuild/i, `${m.id} stored text still carries the caption`);
+    assert.match(m.settings.importPlaceholder, /rebuild/i, `${m.id} lost its caption`);
+  }
+  // Both caption shapes: the default and the too-large-to-split reason.
+  assert.ok(placeholders.some((m) => /real module/.test(m.settings.importPlaceholder)));
+  assert.ok(placeholders.some((m) => /too large to split/.test(m.settings.importPlaceholder)));
+});

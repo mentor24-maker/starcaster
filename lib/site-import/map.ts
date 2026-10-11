@@ -1219,6 +1219,11 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           label: `Imported ${el.class}`,
           importClass: el.class,
           importSourceId: el.sourceId,
+          // The caption is a note for whoever rebuilds the page, so it rides
+          // in a setting the renderer shows inside the Builder only. It used
+          // to be written into `text`, which made it page content: it shipped
+          // to visitors on 24 live pages (task 86bcgdm83).
+          importPlaceholder: caption,
         };
         if (el.html.length <= SOURCE_HTML_INLINE_BUDGET) {
           settings.importSourceHtml = el.html;
@@ -1232,7 +1237,7 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
           type: "code",
           column: "main",
           name: `Imported ${el.class}`,
-          text: `${cropImg}<p><em>${escapeHtml(caption)}</em></p>`,
+          text: cropImg,
           settings,
         });
         if (el.screenshot) crops.push({ sourceId: el.sourceId, fromUrl: el.screenshot, moduleId });
