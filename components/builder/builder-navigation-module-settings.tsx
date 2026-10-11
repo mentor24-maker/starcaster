@@ -1,6 +1,12 @@
 import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
-import { NAV_STYLE_DEFAULTS } from "@/lib/builder-nav-style";
+import {
+  NAV_INVISIBLE_CONTRAST,
+  NAV_STYLE_DEFAULTS,
+  getNavDropdownBackground,
+  navColorContrast,
+  resolveNavDropdownTextColor
+} from "@/lib/builder-nav-style";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   createEmptyModule,
@@ -147,6 +153,25 @@ function serializeNavItems(items: NavItem[]) {
 
 /** Every setting on this panel reaches the page through one helper. */
 const RENDERS_VIA = "getNavModuleStyle (builder-nav-style.ts)";
+
+/**
+ * Says so when the drop-down's links would be unreadable on its fill — the
+ * case that gave daneofearth.starcaster.pro a blank white drop-down with
+ * nothing in the builder pointing at it (task 86bcgddcy).
+ */
+function dropdownTextNote(settings: Record<string, string>): string | null {
+  const resolved = resolveNavDropdownTextColor(settings);
+  if (resolved.source === "contrast") {
+    return `The menu's text colour (${resolved.inherited}) would be invisible on the panel background, so the drop-down links show in ${resolved.color}.`;
+  }
+  if (resolved.source === "panel") {
+    const contrast = navColorContrast(resolved.color, getNavDropdownBackground(settings));
+    if (contrast !== null && contrast < NAV_INVISIBLE_CONTRAST) {
+      return "This colour matches the panel Background, so the drop-down links will be invisible. Clear it or pick a contrasting colour.";
+    }
+  }
+  return null;
+}
 
 const isVerticalMenu = (settings: Record<string, string>) => settings.navDirection === "vertical";
 const isMegaMenu = (settings: Record<string, string>) =>
@@ -1046,9 +1071,27 @@ export function BuilderNavigationModuleSettings({
                   label: "Text Color",
                   width: "color",
                   control: "theme-color",
-                  themeDefault: "#334861",
+                  // What an EMPTY field actually renders, from the renderer's
+                  // own function — it used to be a hardcoded #334861 while
+                  // the page drew the menu's text colour (task 86bcgddcy).
+                  themeDefault: resolveNavDropdownTextColor({ ...module.settings, navDropdownTextColor: "" }).color,
                   dialogLabel: "Drop-down link color",
                   rendersVia: RENDERS_VIA
+                }
+              ],
+              [
+                {
+                  key: "navDropdownTextColorNote",
+                  label: "",
+                  width: "full",
+                  control: "custom",
+                  bare: true,
+                  visibleWhen: (settings) => dropdownTextNote(settings) !== null,
+                  render: ({ settings }) => (
+                    <p className="panel-copy builder-panel-field-note" data-nav-dropdown-text-note="">
+                      {dropdownTextNote(settings)}
+                    </p>
+                  )
                 }
               ]
             ]

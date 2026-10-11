@@ -3963,6 +3963,82 @@ export const RENDER_CONTRACTS = [
   },
 
   /*
+   * DROP-DOWN LINKS THAT VANISH — 86bcgddcy.
+   *
+   * daneofearth.starcaster.pro, 2026-10-10: hovering "Projects" opened a blank
+   * white box. The links were there, drawn in the menu's white text on the
+   * panel's white fill, and the builder's swatch had been showing a dark slate
+   * for that empty field the whole time. Nothing measured the colour a
+   * sub-link actually paints against the panel behind it.
+   */
+  {
+    id: 'nav-dropdown-links-stay-readable-on-a-white-text-menu',
+    why:
+      'A menu with white text over a dark header is the common case, and the drop-down panel fills ' +
+      'white by default. With the panel\'s own Text Color left empty, the sub-links used to inherit ' +
+      'the menu\'s white and disappear — a visitor sees an empty box and reads the menu as broken. ' +
+      'This reads the sub-link\'s colour and the panel\'s fill out of a real browser and fails ' +
+      'when the two are indistinguishable.',
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'home', label: 'Home', href: '/' },
+          { id: 'proj', label: 'Projects', href: '/projects' },
+          { id: 'p1', label: 'WaveCenter', href: '/wavecenter', parentId: 'proj' },
+          { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
+        ]),
+        navColor: '#ffffff',
+      },
+    },
+    hover: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+    selector: '.site-nav-dropdown-menu',
+    read: ['display', 'backgroundColor'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['color'],
+      selectors: { link: '.site-nav-dropdown-menu .site-nav-dropdown-item' },
+    },
+    expect(sample) {
+      if (sample.styles.display === 'none') {
+        return 'the dropdown panel is still closed while its trigger is hovered, so no sub-link was ' +
+          'measured. Fix the scene, never the assertion.';
+      }
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no sub-link was found inside the open panel — the contract measured nothing.';
+      const rgb = (value) => {
+        const m = String(value).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?/);
+        return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+      };
+      const text = rgb(link.color);
+      const fill = rgb(sample.styles.backgroundColor);
+      if (!text || !fill) {
+        return `could not read the colours (text ${link.color}, panel ${sample.styles.backgroundColor}).`;
+      }
+      if (fill.a < 0.5) {
+        return `the panel fill reads as ${sample.styles.backgroundColor}, mostly see-through, so a ` +
+          'contrast against it says nothing about what a visitor sees. Fix the scene.';
+      }
+      const lum = ({ r, g, b }) => {
+        const c = [r, g, b].map((v) => {
+          const x = v / 255;
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      };
+      const [hi, lo] = [lum(text), lum(fill)].sort((a, b) => b - a);
+      const ratio = (hi + 0.05) / (lo + 0.05);
+      if (ratio < 3) {
+        return `a sub-link paints ${link.color} on a panel of ${sample.styles.backgroundColor} — a ` +
+          `contrast of ${ratio.toFixed(2)}:1. With Main Menu text set to white and the panel's own ` +
+          'Text Color left empty, the drop-down opens as a blank box (86bcgddcy).';
+      }
+      return null;
+    },
+  },
+
+  /*
    * A COLUMN'S BORDER STYLE — 86bc16vve.
    *
    * `buildBuilderColumnStyle` wrote the border as `${width}px solid ${color}`

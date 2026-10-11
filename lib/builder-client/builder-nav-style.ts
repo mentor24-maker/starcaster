@@ -28,7 +28,11 @@
  */
 
 import type { CSSProperties } from "react";
-import { applyBuilderColorOpacity } from "@/lib/builder-hex-color";
+import {
+  applyBuilderColorOpacity,
+  isTransparentBuilderColor,
+  normalizeBuilderHexColor
+} from "@/lib/builder-hex-color";
 
 type NavSettings = Record<string, string>;
 
@@ -90,6 +94,17 @@ export const NAV_STYLE_DEFAULTS = {
   dropdownWidth: 160,
   dropdownRadius: 14,
   dropdownBackground: "#ffffff",
+  /*
+   * The sub-links' text when neither the panel nor the menu names a colour.
+   * The panel swatch shows this same constant — see resolveNavDropdownTextColor.
+   */
+  dropdownTextColor: "#334861",
+  /*
+   * What a sub-link turns to when the colour it would inherit is unreadable
+   * on its panel: dark on a light fill, light on a dark one.
+   */
+  dropdownTextOnLight: "#334861",
+  dropdownTextOnDark: "#ffffff",
   /*
    * The panel's own frame. The two panel styles have never looked the same
    * here: a list dropdown has always drawn a hairline (`legacy.css`
@@ -184,6 +199,82 @@ function flag(value: string | undefined, fallback: boolean): boolean {
   if (trimmed === "true" || trimmed === "on") return true;
   if (trimmed === "false") return false;
   return fallback;
+}
+
+/** WCAG relative luminance of a hex/rgb colour, or null when it cannot be read. */
+function luminance(value: string): number | null {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed || isTransparentBuilderColor(trimmed)) return null;
+  // normalizeBuilderHexColor answers its fallback for anything it cannot
+  // parse (a theme var, a colour name), so a sentinel tells the two apart.
+  const hex = normalizeBuilderHexColor(trimmed, "");
+  if (!/^#[0-9a-f]{6}$/.test(hex)) return null;
+  const channels = [1, 3, 5].map((at) => {
+    const c = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+/** WCAG contrast ratio between two colours, or null when either cannot be read. */
+export function navColorContrast(a: string, b: string): number | null {
+  const la = luminance(a);
+  const lb = luminance(b);
+  if (la === null || lb === null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Below this, text on a fill is unreadable — white on white is 1.0, and a
+ * pale grey on white sits around 1.1–1.3. WCAG's own floor for text is 4.5;
+ * this is not trying to grade legibility, only to catch "the links are gone".
+ */
+export const NAV_INVISIBLE_CONTRAST = 1.5;
+
+export type NavDropdownTextSource = "panel" | "menu" | "default" | "contrast";
+
+/**
+ * The colour a sub-link is drawn in, and where it came from. ONE function for
+ * the page and the panel swatch, because two answers to this question are how
+ * daneofearth.starcaster.pro got a blank white drop-down on 2026-10-10: the
+ * panel promised #334861 for an empty field while the page used the menu's
+ * white text on the panel's white fill (task 86bcgddcy).
+ *
+ *  - "panel"    — Text > Panel > Text Color is set. Always honoured, even when
+ *                 it matches the fill; the panel warns instead.
+ *  - "menu"     — empty, so it follows Main Menu > Text Color.
+ *  - "default"  — neither is set: NAV_STYLE_DEFAULTS.dropdownTextColor.
+ *  - "contrast" — the colour it would have followed is unreadable on the
+ *                 panel fill, so a contrasting one is used and the panel says so.
+ */
+export function resolveNavDropdownTextColor(settings: NavSettings): {
+  color: string;
+  source: NavDropdownTextSource;
+  /** The colour it would have used before the contrast guard stepped in. */
+  inherited?: string;
+} {
+  const explicit = color(settings.navDropdownTextColor);
+  if (explicit) return { color: explicit, source: "panel" };
+
+  const linkColor = color(settings.navColor);
+  const inherited = linkColor ?? NAV_STYLE_DEFAULTS.dropdownTextColor;
+  const fill = getNavDropdownBackground(settings);
+  const contrast = navColorContrast(inherited, fill);
+  if (contrast !== null && contrast < NAV_INVISIBLE_CONTRAST) {
+    const onLight = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnLight, fill) ?? 0;
+    const onDark = navColorContrast(NAV_STYLE_DEFAULTS.dropdownTextOnDark, fill) ?? 0;
+    return {
+      color: onLight >= onDark ? NAV_STYLE_DEFAULTS.dropdownTextOnLight : NAV_STYLE_DEFAULTS.dropdownTextOnDark,
+      source: "contrast",
+      inherited
+    };
+  }
+  return { color: inherited, source: linkColor ? "menu" : "default" };
+}
+
+/** The drop-down panel's fill as rendered. */
+export function getNavDropdownBackground(settings: NavSettings): string {
+  return color(settings.navDropdownBackground) ?? NAV_STYLE_DEFAULTS.dropdownBackground;
 }
 
 export function isNavMegaMenu(settings: NavSettings): boolean {
@@ -393,8 +484,15 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
       color(settings.navActiveBackground) ?? color(settings.navHoverBackground) ?? "transparent",
 
     // --- the dropdown / mega panel ------------------------------------
-    "--site-nav-dropdown-bg": color(settings.navDropdownBackground) ?? NAV_STYLE_DEFAULTS.dropdownBackground,
-    "--site-nav-dropdown-color": color(settings.navDropdownTextColor) ?? linkColor,
+    "--site-nav-dropdown-bg": getNavDropdownBackground(settings),
+    /*
+     * Always emitted. Leaving it out when both colours were empty let the
+     * stylesheet fall back to `--site-nav-link-color`, which a theme palette
+     * sets on an ancestor this function cannot see — so a theme with white
+     * header text drew white sub-links on the white panel, and the swatch
+     * showed a colour the page never used.
+     */
+    "--site-nav-dropdown-color": resolveNavDropdownTextColor(settings).color,
     "--site-nav-dropdown-radius": `${num(
       settings.navDropdownRadius,
       NAV_STYLE_DEFAULTS.dropdownRadius,
