@@ -13,8 +13,7 @@
       var h = window.location.hostname;
       var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
         || h.endsWith('.vercel.app')
-        || h === 'starcaster.pro'
-        || h.endsWith('.starcaster.pro');
+        || h === 'app.starcaster.pro';
       if (sys) return;
       var p = window.location.pathname || '/';
       if (p.indexOf('/api/') === 0) return;

@@ -17,7 +17,7 @@ const {
   getPublicSiteDomainParam,
   getPublicSiteDomainFromPath,
 } = require('./http');
-const { isSystemHost } = require('../lib/publicSiteHosts');
+const { isSystemHost, isPlatformPagePath } = require('../lib/publicSiteHosts');
 const { buildFaviconHeadTags, faviconVersionKey, writeProjectFaviconResponse } = require('../lib/projectFavicon');
 
 const MIME_MAP = {
@@ -184,6 +184,18 @@ function createPublicSitePageHandlers({ isRegisteredApiPath }) {
       res.statusCode = 404;
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.end('Public site not found for this domain');
+      return;
+    }
+
+    // The company apex is a tenant site (the "Starcaster" project), but the
+    // legal pages registered with Meta/TikTok app review keep their addresses
+    // there whatever that site publishes — a Builder page at the same slug, or
+    // a blank render where there is none, would silently break app review.
+    if (isPlatformPagePath(getClientHost(req), safePath)) {
+      res.setHeader('X-Site-Handler', 'platform-page');
+      // Without the trailing slash: `privacy-policy/.html` is no file, and the
+      // static server's fallback for a missing file is the ADMIN shell.
+      serveStaticPage(res, safePath.replace(/\/+$/, '') || '/');
       return;
     }
 

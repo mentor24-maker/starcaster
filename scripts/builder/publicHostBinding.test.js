@@ -8,7 +8,7 @@ const path = require('node:path');
 /**
  * Public, unauthenticated POSTs must resolve their project, not believe it.
  *
- * Loop Queue 86bbjj6qb. On a SYSTEM host (starcaster.pro, localhost, every
+ * Loop Queue 86bbjj6qb. On a SYSTEM host (app.starcaster.pro, localhost, every
  * Vercel preview) the host names no tenant, so `assertProjectIdAllowedOnHost`
  * answers `{ ok: true }` with no projectId and every call site fell through to
  * `bind.projectId || projectId` — the caller's unverified claim. Any string
@@ -132,7 +132,7 @@ test('system host + a projectId nobody owns is refused 404, before any write', a
   const { loaded, restore } = withMocks('lib/publicSiteHostBinding.js');
   try {
     const bind = await loaded.resolvePublicProjectForRequest(
-      fakeReq({ url: '/x', host: 'starcaster.pro' }),
+      fakeReq({ url: '/x', host: 'app.starcaster.pro' }),
       'proj_i_made_this_up'
     );
     assert.equal(bind.ok, false);
