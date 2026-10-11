@@ -133,3 +133,45 @@ test('the local dev server applies the same redirects as the edge', () => {
     .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
   assert.match(source, /resolveSiteRedirect\(/);
 });
+
+test('no key carries a file extension, because the middleware never sees one', async () => {
+  const { SITE_REDIRECTS } = await import(MODULE_URL);
+  // middleware.mjs returns early for any address ending in `.something`, and
+  // its matcher excludes them before it even runs. An entry like
+  // `/wp-login.php` would sit in the table looking handled and never fire.
+  for (const [host, table] of Object.entries(SITE_REDIRECTS)) {
+    for (const from of Object.keys(table)) {
+      assert.doesNotMatch(from, /\.[a-z0-9]+$/i, `${host}${from} can never be redirected`);
+    }
+  }
+});
+
+test('daneofearth.org: the WordPress-only addresses land on their StarCaster pages', async () => {
+  const { resolveSiteRedirect } = await import(MODULE_URL);
+  // Pages and posts kept their slugs in the import, so only the shapes
+  // WordPress invented need an entry. Old links carried a trailing slash.
+  const expected = {
+    '/category/strands/': '/category-strands',
+    '/category/autobiography/': '/category-autobiography',
+    '/category/uncategorized/': '/category-uncategorized',
+    '/category/commentary/': '/blog',
+    '/author/dane/': '/author-dane',
+    '/author/daneofearth_tr7hl9/': '/author-dane',
+    '/feed/': '/blog',
+    '/wp-admin/': '/',
+  };
+  for (const [from, to] of Object.entries(expected)) {
+    assert.equal(resolveSiteRedirect('daneofearth.org', from), to, from);
+    assert.equal(resolveSiteRedirect('www.daneofearth.org', from), to, `www${from}`);
+  }
+});
+
+test('daneofearth.org: a page that kept its address is left alone', async () => {
+  const { resolveSiteRedirect } = await import(MODULE_URL);
+  // Redirecting a slug the site actually publishes would hide that page.
+  for (const slug of ['/', '/blog', '/strands-movie', '/author-dane', '/escape-from-tel-aviv/']) {
+    assert.equal(resolveSiteRedirect('daneofearth.org', slug), null, slug);
+  }
+  // The staging address is a different host and must never pick these up.
+  assert.equal(resolveSiteRedirect('daneofearth.starcaster.pro', '/feed'), null);
+});
