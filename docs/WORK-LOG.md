@@ -10,6 +10,46 @@ hidden from visitors too. A cleanup script takes the note off the pages already
 imported, in both the draft and the copy visitors are shown. It still has to be
 run on production by a session that has production access, which this machine
 does not.
+## 2026-10-10 — The Galaxy can be a link, and In Place galaxies can be dragged again (#825)
+
+Dane wanted a spot on the Dane of Earth home page galaxy to work as a link. The
+Galaxy's settings now have a Link section: type an address, click a small
+picture of the galaxy to mark the spot, and set how big the clickable circle
+is. Visitors who click inside the circle go to the link, and a click outside
+still turns the galaxy. The builder sees a faint dashed circle, and visitors
+see nothing but the pointing-hand cursor. While building it, the agent session
+found that this morning's Z-Index change (#820) had pushed every In Place
+galaxy behind its own column. It still showed, but nobody could click or drag
+it, including on the live site. That is fixed in the same change. A browser
+check now clicks the circle's centre, its corner, and the far edge of the
+galaxy, and fails if any of the three lands on the wrong thing.
+## 2026-10-10 — Menu drop-down links no longer vanish on a white-text menu (#823)
+
+On daneofearth.starcaster.pro, hovering "Projects" in the top menu opened an
+empty white box: the links were drawn in white on a white panel. The builder
+had been promising dark text for an empty drop-down Text Color, while the
+live page used the menu's own white text. Now one rule decides the colour for
+both the page and the builder's swatch, so they always agree. If the colour
+the drop-down would inherit cannot be read on the panel (white on white, dark
+on dark), it switches to a readable one, and the builder says so under the
+field. A colour you set yourself is left alone, but the builder now warns
+when it matches the panel background, which is the case on Dane's own menu
+and the one setting he needs to clear.
+
+The same fix covers the link under the mouse. Once Dane picked a dark text
+colour, the links showed but each one turned white the moment he pointed at
+it, because a drop-down link borrowed the main menu's Hover Text, which is
+chosen for the dark bar, not the white panel. The drop-down now has its own
+Hover Text and Hover Fill under Text > Panel. Left empty, a hovered link
+follows the menu's hover colour unless that would be invisible, and then it
+switches to a readable one and the builder says why.
+
+On a phone, and in a menu laid out vertically, there is no white panel at
+all: the drop-down links are listed on the header itself, under their parent.
+There the readability switch was judging against a panel nobody can see and
+made white-text menus draw dark links on a dark header. Those links now
+simply match the rest of the menu, as they did before, and the builder no
+longer shows the warning on a vertical menu.
 
 ## 2026-10-10 — Dane of Earth: getting ready for Hostinger switching off on 10/23 (#822)
 

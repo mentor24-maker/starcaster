@@ -1086,7 +1086,20 @@ export function getModuleNudgeTransform(settings: Record<string, string>) {
  *
  * A floating image, confetti and the other overlay decor keep their own
  * `zIndex` on their own shells; the preview skips this helper for those.
+ *
+ * ONLY the module types that offer this setting may reach it. Galaxy and
+ * TractorNav store a `zIndex` too, defaulting to -9999, and it means where
+ * their CANVAS sits, not where the module does. Fed through here it clamped
+ * to -999 on the wrapper and sent every In Place galaxy behind its own
+ * column, where no click or drag could reach it (task 86bcgef6g).
  */
+export const MODULE_STACK_TYPES: ReadonlySet<string> = new Set(["heading", "image", "carousel", "navigation"]);
+
+/** `getModuleStackStyle` for a module, or nothing when its type does not offer Z-Index. */
+export function getModuleStackStyleFor(type: string, settings: Record<string, string>): CSSProperties {
+  return MODULE_STACK_TYPES.has(type) ? getModuleStackStyle(settings) : {};
+}
+
 export function getModuleStackStyle(settings: Record<string, string>): CSSProperties {
   const zIndex = Number.parseInt(normalizeModuleZIndexValue(settings.zIndex), 10);
   if (!Number.isFinite(zIndex) || zIndex === 0) {

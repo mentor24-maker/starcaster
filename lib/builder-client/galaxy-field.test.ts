@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  galaxyLinkPointFromClick,
+  readGalaxyLink,
   GALAXY_POSE_DEFAULTS,
   GALAXY_UNFURL_START,
   galaxyPoseSquash,
@@ -1342,5 +1344,54 @@ describe("the resting pose: View Angle and Oval Direction (task 86bcd9qtc)", () 
     expect(galaxyPoseSquash(Math.PI / 3)).toBeCloseTo(0.5, 10);
     expect(galaxyPoseSquash(Math.PI / 2)).toBe(0.05);
     expect(galaxyPoseSquash(Number.NaN)).toBe(1);
+  });
+});
+
+describe("readGalaxyLink (task 86bcgef6g)", () => {
+  it("no address means no hotspot", () => {
+    expect(readGalaxyLink({})).toBeNull();
+    expect(readGalaxyLink({ linkUrl: "   " })).toBeNull();
+  });
+
+  it("refuses a javascript: address, however it is spaced", () => {
+    expect(readGalaxyLink({ linkUrl: "javascript:alert(1)" })).toBeNull();
+    expect(readGalaxyLink({ linkUrl: " Java Script:alert(1)" })).toBeNull();
+  });
+
+  it("reads the defaults when only the address is set, and labels with the address", () => {
+    expect(readGalaxyLink({ linkUrl: "/about" })).toEqual({ url: "/about", newTab: false, label: "/about", x: 50, y: 50, radius: 80 });
+  });
+
+  it("clamps the centre to 0..100 and the radius to 20..600", () => {
+    const link = readGalaxyLink({ linkUrl: "/a", linkX: "-5", linkY: "140", linkRadius: "9000" });
+    expect([link?.x, link?.y, link?.radius]).toEqual([0, 100, 600]);
+    expect(readGalaxyLink({ linkUrl: "/a", linkRadius: "3" })?.radius).toBe(20);
+  });
+
+  it("a stored junk value renders at the default, never NaN", () => {
+    const link = readGalaxyLink({ linkUrl: "/a", linkX: "left", linkY: "", linkRadius: "big" });
+    expect([link?.x, link?.y, link?.radius]).toEqual([50, 50, 80]);
+  });
+
+  it("opens in a new tab only on the exact word true, and keeps a label", () => {
+    expect(readGalaxyLink({ linkUrl: "/a", linkNewTab: "true", linkLabel: " About " })).toMatchObject({ newTab: true, label: "About" });
+    expect(readGalaxyLink({ linkUrl: "/a", linkNewTab: "yes" })?.newTab).toBe(false);
+  });
+});
+
+describe("galaxyLinkPointFromClick (task 86bcgef6g)", () => {
+  const box = { left: 100, top: 40, width: 300, height: 120 };
+
+  it("turns a click into whole percents of the box", () => {
+    expect(galaxyLinkPointFromClick(250, 100, box)).toEqual({ x: 50, y: 50 });
+    expect(galaxyLinkPointFromClick(130, 52, box)).toEqual({ x: 10, y: 10 });
+  });
+
+  it("clamps a click a hair outside the box", () => {
+    expect(galaxyLinkPointFromClick(99, 161, box)).toEqual({ x: 0, y: 100 });
+  });
+
+  it("a box with no size reads as the middle, never NaN", () => {
+    expect(galaxyLinkPointFromClick(10, 10, { left: 0, top: 0, width: 0, height: 0 })).toEqual({ x: 50, y: 50 });
   });
 });

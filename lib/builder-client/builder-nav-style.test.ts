@@ -7,8 +7,12 @@ import {
   getNavModuleClassNames,
   getNavModuleStyle,
   getNavTextShadow,
+  getNavDropdownInlineColors,
   getNavUnderline,
   isNavMegaMenu,
+  navColorContrast,
+  resolveNavDropdownHoverColor,
+  resolveNavDropdownTextColor,
   showsNavDropdownArrow,
   squaresNavBottomWhenOpen
 } from "@/lib/builder-nav-style";
@@ -524,5 +528,140 @@ describe('"Square bottom when open" (navLinkRadiusTopOnly)', () => {
 
   it("keeps the default off, which is what the CSS fallbacks assume", () => {
     expect(NAV_STYLE_DEFAULTS.linkRadiusTopOnly).toBe(false);
+  });
+});
+
+describe("drop-down text colour — the panel swatch and the page agree, and sub-links never vanish (86bcgddcy)", () => {
+  it("an empty field renders the same constant the panel swatch shows", () => {
+    expect(resolveNavDropdownTextColor({})).toEqual({ color: "#334861", source: "default" });
+    expect(style()["--site-nav-dropdown-color"]).toBe(NAV_STYLE_DEFAULTS.dropdownTextColor);
+  });
+
+  it("an empty field follows a readable Main Menu text colour", () => {
+    expect(resolveNavDropdownTextColor({ navColor: "#163a5e" })).toEqual({ color: "#163a5e", source: "menu" });
+    expect(style({ navColor: "#163a5e" })["--site-nav-dropdown-color"]).toBe("#163a5e");
+  });
+
+  it("white menu text on the default white panel turns dark instead of vanishing", () => {
+    const resolved = resolveNavDropdownTextColor({ navColor: "#ffffff" });
+    expect(resolved).toEqual({ color: "#334861", source: "contrast", inherited: "#ffffff" });
+    expect(style({ navColor: "#FFF" })["--site-nav-dropdown-color"]).toBe("#334861");
+  });
+
+  it("dark menu text on a dark panel turns light", () => {
+    const vars = style({ navColor: "#101010", navDropdownBackground: "#1a1a1a" });
+    expect(vars["--site-nav-dropdown-color"]).toBe("#ffffff");
+    expect(resolveNavDropdownTextColor({ navDropdownBackground: "#2a3a4a" }).source).toBe("contrast");
+  });
+
+  it("an explicit panel Text Color is left exactly as set, even when it matches the fill", () => {
+    expect(style({ navDropdownTextColor: "#ff4500" })["--site-nav-dropdown-color"]).toBe("#ff4500");
+    expect(resolveNavDropdownTextColor({ navDropdownTextColor: "#ffffff" })).toEqual({
+      color: "#ffffff",
+      source: "panel"
+    });
+  });
+
+  it("does not guess about a colour it cannot read", () => {
+    expect(resolveNavDropdownTextColor({ navColor: "var(--brand)" })).toEqual({
+      color: "var(--brand)",
+      source: "menu"
+    });
+    expect(navColorContrast("#ffffff", "transparent")).toBeNull();
+  });
+
+  it("measures contrast the WCAG way", () => {
+    expect(navColorContrast("#ffffff", "#ffffff")).toBeCloseTo(1, 5);
+    expect(navColorContrast("#000000", "#ffffff")).toBeCloseTo(21, 5);
+    expect(navColorContrast("rgb(255, 255, 255)", "#fff")).toBeCloseTo(1, 5);
+  });
+});
+
+describe("hovered drop-down links stay readable (86bcgddcy, round 2)", () => {
+  it("white menu text, white Hover Text, default white panel: a hovered sub-link is NOT white", () => {
+    const settings = { navColor: "#ffffff", navHoverColor: "#ffffff" };
+    expect(resolveNavDropdownHoverColor(settings)).toEqual({
+      color: "#334861",
+      source: "contrast",
+      inherited: "#ffffff"
+    });
+    const vars = style(settings);
+    expect(vars["--site-nav-dropdown-hover-color"]).toBe("#334861");
+    expect(vars["--site-nav-dropdown-hover-bg"]).toBe("transparent");
+    // The bar's own hover is untouched — it is on a dark header.
+    expect(vars["--site-nav-link-hover-color"]).toBe("#ffffff");
+  });
+
+  it("white menu text with no Hover Text set still does not vanish on hover", () => {
+    expect(resolveNavDropdownHoverColor({ navColor: "#ffffff" }).color).toBe("#334861");
+  });
+
+  it("an empty field follows a readable Main Menu Hover Text, and otherwise the swatch default", () => {
+    expect(resolveNavDropdownHoverColor({ navHoverColor: "#c0392b" })).toEqual({ color: "#c0392b", source: "menu" });
+    expect(resolveNavDropdownHoverColor({})).toEqual({ color: NAV_STYLE_DEFAULTS.hoverColor, source: "default" });
+  });
+
+  it("is measured against a solid hover fill when there is one", () => {
+    // White text on a dark hover fill is readable — no rescue needed.
+    expect(
+      resolveNavDropdownHoverColor({ navHoverColor: "#ffffff", navHoverBackground: "#163a5e" })
+    ).toEqual({ color: "#ffffff", source: "menu" });
+    // The panel's own Hover Fill outranks the bar's.
+    const resolved = resolveNavDropdownHoverColor({
+      navHoverColor: "#ffffff",
+      navHoverBackground: "#163a5e",
+      navDropdownHoverBackground: "#f4f4f4"
+    });
+    expect(resolved.source).toBe("contrast");
+    expect(style({ navDropdownHoverBackground: "#f4f4f4", navHoverBackground: "#163a5e" })["--site-nav-dropdown-hover-bg"]).toBe("#f4f4f4");
+  });
+
+  it("the panel's own Hover Text is honoured as set, and reaches a mega link too", () => {
+    expect(resolveNavDropdownHoverColor({ navHoverColor: "#ffffff", navDropdownHoverColor: "#ff4500" })).toEqual({
+      color: "#ff4500",
+      source: "panel"
+    });
+    const vars = style({ navDropdownHoverColor: "#ff4500" });
+    expect(vars["--site-nav-dropdown-hover-color"]).toBe("#ff4500");
+    expect(vars["--site-nav-mega-hover-color"]).toBe("#ff4500");
+    expect(style()["--site-nav-mega-hover-color"]).toBeUndefined();
+  });
+});
+
+describe("where no panel is drawn, sub-links keep the menu's colour (86bcgddcy, round 3)", () => {
+  it("a vertical white-text menu with empty panel colours gives #ffffff sub-links, not the guard's dark", () => {
+    const settings = { navDirection: "vertical", navColor: "#ffffff" };
+    expect(getNavDropdownInlineColors(settings).color).toBe("#ffffff");
+    expect(resolveNavDropdownTextColor(settings)).toEqual({ color: "#ffffff", source: "menu" });
+    expect(style(settings)["--site-nav-dropdown-inline-color"]).toBe("#ffffff");
+    expect(style(settings)["--site-nav-dropdown-color"]).toBe("#ffffff");
+  });
+
+  it("a vertical menu's hovered sub-link follows the bar's hover colour unguarded", () => {
+    const settings = { navDirection: "vertical", navColor: "#ffffff", navHoverColor: "#ffffff" };
+    expect(resolveNavDropdownHoverColor(settings)).toEqual({ color: "#ffffff", source: "menu" });
+    expect(style(settings)["--site-nav-dropdown-inline-hover-color"]).toBe("#ffffff");
+  });
+
+  it("the horizontal panel keeps its guard; the inline pair beside it is unguarded", () => {
+    const vars = style({ navColor: "#ffffff" });
+    expect(vars["--site-nav-dropdown-color"]).toBe("#334861");
+    expect(vars["--site-nav-dropdown-inline-color"]).toBe("#ffffff");
+    expect(vars["--site-nav-dropdown-inline-hover-color"]).toBe("#ffffff");
+  });
+
+  it("the panel's own colours still win where no panel is drawn", () => {
+    expect(
+      getNavDropdownInlineColors({ navColor: "#ffffff", navDropdownTextColor: "#ffcc00", navDropdownHoverColor: "#ff4500" })
+    ).toEqual({ color: "#ffcc00", hoverColor: "#ff4500" });
+  });
+
+  it("names no colour when nothing is set, so the stylesheet uses the top-level link colour", () => {
+    expect(getNavDropdownInlineColors({})).toEqual({ color: undefined, hoverColor: undefined });
+    expect(style()["--site-nav-dropdown-inline-color"]).toBeUndefined();
+    expect(resolveNavDropdownTextColor({ navDirection: "vertical" })).toEqual({
+      color: NAV_STYLE_DEFAULTS.menuTextColor,
+      source: "default"
+    });
   });
 });

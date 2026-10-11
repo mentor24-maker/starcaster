@@ -3,7 +3,7 @@ import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { normalizeBuilderModuleSettingsForType, normalizeLayoutSections, normalizeModuleType } from "@/lib/builder-template";
-import { GALAXY_MOTION_DEFAULTS, GALAXY_POSE_DEFAULTS, GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
+import { GALAXY_LINK_DEFAULTS, GALAXY_MOTION_DEFAULTS, GALAXY_POSE_DEFAULTS, GALAXY_SETTING_DEFAULTS } from "@/lib/galaxy-field";
 import { GALAXY_LOOK_DEFAULTS, matchGalaxyPreset } from "@/lib/galaxy-render";
 import { searchModulePalette, type ModuleSearchHit } from "@/lib/builder-module-search";
 import { modulePaletteGroups, modulePaletteItems } from "@/components/builder/builder-types";
@@ -50,10 +50,16 @@ describe("the galaxy normalizer block (DOCTRINE §5.27)", () => {
     }
   });
 
+  it("fills the link hotspot's numbers with the engine's own defaults (task 86bcgef6g)", () => {
+    for (const [key, value] of Object.entries(GALAXY_LINK_DEFAULTS)) {
+      expect(filled[key], key).toBe(value);
+    }
+  });
+
   it("never backfills a key whose ABSENCE means something", () => {
     // Empty colour = "follow the default" (the theme-colour reset); empty
     // poster = "no poster". A backfill would undo a reset on the next load.
-    for (const key of ["c1", "c2", "c3", "c4", "c5", "haze", "posterUrl"]) {
+    for (const key of ["c1", "c2", "c3", "c4", "c5", "haze", "posterUrl", "linkUrl", "linkLabel"]) {
       expect(filled[key], key).toBeUndefined();
     }
   });
@@ -184,6 +190,51 @@ describe("the runtime's markup", () => {
       <GalaxyRuntime settings={{}} liveSite builderNote={() => <p>BUILDER NOTE</p>} />
     );
     expect(html).not.toContain("BUILDER NOTE");
+  });
+});
+
+describe("the link hotspot (task 86bcgef6g)", () => {
+  const withLink = { placement: "inline", interaction: "rotate", zIndex: "3", linkUrl: "/about", linkX: "25", linkY: "60", linkRadius: "120" };
+
+  it("In Place with Link to: a circle at the percent centre, twice the radius across, one rung above the drag surface", () => {
+    const html = renderToStaticMarkup(<GalaxyRuntime settings={withLink} />);
+
+    expect(html).toMatch(/<a href="\/about"[^>]*data-galaxy-link="true"/);
+    expect(html).toMatch(/left:25%;top:60%;width:240px;height:240px;z-index:4/);
+    expect(html).toContain("border-radius:50%");
+    expect(html).toContain('aria-label="/about"');
+    // After the drag surface in the DOM, so it also wins at an equal rung.
+    expect(html.indexOf("galaxy-drag-surface")).toBeLessThan(html.indexOf("data-galaxy-link"));
+  });
+
+  it("new tab opens with noopener, and a label replaces the URL as the accessible name", () => {
+    const html = renderToStaticMarkup(<GalaxyRuntime settings={{ ...withLink, linkNewTab: "true", linkLabel: "About Dane" }} />);
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html).toContain('aria-label="About Dane"');
+  });
+
+  it("the builder gets the dashed-outline class; a published page never does", () => {
+    expect(renderToStaticMarkup(<GalaxyRuntime settings={withLink} />)).toContain("galaxy-link-hotspot--builder");
+    const live = renderToStaticMarkup(<GalaxyRuntime settings={withLink} liveSite />);
+    expect(live).toContain('class="galaxy-link-hotspot"');
+    expect(live).not.toContain("galaxy-link-hotspot--builder");
+  });
+
+  it("with Link to empty nothing new renders — the markup is byte-for-byte what it was", () => {
+    const { linkUrl: _drop, ...rest } = withLink;
+    const bare = { placement: "inline", interaction: "rotate", zIndex: "3" };
+    expect(renderToStaticMarkup(<GalaxyRuntime settings={rest} />)).not.toContain("<a ");
+    expect(renderToStaticMarkup(<GalaxyRuntime settings={{ ...rest, linkUrl: "" }} />)).toBe(renderToStaticMarkup(<GalaxyRuntime settings={bare} />));
+  });
+
+  it("Window Center renders no hotspot even with Link to set", () => {
+    expect(renderToStaticMarkup(<GalaxyRuntime settings={{ ...withLink, placement: "window" }} />)).not.toContain("data-galaxy-link");
+  });
+
+  it("junk centre and radius render at the defaults, never NaN", () => {
+    const html = renderToStaticMarkup(<GalaxyRuntime settings={{ ...withLink, linkX: "x", linkY: "", linkRadius: "huge" }} />);
+    expect(html).toMatch(/left:50%;top:50%;width:160px;height:160px/);
+    expect(html).not.toContain("NaN");
   });
 });
 

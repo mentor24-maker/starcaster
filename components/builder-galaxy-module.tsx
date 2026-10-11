@@ -18,6 +18,7 @@ import {
   projectGalaxyField,
   readDeviceTier,
   readGalaxyMotion,
+  readGalaxyLink,
   readGalaxyPose,
   readGalaxySettings,
   resolveGalaxyInteraction,
@@ -107,7 +108,16 @@ function settingsKey(settings: GalaxyModuleSettings): string {
 
 // ── Card preview: one still frame ─────────────────────────────
 
-export function GalaxyCardPreview({ settings }: { settings: GalaxyModuleSettings }) {
+export function GalaxyCardPreview({
+  settings,
+  height: cardHeight = CARD_HEIGHT_PX,
+  padded = true
+}: {
+  settings: GalaxyModuleSettings;
+  /** The settings panel's Click point box draws at the block's own ratio (task 86bcgef6g). */
+  height?: number;
+  padded?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const key = settingsKey(settings);
 
@@ -117,7 +127,7 @@ export function GalaxyCardPreview({ settings }: { settings: GalaxyModuleSettings
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const width = canvas.clientWidth || 320;
-    const height = CARD_HEIGHT_PX;
+    const height = cardHeight;
     const ratio = cappedPixelRatio();
     canvas.width = Math.max(1, Math.round(width * ratio));
     canvas.height = Math.max(1, Math.round(height * ratio));
@@ -136,15 +146,15 @@ export function GalaxyCardPreview({ settings }: { settings: GalaxyModuleSettings
       buildGalaxySprites(look, ratio, makeSpriteCanvas)
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, cardHeight]);
 
   return (
-    <div className="builder-galaxy-card" style={{ width: "100%", padding: "8px 0" }}>
+    <div className="builder-galaxy-card" style={{ width: "100%", padding: padded ? "8px 0" : 0 }}>
       <canvas
         ref={canvasRef}
         aria-hidden="true"
         data-galaxy-card="true"
-        style={{ display: "block", width: "100%", height: CARD_HEIGHT_PX, borderRadius: 6 }}
+        style={{ display: "block", width: "100%", height: cardHeight, borderRadius: 6 }}
       />
     </div>
   );
@@ -205,6 +215,9 @@ export function GalaxyRuntime({
   // the placement does not offer runs as that placement's default.
   const interaction = resolveGalaxyInteraction(inline, settings.interaction);
   const showDragSurface = inline && interaction === "rotate" && !showPoster;
+  // The clickable hotspot (task 86bcgef6g) exists only In Place: a Window
+  // galaxy sits behind the page, and a link there would float over its text.
+  const link = inline ? readGalaxyLink(settings) : null;
 
   // Reduced motion is LISTENED for: a visitor who switches it on mid-visit
   // gets the still frame now, not on their next page load.
@@ -621,6 +634,33 @@ export function GalaxyRuntime({
             className="galaxy-drag-surface"
             aria-label="Drag or use the arrow keys to rotate the galaxy"
             style={{ zIndex }}
+          />
+        ) : null}
+        {link ? (
+          /*
+           * One rung above the drag surface, so a press inside the circle is
+           * the link's and a press outside it still turns the galaxy. The
+           * dashed outline that shows the builder where it is comes from the
+           * `--builder` class, which a published page never gets.
+           */
+          <a
+            href={link.url}
+            target={link.newTab ? "_blank" : undefined}
+            rel={link.newTab ? "noopener noreferrer" : undefined}
+            aria-label={link.label}
+            data-galaxy-link="true"
+            className={liveSite ? "galaxy-link-hotspot" : "galaxy-link-hotspot galaxy-link-hotspot--builder"}
+            style={{
+              position: "absolute",
+              display: "block",
+              borderRadius: "50%",
+              transform: "translate(-50%, -50%)",
+              left: `${link.x}%`,
+              top: `${link.y}%`,
+              width: link.radius * 2,
+              height: link.radius * 2,
+              zIndex: zIndex + 1
+            }}
           />
         ) : null}
       </div>

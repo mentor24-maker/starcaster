@@ -514,7 +514,8 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
      * 86bbqb0ac).
      *
      * Each probe names two selectors, intersects their boxes and asks the
-     * browser what is at the middle of the overlap.
+     * browser what is at the middle of the overlap — or at `at: { x, y }`,
+     * fractions of the overlap, when the middle is not the question.
      *
      * WHAT IT CANNOT SEE, and this is not a footnote: `elementFromPoint` skips
      * anything with `pointer-events: none`, which every tint screen in this
@@ -550,8 +551,13 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
         const bottom = Math.min(sb.bottom, ab.bottom);
         const overlapX = right - left;
         const overlapY = bottom - top;
-        const x = (left + right) / 2;
-        const y = (top + bottom) / 2;
+        // `at` picks a point other than the middle, as fractions of the
+        // overlap (task 86bcgef6g: "outside the hotspot's circle" is a corner
+        // of its square, not its centre). Absent means the middle.
+        const atX = Number.isFinite(spec.at?.x) ? spec.at.x : 0.5;
+        const atY = Number.isFinite(spec.at?.y) ? spec.at.y : 0.5;
+        const x = left + (right - left) * atX;
+        const y = top + (bottom - top) * atY;
         const hit = overlapX > 0 && overlapY > 0 ? document.elementFromPoint(x, y) : null;
         probesOut[name] = {
           subject: true,
@@ -911,15 +917,39 @@ try {
      * than sampling the un-hovered page — silently measuring the wrong state
      * is how a check reports green over a dead feature.
      */
+    /*
+     * `hover` may also be a LIST, hovered in order — a sub-link only exists
+     * once its trigger has opened the panel, so reaching it takes two moves
+     * (86bcgddcy). Each move jumps straight to the next element, never
+     * crossing anything between, which is what keeps the panel open.
+     */
+    /*
+     * Optional CLICK, before any hover — a phone menu's sub-links only exist
+     * once the hamburger has opened it (86bcgddcy, round 3). Same rule as
+     * hover: a selector that matches nothing fails the contract rather than
+     * measuring the closed menu.
+     */
     let hoverError = null;
-    if (contract.hover) {
+    for (const spot of contract.click ? [].concat(contract.click) : []) {
       try {
-        await page.hover(contract.hover, { timeout: 4000 });
+        await page.click(spot, { timeout: 4000 });
         await page.waitForTimeout(120);
       } catch (err) {
-        hoverError = `${contract.id}: could not hover \`${contract.hover}\` — ` +
+        hoverError = `${contract.id}: could not click \`${spot}\` — ` +
+          'the element the contract needs to press did not appear, so the state it measures was ' +
+          `never entered. ${String(err && err.message || err).split('\n')[0]}`;
+        break;
+      }
+    }
+    for (const spot of !hoverError && contract.hover ? [].concat(contract.hover) : []) {
+      try {
+        await page.hover(spot, { timeout: 4000 });
+        await page.waitForTimeout(120);
+      } catch (err) {
+        hoverError = `${contract.id}: could not hover \`${spot}\` — ` +
           'the element the contract needs to put the pointer on did not appear, so the state it ' +
           `measures was never entered. ${String(err && err.message || err).split('\n')[0]}`;
+        break;
       }
     }
 
@@ -962,7 +992,7 @@ try {
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
     // The frame needs no reset: `render` writes the device key on every
     // contract, so the next one cannot inherit this one's box.
-    if (contract.hover) await page.mouse.move(0, 0);
+    if (contract.hover || contract.click) await page.mouse.move(0, 0);
 
     if (hoverError) {
       failures.push(hoverError);
