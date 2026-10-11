@@ -9,6 +9,8 @@ import {
   getNavTextShadow,
   getNavUnderline,
   isNavMegaMenu,
+  navColorContrast,
+  resolveNavDropdownTextColor,
   showsNavDropdownArrow,
   squaresNavBottomWhenOpen
 } from "@/lib/builder-nav-style";
@@ -524,5 +526,51 @@ describe('"Square bottom when open" (navLinkRadiusTopOnly)', () => {
 
   it("keeps the default off, which is what the CSS fallbacks assume", () => {
     expect(NAV_STYLE_DEFAULTS.linkRadiusTopOnly).toBe(false);
+  });
+});
+
+describe("drop-down text colour — the panel swatch and the page agree, and sub-links never vanish (86bcgddcy)", () => {
+  it("an empty field renders the same constant the panel swatch shows", () => {
+    expect(resolveNavDropdownTextColor({})).toEqual({ color: "#334861", source: "default" });
+    expect(style()["--site-nav-dropdown-color"]).toBe(NAV_STYLE_DEFAULTS.dropdownTextColor);
+  });
+
+  it("an empty field follows a readable Main Menu text colour", () => {
+    expect(resolveNavDropdownTextColor({ navColor: "#163a5e" })).toEqual({ color: "#163a5e", source: "menu" });
+    expect(style({ navColor: "#163a5e" })["--site-nav-dropdown-color"]).toBe("#163a5e");
+  });
+
+  it("white menu text on the default white panel turns dark instead of vanishing", () => {
+    const resolved = resolveNavDropdownTextColor({ navColor: "#ffffff" });
+    expect(resolved).toEqual({ color: "#334861", source: "contrast", inherited: "#ffffff" });
+    expect(style({ navColor: "#FFF" })["--site-nav-dropdown-color"]).toBe("#334861");
+  });
+
+  it("dark menu text on a dark panel turns light", () => {
+    const vars = style({ navColor: "#101010", navDropdownBackground: "#1a1a1a" });
+    expect(vars["--site-nav-dropdown-color"]).toBe("#ffffff");
+    expect(resolveNavDropdownTextColor({ navDropdownBackground: "#2a3a4a" }).source).toBe("contrast");
+  });
+
+  it("an explicit panel Text Color is left exactly as set, even when it matches the fill", () => {
+    expect(style({ navDropdownTextColor: "#ff4500" })["--site-nav-dropdown-color"]).toBe("#ff4500");
+    expect(resolveNavDropdownTextColor({ navDropdownTextColor: "#ffffff" })).toEqual({
+      color: "#ffffff",
+      source: "panel"
+    });
+  });
+
+  it("does not guess about a colour it cannot read", () => {
+    expect(resolveNavDropdownTextColor({ navColor: "var(--brand)" })).toEqual({
+      color: "var(--brand)",
+      source: "menu"
+    });
+    expect(navColorContrast("#ffffff", "transparent")).toBeNull();
+  });
+
+  it("measures contrast the WCAG way", () => {
+    expect(navColorContrast("#ffffff", "#ffffff")).toBeCloseTo(1, 5);
+    expect(navColorContrast("#000000", "#ffffff")).toBeCloseTo(21, 5);
+    expect(navColorContrast("rgb(255, 255, 255)", "#fff")).toBeCloseTo(1, 5);
   });
 });
