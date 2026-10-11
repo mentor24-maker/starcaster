@@ -10,6 +10,22 @@ on dark), it switches to a readable one, and the builder says so under the
 field. A colour you set yourself is left alone, but the builder now warns
 when it matches the panel background, which is the case on Dane's own menu
 and the one setting he needs to clear.
+## 2026-10-10 — CRM form colors stop reverting to their defaults (#821)
+
+Dane set his contact form's colors, and the next time he opened it every color
+was back at its default. The ticket blamed the CRM form editor's display. The
+agent session read production first and found the colors had really been
+erased, by the Builder. A CRM Form module in the Builder has a "Form
+Appearance" panel (Padding, Border, Field width). That panel kept the copy of
+the form's styles it loaded when it opened. Changing Padding then saved that
+whole old copy back, colors included. That is what happened at 18:48 today:
+Padding became 15px and every color went back to default. Now the panel saves
+only the setting that changed, and the server applies it to whatever the form
+holds at that moment. A second fault kept colors off the live site: pages
+stored their own copy of the form's colors and showed that instead of the real
+ones. The page copy is ignored now and removed when the panel next opens.
+Also, after creating a new form, reloading the page reopens that form instead
+of a blank "Create Form".
 
 ## 2026-10-09 — Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (#815)
 

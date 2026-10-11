@@ -34,7 +34,27 @@ type Props = {
   themePrimaryColor?: string;
 };
 
+/**
+ * The page setting this panel USED to copy the form's styles into. The
+ * rendered module preferred that copy over the form record, on the canvas and
+ * on the live site, so colours changed in the CRM editor never reached a page
+ * that had one — and a copy taken when the panel opened was written back over
+ * newer colours (ticket 86bcgcnkw). The form record is the only source now;
+ * the panel removes a leftover copy when it opens.
+ */
 export const CRM_FORM_STYLE_SNAPSHOT_KEY = "crmFormStyleSnapshot";
+
+/** Tells a rendered CRM Form on the canvas that its form's styles changed. */
+export const CRM_FORM_STYLES_EVENT = "starcaster:crm-form-styles";
+
+export type CrmFormStylesEventDetail = { formId: string; styles: Record<string, string> };
+
+function announceFormStyles(formId: string, styles: Record<string, string>) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent<CrmFormStylesEventDetail>(CRM_FORM_STYLES_EVENT, { detail: { formId, styles } })
+  );
+}
 
 /**
  * D8 axes, declared the way the schema generator declares them
@@ -64,33 +84,12 @@ function toPx(value: string): string {
   return `${digits || "0"}px`;
 }
 
-function readStyleSnapshot(settings: Record<string, string>): Record<string, string> | null {
-  const raw = settings[CRM_FORM_STYLE_SNAPSHOT_KEY];
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, string>;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStyleSnapshot(
-  onUpdateModule: Props["onUpdateModule"],
-  styles: Record<string, string>
-) {
-  const serialized = JSON.stringify(styles);
-  onUpdateModule((current) =>
-    current.settings[CRM_FORM_STYLE_SNAPSHOT_KEY] === serialized
-      ? current
-      : {
-          ...current,
-          settings: {
-            ...current.settings,
-            [CRM_FORM_STYLE_SNAPSHOT_KEY]: serialized
-          }
-        }
-  );
+function dropStyleSnapshot(onUpdateModule: Props["onUpdateModule"]) {
+  onUpdateModule((current) => {
+    if (!(CRM_FORM_STYLE_SNAPSHOT_KEY in current.settings)) return current;
+    const { [CRM_FORM_STYLE_SNAPSHOT_KEY]: _dropped, ...settings } = current.settings;
+    return { ...current, settings };
+  });
 }
 
 export function BuilderCrmFormModuleSettings({
@@ -111,6 +110,9 @@ export function BuilderCrmFormModuleSettings({
   const [stylesLoading, setStylesLoading] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keys changed since the last save went out. Only these are sent, so a
+  // Padding change cannot carry a stale copy of every colour with it.
+  const pendingPatchRef = useRef<Record<string, string>>({});
 
   // The parent passes a fresh arrow function on every render, so this callback
   // can never be an effect dependency — the style-snapshot write below would
@@ -151,7 +153,8 @@ export function BuilderCrmFormModuleSettings({
         }
         const normalized = normalizeCrmFormStyles(form.styles, form.accentColor) as Record<string, string>;
         setFormStyles(normalized);
-        writeStyleSnapshot(onUpdateModuleRef.current, normalized);
+        announceFormStyles(crmFormId, normalized);
+        dropStyleSnapshot(onUpdateModuleRef.current);
       })
       .catch(() => setFormStyles({}))
       .finally(() => setStylesLoading(false));
@@ -169,22 +172,36 @@ export function BuilderCrmFormModuleSettings({
     }));
   }
 
-  function queueFormStylesSave(nextStyles: Record<string, string>) {
-    if (!crmFormId) return;
-    writeStyleSnapshot(onUpdateModule, nextStyles);
+  function queueFormStylesSave(formId: string, changes: Record<string, string>) {
+    pendingPatchRef.current = { ...pendingPatchRef.current, ...changes };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      fetch(`/api/crm/forms/${encodeURIComponent(crmFormId)}`, {
+      const stylesPatch = pendingPatchRef.current;
+      pendingPatchRef.current = {};
+      fetch(`/api/crm/forms/${encodeURIComponent(formId)}`, {
         method: "PUT",
         credentials: "include",
         headers: {
           ...starcasterScopedHeaders(),
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ styles: nextStyles })
+        body: JSON.stringify({ stylesPatch })
       })
-        .then((r) => r.json())
-        .then(() => setSaveNotice("Form styles saved"))
+        .then(async (r) => {
+          const d = await r.json().catch(() => null);
+          const form = (d?.form ?? d?.data) as CrmFormRecord | null;
+          if (!r.ok || !form?.styles) throw new Error("save failed");
+          // The server merged our keys onto what the form holds NOW, which may
+          // include colours saved in the CRM editor since this panel opened.
+          // Adopt that, keeping any change made while this save was in flight.
+          const saved = normalizeCrmFormStyles(
+            { ...form.styles, ...pendingPatchRef.current },
+            form.accentColor
+          ) as Record<string, string>;
+          setFormStyles(saved);
+          announceFormStyles(formId, saved);
+          setSaveNotice("Form styles saved");
+        })
         .catch(() => setSaveNotice("Could not save form styles"))
         .finally(() => {
           setTimeout(() => setSaveNotice(""), 2400);
@@ -198,7 +215,9 @@ export function BuilderCrmFormModuleSettings({
       formStyles.buttonBackgroundColor
     ) as Record<string, string>;
     setFormStyles(nextStyles);
-    queueFormStylesSave(nextStyles);
+    if (!crmFormId) return;
+    announceFormStyles(crmFormId, nextStyles);
+    queueFormStylesSave(crmFormId, { [key]: nextStyles[key] });
   }
 
   const borderSize = parsePxNumber(formStyles.borderSize, DEFAULT_CRM_FORM_STYLES.borderSize);
@@ -387,10 +406,4 @@ export function BuilderCrmFormModuleSettings({
       ) : null}
     </div>
   );
-}
-
-export function resolveCrmFormStyleSnapshot(
-  settings: Record<string, string>
-): Record<string, string> | null {
-  return readStyleSnapshot(settings);
 }

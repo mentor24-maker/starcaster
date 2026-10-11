@@ -1796,6 +1796,18 @@ ${fieldHtml}
         saved = res.form || res.data || res;
         editingFormId = saved?.id || null;
         notify('Form created.');
+        // From here on this is an existing form. Without its id in the address
+        // a reload reopened a blank "Create Form" with every colour at its
+        // default, which read as the saved colours being lost (86bcgcnkw).
+        if (editingFormId) {
+          const titleEl = el('crmFormEditorTitle');
+          if (titleEl) {
+            titleEl.innerHTML = '<a href="#" class="page-heading-back-link" onclick="App.crm.openPage(); return false;">CRM</a>: Edit Form';
+          }
+          try {
+            window.history.replaceState(window.history.state, '', `#page=crmFormEditorPage&crmForm=${encodeURIComponent(editingFormId)}`);
+          } catch (_) { /* only a reload loses the form */ }
+        }
       }
       if (saved) {
         savedEditorForm = saved;
