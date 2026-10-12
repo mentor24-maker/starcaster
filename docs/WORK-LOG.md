@@ -1,3 +1,13 @@
+## 2026-10-11 — Save Page now takes you straight to Publish, and Publish to Close Builder (#832)
+
+In the page editor, the Publish button and the Close Builder button both sit a
+long scroll away from Save Page, so every edit ended with hunting for the next
+button. Now, when a save works, the screen scrolls to Publish and puts the
+keyboard focus on it, so pressing Enter publishes. When the publish works, the
+screen scrolls back up to Close Builder and focuses that, so Enter again closes
+the Builder. If a save or publish fails, nothing moves, so the error stays in
+front of you; if there is nothing waiting to publish, focus stays where it was.
+Tried in a real browser on a test page: save, Enter, Enter — publish, then close.
 ## 2026-10-11 — An In Place galaxy can now lean toward the mouse (#831)
 
 A galaxy sitting in the page used to do nothing when you moved the mouse over
