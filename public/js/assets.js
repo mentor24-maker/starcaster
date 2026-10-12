@@ -89,6 +89,16 @@ App.assets = (function () {
     return toDriveDirectUrl(location) || (isValidUrl(location) ? location : '');
   }
 
+  // A filename like logo_starcaster_digital_presence_manager900x300.png has
+  // no space to wrap at, so it widened the whole table (86bcgjqeb). A <wbr>
+  // after each _ - . lets it wrap between its parts instead of mid-word.
+  function appendBreakableName(el, text) {
+    String(text).split(/(?<=[_.\-])/).forEach((part, i) => {
+      if (i > 0) el.appendChild(document.createElement('wbr'));
+      el.appendChild(document.createTextNode(part));
+    });
+  }
+
   function appendCell(tr, text) {
     const td = document.createElement('td');
     td.textContent = String(text || '-');
@@ -1315,7 +1325,9 @@ App.assets = (function () {
       tr.appendChild(thumbnailTd);
 
       const nameTd = document.createElement('td');
+      nameTd.className = 'assets-name-cell';
       const nameText = String(asset.assetName || '-');
+      nameTd.title = nameText;
       // Keep the click-through to the original file when there's a valid URL;
       // the hover preview is layered on top of whichever element we render.
       let nameEl = null;
@@ -1324,16 +1336,16 @@ App.assets = (function () {
         nameEl.href = location;
         nameEl.target = '_blank';
         nameEl.rel = 'noopener noreferrer';
-        nameEl.textContent = nameText;
+        appendBreakableName(nameEl, nameText);
         nameTd.appendChild(nameEl);
       } else if (canPreviewImage) {
         nameEl = document.createElement('span');
         nameEl.className = 'asset-name-hover';
         nameEl.tabIndex = 0;
-        nameEl.textContent = nameText;
+        appendBreakableName(nameEl, nameText);
         nameTd.appendChild(nameEl);
       } else {
-        nameTd.textContent = nameText;
+        appendBreakableName(nameTd, nameText);
       }
       if (canPreviewImage && nameEl) bindAssetImageHover(nameEl, asset);
       // Files uploaded through this screen carry a mark, so an operator can see

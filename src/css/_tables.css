@@ -11,6 +11,24 @@
   border-radius: 10px;
 }
 
+/* macOS hides overlay scrollbars until you scroll, so a table that does
+   scroll inside its card (T7 rung 12) gave no sign there was more to the
+   right — Dane read it as the screen cutting columns off (86bcgjqeb).
+   Styling the bar makes Chrome and Safari draw it all the time; it only
+   appears when the table actually overflows. */
+.table-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--ink-muted);
+  border-radius: 999px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+
 /* --- Base table ---
    :not(.builder-module-preview-table):not(.builder-preview-table) keeps
    these admin CRUD styles off the Builder's public-facing "table" module,

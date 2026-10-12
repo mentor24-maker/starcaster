@@ -43,6 +43,7 @@ const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
+const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
@@ -1893,6 +1894,46 @@ async function seedSubstackMiner(scope) {
   return { total: writers.length };
 }
 
+/**
+ * Rows for the Assets screen (86bcgjqeb). Without them the table holds no
+ * data, every column is as narrow as its heading, and check:screens reports
+ * a fit it never had to earn. The names are the shapes that broke it on
+ * 2026-10-10: one unbroken filename joined with underscores (Dane's real
+ * logo file, which is the one that pushed Size and Actions off the card),
+ * one longer than 60 characters, and one with spaces. The first is a link,
+ * the way a row with a stored URL renders. Idempotent by name.
+ */
+async function seedAssets(scope) {
+  const assets = [
+    { assetName: 'logo_starcaster_digital_presence_manager900x300.png', assetType: 'Image', category: 'Website Banner Image', location: 'https://www.starcaster.pro/images/alphire-wordmark.png', imageWidth: 900, imageHeight: 300, size: 48213, topic: 'Branding' },
+    { assetName: 'delray_beach_tennis_center_junior_high_performance_academy_hero_banner_final_v3.jpg', assetType: 'Image', category: 'Feature Image', imageWidth: 3840, imageHeight: 2160, size: 2381904 },
+    { assetName: `${LONG} — clinic flyer.pdf`, assetType: 'Lead Magnet', size: 912345 },
+  ];
+  const listed = await assetsStore.listAssets(scope);
+  if (!listed.ok) throw new Error(`list assets: ${listed.error}`);
+  const have = new Set((listed.data || []).map((row) => row.asset_name));
+  let made = 0;
+  for (const asset of assets) {
+    if (have.has(asset.assetName)) continue;
+    must(await assetsStore.createAsset(asset, scope), 'create asset');
+    made += 1;
+  }
+  // Landmine 12: an insert can succeed with no tenant on it, and then the
+  // screen reads empty. Read the rows back through the project scope.
+  const after = await assetsStore.listAssets(scope);
+  const seen = new Set((after.data || []).map((row) => row.asset_name));
+  const missing = assets.filter((a) => !seen.has(a.assetName)).length;
+  if (missing) throw new Error(`${missing} asset(s) were written but do not read back in this project`);
+  return { made, found: assets.length - made };
+}
+
+let assetsSeeded = null;
+try {
+  assetsSeeded = await seedAssets({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed assets: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -1932,5 +1973,10 @@ console.log(
   minerSeeded
     ? `Substack Miner seeded — ${minerSeeded.total} writer(s) across candidate / approved / rejected, keywords saved.`
     : 'WARNING: the Substack Miner was NOT seeded; Acquire › Substack Miner will show its empty states and check:screens proves nothing there.'
+);
+console.log(
+  assetsSeeded
+    ? `Assets seeded — ${assetsSeeded.made} created, ${assetsSeeded.found} already present.`
+    : 'WARNING: assets were NOT seeded; the Assets table will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);

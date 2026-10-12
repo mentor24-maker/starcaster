@@ -9,6 +9,19 @@ when a module's name and its buttons can't share one line, the buttons move
 down to the next line. The automatic panel check now looks for any cell
 control sitting outside its cell, and it caught the old behaviour when the fix
 was taken out on purpose. Published pages look exactly the same as before.
+## 2026-10-11 — The Assets table fits the screen again, so Resize Images and Delete All can be clicked (#826)
+
+On a 16-inch MacBook the Assets table ran past the edge of its white card.
+With a row ticked, the Resize Images and Delete All buttons, the Size heading
+and the Actions column were all out of view. The table could slide sideways,
+but the Mac hides the scrollbar, so nothing hinted there was more to see. Two
+things caused it. A wide logo thumbnail took a fifth of the width. A long
+filename made of words joined by underscores had no space to wrap at. The
+thumbnail is now capped. Long names wrap between their parts, and the full name
+shows on hover. Any admin table that still has to slide now shows its
+scrollbar. The screen checker now ticks a row and confirms those buttons are
+inside the card at laptop widths. With the old code put back on purpose, that
+check fails.
 
 ## 2026-10-10 — Imported sites stop showing visitors a note meant for the builder (#824)
 
