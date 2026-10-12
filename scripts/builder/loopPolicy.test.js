@@ -36,9 +36,9 @@ test('with no policy file and no marker, a lane runs — exactly as before this 
   assert.deepEqual(v.notes, []);
 });
 
-test('the committed default window is the one Dane named (none until he answers)', () => {
-  // When Dane answers the ticket's first acceptance criterion, this line and
-  // DEFAULT_QUIET_WINDOW change together.
+test('the committed default window is the one Dane named (none — he answered "B")', () => {
+  // Task 86bcgjbfk, 2026-10-11: Dane picked B, no quiet hours. If he ever
+  // names hours, this line and DEFAULT_QUIET_WINDOW change together.
   assert.equal(p.DEFAULT_QUIET_WINDOW, null);
 });
 

@@ -38,9 +38,10 @@ const DEFAULT_ZONE = 'America/Denver';
  * THE QUIET WINDOW IN FORCE WHEN NO POLICY FILE SAYS OTHERWISE.
  *
  * null = no window: the loops run around the clock, exactly as before this
- * module existed. The ticket's first acceptance criterion is that Dane names
- * the hours, so until he has, the code does not guess them for him. When he
- * answers, his answer goes HERE (and a policy file still overrides it).
+ * module existed. This is Dane's answer, not a placeholder: asked on task
+ * 86bcgjbfk (2026-10-11) to pick A (8am-6pm MT weekdays), B (no quiet hours,
+ * keep only the shared stand-down) or C (other hours), he replied "B". If he
+ * names hours later, they go HERE (and a policy file still overrides it).
  *
  * Shape: { days: 'weekdays' | 'all', start: 'HH:MM', end: 'HH:MM', zone }
  */

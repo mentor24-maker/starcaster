@@ -2561,8 +2561,10 @@ files in `~/loop-logs` (the one folder both repos' loops already share):
 * **The quiet window** — `~/loop-logs/loops.policy`. Hours, in Mountain time,
   when no loop *starts* a pass, so your session keeps its share. A pass already
   running finishes; the rule is only asked before a start. The log says
-  `quiet window until 6pm MT — not starting a pass`. **Until you name the
-  hours, there is no window** — the loops run around the clock as before.
+  `quiet window until 6pm MT — not starting a pass`. **There is no window
+  today, by your choice**: asked on the ticket, you answered "B — no quiet
+  hours; keep only the shared wait-for-the-reset note". The loops run around
+  the clock as before; write the file below if you ever want hours.
 * **The shared stand-down** — `~/loop-logs/loops.standdown`. When any loop is
   stopped by the limit, it writes down when the limit resets, and every other
   loop sleeps until then instead of finding out for itself. The log says
