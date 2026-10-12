@@ -2052,6 +2052,76 @@ function assertColumnStrips(columns, width) {
   return failures;
 }
 
+/*
+ * A CELL'S CONTROLS STAY INSIDE THE CELL (task 86bcgjy02).
+ *
+ * The cell and every box nested in it are one-track grids. With a bare `auto`
+ * track, anything in the cell wider than the cell — a long unbroken heading, a
+ * form preview — widened every box beside it, so the Content bar, Save Cell,
+ * Saved Modules and the module toolbar ran past the cell and the row card
+ * clipped them where the operator could not click. Nothing measured WHERE
+ * those controls were, so it reached him (Normie, 2026-10-11).
+ *
+ * Runs last, because it opens every multi-column cell's Content panel and the
+ * measurements above must keep seeing the page they always saw.
+ */
+async function measureCellControls(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('.builder-columns:not(.builder-columns-1) button[aria-label]').forEach((b) => {
+      if (/^expand content$/i.test(b.getAttribute('aria-label') || '')) b.click();
+    });
+  });
+  await page.waitForTimeout(2000);
+  return page.evaluate(() => {
+    const CONTROLS = [
+      '.builder-cell-panel-header button',
+      '.builder-panel-toggle-row button',
+      '.builder-cell-repository-actions select',
+      '.builder-module-header .builder-section-actions button',
+    ].join(', ');
+    const out = [];
+    document.querySelectorAll('.builder-columns:not(.builder-columns-1)').forEach((row) => {
+      const section = row.closest('.builder-section-card');
+      const title = (section?.querySelector('.builder-section-title-label')?.textContent || '').replace(/✎/g, '').trim() || '(untitled row)';
+      [...row.children].forEach((cell, index) => {
+        if (!cell.classList.contains('builder-column-card')) return;
+        const r = cell.getBoundingClientRect();
+        if (!r.width) return;
+        const controls = [...cell.querySelectorAll(CONTROLS)]
+          .filter((el) => el.closest('.builder-column-card') === cell)
+          .map((el) => ({ el, b: el.getBoundingClientRect() }))
+          .filter(({ b }) => b.width && b.height)
+          .map(({ el, b }) => ({
+            name: (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || el.tagName).trim().slice(0, 40),
+            left: Math.round(b.left),
+            right: Math.round(b.right),
+          }));
+        out.push({ title, index, cellLeft: Math.round(r.left), cellRight: Math.round(r.right), controls });
+      });
+    });
+    return out;
+  });
+}
+
+function assertCellControls(cells, width) {
+  const failures = [];
+  for (const cell of cells) {
+    const outside = cell.controls.filter((c) => c.right > cell.cellRight + 1 || c.left < cell.cellLeft - 1);
+    if (!outside.length) continue;
+    failures.push(
+      `${width}px ("${cell.title}", cell ${cell.index + 1}, x=${cell.cellLeft}..${cell.cellRight}): `
+      + `${outside.length} control(s) run outside the cell, so the row card clips them — `
+      + outside.slice(0, 4).map((c) => `"${c.name}" at x=${c.left}..${c.right}`).join(', ')
+      + '. Something in the cell is wider than the cell and a one-track grid between the cell and it '
+      + 'is `auto` rather than `minmax(0, 1fr)`; see the 86bcgjy02 rules in src/css/_builder-react-overrides.css.'
+    );
+  }
+  return {
+    failures,
+    measured: cells.filter((c) => c.controls.length).length,
+  };
+}
+
 const SEAM_BASELINE_PATH = path.join(ROOT, 'scripts', 'ui', 'panel-seam-baseline.json');
 let SEAM_BASELINE;
 try {
@@ -2100,6 +2170,7 @@ let seamFailureCount = 0;
 const stackByWidth = new Map();    // width -> pairs compared
 const stackUncomparable = new Map(); // "panel: lower under upper" -> widths
 let columnGridsSeen = 0;
+const cellControlsByWidth = new Map(); // width -> multi-column cells whose controls were measured
 const stripsByWidth = new Map();      // width -> columns actually measured for dead space
 const stripUnmeasured = new Map();    // "<panel> (<shape>)" -> the widths it could not be measured at
 /*
@@ -2238,6 +2309,10 @@ for (const width of WIDTHS) {
       if (!stripUnmeasured.get(key).includes(width)) stripUnmeasured.get(key).push(width);
     }
     allFailures.push(...assertColumnStrips(columnStrips, width));
+
+    const cellControls = assertCellControls(await measureCellControls(page), width);
+    allFailures.push(...cellControls.failures);
+    cellControlsByWidth.set(width, cellControls.measured);
   } finally {
     await browser.close();
   }
@@ -2354,6 +2429,18 @@ if (WIDTHS.includes(1440) && !(stackByWidth.get(1440) > 0)) {
     'check compared nothing. The fixture wraps ~22 panels at that width (Messaging Topic\n' +
     'List among them); zero means the fixture changed or `.builder-schema-panel-columns`\n' +
     'stopped matching. An instrument problem, which is why this is a 2 rather than a 1.');
+}
+
+/*
+ * NO MULTI-COLUMN CELL MEASURED IS BLIND, NOT GREEN (86bcgjy02). The fixture's
+ * two-column row is the only thing that exercises it.
+ */
+const cellBlindWidths = WIDTHS.filter((w) => !(cellControlsByWidth.get(w) > 0));
+if (cellBlindWidths.length) {
+  blind.push(
+    `No multi-column cell's controls were measured at ${cellBlindWidths.join('/')}px, so the\n` +
+    '"controls stay inside the cell" check compared nothing. The fixture\'s two-column row\n' +
+    '(`PANEL_CHECK_MULTI_COLUMN_SECTION`) is what it reads; re-seed, or the cell markup moved.');
 }
 
 /*
@@ -2691,6 +2778,10 @@ if (code === EXIT_CANNOT_TELL) {
 console.log(
   `[check:panels] OK — W0 and W9 hold across ${panelsSeen} panel(s) `
   + `and ${columnGridsSeen} titled-column manager(s) at ${WIDTHS.join('/')}px.`
+);
+console.log(
+  `Cell controls: every control stayed inside its cell in `
+  + WIDTHS.map((w) => `${cellControlsByWidth.get(w) || 0} multi-column cell(s) at ${w}px`).join(', ') + '.'
 );
 
 console.log(stripNote());

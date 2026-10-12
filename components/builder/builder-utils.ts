@@ -392,6 +392,24 @@ export function getSectionColumnPercent(
   return percents[index] ?? 100;
 }
 
+/**
+ * The page editor's column template: the layout preset with every track
+ * wrapped in `minmax(0, …)` (task 86bcgjy02). The editor sets the template
+ * inline, which overrides the stylesheet's own `minmax(0, 1fr)` guard for
+ * `.builder-columns-2`, so a bare `1fr` track was held at its minimum only by
+ * the cell's `min-width: 0`. This states the guard where the template is set.
+ * (The clipped controls on the Normie row came from INSIDE the cell — see the
+ * 86bcgjy02 rules in `_builder-react-overrides.css`.) Editor only — the live
+ * page keeps `getSectionGridTemplate`.
+ */
+export function getEditorColumnsGridTemplate(layout: BuilderTemplateSection["layout"]): string {
+  return getLayoutGridTemplate(layout)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((track) => `minmax(0, ${track})`)
+    .join(" ");
+}
+
 export function getSectionGridTemplate(section: BuilderTemplateSection): string {
   const columns = getLayoutColumns(section.layout);
   const widths = columns.map((column) =>
