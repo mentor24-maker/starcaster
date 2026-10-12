@@ -13,7 +13,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, DragEvent } from "react";
 import {
   getLayoutColumns,
-  getLayoutGridTemplate,
   normalizeRowOverlayScreenSettings,
   seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
@@ -39,6 +38,7 @@ import { modulePaletteGroups, modulePaletteItems } from "./builder-types";
 import {
   formatColumnName,
   getAlignmentClass,
+  getEditorColumnsGridTemplate,
   getSectionMarginStyle,
 } from "./builder-utils";
 
@@ -732,7 +732,7 @@ export function BuilderSectionCard({
 
           <div
             className={`builder-columns builder-columns-${columns.length} ${getAlignmentClass(section.alignment)}`}
-            style={{ gridTemplateColumns: getLayoutGridTemplate(section.layout) }}
+            style={{ gridTemplateColumns: getEditorColumnsGridTemplate(section.layout) }}
           >
             {columns.map((column, colIndex) => {
               const columnModules = columnModuleMap[column] ?? [];

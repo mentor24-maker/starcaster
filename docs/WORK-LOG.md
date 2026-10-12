@@ -1,3 +1,14 @@
+## 2026-10-11 — Builder: a row's right-hand cell no longer runs off the edge (#829)
+
+In the page editor, if anything in a cell was wider than the cell (a long
+heading, a form preview), every bar in that cell stretched to match it. The
+Content bar, Save Cell, the Saved Modules box and the module buttons then ran
+off the right side of the row and were cut off, which is what happened on the
+Normie "Meet Normie!" row. Each bar is now held to the width of its cell, and
+when a module's name and its buttons can't share one line, the buttons move
+down to the next line. The automatic panel check now looks for any cell
+control sitting outside its cell, and it caught the old behaviour when the fix
+was taken out on purpose. Published pages look exactly the same as before.
 ## 2026-10-11 — The Assets table fits the screen again, so Resize Images and Delete All can be clicked (#826)
 
 On a 16-inch MacBook the Assets table ran past the edge of its white card.

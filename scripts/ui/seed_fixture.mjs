@@ -1326,10 +1326,9 @@ const UNLINKED_SECTION = {
  * the page could not render. That is the 2026-08-12 shape exactly — the check
  * measures what it can see, and what it cannot see it calls fine.
  *
- * Deliberately plain otherwise. The row above is the one carrying awkward
- * content on purpose; this one adds a column count and nothing else, so a
- * failure here points at the multi-column controls rather than at a second
- * pile of adversarial strings.
+ * Plain otherwise, with ONE exception: the right cell's heading is a single
+ * unbroken word, because a cell's controls running off the row card only
+ * shows when something in the cell is wider than the cell (task 86bcgjy02).
  */
 const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   id: 'section-panel-lattice-check-columns',
@@ -1341,9 +1340,18 @@ const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   // Non-default, so the Phone panel has something to show as a per-device
   // override chip beside the controls being measured.
   columnGap: '24',
+  // A text module beside a heading, the shape of the Normie row whose right
+  // cell ran off the row card (task 86bcgjy02). The heading is one unbroken
+  // word, wider than the cell at every width the check runs: a bare `auto`
+  // track anywhere between the cell and the module grows to it, and takes the
+  // Content bar, Save Cell, Saved Modules and the module's toolbar with it.
+  // `check:panels` measures that those controls stay inside the cell.
   modules: [
-    { id: 'panel-columns-left', type: 'heading', text: 'Left column', column: 'left', settings: {} },
-    { id: 'panel-columns-right', type: 'heading', text: 'Right column', column: 'right', settings: {} },
+    { id: 'panel-columns-left', type: 'text', text: '<p>Left column</p>', column: 'left', settings: {} },
+    {
+      id: 'panel-columns-right', type: 'heading', column: 'right', settings: {},
+      text: 'Rightcolumnheadingwithoneunbrokenwordthatcannotwrapanywhereatallsoitiswiderthananycellcanbe',
+    },
   ],
 };
 

@@ -11727,3 +11727,44 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-preview-module.is-align-right:has(> .builder-preview-button) {
   text-align: right;
 }
+
+/*
+ * A row's cells stay inside the row card in the page editor (task 86bcgjy02).
+ *
+ * The cell (`.builder-column-card`) and the boxes nested in it are all
+ * one-column grids with no column template, so their one track is `auto` —
+ * as wide as the widest thing inside. `min-width: 0` on the cell stops the
+ * ROW's track growing, but not the cell's own track, so a module toolbar or
+ * the Content bar wider than the cell pushed every box in it past the cell's
+ * right edge, and the row card clipped them: Save Cell, Saved Modules and
+ * the module buttons cut off where nobody could click them. At 1100px wide
+ * the right cell of a 4fr/2fr row was 301px and its contents 367px.
+ *
+ * `minmax(0, 1fr)` makes each of those tracks exactly the box's width, so the
+ * contents fit or wrap instead of spilling.
+ */
+.builder-react-root .builder-column-card,
+.builder-react-root .builder-column-card .builder-cell-panel,
+.builder-react-root .builder-column-card .builder-module-list,
+.builder-react-root .builder-column-card .builder-module-stack-item,
+.builder-react-root .builder-column-card .builder-module-card,
+.builder-react-root .builder-column-card .builder-module-header .builder-module-title-text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * Once the cell can be narrower than a module's header, the name and the
+ * toolbar cannot both fit on one line. The toolbar drops to its own line and
+ * keeps to the right, so the name stays readable instead of disappearing
+ * under the buttons; on a cell too narrow even for the buttons, they wrap.
+ */
+.builder-react-root .builder-column-card .builder-module-header {
+  flex-wrap: wrap;
+}
+
+.builder-react-root .builder-column-card .builder-module-header .builder-section-actions {
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  min-width: 0;
+  margin-left: auto;
+}
