@@ -24,7 +24,7 @@
  * costs that batch; pressing Publish again picks up exactly where it stopped.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 
@@ -39,6 +39,14 @@ export type PublishStatus = {
 type BuilderPublishPanelProps = {
   /** Bumped by the editor after a save, so the count reflects what just changed. */
   refreshKey?: number;
+  /**
+   * Bumped by the editor after a SUCCESSFUL Save Page: once the re-check this
+   * triggers has answered, the Publish button is scrolled into view and takes
+   * the focus, so the next step is one Enter away instead of a scroll hunt
+   * (operator, 2026-10-11, task 86bcgmztg). Nothing moves when nothing is
+   * waiting — a disabled button cannot take focus, and there is no next step.
+   */
+  focusRequestKey?: number;
   onPublished?: () => void;
 };
 
@@ -65,7 +73,20 @@ export function describePending(status: PublishStatus | null): string {
   return `${status.pending} pages have changes that are not live yet.`;
 }
 
-export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPublishPanelProps) {
+/**
+ * Bring a button into view and give it the keyboard focus. One smooth scroll
+ * and a focus that does not scroll again, so the page moves once rather than
+ * jumping and then gliding. Exported for the editor's Close Builder hand-off.
+ */
+export function revealAndFocus(element: HTMLElement | null): boolean {
+  if (!element || !element.isConnected) return false;
+  if (element instanceof HTMLButtonElement && element.disabled) return false;
+  element.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  element.focus({ preventScroll: true });
+  return true;
+}
+
+export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPublished }: BuilderPublishPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState<PublishStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -73,8 +94,13 @@ export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPubl
   const [progress, setProgress] = useState<{ published: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const publishButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastFocusRequestRef = useRef(focusRequestKey);
+  // Bumped only once a requested re-check has come back with work waiting;
+  // the effect below runs after THAT render, when the button is enabled.
+  const [focusPublishNonce, setFocusPublishNonce] = useState(0);
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (): Promise<PublishStatus | null> => {
     setIsLoading(true);
     setError(null);
     try {
@@ -88,15 +114,29 @@ export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPubl
         throw new Error(message ?? "Could not read what is waiting to publish.");
       }
       setStatus(body.data ?? null);
+      return body.data ?? null;
     } catch (e) {
       setStatus(null);
       setError(e instanceof Error ? e.message : "Could not read what is waiting to publish.");
+      return null;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  useEffect(() => { void loadStatus(); }, [loadStatus, refreshKey]);
+  useEffect(() => {
+    // Wait for the count before moving focus: until the re-check answers, the
+    // Publish button is disabled and focusing it does nothing.
+    const wantsFocus = focusRequestKey !== lastFocusRequestRef.current;
+    lastFocusRequestRef.current = focusRequestKey;
+    void loadStatus().then((loaded) => {
+      if (wantsFocus && loaded && loaded.pending > 0) setFocusPublishNonce((current) => current + 1);
+    });
+  }, [loadStatus, refreshKey, focusRequestKey]);
+
+  useEffect(() => {
+    if (focusPublishNonce) revealAndFocus(publishButtonRef.current);
+  }, [focusPublishNonce]);
 
   async function publish() {
     if (!status || status.pending === 0) return;
@@ -198,6 +238,7 @@ export function BuilderPublishPanel({ refreshKey = 0, onPublished }: BuilderPubl
             className="submit-button builder-panel-heading-button"
             disabled={!hasPending || isPublishing || isLoading}
             onClick={() => void publish()}
+            ref={publishButtonRef}
             title={hasPending ? `Publish ${pending} page(s)` : "Nothing to publish"}
             type="button"
           >

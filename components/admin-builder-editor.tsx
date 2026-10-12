@@ -169,9 +169,11 @@ type AdminBuilderEditorProps = {
   initialRecordId?: string;
   /** When true, open Page Details immediately (used when the editor is mounted to create a new page). */
   autoNewPage?: boolean;
+  /** Called after a Publish succeeds — the shell moves focus to Close Builder. */
+  onPublished?: () => void;
 };
 
-export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }: AdminBuilderEditorProps = {}) {
+export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, onPublished }: AdminBuilderEditorProps = {}) {
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewModalDevice, setPreviewModalDevice] = useState<BuilderPreviewFrameDevice | null>(null);
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
@@ -230,6 +232,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
   // rather than what was true when the panel mounted. A stale count is the one
   // way this panel could actively mislead.
   const [publishRefreshKey, setPublishRefreshKey] = useState(0);
+  // Bumped only by a SUCCESSFUL Save Page: the Publish panel then takes the
+  // focus, so the next step is one Enter away (task 86bcgmztg).
+  const [publishFocusKey, setPublishFocusKey] = useState(0);
   const [dragOverWorkspace, setDragOverWorkspace] = useState(false);
   const [draggingLayout, setDraggingLayout] = useState(false);
   const [dragOverSectionGap, setDragOverSectionGap] = useState<number | null>(null);
@@ -2455,6 +2460,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
       }
       setMessage(selectedPageId ? "Page updated." : "Page created.");
       setPublishRefreshKey((current) => current + 1);
+      setPublishFocusKey((current) => current + 1);
       await loadPages();
       if (data.page?.id) setSelectedPageId(data.page.id);
     } catch (e) {
@@ -3251,7 +3257,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage }
           site-level action, and the COUNT has to be visible whether or not a
           page happens to be open. A step you can forget is worse than no step. */}
       {builderMode === "pages" ? (
-        <BuilderPublishPanel refreshKey={publishRefreshKey} />
+        <BuilderPublishPanel
+          focusRequestKey={publishFocusKey}
+          onPublished={onPublished}
+          refreshKey={publishRefreshKey}
+        />
       ) : null}
 
       {builderMode === "pages" && selectedPageId ? (

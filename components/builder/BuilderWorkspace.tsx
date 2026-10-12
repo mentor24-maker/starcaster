@@ -5,7 +5,9 @@
  * record lists and selection, so record preselection props are accepted
  * for compatibility but selection happens inside the editor.
  */
+import { useRef } from 'react';
 import { AdminBuilderEditor } from '../admin-builder-editor';
+import { revealAndFocus } from './builder-publish-panel';
 
 type BuilderWorkspaceProps = {
   surface?: string;
@@ -39,16 +41,26 @@ export default function BuilderWorkspace({ surface = 'hub', editorMode, record, 
   // immediately so the user can start filling in the new page.
   const autoNewPage = editorMode === 'page' && !initialRecordId;
 
+  // After a Publish the next step is leaving, so Close Builder takes the focus
+  // (task 86bcgmztg). The hub has no Close Builder; the ref stays empty there
+  // and this does nothing.
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
   return (
     <div className="builder-react-root">
       {surface !== 'hub' && typeof onClose === 'function' ? (
         <div className="builder-workspace-topbar">
-          <button className="secondary-button" onClick={onClose} type="button">
+          <button className="secondary-button" onClick={onClose} ref={closeButtonRef} type="button">
             Close Builder
           </button>
         </div>
       ) : null}
-      <AdminBuilderEditor initialMode={initialMode} initialRecordId={initialRecordId} autoNewPage={autoNewPage} />
+      <AdminBuilderEditor
+        initialMode={initialMode}
+        initialRecordId={initialRecordId}
+        autoNewPage={autoNewPage}
+        onPublished={() => revealAndFocus(closeButtonRef.current)}
+      />
     </div>
   );
 }
