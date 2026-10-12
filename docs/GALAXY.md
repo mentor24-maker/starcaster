@@ -230,11 +230,25 @@ card passes no mix and is always the assembled galaxy.
 > runtime publishes the progress as `data-galaxy-intro` (formerly
 > `data-galaxy-converge`).
 
-**The intro.** From the moment the galaxy mounts: wait Intro Delay, then
-the intro's progress runs in a straight line from 0 to 1 over Intro Length
-(`galaxyIntroProgress`; linear because each star eases itself). The start time
-lives in a ref, so dragging a slider in the Builder does not fly every star
-back out. A `galaxy:replay` event on the document (`GALAXY_REPLAY_EVENT`)
+**The intro.** From the moment the galaxy is first seen: wait Intro Delay,
+then the intro's progress runs in a straight line from 0 to 1 over Intro Length
+(`galaxyIntroProgress`; linear because each star eases itself). *First seen*
+depends on where it sits (task 86bcgjr0h):
+
+- **Window Center** is on screen from its mount, so the clock starts then.
+- **In Place** starts the clock when the visibility observer (the same one
+  that pauses it off screen) first reports at least `GALAXY_VISIBLE_FRACTION`
+  of the block in view. Until then the progress is 0 and nothing is drawn, so
+  a galaxy halfway down a page unfurls as the visitor arrives at it, not
+  while they are still reading the top. A block already in view at load —
+  the top of the page, or a reload mid-page — starts at once, as before. It
+  plays once per page load: scrolling away and back does not replay it
+  (Scroll Away's reverse re-assembles a dispersed galaxy on its own).
+  A browser without `IntersectionObserver` starts on mount.
+
+Once started, the intro runs to the end whatever the scroll does. The start
+time lives in a ref, so dragging a slider in the Builder does not fly every
+star back out. A `galaxy:replay` event on the document (`GALAXY_REPLAY_EVENT`)
 restarts it on every galaxy that hears it, and draws the scattered frame at
 once rather than on the next frame.
 

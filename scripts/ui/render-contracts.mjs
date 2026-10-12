@@ -4908,6 +4908,106 @@ export const RENDER_CONTRACTS = [
     },
   },
   /*
+   * WHEN THE INTRO STARTS (task 86bcgjr0h). An In Place galaxy below the fold
+   * used to start its clock on mount, so by the time a visitor scrolled to it
+   * the intro was long over. While it is out of view the loop is paused and
+   * the attribute holds whatever the first frame drew, so "still 0.00 before
+   * the scroll" passes on the old code too — the reading that tells them apart
+   * is the FIRST one that moves after the scroll: from sight, it starts near
+   * 0; from mount, it starts about half way through a 5s intro.
+   */
+  {
+    id: 'galaxy-in-place-intro-waits-for-the-fold',
+    why:
+      'An In Place galaxy halfway down a page played its entrance while nobody could see it, so a visitor ' +
+      'arriving at it found the stars already sitting there (Dane, 2026-10-11, the Dane of Earth home page). ' +
+      'Below two spacer sections, left 2s unscrolled: the canvas must read paused and data-galaxy-intro 0.00. ' +
+      'Scrolled into view: the first reading that moves must be under 0.20, the rest must rise and reach 0.30 ' +
+      'within 2s of a 5s intro.',
+    section: {
+      layout: 'single',
+      spacers: 2,
+      modules: [{
+        type: 'galaxy',
+        settings: { placement: 'inline', height: '300', intro: 'unfurl', introDelay: '0', introDuration: '5', scrollDisperse: 'false', interaction: 'none' },
+      }],
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: {
+      count: 12,
+      everyMs: 250,
+      // Frames 0–2 at the top (the block sits below the fold; with the
+      // harness's 1.8s of settling that is over 2s unscrolled), 3–11 in view.
+      scrollTo: [0, 0, 0, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+      read: [],
+      attrs: ['data-galaxy-intro', 'data-galaxy-paused'],
+      selectors: { canvas: 'canvas[data-galaxy-count]' },
+    },
+    expect(sample) {
+      const frames = (sample.series || []).map((f) => ({
+        intro: f.canvas?.['data-galaxy-intro'] ?? null,
+        paused: f.canvas?.['data-galaxy-paused'] ?? null,
+      }));
+      if (frames.length !== 12 || frames.some((f) => f.intro === null)) {
+        return `data-galaxy-intro could not be read on every sample (${frames.map((f) => f.intro).join(', ')}) — nothing was watched.`;
+      }
+      const above = frames.slice(0, 3);
+      if (above.some((f) => f.paused !== 'true')) {
+        return `before the scroll the canvas read paused=${above.map((f) => f.paused).join(', ')} — the block was ` +
+          'not below the fold, so this proves nothing about waiting for it.';
+      }
+      if (above.some((f) => f.intro !== '0.00')) {
+        return `before anyone scrolled to it the intro read ${above.map((f) => f.intro).join(' → ')} — it ran out of sight.`;
+      }
+      const values = frames.slice(3).map((f) => Number(f.intro));
+      const firstMoving = values.findIndex((v) => v > 0);
+      if (firstMoving < 0) {
+        return `scrolled into view, the intro never started (${values.join(' → ')}).`;
+      }
+      if (values[firstMoving] >= 0.2) {
+        return `the first reading after the scroll was already ${values[firstMoving].toFixed(2)} ` +
+          `(${values.join(' → ')}) — the intro had been running since the page loaded, out of sight.`;
+      }
+      for (let i = firstMoving + 1; i < values.length; i += 1) {
+        if (!(values[i] > values[i - 1])) {
+          return `once started, the intro did not keep rising (${values.join(' → ')}).`;
+        }
+      }
+      if (values[values.length - 1] < 0.3) {
+        return `2s after the scroll a 5s intro had only reached ${values[values.length - 1].toFixed(2)} (${values.join(' → ')}).`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'galaxy-window-intro-runs-from-load',
+    why:
+      'A Window Center galaxy is on screen from the first frame, so its intro must keep starting on mount — ' +
+      'the pair of the contract above, which would pass just as well if NO galaxy ever started its intro ' +
+      'until something was scrolled. No replay: about 1.8s after load a 5s intro must already be past 0.20 ' +
+      'and still rising.',
+    module: {
+      type: 'galaxy',
+      settings: { placement: 'window', intro: 'unfurl', introDelay: '0', introDuration: '5', scrollDisperse: 'false', interaction: 'none' },
+    },
+    selector: 'canvas[data-galaxy-count]',
+    series: { count: 4, everyMs: 250, read: [], attrs: ['data-galaxy-intro'], selectors: { canvas: 'canvas[data-galaxy-count]' } },
+    expect(sample) {
+      const values = (sample.series || []).map((f) => Number(f.canvas?.['data-galaxy-intro']));
+      if (values.length < 4 || values.some((n) => !Number.isFinite(n))) {
+        return `data-galaxy-intro could not be read on every sample (${values.join(', ')}) — nothing was watched.`;
+      }
+      if (values[0] <= 0.2) {
+        return `about 1.8s after load the Window galaxy's intro read only ${values[0].toFixed(2)} ` +
+          `(${values.join(' → ')}) — it did not start on mount.`;
+      }
+      for (let i = 1; i < values.length; i += 1) {
+        if (!(values[i] > values[i - 1])) return `the Window intro did not keep rising (${values.join(' → ')}).`;
+      }
+      return null;
+    },
+  },
+  /*
    * THE RESTING POSE (task 86bcd9qtc). Read off the pixels with
    * `series.shape`: the luminance-weighted spread of the light along x and
    * along y. Intro None and no interaction, so nothing but the setting moves it.
