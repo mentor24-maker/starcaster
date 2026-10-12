@@ -195,8 +195,10 @@ export function GalaxyRuntime({
   /*
    * When the intro started, on the frame clock. A ref for the same reason
    * again: a settings change re-runs the effect, and dragging a slider in the
-   * Builder must not fly every star back out to the edges. Only a mount and
-   * "Replay intro" set it.
+   * Builder must not fly every star back out to the edges. Only the first
+   * sight of the galaxy and "Replay intro" set it: a Window galaxy is on
+   * screen from its mount, an In Place one from when it is first scrolled
+   * into view (task 86bcgjr0h). Null means not yet seen, and draws nothing.
    */
   const introStartRef = useRef<number | null>(null);
   const [reduced, setReduced] = useState(readReducedMotion);
@@ -258,7 +260,11 @@ export function GalaxyRuntime({
     const introRuns = !reduced && motion.intro !== "none";
     const framePose = { squash: 1, roll: pose.roll };
     const scrollRuns = !reduced && motion.scrollDisperse;
-    if (introStartRef.current === null) introStartRef.current = performance.now();
+    // In Place, the visibility observer below starts the clock when the block
+    // is first in view — an intro played below the fold is over before anyone
+    // scrolls to it. Without an observer there is no way to know, so it runs now.
+    const introWaitsForSight = inline && typeof IntersectionObserver === "function";
+    if (introStartRef.current === null && !introWaitsForSight) introStartRef.current = performance.now();
     const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
     const tier = readDeviceTier({
       hardwareConcurrency: nav.hardwareConcurrency,
@@ -369,9 +375,12 @@ export function GalaxyRuntime({
 
     /** Where the intro and the scroll have got to, at `now` on the frame clock. */
     function updateMix(now: number) {
-      mix.reveal = introRuns
-        ? galaxyIntroProgress((now - (introStartRef.current ?? now)) / 1000, motion.introDelay, motion.introDuration)
-        : 1;
+      const introStart = introStartRef.current;
+      mix.reveal = !introRuns
+        ? 1
+        : introStart === null
+          ? 0
+          : galaxyIntroProgress((now - introStart) / 1000, motion.introDelay, motion.introDuration);
       if (scrollDirty) {
         scrollDirty = false;
         mix.disperse = readDisperse();
@@ -478,7 +487,12 @@ export function GalaxyRuntime({
       ? new IntersectionObserver(
           (entries) => {
             const entry = entries[entries.length - 1];
-            if (entry) setOffscreen(!entry.isIntersecting || entry.intersectionRatio < GALAXY_VISIBLE_FRACTION);
+            if (!entry) return;
+            const seen = entry.isIntersecting && entry.intersectionRatio >= GALAXY_VISIBLE_FRACTION;
+            // First sight starts the intro, once per page load: a second entry
+            // finds the clock already set and replays nothing.
+            if (seen && introStartRef.current === null) introStartRef.current = performance.now();
+            setOffscreen(!seen);
           },
           { threshold: [0, GALAXY_VISIBLE_FRACTION] }
         )

@@ -11,6 +11,16 @@ loops wait until then instead of each running into it. If either rule can't
 be read, the loops carry on as before and the log says so, so a typo can't
 quietly switch them all off.
 
+## 2026-10-11 — A galaxy partway down a page now plays its entrance when you reach it (#828)
+
+On the Dane of Earth home page the galaxy sits about halfway down. Its entrance
+(the stars unfurling from the centre) started the moment the page loaded, while
+it was still out of sight, so by the time a visitor scrolled down to it the show
+was over and the stars were just sitting there. Now an In Place galaxy waits
+until it actually comes into view and plays its entrance then, once per visit.
+A galaxy that is already on screen when the page opens, and the full-window
+kind, start straight away exactly as before. A new browser check proves the
+wait, and it was tested by putting the old behaviour back and watching it fail.
 ## 2026-10-11 — Builder: a row's right-hand cell no longer runs off the edge (#829)
 
 In the page editor, if anything in a cell was wider than the cell (a long
