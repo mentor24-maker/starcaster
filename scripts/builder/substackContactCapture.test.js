@@ -265,3 +265,27 @@ test('publicationKey treats case, scheme, www and a trailing slash as one addres
     restore();
   }
 });
+
+test('reasons travel with the approve; a bad reason is refused BEFORE any contact is made (86bch0j99)', async () => {
+  const { store, capture, restore } = withDb();
+  try {
+    const contacts = fakeContacts();
+    const w = await writer(store, { handle: 'reasoned' });
+    const tooLong = await capture.approveCandidate(w.id, { status: 'approved', decisionReasons: ['x'.repeat(81)] }, SCOPE_A, { contactsStore: contacts });
+    assert.equal(tooLong.ok, false);
+    assert.match(tooLong.error, /80 characters or fewer/);
+    assert.equal(contacts.calls.created, 0, 'no contact left behind for a writer never approved');
+    const notList = await capture.approveCandidate(w.id, { status: 'approved', decisionReasons: 'polymath' }, SCOPE_A, { contactsStore: contacts });
+    assert.equal(notList.ok, false);
+    assert.equal(contacts.calls.created, 0);
+
+    const res = await capture.approveCandidate(w.id, { status: 'approved', note: 'deep', decisionReasons: ['polymath', 'Polymath', ' kind '] }, SCOPE_A, { contactsStore: contacts });
+    assert.equal(res.ok, true, res.error);
+    assert.deepEqual(res.data.decisionReasons, ['polymath', 'kind'], 'trimmed, repeats (any case) dropped');
+    const back = await store.getCandidateById(w.id, SCOPE_A);
+    assert.deepEqual(back.data.decisionReasons, ['polymath', 'kind']);
+    assert.equal(back.data.note, 'deep');
+  } finally {
+    restore();
+  }
+});

@@ -175,12 +175,94 @@
   padding-left: var(--space-5);
 }
 
-.substack-miner-note-input {
-  width: 10ch;
+.substack-miner-why {
+  display: block;
+  margin-top: var(--space-2);
+  font-style: italic;
+  overflow-wrap: break-word;
+}
+
+/* ── The Approve / Reject pop-up (substack-decision-dialog.tsx) ─────────
+   The frame is the shared c-modal (legacy.css); only the inside is here.
+   Content sizes the window (D7): the textarea asks for a reading measure,
+   and the reasons table is as wide as its longest reason. */
+
+.substack-decision-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.substack-decision-label {
+  font-weight: 600;
+}
+
+.substack-decision-body textarea {
+  width: 56ch;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.substack-decision-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.substack-decision-reasons legend {
+  padding: 0;
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+}
+
+.substack-decision-table {
+  border-collapse: collapse;
+  width: auto;
+}
+
+.substack-decision-table th,
+.substack-decision-table td {
+  padding: var(--space-1) var(--space-3);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.substack-decision-table td:last-child {
+  opacity: 0.75;
+}
+
+.substack-decision-table label {
+  cursor: pointer;
+}
+
+.substack-decision-empty {
+  margin: 0;
+  opacity: 0.75;
+}
+
+.substack-decision-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.substack-decision-add label {
+  white-space: nowrap;
+}
+
+.substack-decision-add input {
+  width: 30ch;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  margin: 0;
 }
 
 .substack-miner-contact {
