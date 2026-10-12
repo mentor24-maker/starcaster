@@ -27,6 +27,7 @@ import {
   stepGalaxyView,
   stepGalaxyViewByKey,
   tiltGalaxyView,
+  tiltGalaxyViewInBox,
   type GalaxyBudgetReason,
   type GalaxyMix
 } from "@/lib/galaxy-field";
@@ -213,8 +214,9 @@ export function GalaxyRuntime({
   const posterUrl = (settings.posterUrl ?? "").trim();
   const showPoster = Boolean(posterUrl) && (reduced || canvasFailed);
   const key = settingsKey(settings);
-  // `rotate` exists only In Place and `tilt` only in a Window; a stored value
-  // the placement does not offer runs as that placement's default.
+  // `rotate` exists only In Place, `tilt` in both (In Place measures the cursor
+  // across the block); a stored value the placement does not offer runs as
+  // that placement's default.
   const interaction = resolveGalaxyInteraction(inline, settings.interaction);
   const showDragSurface = inline && interaction === "rotate" && !showPoster;
   // The clickable hotspot (task 86bcgef6g) exists only In Place: a Window
@@ -438,7 +440,13 @@ export function GalaxyRuntime({
       last = now;
       stepGalaxyField(field, dt, stars);
       if (pendingTilt) {
-        tiltGalaxyView(view, pendingTilt.x, pendingTilt.y, window.innerWidth, window.innerHeight);
+        if (inline) {
+          // In Place leans across the block, and eases back to rest outside it.
+          const rect = container!.getBoundingClientRect();
+          tiltGalaxyViewInBox(view, pendingTilt.x, pendingTilt.y, rect);
+        } else {
+          tiltGalaxyView(view, pendingTilt.x, pendingTilt.y, window.innerWidth, window.innerHeight);
+        }
         pendingTilt = null;
       }
       stepGalaxyView(view, dt);
@@ -552,8 +560,13 @@ export function GalaxyRuntime({
     const onTilt = (event: MouseEvent) => {
       pendingTilt = { x: event.clientX, y: event.clientY };
     };
+    // The cursor left the window: an In Place galaxy eases back to rest. A
+    // point that can never be inside the block does it through the same path.
+    const onTiltLeave = () => {
+      pendingTilt = { x: Number.NaN, y: Number.NaN };
+    };
     const rotating = !reduced && interaction === "rotate" && inline && button;
-    const tilting = !reduced && interaction === "tilt" && !inline;
+    const tilting = !reduced && interaction === "tilt";
     if (rotating) {
       button.addEventListener("pointerdown", onPointerDown);
       button.addEventListener("pointermove", onPointerMove);
@@ -564,6 +577,7 @@ export function GalaxyRuntime({
       window.addEventListener("blur", endDrag);
     }
     if (tilting) document.addEventListener("mousemove", onTilt, { passive: true });
+    if (tilting && inline) document.documentElement.addEventListener("mouseleave", onTiltLeave);
 
     /*
      * Intro and scroll. Under reduced motion neither listens: the mix stays
@@ -601,6 +615,7 @@ export function GalaxyRuntime({
         window.removeEventListener("blur", endDrag);
       }
       if (tilting) document.removeEventListener("mousemove", onTilt);
+      if (tilting && inline) document.documentElement.removeEventListener("mouseleave", onTiltLeave);
       if (scrollRuns) window.removeEventListener("scroll", onScroll);
       if (introRuns) document.removeEventListener(GALAXY_REPLAY_EVENT, onReplay);
       observer?.disconnect();

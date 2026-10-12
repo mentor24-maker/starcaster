@@ -944,7 +944,9 @@ export const GALAXY_VISIBLE_FRACTION = 0.05;
  * sits: `rotate` (drag and arrow keys) needs something to press, so it exists
  * only In Place; a Window galaxy sits behind the page at z-index -9999 and can
  * never receive a pointer, so it gets `tilt`, read from the cursor anywhere on
- * the page (TractorNav trap 3). `none` is valid in both.
+ * the page (TractorNav trap 3). Since task 86bcgjr0w `tilt` is offered In Place
+ * too, measured across the block rather than the viewport. `none` is valid in
+ * both.
  */
 export const GALAXY_INTERACTIONS = ["rotate", "tilt", "none"] as const;
 export type GalaxyInteraction = (typeof GALAXY_INTERACTIONS)[number];
@@ -957,7 +959,7 @@ export const GALAXY_KEY_STEP = 0.08;
 export const GALAXY_PITCH_LIMIT = 1.2;
 /** How quickly the view eases toward where it was turned to (per second). */
 export const GALAXY_DAMPING = 6;
-/** Window tilt: the cursor at a viewport edge turns the backdrop this far. */
+/** Tilt: the cursor at an edge (the viewport's, or an In Place block's) turns it this far. */
 export const GALAXY_TILT_YAW = 0.25;
 export const GALAXY_TILT_PITCH = 0.15;
 
@@ -968,7 +970,7 @@ export function defaultGalaxyInteraction(inline: boolean): GalaxyInteraction {
 
 /** The interactions the panel offers for a placement, in panel order. */
 export function galaxyInteractionsFor(inline: boolean): GalaxyInteraction[] {
-  return inline ? ["rotate", "none"] : ["tilt", "none"];
+  return inline ? ["rotate", "tilt", "none"] : ["tilt", "none"];
 }
 
 /**
@@ -1143,6 +1145,36 @@ export function tiltGalaxyView(view: GalaxyView, clientX: number, clientY: numbe
     view.targetPitch = (clamp(clientY / viewportH, 0, 1) * 2 - 1) * GALAXY_TILT_PITCH;
   }
   return view;
+}
+
+/** The box an In Place galaxy's tilt is measured across, in viewport pixels. */
+export interface GalaxyTiltBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * In Place tilt (task 86bcgjr0w): the same lean as the Window's, but the
+ * cursor is measured across the BLOCK, so its left edge is −GALAXY_TILT_YAW
+ * and its right edge +. A cursor outside the block — or a block with no size —
+ * puts the targets back to 0 and answers "rest", so the view eases back to its
+ * resting pose (the pose itself is drawn separately and is untouched).
+ */
+export function tiltGalaxyViewInBox(view: GalaxyView, clientX: number, clientY: number, box: GalaxyTiltBox): "tilt" | "rest" {
+  const inside =
+    Number.isFinite(clientX) && Number.isFinite(clientY) &&
+    box.width > 0 && box.height > 0 &&
+    clientX >= box.left && clientX <= box.left + box.width &&
+    clientY >= box.top && clientY <= box.top + box.height;
+  if (!inside) {
+    view.targetYaw = 0;
+    view.targetPitch = 0;
+    return "rest";
+  }
+  tiltGalaxyView(view, clientX - box.left, clientY - box.top, box.width, box.height);
+  return "tilt";
 }
 
 /** Ease the view one frame toward its target. */

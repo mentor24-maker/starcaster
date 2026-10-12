@@ -4704,6 +4704,57 @@ export const RENDER_CONTRACTS = [
     selector: '.galaxy-drag-surface',
     absent: true,
   },
+  /*
+   * IN PLACE TILT (task 86bcgjr0w). Tilt with Cursor is offered In Place too,
+   * measured across the block. No drag surface (a click must fall through to
+   * the link hotspot), and the cursor walked to the block's right edge, its
+   * left edge, then off it must carry the published yaw right, left, and back.
+   */
+  {
+    id: 'galaxy-in-place-tilt-has-no-drag-surface',
+    why:
+      'An In Place galaxy set to Tilt with Cursor reads the cursor from the document, so it needs ' +
+      'nothing to press — and a button over it would swallow the click meant for the link hotspot. ' +
+      'Paired with galaxy-in-place-rotate-has-a-labelled-drag-surface.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', interaction: 'tilt' } },
+    selector: '.galaxy-drag-surface',
+    absent: true,
+  },
+  {
+    id: 'galaxy-in-place-tilt-follows-the-cursor',
+    why:
+      'Tilt with Cursor In Place leans the galaxy toward the pointer as it crosses the block, and ' +
+      'eases it back to rest once the pointer leaves. Before task 86bcgjr0w the cursor listener ran ' +
+      'only for a Window galaxy, and In Place the yaw stayed at 0 whatever the mouse did. Read off the ' +
+      'yaw the canvas publishes, at each stop of a real mouse path: right edge, left edge, then 150px ' +
+      'below the block.',
+    module: { type: 'galaxy', settings: { placement: 'inline', height: '300', intro: 'none', interaction: 'tilt' } },
+    selector: 'canvas[data-galaxy-count]',
+    pointer: [
+      { selector: '.builder-galaxy--inline', at: [0.98, 0.5], waitMs: 50, watch: { selector: 'canvas[data-galaxy-count]', attr: 'data-galaxy-yaw', count: 5, everyMs: 250 } },
+      { selector: '.builder-galaxy--inline', at: [0.02, 0.5], waitMs: 50, watch: { selector: 'canvas[data-galaxy-count]', attr: 'data-galaxy-yaw', count: 5, everyMs: 250 } },
+      { selector: '.builder-galaxy--inline', at: [0.5, 1.5], waitMs: 50, watch: { selector: 'canvas[data-galaxy-count]', attr: 'data-galaxy-yaw', count: 9, everyMs: 250 } },
+    ],
+    expect(sample) {
+      const [right, left, away] = (sample.pointer || []).map((seen) => seen.map(Number));
+      if (![right, left, away].every((seen) => seen && seen.length && seen.every(Number.isFinite))) {
+        return `the yaw could not be read at every stop of the cursor path (${JSON.stringify(sample.pointer)}) — nothing was watched.`;
+      }
+      if (!right.some((n) => n > 0.15)) {
+        return `with the cursor at the block's right edge the yaw read ${right.join(' → ')} over a second — ` +
+          'it should rise above 0.15, so the galaxy is not leaning toward the cursor.';
+      }
+      if (!left.some((n) => n < -0.15)) {
+        return `with the cursor at the block's left edge the yaw read ${left.join(' → ')} over a second — ` +
+          'it should fall below -0.15.';
+      }
+      if (!away.some((n) => Math.abs(n) < 0.05)) {
+        return `with the cursor 150px below the block the yaw read ${away.join(' → ')} over two seconds — ` +
+          'it should ease back under 0.05, so the galaxy does not return to rest when the cursor leaves.';
+      }
+      return null;
+    },
+  },
   {
     id: 'galaxy-arrow-key-turns-it',
     why:

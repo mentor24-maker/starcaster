@@ -139,7 +139,7 @@ What it offers depends on **Sits**:
 
 | Sits | Choices | Default |
 |---|---|---|
-| In Place | Drag to Rotate, None | Drag to Rotate |
+| In Place | Drag to Rotate, Tilt with Cursor, None | Drag to Rotate |
 | Window Center | Tilt with Cursor, None | Tilt with Cursor |
 
 A stored value the placement does not offer (Drag to Rotate left on a galaxy
@@ -172,6 +172,17 @@ galaxy"*, focusable, with a visible focus ring.
 only the newest position is applied, once per frame. The cursor's place in
 the viewport maps to yaw **±0.25** (0.5 rad from the left edge to the right)
 and pitch **±0.15**.
+
+**Tilt with Cursor, In Place** (task 86bcgjr0w). The same listener and the
+same ±0.25 / ±0.15 limits, but the cursor is measured across the **block's**
+bounding box, not the viewport: the block's left edge is −0.25, its right
+edge +0.25 (`tiltGalaxyViewInBox`). A cursor outside the block, or leaving
+the window, sets both targets back to 0, so the galaxy eases back to its
+resting pose (View Angle and Oval Direction are drawn separately and stay as
+set). It renders no drag surface, so a click falls straight through to the
+link hotspot when one is set. Touch devices send no hover, so it simply never
+moves there. There is no combined drag-and-tilt choice: the cursor would
+immediately override wherever a drag left the target.
 
 **Easing.** Both set a target; the frame loop eases toward it with damping
 **6** through `easeToward`, which closes the gap by e^(-6·dt) per frame —
@@ -528,6 +539,10 @@ are invisible to computed style), plus the two `luma` differentials above:
   labelled, `type="button"`, covering the canvas;
 - `galaxy-window-tilt-has-no-drag-surface` — absence, paired with the one
   above;
+- `galaxy-in-place-tilt-has-no-drag-surface` — the same absence In Place;
+- `galaxy-in-place-tilt-follows-the-cursor` — the mouse at the block's right
+  edge carries `data-galaxy-yaw` above 0.15, at its left edge below −0.15,
+  and well outside the block back under 0.05 in absolute value;
 - `galaxy-arrow-key-turns-it` — one real ArrowLeft carries `data-galaxy-yaw`
   toward -0.08;
 - `galaxy-reduced-motion-keeps-the-button-but-does-not-animate` — under

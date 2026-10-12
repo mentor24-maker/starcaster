@@ -104,7 +104,11 @@ describe("interaction follows the placement (task 86bc7f5hh)", () => {
 
   it("a mismatched one is rewritten to that default — the key stays", () => {
     expect(norm({ placement: "window", interaction: "rotate" })).toBe("tilt");
-    expect(norm({ placement: "inline", interaction: "tilt" })).toBe("rotate");
+    expect(norm({ placement: "inline", interaction: "spin" })).toBe("rotate");
+  });
+
+  it("In Place keeps Tilt with Cursor — a saved tilt reloads as tilt (task 86bcgjr0w)", () => {
+    expect(norm({ placement: "inline", interaction: "tilt" })).toBe("tilt");
   });
 
   it("None survives either placement", () => {
@@ -175,9 +179,10 @@ describe("the runtime's markup", () => {
     expect(html).toContain("galaxy-drag-surface");
   });
 
-  it("no button In Place + none, and never one on a Window galaxy", () => {
+  it("no button In Place + none or tilt, and never one on a Window galaxy", () => {
     for (const settings of [
       { placement: "inline", interaction: "none" },
+      { placement: "inline", interaction: "tilt" },
       { placement: "window", interaction: "tilt" },
       { placement: "window", interaction: "rotate" }
     ]) {
