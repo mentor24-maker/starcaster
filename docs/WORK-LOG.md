@@ -1,3 +1,15 @@
+## 2026-10-12 — A Studio video stuck in iCloud now says why, and what to click (#836)
+
+When a video in the Photos "Studio" album has its full copy only in iCloud,
+macOS will not let the MacBook's scheduled job ask Photos to download it, and
+it never shows a prompt you could approve. The log used to shrug: "the original
+may not have come down from iCloud". It now says PERMISSION DENIED, explains
+that there is no switch for it, and prints the fix underneath: in Photos ›
+Settings › iCloud choose "Download Originals to this Mac" (every such video then
+arrives on the next pass), or open the one video in Photos. The failed video is
+still tried again on every pass, and a test now proves that. This is the first
+half of what you picked ("A now + C"); the Photos setting is the other half.
+
 ## 2026-10-11 — Save Page now takes you straight to Publish, and Publish to Close Builder (#832)
 
 In the page editor, the Publish button and the Close Builder button both sit a
