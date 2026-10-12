@@ -2547,6 +2547,57 @@ so the file was replaced with `mv` rather than edited in place; the live
 next restarted. Bringing that wrapper under version control is **NODES Slice B
 (86bbh9kh2)**, not this ticket.
 
+## One Claude limit, five users (2026-10-11, task 86bcgjbfk)
+
+You, the two StarCaster loops and the two WaveCenter loops on the Mac Mini all
+use **one Claude account with one usage limit**. It is first come, first
+served: nothing used to give your own session priority, and when the limit was
+hit each loop found out separately by running into it — WaveCenter's every 30
+minutes, all night.
+
+Two rules now sit in front of every StarCaster pass, read fresh each time from
+files in `~/loop-logs` (the one folder both repos' loops already share):
+
+* **The quiet window** — `~/loop-logs/loops.policy`. Hours, in Mountain time,
+  when no loop *starts* a pass, so your session keeps its share. A pass already
+  running finishes; the rule is only asked before a start. The log says
+  `quiet window until 6pm MT — not starting a pass`. **There is no window
+  today, by your choice**: asked on the ticket, you answered "B — no quiet
+  hours; keep only the shared wait-for-the-reset note". The loops run around
+  the clock as before; write the file below if you ever want hours.
+* **The shared stand-down** — `~/loop-logs/loops.standdown`. When any loop is
+  stopped by the limit, it writes down when the limit resets, and every other
+  loop sleeps until then instead of finding out for itself. The log says
+  `standing down until Oct 11 2:50am MT (set by starcaster/loop-build)`. Once
+  that time has passed the note is ignored, so nothing needs cleaning up.
+
+Both rules **fail open**: if a file cannot be read, the loops run exactly as
+they did before, and the log says what could not be read. A mistake in a
+setting must never quietly switch off two repos' worth of loops.
+
+To see the rule as each loop sees it:
+
+```
+./scripts/install_loop_runner.sh --status     # each lane has a line starting "policy:"
+```
+
+To change the hours, write the file (this one is 8am–6pm, weekdays):
+
+```
+{"quietWindow": {"days": "weekdays", "start": "08:00", "end": "18:00"}}
+```
+
+`{"quietWindow": null}` turns the window off; deleting the file returns to the
+built-in default (`DEFAULT_QUIET_WINDOW` in `scripts/builder/loopPolicy.js`).
+To lift a stand-down early, delete `loops.standdown`. A loop re-reads both
+files at least every 15 minutes, so an edit takes effect within that.
+
+What it does not do: it cannot read how much of the limit is left (Claude
+offers no clean way to ask — the error message's reset time is the only
+signal), and it does not give each project its own budget. WaveCenter's loops
+read the same files once their own runner learns to (a separate ticket in the
+WaveCenter queue).
+
 ## A build node must be able to make GitHub run its checks
 
 Every gate downstream of the build loop reads GitHub's checks. `ship` waits for
