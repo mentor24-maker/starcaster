@@ -283,6 +283,22 @@ body.asset-associations-modal-open {
 .asset-thumb-preview {
   cursor: zoom-in;
   border-radius: 4px;
+  /* A wide logo at 50px tall was 352px across and took a fifth of the
+     table (86bcgjqeb). Capped and letterboxed; the hover card shows it
+     full size. */
+  max-width: 96px;
+  object-fit: contain;
+}
+
+/* Asset Name. Filenames rarely contain spaces, so a long one had no place to
+   break and widened the whole table until Size, Actions and the bulk buttons
+   sat off the card (86bcgjqeb). assets.js puts a break opportunity after each
+   _ - and . so the name wraps between its parts; `anywhere` is the fallback
+   for a long run with no separator at all. The full name is also the cell's
+   tooltip. */
+.assets-name-cell {
+  min-width: 10rem;
+  overflow-wrap: anywhere;
 }
 
 .asset-thumb-preview:hover,

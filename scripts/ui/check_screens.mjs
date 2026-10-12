@@ -59,6 +59,19 @@ const SHOT_DIR = path.join(ROOT, '.ui-check');
  * Footage screen's "Search what you said" (86bcdek0z). No `ready` means the
  * screen is SKIPPED, never reported as fitting; `clear` is clicked afterwards
  * so the next entry sees the bare page.
+ *
+ * `select` (optional) ticks the first row checkbox matching it before
+ * measuring, which is how a CRUD reaches bulk mode — the Assets toolbar only
+ * shows Resize Images and Delete All once a row is checked. Nothing to tick
+ * means SKIPPED; it is unticked again afterwards.
+ *
+ * `inReach` (optional) lists things the operator must be able to click
+ * without sliding the table sideways: each must sit inside the visible box of
+ * its table's card. Checked only at widths of `inReachFrom` and up — below
+ * that the table may legally scroll in its card (T7 rung 12). This is the
+ * check that a table scrolling "legally" can still hide the controls that
+ * matter: on 2026-10-10 the Assets table did exactly that at 1728px, and the
+ * page-width check above reported it as a note (86bcgjqeb).
  */
 const SCREENS = [
   { id: 'builderManagePagesPage', label: 'Builder: Pages' },
@@ -67,6 +80,13 @@ const SCREENS = [
   // in this sweep; add screens here only when they own a table.
   { id: 'contactsPersonasPage', label: 'Contacts: Personas' },
   { id: 'assetsPage', label: 'Assets' },
+  {
+    id: 'assetsPage',
+    label: 'Assets, a row checked (bulk mode)',
+    select: '#assetsTable input[type="checkbox"]',
+    inReach: ['#assetsBulkEditBtn', '#assetsBulkResizeBtn', '#assetsBulkDeleteBtn', '#assetsSortSizeBtn', 'thead th.actions-col'],
+    inReachFrom: 1440,
+  },
   { id: 'assetsFootagePage', label: 'Assets: Footage' },
   { id: 'assetsFootagePage', label: 'Assets: Footage, transcript open', open: '[data-testid="studio-transcript-open"]' },
   {
@@ -194,7 +214,37 @@ try {
         }
         await page.waitForTimeout(300);
       }
+      if (screen.select) {
+        const box = page.locator(screen.select).first();
+        if (!(await box.count())) {
+          console.log(`skip  ${String(width).padStart(4)}  ${screen.label} — nothing matches ${screen.select} (is the fixture seeded?)`);
+          skipped += 1;
+          continue;
+        }
+        await box.check();
+        await page.waitForTimeout(400);
+      }
       const m = await measureActiveScreen(page);
+      // Each `inReach` target, against the visible box of the card it sits in.
+      // A target that is missing or not displayed is out of reach too — a
+      // check that passes because it found nothing is the hollow pass.
+      const outOfReach = screen.inReach && width >= (screen.inReachFrom || 0)
+        ? await page.evaluate((selectors) => {
+          const sec = [...document.querySelectorAll('section.app-page')].find((x) => !x.classList.contains('hidden'));
+          return selectors.flatMap((sel) => {
+            const el = sec?.querySelector(sel);
+            if (!el) return [`${sel} (not on the page)`];
+            const r = el.getBoundingClientRect();
+            if (!r.width) return [`${sel} (not displayed)`];
+            const wrap = el.closest('.table-wrap');
+            const c = (wrap || document.documentElement).getBoundingClientRect();
+            const right = wrap ? c.left + wrap.clientLeft + wrap.clientWidth : window.innerWidth;
+            return r.left < c.left - 1 || r.right > right + 1
+              ? [`${sel} (spans ${Math.round(r.left)}–${Math.round(r.right)}px, card shows ${Math.round(c.left)}–${Math.round(right)}px)`]
+              : [];
+          });
+        }, screen.inReach)
+        : [];
       // Measured BEFORE the `open` step closes what it opened.
       const sideways = await page.evaluate(() => {
         const sec = [...document.querySelectorAll('section.app-page')].find((x) => !x.classList.contains('hidden'));
@@ -202,7 +252,7 @@ try {
           .filter((el) => el.scrollWidth > el.clientWidth + 1)
           .map((el) => `${el.getAttribute('data-ui-no-sideways') || el.className} (${el.scrollWidth}px of text in ${el.clientWidth}px)`);
       });
-      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}${screen.search ? '-searched' : ''}-${width}.png`);
+      const shot = path.join(SHOT_DIR, `${screen.id}${screen.open ? '-opened' : ''}${screen.search ? '-searched' : ''}${screen.select ? '-selected' : ''}-${width}.png`);
       await page.screenshot({ path: shot });
       checked += 1;
       if (screen.open) {
@@ -213,8 +263,10 @@ try {
         const clear = page.locator(screen.search.clear).first();
         if (await clear.count() && await clear.isEnabled()) await clear.click();
       }
+      if (screen.select) await page.locator(screen.select).first().uncheck();
 
       const problems = [];
+      for (const what of outOfReach) problems.push(`${what} — out of reach without sliding the table sideways`);
       if (m.pageScrollsSideways) {
         const worst = m.overflowing[0];
         problems.push(

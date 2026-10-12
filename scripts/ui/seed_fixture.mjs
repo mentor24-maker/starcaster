@@ -43,6 +43,7 @@ const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
+const assetsStore = require(path.join(ROOT, 'lib/assetsStore.js'));
 const substackContactCapture = require(path.join(ROOT, 'lib/acquire/SubstackContactCapture.js'));
 const youtubeOutreachCommentsStore = require(path.join(ROOT, 'lib/youtubeOutreachCommentsStore.js'));
 
@@ -1325,10 +1326,9 @@ const UNLINKED_SECTION = {
  * the page could not render. That is the 2026-08-12 shape exactly — the check
  * measures what it can see, and what it cannot see it calls fine.
  *
- * Deliberately plain otherwise. The row above is the one carrying awkward
- * content on purpose; this one adds a column count and nothing else, so a
- * failure here points at the multi-column controls rather than at a second
- * pile of adversarial strings.
+ * Plain otherwise, with ONE exception: the right cell's heading is a single
+ * unbroken word, because a cell's controls running off the row card only
+ * shows when something in the cell is wider than the cell (task 86bcgjy02).
  */
 const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   id: 'section-panel-lattice-check-columns',
@@ -1340,9 +1340,18 @@ const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   // Non-default, so the Phone panel has something to show as a per-device
   // override chip beside the controls being measured.
   columnGap: '24',
+  // A text module beside a heading, the shape of the Normie row whose right
+  // cell ran off the row card (task 86bcgjy02). The heading is one unbroken
+  // word, wider than the cell at every width the check runs: a bare `auto`
+  // track anywhere between the cell and the module grows to it, and takes the
+  // Content bar, Save Cell, Saved Modules and the module's toolbar with it.
+  // `check:panels` measures that those controls stay inside the cell.
   modules: [
-    { id: 'panel-columns-left', type: 'heading', text: 'Left column', column: 'left', settings: {} },
-    { id: 'panel-columns-right', type: 'heading', text: 'Right column', column: 'right', settings: {} },
+    { id: 'panel-columns-left', type: 'text', text: '<p>Left column</p>', column: 'left', settings: {} },
+    {
+      id: 'panel-columns-right', type: 'heading', column: 'right', settings: {},
+      text: 'Rightcolumnheadingwithoneunbrokenwordthatcannotwrapanywhereatallsoitiswiderthananycellcanbe',
+    },
   ],
 };
 
@@ -1885,6 +1894,46 @@ async function seedSubstackMiner(scope) {
   return { total: writers.length };
 }
 
+/**
+ * Rows for the Assets screen (86bcgjqeb). Without them the table holds no
+ * data, every column is as narrow as its heading, and check:screens reports
+ * a fit it never had to earn. The names are the shapes that broke it on
+ * 2026-10-10: one unbroken filename joined with underscores (Dane's real
+ * logo file, which is the one that pushed Size and Actions off the card),
+ * one longer than 60 characters, and one with spaces. The first is a link,
+ * the way a row with a stored URL renders. Idempotent by name.
+ */
+async function seedAssets(scope) {
+  const assets = [
+    { assetName: 'logo_starcaster_digital_presence_manager900x300.png', assetType: 'Image', category: 'Website Banner Image', location: 'https://www.starcaster.pro/images/alphire-wordmark.png', imageWidth: 900, imageHeight: 300, size: 48213, topic: 'Branding' },
+    { assetName: 'delray_beach_tennis_center_junior_high_performance_academy_hero_banner_final_v3.jpg', assetType: 'Image', category: 'Feature Image', imageWidth: 3840, imageHeight: 2160, size: 2381904 },
+    { assetName: `${LONG} — clinic flyer.pdf`, assetType: 'Lead Magnet', size: 912345 },
+  ];
+  const listed = await assetsStore.listAssets(scope);
+  if (!listed.ok) throw new Error(`list assets: ${listed.error}`);
+  const have = new Set((listed.data || []).map((row) => row.asset_name));
+  let made = 0;
+  for (const asset of assets) {
+    if (have.has(asset.assetName)) continue;
+    must(await assetsStore.createAsset(asset, scope), 'create asset');
+    made += 1;
+  }
+  // Landmine 12: an insert can succeed with no tenant on it, and then the
+  // screen reads empty. Read the rows back through the project scope.
+  const after = await assetsStore.listAssets(scope);
+  const seen = new Set((after.data || []).map((row) => row.asset_name));
+  const missing = assets.filter((a) => !seen.has(a.assetName)).length;
+  if (missing) throw new Error(`${missing} asset(s) were written but do not read back in this project`);
+  return { made, found: assets.length - made };
+}
+
+let assetsSeeded = null;
+try {
+  assetsSeeded = await seedAssets({ projectId: project.id, userId });
+} catch (err) {
+  console.error(`  failed to seed assets: ${err.message}`);
+}
+
 let minerSeeded = null;
 try {
   minerSeeded = await seedSubstackMiner({ projectId: project.id, userId });
@@ -1924,5 +1973,10 @@ console.log(
   minerSeeded
     ? `Substack Miner seeded — ${minerSeeded.total} writer(s) across candidate / approved / rejected, keywords saved.`
     : 'WARNING: the Substack Miner was NOT seeded; Acquire › Substack Miner will show its empty states and check:screens proves nothing there.'
+);
+console.log(
+  assetsSeeded
+    ? `Assets seeded — ${assetsSeeded.made} created, ${assetsSeeded.found} already present.`
+    : 'WARNING: assets were NOT seeded; the Assets table will be empty and check:screens proves nothing there.'
 );
 console.log(`export UI_HARNESS_PROJECT_ID=${project.id}`);
