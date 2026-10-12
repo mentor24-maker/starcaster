@@ -128,3 +128,17 @@ alter table public.substack_candidates add column if not exists last_notes_read_
 --                       running this file again changes nothing.
 
 alter table public.substack_candidates add column if not exists decision_reasons jsonb not null default '[]'::jsonb;
+
+-- ── A suggested decision for each undecided writer (task 86bch3f2v) ─────────
+--
+--   suggestion    what the suggestion pass (lib/acquire/SubstackSuggestRun.js)
+--                 guessed Dane would decide, from his past decisions:
+--                 { "action": "approved"|"rejected", "reasons": [...],
+--                   "confidence": "high"|"medium"|"low", "why": "...",
+--                   "basedOn": <decisions it learned from>, "model": "...",
+--                   "suggestedAt": "<time>" }. Null: not suggested yet. Only
+--                 the pass writes it; Dane's own decision lives in status,
+--                 decision_reasons and note, and Agree copies the suggestion
+--                 into those.
+
+alter table public.substack_candidates add column if not exists suggestion jsonb;
