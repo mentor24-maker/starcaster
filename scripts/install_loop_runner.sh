@@ -77,6 +77,10 @@ status_one() {
   else
     echo "lock:     none"
   fi
+  # The shared Claude-limit rule (task 86bcgjbfk): Dane's quiet window and any
+  # stand-down another lane recorded. Read through the same code the runner
+  # asks before every pass, so this line and the runner cannot disagree.
+  node "$REPO/scripts/loop_policy.mjs" status 2>/dev/null || echo "policy:   could not be read — the runner treats that as no rule (runs as before)"
   local log="$HOME/loop-logs/$skill.log"
   if [ -f "$log" ]; then echo "log:      $log (last modified $(date -r "$log" '+%Y-%m-%d %H:%M'))"; else echo "log:      $log (nothing written yet)"; fi
 }

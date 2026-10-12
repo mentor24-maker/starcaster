@@ -1,3 +1,16 @@
+## 2026-10-11 — The Mini's loops can now leave Dane his share of the Claude limit (#830)
+
+Dane and the four loops on the Mac Mini all use one Claude account with one
+usage limit, and until now the loops took whatever they could reach first.
+Before starting each pass, the StarCaster loops now check two rules kept in a
+folder every loop can see. The first is a set of "quiet hours" during which
+no loop starts work, so Dane's own session keeps its share. Dane chose to
+set none for now, so the loops still run around the clock. The second is a shared note: when one
+loop hits the limit, it writes down when the limit resets, and the other
+loops wait until then instead of each running into it. If either rule can't
+be read, the loops carry on as before and the log says so, so a typo can't
+quietly switch them all off.
+
 ## 2026-10-11 — A galaxy partway down a page now plays its entrance when you reach it (#828)
 
 On the Dane of Earth home page the galaxy sits about halfway down. Its entrance
