@@ -11768,3 +11768,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   min-width: 0;
   margin-left: auto;
 }
+
+/*
+ * After Save Page the Publish button is handed the focus, and after Publish
+ * the Close Builder button is (revealAndFocus in builder-publish-panel.tsx).
+ * Both clicks come from the mouse, and after a mouse click the browser hides
+ * the focus ring — so the button had the focus and nothing showed it. The
+ * hand-off marks the button; this ring shows until the focus moves on.
+ */
+[data-builder-focus-handoff]:focus {
+  outline: 3px solid var(--focus-ring-color);
+  outline-offset: 3px;
+}
