@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-notes-panel';
 import { SubstackDecisionDialog, reasonTally, type Decision } from './substack-decision-dialog';
+import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './substack-suggestion-dialog';
 
 /**
  * Acquire › Substack Miner — where Dane sees every Substack writer Starcaster
@@ -56,6 +57,8 @@ export type Candidate = {
   note: string;
   /** The short reasons ticked in the Approve/Reject pop-up (task 86bch0j99). */
   decisionReasons?: string[];
+  /** What the suggestion pass guessed he would decide (task 86bch3f2v); null until it has run. */
+  suggestion?: Suggestion | null;
   /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
   /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
   recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
@@ -201,6 +204,27 @@ export function decisionWhyText(c: Candidate): string {
 function DecisionWhy({ c }: { c: Candidate }) {
   const why = decisionWhyText(c);
   return why ? <span className="substack-miner-why" data-testid="substack-miner-why">{why}</span> : null;
+}
+
+/** The suggestion pass's report, in plain language (task 86bch3f2v). */
+export function suggestSummaryText(s: Record<string, any> | null | undefined): string[] {
+  if (!s) return [];
+  const suggested = (s.suggested || []) as Array<{ name: string; action: string; confidence: string }>;
+  const approve = suggested.filter((x) => x.action === 'approved').length;
+  const out = [
+    `Learned from ${plural(Number(s.basedOn) || 0, 'decision')} (${Number(s.approvedExamples) || 0} approved, ${Number(s.rejectedExamples) || 0} rejected). `
+    + `Suggested ${suggested.length} of ${plural(Number(s.undecided) || 0, 'undecided writer')}: ${approve} approve, ${suggested.length - approve} reject.`
+    + (Number(s.alreadySuggested) ? ` ${Number(s.alreadySuggested)} already had a suggestion.` : ''),
+  ];
+  if (suggested.length) out.push('See the Suggested column on the Candidates tab.');
+  for (const x of (s.notSuggested || []) as Array<{ name: string; reason: string }>) out.push(`${x.name} was not suggested: ${x.reason}.`);
+  for (const x of (s.postsUnread || []) as Array<{ name: string; reason: string }>) out.push(`${x.name} was judged from its description only — ${x.reason}.`);
+  if (Number(s.notReached)) {
+    out.push(s.stoppedBecause
+      ? `Stopped with ${Number(s.notReached)} not reached: ${s.stoppedBecause}`
+      : `${Number(s.notReached)} not reached in this run — click Suggest decisions again for the rest.`);
+  }
+  return out;
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -418,6 +442,10 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [rowBusy, setRowBusy] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
   const [deciding, setDeciding] = useState<{ candidate: Candidate; decision: Decision } | null>(null);
+  const [viewingSuggestion, setViewingSuggestion] = useState<Candidate | null>(null);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const [suggestLines, setSuggestLines] = useState<string[]>([]);
+  const [suggestRedo, setSuggestRedo] = useState(false);
   const [links, setLinks] = useState<Record<string, ContactLink>>({});
   const [keywordsText, setKeywordsText] = useState('');
   const [keywordsBusy, setKeywordsBusy] = useState(false);
@@ -518,6 +546,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setRowBusy('');
       setRowError({ id: '', message: '' });
       setDeciding(null);
+      setViewingSuggestion(null);
+      setSuggestLines([]);
       setLinks({});
       setKeywordsText('');
       setKeywordsMessage('');
@@ -584,6 +614,18 @@ export default function SubstackMinerPanel(): React.ReactElement {
   };
   const decide = (c: Candidate, status: string) => void patchRow(c, { status });
 
+  /** Agree: make the suggested decision with the suggested reasons, as if he had ticked them. */
+  const agree = async (c: Candidate) => {
+    const s = c.suggestion;
+    if (!s) return;
+    const body: Record<string, unknown> = { status: s.action };
+    if (s.reasons.length || (c.decisionReasons || []).length) body.decisionReasons = s.reasons;
+    const data = await patchRow(c, body);
+    if (!data) return;
+    if (data.contact) setLinks((m) => ({ ...m, [c.id]: data.contact as ContactLink }));
+    setViewingSuggestion(null);
+  };
+
   const openContact = async (contactId: string, known?: Record<string, unknown>) => {
     const app = getApp();
     if (!app) return;
@@ -624,14 +666,14 @@ export default function SubstackMinerPanel(): React.ReactElement {
   };
 
   /** POST a run; its summary is shown, then the list is read again. */
-  const runPass = async (path: string, setBusy: (b: boolean) => void, setLines: (l: string[]) => void, describe: (d: any) => string[], what: string) => {
+  const runPass = async (path: string, setBusy: (b: boolean) => void, setLines: (l: string[]) => void, describe: (d: any) => string[], what: string, body: Record<string, unknown> = {}) => {
     const api = getApi();
     if (!api) return;
     const epoch = projectEpoch.current;
     setBusy(true);
     setLines([]);
     try {
-      const reply = await api(path, { method: 'POST', body: JSON.stringify({}) });
+      const reply = await api(path, { method: 'POST', body: JSON.stringify(body) });
       if (epoch !== projectEpoch.current) return;
       setLines(describe(reply?.data));
       void load();
@@ -785,6 +827,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Found via</th>
                     <th scope="col">Last seen</th>
                     <th scope="col">Notes read</th>
+                    <th scope="col">Suggested</th>
                     <th scope="col" className="actions-col">Actions</th>
                   </tr>
                 </thead>
@@ -814,6 +857,25 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
                         <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
                         <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
+                        <td className="substack-miner-suggested-cell">
+                          {c.status === 'candidate' && c.suggestion ? (
+                            <>
+                              <button
+                                type="button"
+                                className="substack-miner-suggested-word"
+                                data-action={c.suggestion.action}
+                                title={`${c.suggestion.confidence} confidence — click to see the reasons`}
+                                onClick={() => setViewingSuggestion(c)}
+                              >
+                                {SUGGESTED_WORD[c.suggestion.action]}
+                              </button>
+                              <span className="substack-miner-suggested-confidence">{c.suggestion.confidence}</span>
+                              <button type="button" className="btn tiny-btn" disabled={busy} onClick={() => void agree(c)}>Agree</button>
+                            </>
+                          ) : (
+                            <span title={c.status === 'candidate' ? 'Not suggested yet — Run tab, Suggest decisions' : 'Already decided'}>—</span>
+                          )}
+                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {c.status === 'candidate' ? (
@@ -851,6 +913,17 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 </tbody>
               </table>
             </div>
+          ) : null}
+          {viewingSuggestion?.suggestion ? (
+            <SubstackSuggestionDialog
+              key={viewingSuggestion.id}
+              suggestion={viewingSuggestion.suggestion}
+              writerName={viewingSuggestion.name || viewingSuggestion.handle}
+              busy={rowBusy === viewingSuggestion.id}
+              error={rowError.id === viewingSuggestion.id ? rowError.message : ''}
+              onClose={() => { setViewingSuggestion(null); setRowError({ id: '', message: '' }); }}
+              onAgree={() => void agree(viewingSuggestion)}
+            />
           ) : null}
           {deciding ? (
             <SubstackDecisionDialog
@@ -908,6 +981,29 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </button>
             </div>
             <RunResult lines={searchLines} label="What the search did" />
+          </section>
+
+          <section className="substack-miner-card" aria-label="Suggest decisions">
+            <h3 className="substack-miner-card-title">Suggest decisions</h3>
+            <p className="substack-miner-card-note">
+              Reads each undecided writer's newest posts and suggests Approve or Reject, with reasons, from the decisions you have
+              already made. Nothing is decided until you click Agree on the Candidates tab. Each writer is one paid AI call.
+            </p>
+            <label className="substack-miner-not">
+              <input type="checkbox" checked={suggestRedo} onChange={(e) => setSuggestRedo(e.target.checked)} />
+              <span>Suggest again for writers that already have a suggestion</span>
+            </label>
+            <div className="substack-miner-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={suggestBusy}
+                onClick={() => void runPass(`${BASE}/suggest`, setSuggestBusy, setSuggestLines, suggestSummaryText, 'Suggesting', suggestRedo ? { redo: true } : {})}
+              >
+                {suggestBusy ? 'Suggesting… (about 5 seconds a writer)' : 'Suggest decisions'}
+              </button>
+            </div>
+            <RunResult lines={suggestLines} label="What suggesting did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read recommendations">

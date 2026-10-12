@@ -93,6 +93,7 @@
     "test:hooks": "node --test scripts/hooks/*.test.js",
     "substack-miner:read-notes": "node scripts/substack_miner_read_notes.mjs",
     "substack-miner:search-notes": "node scripts/substack_miner_search_notes.mjs",
+    "substack-miner:suggest": "node scripts/substack_miner_suggest.mjs",
     "sql:handoff": "node scripts/sql_handoff.cjs",
     "db:refresh": "doppler run --project starcaster --config dev --no-check-version -- node scripts/db_refresh.mjs",
     "db:use": "node scripts/db_use.mjs",

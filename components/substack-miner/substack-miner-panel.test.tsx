@@ -12,6 +12,7 @@ import SubstackMinerPanel, {
   searchSummaryText,
   seedSummaryText,
   snowballSummaryText,
+  suggestSummaryText,
   statsNotes,
   subscriberSummaryText,
   visibleCandidates,
@@ -491,6 +492,44 @@ describe("Substack Miner screen", () => {
     expect(shown()).toEqual(["no", "waiting", "yes"]);
   });
 
+  it("Suggested shows the word and Agree; the word opens the reasons; Agree decides with them (86bch3f2v)", async () => {
+    const suggestion = { action: "approved" as const, reasons: ["polymath", "writes Notes daily"], confidence: "high" as const, why: "Writes across fields like the ones you approved.", basedOn: 30 };
+    stores.proj_doe.writers = [
+      writer({ handle: "guessed", name: "Guessed Writer", suggestion }),
+      writer({ handle: "nosuggestion" }),
+    ];
+    await mount();
+    const cell = rowFor("guessed")!.querySelector(".substack-miner-suggested-cell")!;
+    expect(cell.textContent).toContain("Approve");
+    expect(cell.textContent).toContain("high");
+    expect(rowFor("nosuggestion")!.querySelector(".substack-miner-suggested-cell")!.textContent).toBe("—");
+
+    await click(cell.querySelector<HTMLButtonElement>(".substack-miner-suggested-word")!);
+    const box = document.body.querySelector<HTMLElement>(".substack-suggestion-dialog")!;
+    expect(box.textContent).toContain("Suggested: Approve Guessed Writer");
+    expect([...box.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["polymath", "writes Notes daily"]);
+    expect(box.textContent).toContain("Writes across fields like the ones you approved.");
+    expect(box.textContent).toContain("learned from 30 of your decisions");
+    await click(button("Agree", box));
+    expect(requests.filter((r) => r.method === "PATCH").at(-1)?.body).toEqual({ status: "approved", decisionReasons: ["polymath", "writes Notes daily"] });
+    expect(document.body.querySelector(".substack-suggestion-dialog")).toBeNull();
+    expect(stores.proj_doe.writers[0].status).toBe("approved");
+    expect(stores.proj_doe.contacts).toHaveLength(1);
+  });
+
+  it("Agree in the row rejects with the suggested reasons; a decided writer shows no suggestion", async () => {
+    stores.proj_doe.writers = [
+      writer({ handle: "nope", suggestion: { action: "rejected", reasons: ["AI hype"], confidence: "medium", why: "", basedOn: 30 } }),
+      writer({ handle: "already", status: "approved", suggestion: { action: "rejected", reasons: [], confidence: "low", why: "", basedOn: 30 } }),
+    ];
+    await mount();
+    expect(rowFor("nope")!.querySelector(".substack-miner-suggested-word")!.getAttribute("data-action")).toBe("rejected");
+    await click(button("Agree", rowFor("nope")!));
+    expect(requests.filter((r) => r.method === "PATCH").at(-1)?.body).toEqual({ status: "rejected", decisionReasons: ["AI hype"] });
+    await show("approved");
+    expect(rowFor("already")!.querySelector(".substack-miner-suggested-cell")!.textContent).toBe("—");
+  });
+
   it("switching project shows that project's rows, not this one's", async () => {
     stores.proj_doe.writers = [writer({ handle: "doeonly" })];
     await mount();
@@ -610,6 +649,20 @@ describe("Substack Miner helpers", () => {
 
   it("parses seed lines, keeping commas inside the reason", () => {
     expect(parseSeedLines("a, one, two\n\n@b")).toEqual({ rows: [{ handle: "a", whyFit: "one, two" }, { handle: "@b" }], lines: [1, 3] });
+  });
+
+  it("the suggestion summary counts both ways, names what was skipped, and says when to run again", () => {
+    const lines = suggestSummaryText({
+      basedOn: 30, approvedExamples: 18, rejectedExamples: 12, undecided: 40, alreadySuggested: 5,
+      suggested: [{ name: "A", action: "approved", confidence: "high" }, { name: "B", action: "rejected", confidence: "low" }],
+      notSuggested: [{ name: "C", reason: "the AI did not answer: timeout" }],
+      postsUnread: [{ name: "D", reason: "its newest posts answered HTTP 404" }],
+      notReached: 7,
+    });
+    expect(lines[0]).toBe("Learned from 30 decisions (18 approved, 12 rejected). Suggested 2 of 40 undecided writers: 1 approve, 1 reject. 5 already had a suggestion.");
+    expect(lines).toContain("C was not suggested: the AI did not answer: timeout.");
+    expect(lines).toContain("D was judged from its description only — its newest posts answered HTTP 404.");
+    expect(lines.at(-1)).toBe("7 not reached in this run — click Suggest decisions again for the rest.");
   });
 
   it("run summaries account for everything the server reported", () => {
