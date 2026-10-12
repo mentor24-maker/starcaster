@@ -1,3 +1,13 @@
+## 2026-10-11 — An In Place galaxy can now lean toward the mouse (#831)
+
+A galaxy sitting in the page used to do nothing when you moved the mouse over
+it; it only turned if you pressed and dragged. Its Interaction setting now
+offers a third choice, Tilt with Cursor: move the pointer across the galaxy and
+it leans toward it, move off and it settles back to how it was resting. Drag to
+Rotate stays the default, so no existing page changes until someone picks Tilt.
+The saved choice survives a reload, and a link on the galaxy still opens when
+clicked. A new browser check walks a real mouse across the galaxy and reads how
+far it leaned; putting the old behaviour back made that check fail.
 ## 2026-10-11 — A galaxy partway down a page now plays its entrance when you reach it (#828)
 
 On the Dane of Earth home page the galaxy sits about halfway down. Its entrance
