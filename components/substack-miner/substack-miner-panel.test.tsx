@@ -507,6 +507,9 @@ describe("Substack Miner helpers", () => {
     expect(snow.join(" ")).toContain("bad: recommendations page could not be read (HTTP 404)");
     expect(snow.join(" ")).toContain("2 recommendations on a publication's own domain were skipped");
     expect(seedSummaryText({ added: 0, merged: 1, refusals: [] }, [])[0]).toContain("1 already here");
+    const fromProfile = seedSummaryText({ added: 1, merged: 0, refusals: [{ index: 1, handle: "@reader", error: "they have no Substack publication of their own" }], resolved: [{ index: 0, profile: "@ankairos", handle: "magickalchemyandai", name: "Philosophy & AI" }] }, [2, 4]);
+    expect(fromProfile).toContain('Line 2: @ankairos writes "Philosophy & AI" at magickalchemyandai.substack.com, so they were added under that publication.');
+    expect(fromProfile.join(" ")).toContain("Line 4 (@reader) was not added");
     const subs = subscriberSummaryText({ rowsRead: 3, matched: 1, newlyMarked: 1, alreadyMarked: 0, unmatched: 1, unreadable: 1, emailColumn: "Email", dateColumn: "", approvedWriterMatches: 1, problems: [{ line: 4, reason: "the email is blank" }], unmatchedEmails: ["x@y.co"], contactsTruncated: true, contactsSearched: 5000 }).join(" ");
     expect(subs).toContain("1 could not be read");
     expect(subs).toContain("no subscription-date column, so contacts newly marked carry today's date");

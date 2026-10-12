@@ -271,7 +271,9 @@ export type SeedRow = { handle: string; whyFit?: string };
 
 /**
  * One writer per line, `handle, why it fits`. The handle may be a bare name,
- * an @name or the publication's address; the server decides which are real.
+ * an @name, the publication's address or a person's substack.com/@name
+ * profile link (looked up and filed under their publication); the server
+ * decides which are real.
  * Blank lines are dropped, and `lines` maps each row back to the line it came
  * from so a refusal can name the line Dane typed.
  */
@@ -294,6 +296,10 @@ export function seedSummaryText(data: Record<string, any> | null | undefined, li
   const added = Number(data?.added) || 0;
   const merged = Number(data?.merged) || 0;
   const out = [`${added} added${merged ? `, ${merged} already here (their details were brought up to date)` : ''}.`];
+  for (const r of (data?.resolved || []) as Array<{ index: number; profile: string; handle: string; name?: string }>) {
+    const line = lines[r.index] ?? r.index + 1;
+    out.push(`Line ${line}: ${r.profile} writes ${r.name ? `"${r.name}" at ` : ''}${r.handle}.substack.com, so they were added under that publication.`);
+  }
   for (const r of (data?.refusals || []) as Array<{ index: number; handle?: string; error: string }>) {
     const line = lines[r.index] ?? r.index + 1;
     out.push(`Line ${line}${r.handle ? ` (${r.handle})` : ''} was not added: ${plainError(r.error)}`);
@@ -873,7 +879,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
           <form className="substack-miner-card" aria-label="Paste a seed list" onSubmit={addSeeds}>
             <label className="substack-miner-card-title" htmlFor="sm-seeds">Paste a seed list</label>
-            <p className="substack-miner-card-note">One writer per line: <code>handle, why it fits</code>. The handle is the part before .substack.com, or paste the address.</p>
+            <p className="substack-miner-card-note">One writer per line: <code>handle, why it fits</code>. The handle is the part before .substack.com, or paste the publication's address or the person's profile link (substack.com/@name).</p>
             <textarea id="sm-seeds" rows={5} value={seedText} onChange={(e) => setSeedText(e.target.value)} />
             <div className="substack-miner-actions">
               <button type="submit" className="btn btn-primary" disabled={seedBusy || !parseSeedLines(seedText).rows.length}>
