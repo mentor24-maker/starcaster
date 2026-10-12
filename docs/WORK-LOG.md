@@ -1,3 +1,16 @@
+## 2026-10-11 — The Mini's loops can now leave Dane his share of the Claude limit (#830)
+
+Dane and the four loops on the Mac Mini all use one Claude account with one
+usage limit, and until now the loops took whatever they could reach first.
+Before starting each pass, the StarCaster loops now check two rules kept in a
+folder every loop can see. The first is a set of "quiet hours" during which
+no loop starts work, so Dane's own session keeps its share. No hours are set
+yet; that choice is waiting on Dane. The second is a shared note: when one
+loop hits the limit, it writes down when the limit resets, and the other
+loops wait until then instead of each running into it. If either rule can't
+be read, the loops carry on as before and the log says so, so a typo can't
+quietly switch them all off.
+
 ## 2026-10-11 — Builder: a row's right-hand cell no longer runs off the edge (#829)
 
 In the page editor, if anything in a cell was wider than the cell (a long
