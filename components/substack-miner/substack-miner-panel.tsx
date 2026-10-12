@@ -106,7 +106,11 @@ export const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: 'candidate', label: 'Candidates' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
+  { value: 'all', label: 'All' },
 ];
+
+/** What each status is called in a sentence, for the empty-list messages. */
+const STATUS_WORDS: Record<string, string> = { candidate: 'a candidate', approved: 'approved', rejected: 'rejected' };
 
 export const FOUND_VIA_LABELS: Record<string, string> = {
   seed: 'Seed list',
@@ -215,9 +219,16 @@ export function headerCounts(candidates: Candidate[]): { found: number; approved
 }
 
 /** Most recommended first; ties go to the one seen most recently. */
-export function visibleCandidates(candidates: Candidate[], status: string, foundVia: string): Candidate[] {
+/**
+ * The rows the Show filter picks. `status` 'all' is every writer; `negate`
+ * (the Not box) flips the status choice only — Found via still narrows — so
+ * Not Approved is the candidates and the rejected. Not All is nothing, which
+ * is why the screen disables the box while All is chosen.
+ */
+export function visibleCandidates(candidates: Candidate[], status: string, foundVia: string, negate = false): Candidate[] {
+  const statusMatch = (c: Candidate) => (status === 'all' || c.status === status) !== negate;
   return candidates
-    .filter((c) => c.status === status && (!foundVia || c.foundVia === foundVia))
+    .filter((c) => statusMatch(c) && (!foundVia || c.foundVia === foundVia))
     .sort((a, b) => {
       const byCount = (b.recommendedBy?.length || 0) - (a.recommendedBy?.length || 0);
       if (byCount) return byCount;
@@ -226,8 +237,13 @@ export function visibleCandidates(candidates: Candidate[], status: string, found
 }
 
 /** Why the table is empty, in a sentence that names the cause. */
-export function emptyText(candidates: Candidate[], status: string, foundVia: string): string {
+export function emptyText(candidates: Candidate[], status: string, foundVia: string, negate = false): string {
   const via = foundVia ? ` found via ${(FOUND_VIA_LABELS[foundVia] || foundVia).toLowerCase()}` : '';
+  if (status === 'all' || negate) {
+    if (!candidates.length) return 'No writers yet. Add keywords on the Run tab and click Search the web.';
+    if (status === 'all') return `No writers${via}. Try another "Found via" choice.`;
+    return `Every writer${via || ' found'} is ${STATUS_WORDS[status] || status}, so nothing is left once those are taken out. Untick Not to see them.`;
+  }
   if (status === 'approved') return foundVia ? `Nothing approved${via}.` : 'Nothing approved yet.';
   if (status === 'rejected') return foundVia ? `Nothing rejected${via}.` : 'Nothing rejected yet.';
   if (!candidates.length) return 'No candidates yet. Add keywords on the Run tab and click Search the web.';
@@ -397,6 +413,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [error, setError] = useState('');
   const [tab, setTab] = useState<Tab>('candidates');
   const [statusFilter, setStatusFilter] = useState('candidate');
+  const [negateFilter, setNegateFilter] = useState(false);
   const [foundViaFilter, setFoundViaFilter] = useState('');
   const [rowBusy, setRowBusy] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
@@ -680,7 +697,9 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
   const all = candidates || [];
   const counts = headerCounts(all);
-  const rows = visibleCandidates(all, statusFilter, foundViaFilter);
+  // Not All would always be empty; the box is disabled then, and ignored.
+  const negate = negateFilter && statusFilter !== 'all';
+  const rows = visibleCandidates(all, statusFilter, foundViaFilter, negate);
   const keywordsDirty = settings ? keywordsText.trim() !== (settings.keywords || []).join('\n').trim() : false;
   const approvedCount = counts.approved;
 
@@ -725,12 +744,22 @@ export default function SubstackMinerPanel(): React.ReactElement {
       {tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
           <div className="substack-miner-filters">
-            <label className="substack-miner-filter">
+            <div className="substack-miner-filter" role="group" aria-label="Show filter">
               <span>Show</span>
+              <label className="substack-miner-not" title={statusFilter === 'all' ? 'Not All would show nothing' : 'Show every writer except these'}>
+                <input
+                  type="checkbox"
+                  aria-label="Not"
+                  checked={negate}
+                  disabled={statusFilter === 'all'}
+                  onChange={(e) => setNegateFilter(e.target.checked)}
+                />
+                <span>Not</span>
+              </label>
               <select aria-label="Show" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                 {STATUS_FILTERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </label>
+            </div>
             <label className="substack-miner-filter">
               <span>Found via</span>
               <select aria-label="Found via" value={foundViaFilter} onChange={(e) => setFoundViaFilter(e.target.value)}>
@@ -741,7 +770,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
           </div>
 
           {candidates && !rows.length ? (
-            <p className="substack-miner-empty">{emptyText(all, statusFilter, foundViaFilter)}</p>
+            <p className="substack-miner-empty">{emptyText(all, statusFilter, foundViaFilter, negate)}</p>
           ) : null}
 
           {rows.length ? (

@@ -469,6 +469,28 @@ describe("Substack Miner screen", () => {
     expect(dialog()!.textContent).toContain("Writer not found in this project");
   });
 
+  it("on screen: Show All lists everyone, Not Approved hides the approved, and Not is greyed out on All", async () => {
+    stores.proj_doe.writers = [
+      writer({ handle: "waiting" }),
+      writer({ handle: "yes", status: "approved" }),
+      writer({ handle: "no", status: "rejected" }),
+    ];
+    await mount();
+    const shown = () => [...container!.querySelectorAll("tr[data-handle]")].map((r) => r.getAttribute("data-handle")).sort();
+    const not = () => el<HTMLInputElement>('input[aria-label="Not"]');
+    expect(shown()).toEqual(["waiting"]);
+    expect([...el<HTMLSelectElement>('select[aria-label="Show"]').options].map((o) => o.text)).toEqual(["Candidates", "Approved", "Rejected", "All"]);
+    await show("all");
+    expect(shown()).toEqual(["no", "waiting", "yes"]);
+    expect(not().disabled).toBe(true);
+    await show("approved");
+    expect(not().disabled).toBe(false);
+    await click(not());
+    expect(shown()).toEqual(["no", "waiting"]);
+    await show("all");
+    expect(shown()).toEqual(["no", "waiting", "yes"]);
+  });
+
   it("switching project shows that project's rows, not this one's", async () => {
     stores.proj_doe.writers = [writer({ handle: "doeonly" })];
     await mount();
@@ -554,6 +576,24 @@ describe("Substack Miner helpers", () => {
     const rows = [writer({ handle: "a" }), writer({ handle: "b", recommendedBy: ["x", "y"] }), writer({ handle: "c", recommendedBy: ["x"] })];
     expect(visibleCandidates(rows, "candidate", "").map((r) => r.handle)).toEqual(["b", "c", "a"]);
     expect(visibleCandidates(rows, "candidate", "seed")).toEqual([]);
+  });
+
+  it("All shows every writer; Not flips the status choice and keeps Found via (86bch1yyk)", () => {
+    const rows = [
+      writer({ handle: "c1", status: "candidate", foundVia: "seed" }),
+      writer({ handle: "a1", status: "approved", foundVia: "seed" }),
+      writer({ handle: "r1", status: "rejected", foundVia: "web_search" }),
+    ];
+    const handles = (list: Candidate[]) => list.map((r) => r.handle).sort();
+    expect(handles(visibleCandidates(rows, "all", ""))).toEqual(["a1", "c1", "r1"]);
+    expect(handles(visibleCandidates(rows, "approved", "", true))).toEqual(["c1", "r1"]);
+    expect(handles(visibleCandidates(rows, "candidate", "", true))).toEqual(["a1", "r1"]);
+    expect(handles(visibleCandidates(rows, "approved", "seed", true))).toEqual(["c1"]);
+    expect(visibleCandidates(rows, "all", "", true)).toEqual([]);
+    expect(emptyText([], "all", "")).toContain("No writers yet");
+    expect(emptyText(rows, "all", "notes_search")).toBe('No writers found via notes search. Try another "Found via" choice.');
+    expect(emptyText([writer({ status: "approved" })], "approved", "", true))
+      .toBe("Every writer found is approved, so nothing is left once those are taken out. Untick Not to see them.");
   });
 
   it("counts found, approved, rejected and in Contacts", () => {
