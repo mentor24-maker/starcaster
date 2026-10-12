@@ -73,16 +73,28 @@ export function describePending(status: PublishStatus | null): string {
   return `${status.pending} pages have changes that are not live yet.`;
 }
 
+/** Marks a button that was just handed the focus, so CSS can ring it. */
+export const FOCUS_HANDOFF_ATTR = "data-builder-focus-handoff";
+
 /**
  * Bring a button into view and give it the keyboard focus. One smooth scroll
  * and a focus that does not scroll again, so the page moves once rather than
  * jumping and then gliding. Exported for the editor's Close Builder hand-off.
+ *
+ * The focus must also be SEEN. Save Page is clicked with the mouse, and after
+ * a mouse click the browser hides the focus ring, so Publish had the focus
+ * with no outline and nothing told Dane that Enter would publish. So the
+ * button asks for a visible ring (`focusVisible`, which Chrome and Firefox
+ * honour) and carries a marker attribute that `_builder-react-overrides.css`
+ * draws a ring from in every browser, until the focus moves on.
  */
 export function revealAndFocus(element: HTMLElement | null): boolean {
   if (!element || !element.isConnected) return false;
   if (element instanceof HTMLButtonElement && element.disabled) return false;
   element.scrollIntoView?.({ block: "center", behavior: "smooth" });
-  element.focus({ preventScroll: true });
+  element.setAttribute(FOCUS_HANDOFF_ATTR, "");
+  element.addEventListener("blur", () => element.removeAttribute(FOCUS_HANDOFF_ATTR), { once: true });
+  element.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
   return true;
 }
 

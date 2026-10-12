@@ -2,7 +2,7 @@
 import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BuilderPublishPanel, revealAndFocus, type PublishStatus } from "./builder-publish-panel";
+import { BuilderPublishPanel, FOCUS_HANDOFF_ATTR, revealAndFocus, type PublishStatus } from "./builder-publish-panel";
 
 /**
  * After Save Page the next step is Publish, and after Publish it is Close
@@ -110,8 +110,42 @@ describe("revealAndFocus", () => {
     const focus = vi.spyOn(button, "focus");
     expect(revealAndFocus(button)).toBe(true);
     expect(scroll).toHaveBeenCalledWith({ block: "center", behavior: "smooth" });
-    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(focus).toHaveBeenCalledWith(expect.objectContaining({ preventScroll: true }));
     expect(document.activeElement).toBe(button);
+    button.remove();
+  });
+
+  it("asks for a VISIBLE focus ring, because Save Page is clicked with the mouse", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.scrollIntoView = vi.fn();
+    const focus = vi.spyOn(button, "focus");
+    revealAndFocus(button);
+    // The browser hides the ring after a mouse click unless asked otherwise.
+    expect(focus).toHaveBeenCalledWith(expect.objectContaining({ focusVisible: true }));
+    // And the marker the override CSS rings, for browsers that ignore the option.
+    expect(button.hasAttribute(FOCUS_HANDOFF_ATTR)).toBe(true);
+    button.remove();
+  });
+
+  it("drops the ring marker once the focus moves on", () => {
+    const button = document.createElement("button");
+    const other = document.createElement("button");
+    document.body.append(button, other);
+    button.scrollIntoView = vi.fn();
+    revealAndFocus(button);
+    other.focus();
+    expect(button.hasAttribute(FOCUS_HANDOFF_ATTR)).toBe(false);
+    button.remove();
+    other.remove();
+  });
+
+  it("does not mark a button it could not focus", () => {
+    const button = document.createElement("button");
+    button.disabled = true;
+    document.body.appendChild(button);
+    revealAndFocus(button);
+    expect(button.hasAttribute(FOCUS_HANDOFF_ATTR)).toBe(false);
     button.remove();
   });
 
