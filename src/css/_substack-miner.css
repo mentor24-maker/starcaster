@@ -90,6 +90,26 @@
   white-space: nowrap;
 }
 
+/* The Not box sits between "Show" and the choice, so the row reads
+   "Show ☐ Not Approved". Normal weight: it qualifies the choice. */
+.substack-miner-not {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.substack-miner-not input {
+  margin: 0;
+}
+
+.substack-miner-not:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .substack-miner-filter select {
   width: auto;
   min-width: 0;
