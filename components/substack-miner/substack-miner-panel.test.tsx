@@ -3,6 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SubstackMinerPanel, {
+  decisionWhyText,
   emptyText,
   foundInNotes,
   headerCounts,
@@ -17,6 +18,7 @@ import SubstackMinerPanel, {
   type Candidate,
 } from "./substack-miner-panel";
 import { PROJECT_SWITCH_EVENT } from "../substack-notes/substack-notes-panel";
+import { reasonTally } from "./substack-decision-dialog";
 
 /**
  * Substack Miner 4/7 (86bcfprxq). The screen is driven against a fake
@@ -150,6 +152,7 @@ async function fakeApi(path: string, options: RequestInit = {}) {
       fail(`status cannot move from ${found.status} to ${body.status}`);
     }
     if (body.note !== undefined) found.note = body.note;
+    if (body.decisionReasons !== undefined) found.decisionReasons = body.decisionReasons;
     if (body.status === "approved") {
       let linked = store.contacts.find((c) => c.substack === found.publicationUrl);
       const mode = linked ? "linked" : "created";
@@ -225,6 +228,18 @@ async function click(target: HTMLElement) {
 async function submit(form: HTMLFormElement) {
   await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await flush();
+}
+
+/** The Approve/Reject pop-up, which renders on document.body, not in the screen. */
+function dialog(): HTMLFormElement | null {
+  return document.body.querySelector<HTMLFormElement>(".substack-decision-dialog");
+}
+
+/** Click Approve/Reject on a row, then confirm in the pop-up with an optional sentence. */
+async function decideRow(label: "Approve" | "Reject", handle: string, note = "") {
+  await click(button(label, rowFor(handle)!));
+  if (note) type(dialog()!.querySelector<HTMLTextAreaElement>("textarea")!, note);
+  await submit(dialog()!);
 }
 
 async function show(status: string) {
@@ -331,9 +346,10 @@ describe("Substack Miner screen", () => {
   it("approving makes one contact, says Added to Contacts with a link, and the link opens it", async () => {
     stores.proj_doe.writers = [writer({ handle: "kindoftsetsy", name: "Kind of Tsetsy" })];
     await mount();
-    await click(button("Approve", rowFor("kindoftsetsy")!));
+    await decideRow("Approve", "kindoftsetsy");
     const patch = requests.find((r) => r.method === "PATCH");
-    expect(patch?.body).toEqual({ status: "approved" });
+    expect(patch?.body).toEqual({ status: "approved", note: "" });
+    expect(dialog()).toBeNull();
     expect(stores.proj_doe.contacts).toHaveLength(1);
     // Approved rows leave the Candidates filter; the decision is on the Approved one.
     await show("approved");
@@ -350,8 +366,8 @@ describe("Substack Miner screen", () => {
       writer({ handle: "two", publicationUrl: "https://shared.substack.com" }),
     ];
     await mount();
-    await click(button("Approve", rowFor("one")!));
-    await click(button("Approve", rowFor("two")!));
+    await decideRow("Approve", "one");
+    await decideRow("Approve", "two");
     expect(stores.proj_doe.contacts).toHaveLength(1);
     await show("approved");
     expect(rowFor("two")!.textContent).toContain("Linked to a contact already in Contacts");
@@ -372,7 +388,7 @@ describe("Substack Miner screen", () => {
   it("rejecting hides the row from Candidates, shows it under Rejected, and a reload keeps it", async () => {
     stores.proj_doe.writers = [writer({ handle: "notforus" })];
     await mount();
-    await click(button("Reject", rowFor("notforus")!));
+    await decideRow("Reject", "notforus");
     expect(rowFor("notforus")).toBeNull();
     await reload();
     expect(rowFor("notforus")).toBeNull();
@@ -381,18 +397,76 @@ describe("Substack Miner screen", () => {
     expect(stores.proj_doe.writers[0].status).toBe("rejected");
   });
 
-  it("a note typed before Approve travels with it, and is saved on its own when the box is left", async () => {
-    stores.proj_doe.writers = [writer({ handle: "noted" }), writer({ handle: "other" })];
+  it("the table has no Note column; Approve asks why, and Cancel changes nothing", async () => {
+    stores.proj_doe.writers = [writer({ handle: "asked", name: "Asked Writer" })];
     await mount();
-    const box = rowFor("other")!.querySelector<HTMLInputElement>("input")!;
-    type(box, "maybe later");
-    await act(async () => { box.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
-    await flush();
-    expect(stores.proj_doe.writers[1].note).toBe("maybe later");
+    expect([...container!.querySelectorAll("th")].map((th) => th.textContent)).not.toContain("Note");
+    expect(rowFor("asked")!.querySelector("input")).toBeNull();
 
-    type(rowFor("noted")!.querySelector<HTMLInputElement>("input")!, "great on Notes");
-    await click(button("Approve", rowFor("noted")!));
-    expect(requests.filter((r) => r.method === "PATCH").at(-1)?.body).toEqual({ status: "approved", note: "great on Notes" });
+    await click(button("Approve", rowFor("asked")!));
+    const box = dialog()!;
+    expect(box.getAttribute("data-decision")).toBe("approved");
+    expect(box.querySelector("label[for=sm-decision-note]")!.textContent).toBe("Why did you Approve?");
+    expect(box.textContent).toContain("Approve: Asked Writer");
+    await click(button("Cancel", box));
+    expect(dialog()).toBeNull();
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+    expect(stores.proj_doe.writers[0].status).toBe("candidate");
+
+    await click(button("Reject", rowFor("asked")!));
+    expect(dialog()!.querySelector("label[for=sm-decision-note]")!.textContent).toBe("Why did you Disapprove?");
+  });
+
+  it("the sentence and the ticked reasons are saved, shown under the writer, and offered next time with a count", async () => {
+    stores.proj_doe.writers = [writer({ handle: "first" }), writer({ handle: "second" }), writer({ handle: "third" })];
+    await mount();
+
+    await click(button("Approve", rowFor("first")!));
+    expect(dialog()!.textContent).toContain("No reasons yet for approving a writer");
+    type(dialog()!.querySelector<HTMLTextAreaElement>("textarea")!, "kind and deep");
+    type(document.body.querySelector<HTMLInputElement>("#sm-decision-new-reason")!, "polymath");
+    await click(button("Add", dialog()!));
+    type(document.body.querySelector<HTMLInputElement>("#sm-decision-new-reason")!, "writes Notes daily");
+    await click(button("Add", dialog()!));
+    await submit(dialog()!);
+    expect(requests.filter((r) => r.method === "PATCH").at(-1)?.body).toEqual({
+      status: "approved", note: "kind and deep", decisionReasons: ["polymath", "writes Notes daily"],
+    });
+    expect(stores.proj_doe.writers[0].decisionReasons).toEqual(["polymath", "writes Notes daily"]);
+
+    // Offered for the next approval, unticked, with how often each was used.
+    await click(button("Approve", rowFor("second")!));
+    const rows = [...dialog()!.querySelectorAll("tbody tr")].map((tr) => tr.textContent);
+    expect(rows).toEqual(["polymath1×", "writes Notes daily1×"]);
+    expect([...dialog()!.querySelectorAll<HTMLInputElement>("tbody input")].every((i) => !i.checked)).toBe(true);
+    await click(dialog()!.querySelector<HTMLInputElement>("tbody input")!);
+    await submit(dialog()!);
+    expect(requests.filter((r) => r.method === "PATCH").at(-1)?.body).toEqual({ status: "approved", note: "", decisionReasons: ["polymath"] });
+
+    // An approving reason is never offered for a rejection.
+    await click(button("Reject", rowFor("third")!));
+    expect(dialog()!.querySelectorAll("tbody tr")).toHaveLength(0);
+    await click(button("Cancel", dialog()!));
+
+    // After a reload the reasons are under the writer's name.
+    await reload();
+    await show("approved");
+    expect(rowFor("first")!.querySelector('[data-testid="substack-miner-why"]')!.textContent)
+      .toBe("Why approved: polymath, writes Notes daily — kind and deep");
+  });
+
+  it("a failed save keeps the pop-up open with what was typed and says why", async () => {
+    stores.proj_doe.writers = [writer({ handle: "stuck", status: "approved" })];
+    await mount();
+    await show("approved");
+    // The fake refuses approved -> approved; force a refusal by deleting the writer under the screen.
+    stores.proj_doe.writers = [];
+    await click(button("Reject", rowFor("stuck")!));
+    type(dialog()!.querySelector<HTMLTextAreaElement>("textarea")!, "not a fit after all");
+    await submit(dialog()!);
+    expect(dialog()).not.toBeNull();
+    expect(dialog()!.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("not a fit after all");
+    expect(dialog()!.textContent).toContain("Writer not found in this project");
   });
 
   it("switching project shows that project's rows, not this one's", async () => {
@@ -527,5 +601,31 @@ describe("Substack Miner helpers", () => {
     expect(none).not.toContain("Import the subscriber list");
     const some = statsNotes({ found: 1, approved: 1, rejected: 0, inContacts: 1, engaged: 0, subscribed: 0, approvedWithContact: 1, truncated: false, unknown: [] }, "").join(" ");
     expect(some).toContain("Import the subscriber list");
+  });
+});
+
+describe("decision reasons (86bch0j99)", () => {
+  it("reasonTally counts each decision separately, merges case and spacing, most used first", () => {
+    const ws = [
+      { status: "approved", decisionReasons: ["Polymath", "kind"] },
+      { status: "approved", decisionReasons: ["polymath ", "polymath"] },
+      { status: "approved", decisionReasons: ["deep  thinker"] },
+      { status: "rejected", decisionReasons: ["off-topic", "kind"] },
+      { status: "candidate", decisionReasons: ["polymath"] },
+      { status: "approved" },
+    ];
+    expect(reasonTally(ws, "approved")).toEqual([
+      { reason: "Polymath", count: 2 },
+      { reason: "deep thinker", count: 1 },
+      { reason: "kind", count: 1 },
+    ]);
+    expect(reasonTally(ws, "rejected")).toEqual([{ reason: "kind", count: 1 }, { reason: "off-topic", count: 1 }]);
+  });
+
+  it("decisionWhyText says why only for a decided writer with something to say", () => {
+    expect(decisionWhyText(writer({ status: "approved", decisionReasons: ["a", "b"], note: "c" }))).toBe("Why approved: a, b — c");
+    expect(decisionWhyText(writer({ status: "rejected", note: "spam" }))).toBe("Why rejected: spam");
+    expect(decisionWhyText(writer({ status: "approved" }))).toBe("");
+    expect(decisionWhyText(writer({ status: "candidate", note: "maybe" }))).toBe("");
   });
 });

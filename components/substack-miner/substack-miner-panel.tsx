@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-notes-panel';
+import { SubstackDecisionDialog, reasonTally, type Decision } from './substack-decision-dialog';
 
 /**
  * Acquire › Substack Miner — where Dane sees every Substack writer Starcaster
@@ -53,6 +54,8 @@ export type Candidate = {
   status: string;
   contactId: string;
   note: string;
+  /** The short reasons ticked in the Approve/Reject pop-up (task 86bch0j99). */
+  decisionReasons?: string[];
   /** Substack Miner 5/7: the writer's newest Notes as last read, and when. */
   /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
   recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
@@ -175,6 +178,25 @@ function FoundInNotes({ c }: { c: Candidate }) {
       </span>
     </details>
   );
+}
+
+/**
+ * Why a decided writer was approved or rejected, under their name: the reasons
+ * ticked in the pop-up and the sentence typed there (task 86bch0j99). A writer
+ * still waiting shows nothing; neither does a decision made with no reason.
+ */
+export function decisionWhyText(c: Candidate): string {
+  if (c.status !== 'approved' && c.status !== 'rejected') return '';
+  const reasons = (c.decisionReasons || []).join(', ');
+  const note = (c.note || '').trim();
+  if (!reasons && !note) return '';
+  const head = c.status === 'approved' ? 'Why approved' : 'Why rejected';
+  return `${head}: ${[reasons, note].filter(Boolean).join(' — ')}`;
+}
+
+function DecisionWhy({ c }: { c: Candidate }) {
+  const why = decisionWhyText(c);
+  return why ? <span className="substack-miner-why" data-testid="substack-miner-why">{why}</span> : null;
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -378,7 +400,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [foundViaFilter, setFoundViaFilter] = useState('');
   const [rowBusy, setRowBusy] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
-  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [deciding, setDeciding] = useState<{ candidate: Candidate; decision: Decision } | null>(null);
   const [links, setLinks] = useState<Record<string, ContactLink>>({});
   const [keywordsText, setKeywordsText] = useState('');
   const [keywordsBusy, setKeywordsBusy] = useState(false);
@@ -478,7 +500,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setLoading(false);
       setRowBusy('');
       setRowError({ id: '', message: '' });
-      setNotes({});
+      setDeciding(null);
       setLinks({});
       setKeywordsText('');
       setKeywordsMessage('');
@@ -527,18 +549,23 @@ export default function SubstackMinerPanel(): React.ReactElement {
     }
   };
 
-  const noteFor = (c: Candidate) => (notes[c.id] !== undefined ? notes[c.id] : c.note);
-  const noteChanged = (c: Candidate) => notes[c.id] !== undefined && notes[c.id] !== c.note;
-  const withNote = (c: Candidate, body: Record<string, unknown>) => (noteChanged(c) ? { ...body, note: notes[c.id] } : body);
-
-  const approve = async (c: Candidate) => {
-    const data = await patchRow(c, withNote(c, { status: 'approved' }));
-    if (data?.contact) setLinks((m) => ({ ...m, [c.id]: data.contact as ContactLink }));
+  /**
+   * Approve and Reject ask why first (task 86bch0j99). The pop-up stays open
+   * if the save fails, so what he typed is not lost; the error shows inside it.
+   */
+  const confirmDecision = async (note: string, reasons: string[]) => {
+    if (!deciding) return;
+    const { candidate: c, decision } = deciding;
+    const body: Record<string, unknown> = { status: decision, note };
+    // Reasons ride along only when there is something to say: a database
+    // without the decision_reasons column still approves and rejects.
+    if (reasons.length || (c.decisionReasons || []).length) body.decisionReasons = reasons;
+    const data = await patchRow(c, body);
+    if (!data) return;
+    if (data.contact) setLinks((m) => ({ ...m, [c.id]: data.contact as ContactLink }));
+    setDeciding(null);
   };
-  const decide = (c: Candidate, status: string) => void patchRow(c, withNote(c, { status }));
-  const saveNote = (c: Candidate) => {
-    if (noteChanged(c) && rowBusy !== c.id) void patchRow(c, { note: notes[c.id] });
-  };
+  const decide = (c: Candidate, status: string) => void patchRow(c, { status });
 
   const openContact = async (contactId: string, known?: Record<string, unknown>) => {
     const app = getApp();
@@ -729,7 +756,6 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Found via</th>
                     <th scope="col">Last seen</th>
                     <th scope="col">Notes read</th>
-                    <th scope="col">Note</th>
                     <th scope="col" className="actions-col">Actions</th>
                   </tr>
                 </thead>
@@ -745,6 +771,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                           <span className="substack-miner-handle">{c.handle}</span>
                           {c.description ? <span className="substack-miner-description">{c.description}</span> : null}
                           <FoundInNotes c={c} />
+                          <DecisionWhy c={c} />
                         </td>
                         <td>{c.subscriberText || '—'}</td>
                         <td>
@@ -758,36 +785,18 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
                         <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
                         <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
-                        <td>
-                          <input
-                            type="text"
-                            className="substack-miner-note-input"
-                            aria-label={`Note on ${c.name || c.handle}`}
-                            value={noteFor(c)}
-                            disabled={busy}
-                            onChange={(e) => setNotes((m) => ({ ...m, [c.id]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            onBlur={(e) => {
-                              // Approve and Reject carry the note themselves; saving it
-                              // here too would disable the button being clicked.
-                              const next = e.relatedTarget as HTMLElement | null;
-                              if (next?.tagName === 'BUTTON' && next.closest('tr') === e.currentTarget.closest('tr')) return;
-                              saveNote(c);
-                            }}
-                          />
-                        </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
                             {c.status === 'candidate' ? (
                               <>
-                                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void approve(c)}>
+                                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setDeciding({ candidate: c, decision: 'approved' })}>
                                   {busy ? 'Saving…' : 'Approve'}
                                 </button>
-                                <button type="button" className="btn" disabled={busy} onClick={() => decide(c, 'rejected')}>Reject</button>
+                                <button type="button" className="btn" disabled={busy} onClick={() => setDeciding({ candidate: c, decision: 'rejected' })}>Reject</button>
                               </>
                             ) : null}
                             {c.status === 'approved' ? (
-                              <button type="button" className="btn" disabled={busy} onClick={() => decide(c, 'rejected')}>Reject</button>
+                              <button type="button" className="btn" disabled={busy} onClick={() => setDeciding({ candidate: c, decision: 'rejected' })}>Reject</button>
                             ) : null}
                             {c.status === 'rejected' ? (
                               <button type="button" className="btn" disabled={busy} onClick={() => decide(c, 'candidate')}>Think again</button>
@@ -805,7 +814,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                               </a>
                             </p>
                           ) : null}
-                          {rowError.id === c.id ? <p className="substack-miner-error" role="alert">{rowError.message}</p> : null}
+                          {rowError.id === c.id && deciding?.candidate.id !== c.id ? <p className="substack-miner-error" role="alert">{rowError.message}</p> : null}
                         </td>
                       </tr>
                     );
@@ -813,6 +822,21 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 </tbody>
               </table>
             </div>
+          ) : null}
+          {deciding ? (
+            <SubstackDecisionDialog
+              key={`${deciding.candidate.id}-${deciding.decision}`}
+              decision={deciding.decision}
+              writerName={deciding.candidate.name || deciding.candidate.handle}
+              // A note typed while the writer was still waiting is about this
+              // decision; one from the opposite decision is not, so it starts blank.
+              initialNote={deciding.candidate.status === 'candidate' ? deciding.candidate.note : ''}
+              offered={reasonTally(all, deciding.decision)}
+              busy={rowBusy === deciding.candidate.id}
+              error={rowError.id === deciding.candidate.id ? rowError.message : ''}
+              onCancel={() => { setDeciding(null); setRowError({ id: '', message: '' }); }}
+              onConfirm={(note, reasons) => void confirmDecision(note, reasons)}
+            />
           ) : null}
         </div>
       ) : null}

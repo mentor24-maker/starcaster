@@ -116,3 +116,15 @@ alter table public.substack_miner_settings enable row level security;
 
 alter table public.substack_candidates add column if not exists recent_notes jsonb not null default '[]'::jsonb;
 alter table public.substack_candidates add column if not exists last_notes_read_at timestamptz;
+
+-- ── Why Dane approved or rejected a writer (task 86bch0j99) ─────────────────
+--
+--   decision_reasons    the short reasons he ticked when he approved or
+--                       rejected this writer, e.g. ["polymath", "writes Notes
+--                       daily"]. His sentence about it stays in `note`. The
+--                       Approve/Reject pop-up offers every reason used before
+--                       for that decision, counted across the project's
+--                       writers. Added the same way as the 5/7 columns, so
+--                       running this file again changes nothing.
+
+alter table public.substack_candidates add column if not exists decision_reasons jsonb not null default '[]'::jsonb;

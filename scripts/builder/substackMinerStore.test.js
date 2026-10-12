@@ -550,3 +550,19 @@ test('contact_sources lists substack_miner, beside youtube_miner', () => {
   const migration = fs.readFileSync(PEOPLE_SQL_PATH, 'utf8');
   assert.match(migration, /insert into public\.contact_sources[\s\S]*'substack_miner', 'Substack Miner'[\s\S]*on conflict \(key\) do nothing/);
 });
+
+test('a reject saves its reasons; a writer never decided reads back an empty list (86bch0j99)', async () => {
+  const { store, restore } = withDb();
+  try {
+    const { data } = await find(store, { handle: 'whyrejected' });
+    assert.deepEqual(data.decisionReasons, []);
+    const res = await store.updateCandidate(data.id, { status: 'rejected', note: 'not for us', decisionReasons: ['off-topic'] }, SCOPE_A);
+    assert.equal(res.ok, true, res.error);
+    assert.deepEqual(res.data.decisionReasons, ['off-topic']);
+    const many = await store.updateCandidate(data.id, { decisionReasons: Array.from({ length: 21 }, (_, i) => `r${i}`) }, SCOPE_A);
+    assert.equal(many.ok, false);
+    assert.match(many.error, /at most 20 reasons/);
+  } finally {
+    restore();
+  }
+});
