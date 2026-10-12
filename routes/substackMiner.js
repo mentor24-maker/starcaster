@@ -8,6 +8,9 @@
  *   GET    /api/acquire/substack-miner/candidates          ?status=&foundVia=&limit=
  *   POST   /api/acquire/substack-miner/candidates          one writer; merged if already here
  *   POST   /api/acquire/substack-miner/candidates/import   { candidates: [{ handle, publicationUrl, name, whyFit, keywordsHit }] }
+ *                                                          — a handle may be a substack.com/@name profile link: it is
+ *                                                          looked up and filed under that person's publication
+ *                                                          (lib/acquire/SubstackSeedImport.js)
  *   GET    /api/acquire/substack-miner/candidates/:id
  *   PATCH  /api/acquire/substack-miner/candidates/:id      (PUT accepted too) details, or { status }
  *                                                          { status: 'approved' } also puts the writer in
@@ -53,6 +56,7 @@ const { importSubscribers } = require('../lib/acquire/SubstackSubscriberImport')
 const { captureCandidateNotes } = require('../lib/acquire/SubstackNotesCapture');
 const { runSubstackNotesRead } = require('../lib/acquire/SubstackNotesReadRun');
 const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
+const { importSeedList } = require('../lib/acquire/SubstackSeedImport');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -126,7 +130,7 @@ async function handle(req, res, pathname, method) {
     if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
     const body = await readBody(req, res);
     if (!body) return true;
-    return reply(res, await store.importCandidates(body.candidates, scope));
+    return reply(res, await importSeedList(body.candidates, scope));
   }
 
   const notes = pathname.match(/^\/api\/acquire\/substack-miner\/candidates\/([^/]+)\/notes$/);
