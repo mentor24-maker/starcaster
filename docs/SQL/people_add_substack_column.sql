@@ -21,26 +21,50 @@
 --
 -- Idempotent: running it twice changes nothing.
 
-alter table public.people
-  add column if not exists substack text not null default '';
+-- Every step is guarded, because databases differ: PRODUCTION HAS NO `people`
+-- TABLE (found 2026-10-12, when the unguarded version failed there with
+-- "relation public.people does not exist" and rolled back whole). Contacts
+-- live in `contacts` alone, which lib/ContactsStore.js already handles. A step
+-- whose table or column is absent is skipped, not failed.
 
-alter table public.contacts
-  add column if not exists substack text null default '';
+do $$
+begin
+  if to_regclass('public.people') is not null then
+    alter table public.people
+      add column if not exists substack text not null default '';
+    if exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'people'
+                 and column_name = 'custom_fields') then
+      update public.people
+      set substack = trim(custom_fields->>'substack'),
+          updated_at = now()
+      where coalesce(substack, '') = ''
+        and coalesce(trim(custom_fields->>'substack'), '') <> '';
+    end if;
+  end if;
 
-update public.people
-set substack = trim(custom_fields->>'substack'),
-    updated_at = now()
-where coalesce(substack, '') = ''
-  and coalesce(trim(custom_fields->>'substack'), '') <> '';
-
-update public.contacts
-set substack = trim(custom_fields->>'substack')
-where coalesce(substack, '') = ''
-  and coalesce(trim(custom_fields->>'substack'), '') <> '';
+  if to_regclass('public.contacts') is not null then
+    alter table public.contacts
+      add column if not exists substack text null default '';
+    if exists (select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'contacts'
+                 and column_name = 'custom_fields') then
+      update public.contacts
+      set substack = trim(custom_fields->>'substack')
+      where coalesce(substack, '') = ''
+        and coalesce(trim(custom_fields->>'substack'), '') <> '';
+    end if;
+  end if;
+end $$;
 
 -- The source a contact carries when Dane approves a writer the Miner found
 -- (slice 4/7). Also seeded in docs/SQL/contacts_options_management_setup.sql
 -- for a database set up from scratch.
-insert into public.contact_sources (key, label, sort_order) values
-  ('substack_miner', 'Substack Miner', 4)
-on conflict (key) do nothing;
+do $$
+begin
+  if to_regclass('public.contact_sources') is not null then
+    insert into public.contact_sources (key, label, sort_order) values
+      ('substack_miner', 'Substack Miner', 4)
+    on conflict (key) do nothing;
+  end if;
+end $$;
