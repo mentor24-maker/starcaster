@@ -98,6 +98,29 @@ while true; do
   # rewrite someone's work or refuse to work because it could not.
   npm run --silent checkout:current >> "$LOG" 2>&1 || true
 
+  # ── 1a. One Claude limit, five users: may a pass start at all? ────────────
+  # Dane and every loop lane on this machine (both repos) share ONE Claude
+  # usage limit, first come first served (task 86bcgjbfk). Two rules, read
+  # fresh before every pass from files all lanes share (~/loop-logs):
+  #   quiet       Dane's hours — no lane starts a pass, so his session keeps
+  #               its share.
+  #   stand-down  another lane already read a usage-limit reset time; sleep
+  #               until it rather than spend a pass rediscovering it.
+  # FAILURE-OPEN: anything that cannot be read answers `run`, and says so in
+  # this log. A bug here must never silence the lanes.
+  POLICY_ANSWER=$(node "$REPO/scripts/loop_policy.mjs" check --lane "starcaster/$SKILL" 2>> "$LOG")
+  read -r POLICY_ACTION POLICY_SLEEP POLICY_LINE <<< "$POLICY_ANSWER"
+  if { [ "$POLICY_ACTION" = "quiet" ] || [ "$POLICY_ACTION" = "stand-down" ]; } \
+     && [[ "$POLICY_SLEEP" =~ ^[0-9]+$ ]] && [ "$POLICY_SLEEP" -gt 0 ]; then
+    echo "[loop-runner] $(date "+%H:%M:%S") $POLICY_LINE; asking again in ${POLICY_SLEEP}s" >> "$LOG"
+    # Still a beat — the runner is alive and obeying the rule — marked as a
+    # stand-down so the roll call does not read it as a pass that worked.
+    npm run --silent heartbeat -- --beat --role "$SKILL" \
+      --stood-down "$POLICY_LINE" >> "$LOG" 2>&1 || true
+    sleep "$POLICY_SLEEP"
+    continue
+  fi
+
   echo "" >> "$LOG"
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") START /$SKILL =====" >> "$LOG"
   # A time limit, because a pass that freezes otherwise blocks this lane
@@ -196,6 +219,13 @@ while true; do
     # Only a stand-down sleeps. A `blocked` pass waiting half an hour is the
     # wrong answer to a locked door, and `ran` never reaches here anyway.
     if [ "$PASS_KIND" != "stood-down" ]; then LIMIT_SLEEP=0; fi
+  fi
+
+  # A limit this lane read is a limit every lane is under: write it where the
+  # others look (step 1a), so their next cycle sleeps instead of hitting it.
+  if [ "$PASS_KIND" = "stood-down" ] && [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
+    node "$REPO/scripts/loop_policy.mjs" stand-down --lane "starcaster/$SKILL" \
+      --seconds "$LIMIT_SLEEP" --reason "a usage limit closed a /$SKILL pass" >> "$LOG" 2>&1 || true
   fi
 
   # ── 3. The beat: this runner fired a pass, and what that pass could do ─────

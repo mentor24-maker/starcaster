@@ -119,7 +119,9 @@ test('a pass runs pull -> claude -> limit reading -> beat -> sleep decision, in 
   const pull = sh.indexOf('checkout:current');
   const pass = sh.indexOf('"$CLAUDE_BIN" -p');
   const limit = sh.indexOf('loop_runner_delay.mjs');
-  const beat = sh.indexOf('heartbeat -- --beat --role');
+  // The PASS's beat — the one after it. The policy step (task 86bcgjbfk) also
+  // beats, before any pass starts, when the rule says not to start one.
+  const beat = sh.indexOf('heartbeat -- --beat --role', pass);
   const pace = sh.indexOf('next-interval');
   assert.ok(pull > 0 && pass > pull, 'the timid pull comes before the pass, or a merged skill edit lags a cycle');
   assert.ok(limit > pass, 'the limit is read out of the pass\'s own output, so it follows the pass');
@@ -155,8 +157,13 @@ test('a pass that stood down or was blocked STILL beats, and says which it was',
   // blocked, whose text sends Dane to sign in on a machine that is signed in.
   assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--timed-out "\$\{ANSWER_WHY/,
     'the timed-out branch beats with the timed-out flag and the guard\'s own reason');
-  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 4,
-    'exactly four beat calls: worked, a limit closed it, could not work at all, ran out of time');
+  // And a fifth, BEFORE any pass (task 86bcgjbfk): the shared Claude-limit
+  // rule said not to start one. The runner is alive and obeying, so it beats —
+  // as a stand-down carrying the rule's own sentence, never as a run.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down "\$POLICY_LINE"/,
+    'the policy branch beats as a stand-down with the rule\'s sentence');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 5,
+    'exactly five beat calls: worked, a limit closed it, could not work at all, ran out of time, and the rule said not to start');
 });
 
 test('THE ROUND-2 DEFECT: the runner consults the EXIT CODE, and only asks the guard when it is non-zero', () => {
