@@ -33,6 +33,9 @@
  *                                                          (Substack Miner 3/7, lib/acquire/SubstackRecommendationsRun.js)
  *   POST   /api/acquire/substack-miner/run                 { keywords?: [] } — the web-search pass
  *                                                          (Substack Miner 2/7, lib/acquire/SubstackMinerRun.js)
+ *   POST   /api/acquire/substack-miner/suggest             { redo?: true } — suggest Approve or Reject, with reasons,
+ *                                                          for each undecided writer, from Dane's past decisions
+ *                                                          (lib/acquire/SubstackSuggestRun.js, task 86bch3f2v)
  *   GET    /api/acquire/substack-miner/stats               the header's counts: found, approved, rejected,
  *                                                          in Contacts, engaged, subscribed
  *                                                          (Substack Miner 7/7, lib/acquire/SubstackMinerStats.js)
@@ -57,6 +60,7 @@ const { captureCandidateNotes } = require('../lib/acquire/SubstackNotesCapture')
 const { runSubstackNotesRead } = require('../lib/acquire/SubstackNotesReadRun');
 const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 const { importSeedList } = require('../lib/acquire/SubstackSeedImport');
+const { runSubstackSuggestions } = require('../lib/acquire/SubstackSuggestRun');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -202,6 +206,14 @@ async function handle(req, res, pathname, method) {
     const body = await readBody(req, res);
     if (!body) return true;
     return reply(res, await runSubstackSnowball({ handles: body.handles }, scope));
+  }
+
+  if (pathname === `${PREFIX}/suggest`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.suggest')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await runSubstackSuggestions(scope, { redo: body.redo === true }));
   }
 
   if (pathname === `${PREFIX}/stats`) {
