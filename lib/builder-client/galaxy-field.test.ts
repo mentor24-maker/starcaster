@@ -31,6 +31,8 @@ import {
   stepGalaxyView,
   stepGalaxyViewByKey,
   tiltGalaxyView,
+  tiltGalaxyViewInBox,
+  galaxyInteractionsFor,
   GALAXY_CORE_ARM,
   GALAXY_FLARE_TWINKLE_RATE,
   GALAXY_COUNT_FLOOR,
@@ -1022,10 +1024,42 @@ describe("interaction (Galaxy module 3/6, task 86bc7f5hh)", () => {
     expect(view.yaw).toBeCloseTo(GALAXY_KEY_STEP, 4);
   });
 
+  it("In Place offers Drag to Rotate, Tilt with Cursor and None, in that order (task 86bcgjr0w)", () => {
+    expect(galaxyInteractionsFor(true)).toEqual(["rotate", "tilt", "none"]);
+    expect(galaxyInteractionsFor(false)).toEqual(["tilt", "none"]);
+  });
+
+  it("In Place tilt is measured across the block: its edges reach the full lean, its centre none", () => {
+    const box = { left: 200, top: 1000, width: 600, height: 300 };
+    const view = createGalaxyView();
+    expect(tiltGalaxyViewInBox(view, 800, 1150, box)).toBe("tilt");
+    expect(view.targetYaw).toBeCloseTo(GALAXY_TILT_YAW, 10);
+    expect(view.targetPitch).toBeCloseTo(0, 10);
+    tiltGalaxyViewInBox(view, 200, 1000, box);
+    expect(view.targetYaw).toBeCloseTo(-GALAXY_TILT_YAW, 10);
+    expect(view.targetPitch).toBeCloseTo(-GALAXY_TILT_PITCH, 10);
+    tiltGalaxyViewInBox(view, 500, 1150, box);
+    expect(view.targetYaw).toBeCloseTo(0, 10);
+  });
+
+  it("a cursor outside the block, or none at all, answers rest and puts the targets back to 0", () => {
+    const box = { left: 200, top: 1000, width: 600, height: 300 };
+    for (const [x, y] of [[100, 1150], [900, 1150], [500, 900], [500, 1400], [Number.NaN, Number.NaN]]) {
+      const view = createGalaxyView();
+      tiltGalaxyViewInBox(view, 800, 1000, box);
+      expect(tiltGalaxyViewInBox(view, x, y, box), `${x},${y}`).toBe("rest");
+      expect(view.targetYaw).toBe(0);
+      expect(view.targetPitch).toBe(0);
+    }
+    const view = createGalaxyView();
+    expect(tiltGalaxyViewInBox(view, 0, 0, { left: 0, top: 0, width: 0, height: 0 })).toBe("rest");
+  });
+
   it("an interaction the placement does not offer resolves to that placement's default", () => {
     expect(resolveGalaxyInteraction(true, undefined)).toBe("rotate");
     expect(resolveGalaxyInteraction(false, undefined)).toBe("tilt");
-    expect(resolveGalaxyInteraction(true, "tilt")).toBe("rotate");
+    expect(resolveGalaxyInteraction(true, "tilt")).toBe("tilt");
+    expect(resolveGalaxyInteraction(true, "spin")).toBe("rotate");
     expect(resolveGalaxyInteraction(false, "rotate")).toBe("tilt");
     expect(resolveGalaxyInteraction(true, "none")).toBe("none");
     expect(resolveGalaxyInteraction(false, "none")).toBe("none");

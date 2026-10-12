@@ -954,6 +954,49 @@ try {
     }
 
     /*
+     * Optional POINTER PATH (task 86bcgjr0w — an In Place galaxy tilts toward
+     * the cursor). `hover` always lands on an element's CENTRE, and the
+     * centre is the one point where a tilt reads zero. `pointer` is a list of
+     * `{ selector, at: [fx, fy], waitMs }`: the real mouse moves to that
+     * fraction of the element's box (1 is its right/bottom edge; past 1 is
+     * outside it) and waits, in order — so a contract can walk the cursor to
+     * one edge, then the other, then off the block. A point outside the
+     * viewport, or an element that is not there, FAILS the contract rather
+     * than sampling a page the cursor never reached.
+     */
+    const pointerReadings = [];
+    for (const step of !hoverError && contract.pointer ? [].concat(contract.pointer) : []) {
+      try {
+        const handle = await page.waitForSelector(step.selector, { state: 'visible', timeout: 4000 });
+        await handle.scrollIntoViewIfNeeded();
+        const box = await handle.boundingBox();
+        if (!box) throw new Error('the element has no box');
+        const x = box.x + box.width * step.at[0];
+        const y = box.y + box.height * step.at[1];
+        const view = page.viewportSize();
+        if (!(x >= 0 && y >= 0 && (!view || (x < view.width && y < view.height)))) {
+          throw new Error(`the point (${Math.round(x)}, ${Math.round(y)}) is outside the viewport`);
+        }
+        await page.mouse.move(x, y);
+        await page.waitForTimeout(step.waitMs ?? 120);
+        // `watch` reads an attribute at this point of the path, several times,
+        // so a contract can see what the cursor did HERE before it moves on.
+        if (step.watch) {
+          const seen = [];
+          for (let i = 0; i < (step.watch.count ?? 1); i += 1) {
+            if (i) await page.waitForTimeout(step.watch.everyMs ?? 100);
+            seen.push(await page.getAttribute(step.watch.selector, step.watch.attr));
+          }
+          pointerReadings.push(seen);
+        }
+      } catch (err) {
+        hoverError = `${contract.id}: could not move the pointer to ${JSON.stringify(step.at)} of \`${step.selector}\` — ` +
+          'so the state it measures was never entered. ' + String(err && err.message || err).split('\n')[0];
+        break;
+      }
+    }
+
+    /*
      * Optional KEY PRESS, for behaviour that only exists after the visitor
      * does something with the keyboard (task 86bc7f5hh — arrow keys turn the
      * galaxy). `press: { selector, key }` focuses the element and presses the
@@ -988,11 +1031,12 @@ try {
       contract.dispatch
     );
 
+    if (result && contract.pointer) result.pointer = pointerReadings;
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
     // The frame needs no reset: `render` writes the device key on every
     // contract, so the next one cannot inherit this one's box.
-    if (contract.hover || contract.click) await page.mouse.move(0, 0);
+    if (contract.hover || contract.click || contract.pointer) await page.mouse.move(0, 0);
 
     if (hoverError) {
       failures.push(hoverError);
