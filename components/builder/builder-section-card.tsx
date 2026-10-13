@@ -19,7 +19,6 @@ import {
 import { describeBlockLineage } from "@/lib/block-lineage";
 import { resolveSharedSectionTitle } from "@/lib/saved-section-name";
 import type { BlockUsage } from "@/lib/shared-block-usage";
-import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { BuilderCellPanelHeader } from "./builder-cell-panel-header";
 import { BuilderCellStyleSettings } from "./builder-cell-style-settings";
@@ -419,7 +418,9 @@ export function BuilderSectionCard({
     };
 
     return {
-      ...resolveBuilderDrillDownSurfaceBackground(section.cellBackgrounds[column], "column"),
+      // No background: the column card is editor chrome and always shows the
+      // column tier's blue from CSS, so the drill-down never breaks on a dark
+      // or photo cell. The cell's own fill shows in Live Preview (86bch66at).
       // Four sides, with the pre-2026-08-11 pair and the all-sides number
       // before it read as fallbacks — same order the live page resolves in,
       // so the canvas and the page cannot disagree. The cast reaches keys
