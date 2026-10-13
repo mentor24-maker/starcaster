@@ -10,6 +10,17 @@ line explaining how the pages get built when they have not been. A built
 import lists every page it made, and each one opens in the Builder in a new
 tab. If the import created a theme and made it the default, the screen says
 which theme.
+## 2026-10-12 — A site import no longer stacks repeat copies of the home page onto one page (#842)
+
+When an import captured the same page more than once — the Strands Movie site
+had its home page captured three times — the step that builds the Builder pages
+looked each one up by its web address, so copies two and three were added to
+the bottom of the first. The Home page ended up with its content repeated, 41
+pages existed where the report promised 43, and nothing said so. Now an exact
+repeat is skipped (and the run says how many it skipped), a repeat with
+different content gets its own page, and after writing, the run prints how many
+pages it created and updated and fails loudly if that does not match the
+report. Strands' Home page itself still needs a one-off clean-up.
 ## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
 
 The AI that will write Reddit comments needs to know how Dane thinks and
