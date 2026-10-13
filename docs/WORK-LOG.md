@@ -1,3 +1,15 @@
+## 2026-10-12 — Starcaster can write a Reddit comment in Dane's voice, waiting for his OK (#840)
+
+Give Starcaster a link to a Reddit post and it saves the post, then has the AI
+write a short comment on it in Dane's voice, using the canon copied in by the
+previous ticket. The rules are checked by code, not just asked of the AI: a
+draft may never carry a link or name one of Dane's own projects, and any phrase
+on his banned-phrasings list is refused, with the reason named. Dane's own edit
+may add a link — that is his call. Nothing is written if the canon has not been
+copied yet. One surprise, measured before building: Reddit now refuses to show
+posts to anything not signed in, even from the Mini's home connection, so when
+it refuses, the post's title and text can be pasted in instead. No screen yet
+(next ticket) and nothing posts to Reddit (the one after).
 ## 2026-10-12 — The Imports screen no longer says COMPLETE when no pages were built (#841)
 
 Importing a client's site is two steps: first the site is copied, then an
