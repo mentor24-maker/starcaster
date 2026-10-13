@@ -1,3 +1,12 @@
+## 2026-10-12 — The Imports screen's Jobs list names each website again (#845)
+
+On the Site Import screen, the list of imports on the left showed a coloured
+badge on each row but the website address next to it was white — invisible on
+the white page, and barely there on the grey highlighted row — so with two
+imports you could not tell which was which without clicking. Each row is a
+button, and every button in the app is styled with white bold text; this one
+never said otherwise. It now uses the normal dark text, and the badge sits
+above the address so a long badge cannot push the address out of the column.
 ## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
 
 The AI that will write Reddit comments needs to know how Dane thinks and
