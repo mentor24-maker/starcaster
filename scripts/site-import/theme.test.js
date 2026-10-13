@@ -10,6 +10,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { deriveImportTheme, nextThemeName, siteNameFromUrl } = require('../../lib/site-import/dist/map.js');
+
+/** WCAG contrast, written out here rather than imported, so the test does
+ *  not grade the guard with the guard's own arithmetic. */
+function contrastRatio(a, b) {
+  const lum = (hex) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
 const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
 const { normalizeTheme } = require('../../lib/builder/template.js');
 
@@ -122,6 +136,73 @@ test('an outlined button becomes a filled one in its colour, and says so', () =>
   assert.equal(t.palette.buttonText, '#111111');
   assert.equal(t.borderRadius, 3);
   assert.ok(t.notes.some((n) => n.includes('outlined')));
+});
+
+/** Every text element in the fixture painted one colour. */
+function withTextColor(ir, color) {
+  for (const e of ir.pages[0].sections[0].elements) e.computedStyles.color = color;
+  return ir;
+}
+
+// Strands Movie, 2026-10-12 (task 86bch6geu): a black <body> behind a white
+// content column, black text. The dry run printed "surface #000000,
+// surfaceText #000000" — every imported page would have looked blank.
+const BLACK_BODY = {
+  ...SUMMARY,
+  pageBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 12 }],
+  backgroundsByArea: [
+    { value: 'rgb(0, 0, 0)', count: 9000 },
+    { value: 'rgb(250, 250, 250)', count: 6000 },
+  ],
+  headerBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 12 }],
+};
+
+test('black text on a black page is never shipped: the surface becomes the area the text reads on, and the notes say why', () => {
+  const t = deriveImportTheme(withTextColor(siteIr(BLACK_BODY), 'rgb(0, 0, 0)'), 'strands 1');
+  assert.equal(t.palette.surface, '#fafafa', 'the content column, not the body');
+  assert.equal(t.palette.surfaceText, '#000000', 'the measured text is kept — it reads on the new surface');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5);
+  const note = t.notes.find((n) => n.startsWith('surface:'));
+  assert.ok(note, `a note names the rejection: ${t.notes.join(' / ')}`);
+  assert.match(note, /rejected the page background #000000/);
+  assert.match(note, /#000000 on it is 1\.0:1/);
+  assert.equal(t.palette.inverse, '#000000', 'the black bands stay black, as their own colour');
+});
+
+test('with no readable area measured, the surface falls back to white and keeps the measured text', () => {
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, backgroundsByArea: [{ value: 'rgb(0, 0, 0)', count: 9000 }] }), 'rgb(0, 0, 0)');
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.palette.surface, '#ffffff');
+  assert.equal(t.palette.surfaceText, '#000000');
+  assert.ok(t.notes.some((n) => n.startsWith('surface:') && n.includes('using #ffffff')));
+});
+
+test('text that reads on no light surface keeps the page colour and gets text that reads', () => {
+  // Pale grey text. The dark #1a1a1a band WOULD read with it, but the surface
+  // never moves onto a dark band: the mapper unsets bands painted the surface
+  // colour, and that band would lose its colour in the import.
+  const ir = withTextColor(siteIr({ ...SUMMARY, pageBackgrounds: [{ value: 'rgb(240, 240, 240)', count: 4 }] }), 'rgb(238, 238, 238)');
+  const t = deriveImportTheme(ir, 'pale 1');
+  assert.equal(t.palette.surface, '#f0f0f0');
+  assert.equal(t.palette.inverse, '#1a1a1a', 'the dark band keeps its own colour');
+  assert.equal(t.palette.surfaceText, '#111111');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5);
+  assert.ok(t.notes.some((n) => n.startsWith('surface text: rejected #eeeeee')));
+});
+
+test('on a mid grey, where near-black and white both fall short, the replacement text is pure black', () => {
+  const ir = withTextColor(siteIr({ ...SUMMARY, pageBackgrounds: [{ value: 'rgb(120, 120, 120)', count: 4 }], backgroundsByArea: [] }), 'rgb(125, 125, 125)');
+  const t = deriveImportTheme(ir, 'grey 1');
+  assert.equal(t.palette.surface, '#787878');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5, `${t.palette.surfaceText} on #787878`);
+});
+
+test('a readable page background is left alone and adds no note', () => {
+  const t = deriveImportTheme(siteIr(SUMMARY), 'daneofearth 1');
+  assert.equal(t.palette.surface, '#ffffff');
+  assert.equal(t.palette.surfaceText, '#666666');
+  assert.ok(!t.notes.some((n) => n.startsWith('surface')));
 });
 
 test('a capture without style evidence still gets fonts and colours, and invents no palette', () => {

@@ -113,6 +113,16 @@ export function contrastText(hex: string): string {
   return onWhite >= onDark ? "#ffffff" : "#111111";
 }
 
+/** WCAG contrast ratio between two colours, 1 (identical) – 21 (black on white). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** WCAG AA for body text. Below this the import theme does not ship a
+ *  surface/text pair (task 86bch6geu). */
+export const READABLE_CONTRAST = 4.5;
+
 const px = (value: string | undefined): number => {
   const n = parseFloat(String(value || ""));
   return Number.isFinite(n) ? n : 0;
@@ -159,13 +169,54 @@ export function nextThemeName(siteName: string, existingNames: string[]): string
   return `${siteName} ${max + 1}`;
 }
 
+/** The most common text colour across the site, as hex ("" if none measured). */
+function measuredTextColor(ir: SiteIR): string {
+  const texts = (ir.pages || [])
+    .flatMap((p) => (p.sections || []).flatMap((s) => s.elements || []))
+    .filter((e) => e.class === "text");
+  return toHex(mode(texts.map((e) => (e.computedStyles || {}).color)));
+}
+
+/** The page surface and, when the obvious choice was refused, why.
+ *
+ *  The obvious choice is the most common page background — but that is the
+ *  <body>, and a site with a black body behind a white content column reads
+ *  as black there. With the site's text also black, the theme shipped black
+ *  on black and every imported page looked blank (Strands Movie,
+ *  2026-10-12, task 86bch6geu). So a surface must be readable against the
+ *  measured text: else the biggest LIGHT painted area that is (the content
+ *  column), else white. Only light ones: the mapper unsets every band painted
+ *  the surface colour, so moving the surface onto a dark band — which is
+ *  where white text usually sits — would strip that band's colour from the
+ *  import. When nothing light reads, the surface stays and the text is
+ *  replaced instead (deriveImportTheme). */
+function pickSurface(ir: SiteIR): { surface: string; note: string } {
+  const sum = ir.styleSummary;
+  if (!sum) return { surface: "", note: "" };
+  const measured = toHex(top(sum.pageBackgrounds));
+  const text = measuredTextColor(ir);
+  const readable = (hex: string) => !text || contrastRatio(hex, text) >= READABLE_CONTRAST;
+  if (!measured) return { surface: "#ffffff", note: "" };
+  if (readable(measured)) return { surface: measured, note: "" };
+  const area = (sum.backgroundsByArea || [])
+    .map((t) => toHex(t.value))
+    .find((h) => h && luminance(h) >= 0.45 && readable(h));
+  const surface = area || (readable("#ffffff") ? "#ffffff" : "");
+  if (!surface) return { surface: measured, note: "" };
+  const why = area ? "the biggest light area, which the text reads on" : "white, as no light area measured reads with it";
+  return {
+    surface,
+    note: `surface: rejected the page background ${measured} — the site's text ${text} on it is ${contrastRatio(measured, text).toFixed(1)}:1, under ${READABLE_CONTRAST}:1 — using ${surface} (${why})`,
+  };
+}
+
 /** The colour the import theme gives the page surface: the most common page
- *  background, white when backgrounds were measured but none was painted,
+ *  background when the site's text reads on it, else a readable one (see
+ *  pickSurface); white when backgrounds were measured but none was painted,
  *  "" when the capture predates the measurement. The mapper leaves a band or
  *  card of exactly this colour unset, so it follows the theme. */
 export function importSurfaceColor(ir: SiteIR): string {
-  const sum = ir.styleSummary;
-  return toHex(top(sum?.pageBackgrounds)) || (sum ? "#ffffff" : "");
+  return pickSurface(ir).surface;
 }
 
 /* ---------- the derivation ---------- */
@@ -222,10 +273,20 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // Palette, from the role-separated evidence (absent on old captures).
   const sum = ir.styleSummary;
   const palette: Record<string, string> = {};
-  const surface = importSurfaceColor(ir);
+  const { surface, note: surfaceNote } = pickSurface(ir);
+  if (surfaceNote) notes.push(surfaceNote);
   if (surface) {
     palette.surface = surface;
-    if (text) palette.surfaceText = text;
+    if (text && contrastRatio(surface, text) >= READABLE_CONTRAST) palette.surfaceText = text;
+    else if (text) {
+      // No light surface reads with this text (white text, or a pale grey
+      // one): keep the surface, give it text that reads.
+      // Near-black tops out near 4.35:1 on a mid grey; pure black never
+      // drops under 4.5:1 wherever white does.
+      const fallback = contrastText(surface);
+      palette.surfaceText = contrastRatio(surface, fallback) >= READABLE_CONTRAST ? fallback : "#000000";
+      notes.push(`surface text: rejected ${text} on ${surface} (${contrastRatio(surface, text).toFixed(1)}:1) — using ${palette.surfaceText}`);
+    }
   }
   const bands = (sum?.backgroundsByArea || []).map((t) => toHex(t.value)).filter((h) => h && h !== surface);
   const band = bands.find((h) => luminance(h) >= 0.45);
