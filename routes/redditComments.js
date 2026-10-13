@@ -27,7 +27,7 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/redditCommentsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
-const { REDDIT_PACE } = require('../workers/youtube-outreach/limits');
+const { REDDIT_PACE } = require('../lib/redditPace');
 const { EXPECTED_REDDIT_ACCOUNT } = require('../lib/openclawSignIn');
 
 const PREFIX = '/api/engage/reddit-comments';

@@ -1,3 +1,15 @@
+## 2026-10-13 — The Mac Mini can post approved Reddit comments, with proof (#851)
+
+Comments approved on Engage → Comments are now picked up by the Mac Mini, which
+posts them on Reddit through its own signed-in browser, the same way it posts
+YouTube comments and Substack Notes. A comment only counts as posted when the
+browser hands back its link and Reddit's own record of that comment shows the
+approved words, by the right account; no link or different words is marked
+Failed. It goes slowly on purpose (at most 3 a day, 20 minutes apart), and the
+screen says so. Nothing posts until Dane names which Reddit account to use and
+signs the Mini in once. One catch, measured before building: Reddit currently
+refuses to show its records to the Mini, so for now a real post lands as "check
+this one by hand", with its link, instead of "posted and proven".
 ## 2026-10-13 — Engage → Comments is now the screen for Reddit comments in Dane's voice (#846)
 
 The Comments screen under Engage used to be a bare form that tried to post
