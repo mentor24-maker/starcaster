@@ -90,9 +90,18 @@ guard, dry-run default, JSON backup of every page it will touch to
 
 ### Idempotent re-runs — and never clobbering human work
 
-The job row gains `checkpoints.map.pageIds` — `{ <irPagePath>: <builderPageId> }`.
+The job row gains `checkpoints.map.pageIds` — `{ <writeKey>: <builderPageId> }`.
 A re-run **updates** those pages in place and never duplicates. Deleting
 the drafts and clearing the checkpoint resets cleanly.
+
+The write key is the source path, except when capture reached one path more
+than once (task 86bch6ger, 2026-10-12 — three captures of `/` were all
+appended onto one Home page, because the key was the path). An exact repeat
+(same path, same content) is mapped once and listed in the report's
+`repeatCaptures`; a repeat whose content differs becomes its own page under
+the key `<path>#2`, `#3`…. After `--apply` the run prints how many pages it
+created and updated, and fails if two mapped pages landed on one Builder page
+or the distinct count differs from the report.
 
 But "import-owned" is not enough to make replacement safe: these drafts
 exist to be redesigned, and a half-redesigned section still carries the
