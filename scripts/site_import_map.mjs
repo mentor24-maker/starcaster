@@ -119,6 +119,7 @@ const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
   mapSite, reportReconciles, mergeMappedSections, deriveImportTheme, nextThemeName, siteNameFromUrl,
+  writeMappedPages, summarizePageWrites,
 } = require('./lib/site-import/dist/map.js');
 const themesStore = require('./lib/builderThemesStore.js');
 const { normalizeTheme } = require('./lib/builder/template.js');
@@ -198,7 +199,7 @@ async function main() {
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
   const protectedSections = [];
   for (const page of out.pages) {
-    const existingId = priorPageIds[page.irPath];
+    const existingId = priorPageIds[page.key];
     if (!existingId) continue;
     const current = existingPages.find((p) => String(p.id) === String(existingId));
     if (!current) continue;
@@ -223,6 +224,13 @@ async function main() {
   for (const p of out.report.pages) {
     log(`  ${p.path}  →  /${p.slug}   ${p.modules} modules (${p.placeholders} placeholders)`);
   }
+  if (out.report.repeatCaptures.length) {
+    // Capture reached one page by more than one URL. Mapped once — the
+    // alternative was every copy piled onto one page (task 86bch6ger).
+    log(`${out.report.repeatCaptures.length} duplicate capture(s) skipped (same path, same content as one already mapped):`);
+    for (const r of out.report.repeatCaptures) log(`  ${r.path}  (${r.url}, ${r.elements} elements)`);
+  }
+  log(`Pages: ${out.pages.length} — each becomes its own Builder page.`);
   if (protectedIds.size) {
     log(`Hash guard: ${protectedIds.size} section(s) human-modified — will be left untouched:`);
     for (const { page, section } of protectedSections) log(`  ${page.slug} :: ${section.id} (${section.title})`);
@@ -369,49 +377,51 @@ async function main() {
 
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
-  const pageIds = { ...priorPageIds };
   const sectionHashes = { ...priorHashes };
   /** pageId -> section ids this run owns; hashed at the very end. */
   const ownedSectionIds = new Map();
-  for (const page of out.pages) {
-    const sections = page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
+  // Keyed by page.key, never by source path: two captures of "/" keyed by
+  // path found each other's page and were appended onto it (86bch6ger).
+  const { pageIds, writes } = await writeMappedPages(out.pages, {
+    priorPageIds,
+    prepareSections: (page) => page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
       const clean = rewriteUrls(section, urlMap);
       for (const module of clean.modules) {
         const overflowUrl = overflowUrls.get(module.id);
         if (overflowUrl) module.settings.importSourceHtmlUrl = overflowUrl;
       }
       return clean;
-    });
-
-    const existingId = pageIds[page.irPath];
-    // Fetch the page's CURRENT state at write time — the startup listing
-    // is stale by now (this same run, or a human, may have changed the
-    // page since; merging against a stale copy silently reverts them).
-    let current = null;
-    if (existingId) {
-      const fresh = await pagesStore.getPage(existingId, scope);
-      current = fresh.ok ? fresh.data : null; // vanished page → recreate
-    }
-    let saved;
-    if (current) {
-      const merged = mergeMappedSections(current.layoutSections || [], sections, protectedIds);
-      saved = must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`);
-    } else {
-      saved = must(await pagesStore.createPage({
-        name: page.name,
-        slug: page.slug,
-        templateId: '',
-        templateKind: 'modular',
-        isPublished: false,
-        layoutSections: sections,
-      }, scope), `create ${page.slug}`);
-    }
-    pageIds[page.irPath] = String(saved.id);
-
-    ownedSectionIds.set(String(saved.id), sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));
-    const reportPage = out.report.pages.find((p) => p.path === page.irPath);
-    if (reportPage) reportPage.builderPageId = String(saved.id);
-    log(`  wrote /${page.slug} (page ${saved.id}, draft)`);
+    }),
+    getPage: async (id) => {
+      const fresh = await pagesStore.getPage(id, scope);
+      return fresh.ok ? fresh.data : null;
+    },
+    createPage: async (page, sections) => must(await pagesStore.createPage({
+      name: page.name,
+      slug: page.slug,
+      templateId: '',
+      templateKind: 'modular',
+      isPublished: false,
+      layoutSections: sections,
+    }, scope), `create ${page.slug}`),
+    updatePage: async (page, current, merged) =>
+      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`),
+    mergeSections: (existing, incoming) => mergeMappedSections(existing, incoming, protectedIds),
+    onWrite: (page, pageId, sections, action) => {
+      ownedSectionIds.set(pageId, sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));
+      const reportPage = out.report.pages.find((p) => p.key === page.key);
+      if (reportPage) reportPage.builderPageId = pageId;
+      log(`  ${action === 'created' ? 'created' : 'updated'} /${page.slug} (page ${pageId}, draft)`);
+    },
+  });
+  const writeSummary = summarizePageWrites(out.pages.length, writes);
+  log(`Pages: ${writeSummary.created} created, ${writeSummary.updated} updated — ${writeSummary.distinctPages} distinct page(s) for ${out.pages.length} in the report.`);
+  if (writeSummary.problems.length) {
+    // Not thrown: the pages are already written, and the checkpoint below
+    // must still record them so a re-run finds them. But the run fails.
+    console.error('\nERROR: what was written does not match the report:');
+    for (const problem of writeSummary.problems) console.error(`  ${problem}`);
+    process.exitCode = 1;
   }
 
   // 4b. The import theme: create, make default, READ BACK (landmine 12 —
@@ -460,7 +470,7 @@ async function main() {
     mimeType: 'application/json',
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'update report');
-  log(`\nAPPLY complete: ${out.pages.length} draft page(s). Nothing was published.`);
+  log(`\nAPPLY complete: ${writeSummary.distinctPages} draft page(s) (${writeSummary.created} created, ${writeSummary.updated} updated). Nothing was published.`);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
 
   // Nav LAST: nothing may write pages after the master instances attach.
@@ -583,7 +593,7 @@ async function runNav(job, scope, out) {
 
   // Attach the master instance to every imported page missing it, then
   // propagate so instances match the master exactly.
-  const pageIds = Object.values(job.checkpoints?.map?.pageIds || {});
+  const pageIds = [...new Set(Object.values(job.checkpoints?.map?.pageIds || {}).map(String))];
   for (const pageId of pageIds) {
     const page = must(await pagesStore.getPage(pageId, scope), `read page ${pageId}`);
     if ((page.layoutSections || []).some((s) => s.savedSectionId === master.id)) continue;

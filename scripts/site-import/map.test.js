@@ -26,6 +26,9 @@ const {
   reportReconciles,
   normalizeImportSlug,
   splitOversizeHtml,
+  writeMappedPages,
+  summarizePageWrites,
+  pathOfWriteKey,
   TEXT_MODULE_CHAR_BUDGET,
 } = require('../../lib/site-import/dist/map.js');
 const { serializeBuilderDocument } = require('../../lib/builder/document.js');
@@ -579,4 +582,122 @@ test('a placeholder carries its rebuild caption as a setting, never as page text
   // Both caption shapes: the default and the too-large-to-split reason.
   assert.ok(placeholders.some((m) => /real module/.test(m.settings.importPlaceholder)));
   assert.ok(placeholders.some((m) => /too large to split/.test(m.settings.importPlaceholder)));
+});
+
+// --- Two captures of the same path (task 86bch6ger) ----------------------
+// Strands Movie, 2026-10-12: three captures of "/" were keyed by source path
+// in the write loop, so captures 2 and 3 found capture 1's page and were
+// appended onto it — one Home page with 15 sections, 41 pages for a report
+// of 43, and nothing said so.
+
+function homeCapture(url, sectionId, text) {
+  return {
+    url, path: '/', title: 'Home', metaDescription: '', ogTags: {}, canonicalUrl: '', lang: 'en',
+    screenshots: { desktop: '', tablet: '', mobile: '' },
+    sections: [{
+      sourceId: sectionId, type: 'unknown', screenshot: '',
+      elements: [el({ sourceId: `${sectionId}-p`, class: 'text', html: `<p>${text}</p>`, textContent: text })],
+    }],
+  };
+}
+
+function irWithPages(pages) {
+  return {
+    irVersion: '1.0', jobId: 'job-repeat', sourceUrl: 'https://repeat.test/',
+    capturedAt: '2026-10-12T00:00:00.000Z', assets: [], taxonomy: { navs: [] }, pages,
+  };
+}
+
+/** An in-memory page store — enough of one to run the real write loop. */
+function memoryStore(seed = []) {
+  const pages = new Map(seed.map((p) => [String(p.id), { ...p }]));
+  let nextId = 1000;
+  return {
+    pages,
+    io(priorPageIds) {
+      return {
+        priorPageIds,
+        prepareSections: (page) => page.sections.map(({ sourceElementIds, dispositions, ...section }) => section),
+        getPage: async (id) => pages.get(String(id)) || null,
+        createPage: async (page, sections) => {
+          const row = { id: nextId++, slug: page.slug, layoutSections: sections };
+          pages.set(String(row.id), row);
+          return row;
+        },
+        updatePage: async (page, current, merged) => {
+          const row = { ...current, layoutSections: merged };
+          pages.set(String(row.id), row);
+          return row;
+        },
+        // Appends, like mergeMappedSections does for sections it has not seen.
+        mergeSections: (existing, incoming) => [
+          ...existing.filter((s) => !incoming.some((n) => n.id === s.id)),
+          ...incoming,
+        ],
+      };
+    },
+  };
+}
+
+test('two captures of the same path with different content become two Builder pages, never one', async () => {
+  const out = mapSite(irWithPages([
+    homeCapture('https://repeat.test/', 'h0', 'Welcome home.'),
+    homeCapture('https://repeat.test/?ref=menu', 'h1', 'Welcome home, with a banner this time.'),
+  ]), { existingSlugs: [] });
+
+  assert.equal(out.pages.length, 2);
+  assert.deepEqual(out.pages.map((p) => p.key), ['/', '/#2']);
+  assert.notEqual(out.pages[0].slug, out.pages[1].slug);
+  assert.deepEqual(out.report.pages.map((p) => p.key), ['/', '/#2']);
+  assert.equal(pathOfWriteKey('/#2'), '/');
+  assert.equal(pathOfWriteKey('/about'), '/about');
+
+  const store = memoryStore();
+  const { pageIds, writes } = await writeMappedPages(out.pages, store.io({}));
+  assert.equal(new Set(writes.map((w) => w.pageId)).size, 2, 'each capture landed on its own page');
+  assert.deepEqual(writes.map((w) => w.action), ['created', 'created']);
+  for (const row of store.pages.values()) assert.equal(row.layoutSections.length, 1, `page ${row.id} holds one capture, not several`);
+  assert.deepEqual(summarizePageWrites(out.pages.length, writes).problems, []);
+
+  // A re-run updates the same two pages rather than creating more.
+  const again = await writeMappedPages(out.pages, store.io(pageIds));
+  assert.deepEqual(again.writes.map((w) => w.action), ['updated', 'updated']);
+  assert.deepEqual(again.pageIds, pageIds);
+  assert.equal(store.pages.size, 2);
+});
+
+test('two captures of the same path with the same content: one page, and the repeat is reported', async () => {
+  const out = mapSite(irWithPages([
+    homeCapture('https://repeat.test/', 'h0', 'Welcome home.'),
+    homeCapture('https://repeat.test/index.php', 'h40', 'Welcome home.'),
+    homeCapture('https://repeat.test/?p=1', 'h42', 'Welcome home.'),
+  ]), { existingSlugs: [] });
+
+  assert.equal(out.pages.length, 1);
+  assert.equal(out.report.repeatCaptures.length, 2);
+  assert.deepEqual(out.report.repeatCaptures.map((r) => r.url), ['https://repeat.test/index.php', 'https://repeat.test/?p=1']);
+  assert.equal(out.report.elements.total, 3, 'the skipped captures are still accounted for');
+  assert.equal(out.report.elements.deduped, 2);
+  assert.ok(reportReconciles(out.report));
+});
+
+test('a pre-86bch6ger checkpoint keyed by path still finds its page on a re-run', async () => {
+  const out = mapSite(irWithPages([homeCapture('https://repeat.test/', 'h0', 'Welcome home.')]), { existingSlugs: [] });
+  const store = memoryStore([{ id: 77, slug: 'home', layoutSections: [] }]);
+  const { writes } = await writeMappedPages(out.pages, store.io({ '/': '77' }));
+  assert.deepEqual(writes, [{ key: '/', slug: out.pages[0].slug, pageId: '77', action: 'updated' }]);
+});
+
+test('apply summary: two mapped pages written onto one page is an error, not a success', () => {
+  const summary = summarizePageWrites(3, [
+    { key: '/', slug: 'home', pageId: '1497', action: 'created' },
+    { key: '/#2', slug: 'home-imported', pageId: '1497', action: 'updated' },
+    { key: '/about', slug: 'about', pageId: '1500', action: 'created' },
+  ]);
+  assert.equal(summary.created, 2);
+  assert.equal(summary.updated, 1);
+  assert.equal(summary.distinctPages, 2);
+  assert.equal(summary.problems.length, 2);
+  assert.match(summary.problems[0], /page 1497 was written 2 times: \/home, \/home-imported/);
+  assert.match(summary.problems[1], /report lists 3 page\(s\) but 2 distinct/);
 });
