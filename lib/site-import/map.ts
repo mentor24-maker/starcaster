@@ -106,6 +106,14 @@ export type MappedSection = {
 
 export type MappedPage = {
   irPath: string;
+  /**
+   * What the --apply write loop and `checkpoints.map.pageIds` key this page
+   * by. The source path for the first capture of a path; `<path>#2`, `#3`…
+   * for a later capture of the SAME path whose content differs. Keying by
+   * irPath alone wrote every repeat capture of "/" onto one Builder page
+   * (Strands Movie, 2026-10-12, task 86bch6ger). See pageWriteKey().
+   */
+  key: string;
   name: string;
   slug: string;
   sections: MappedSection[];
@@ -136,12 +144,20 @@ export type MapReport = {
   skipped: { sourceId: string; class: string; reason: string }[];
   pages: {
     path: string;
+    /** MappedPage.key — unique per page, unlike path. */
+    key: string;
     slug: string;
     modules: number;
     placeholders: number;
     builderPageId: string | null;
   }[];
   assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
+  /**
+   * Captures of a path already captured with the SAME content. Mapped once;
+   * their elements are counted in elements.deduped so the report still
+   * reconciles.
+   */
+  repeatCaptures: { path: string; url: string; elements: number }[];
   /**
    * What the placeholders actually CONTAIN, grouped by structural
    * signature and ranked. Placeholders are the importer admitting it has
@@ -262,6 +278,134 @@ export function normalizeImportSlug(irPath: string): string {
   // silently vanish from the public list or shadow platform screens.
   if (RESERVED_SLUG_RE.test(flattened)) return `imported-${flattened}`;
   return flattened;
+}
+
+/**
+ * The key a mapped page is written under. The first capture of a path keeps
+ * the bare path, so every job applied before this existed still finds its
+ * pages on a re-run; a later capture of the same path gets `#<n>`. A URL
+ * path never carries a "#", so the suffix cannot collide with a real path.
+ */
+export function pageWriteKey(irPath: string, occurrence: number): string {
+  return occurrence <= 1 ? irPath : `${irPath}#${occurrence}`;
+}
+
+/** The source path a write key (or a pre-86bch6ger irPath key) stands for. */
+export function pathOfWriteKey(key: string): string {
+  return String(key || "").replace(/#\d+$/, "");
+}
+
+/** What a capture SAYS, without the ids capture invents per visit. */
+function captureFingerprint(page: PageIR): string {
+  return JSON.stringify(
+    (page.sections || []).map((section) =>
+      (section.elements || []).map((el) => [el.class, String(el.html || "").replace(/\s+/g, " ").trim()])
+    )
+  );
+}
+
+/**
+ * Drop a capture whose path AND content repeat an earlier capture. Capture
+ * can reach one page by several URLs (three "/" pages on the Strands Movie
+ * job); mapping each would build the same page three times. A repeat whose
+ * content differs is kept — it becomes its own page under its own key.
+ */
+export function dropRepeatCaptures(pages: PageIR[]): {
+  kept: PageIR[];
+  repeats: { path: string; url: string; elements: number }[];
+} {
+  const seen = new Set<string>();
+  const kept: PageIR[] = [];
+  const repeats: { path: string; url: string; elements: number }[] = [];
+  for (const page of pages || []) {
+    const fingerprint = `${page.path}\u0000${captureFingerprint(page)}`;
+    if (seen.has(fingerprint)) {
+      repeats.push({
+        path: page.path,
+        url: page.url,
+        elements: (page.sections || []).reduce((n, s) => n + (s.elements || []).length, 0),
+      });
+      continue;
+    }
+    seen.add(fingerprint);
+    kept.push(page);
+  }
+  return { kept, repeats };
+}
+
+export type PageWrite = { key: string; slug: string; pageId: string; action: "created" | "updated" };
+
+/**
+ * The --apply page write loop, with the store passed in so it can be tested
+ * without a database. Each mapped page is looked up, and recorded, under its
+ * OWN key: a page whose key has a prior id is merged into that page, any
+ * other page is created.
+ */
+export async function writeMappedPages<S>(
+  pages: MappedPage[],
+  io: {
+    priorPageIds: Record<string, string>;
+    prepareSections: (page: MappedPage) => S[];
+    getPage: (id: string) => Promise<{ id: string | number; layoutSections?: S[] } | null>;
+    createPage: (page: MappedPage, sections: S[]) => Promise<{ id: string | number }>;
+    updatePage: (page: MappedPage, current: { id: string | number; layoutSections?: S[] }, merged: S[]) => Promise<{ id: string | number }>;
+    mergeSections: (existing: S[], incoming: S[]) => S[];
+    onWrite?: (page: MappedPage, pageId: string, sections: S[], action: PageWrite["action"]) => void;
+  }
+): Promise<{ pageIds: Record<string, string>; writes: PageWrite[] }> {
+  const pageIds: Record<string, string> = { ...io.priorPageIds };
+  const writes: PageWrite[] = [];
+  for (const page of pages) {
+    const sections = io.prepareSections(page);
+    const existingId = pageIds[page.key];
+    // Read the page's CURRENT state at write time — a listing taken at
+    // startup is stale by now, and merging against it reverts edits.
+    const current = existingId ? await io.getPage(existingId) : null; // vanished page → recreate
+    let saved: { id: string | number };
+    let action: PageWrite["action"];
+    if (current) {
+      saved = await io.updatePage(page, current, io.mergeSections(current.layoutSections || [], sections));
+      action = "updated";
+    } else {
+      saved = await io.createPage(page, sections);
+      action = "created";
+    }
+    const pageId = String(saved.id);
+    pageIds[page.key] = pageId;
+    writes.push({ key: page.key, slug: page.slug, pageId, action });
+    io.onWrite?.(page, pageId, sections, action);
+  }
+  return { pageIds, writes };
+}
+
+/**
+ * Does what --apply wrote match what the report promised? One mapped page
+ * must be one Builder page. Two pages written to one id is the 86bch6ger
+ * failure: the report said 43 pages, 41 existed, and nothing said so.
+ */
+export function summarizePageWrites(expectedPages: number, writes: PageWrite[]): {
+  created: number;
+  updated: number;
+  distinctPages: number;
+  problems: string[];
+} {
+  const byId = new Map<string, PageWrite[]>();
+  for (const write of writes) byId.set(write.pageId, [...(byId.get(write.pageId) || []), write]);
+  const problems: string[] = [];
+  for (const [pageId, shared] of byId) {
+    if (shared.length > 1) {
+      problems.push(`page ${pageId} was written ${shared.length} times: ${shared.map((w) => `/${w.slug}`).join(", ")}`);
+    }
+  }
+  if (byId.size !== expectedPages) {
+    problems.push(`the report lists ${expectedPages} page(s) but ${byId.size} distinct page(s) were written`);
+  }
+  return {
+    created: writes.filter((w) => w.action === "created").length,
+    updated: writes.filter((w) => w.action === "updated").length,
+    distinctPages: byId.size,
+    problems,
+  };
 }
 
 function uniqueSlug(base: string, taken: Set<string>): string {
@@ -749,7 +893,11 @@ function splitIntoRows(args: {
   return out;
 }
 
-export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
+export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
+  // Exact repeat captures are mapped once (task 86bch6ger); everything
+  // below works on the remaining pages.
+  const { kept: keptPages, repeats: repeatCaptures } = dropRepeatCaptures(sourceIr.pages || []);
+  const ir: SiteIR = { ...sourceIr, pages: keptPages };
   const takenSlugs = new Set((opts.existingSlugs || []).map((s) => String(s).toLowerCase()));
   const assetsById = new Map<string, AssetRef>((ir.assets || []).map((a) => [a.id, a]));
   // The source page's content column (theme.ts reads the same tally); 0 when
@@ -785,8 +933,13 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     skipped: [],
     pages: [],
     assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
+    repeatCaptures,
     placeholderPatterns: [],
   };
+  for (const repeat of repeatCaptures) {
+    report.elements.total += repeat.elements;
+    report.elements.deduped += repeat.elements;
+  }
   const patternTally = new Map<string, { count: number; sampleSourceId: string }>();
   const crops: CropCopy[] = [];
   const promotions = new Map<string, AssetPromotion>();
@@ -1081,7 +1234,11 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     }
   });
 
+  const capturesOfPath = new Map<string, number>();
   for (const page of ir.pages || []) {
+    const occurrence = (capturesOfPath.get(page.path) || 0) + 1;
+    capturesOfPath.set(page.path, occurrence);
+    const key = pageWriteKey(page.path, occurrence);
     const mappedSections: MappedSection[] = [];
     let pageModules = 0;
     let pagePlaceholders = 0;
@@ -1527,12 +1684,14 @@ export function mapSite(ir: SiteIR, opts: MapOptions): MapOutput {
     const slug = uniqueSlug(normalizeImportSlug(page.path), takenSlugs);
     pages.push({
       irPath: page.path,
+      key,
       name: collapse(page.title) || slug,
       slug,
       sections: mappedSections,
     });
     report.pages.push({
       path: page.path,
+      key,
       slug,
       modules: pageModules,
       placeholders: pagePlaceholders,

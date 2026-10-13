@@ -51,15 +51,26 @@
   gap: 4px;
 }
 
+/*
+ * A plain <button> takes the app-wide button paint (`_buttons.css`: white
+ * bold text), so without its own colour the address was white on grey and
+ * nobody could tell which import was which (task 86bch7trg). The badge sits
+ * above the address so a long one ("Captured — pages not built yet") cannot
+ * squeeze the address out of the 300px column.
+ */
 .site-import-job-link {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
   width: 100%;
   padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: none;
+  color: var(--ink-primary, #111827);
+  font-weight: 400;
   cursor: pointer;
   text-align: left;
   font-size: 13px;
@@ -75,6 +86,7 @@
 }
 
 .site-import-job-url {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -109,6 +121,24 @@
 .site-import-badge.status-capturing,
 .site-import-badge.status-normalizing,
 .site-import-badge.status-extracting { background: #dbeafe; color: #1e40af; }
+
+/* A finished copy is only half an import: the badge says which half it has
+   reached, in a sentence, so it is not shouted in capitals. Listed after
+   status-complete so a not-yet-built copy is never shown in the "done" green. */
+.site-import-badge.status-captured,
+.site-import-badge.status-built { text-transform: none; }
+.site-import-badge.status-captured { background: var(--status-warn-bg); color: var(--status-warn-ink); }
+.site-import-badge.status-built { background: var(--status-ok-bg); color: var(--status-ok-ink); }
+
+.site-import-build-note { margin-top: 8px; }
+.site-import-built { margin-top: 14px; }
+
+.site-import-built-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
 
 .site-import-stages {
   display: flex;

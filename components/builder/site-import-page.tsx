@@ -137,6 +137,94 @@ function checkpointOf(
   return value && typeof value === "object" ? value : null;
 }
 
+/**
+ * What `scripts/site_import_map.mjs --apply` writes onto the job when it builds
+ * the Builder pages. A dry run writes nothing, so its absence means "no pages
+ * were built" — the only place that fact is recorded.
+ */
+export type MapCheckpoint = {
+  at?: string;
+  pageIds?: Record<string, string>;
+  theme?: { id?: string; name?: string; previousDefaultName?: string };
+};
+
+export function mapCheckpointOf(job: Pick<Job, "checkpoints">): MapCheckpoint | null {
+  const value = (job.checkpoints as Record<string, unknown> | undefined)?.map;
+  return value && typeof value === "object" ? (value as MapCheckpoint) : null;
+}
+
+export type ImportStatus = {
+  /** Badge text. Never the bare word "complete" — see importStatus. */
+  label: string;
+  /** CSS suffix for the badge: status-<tone>. */
+  tone: "running" | "failed" | "captured" | "built";
+  built: boolean;
+  pageCount: number;
+};
+
+const MOUNTAIN_DAY = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Denver",
+  month: "short",
+  day: "numeric",
+});
+
+/**
+ * An import is two steps: the worker COPIES the site (capture, assets,
+ * normalize — after which it sets status "complete"), and an agent session
+ * BUILDS the Builder pages from the copy. The raw status only knows about the
+ * first, so showing it read "COMPLETE" over an empty Pages list (Strands
+ * Movie, 2026-10-12). Running and failed jobs keep their status word; a
+ * finished copy says which of the two steps it has reached.
+ */
+export function importStatus(job: Pick<Job, "status" | "checkpoints">): ImportStatus {
+  const map = mapCheckpointOf(job);
+  const pageCount = map ? Object.keys(map.pageIds ?? {}).length : 0;
+  if (job.status === "failed") return { label: "failed", tone: "failed", built: false, pageCount };
+  if (job.status !== "complete") return { label: job.status, tone: "running", built: false, pageCount };
+  if (!map) return { label: "Captured — pages not built yet", tone: "captured", built: false, pageCount: 0 };
+  const noun = pageCount === 1 ? "draft page" : "draft pages";
+  const at = map.at ? new Date(map.at) : null;
+  const day = at && !Number.isNaN(at.getTime()) ? ` on ${MOUNTAIN_DAY.format(at)}` : "";
+  return { label: `Built ${pageCount} ${noun}${day}`, tone: "built", built: true, pageCount };
+}
+
+export type BuiltPageRow = { path: string; pageId: string; name: string; slug: string; missing: boolean };
+
+/**
+ * Pair each source path the mapper built with the Builder page it wrote.
+ * `pages` is null when the page list could not be read, which is not the same
+ * as a page having been deleted since — only a page absent from a list that
+ * WAS read is marked missing.
+ */
+export function builtPageRows(
+  pageIds: Record<string, string> | undefined,
+  pages: Array<{ id: string | number; name?: string; slug?: string }> | null
+): BuiltPageRow[] {
+  const byId = new Map((pages ?? []).map((p) => [String(p.id), p]));
+  return Object.entries(pageIds ?? {})
+    .map(([path, pageId]) => {
+      const page = byId.get(String(pageId));
+      return {
+        path,
+        pageId: String(pageId),
+        name: page?.name ?? "",
+        slug: page?.slug ?? "",
+        missing: pages !== null && !page,
+      };
+    })
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/**
+ * Opened in a NEW TAB on purpose. The Builder reads `builderPage` only when the
+ * app loads on that hash (the Assets "Used In" links work the same way); an
+ * in-app hash change lands on the Pages list with the editor closed — measured
+ * 2026-10-12. A new tab also keeps this list open while going through pages.
+ */
+function builderPageHref(pageId: string): string {
+  return `#page=builderManagePagesPage&builderPage=${encodeURIComponent(pageId)}`;
+}
+
 export default function SiteImportPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -150,6 +238,10 @@ export default function SiteImportPage() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // The project's Builder pages, read once a job has built some, to name the
+  // pages it built. null = not read (or the read failed — see builderPagesError).
+  const [builderPages, setBuilderPages] = useState<Array<{ id: string; name?: string; slug?: string }> | null>(null);
+  const [builderPagesError, setBuilderPagesError] = useState("");
   const detailFetchedFor = useRef<string>("");
 
   const loadJobs = useCallback(async () => {
@@ -205,6 +297,21 @@ export default function SiteImportPage() {
             setIrText(null);
           }
         }
+        if (mapCheckpointOf(fresh)) {
+          try {
+            const pagesBody = await appApi("/api/builder/landing-pages");
+            const data = unwrapEnvelope<unknown>(pagesBody);
+            setBuilderPages(
+              Array.isArray(data)
+                ? (data as Array<{ id: string; name?: string; slug?: string }>)
+                : readEnvelopeList(pagesBody, "pages")
+            );
+            setBuilderPagesError("");
+          } catch (err) {
+            setBuilderPages(null);
+            setBuilderPagesError((err as Error).message);
+          }
+        }
       }
     } catch (err) {
       setStatus({ message: (err as Error).message, isError: true });
@@ -225,6 +332,8 @@ export default function SiteImportPage() {
     setIrText(null);
     setShowIr(false);
     setMapReport(undefined);
+    setBuilderPages(null);
+    setBuilderPagesError("");
     void loadJobDetail(selectedId);
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -280,6 +389,9 @@ export default function SiteImportPage() {
       ...Object.keys(dropped),
     ])
   ).sort();
+  const jobStatus = job ? importStatus(job) : null;
+  const mapCp = job ? mapCheckpointOf(job) : null;
+  const builtRows = mapCp ? builtPageRows(mapCp.pageIds, builderPages) : [];
   const failedAssets = (assets ?? []).filter((a) => a.status === "failed");
   const imageAssets = (assets ?? []).filter(
     (a) => a.status === "downloaded" && a.mimeType.startsWith("image/")
@@ -313,18 +425,21 @@ export default function SiteImportPage() {
           <h3>Jobs</h3>
           {jobs.length === 0 ? <p className="meta">No imports yet.</p> : null}
           <ul>
-            {jobs.map((j) => (
-              <li key={j.id}>
-                <button
-                  type="button"
-                  className={`site-import-job-link${j.id === selectedId ? " is-active" : ""}`}
-                  onClick={() => setSelectedId(j.id)}
-                >
-                  <span className={`site-import-badge status-${j.status}`}>{j.status}</span>
-                  <span className="site-import-job-url">{j.sourceUrl}</span>
-                </button>
-              </li>
-            ))}
+            {jobs.map((j) => {
+              const s = importStatus(j);
+              return (
+                <li key={j.id}>
+                  <button
+                    type="button"
+                    className={`site-import-job-link${j.id === selectedId ? " is-active" : ""}`}
+                    onClick={() => setSelectedId(j.id)}
+                  >
+                    <span className={`site-import-badge status-${j.status} status-${s.tone}`}>{s.label}</span>
+                    <span className="site-import-job-url">{j.sourceUrl}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
 
@@ -335,7 +450,8 @@ export default function SiteImportPage() {
             <>
               <div className="site-import-detail-head">
                 <h3>
-                  {job.sourceUrl} <span className={`site-import-badge status-${job.status}`}>{job.status}</span>
+                  {job.sourceUrl}{" "}
+                  <span className={`site-import-badge status-${job.status} status-${jobStatus?.tone}`}>{jobStatus?.label}</span>
                 </h3>
                 {ACTIVE_STATUSES.has(job.status) && !job.checkpoints?.cancelRequested ? (
                   <button type="button" className="btn" onClick={() => void handleCancel(job.id)}>
@@ -358,7 +474,60 @@ export default function SiteImportPage() {
                     </span>
                   );
                 })}
+                <span className={`site-import-stage${mapCp ? " is-done" : ""}`}>
+                  Build pages
+                  {mapCp ? <em> — {jobStatus?.pageCount ?? 0} draft</em> : null}
+                </span>
               </div>
+              {job.status === "complete" && !mapCp ? (
+                <p className="meta site-import-build-note">
+                  The site has been copied but no Builder pages exist yet. An agent session builds them
+                  (Claude Code: &lsquo;build the pages for import {job.id}&rsquo;). It runs a rehearsal first
+                  and creates drafts only. Nothing is published.
+                </p>
+              ) : null}
+              {mapCp ? (
+                <div className="site-import-built">
+                  <h4>
+                    Built pages ({builtRows.length}) — drafts, nothing published
+                  </h4>
+                  {mapCp.theme?.name ? (
+                    <p className="meta">
+                      Theme &ldquo;{mapCp.theme.name}&rdquo; was created and made this project&apos;s default
+                      {mapCp.theme.previousDefaultName
+                        ? ` (the default before it was “${mapCp.theme.previousDefaultName}”).`
+                        : " (there was no default theme before it)."}
+                    </p>
+                  ) : null}
+                  {builderPagesError ? (
+                    <p className="site-import-status is-error">
+                      Could not read this project&apos;s Builder pages to name them ({builderPagesError}). The
+                      links below still open each page.
+                    </p>
+                  ) : null}
+                  {builtRows.length === 0 ? (
+                    <p className="meta">The build step ran but recorded no pages for this import.</p>
+                  ) : (
+                    <ul className="site-import-built-list">
+                      {builtRows.map((row) => (
+                        <li key={row.path}>
+                          <code>{row.path}</code> →{" "}
+                          {row.missing ? (
+                            <span className="is-error-text">
+                              page {row.pageId} no longer exists in this project (deleted since it was built)
+                            </span>
+                          ) : (
+                            <a href={builderPageHref(row.pageId)} target="_blank" rel="noreferrer">
+                              {row.name || `page ${row.pageId}`}
+                              {row.slug ? <span className="meta"> /{row.slug.replace(/^\//, "")}</span> : null}
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
 
               {droppedTotal > 0 ? (
                 <div className="site-import-dropped-alert">

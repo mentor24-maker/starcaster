@@ -11,6 +11,50 @@ Movie, 59 forms, 16 tables and 11 embeds. Once the pages have actually been
 built, the panel's title changes to "What the build step created". An import
 with no rehearsal says so instead of showing an empty space.
 
+## 2026-10-12 — The Imports screen's Jobs list names each website again (#845)
+
+On the Site Import screen, the list of imports on the left showed a coloured
+badge on each row but the website address next to it was white — invisible on
+the white page, and barely there on the grey highlighted row — so with two
+imports you could not tell which was which without clicking. Each row is a
+button, and every button in the app is styled with white bold text; this one
+never said otherwise. It now uses the normal dark text, and the badge sits
+above the address so a long badge cannot push the address out of the column.
+## 2026-10-12 — Starcaster can write a Reddit comment in Dane's voice, waiting for his OK (#840)
+
+Give Starcaster a link to a Reddit post and it saves the post, then has the AI
+write a short comment on it in Dane's voice, using the canon copied in by the
+previous ticket. The rules are checked by code, not just asked of the AI: a
+draft may never carry a link or name one of Dane's own projects, and any phrase
+on his banned-phrasings list is refused, with the reason named. Dane's own edit
+may add a link — that is his call. Nothing is written if the canon has not been
+copied yet. One surprise, measured before building: Reddit now refuses to show
+posts to anything not signed in, even from the Mini's home connection, so when
+it refuses, the post's title and text can be pasted in instead. No screen yet
+(next ticket) and nothing posts to Reddit (the one after).
+## 2026-10-12 — The Imports screen no longer says COMPLETE when no pages were built (#841)
+
+Importing a client's site is two steps: first the site is copied, then an
+agent session builds the Builder pages from the copy. The Imports screen only
+knew about the first one, so it said COMPLETE the moment the copy finished.
+That is how the Strands Movie import looked done while its Pages list sat
+empty. The badge now says "Captured — pages not built yet" or "Built 43 draft
+pages on Oct 9". There is a fourth "Build pages" step on the screen, with one
+line explaining how the pages get built when they have not been. A built
+import lists every page it made, and each one opens in the Builder in a new
+tab. If the import created a theme and made it the default, the screen says
+which theme.
+## 2026-10-12 — A site import no longer stacks repeat copies of the home page onto one page (#842)
+
+When an import captured the same page more than once — the Strands Movie site
+had its home page captured three times — the step that builds the Builder pages
+looked each one up by its web address, so copies two and three were added to
+the bottom of the first. The Home page ended up with its content repeated, 41
+pages existed where the report promised 43, and nothing said so. Now an exact
+repeat is skipped (and the run says how many it skipped), a repeat with
+different content gets its own page, and after writing, the run prints how many
+pages it created and updated and fails loudly if that does not match the
+report. Strands' Home page itself still needs a one-off clean-up.
 ## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
 
 The AI that will write Reddit comments needs to know how Dane thinks and
