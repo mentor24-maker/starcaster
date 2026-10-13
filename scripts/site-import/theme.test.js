@@ -144,6 +144,16 @@ function withTextColor(ir, color) {
   return ir;
 }
 
+/** The page paints body text from typography.colors.text and headings from
+ *  colors.heading, on backgroundColor — palette.surfaceText reaches nothing
+ *  on screen (review round 1, task 86bch6geu). So "readable" is judged on
+ *  what is painted, not on the palette. */
+function assertPaintedReadable(t) {
+  const { text, heading } = t.typography.colors;
+  assert.ok(contrastRatio(t.backgroundColor, text) >= 4.5, `body text ${text} on ${t.backgroundColor}`);
+  assert.ok(contrastRatio(t.backgroundColor, heading) >= 4.5, `headings ${heading} on ${t.backgroundColor}`);
+}
+
 // Strands Movie, 2026-10-12 (task 86bch6geu): a black <body> behind a white
 // content column, black text. The dry run printed "surface #000000,
 // surfaceText #000000" — every imported page would have looked blank.
@@ -168,6 +178,19 @@ test('black text on a black page is never shipped: the surface becomes the area 
   assert.match(note, /rejected the page background #000000/);
   assert.match(note, /#000000 on it is 1\.0:1/);
   assert.equal(t.palette.inverse, '#000000', 'the black bands stay black, as their own colour');
+  assertPaintedReadable(t);
+});
+
+test('headings measured in a colour that does not read on the moved surface are replaced too, and the notes say so', () => {
+  // Black body text, WHITE headings (they sat on the black bands). Once the
+  // surface moves to the light content column, white headings would vanish.
+  const ir = withTextColor(siteIr(BLACK_BODY), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'heading') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.equal(t.typography.colors.heading, '#000000', 'the readable body text colour');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('heading colour: rejected #ffffff on #fafafa')), t.notes.join(' / '));
 });
 
 test('with no readable area measured, the surface falls back to white and keeps the measured text', () => {
@@ -176,6 +199,7 @@ test('with no readable area measured, the surface falls back to white and keeps 
   assert.equal(t.palette.surface, '#ffffff');
   assert.equal(t.palette.surfaceText, '#000000');
   assert.ok(t.notes.some((n) => n.startsWith('surface:') && n.includes('using #ffffff')));
+  assertPaintedReadable(t);
 });
 
 test('text that reads on no light surface keeps the page colour and gets text that reads', () => {
@@ -189,6 +213,9 @@ test('text that reads on no light surface keeps the page colour and gets text th
   assert.equal(t.palette.surfaceText, '#111111');
   assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5);
   assert.ok(t.notes.some((n) => n.startsWith('surface text: rejected #eeeeee')));
+  assert.equal(t.typography.colors.text, '#111111', 'what the note says is what the page paints');
+  assert.equal(t.typography.colors.heading, '#111111');
+  assertPaintedReadable(t);
 });
 
 test('on a mid grey, where near-black and white both fall short, the replacement text is pure black', () => {
@@ -196,13 +223,16 @@ test('on a mid grey, where near-black and white both fall short, the replacement
   const t = deriveImportTheme(ir, 'grey 1');
   assert.equal(t.palette.surface, '#787878');
   assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5, `${t.palette.surfaceText} on #787878`);
+  assert.equal(t.typography.colors.text, t.palette.surfaceText);
+  assertPaintedReadable(t);
 });
 
 test('a readable page background is left alone and adds no note', () => {
   const t = deriveImportTheme(siteIr(SUMMARY), 'daneofearth 1');
   assert.equal(t.palette.surface, '#ffffff');
   assert.equal(t.palette.surfaceText, '#666666');
-  assert.ok(!t.notes.some((n) => n.startsWith('surface')));
+  assert.ok(!t.notes.some((n) => n.startsWith('surface') || n.startsWith('heading')));
+  assert.equal(t.typography.colors.heading, '#333333', 'readable headings keep their measured colour');
 });
 
 test('a capture without style evidence still gets fonts and colours, and invents no palette', () => {

@@ -277,15 +277,29 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   if (surfaceNote) notes.push(surfaceNote);
   if (surface) {
     palette.surface = surface;
-    if (text && contrastRatio(surface, text) >= READABLE_CONTRAST) palette.surfaceText = text;
+    const readsOnSurface = (hex: string) => contrastRatio(surface, hex) >= READABLE_CONTRAST;
+    // Near-black tops out near 4.35:1 on a mid grey; pure black never
+    // drops under 4.5:1 wherever white does.
+    const fallback = readsOnSurface(contrastText(surface)) ? contrastText(surface) : "#000000";
+    if (text && readsOnSurface(text)) palette.surfaceText = text;
     else if (text) {
       // No light surface reads with this text (white text, or a pale grey
-      // one): keep the surface, give it text that reads.
-      // Near-black tops out near 4.35:1 on a mid grey; pure black never
-      // drops under 4.5:1 wherever white does.
-      const fallback = contrastText(surface);
-      palette.surfaceText = contrastRatio(surface, fallback) >= READABLE_CONTRAST ? fallback : "#000000";
-      notes.push(`surface text: rejected ${text} on ${surface} (${contrastRatio(surface, text).toFixed(1)}:1) — using ${palette.surfaceText}`);
+      // one): keep the surface, give it text that reads. The page paints
+      // body text from typography.colors.text, not palette.surfaceText
+      // (--bx-text; --lp-surface-text is read by nothing), so replacing only
+      // the palette left the page as blank as before while the note claimed
+      // a fix (review round 1, task 86bch6geu).
+      palette.surfaceText = fallback;
+      colors.text = fallback;
+      notes.push(`surface text: rejected ${text} on ${surface} (${contrastRatio(surface, text).toFixed(1)}:1) — using ${fallback}`);
+    }
+    // Headings paint from colors.heading, measured separately — or the
+    // rejected text colour inherited above — so they get the same check
+    // against whichever surface was chosen.
+    if (colors.heading && !readsOnSurface(colors.heading)) {
+      const was = colors.heading;
+      colors.heading = colors.text && readsOnSurface(colors.text) ? colors.text : fallback;
+      notes.push(`heading colour: rejected ${was} on ${surface} (${contrastRatio(surface, was).toFixed(1)}:1) — using ${colors.heading}`);
     }
   }
   const bands = (sum?.backgroundsByArea || []).map((t) => toHex(t.value)).filter((h) => h && h !== surface);

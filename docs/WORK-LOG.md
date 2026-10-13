@@ -7,7 +7,11 @@ black on black, so every page would have looked blank. Now a pair that is hard
 to read (under the usual 4.5:1 standard) is never used. The page colour moves
 to the light area the text actually sits on, or to white. If no light colour
 works, the text colour changes instead. The import report says in a plain line
-what was rejected and why.
+what was rejected and why. A review caught that the first version changed the
+text colour in a place nothing on the page reads, so the page would still have
+looked blank while the report said it was fixed; now the colours the page
+actually paints body text and headings with are the ones replaced.
+
 ## 2026-10-12 — A site import no longer stacks repeat copies of the home page onto one page (#842)
 
 When an import captured the same page more than once — the Strands Movie site
