@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { whenText } from '../youtube-outreach/youtube-outreach-panel';
+import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 
 /**
  * Engage › Comments — Reddit comments written in Dane's voice. Reddit
@@ -17,8 +17,12 @@ import { whenText } from '../youtube-outreach/youtube-outreach-panel';
  * the post pasted by hand, then sends Add again with it. "Write with AI" puts
  * a draft on Approvals in an editable box, under the canon it was written
  * from; Approve sends the box's words and the SERVER checks them against the
- * blocklist, so its refusal is shown word for word. Nothing here posts — 4/4
- * does, from the Mini, and fills the Posted tab.
+ * blocklist, so its refusal is shown word for word. Nothing here posts — the
+ * Mini's worker does (workers/youtube-outreach/adapters/reddit.js, 4/4, task
+ * 86bch3jpg) and fills the Posted tab. The line at the top says whether the
+ * Mini's browser is signed in to Reddit and how fast it posts, read from
+ * /api/engage/reddit-comments/status; a comment the Mini could not prove
+ * either way sits on Posted as "check this one by hand".
  *
  * The shape is components/substack-notes/substack-notes-panel.tsx's on
  * purpose: it (re)loads when its page is SHOWN and when the project is
@@ -29,6 +33,7 @@ import { whenText } from '../youtube-outreach/youtube-outreach-panel';
  */
 
 const ITEMS_PATH = '/api/engage/reddit-comments/items';
+const STATUS_PATH = '/api/engage/reddit-comments/status';
 
 /** The window event public/js/projectContext.js emits on every project switch. */
 export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
@@ -60,7 +65,65 @@ export type RedditItem = {
   updatedAt: string;
   /** 4/4: the Mini could not prove either way whether it posted. */
   needsHandCheck?: boolean;
+  /** 4/4: why an approved comment has not gone out yet, in the worker's words. */
+  waitReason?: string;
 };
+
+export type RedditPace = { maxCommentsPerDay: number; minMinutesBetween: number; jitterMinutes: number };
+
+/** What /status answers: the account the Mini posts as, its pace, and its last sign-in check. */
+export type RedditStatus = {
+  account: string;
+  pace: RedditPace | null;
+  browserCheck: BrowserCheck | null;
+  browserCheckError: string;
+};
+
+export type SignInLine = { tone: 'ok' | 'warn' | 'alarm'; state: string; text: string };
+
+/**
+ * The line at the top: is the Mini's browser signed in to Reddit, and when
+ * did it last look? It always says when, so "never checked", "stopped
+ * checking" and "signed out" each read as what they are (landmine 17).
+ */
+export function signInLine(status: RedditStatus | null, now: number = Date.now()): SignInLine {
+  if (status?.browserCheckError) {
+    return { tone: 'warn', state: 'unread', text: `The Mini's Reddit sign-in check could not be read: ${status.browserCheckError}` };
+  }
+  const check = status?.browserCheck;
+  const checkedAt = check?.checkedAt ? Date.parse(check.checkedAt) : NaN;
+  const ago = agoText(check?.checkedAt, now);
+  const message = (check?.message || '').trim().replace(/\.$/, '');
+  if (!check?.state || !Number.isFinite(checkedAt)) {
+    return {
+      tone: 'warn',
+      state: 'unknown',
+      text: 'Mini: has not checked its Reddit sign-in yet, so nothing here says whether posting to Reddit would work — the posting worker on the Mini may not be running.',
+    };
+  }
+  if (now - checkedAt > MINI_STALE_MS) {
+    return {
+      tone: 'warn',
+      state: 'stale',
+      text: `The Mini last checked its Reddit sign-in ${ago}, so the posting worker may have stopped. That check said: ${message}.`,
+    };
+  }
+  if (check.state === 'signed_in') return { tone: 'ok', state: check.state, text: `${message}, checked ${ago}.` };
+  if (check.state === 'cannot_tell') return { tone: 'warn', state: check.state, text: `${message} (checked ${ago}).` };
+  const since = check.signedInAt ? ` Last signed in: ${whenText(check.signedInAt)}.` : '';
+  return { tone: 'alarm', state: check.state, text: `${message}. Checked ${ago}.${since}` };
+}
+
+/** "Posts at most 3 comments a day, at least 20 minutes apart (plus up to 10 minutes at random)." */
+export function paceLine(status: RedditStatus | null): string {
+  const pace = status?.pace;
+  if (!pace) return '';
+  const day = `${pace.maxCommentsPerDay} comment${pace.maxCommentsPerDay === 1 ? '' : 's'} a day`;
+  const extra = pace.jitterMinutes ? ` (plus up to ${pace.jitterMinutes} minutes at random)` : '';
+  const who = status?.account ? ` as u/${status.account}` : '';
+  const named = status?.account ? '' : ' No Reddit account has been chosen for it to post as yet, so nothing posts until one is.';
+  return `The Mini posts${who} at most ${day}, at least ${pace.minMinutesBetween} minutes apart${extra}.${named}`;
+}
 
 type Tab = 'write' | 'approvals' | 'posted';
 
@@ -140,8 +203,13 @@ export function isCommentLink(link: string): boolean {
   return /\/comments\/[a-z0-9]+\/[^/?#]*\/[a-z0-9]+/i.test(link) || /\/comment\/[a-z0-9]+/i.test(link);
 }
 
-/** Which tab a row lives on. Rejected rows are on none; the To write tab counts them. */
-export function tabFor(status: string): Tab | null {
+/**
+ * Which tab a row lives on. Rejected rows are on none; the To write tab
+ * counts them. A `posting` row the Mini could not prove either way goes on
+ * Posted, where its "check this one by hand" and its link are.
+ */
+export function tabFor(status: string, needsHandCheck = false): Tab | null {
+  if (status === 'posting' && needsHandCheck) return 'posted';
   if (status === 'idea') return 'write';
   if (status === 'draft' || status === 'approved' || status === 'posting') return 'approvals';
   if (status === 'posted' || status === 'failed') return 'posted';
@@ -219,6 +287,7 @@ function ApprovedCard({ item, busy, error, onReject }: {
     <article className="reddit-comments-card" data-item-id={item.id} aria-label="Approved comment">
       <PostSummary item={item} />
       <p className="reddit-comments-status">{waiting}</p>
+      {item.status === 'approved' && item.waitReason ? <p className="reddit-comments-help">{item.waitReason}</p> : null}
       <p className="reddit-comments-text">{item.finalText || item.draftText}</p>
       {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
       {item.status === 'approved' ? (
@@ -263,6 +332,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
   // it before showing its reply, so the old client's row never lands here.
   const projectEpoch = useRef(0);
   const [items, setItems] = useState<RedditItem[] | null>(null);
+  const [status, setStatus] = useState<RedditStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -296,6 +366,16 @@ export default function RedditCommentsPanel(): React.ReactElement {
       setItems(null);
       setError(`The Reddit comments could not be read: ${errorText(err, 'unknown error')}`);
     }
+    // Read after the list, on its own: a status that cannot be read says so
+    // on its own line and never hides the comments.
+    try {
+      const reply = await api(STATUS_PATH);
+      if (seq !== requestSeq.current) return;
+      setStatus((reply?.data as RedditStatus) || null);
+    } catch (err) {
+      if (seq !== requestSeq.current) return;
+      setStatus({ account: '', pace: null, browserCheck: null, browserCheckError: errorText(err, 'unknown error') });
+    }
     setLoading(false);
   }, []);
 
@@ -321,6 +401,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
       requestSeq.current += 1;
       projectEpoch.current += 1;
       setItems(null);
+      setStatus(null);
       setError('');
       setNotice('');
       setAddError('');
@@ -419,9 +500,9 @@ export default function RedditCommentsPanel(): React.ReactElement {
   };
 
   const all = items || [];
-  const toWrite = all.filter((i) => tabFor(i.status) === 'write');
-  const approvals = all.filter((i) => tabFor(i.status) === 'approvals');
-  const posted = all.filter((i) => tabFor(i.status) === 'posted');
+  const toWrite = all.filter((i) => tabFor(i.status, i.needsHandCheck) === 'write');
+  const approvals = all.filter((i) => tabFor(i.status, i.needsHandCheck) === 'approvals');
+  const posted = all.filter((i) => tabFor(i.status, i.needsHandCheck) === 'posted');
   const rejectedCount = all.filter((i) => i.status === 'rejected').length;
   const busyFor = (item: RedditItem) => (rowBusy.id === item.id ? rowBusy.what : '');
   const errorFor = (item: RedditItem) => (rowError.id === item.id ? rowError.message : '');
@@ -444,8 +525,22 @@ export default function RedditCommentsPanel(): React.ReactElement {
     ? `${rejectedCount} rejected ${rejectedCount === 1 ? 'comment is' : 'comments are'} not shown.`
     : '';
 
+  // Only once /status has answered: before that, "never checked" would be a guess.
+  const signIn = status ? signInLine(status) : null;
+  const pace = paceLine(status);
+
   return (
     <div ref={hostRef} className="reddit-comments-panel">
+      {signIn ? (
+        <p
+          className={`reddit-comments-signin reddit-comments-signin--${signIn.tone}`}
+          data-signin-state={signIn.state}
+          role={signIn.tone === 'alarm' ? 'alert' : 'status'}
+        >
+          {signIn.text}
+        </p>
+      ) : null}
+      {pace ? <p className="reddit-comments-help reddit-comments-pace">{pace}</p> : null}
       <form className="reddit-comments-add" onSubmit={addItem}>
         <label className="reddit-comments-label" htmlFor="rc-link">Paste a Reddit post or comment link</label>
         <div className="reddit-comments-add-row">
@@ -554,7 +649,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
             </ul>
           ) : (
             <p className="reddit-comments-empty">
-              Nothing posted yet — the Mac Mini posts approved comments, and that part is not switched on yet.
+              Nothing posted yet — the Mac Mini posts approved comments, and each one lands here with its link once Reddit shows it.
             </p>
           )}
         </div>

@@ -23,6 +23,24 @@
   margin: 0;
 }
 
+/* The Mini's Reddit sign-in reading (4/4), the same treatment as Substack's:
+   a bad or missing reading is not muted, because it is the one line on the
+   screen that needs acting on. */
+.reddit-comments-signin {
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.reddit-comments-signin--warn,
+.reddit-comments-signin--alarm {
+  opacity: 1;
+  color: var(--status-warn-ink);
+}
+
+.reddit-comments-signin--alarm {
+  font-weight: 600;
+}
+
 .reddit-comments-label {
   margin: 0;
   font-weight: 600;

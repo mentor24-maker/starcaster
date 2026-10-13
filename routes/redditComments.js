@@ -10,11 +10,14 @@
  *   POST   /api/engage/reddit-comments/items/:id/draft    write a draft (AI); "Write another" too
  *   POST   /api/engage/reddit-comments/items/:id/approve  { text? }  (Dane's edited wording)
  *   POST   /api/engage/reddit-comments/items/:id/reject
+ *   GET    /api/engage/reddit-comments/status             the Mini's Reddit sign-in, and the pace
  *
  * Add answers 409 `POST_TEXT_NEEDED` when Reddit refuses the read, with the
  * reason; sending Add again with the post pasted saves it.
  *
- * Nothing here posts (4/4) and there is no screen yet (3/4). The older
+ * Nothing here posts: the Mini's worker does (workers/youtube-outreach/
+ * adapters/reddit.js, 4/4). `status` only READS what that worker last wrote
+ * about its browser — no route can write it. The older
  * /api/engage/reddit/* routes in routes/engage.js are untouched.
  *
  * Auth and project scope are decided centrally in routes/index.js; /api/engage
@@ -24,6 +27,8 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/redditCommentsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
+const { REDDIT_PACE } = require('../workers/youtube-outreach/limits');
+const { EXPECTED_REDDIT_ACCOUNT } = require('../lib/openclawSignIn');
 
 const PREFIX = '/api/engage/reddit-comments';
 
@@ -92,6 +97,24 @@ async function handle(req, res, pathname, method) {
       return reply(res, added, 201);
     }
     return sendErr(res, 405, 'Method not allowed'), true;
+  }
+
+  if (pathname === `${PREFIX}/status`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    const check = await store.getBrowserCheck(scope);
+    // The pace and the account are code, not settings: always answerable. A
+    // sign-in reading that cannot be read is said on its own line, so the
+    // screen can show the pace and name the failed read.
+    return reply(res, {
+      ok: true,
+      status: 200,
+      data: {
+        account: EXPECTED_REDDIT_ACCOUNT,
+        pace: REDDIT_PACE,
+        browserCheck: check.ok ? check.data : null,
+        browserCheckError: check.ok ? '' : check.error,
+      },
+    });
   }
 
   const decision = pathname.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject)$/);

@@ -16,7 +16,8 @@
  * per site. So this file owns what every site shares — the loop, the beat, the
  * three rules below — and each site is an adapter in ./adapters/ (the contract
  * is written at the top of ./adapters/youtube.js). Substack Notes 6/7 added
- * ./adapters/substack.js and its line in ADAPTERS (task 86bcet7qr).
+ * ./adapters/substack.js and its line in ADAPTERS (task 86bcet7qr), and
+ * Reddit comments 4/4 added ./adapters/reddit.js (task 86bch3jpg).
  *
  * THE THREE RULES THIS FILE OWNS, so no adapter can loosen them:
  *
@@ -256,7 +257,8 @@ async function readProjectTimeZone(projectId) {
 }
 
 /**
- * THE ADAPTER LIST. One entry per site. YouTube, then Substack (6/7).
+ * THE ADAPTER LIST. One entry per site. YouTube, then Substack (6/7), then
+ * Reddit (Reddit comments 4/4).
  * Each builder returns an adapter or throws a sentence saying what is missing.
  */
 const ADAPTERS = [
@@ -274,6 +276,14 @@ const ADAPTERS = [
     // when no Substack one is given; the installer needs nothing new.
     build: (env) => require('./adapters/substack.js').createSubstackAdapter({
       projectId: text(env.SUBSTACK_NOTES_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID),
+      projectTimeZone: readProjectTimeZone,
+    }),
+  },
+  {
+    name: 'reddit',
+    // Dane of Earth again, so the installer needs nothing new here either.
+    build: (env) => require('./adapters/reddit.js').createRedditAdapter({
+      projectId: text(env.REDDIT_COMMENTS_PROJECT_ID) || text(env.YOUTUBE_OUTREACH_PROJECT_ID),
       projectTimeZone: readProjectTimeZone,
     }),
   },

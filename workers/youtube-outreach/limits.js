@@ -30,6 +30,24 @@
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 
+/**
+ * Reddit's pace, per account (Reddit comments 4/4, task 86bch3jpg). There is
+ * no settings form for it: these numbers ARE the setting, and the Comments
+ * screen shows them.
+ *
+ * NOT MEASURED: how fast Reddit lets a new account comment before its spam
+ * filter starts hiding the comments or flags the account. So this is
+ * deliberately low — three a day, at least twenty minutes apart, plus up to
+ * ten minutes of random extra so they do not land on a clock. Raise it only on
+ * evidence (comments that stayed up at this pace), never on a guess.
+ * No active hours: none were asked for. "Today" is the project's time zone.
+ */
+const REDDIT_PACE = Object.freeze({
+  maxCommentsPerDay: 3,
+  minMinutesBetween: 20,
+  jitterMinutes: 10,
+});
+
 function isValidTimeZone(zone) {
   if (!zone) return false;
   try {
@@ -218,6 +236,7 @@ function checkItemRules({ settings, target, videoHistory, now, timeZone }) {
 }
 
 module.exports = {
+  REDDIT_PACE,
   checkAccountLimits,
   checkItemRules,
   jitterMinutesFor,

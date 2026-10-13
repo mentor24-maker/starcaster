@@ -6,6 +6,7 @@
 //
 //   node scripts/openclaw_smoke.mjs                       # YouTube, the dane-of-earth profile
 //   node scripts/openclaw_smoke.mjs --site substack       # Substack, same profile
+//   node scripts/openclaw_smoke.mjs --site reddit         # Reddit, same profile (Reddit comments 4/4)
 //   node scripts/openclaw_smoke.mjs --profile <name>      # another profile
 //
 // It asks the LOCAL gateway (/v1/responses, through lib/openclawResponsesClient.js)
@@ -18,7 +19,9 @@
 // (YouTube outreach 7/7, 86bcda6dt), so the two can never disagree.
 //
 // Exit codes follow scripts/ui/harness-exit.mjs (docs/DOCTRINE.md §5.33):
-//   0  signed in as Dane of Earth
+//   0  signed in as Dane of Earth (on Reddit: as EXPECTED_REDDIT_ACCOUNT in
+//      lib/openclawSignIn.js — while that is blank, a signed-in browser is a 2,
+//      because there is nothing to compare it with)
 //   1  a reading was taken and it is wrong: signed out, signed in as someone
 //      else, or no browser profile by that name exists
 //   2  no reading could be taken: the gateway is down or refused the token, the
