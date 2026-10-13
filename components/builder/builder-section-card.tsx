@@ -405,11 +405,6 @@ export function BuilderSectionCard({
     const shadow = (section as unknown as Record<string, Record<string, string>>).cellShadow?.[column] ?? "none";
     const opacity = (section as unknown as Record<string, Record<string, string>>).cellOpacity?.[column];
 
-    const records = section as unknown as Record<string, Record<string, string> | undefined>;
-    const legacyPadding = section.cellPadding?.[column] ?? "0";
-    const cellSide = (key: string, pairKey: string, fallback: string) =>
-      records[key]?.[column] ?? (pairKey ? records[pairKey]?.[column] : undefined) ?? fallback;
-
     const shadowMap: Record<string, string> = {
       none: "none",
       light: "0 2px 8px rgba(0,0,0,0.08)",
@@ -418,25 +413,10 @@ export function BuilderSectionCard({
     };
 
     return {
-      // No background: the column card is editor chrome and always shows the
-      // column tier's blue from CSS, so the drill-down never breaks on a dark
-      // or photo cell. The cell's own fill shows in Live Preview (86bch66at).
-      // Four sides, with the pre-2026-08-11 pair and the all-sides number
-      // before it read as fallbacks — same order the live page resolves in,
-      // so the canvas and the page cannot disagree. The cast reaches keys
-      // that live only in stored data now.
-      marginTop: `${cellSide("cellMarginTop", "cellVerticalMargin", "0")}px`,
-      marginBottom: `${cellSide("cellMarginBottom", "cellVerticalMargin", "0")}px`,
-      marginLeft: `${cellSide("cellMarginLeft", "", "0")}px`,
-      marginRight: `${cellSide("cellMarginRight", "", "0")}px`,
-      padding: [
-        cellSide("cellPaddingTop", "cellVerticalPadding", legacyPadding),
-        cellSide("cellPaddingRight", "cellHorizontalPadding", legacyPadding),
-        cellSide("cellPaddingBottom", "cellVerticalPadding", legacyPadding),
-        cellSide("cellPaddingLeft", "cellHorizontalPadding", legacyPadding)
-      ]
-        .map((side) => `${side}px`)
-        .join(" "),
+      // No background, margin or padding: the column card is editor chrome
+      // and always shows the column tier's blue and the same 10px spacing as
+      // every drill-down level (CSS). The cell's own fill and spacing show in
+      // Live Preview (86bch66at, 86bchhgae).
       borderStyle: borderStyle === "none" ? "none" : borderStyle,
       borderWidth: borderStyle === "none" ? 0 : `${Math.max(Number.isFinite(borderWidth) ? borderWidth : 0, 0)}px`,
       borderColor: section.cellBorderColor[column] ?? "transparent",
