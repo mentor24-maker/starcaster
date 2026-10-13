@@ -1,3 +1,15 @@
+## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
+
+The AI that will write Reddit comments needs to know how Dane thinks and
+sounds. That writing lives in his vault, which only the Macs can see — the live
+app cannot. This adds a table that holds a copy of the seven documents he
+chose (Dane of Earth, Voice and its banned-phrasings list, the three DEO
+documents, and the Ecosystem overview), and a command, `npm run canon:sync`,
+that copies them in. It only reports what it would change unless told to
+`--apply`, then reads every row back to prove it landed with the right owner.
+If a file is missing it names it and writes nothing. Run a second time with no
+changes, it says all seven are unchanged. Proven on the Mini's own database;
+the live copy needs the table created in Supabase first.
 ## 2026-10-12 — A Studio video stuck in iCloud now says why, and what to click (#836)
 
 When a video in the Photos "Studio" album has its full copy only in iCloud,
