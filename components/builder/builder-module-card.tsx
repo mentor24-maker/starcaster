@@ -148,7 +148,6 @@ import {
   getModuleAlignment,
   getModuleBackgroundSettings,
   isPollCategoryListPanelTransparent,
-  getModuleOuterSpacingStyle,
   getTableWrapStyle,
   getPlainTextModuleStyle,
   getTextModuleFrameStyle,
@@ -3787,19 +3786,15 @@ export function BuilderModuleCard({
   return (
     <div
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
-      style={{
-        /*
-         * No background here: the card is editor chrome and always shows the
-         * module tier's blue (`--builder-bg-module`, set in CSS), so the
-         * drill-down steps light-to-dark without a break. The module's own
-         * background belongs to the page and shows in Live Preview — painting
-         * it on the card broke the ladder on every dark or photo module
-         * (task 86bch66at, Dane's call 2026-10-12).
-         */
-        // One reader for every type (W7). A floating image and a reminder are
-        // positioned overlays, so a wrapper margin has nothing to push.
-        ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))
-      }}
+      /*
+       * No inline style: the card is editor chrome. It always shows the module
+       * tier's blue and the same 10px spacing as every other drill-down level
+       * (`_builder-react-overrides.css`). The module's own background and
+       * outer margins belong to the page and show in Live Preview — painting
+       * them on the card broke the colour ladder and made the gap around each
+       * level differ page to page (tasks 86bch66at, 86bchhgae; Dane's calls
+       * 2026-10-12 and 10-13).
+       */
     >
       {onModuleDragStart ? (
         <div

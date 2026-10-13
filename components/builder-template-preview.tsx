@@ -8150,6 +8150,14 @@ function EventManagerPreview({
   // only for a platform session, so a club admin never sees the button.
   const [harvestAvailable, setHarvestAvailable] = useState(false);
   const [harvestOpen, setHarvestOpen] = useState(false);
+  // The form renders BELOW the table, so on a long list Edit opened it
+  // off-screen and read as doing nothing, and a save left the admin at the
+  // bottom of the page (task 86bchh04f). Each request carries a fresh number
+  // so a second Edit while the form is already open still moves the page.
+  const [focusRequest, setFocusRequest] = useState<{ target: "form" | "table"; seq: number } | null>(null);
+  const moduleTopRef = useRef<HTMLHeadingElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const categoryById = new Map(categories.map((c) => [c.id, c]));
   // Dates and times in the form are read in the EVENT's zone, so a repeat
   // stays at 8:30am local across a clock change and an admin travelling
@@ -8189,6 +8197,22 @@ function EventManagerPreview({
       .then((d) => setHarvestAvailable(Boolean((d?.data ?? d)?.available)))
       .catch(() => setHarvestAvailable(false));
   }, []);
+
+  // Runs after the render that mounted (or unmounted) the form, so the element
+  // being scrolled to exists. Focus first without scrolling, then scroll once,
+  // so the browser does not jump and then animate from the wrong place.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const behavior: ScrollBehavior = reduceMotion ? "auto" : "smooth";
+    if (focusRequest.target === "form") {
+      titleInputRef.current?.focus({ preventScroll: true });
+      formRef.current?.scrollIntoView?.({ behavior, block: "start" });
+    } else {
+      moduleTopRef.current?.focus({ preventScroll: true });
+      moduleTopRef.current?.scrollIntoView?.({ behavior, block: "start" });
+    }
+  }, [focusRequest]);
 
   /**
    * One request per change, then the list read back — so what the admin sees
@@ -8287,6 +8311,7 @@ function EventManagerPreview({
     setErrorMsg("");
     setStatusMsg("");
     setFormOpen(true);
+    setFocusRequest((prev) => ({ target: "form", seq: (prev?.seq ?? 0) + 1 }));
   }
 
   /**
@@ -8373,6 +8398,9 @@ function EventManagerPreview({
       setStatusMsg(editId ? "Event updated." : "Event created.");
       closeForm();
       loadEvents();
+      // Back to the top of the table, where the notice above just appeared.
+      // Only on success: a refused save keeps the admin on the form's error.
+      setFocusRequest((prev) => ({ target: "table", seq: (prev?.seq ?? 0) + 1 }));
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -8628,12 +8656,13 @@ function EventManagerPreview({
   );
 
   const eventForm = formOpen ? (
-    <form className="builder-event-manager-form" onSubmit={handleSubmit}>
+    <form ref={formRef} className="builder-event-manager-form" onSubmit={handleSubmit}>
       <h3 className="builder-event-manager-form-title">{editId ? "Edit Event" : "New Event"}</h3>
 
       <div className="builder-event-manager-field">
         <label className="builder-event-manager-label" htmlFor="event-title">Event Name *</label>
         <input
+          ref={titleInputRef}
           id="event-title"
           className="builder-event-manager-input"
           value={form.title}
@@ -8912,7 +8941,8 @@ function EventManagerPreview({
       className="builder-event-manager-module builder-admin-data-table-module"
       style={getAdminDataTableThemeStyle(themePalette, theme)}
     >
-      <h2 className="builder-admin-data-table-title">Events</h2>
+      {/* tabIndex -1: focusable from code after a save, never a Tab stop. */}
+      <h2 ref={moduleTopRef} tabIndex={-1} className="builder-admin-data-table-title">Events</h2>
 
       {statusMsg ? <div className="builder-event-manager-notice">{statusMsg}</div> : null}
       {loadError ? <div className="builder-event-manager-error">{loadError}</div> : null}

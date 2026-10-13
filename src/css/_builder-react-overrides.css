@@ -11782,10 +11782,10 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 
 /*
- * Drill-down surfaces: one even ladder, light outside to dark at the module
- * (task 86bch66at). Values and reasoning are in _variables.css. These are
- * editor chrome only — no cell or module background is painted on a card
- * any more, so nothing interrupts the steps.
+ * Drill-down surfaces: one even ladder of pure blues, light outside to dark
+ * at the module (tasks 86bch66at, 86bchhgae). Values and reasoning are in
+ * _variables.css. These are editor chrome only — no cell or module
+ * background is painted on a card, so nothing interrupts the steps.
  */
 .builder-react-root {
   --builder-bg-workspace: var(--builder-depth-0);
@@ -11793,4 +11793,59 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   --builder-bg-cell: var(--builder-depth-2);
   --builder-bg-column: var(--builder-depth-3);
   --builder-bg-module: var(--builder-depth-4);
+  --builder-header-workspace: var(--builder-depth-header-0);
+  --builder-header-workspace-hover: var(--builder-depth-header-0-hover);
+  --builder-header-section: var(--builder-depth-header-1);
+  --builder-header-section-hover: var(--builder-depth-header-1-hover);
+  --builder-header-cell: var(--builder-depth-header-2);
+  --builder-header-cell-hover: var(--builder-depth-header-2-hover);
+  --builder-header-module: var(--builder-depth-header-3);
+  --builder-header-module-hover: var(--builder-depth-header-3-hover);
+}
+
+/*
+ * The same gap at every level (86bchhgae, Dane 2026-10-13: "the darker blue
+ * section has no margin while the lighter blue section does ... make it
+ * consistent all the way down"). Measured before: workspace→section 15px,
+ * section→column 19px, column→module 0px (the column card took the page
+ * design's own cell padding), module→contents 18px. Each drill-down box now
+ * keeps exactly --builder-depth-gap of its own colour around the box inside
+ * it, and the same gap between neighbouring boxes. The page design's cell
+ * padding and module margins are no longer applied to these cards; they
+ * show in Live Preview.
+ */
+.builder-react-root .builder-main.builder-workspace,
+.builder-react-root .builder-section-card,
+.builder-react-root .builder-column-card,
+.builder-react-root .builder-module-card {
+  padding: var(--builder-depth-gap) !important;
+  gap: var(--builder-depth-gap) !important;
+}
+
+.builder-react-root .builder-columns,
+.builder-react-root .builder-column-card .builder-module-stack-item {
+  gap: var(--builder-depth-gap) !important;
+}
+
+.builder-react-root .builder-columns > .builder-column-card:first-child {
+  margin-left: 0 !important;
+}
+
+/*
+ * The workspace is two boxes: the pale outer frame, and inside it the page
+ * area, which paints the linked theme's page background (the cream on a
+ * themed page) — only when the page follows a theme AND that theme resolves
+ * a background, which is exactly when both classes below are set (the
+ * paint is gated the same way in admin-builder-editor.tsx). With a background it is a
+ * level of its own and keeps the gap; without one it is invisible, and its
+ * padding would stack onto the frame's into a 20px gap nobody can see the
+ * reason for, so it gives the gap up to the frame.
+ */
+.builder-react-root .builder-workspace-shell.builder-toolbar-shell {
+  padding: var(--builder-depth-gap) !important;
+}
+
+.builder-react-root .builder-main.builder-workspace:not(.has-builder-theme-styles),
+.builder-react-root .builder-main.builder-workspace:not(.has-resolved-shell-background) {
+  padding: 0 !important;
 }
