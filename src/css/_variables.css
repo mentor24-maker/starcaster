@@ -246,3 +246,23 @@
   --focus-ring: rgba(11, 130, 212, 0.12);
   --radius-md: 10px;
 }
+
+/*
+ * Builder drill-down ladder (task 86bch66at, Dane 2026-10-12): as you drill
+ * into deeper editor levels the boxes go from light blue to dark, in STEADY
+ * steps. Each step is the same distance apart in perceived lightness (OKLab
+ * L 0.970 → 0.597, 0.093 per step), interpolated between the original
+ * workspace and module blues. The Normie values these replace jumped
+ * unevenly (0.03, 0.06, 0.17, 0.11), so section and cell looked alike and
+ * column jumped. The named tiers are mapped onto these in
+ * _builder-react-overrides.css. The darkest step keeps 4.5:1 contrast with
+ * --builder-label-on-module, so module labels stay readable — recheck that
+ * if you darken it.
+ */
+:root {
+  --builder-depth-0: #eef6ff;
+  --builder-depth-1: #c4daea;
+  --builder-depth-2: #9abed4;
+  --builder-depth-3: #70a3bf;
+  --builder-depth-4: #4488aa;
+}

@@ -10,6 +10,29 @@ copied yet. One surprise, measured before building: Reddit now refuses to show
 posts to anything not signed in, even from the Mini's home connection, so when
 it refuses, the post's title and text can be pasted in instead. No screen yet
 (next ticket) and nothing posts to Reddit (the one after).
+## 2026-10-12 — The Imports screen no longer says COMPLETE when no pages were built (#841)
+
+Importing a client's site is two steps: first the site is copied, then an
+agent session builds the Builder pages from the copy. The Imports screen only
+knew about the first one, so it said COMPLETE the moment the copy finished.
+That is how the Strands Movie import looked done while its Pages list sat
+empty. The badge now says "Captured — pages not built yet" or "Built 43 draft
+pages on Oct 9". There is a fourth "Build pages" step on the screen, with one
+line explaining how the pages get built when they have not been. A built
+import lists every page it made, and each one opens in the Builder in a new
+tab. If the import created a theme and made it the default, the screen says
+which theme.
+## 2026-10-12 — A site import no longer stacks repeat copies of the home page onto one page (#842)
+
+When an import captured the same page more than once — the Strands Movie site
+had its home page captured three times — the step that builds the Builder pages
+looked each one up by its web address, so copies two and three were added to
+the bottom of the first. The Home page ended up with its content repeated, 41
+pages existed where the report promised 43, and nothing said so. Now an exact
+repeat is skipped (and the run says how many it skipped), a repeat with
+different content gets its own page, and after writing, the run prints how many
+pages it created and updated and fails loudly if that does not match the
+report. Strands' Home page itself still needs a one-off clean-up.
 ## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
 
 The AI that will write Reddit comments needs to know how Dane thinks and

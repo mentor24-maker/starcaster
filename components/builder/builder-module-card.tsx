@@ -50,7 +50,6 @@ import {
   normalizeModuleZIndexValue,
   normalizeSignedOffsetValue
 } from "@/lib/builder-template";
-import { resolveBuilderDrillDownSurfaceBackground } from "@/lib/builder-drill-down-surface";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { normalizeSocialIconBackgroundColor } from "@/lib/social-icon-background";
 import { sanitizeEmbedHtml } from "@/lib/sanitize-html";
@@ -3790,16 +3789,13 @@ export function BuilderModuleCard({
       className={`builder-module-card ${getAlignmentClass(moduleAlignment)}`}
       style={{
         /*
-         * Text is excluded with Button because its fill now belongs to the
-         * frame INSIDE the card (getTextModuleFrameStyle, 2026-08-15).
-         * Tinting the card as well would paint the same colour twice at two
-         * different sizes and tell the operator the fill spans the card when
-         * on the page it stops at the border. The card keeps the neutral
-         * surface; the preview inside shows what the page will show.
+         * No background here: the card is editor chrome and always shows the
+         * module tier's blue (`--builder-bg-module`, set in CSS), so the
+         * drill-down steps light-to-dark without a break. The module's own
+         * background belongs to the page and shows in Live Preview — painting
+         * it on the card broke the ladder on every dark or photo module
+         * (task 86bch66at, Dane's call 2026-10-12).
          */
-        ...(module.type !== "button" && module.type !== "text" && !isPollCategoryListModule
-          ? resolveBuilderDrillDownSurfaceBackground(getModuleBackgroundSettings(module.settings), "module")
-          : {}),
         // One reader for every type (W7). A floating image and a reminder are
         // positioned overlays, so a wrapper margin has nothing to push.
         ...(isFloatingImage || isReminderModule ? {} : getModuleOuterSpacingStyle(module.settings))

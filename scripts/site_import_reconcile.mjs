@@ -138,6 +138,7 @@ const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const pagesStore = require('./lib/builderPagesStore.js');
 const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');
 const { reconcile, reportReconciles, toPath, mergeDecisions } = require('./lib/site-import/dist/reconcile.js');
+const { pathOfWriteKey } = require('./lib/site-import/dist/map.js');
 const {
   planImageTopUp, buildTopUpSection, topUpReconciles, topUpSectionId, photoStem,
 } = require('./lib/site-import/dist/image-topup.js');
@@ -566,10 +567,11 @@ async function main() {
   const postPaths = collectPostPaths(ir);
   log(`Blog/archive listings link to ${postPaths.length} path(s) — those are posts, not pages`);
 
-  // path -> builderPageId, inverted to id -> path.
+  // write key -> builderPageId, inverted to id -> path. A repeat capture's
+  // key carries a "#2" suffix (site_import_map, task 86bch6ger); strip it.
   const sourcePaths = {};
-  for (const [irPath_, pageId] of Object.entries(mapCheckpoint.pageIds)) {
-    sourcePaths[String(pageId)] = irPath_;
+  for (const [writeKey, pageId] of Object.entries(mapCheckpoint.pageIds)) {
+    sourcePaths[String(pageId)] = pathOfWriteKey(writeKey);
   }
 
   // listPages takes (limit, scope) — passing the scope first silently returns
