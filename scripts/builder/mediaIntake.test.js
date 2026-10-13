@@ -569,6 +569,55 @@ test('photos adapter: every osxphotos call names the library (without it, osxpho
   assert.ok(calls[2].includes('--download-missing') && calls[2].includes('--skip-edited'), 'originals, from iCloud if needed');
 });
 
+test('photos: an iCloud-only video macOS will not download says PERMISSION DENIED with the fix, and goes once it is local', async () => {
+  // IMG_1978.MOV on 2026-10-12 (ticket 86bcgxhgc): osxphotos exits 0 having
+  // exported nothing, because tccd refused the Apple Events it needs to ask
+  // Photos for the original. The adapter here is the REAL one; only osxphotos
+  // is faked — first as that refusal, then as the original having come down.
+  const s = scratch();
+  let local = false;
+  const item = { ...photoItem('IMG1978', { name: 'IMG_1978.MOV' }), ismissing: true };
+  delete item.body;
+  const photos = intake.osxphotosAdapter({
+    library: '/L',
+    io: { ...fs, readdirSync: (p) => (p === '/L' ? [] : fs.readdirSync(p)) },
+    run: async (bin, args) => {
+      if (args[0] === 'albums') return { status: 0, stdout: '{"albums": {"Studio": 1}}' };
+      if (args[0] === 'query') return { status: 0, stdout: JSON.stringify([{ ...item, ismissing: !local }]) };
+      if (local) fs.writeFileSync(path.join(args[1], 'IMG_1978.MOV'), 'the original');
+      return { status: 0, stdout: local ? 'Exporting 1 photo' : 'Exporting 1 photo\nExported 0 photos' };
+    },
+  });
+  const refused = await photosRun(s, photos, fakeUploader(s.drive));
+  assert.strictEqual(refused.failed.length, 1);
+  assert.match(refused.failed[0].why, /^PERMISSION DENIED — the original is only in iCloud/);
+  assert.match(refused.failed[0].fix, /Photos › Settings › iCloud › choose "Download Originals to this Mac"/);
+  const text = intake.renderPhotos(refused);
+  assert.match(text, /FAILED {3}Photos IMG_1978\.MOV \(IMG1978\) — PERMISSION DENIED/);
+  assert.match(text, /\n {4}FIX: On the MacBook: Photos › Settings › iCloud/);
+  assert.doesNotMatch(text, /may not have come down/, 'the old guess is gone');
+  assert.deepStrictEqual(intake.readLedger(s.ledgerFile).ledger.photos, {}, 'recorded nowhere, so tried again');
+
+  local = true; // Dane opened it in Photos, or turned on "Download Originals"
+  const sent = await photosRun(s, photos, fakeUploader(s.drive));
+  assert.strictEqual(sent.failed.length, 0);
+  assert.strictEqual(sent.sent.length, 1);
+});
+
+test('photos adapter: "exported nothing" names the cause it can see, and never guesses', () => {
+  const refusedByMacOS = intake.exportedNothing({ ismissing: false }, '', 'execution error: Not authorized to send Apple events to Photos. (-1743)');
+  assert.match(refusedByMacOS.message, /^PERMISSION DENIED/, 'an Apple Events refusal in either stream is a permission denial');
+  assert.ok(refusedByMacOS.fix);
+
+  const onThisMac = intake.exportedNothing({ ismissing: false }, 'boom');
+  assert.match(onThisMac.message, /the original IS on this Mac.*boom/);
+  assert.strictEqual(onThisMac.fix, undefined);
+
+  const unknown = intake.exportedNothing({});
+  assert.match(unknown.message, /did not say whether the original is on this Mac or only in iCloud/);
+  for (const err of [onThisMac, unknown]) assert.doesNotMatch(err.message, /PERMISSION DENIED|may not have come down/);
+});
+
 test('photos: the Drive name carries the date taken, and no slash survives', () => {
   assert.strictEqual(intake.photosDriveName({ date: '2026-10-09T18:04:11-06:00', original_filename: 'a/b.MOV' }),
     'Photos - 2026-10-09 18.04.11 - a-b.MOV');
