@@ -12,6 +12,18 @@ text colour in a place nothing on the page reads, so the page would still have
 looked blank while the report said it was fixed; now the colours the page
 actually paints body text and headings with are the ones replaced.
 
+## 2026-10-12 — The Imports screen no longer says COMPLETE when no pages were built (#841)
+
+Importing a client's site is two steps: first the site is copied, then an
+agent session builds the Builder pages from the copy. The Imports screen only
+knew about the first one, so it said COMPLETE the moment the copy finished.
+That is how the Strands Movie import looked done while its Pages list sat
+empty. The badge now says "Captured — pages not built yet" or "Built 43 draft
+pages on Oct 9". There is a fourth "Build pages" step on the screen, with one
+line explaining how the pages get built when they have not been. A built
+import lists every page it made, and each one opens in the Builder in a new
+tab. If the import created a theme and made it the default, the screen says
+which theme.
 ## 2026-10-12 — A site import no longer stacks repeat copies of the home page onto one page (#842)
 
 When an import captured the same page more than once — the Strands Movie site
