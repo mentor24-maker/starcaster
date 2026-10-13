@@ -21,56 +21,11 @@
       </section>
       <section id="engageCommentResponsesPage" class="app-page hidden">
         <div class="page-heading-row">
-          <h2>Engage: Comments</h2>
-          <div class="page-heading-actions">
-            <button id="engageCommentsStatusBtn" type="button" class="btn">Check Reddit Connection</button>
-            <button id="engageCommentsOpenSettingsBtn" type="button" class="btn">API Settings</button>
-          </div>
+          <h2>Engage: Reddit</h2>
         </div>
-        <p>Post a comment to a Reddit discussion by providing a post/comment URL or a Reddit thing ID.</p>
-        <form id="engageCommentsForm" class="standard-form-grid" style="max-width: 900px;">
-          
-            <label for="engageCommentsSubmitModeSelect">Submit Mode</label>
-            <select id="engageCommentsSubmitModeSelect" name="submit_mode">
-              <option value="reddit_api">Direct Reddit API</option>
-              <option value="openclaw">Queue via OpenClaw Agent</option>
-            </select>
-          
-          
-            <label for="engageCommentsTargetInput">Reddit Discussion URL or Thing ID</label>
-            <input
-              id="engageCommentsTargetInput"
-              name="target"
-             
-              required
-            />
-          
-          
-            <label for="engageCommentsTargetKindSelect">Target Type</label>
-            <select id="engageCommentsTargetKindSelect" name="target_kind">
-              <option value="post">Post (default)</option>
-              <option value="comment">Comment reply</option>
-            </select>
-          
-          
-            <label for="engageCommentsBodyInput">Comment</label>
-            <textarea
-              id="engageCommentsBodyInput"
-              name="comment"
-              rows="8"
-              maxlength="10000"
-             
-              required
-            ></textarea>
-          
-          <div></div>
-              <div class="page-heading-actions standard-form-grid-full">
-            <div></div>
-              <button id="engageCommentsSubmitBtn" type="submit" class="btn btn-primary">Post Comment</button>
-          </div>
-        </form>
-        <p id="engageCommentsStatus" class="meta"></p>
-        <pre id="engageCommentsPreview" class="code-box">{}</pre>
+        <p>Reddit comments written in your voice. Paste a link to a Reddit post or comment, have the AI write a comment, edit it, and approve it. Nothing is posted from this screen; once approved, the Mac Mini posts it and the Posted tab shows the proof.</p>
+        <!-- React island. Mounted by react-entry.js; see components/reddit-comments/reddit-comments-panel.tsx. -->
+        <div id="redditCommentsReactRoot"></div>
       </section>
       <section id="engageYoutubeOutreachPage" class="app-page hidden">
         <div class="page-heading-row">

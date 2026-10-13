@@ -1,0 +1,204 @@
+/* Engage › Comments — the React island at #redditCommentsReactRoot
+   (components/reddit-comments/reddit-comments-panel.tsx). Reddit comments 3 of 4.
+
+   Copies _substack-notes.css's conventions rather than inventing new ones:
+   every flex/grid box sets min-width: 0 (UI_RULES T8), no pixel min-widths
+   (T9), text controls stop at --builder-field-long-max (W9), so the page body
+   never scrolls sideways (T0). */
+
+.reddit-comments-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.reddit-comments-panel .btn {
+  margin: 0;
+}
+
+.reddit-comments-panel p {
+  margin: 0;
+}
+
+.reddit-comments-label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.reddit-comments-help {
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.reddit-comments-muted {
+  color: var(--muted);
+}
+
+.reddit-comments-error {
+  color: var(--status-warn-ink);
+}
+
+.reddit-comments-empty {
+  padding: var(--space-5);
+  border: 1px dashed var(--border-light);
+  border-radius: 10px;
+}
+
+/* ── Add a link ─────────────────────────────────────────────────────── */
+
+.reddit-comments-add,
+.reddit-comments-paste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.reddit-comments-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.reddit-comments-add-row input {
+  flex: 1 1 20rem;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.reddit-comments-paste input,
+.reddit-comments-paste textarea,
+.reddit-comments-draft {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────── */
+
+.reddit-comments-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-5);
+  min-width: 0;
+}
+
+.reddit-comments-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-right: auto;
+}
+
+.reddit-comments-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* ── Rows and cards ─────────────────────────────────────────────────── */
+
+.reddit-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reddit-comments-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.reddit-comments-post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A post title is what the row is FOR — wrap it, never clip it (T-1). */
+.reddit-comments-post-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.reddit-comments-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reddit-comments-link {
+  align-self: flex-start;
+}
+
+.reddit-comments-status {
+  font-weight: 600;
+}
+
+.reddit-comments-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.reddit-comments-actions--start {
+  justify-content: flex-start;
+}
+
+/* ── Posted (filled by 4/4) ─────────────────────────────────────────── */
+
+.reddit-comments-posted-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: flex-start;
+  min-width: 0;
+  padding: var(--space-5);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+}
+
+.reddit-comments-posted-shot {
+  flex: 0 0 auto;
+  display: block;
+  width: 160px;
+  max-width: 100%;
+}
+
+.reddit-comments-posted-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.reddit-comments-posted-body {
+  display: flex;
+  flex: 1 1 20rem;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}

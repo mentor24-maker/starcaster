@@ -1,3 +1,15 @@
+## 2026-10-13 — Engage → Comments is now the screen for Reddit comments in Dane's voice (#846)
+
+The Comments screen under Engage used to be a bare form that tried to post
+straight to Reddit through a login that was never set up. Now it is the screen
+for the comment-writing built in the last ticket. Paste a Reddit link and the
+post appears. Click Write with AI and a comment lands in a box you can edit,
+with a line saying which canon documents it was written from and when they were
+copied. Approve it and it waits for the Mac Mini, which the next ticket teaches
+to post it. Reddit blocks unsigned reads, so when it refuses, the screen says so
+and gives you boxes to paste the post into. If the server refuses your edit
+(say it contains a banned phrase), the reason shows word for word and your
+words stay in the box.
 ## 2026-10-12 — The Imports screen's Jobs list names each website again (#845)
 
 On the Site Import screen, the list of imports on the left showed a coloured

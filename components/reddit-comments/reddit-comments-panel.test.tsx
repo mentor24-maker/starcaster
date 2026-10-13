@@ -1,0 +1,399 @@
+// @vitest-environment jsdom
+import { act } from "react-dom/test-utils";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import RedditCommentsPanel, {
+  PROJECT_SWITCH_EVENT,
+  canonLine,
+  canonName,
+  isCommentLink,
+  postPreview,
+  tabFor,
+  withScheme,
+  type RedditItem,
+} from "./reddit-comments-panel";
+
+/**
+ * Reddit comments 3/4 (86bch3jp7). The screen is driven against a fake
+ * /api/engage/reddit-comments that keeps one store PER PROJECT, so "still
+ * showing the old client's rows" after a switch is distinguishable from
+ * "empty", and every save is read back from the fake's store — a remount is
+ * the reload — rather than from the screen's own state. The fake refuses the
+ * way lib/redditCommentsStore.js does: Reddit's read refused (409
+ * POST_TEXT_NEEDED) and a blocklisted phrase on approve (422).
+ */
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const CANON = [
+  { docKey: "DANE-OF-EARTH", syncedAt: "2026-10-12T15:00:00Z" },
+  { docKey: "VOICE", syncedAt: "2026-10-12T15:00:00Z" },
+  { docKey: "DEO", syncedAt: "2026-10-11T15:00:00Z" },
+  { docKey: "ECOSYSTEM", syncedAt: "2026-10-12T15:00:00Z" },
+];
+const BLOCKED = "delve into";
+const POST_LINK = "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/";
+
+type Store = { items: RedditItem[]; readable: boolean };
+let stores: Record<string, Store>;
+let activeProject = "proj_doe";
+let requests: Array<{ method: string; path: string; body: any }>;
+let container: HTMLDivElement | null = null;
+let root: Root | null = null;
+let seq = 0;
+let drafts = 0;
+
+function item(overrides: Partial<RedditItem>): RedditItem {
+  seq += 1;
+  return {
+    id: `r${seq}`,
+    targetUrl: POST_LINK,
+    postId: "abc123",
+    parentCommentId: "",
+    subreddit: "astronomy",
+    postTitle: "Why do stars twinkle?",
+    postBody: "I always wondered.\nIs it the air?",
+    postAuthor: "someone",
+    parentCommentAuthor: "",
+    parentCommentText: "",
+    postReadFrom: "reddit",
+    draftText: "",
+    finalText: "",
+    canonUsed: [],
+    status: "idea",
+    approvedAt: null,
+    postedUrl: "",
+    screenshotUrl: "",
+    postedAt: null,
+    error: "",
+    createdAt: "2026-10-12T12:00:00Z",
+    updatedAt: "2026-10-12T12:00:00Z",
+    ...overrides,
+  };
+}
+
+function fail(message: string, status = 400, code = ""): never {
+  const err = new Error(message) as Error & { status: number; code?: string };
+  err.status = status;
+  if (code) err.code = code;
+  throw err;
+}
+
+async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<string, any>> {
+  const method = (options.method || "GET").toUpperCase();
+  const body = options.body ? JSON.parse(String(options.body)) : undefined;
+  requests.push({ method, path, body });
+  const store = stores[activeProject];
+
+  if (path === "/api/engage/reddit-comments/items") {
+    if (method === "GET") return { ok: true, data: store.items.map((i) => ({ ...i })) };
+    if (method === "POST") {
+      if (!/reddit\.com\/r\//.test(body.url)) fail(`${body.url} is not a Reddit link — it should start https://www.reddit.com/r/…`);
+      const pasted = body.postTitle || body.postBody;
+      if (!pasted && !store.readable) {
+        fail("The post could not be read from Reddit: Reddit refused the read (403). Paste the post's title and text, then Add again.", 409, "POST_TEXT_NEEDED");
+      }
+      const made = item(pasted
+        ? { targetUrl: body.url, postTitle: body.postTitle || "", postBody: body.postBody || "", postReadFrom: "pasted" }
+        : { targetUrl: body.url });
+      store.items.unshift(made);
+      return { ok: true, data: { ...made } };
+    }
+  }
+  const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject)$/);
+  if (decision) {
+    const found = store.items.find((i) => i.id === decision[1]) || fail("Reddit comment not found in this project", 404);
+    if (decision[2] === "draft") {
+      drafts += 1;
+      Object.assign(found, { status: "draft", draftText: `The air bends the light, draft ${drafts}.`, finalText: "", canonUsed: CANON });
+    } else if (decision[2] === "approve") {
+      const text = body.text ?? found.draftText;
+      if (text.toLowerCase().includes(BLOCKED)) {
+        fail(`Not approved: it uses "${BLOCKED}", which is on the AI-ism blocklist.`, 422, "RULE_BROKEN");
+      }
+      Object.assign(found, { status: "approved", finalText: text });
+    } else {
+      found.status = "rejected";
+    }
+    return { ok: true, data: { ...found } };
+  }
+  return fail(`unexpected ${method} ${path}`);
+}
+
+async function flush() {
+  for (let i = 0; i < 6; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  }
+}
+
+async function mount() {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => { root!.render(<RedditCommentsPanel />); });
+  await flush();
+}
+
+/** A reload: throw the screen away and read everything from the store again. */
+async function reload() {
+  act(() => root?.unmount());
+  container?.remove();
+  await mount();
+}
+
+function text(): string {
+  return container?.textContent || "";
+}
+
+function button(label: string, scope: ParentNode = container!): HTMLButtonElement {
+  const found = [...scope.querySelectorAll("button")].find((b) => (b.textContent || "").trim().startsWith(label));
+  if (!found) throw new Error(`no button "${label}" in: ${text()}`);
+  return found as HTMLButtonElement;
+}
+
+function row(id: string): HTMLElement {
+  const found = container!.querySelector(`[data-item-id="${id}"]`);
+  if (!found) throw new Error(`no row ${id} in: ${text()}`);
+  return found as HTMLElement;
+}
+
+function el<T extends Element>(selector: string): T {
+  const found = container!.querySelector<T>(selector);
+  if (!found) throw new Error(`no ${selector} in: ${text()}`);
+  return found;
+}
+
+/** Set a controlled input's value the way React's onChange sees it. */
+function type(target: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), "value")!.set!;
+  act(() => {
+    setter.call(target, value);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function click(target: HTMLElement) {
+  await act(async () => { target.click(); });
+  await flush();
+}
+
+async function submit(form: HTMLFormElement) {
+  await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  await flush();
+}
+
+async function addLink(link: string) {
+  type(el<HTMLInputElement>("#rc-link"), link);
+  await submit(el<HTMLFormElement>("form.reddit-comments-add"));
+}
+
+beforeEach(() => {
+  seq = 0;
+  drafts = 0;
+  stores = {
+    proj_doe: { items: [], readable: true },
+    proj_delray: { items: [item({ postTitle: "Delray only: best tennis drills", subreddit: "tennis" })], readable: true },
+  };
+  activeProject = "proj_doe";
+  requests = [];
+  (window as unknown as { App: unknown }).App = { api: vi.fn(fakeApi) };
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+});
+
+afterEach(() => {
+  act(() => root?.unmount());
+  container?.remove();
+  container = null;
+  root = null;
+  vi.restoreAllMocks();
+});
+
+describe("Reddit comments screen", () => {
+  it("opens on three tabs and says why each one is empty", async () => {
+    await mount();
+    const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+    expect(tabs).toEqual(["To write", "Approvals", "Posted"]);
+    expect(text()).toContain("No Reddit posts added yet — paste a link above.");
+    await click(button("Approvals"));
+    expect(text()).toContain("No drafts yet — paste a Reddit link above, then click Write with AI on it.");
+    await click(button("Posted"));
+    expect(text()).toContain("Nothing posted yet");
+  });
+
+  it("adds a link and shows the subreddit, title, first lines and a Reddit link", async () => {
+    await mount();
+    await addLink("www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/");
+    expect(requests.find((r) => r.method === "POST")?.body).toEqual({ url: POST_LINK });
+    const id = stores.proj_doe.items[0].id;
+    expect(row(id).textContent).toContain("r/astronomy");
+    expect(row(id).textContent).toContain("Why do stars twinkle?");
+    expect(row(id).textContent).toContain("Is it the air?");
+    expect(row(id).querySelector("a")?.getAttribute("href")).toBe(POST_LINK);
+    expect(el<HTMLInputElement>("#rc-link").value).toBe("");
+  });
+
+  it("when Reddit refuses the read, says why and saves the post pasted by hand", async () => {
+    stores.proj_doe.readable = false;
+    await mount();
+    await addLink(POST_LINK);
+    expect(stores.proj_doe.items).toEqual([]);
+    expect(text()).toContain("The post could not be read from Reddit: Reddit refused the read (403).");
+    expect(el<HTMLInputElement>("#rc-link").value).toBe(POST_LINK);
+
+    type(el<HTMLInputElement>("#rc-paste-title"), "Why do stars twinkle?");
+    type(el<HTMLTextAreaElement>("#rc-paste-body"), "Pasted body");
+    await submit(el<HTMLFormElement>("form.reddit-comments-add"));
+    expect(requests.filter((r) => r.method === "POST").pop()?.body).toEqual({
+      url: POST_LINK, postTitle: "Why do stars twinkle?", postBody: "Pasted body",
+    });
+    await reload();
+    expect(row(stores.proj_doe.items[0].id).textContent).toContain("pasted by hand");
+  });
+
+  it("refuses a link that is not Reddit with the server's sentence", async () => {
+    await mount();
+    await addLink("https://example.com/post");
+    expect(text()).toContain("https://example.com/post is not a Reddit link — it should start https://www.reddit.com/r/…");
+    expect(stores.proj_doe.items).toEqual([]);
+  });
+
+  it("writes a draft, takes Dane's edit, and approves it to wait for the Mini", async () => {
+    stores.proj_doe.items = [item({})];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write with AI", row(id)));
+    expect(text()).toContain("Draft written — it is on Approvals");
+    const box = el<HTMLTextAreaElement>(`#rc-draft-${id}`);
+    expect(box.value).toBe("The air bends the light, draft 1.");
+    expect(row(id).textContent).toContain("Written from: Dane of Earth, Voice, DEO, Ecosystem — canon copied Oct 12");
+
+    type(box, "Turbulent air bends starlight — that's the twinkle.");
+    await click(button("Approve", row(id)));
+    expect(requests.pop()?.body).toEqual({ text: "Turbulent air bends starlight — that's the twinkle." });
+    expect(stores.proj_doe.items[0].status).toBe("approved");
+
+    await reload();
+    await click(button("Approvals"));
+    expect(row(id).textContent).toContain("Approved — waiting for the Mini to post it");
+    expect(row(id).textContent).toContain("Turbulent air bends starlight");
+  });
+
+  it("shows the server's refusal word for word when an edit breaks a rule", async () => {
+    stores.proj_doe.items = [item({ status: "draft", draftText: "Fine words.", canonUsed: CANON })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals"));
+    type(el<HTMLTextAreaElement>(`#rc-draft-${id}`), "Let us delve into the optics.");
+    await click(button("Approve", row(id)));
+    expect(row(id).querySelector('[role="alert"]')?.textContent)
+      .toBe('Not approved: it uses "delve into", which is on the AI-ism blocklist.');
+    expect(stores.proj_doe.items[0].status).toBe("draft");
+    // His edit is still in the box to fix, not replaced by the old draft.
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}`).value).toBe("Let us delve into the optics.");
+  });
+
+  it("Write another replaces the draft in the box", async () => {
+    stores.proj_doe.items = [item({ status: "draft", draftText: "First try.", canonUsed: CANON })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals"));
+    await click(button("Write another", row(id)));
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}`).value).toBe("The air bends the light, draft 1.");
+  });
+
+  it("rejects from the server and says how many rejected rows are hidden", async () => {
+    stores.proj_doe.items = [item({})];
+    await mount();
+    await click(button("Reject", row(stores.proj_doe.items[0].id)));
+    expect(stores.proj_doe.items[0].status).toBe("rejected");
+    await reload();
+    expect(text()).toContain("1 rejected comment is not shown.");
+    expect(text()).toContain("Nothing waiting to be written");
+  });
+
+  it("empties the screen on a project switch and shows the new project's rows", async () => {
+    stores.proj_doe.items = [item({ postTitle: "Dane of Earth post" })];
+    await mount();
+    expect(text()).toContain("Dane of Earth post");
+    type(el<HTMLInputElement>("#rc-link"), POST_LINK);
+
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    expect(text()).toContain("Delray only: best tennis drills");
+    expect(text()).not.toContain("Dane of Earth post");
+    expect(el<HTMLInputElement>("#rc-link").value).toBe("");
+  });
+
+  it("drops an add answered after a project switch", async () => {
+    await mount();
+    let release: () => void = () => {};
+    const api = (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api;
+    api.mockImplementationOnce(async (path: string, options: RequestInit) => {
+      const answer = await fakeApi(path, options);
+      await new Promise<void>((resolve) => { release = resolve; });
+      return answer;
+    });
+    type(el<HTMLInputElement>("#rc-link"), POST_LINK);
+    await act(async () => { el<HTMLFormElement>("form.reddit-comments-add").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    await act(async () => { release(); });
+    await flush();
+    expect(text()).toContain("Delray only: best tennis drills");
+    expect(text()).not.toContain("Why do stars twinkle?");
+  });
+
+  it("lists posted and failed rows on Posted with their proof and reason", async () => {
+    stores.proj_doe.items = [
+      item({ status: "posted", finalText: "Posted words", postedUrl: "https://www.reddit.com/r/astronomy/comments/abc123/x/def456/", screenshotUrl: "https://cdn.example/shot.png", postedAt: "2026-10-13T10:00:00Z" }),
+      item({ status: "failed", finalText: "Failed words", error: "Reddit said the thread is locked." }),
+    ];
+    await mount();
+    await click(button("Posted"));
+    const [posted, failed] = stores.proj_doe.items;
+    expect(row(posted.id).textContent).toContain("Posted words");
+    expect(row(posted.id).querySelector("img")?.getAttribute("src")).toBe("https://cdn.example/shot.png");
+    expect(row(failed.id).textContent).toContain("Failed to post");
+    expect(row(failed.id).textContent).toContain("Reddit said the thread is locked.");
+  });
+
+  it("says which read failed when the list cannot be read", async () => {
+    (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api.mockRejectedValueOnce(new Error("database unreachable"));
+    await mount();
+    expect(text()).toContain("The Reddit comments could not be read: database unreachable");
+    expect(text()).not.toContain("No Reddit posts added yet");
+  });
+});
+
+describe("helpers", () => {
+  it("canonLine names each document and the newest copy date", () => {
+    expect(canonLine(CANON)).toBe("Written from: Dane of Earth, Voice, DEO, Ecosystem — canon copied Oct 12");
+    expect(canonLine([{ docKey: "AIISM-BLOCKLIST", syncedAt: null }])).toBe("Written from: AI-ism blocklist — when the canon was copied is not recorded.");
+    expect(canonLine([])).toBe("Written from: no canon was recorded for this draft.");
+  });
+
+  it("canonName keeps DEO in capitals inside longer keys", () => {
+    expect(["DEO-CHARACTERISTICS", "DEO-DATA-THESIS", "NEW-THING"].map(canonName))
+      .toEqual(["DEO characteristics", "DEO data thesis", "New thing"]);
+  });
+
+  it("tabFor puts each status on one tab, and rejected on none", () => {
+    expect(["idea", "draft", "approved", "posting", "posted", "failed", "rejected"].map(tabFor))
+      .toEqual(["write", "approvals", "approvals", "approvals", "posted", "posted", null]);
+  });
+
+  it("postPreview keeps the first lines and trims long ones", () => {
+    expect(postPreview("a\nb\nc\nd")).toBe("a\nb\nc");
+    expect(postPreview("x".repeat(300), 10)).toBe(`${"x".repeat(10)}…`);
+  });
+
+  it("withScheme and isCommentLink read pasted links", () => {
+    expect(withScheme("reddit.com/r/x")).toBe("https://reddit.com/r/x");
+    expect(isCommentLink(POST_LINK)).toBe(false);
+    expect(isCommentLink(`${POST_LINK}def456/`)).toBe(true);
+  });
+});
