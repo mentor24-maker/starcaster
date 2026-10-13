@@ -130,7 +130,8 @@
     "archive:mac": "node scripts/archive_mac.mjs",
     "archive:loose": "node scripts/archive_loose.mjs",
     "backup:node": "node scripts/backup_node.mjs",
-    "restore:node": "node scripts/restore_node.mjs"
+    "restore:node": "node scripts/restore_node.mjs",
+    "check:drilldown": "node scripts/ui/check_drilldown.mjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
