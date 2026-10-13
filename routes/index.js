@@ -69,6 +69,7 @@ const events      = require('./events');
 const studio      = require('./studio');
 const youtubeOutreach = require('./youtubeOutreach');
 const substackNotes = require('./substackNotes');
+const redditComments = require('./redditComments');
 const substackMiner = require('./substackMiner');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
@@ -108,6 +109,8 @@ const ROUTE_MODULES = [
   // prefix. engage falls through with `false` on paths it does not know today,
   // so either order works — matching first removes the dependency.
   substackNotes,
+  // Ahead of `engage` for the same reason: '/api/engage/reddit-comments'.
+  redditComments,
   engage,
   // Ahead of `builder` on purpose. Both claim '/api/builder/*'; builder
   // currently falls through with `false` on paths it doesn't recognise, so
