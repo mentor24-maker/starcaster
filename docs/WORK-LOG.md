@@ -1,3 +1,13 @@
+## 2026-10-12 — An imported site's theme can no longer put black text on a black page (#844)
+
+When Starcaster imports a website it builds a theme from the site's own
+colours, and it chose the page colour and the text colour separately without
+asking whether one can be read on the other. The Strands Movie import came out
+black on black, so every page would have looked blank. Now a pair that is hard
+to read (under the usual 4.5:1 standard) is never used. The page colour moves
+to the light area the text actually sits on, or to white. If no light colour
+works, the text colour changes instead. The import report says in a plain line
+what was rejected and why.
 ## 2026-10-12 — Dane of Earth's voice and canon are copied into Starcaster's database (#838)
 
 The AI that will write Reddit comments needs to know how Dane thinks and
