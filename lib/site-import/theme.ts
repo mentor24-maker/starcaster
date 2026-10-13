@@ -273,6 +273,13 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // Palette, from the role-separated evidence (absent on old captures).
   const sum = ir.styleSummary;
   const palette: Record<string, string> = {};
+  const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
+  // An OUTLINED button (no fill, coloured text + border) has no Builder
+  // equivalent — the theme's button is a fill — so its colour becomes the
+  // fill and the text is whichever of white/near-black reads better on it.
+  const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
+  const fill = toHex(buttonFill) || toHex(buttonText);
+  let readableLink = link;
   const { surface, note: surfaceNote } = pickSurface(ir);
   if (surfaceNote) notes.push(surfaceNote);
   if (surface) {
@@ -301,6 +308,22 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
       colors.heading = colors.text && readsOnSurface(colors.text) ? colors.text : fallback;
       notes.push(`heading colour: rejected ${was} on ${surface} (${contrastRatio(surface, was).toFixed(1)}:1) — using ${colors.heading}`);
     }
+    // Links in body text paint from colors.link (--bx-link) and the <a>
+    // element override. On Strands the links were white on the black body;
+    // once the surface moved to the white content column they were white on
+    // white and the notes said nothing (review round 2, task 86bch6geu).
+    // Only checked once this import has already overridden the page's own
+    // colours (moved the surface, or replaced unreadable text): until then a
+    // link sits where the site designed it to, and a brand blue at 2.8:1 on
+    // white is the site's choice, not an import defect to rewrite. Prefer the
+    // button colour — the site's own accent — when it reads.
+    const overridden = Boolean(surfaceNote) || colors.text !== text;
+    if (link && overridden && !readsOnSurface(link)) {
+      readableLink = fill && readsOnSurface(fill) ? fill : fallback;
+      colors.link = readableLink;
+      colors.linkHover = readableLink;
+      notes.push(`link colour: rejected ${link} on ${surface} (${contrastRatio(surface, link).toFixed(1)}:1) — using ${readableLink}`);
+    }
   }
   const bands = (sum?.backgroundsByArea || []).map((t) => toHex(t.value)).filter((h) => h && h !== surface);
   const band = bands.find((h) => luminance(h) >= 0.45);
@@ -319,12 +342,6 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
     palette.headerText = contrastText(header) === "#ffffff" ? "#ffffff" : text || "#111111";
   }
   let borderRadius: number | undefined;
-  const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
-  // An OUTLINED button (no fill, coloured text + border) has no Builder
-  // equivalent — the theme's button is a fill — so its colour becomes the
-  // fill and the text is whichever of white/near-black reads better on it.
-  const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
-  const fill = toHex(buttonFill) || toHex(buttonText);
   if (fill) {
     palette.button = fill;
     palette.buttonText = outlined ? contrastText(fill) : toHex(buttonText) || contrastText(fill);
@@ -340,14 +357,14 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
 
   return {
     name,
-    primaryColor: fill || link || "",
+    primaryColor: fill || readableLink || "",
     secondaryColor: band || "",
     backgroundColor: surface || "",
-    accentColor: link || fill || "",
+    accentColor: readableLink || fill || "",
     ...(borderRadius !== undefined ? { borderRadius } : {}),
     ...(contentWidth ? { contentWidth } : {}),
     palette,
-    typography: { fonts, scale, colors, elements: link ? { a: { color: link } } : {} },
+    typography: { fonts, scale, colors, elements: readableLink ? { a: { color: readableLink } } : {} },
     notes,
   };
 }

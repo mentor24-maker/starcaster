@@ -152,6 +152,13 @@ function assertPaintedReadable(t) {
   const { text, heading } = t.typography.colors;
   assert.ok(contrastRatio(t.backgroundColor, text) >= 4.5, `body text ${text} on ${t.backgroundColor}`);
   assert.ok(contrastRatio(t.backgroundColor, heading) >= 4.5, `headings ${heading} on ${t.backgroundColor}`);
+  // Links in body text paint from colors.link (--bx-link) and the <a>
+  // element override (review round 2, task 86bch6geu).
+  const { link, linkHover } = t.typography.colors;
+  const a = (t.typography.elements.a || {}).color;
+  for (const [what, hex] of [['links', link], ['link hover', linkHover], ['<a> override', a]]) {
+    if (hex) assert.ok(contrastRatio(t.backgroundColor, hex) >= 4.5, `${what} ${hex} on ${t.backgroundColor}`);
+  }
 }
 
 // Strands Movie, 2026-10-12 (task 86bch6geu): a black <body> behind a white
@@ -191,6 +198,32 @@ test('headings measured in a colour that does not read on the moved surface are 
   assert.equal(t.typography.colors.heading, '#000000', 'the readable body text colour');
   assertPaintedReadable(t);
   assert.ok(t.notes.some((n) => n.startsWith('heading colour: rejected #ffffff on #fafafa')), t.notes.join(' / '));
+});
+
+test('links that do not read on the moved surface take the button colour, and the notes say so', () => {
+  // The real Strands shape (review round 2): black body, black text, WHITE
+  // links (they sat on the black bands), a navy button. On main the links
+  // were white on black; once the surface moved to the white content column
+  // they were white on white, 1.0:1.
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, buttons: [{ value: 'rgb(8, 26, 142)|rgb(255, 255, 255)|0', count: 4 }] }), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'link') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.equal(t.typography.colors.link, '#081a8e', 'the button colour, which reads on the surface');
+  assert.equal(t.typography.colors.linkHover, '#081a8e');
+  assert.equal(t.typography.elements.a.color, '#081a8e', 'the <a> override paints the readable colour too');
+  assert.equal(t.accentColor, '#081a8e');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('link colour: rejected #ffffff on #fafafa (1.0:1) — using #081a8e')), t.notes.join(' / '));
+});
+
+test('links that do not read, with a button that does not read either, take the readable fallback', () => {
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, buttons: [{ value: 'rgb(255, 255, 255)|rgb(0, 0, 0)|0', count: 4 }] }), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'link') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.notEqual(t.typography.colors.link, '#ffffff');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('link colour: rejected #ffffff')), t.notes.join(' / '));
 });
 
 test('with no readable area measured, the surface falls back to white and keeps the measured text', () => {

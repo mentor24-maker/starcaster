@@ -10,7 +10,11 @@ works, the text colour changes instead. The import report says in a plain line
 what was rejected and why. A review caught that the first version changed the
 text colour in a place nothing on the page reads, so the page would still have
 looked blank while the report said it was fixed; now the colours the page
-actually paints body text and headings with are the ones replaced.
+actually paints body text and headings with are the ones replaced. A second
+review ran it on the real Strands import and found its white links (they sat
+on the black areas) would vanish on the new white page; links now get the same
+check whenever the import has changed the page's colours, taking the site's
+own button colour (navy, on Strands) when that reads.
 
 ## 2026-10-12 — Starcaster can write a Reddit comment in Dane's voice, waiting for his OK (#840)
 
