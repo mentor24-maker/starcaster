@@ -10,6 +10,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { deriveImportTheme, nextThemeName, siteNameFromUrl } = require('../../lib/site-import/dist/map.js');
+
+/** WCAG contrast, written out here rather than imported, so the test does
+ *  not grade the guard with the guard's own arithmetic. */
+function contrastRatio(a, b) {
+  const lum = (hex) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
 const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
 const { normalizeTheme } = require('../../lib/builder/template.js');
 
@@ -122,6 +136,136 @@ test('an outlined button becomes a filled one in its colour, and says so', () =>
   assert.equal(t.palette.buttonText, '#111111');
   assert.equal(t.borderRadius, 3);
   assert.ok(t.notes.some((n) => n.includes('outlined')));
+});
+
+/** Every text element in the fixture painted one colour. */
+function withTextColor(ir, color) {
+  for (const e of ir.pages[0].sections[0].elements) e.computedStyles.color = color;
+  return ir;
+}
+
+/** The page paints body text from typography.colors.text and headings from
+ *  colors.heading, on backgroundColor — palette.surfaceText reaches nothing
+ *  on screen (review round 1, task 86bch6geu). So "readable" is judged on
+ *  what is painted, not on the palette. */
+function assertPaintedReadable(t) {
+  const { text, heading } = t.typography.colors;
+  assert.ok(contrastRatio(t.backgroundColor, text) >= 4.5, `body text ${text} on ${t.backgroundColor}`);
+  assert.ok(contrastRatio(t.backgroundColor, heading) >= 4.5, `headings ${heading} on ${t.backgroundColor}`);
+  // Links in body text paint from colors.link (--bx-link) and the <a>
+  // element override (review round 2, task 86bch6geu).
+  const { link, linkHover } = t.typography.colors;
+  const a = (t.typography.elements.a || {}).color;
+  for (const [what, hex] of [['links', link], ['link hover', linkHover], ['<a> override', a]]) {
+    if (hex) assert.ok(contrastRatio(t.backgroundColor, hex) >= 4.5, `${what} ${hex} on ${t.backgroundColor}`);
+  }
+}
+
+// Strands Movie, 2026-10-12 (task 86bch6geu): a black <body> behind a white
+// content column, black text. The dry run printed "surface #000000,
+// surfaceText #000000" — every imported page would have looked blank.
+const BLACK_BODY = {
+  ...SUMMARY,
+  pageBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 12 }],
+  backgroundsByArea: [
+    { value: 'rgb(0, 0, 0)', count: 9000 },
+    { value: 'rgb(250, 250, 250)', count: 6000 },
+  ],
+  headerBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 12 }],
+};
+
+test('black text on a black page is never shipped: the surface becomes the area the text reads on, and the notes say why', () => {
+  const t = deriveImportTheme(withTextColor(siteIr(BLACK_BODY), 'rgb(0, 0, 0)'), 'strands 1');
+  assert.equal(t.palette.surface, '#fafafa', 'the content column, not the body');
+  assert.equal(t.palette.surfaceText, '#000000', 'the measured text is kept — it reads on the new surface');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5);
+  const note = t.notes.find((n) => n.startsWith('surface:'));
+  assert.ok(note, `a note names the rejection: ${t.notes.join(' / ')}`);
+  assert.match(note, /rejected the page background #000000/);
+  assert.match(note, /#000000 on it is 1\.0:1/);
+  assert.equal(t.palette.inverse, '#000000', 'the black bands stay black, as their own colour');
+  assertPaintedReadable(t);
+});
+
+test('headings measured in a colour that does not read on the moved surface are replaced too, and the notes say so', () => {
+  // Black body text, WHITE headings (they sat on the black bands). Once the
+  // surface moves to the light content column, white headings would vanish.
+  const ir = withTextColor(siteIr(BLACK_BODY), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'heading') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.equal(t.typography.colors.heading, '#000000', 'the readable body text colour');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('heading colour: rejected #ffffff on #fafafa')), t.notes.join(' / '));
+});
+
+test('links that do not read on the moved surface take the button colour, and the notes say so', () => {
+  // The real Strands shape (review round 2): black body, black text, WHITE
+  // links (they sat on the black bands), a navy button. On main the links
+  // were white on black; once the surface moved to the white content column
+  // they were white on white, 1.0:1.
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, buttons: [{ value: 'rgb(8, 26, 142)|rgb(255, 255, 255)|0', count: 4 }] }), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'link') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.backgroundColor, '#fafafa');
+  assert.equal(t.typography.colors.link, '#081a8e', 'the button colour, which reads on the surface');
+  assert.equal(t.typography.colors.linkHover, '#081a8e');
+  assert.equal(t.typography.elements.a.color, '#081a8e', 'the <a> override paints the readable colour too');
+  assert.equal(t.accentColor, '#081a8e');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('link colour: rejected #ffffff on #fafafa (1.0:1) — using #081a8e')), t.notes.join(' / '));
+});
+
+test('links that do not read, with a button that does not read either, take the readable fallback', () => {
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, buttons: [{ value: 'rgb(255, 255, 255)|rgb(0, 0, 0)|0', count: 4 }] }), 'rgb(0, 0, 0)');
+  for (const e of ir.pages[0].sections[0].elements) if (e.class === 'link') e.computedStyles.color = 'rgb(255, 255, 255)';
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.notEqual(t.typography.colors.link, '#ffffff');
+  assertPaintedReadable(t);
+  assert.ok(t.notes.some((n) => n.startsWith('link colour: rejected #ffffff')), t.notes.join(' / '));
+});
+
+test('with no readable area measured, the surface falls back to white and keeps the measured text', () => {
+  const ir = withTextColor(siteIr({ ...BLACK_BODY, backgroundsByArea: [{ value: 'rgb(0, 0, 0)', count: 9000 }] }), 'rgb(0, 0, 0)');
+  const t = deriveImportTheme(ir, 'strands 1');
+  assert.equal(t.palette.surface, '#ffffff');
+  assert.equal(t.palette.surfaceText, '#000000');
+  assert.ok(t.notes.some((n) => n.startsWith('surface:') && n.includes('using #ffffff')));
+  assertPaintedReadable(t);
+});
+
+test('text that reads on no light surface keeps the page colour and gets text that reads', () => {
+  // Pale grey text. The dark #1a1a1a band WOULD read with it, but the surface
+  // never moves onto a dark band: the mapper unsets bands painted the surface
+  // colour, and that band would lose its colour in the import.
+  const ir = withTextColor(siteIr({ ...SUMMARY, pageBackgrounds: [{ value: 'rgb(240, 240, 240)', count: 4 }] }), 'rgb(238, 238, 238)');
+  const t = deriveImportTheme(ir, 'pale 1');
+  assert.equal(t.palette.surface, '#f0f0f0');
+  assert.equal(t.palette.inverse, '#1a1a1a', 'the dark band keeps its own colour');
+  assert.equal(t.palette.surfaceText, '#111111');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5);
+  assert.ok(t.notes.some((n) => n.startsWith('surface text: rejected #eeeeee')));
+  assert.equal(t.typography.colors.text, '#111111', 'what the note says is what the page paints');
+  assert.equal(t.typography.colors.heading, '#111111');
+  assertPaintedReadable(t);
+});
+
+test('on a mid grey, where near-black and white both fall short, the replacement text is pure black', () => {
+  const ir = withTextColor(siteIr({ ...SUMMARY, pageBackgrounds: [{ value: 'rgb(120, 120, 120)', count: 4 }], backgroundsByArea: [] }), 'rgb(125, 125, 125)');
+  const t = deriveImportTheme(ir, 'grey 1');
+  assert.equal(t.palette.surface, '#787878');
+  assert.ok(contrastRatio(t.palette.surface, t.palette.surfaceText) >= 4.5, `${t.palette.surfaceText} on #787878`);
+  assert.equal(t.typography.colors.text, t.palette.surfaceText);
+  assertPaintedReadable(t);
+});
+
+test('a readable page background is left alone and adds no note', () => {
+  const t = deriveImportTheme(siteIr(SUMMARY), 'daneofearth 1');
+  assert.equal(t.palette.surface, '#ffffff');
+  assert.equal(t.palette.surfaceText, '#666666');
+  assert.ok(!t.notes.some((n) => n.startsWith('surface') || n.startsWith('heading')));
+  assert.equal(t.typography.colors.heading, '#333333', 'readable headings keep their measured colour');
 });
 
 test('a capture without style evidence still gets fonts and colours, and invents no palette', () => {
