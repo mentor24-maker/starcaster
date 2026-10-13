@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createDefaultBackgroundSettings, type BackgroundSettings } from "@/lib/builder-template";
 import {
-  resolveBuilderDrillDownSurfaceBackground,
   sanitizeCellBackgroundForDrillDown,
   usesBuilderDrillDownSurfaceDefault
 } from "@/lib/builder-drill-down-surface";
@@ -17,18 +16,6 @@ describe("builder drill-down surfaces", () => {
         styleKey: "blue-yellow-circles"
       })
     ).toBe(true);
-  });
-
-  it("resolves cell tier to the row-body background token", () => {
-    expect(resolveBuilderDrillDownSurfaceBackground(createDefaultBackgroundSettings(), "cell")).toEqual({
-      background: "var(--builder-bg-cell)"
-    });
-  });
-
-  it("resolves column tier to the column background token", () => {
-    expect(resolveBuilderDrillDownSurfaceBackground(createDefaultBackgroundSettings(), "column")).toEqual({
-      background: "var(--builder-bg-column)"
-    });
   });
 
   /*

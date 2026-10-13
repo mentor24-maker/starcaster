@@ -11780,3 +11780,17 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   outline: 3px solid var(--focus-ring-color);
   outline-offset: 3px;
 }
+
+/*
+ * Drill-down surfaces: one even ladder, light outside to dark at the module
+ * (task 86bch66at). Values and reasoning are in _variables.css. These are
+ * editor chrome only — no cell or module background is painted on a card
+ * any more, so nothing interrupts the steps.
+ */
+.builder-react-root {
+  --builder-bg-workspace: var(--builder-depth-0);
+  --builder-bg-section: var(--builder-depth-1);
+  --builder-bg-cell: var(--builder-depth-2);
+  --builder-bg-column: var(--builder-depth-3);
+  --builder-bg-module: var(--builder-depth-4);
+}
