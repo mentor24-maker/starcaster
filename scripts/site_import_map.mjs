@@ -11,11 +11,22 @@
  *   touch to docs/SQL/backups/, copies placeholder crops + referenced
  *   assets into the durable SiteImportApplied/<projectId>/ namespace,
  *   then creates/updates the draft pages. Never publishes anything.
- *   --nav: separate deliberate step — writes the imported header nav into
- *   the Header saved-section MASTER (backing it up first; refusing a
- *   non-empty master without --nav-replace) and attaches the master to
- *   every imported page. Site snapshots do NOT cover masters, hence the
- *   dedicated backup.
+ *   MENUS (task 86bchydp6, Dane 2026-10-13): --apply also builds two saved
+ *   sections, LAST, after every page write — "Top Menu" (the site's logo
+ *   left, its menu with dropdowns right) and "Footer Menu" (its footer
+ *   links, only when it has any) — and attaches them as canonical
+ *   instances: Top Menu first on every imported page, Footer Menu last.
+ *   A saved section the project already has is never written to: a name in
+ *   use gets "Top Menu (strandsmovie.com)" instead. A re-run updates the
+ *   sections this job created (their ids live in the map checkpoint), after
+ *   backing each one up. Only pages this import created are touched.
+ *   --no-menus skips both.
+ *   --nav: the OLDER, deliberate step, kept for projects that already have a
+ *   header master of their own — writes the imported header nav into that
+ *   master (backing it up first; refusing a non-empty master without
+ *   --nav-replace) and attaches it to every imported page. --nav turns the
+ *   new menus off for the run, so no page ever gets two menus. Site
+ *   snapshots do NOT cover masters, hence the dedicated backups.
  *
  * SAFETY (all spec-mandated)
  * - Every page lands isPublished:false. The mapper cannot publish.
@@ -40,6 +51,7 @@
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --nav [--nav-replace]
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
  *   ... --no-theme   skip the import theme (see below)
+ *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
  */
@@ -120,6 +132,7 @@ const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
   mapSite, reportReconciles, mergeMappedSections, deriveImportTheme, nextThemeName, siteNameFromUrl,
   writeMappedPages, summarizePageWrites,
+  buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
 const themesStore = require('./lib/builderThemesStore.js');
 const { normalizeTheme } = require('./lib/builder/template.js');
@@ -128,6 +141,9 @@ const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const NO_THEME = flag('--no-theme');
+// --nav writes the project's own header master instead; doing both would
+// put two menus on every imported page.
+const NO_MENUS = flag('--no-menus') || NAV;
 const NAV_MASTER_ID = flagValue('--nav-master');
 const FORCED_SECTIONS = new Set(flagValues('--force-section'));
 const NO_CARDS_PATHS = flagValues('--no-cards');
@@ -167,12 +183,12 @@ function rewriteUrls(value, urlMap) {
 
 async function main() {
   if (!JOB_ID) {
-    console.error('Usage: doppler run --config prd -- node scripts/site_import_map.mjs --job <id> [--apply] [--nav]');
+    console.error('Usage: doppler run --config prd -- node scripts/site_import_map.mjs --job <id> [--apply] [--no-menus] [--nav]');
     process.exit(1);
   }
   let job = must(await store.getJob(JOB_ID), 'load job');
   const scope = { projectId: job.projectId, userId: job.ownerUserId || '' };
-  log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}`);
+  log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}${NO_MENUS ? ' (no menus)' : ''}`);
   log(`Job:     ${job.id} (${job.sourceUrl})`);
   log(`Project: ${job.projectId}`);
   const irUrl = job.checkpoints?.normalize?.blobPath;
@@ -194,6 +210,7 @@ async function main() {
     skipSlideshowPaths: NO_SLIDESHOW_PATHS,
     skipAllCardGrids: NO_CARDS_ALL,
     skipCardGridPaths: NO_CARDS_PATHS,
+    menus: !NO_MENUS,
   });
 
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
@@ -278,6 +295,7 @@ async function main() {
     log('');
   }
   log(`Assets: promote ${out.report.assets.promoted}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
+  logMenuPlan(job, out, prior);
 
   if (!reportReconciles(out.report)) {
     throw new Error('Report does not reconcile — refusing to proceed. This is a mapper bug; file it.');
@@ -462,6 +480,9 @@ async function main() {
       sectionHashes,
       appliedNamespace: applied,
       ...(themeCheckpoint ? { theme: themeCheckpoint } : {}),
+      // Carried over until the menu step below replaces it: these ids are
+      // how a re-run finds the sections it made instead of minting twins.
+      ...(prior.menus ? { menus: prior.menus } : {}),
     },
   };
   job = must(await store.updateJob(job.id, { checkpoints }), 'record map checkpoint');
@@ -473,7 +494,12 @@ async function main() {
   log(`\nAPPLY complete: ${writeSummary.distinctPages} draft page(s) (${writeSummary.created} created, ${writeSummary.updated} updated). Nothing was published.`);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
 
-  // Nav LAST: nothing may write pages after the master instances attach.
+  // Menus and nav LAST: nothing may write pages after the master instances
+  // attach (2026-08-06: a page write from pre-fetched state stripped them).
+  if (!NO_MENUS) {
+    const menuIds = await runMenus(job, scope, out, urlMap, checkpoints);
+    checkpoints.map = { ...checkpoints.map, menus: menuIds };
+  }
   if (NAV) await runNav(job, scope, out);
 
   // Fingerprint the sections only NOW, once every write in this run has
@@ -495,6 +521,112 @@ async function main() {
     checkpoints: { ...checkpoints, map: { ...checkpoints.map, sectionHashes: settledHashes } },
   }), 'record settled section hashes');
   log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
+}
+
+/** What the menu step will build — the dry run's promise, and --apply's. */
+function logMenuPlan(job, out, prior) {
+  if (NO_MENUS) {
+    log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);
+    return;
+  }
+  const menus = out.report.menus;
+  const reused = (kind) => (prior.menus?.[kind] ? ` (re-run: updates saved section ${prior.menus[kind]} if it still exists)` : '');
+  log('\nMenus (attached to every imported page on --apply):');
+  log(menus.top
+    ? `  Top Menu: ${menus.top.items} link(s), ${menus.top.topLevel} at the top level; logo ${menus.top.logo ? 'yes (left column)' : 'no'}${reused('top')}`
+    : '  Top Menu: none');
+  log(menus.footer ? `  Footer Menu: ${menus.footer.items} link(s)${reused('footer')}` : '  Footer Menu: none');
+  for (const note of menus.notes) log(`  - ${note}`);
+}
+
+/**
+ * --apply's menu step (task 86bchydp6): create or update the Top Menu and
+ * Footer Menu saved sections, attach them to the imported pages, propagate.
+ * Returns the saved-section ids for the job's map checkpoint.
+ */
+async function runMenus(job, scope, out, urlMap, checkpoints) {
+  const prior = job.checkpoints?.map?.menus || {};
+  const ids = { ...prior };
+  const siteLabel = menuSiteLabel(job.sourceUrl);
+  const savedSections = must(await savedSectionsStore.listSavedSections(1000, scope), 'list saved sections');
+  const attached = {};
+  /** kind -> did the master's content change this run? */
+  const masterChanged = {};
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+  for (const kind of ['top', 'footer']) {
+    const built = buildMenuSection(kind, out.menus, job.id);
+    if (!built) {
+      const why = out.menus.notes.filter((n) => (kind === 'top' ? /Top Menu/ : /Footer Menu/).test(n));
+      log(`Menus: no ${kind === 'top' ? 'Top' : 'Footer'} Menu — ${why.join('; ') || 'nothing to build'}.`);
+      continue;
+    }
+    // The logo's URL becomes the project's own copy, like every image.
+    const section = rewriteUrls(built, urlMap);
+    const target = planMenuTarget(kind, savedSections, prior[kind] || '', siteLabel);
+    let saved;
+    let before = '';
+    if (target.action === 'update') {
+      const current = savedSections.find((s) => String(s.id) === target.id);
+      before = sha256(current?.section || null);
+      const backupPath = path.join(BACKUP_DIR, `site_import_menu_${kind}_${job.id}_${stamp}.json`);
+      writeFileSync(backupPath, JSON.stringify({ jobId: job.id, master: current }, null, 2));
+      saved = must(await savedSectionsStore.updateSavedSection(target.id, { name: target.name, section }, scope), `update "${target.name}"`);
+      log(`Menus: updated "${target.name}" (${target.id}) — this job made it; backup → ${path.relative(ROOT, backupPath)}`);
+    } else {
+      saved = must(await savedSectionsStore.createSavedSection({ name: target.name, section }, scope), `create "${target.name}"`);
+      log(`Menus: created "${target.name}" (${saved.id}).`);
+      if (target.name !== (kind === 'top' ? 'Top Menu' : 'Footer Menu')) {
+        log(`  (the project already has a section named "${kind === 'top' ? 'Top Menu' : 'Footer Menu'}" — left untouched)`);
+      }
+    }
+    ids[kind] = String(saved.id);
+    // Record the id at once: a run that dies before the end must still find
+    // this section next time, not make a second one.
+    must(await store.updateJob(job.id, {
+      checkpoints: { ...checkpoints, map: { ...checkpoints.map, menus: { ...ids } } },
+    }), 'record menu section ids');
+    // Read it back (landmine 12): the insert succeeding is not the row
+    // landing in this project.
+    const reread = must(await savedSectionsStore.getSavedSection(ids[kind], scope), `re-read "${target.name}"`);
+    if (!reread) throw new Error(`"${target.name}" (${ids[kind]}) was saved but is not readable in this project.`);
+    attached[kind] = { savedSectionId: ids[kind], section: reread.section || section };
+    masterChanged[kind] = sha256(reread.section || null) !== before;
+  }
+  if (!attached.top && !attached.footer) return ids;
+
+  const pageIds = [...new Set(Object.values(job.checkpoints?.map?.pageIds || {}).map(String))];
+  let changedPages = 0;
+  for (const pageId of pageIds) {
+    const page = must(await pagesStore.getPage(pageId, scope), `read page ${pageId}`);
+    const next = attachMenuInstances(page.layoutSections || [], pageId, attached);
+    if (!next.changed) continue;
+    // Spread the page and pass the ARRAY (landmine 13), then read it back.
+    must(await pagesStore.updatePage(pageId, { ...page, layoutSections: next.sections }, scope), `attach menus to ${pageId}`);
+    const after = must(await pagesStore.getPage(pageId, scope), `re-read page ${pageId}`);
+    const sections = after.layoutSections || [];
+    if (attached.top && !sections.some((s) => s.savedSectionId === attached.top.savedSectionId)) {
+      throw new Error(`page ${pageId}: the Top Menu did not stick (${sections.length} section(s) read back).`);
+    }
+    if (attached.footer && !sections.some((s) => s.savedSectionId === attached.footer.savedSectionId)) {
+      throw new Error(`page ${pageId}: the Footer Menu did not stick (${sections.length} section(s) read back).`);
+    }
+    changedPages += 1;
+  }
+  for (const kind of ['top', 'footer']) {
+    if (!attached[kind]) continue;
+    // An unchanged master on pages that already carried it has nothing to
+    // propagate; running it anyway rewrote every imported page per re-run.
+    if (!masterChanged[kind] && !changedPages) {
+      log(`Menus: ${kind === 'top' ? 'Top' : 'Footer'} Menu unchanged — no propagation needed.`);
+      continue;
+    }
+    const prop = await pagesStore.propagateCanonicalSection(attached[kind].savedSectionId, attached[kind].section, scope);
+    log(`Menus: ${kind === 'top' ? 'Top' : 'Footer'} Menu propagation updated ${prop?.updated ?? '?'}/${prop?.total ?? '?'}.`);
+  }
+  log(`Menus: attached to ${changedPages} of ${pageIds.length} imported page(s) (the rest already carried them).`);
+  return ids;
 }
 
 /** --nav: write the imported header tree into the Header saved-section

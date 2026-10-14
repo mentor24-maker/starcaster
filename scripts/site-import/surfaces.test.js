@@ -414,7 +414,10 @@ test('Dane of Earth: the starfield band and the #222 footer are row backgrounds 
   const star = holding(sections, /Join me on the Adventure/);
   assert.equal(star.background.mode, 'image');
   assert.match(star.background.imageUrl, /background_starfield/);
-  const footer = holding(sections, /footer-info/);
+  // Its credits line is dropped with the Footer Menu (task 86bchydp6); the
+  // band itself, holding the social links, stays. Searched from the bottom:
+  // the "Follow and Share" band links the same profile higher up.
+  const footer = holding([...sections].reverse(), /facebook\.com\/daneofearth/);
   assert.deepEqual([footer.background.mode, footer.background.color], ['color', '#222222']);
   assert.equal(footer.cellBackgrounds, undefined, 'the footer is a band, not a column');
 });
