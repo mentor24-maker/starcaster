@@ -1,3 +1,14 @@
+## 2026-10-14 — The Imports screen now shows which menus an import will get (#858)
+
+The Imports screen's build panel has a new **Menus** block. Before you build an
+imported site, it shows whether its menus came through: the **Top Menu** (how
+many links, and whether a logo was found) and the **Footer Menu** (how many
+links). When one is missing, it gives the reason in plain words. For example,
+"no links found in the footer" means the old site's footer really had none, so
+it is not a bug. After the build has run, it also names the saved section each
+menu became. Imports rehearsed before menus were captured say so, and ask for a
+re-run, instead of wrongly claiming the site has no menus.
+
 ## 2026-10-14 — Imported sites now get a Top Menu with their logo, and a Footer Menu (#855)
 
 When an imported website is built into pages, the importer now also makes two
