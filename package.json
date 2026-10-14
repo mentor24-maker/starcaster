@@ -131,7 +131,8 @@
     "archive:loose": "node scripts/archive_loose.mjs",
     "backup:node": "node scripts/backup_node.mjs",
     "restore:node": "node scripts/restore_node.mjs",
-    "check:drilldown": "node scripts/ui/check_drilldown.mjs"
+    "check:drilldown": "node scripts/ui/check_drilldown.mjs",
+    "fonts:import": "node scripts/fonts_import_fontsource.mjs"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
