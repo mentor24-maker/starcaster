@@ -950,9 +950,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
-/* F6: the project-data picker — select + optional Custom input share a row. */
+/* F6: the project-data picker — select + optional Custom input share a row,
+   and the input wraps under the select when the row has no room for both
+   (task 86bchyhje: side by side in a narrow column, the input sat past the
+   panel's edge and the operator could not find it). */
 .builder-react-root .builder-project-data-picker {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2, 6px);
   max-width: 100%;
@@ -965,7 +969,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-project-data-picker input[type="text"] {
+  flex: 1 1 200px;
   width: 200px;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -4158,9 +4164,20 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * stop, and `npm run check:panels` fails on it.
  */
 
+/*
+ * The control track is `minmax(0, max-content)`, not bare `max-content`
+ * (task 86bchyhje) — the same fix the chrome strip already carries, for the
+ * reason it gives: a `max-content` track cannot shrink. With room it resolves
+ * to max-content exactly as before. In a narrow box — a module in one column
+ * of a two- or three-column row — it gives way instead, so the controls stop
+ * at the box's edge rather than running past it. Dane, 2026-10-13: a Button
+ * in a column was 694px wide in a 420px box; Link and Text ran off the edge,
+ * and the "Custom…" address box was drawn entirely beyond it, out of sight,
+ * so there was no way to enter a link to another site at all.
+ */
 .builder-react-root .is-lattice .builder-schema-panel-column {
   display: grid;
-  grid-template-columns: max-content max-content;
+  grid-template-columns: max-content minmax(0, max-content);
   align-items: center;
   row-gap: var(--space-2, 6px);
   column-gap: 0;
@@ -4710,7 +4727,11 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .is-lattice .builder-schema-panel-column {
-  flex: 0 0 auto;
+  /* Shrinks only when a column is alone on its line and still wider than the
+     panel (it wraps first otherwise) — see the control track above. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /*
@@ -4730,7 +4751,7 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
  * (the video sub-panel) subgrids onto its parent and must not pick it up.
  */
 .builder-react-root .is-lattice .builder-schema-panel-columns > .builder-schema-panel-column[style*="--lattice-stack-label"] {
-  grid-template-columns: minmax(var(--lattice-stack-label), max-content) max-content;
+  grid-template-columns: minmax(var(--lattice-stack-label), max-content) minmax(0, max-content);
 }
 
 /* ============================================================== */
@@ -11690,7 +11711,11 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 }
 
 .builder-react-root .is-lattice .builder-module-field-control > .builder-project-data-picker > select {
-  flex: 1 1 auto;
+  /* A modest basis rather than `auto` (the longest page name), so the pair
+     wraps only when the column is genuinely narrow — with `flex-wrap` on the
+     picker, an `auto` basis would push the Custom input under the select at
+     every width a long page name exists. Both grow to fill the row. */
+  flex: 1 1 16ch;
   min-width: 0;
 }
 
