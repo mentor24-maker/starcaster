@@ -25,7 +25,9 @@ const {
 // six-tile grid is the reference case for card-grid detection (map.ts).
 // The older `wordpress` fixture is the PREVIOUS delraytennis.com site and
 // has no card grid at all, so it cannot serve as that reference.
-const FIXTURES = ['wordpress', 'jsframework', 'tablelayout', 'blazefishcards'];
+// strands: hand-built from strandsmovie.com's live markup (task 86bchydp2) —
+// the reference case for a header logo and a footer with no <nav>.
+const FIXTURES = ['wordpress', 'jsframework', 'tablelayout', 'blazefishcards', 'strands'];
 const fixturesDir = path.join(__dirname, 'fixtures');
 
 function loadJson(file) {
@@ -148,4 +150,126 @@ test('element screenshot crops join by sourceId', () => {
   assert.equal(form.class, 'form');
   assert.equal(form.sourceId, sid);
   assert.equal(form.screenshot, 'SiteImport/j/shots/home.desktop.e' + sid + '.png');
+});
+
+/* ---------------------------------------------------------------------------
+ * Header logo + footer links outside a <nav> (task 86bchydp2)
+ * ------------------------------------------------------------------------ */
+
+function onePage(html, url = 'https://x.test/') {
+  return normalizeSite({
+    jobId: 'j',
+    sourceUrl: url,
+    capturedAt: '2026-10-13T00:00:00.000Z',
+    assets: [],
+    pages: [
+      {
+        desktop: {
+          url,
+          finalUrl: url,
+          viewport: 'desktop',
+          html,
+          styles: {},
+          fullPageScreenshot: '',
+          sectionScreenshots: {},
+          elementScreenshots: {},
+          assetUrls: [],
+          fontFamilies: [],
+          meta: { title: '', metaDescription: '', ogTags: {}, canonicalUrl: '', lang: '' },
+        },
+      },
+    ],
+  }).ir;
+}
+
+function countLinks(items) {
+  return items.reduce((n, item) => n + 1 + countLinks(item.children), 0);
+}
+
+test('strands: the header logo is recorded and joined to its asset', () => {
+  const { ir } = normalizeSite(loadJson('strands.json'));
+  const logo = ir.taxonomy.logo;
+  assert.ok(logo, 'taxonomy.logo is missing — the header logo was not captured');
+  assert.match(logo.src, /logo_strands_1000x300\.png$/);
+  assert.equal(logo.alt, 'Strands');
+  assert.equal(logo.href, 'https://strandsmovie.com/');
+  assert.equal(logo.width, 1000);
+  assert.equal(logo.height, 300);
+  assert.equal(logo.assetId, 'asset-logo');
+});
+
+test('strands: footer links outside a <nav> become a footer menu, credits dropped', () => {
+  const { ir } = normalizeSite(loadJson('strands.json'));
+  const footers = ir.taxonomy.navs.filter((n) => n.location === 'footer');
+  assert.equal(footers.length, 1, 'expected one footer menu');
+  assert.equal(footers[0].source, 'footer-links', 'a tree built outside <nav> must be marked so map skips it');
+  assert.deepEqual(
+    footers[0].items.map((i) => [i.label, i.href]),
+    [
+      ['Facebook', 'https://www.facebook.com/profile.php?id=61576242464283'],
+      ['X', 'https://x.com/StrandsMovie'],
+    ]
+  );
+  const labels = JSON.stringify(ir.taxonomy.navs);
+  assert.ok(!/Elegant Themes|WordPress/.test(labels), 'theme credits must not become menu items');
+});
+
+test('strands: the header menu is unchanged — 7 top items, 25 links', () => {
+  const { ir } = normalizeSite(loadJson('strands.json'));
+  const headers = ir.taxonomy.navs.filter((n) => n.location === 'header');
+  assert.equal(headers.length, 1);
+  assert.equal(headers[0].items.length, 7);
+  assert.equal(headers[0].items.filter((i) => i.children.length).length, 5);
+  assert.equal(countLinks(headers[0].items), 25);
+});
+
+test('a page with no logo leaves taxonomy.logo absent, not an empty object', () => {
+  const ir = onePage(
+    '<body><header><img src="/hero.jpg" alt="Beach"><nav><ul><li><a href="/a">A</a></li></ul></nav></header></body>'
+  );
+  assert.equal('logo' in ir.taxonomy, false);
+});
+
+test('a logo with no home link is found by its id, class or alt', () => {
+  const ir = onePage(
+    '<body><div class="site-header"><img src="/banner.jpg" alt="Banner"><img src="/brand.svg" class="custom-logo" alt="Acme"></div></body>'
+  );
+  assert.equal(ir.taxonomy.logo.src, 'https://x.test/brand.svg');
+  assert.equal(ir.taxonomy.logo.href, '');
+  assert.equal('assetId' in ir.taxonomy.logo, false);
+});
+
+test('a footer that already uses <nav> keeps exactly the tree it had', () => {
+  const ir = onePage(
+    '<body><footer><nav><ul><li><a href="/privacy">Privacy</a></li><li><a href="/terms">Terms</a></li></ul></nav></footer></body>'
+  );
+  assert.deepEqual(ir.taxonomy.navs, [
+    {
+      location: 'footer',
+      pageUrl: 'https://x.test/',
+      items: [
+        { label: 'Privacy', href: '/privacy', children: [] },
+        { label: 'Terms', href: '/terms', children: [] },
+      ],
+    },
+  ]);
+});
+
+test('icon-only footer links are named from aria-label, title, then the domain', () => {
+  const ir = onePage(
+    '<body><div role="contentinfo"><ul>' +
+      '<li><a href="https://instagram.com/acme" aria-label="Our Instagram"><svg></svg></a></li>' +
+      '<li><a href="https://youtube.com/@acme" title="Watch us"><i class="fa"></i></a></li>' +
+      '<li><a href="https://www.linkedin.com/company/acme"><i class="fa"></i></a></li>' +
+      '<li><a href="https://bandcamp.com/acme"><i></i></a></li>' +
+      '<li>123 Main St</li>' +
+      '<li><a href="https://wix.com">Made with Wix</a></li>' +
+      '<li><a href="https://agency.test">Powered by Agency</a></li>' +
+      '</ul></div></body>'
+  );
+  const footer = ir.taxonomy.navs.find((n) => n.location === 'footer');
+  assert.deepEqual(
+    footer.items.map((i) => i.label),
+    ['Our Instagram', 'Watch us', 'LinkedIn', 'Bandcamp']
+  );
 });

@@ -9566,6 +9566,12 @@
           ]
         }
       ],
+      "logo": {
+        "src": "https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/logo-delray.png",
+        "alt": "Delray Beach Tennis Center and Delray Swim & Tennis Club",
+        "href": "https://www.blazefish.com/",
+        "assetId": "f2"
+      },
       "pageOrder": [
         "/"
       ]

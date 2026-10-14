@@ -365,6 +365,31 @@ export type NavTree = {
   /** Page the tree was extracted from. */
   pageUrl: string;
   items: NavItem[];
+  /**
+   * Set to "footer-links" on a footer tree built from plain link lists
+   * outside any <nav> (task 86bchydp2). The mapping step and the reconcile
+   * runner skip marked trees: before this slice those links were page
+   * content, and reading them as a menu would drop them from the imported
+   * page (navConsumed) or promote them to the site's top menu. Slice 2
+   * reads them on purpose. Absent on every tree that came from a real <nav>.
+   */
+  source?: "footer-links";
+};
+
+/**
+ * The site's logo, as found in its header (task 86bchydp2). `src` is resolved
+ * to an absolute URL; `assetId` joins it to the captured asset manifest the
+ * way content images join, so a later stage can copy the file into the
+ * project. Absent when no header image looked like a logo.
+ */
+export type SiteLogo = {
+  src: string;
+  alt: string;
+  /** Where the logo's wrapping link points ("" when it has none). */
+  href: string;
+  width?: number;
+  height?: number;
+  assetId?: string;
 };
 
 /** A CSS value with how many elements carry it — raw material for the
@@ -381,6 +406,9 @@ export type SiteIR = {
   assets: AssetRef[];
   taxonomy: {
     navs: NavTree[];
+    /** The site's header logo. Absent on IRs normalized before 2026-10-13,
+     *  and on sites where no header image looked like a logo. */
+    logo?: SiteLogo;
     /** Crawl/sitemap order of page paths — the original site's ordering. */
     pageOrder: string[];
   };

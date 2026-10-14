@@ -1,3 +1,17 @@
+## 2026-10-13 — Site Import now writes down a website's logo and its footer links (#852)
+
+When Site Import copies a website, it now records the site's logo (the picture
+in the header that links to the home page) and the links in its footer, even
+when the footer does not use a proper menu tag — which most don't.
+strandsmovie.com was the example: its top menu came across, but its logo and its
+Facebook and X links did not. Now they do, and the "Designed by Elegant Themes |
+Powered by WordPress" credit line is left behind, since that belongs to the
+website platform, not the client. This step only records them; the next slice
+turns them into a Top Menu and a Footer Menu on the imported site. Until it
+does, the importer deliberately ignores the newly recorded footer links, so
+they still land on the copied page as ordinary links — a review caught that
+without this, they would have quietly vanished from imported pages.
+
 ## 2026-10-13 — The Mac Mini can post approved Reddit comments, with proof (#851)
 
 Comments approved on Engage → Comments are now picked up by the Mac Mini, which

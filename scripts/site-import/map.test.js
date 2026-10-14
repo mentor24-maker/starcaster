@@ -701,3 +701,49 @@ test('apply summary: two mapped pages written onto one page is an error, not a s
   assert.match(summary.problems[0], /page 1497 was written 2 times: \/home, \/home-imported/);
   assert.match(summary.problems[1], /report lists 3 page\(s\) but 2 distinct/);
 });
+
+// Task 86bchydp2, round 2: footer trees built from plain link lists
+// (source "footer-links") are recorded for slice 2 but must not change what
+// the mapping step does today. Before that slice, those links were page
+// content — reading them as a menu dropped them from the page (navConsumed)
+// and, on a site with no header <nav>, made them the top menu.
+const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
+
+function strandsWith(edit) {
+  const raw = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'fixtures', 'strands.json'), 'utf8')
+  );
+  for (const page of raw.pages) page.desktop.html = edit(page.desktop.html);
+  return raw;
+}
+
+const SOCIAL_LIST = /<ul class="et-social-icons">[\s\S]*?<\/ul>/;
+const TEXT_LINKS =
+  '<ul class="footer-links"><li><a href="/privacy">Privacy Policy</a></li>' +
+  '<li><a href="/contact">Contact us</a></li></ul>';
+
+test('footer link lists outside a <nav> stay on the page and out of navConsumed', () => {
+  const { ir } = normalizeSite(strandsWith((html) => html.replace(SOCIAL_LIST, TEXT_LINKS)));
+  const marked = ir.taxonomy.navs.filter((n) => n.source === 'footer-links');
+  assert.equal(marked.length, 1, 'fixture must produce a footer-links tree, or this test proves nothing');
+  assert.deepEqual(marked[0].items.map((i) => i.label), ['Privacy Policy', 'Contact us']);
+
+  const without = { ...ir, taxonomy: { ...ir.taxonomy, navs: ir.taxonomy.navs.filter((n) => n.source !== 'footer-links') } };
+  const withTree = mapSite(ir, { existingSlugs: [] });
+  const baseline = mapSite(without, { existingSlugs: [] });
+  assert.equal(withTree.report.elements.mapped, baseline.report.elements.mapped);
+  assert.equal(withTree.report.elements.navConsumed, baseline.report.elements.navConsumed);
+  assert.deepEqual(withTree.navItems, baseline.navItems);
+});
+
+test('a site with no header <nav> does not get its footer links as its menu', () => {
+  const { ir } = normalizeSite(
+    strandsWith((html) =>
+      html.replace(/<nav id="top-menu-nav">[\s\S]*?<\/nav>/, '').replace(SOCIAL_LIST, TEXT_LINKS)
+    )
+  );
+  assert.ok(!ir.taxonomy.navs.some((n) => n.location === 'header'), 'fixture must have no header menu');
+  assert.ok(ir.taxonomy.navs.some((n) => n.source === 'footer-links'), 'fixture must carry a footer-links tree');
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.deepEqual(out.navItems, []);
+});
