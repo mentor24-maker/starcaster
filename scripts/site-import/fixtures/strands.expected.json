@@ -1,0 +1,600 @@
+{
+  "ir": {
+    "irVersion": "1.0",
+    "jobId": "job-fixture-strands",
+    "sourceUrl": "https://strandsmovie.com/",
+    "capturedAt": "2026-10-13T00:00:00.000Z",
+    "pages": [
+      {
+        "url": "https://strandsmovie.com/",
+        "path": "/",
+        "title": "Strands",
+        "metaDescription": "",
+        "ogTags": {},
+        "canonicalUrl": "https://strandsmovie.com/",
+        "lang": "en-US",
+        "sections": [
+          {
+            "sourceId": "0-08c2bf26",
+            "type": "unknown",
+            "screenshot": "",
+            "elements": [
+              {
+                "sourceId": "0-6449c76e",
+                "class": "image",
+                "html": "<a href=\"https://strandsmovie.com/\"><img src=\"https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png\" width=\"1000\" height=\"300\" alt=\"Strands\" id=\"logo\" data-height-percentage=\"54\"></a>",
+                "textContent": "",
+                "textLength": 0,
+                "computedStyles": {},
+                "documentPosition": 0,
+                "depth": 5,
+                "assetRefs": [
+                  "asset-logo"
+                ]
+              },
+              {
+                "sourceId": "0-93b0815a",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/\">Home</a>",
+                "textContent": "Home",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 1,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-16ac119d",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/about/\">About</a>",
+                "textContent": "About",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 2,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-323ac81c",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/the-film/\">The Film</a>",
+                "textContent": "The Film",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 3,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-defc4587",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/directors-statement/\">Directors Statement</a>",
+                "textContent": "Directors Statement",
+                "textLength": 19,
+                "computedStyles": {},
+                "documentPosition": 4,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-c3cdbba2",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/production-notes/\">Production Notes</a>",
+                "textContent": "Production Notes",
+                "textLength": 16,
+                "computedStyles": {},
+                "documentPosition": 5,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-f917df85",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/awards/\">Awards</a>",
+                "textContent": "Awards",
+                "textLength": 6,
+                "computedStyles": {},
+                "documentPosition": 6,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-b224f1f4",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/cast-crew/\">Cast &amp; Crew</a>",
+                "textContent": "Cast & Crew",
+                "textLength": 11,
+                "computedStyles": {},
+                "documentPosition": 7,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-5f5e8645",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/cast/\">Cast</a>",
+                "textContent": "Cast",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 8,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-17220662",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/crew/\">Crew</a>",
+                "textContent": "Crew",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 9,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-c30be247",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/producers/\">Producers</a>",
+                "textContent": "Producers",
+                "textLength": 9,
+                "computedStyles": {},
+                "documentPosition": 10,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-858d7fdc",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/composer/\">Composer</a>",
+                "textContent": "Composer",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 11,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-a5a51bff",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/story/\">Story</a>",
+                "textContent": "Story",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 12,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-21215206",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/synopsis/\">Synopsis</a>",
+                "textContent": "Synopsis",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 13,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-af72cfc9",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/characters/\">Characters</a>",
+                "textContent": "Characters",
+                "textLength": 10,
+                "computedStyles": {},
+                "documentPosition": 14,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-4c20a2a0",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/setting/\">Setting</a>",
+                "textContent": "Setting",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 15,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-8a526c6e",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/media/\">Media</a>",
+                "textContent": "Media",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 16,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-99dfa5df",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/trailer/\">Trailer</a>",
+                "textContent": "Trailer",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 17,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-6d5e95d4",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/photos/\">Photos</a>",
+                "textContent": "Photos",
+                "textLength": 6,
+                "computedStyles": {},
+                "documentPosition": 18,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-89a4507d",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/posters/\">Posters</a>",
+                "textContent": "Posters",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 19,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-6e9e563a",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/press-kit/\">Press Kit</a>",
+                "textContent": "Press Kit",
+                "textLength": 9,
+                "computedStyles": {},
+                "documentPosition": 20,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-a2f83b91",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/news/\">News</a>",
+                "textContent": "News",
+                "textLength": 4,
+                "computedStyles": {},
+                "documentPosition": 21,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-ac029e48",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/press/\">Press</a>",
+                "textContent": "Press",
+                "textLength": 5,
+                "computedStyles": {},
+                "documentPosition": 22,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-2d16fe73",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/festivals/\">Festivals</a>",
+                "textContent": "Festivals",
+                "textLength": 9,
+                "computedStyles": {},
+                "documentPosition": 23,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-593aa6ee",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/updates/\">Updates</a>",
+                "textContent": "Updates",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 24,
+                "depth": 10,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-dd1a63c8",
+                "class": "link",
+                "html": "<a href=\"https://strandsmovie.com/contact/\">Contact</a>",
+                "textContent": "Contact",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 25,
+                "depth": 8,
+                "assetRefs": []
+              }
+            ]
+          },
+          {
+            "sourceId": "0-04c07a43",
+            "type": "unknown",
+            "screenshot": "",
+            "elements": [
+              {
+                "sourceId": "0-16914eb6",
+                "class": "heading",
+                "html": "<h1>Strands</h1>",
+                "textContent": "Strands",
+                "textLength": 7,
+                "computedStyles": {},
+                "documentPosition": 26,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-5bb253dc",
+                "class": "text",
+                "html": "<p>A feature film about the threads that bind us.</p>",
+                "textContent": "A feature film about the threads that bind us.",
+                "textLength": 46,
+                "computedStyles": {},
+                "documentPosition": 27,
+                "depth": 4,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-2c7ba5fb",
+                "class": "link",
+                "html": "<a href=\"https://www.facebook.com/profile.php?id=61576242464283\" class=\"icon\"><span>Facebook</span></a>",
+                "textContent": "Facebook",
+                "textLength": 8,
+                "computedStyles": {},
+                "documentPosition": 28,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-abf1c690",
+                "class": "link",
+                "html": "<a href=\"https://x.com/StrandsMovie\" class=\"icon\"><span>X</span></a>",
+                "textContent": "X",
+                "textLength": 1,
+                "computedStyles": {},
+                "documentPosition": 29,
+                "depth": 8,
+                "assetRefs": []
+              },
+              {
+                "sourceId": "0-10aca9b5",
+                "class": "text",
+                "html": "<p id=\"footer-info\">Designed by <a href=\"https://www.elegantthemes.com\" title=\"Premium WordPress Themes\">Elegant Themes</a> | Powered by <a href=\"https://www.wordpress.org\">WordPress</a></p>",
+                "textContent": "Designed by Elegant Themes | Powered by WordPress",
+                "textLength": 49,
+                "computedStyles": {},
+                "documentPosition": 30,
+                "depth": 6,
+                "assetRefs": []
+              }
+            ]
+          }
+        ],
+        "screenshots": {
+          "desktop": "SiteImport/job-fixture-strands/shots/home.desktop.full.png",
+          "tablet": "",
+          "mobile": ""
+        }
+      }
+    ],
+    "assets": [
+      {
+        "id": "asset-logo",
+        "originalUrl": "https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png",
+        "storageUrl": "SiteImport/job-fixture-strands/assets/logo.png",
+        "contentHash": "fixture",
+        "mimeType": "image/png",
+        "byteSize": 12345,
+        "width": 1000,
+        "height": 300,
+        "altText": "Strands",
+        "referencedBy": [
+          {
+            "pageUrl": "https://strandsmovie.com/",
+            "sourceId": "0-6449c76e"
+          }
+        ],
+        "status": "downloaded",
+        "error": ""
+      }
+    ],
+    "taxonomy": {
+      "navs": [
+        {
+          "location": "header",
+          "pageUrl": "https://strandsmovie.com/",
+          "items": [
+            {
+              "label": "Home",
+              "href": "https://strandsmovie.com/",
+              "children": []
+            },
+            {
+              "label": "About",
+              "href": "https://strandsmovie.com/about/",
+              "children": [
+                {
+                  "label": "The Film",
+                  "href": "https://strandsmovie.com/the-film/",
+                  "children": []
+                },
+                {
+                  "label": "Directors Statement",
+                  "href": "https://strandsmovie.com/directors-statement/",
+                  "children": []
+                },
+                {
+                  "label": "Production Notes",
+                  "href": "https://strandsmovie.com/production-notes/",
+                  "children": []
+                },
+                {
+                  "label": "Awards",
+                  "href": "https://strandsmovie.com/awards/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "Cast & Crew",
+              "href": "https://strandsmovie.com/cast-crew/",
+              "children": [
+                {
+                  "label": "Cast",
+                  "href": "https://strandsmovie.com/cast/",
+                  "children": []
+                },
+                {
+                  "label": "Crew",
+                  "href": "https://strandsmovie.com/crew/",
+                  "children": []
+                },
+                {
+                  "label": "Producers",
+                  "href": "https://strandsmovie.com/producers/",
+                  "children": []
+                },
+                {
+                  "label": "Composer",
+                  "href": "https://strandsmovie.com/composer/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "Story",
+              "href": "https://strandsmovie.com/story/",
+              "children": [
+                {
+                  "label": "Synopsis",
+                  "href": "https://strandsmovie.com/synopsis/",
+                  "children": []
+                },
+                {
+                  "label": "Characters",
+                  "href": "https://strandsmovie.com/characters/",
+                  "children": []
+                },
+                {
+                  "label": "Setting",
+                  "href": "https://strandsmovie.com/setting/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "Media",
+              "href": "https://strandsmovie.com/media/",
+              "children": [
+                {
+                  "label": "Trailer",
+                  "href": "https://strandsmovie.com/trailer/",
+                  "children": []
+                },
+                {
+                  "label": "Photos",
+                  "href": "https://strandsmovie.com/photos/",
+                  "children": []
+                },
+                {
+                  "label": "Posters",
+                  "href": "https://strandsmovie.com/posters/",
+                  "children": []
+                },
+                {
+                  "label": "Press Kit",
+                  "href": "https://strandsmovie.com/press-kit/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "News",
+              "href": "https://strandsmovie.com/news/",
+              "children": [
+                {
+                  "label": "Press",
+                  "href": "https://strandsmovie.com/press/",
+                  "children": []
+                },
+                {
+                  "label": "Festivals",
+                  "href": "https://strandsmovie.com/festivals/",
+                  "children": []
+                },
+                {
+                  "label": "Updates",
+                  "href": "https://strandsmovie.com/updates/",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "Contact",
+              "href": "https://strandsmovie.com/contact/",
+              "children": []
+            }
+          ]
+        },
+        {
+          "location": "footer",
+          "pageUrl": "https://strandsmovie.com/",
+          "items": [
+            {
+              "label": "Facebook",
+              "href": "https://www.facebook.com/profile.php?id=61576242464283",
+              "children": []
+            },
+            {
+              "label": "X",
+              "href": "https://x.com/StrandsMovie",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "logo": {
+        "src": "https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png",
+        "alt": "Strands",
+        "href": "https://strandsmovie.com/",
+        "width": 1000,
+        "height": 300,
+        "assetId": "asset-logo"
+      },
+      "pageOrder": [
+        "/"
+      ]
+    },
+    "rawTokens": {
+      "colors": [],
+      "fontSizes": [],
+      "fontFamilies": [],
+      "spacing": []
+    }
+  },
+  "coverage": {
+    "captured": {
+      "image": 1,
+      "link": 27,
+      "heading": 1,
+      "text": 2
+    },
+    "emitted": {
+      "image": 1,
+      "link": 27,
+      "heading": 1,
+      "text": 2
+    },
+    "dropped": {},
+    "pages": {
+      "discovered": 1,
+      "captured": 1,
+      "failed": 0
+    },
+    "caps": {
+      "hit": []
+    }
+  }
+}
