@@ -19,7 +19,7 @@ const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'fonts_library_
 const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
 const { checkFontLicence, checkFontFamilyName, LICENCE_REFUSED_MESSAGE } = require('../../lib/fontLicence.js');
 const { detectFontFormat, inferFontStyle } = require('../../lib/fontFiles.js');
-const { parseMultipart } = require('../../lib/multipartForm.js');
+const { readFontUploadBody, MAX_FILE_BYTES } = require('../../lib/fontUploadBody.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const scopePath = require.resolve('../../lib/projectScope.js');
@@ -136,21 +136,35 @@ test('weight and style are read from the usual file names', () => {
   assert.deepEqual(inferFontStyle('MyFont.woff2'), { weight: 400, style: 'normal' });
 });
 
-test('a multipart form is read back into its fields and files, bytes intact', () => {
-  const boundary = '----fontsboundary';
-  const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="family"\r\n\r\nSpace Grotesk\r\n`),
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="SG-Bold.woff2"\r\nContent-Type: font/woff2\r\n\r\n`),
-    WOFF2,
-    Buffer.from(`\r\n--${boundary}--\r\n`),
-  ]);
-  const parsed = parseMultipart(body, `multipart/form-data; boundary=${boundary}`);
-  assert.equal(parsed.ok, true);
+test('a JSON upload is read back into its fields and files, bytes intact', () => {
+  const parsed = readFontUploadBody({
+    family: 'Space Grotesk',
+    tags: ['sci-fi', 'display'],
+    styles: [{ weight: 700, style: 'normal' }],
+    files: [{ name: 'SG-Bold.woff2', data: `data:font/woff2;base64,${WOFF2.toString('base64')}` }],
+  });
+  assert.equal(parsed.ok, true, parsed.message);
   assert.equal(parsed.fields.family, 'Space Grotesk');
+  assert.deepEqual(JSON.parse(parsed.fields.tags), ['sci-fi', 'display']);
+  assert.deepEqual(JSON.parse(parsed.fields.styles), [{ weight: 700, style: 'normal' }]);
   assert.equal(parsed.files.length, 1);
   assert.equal(parsed.files[0].fileName, 'SG-Bold.woff2');
   assert.ok(parsed.files[0].buffer.equals(WOFF2), 'the file bytes changed on the way through');
-  assert.equal(parseMultipart(body, 'application/json').ok, false);
+});
+
+test('a JSON upload refuses bad base64, a nameless file, and files over the size cap — in words', () => {
+  const bad = readFontUploadBody({ files: [{ name: 'A.woff2', data: 'not base64!' }] });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.status, 400);
+  assert.match(bad.message, /base64/);
+  assert.equal(readFontUploadBody({ files: [{ data: WOFF2.toString('base64') }] }).ok, false);
+  assert.equal(readFontUploadBody({ files: 'A.woff2' }).ok, false);
+  assert.equal(readFontUploadBody(null).ok, false);
+  const big = Buffer.alloc(MAX_FILE_BYTES + 3).toString('base64');
+  const tooBig = readFontUploadBody({ files: [{ name: 'Big.woff2', data: big }] });
+  assert.equal(tooBig.ok, false);
+  assert.equal(tooBig.status, 413);
+  assert.match(tooBig.message, /Upload fewer files/);
 });
 
 // ── Store: tenancy and the platform/project split ───────────────────────────
@@ -313,6 +327,20 @@ function fakeReq({ method, body, contentType, projectId = 'proj_a' }) {
   return req;
 }
 
+/**
+ * A request the way Vercel's Node runtime hands it over: the stream has
+ * already been read to the end, and `req.body` is the parsed JSON — or
+ * undefined for any type it does not parse, multipart among them. A handler
+ * that listens on this stream waits forever.
+ */
+async function vercelReq({ method, json, contentType = 'application/json', projectId = 'proj_a' }) {
+  const req = fakeReq({ method, contentType, projectId });
+  req.resume();
+  await new Promise((resolve) => req.once('end', resolve));
+  if (json !== undefined) req.body = json;
+  return req;
+}
+
 function fakeRes() {
   const res = { statusCode: 0, headers: {}, body: '' };
   res.setHeader = (k, v) => { res.headers[k] = v; };
@@ -321,37 +349,55 @@ function fakeRes() {
   return res;
 }
 
-function multipartBody(fields, files) {
-  const boundary = '----routeboundary';
-  const parts = [];
-  for (const [name, value] of Object.entries(fields)) {
-    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
-  }
-  for (const f of files) {
-    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${f.fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`));
-    parts.push(f.buffer, Buffer.from('\r\n'));
-  }
-  parts.push(Buffer.from(`--${boundary}--\r\n`));
-  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
+function uploadJson(fields, files) {
+  return { ...fields, files: files.map((f) => ({ name: f.fileName, data: f.buffer.toString('base64') })) };
+}
+
+// A hang is the failure being guarded against, so it must fail the test, not stall it.
+function withinOneSecond(promise) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('HANG: the handler never answered')), 1000); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 test('POST /api/fonts: OFL stores and returns the font; personal-use answers 400 with the message', async (t) => {
   const { db, route, blobs, deps, restore } = withStore();
   t.after(restore);
 
-  const good = multipartBody(OFL_FIELDS, [{ fileName: 'SG-Regular.woff2', buffer: WOFF2 }]);
+  // The Vercel shape: stream already drained, body parsed onto req.body.
+  const good = uploadJson(OFL_FIELDS, [{ fileName: 'SG-Regular.woff2', buffer: WOFF2 }]);
   const res1 = fakeRes();
-  assert.equal(await route.handle(fakeReq({ method: 'POST', ...good }), res1, '/api/fonts', 'POST', deps), true);
+  const req1 = await vercelReq({ method: 'POST', json: good });
+  assert.equal(await withinOneSecond(route.handle(req1, res1, '/api/fonts', 'POST', deps)), true);
   assert.equal(res1.statusCode, 201, res1.body);
   assert.equal(res1.json().data.font.family, 'Space Grotesk');
 
-  const refused = multipartBody({ ...OFL_FIELDS, family: 'Other Font', licence: 'personal-use' }, [{ fileName: 'O.woff2', buffer: WOFF2 }]);
+  // The local shape: server.js never pre-reads, so the JSON is on the stream.
+  const refused = uploadJson({ ...OFL_FIELDS, family: 'Other Font', licence: 'personal-use' }, [{ fileName: 'O.woff2', buffer: WOFF2 }]);
   const res2 = fakeRes();
-  await route.handle(fakeReq({ method: 'POST', ...refused }), res2, '/api/fonts', 'POST', deps);
+  await withinOneSecond(route.handle(fakeReq({ method: 'POST', body: JSON.stringify(refused) }), res2, '/api/fonts', 'POST', deps));
   assert.equal(res2.statusCode, 400);
   assert.equal(res2.json().error.message, LICENCE_REFUSED_MESSAGE);
   assert.equal(blobs.puts.length, 1, 'the refused upload stored a file');
   assert.equal((await rawRows(db)).length, 1);
+});
+
+test('POST /api/fonts as a multipart form answers 415 at once on Vercel, instead of hanging until timeout', async (t) => {
+  const { db, route, blobs, deps, restore } = withStore();
+  t.after(restore);
+  for (const contentType of ['multipart/form-data; boundary=----x', '']) {
+    const res = fakeRes();
+    // On Vercel a multipart body is read and discarded: drained stream, no req.body.
+    const req = await vercelReq({ method: 'POST', contentType });
+    if (!contentType) req.headers = {};
+    await withinOneSecond(route.handle(req, res, '/api/fonts', 'POST', deps));
+    assert.equal(res.statusCode, 415, res.body);
+    assert.match(res.json().error.message, /JSON/);
+  }
+  assert.equal(blobs.puts.length, 0);
+  assert.equal((await rawRows(db)).length, 0);
 });
 
 test('GET /api/fonts lists the shared library and this project; DELETE of a shared font is 403', async (t) => {

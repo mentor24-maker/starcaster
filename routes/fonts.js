@@ -4,9 +4,9 @@
  * The font library API (Font Library 1/7, task 86bchyd3n).
  *
  *   GET    /api/fonts        → { ok, data: { fonts, total } }   shared library + this project's own
- *   POST   /api/fonts        → { ok, data: { font } }           multipart: files + family + category
- *                                                                + licence (+ source, sourceUrl,
- *                                                                licenceText, tags, previewText, styles)
+ *   POST   /api/fonts        → { ok, data: { font } }           JSON: family + category + licence
+ *                                                                + files [{ name, data: base64 }]
+ *                                                                (lib/fontUploadBody.js has the rest)
  *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }
  *   DELETE /api/fonts/:id    → { ok, data: { font, filesRemoved, filesNotRemoved } }
  *
@@ -23,7 +23,7 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const fontsStore = require('../lib/fontsStore');
 const { uploadProjectFont, removeFontFiles } = require('../lib/fontUpload');
-const { parseMultipart, readRawBody } = require('../lib/multipartForm');
+const { readFontUploadBody } = require('../lib/fontUploadBody');
 
 const manifest = {
   id: 'fonts',
@@ -54,14 +54,20 @@ async function handle(req, res, pathname, method, deps = {}) {
   }
 
   if (isCollection && verb === 'POST') {
-    let form;
+    // Refused BEFORE the body is read. On Vercel a multipart (or untyped)
+    // body has already been read and discarded by the runtime, so waiting on
+    // the stream would hang until the function timed out.
+    if (!/^application\/json\b/i.test(String(req.headers?.['content-type'] || ''))) {
+      return sendErr(res, 415, 'Send the font as JSON (Content-Type: application/json), with each file as base64.'), true;
+    }
+    let body;
     try {
-      const body = await readRawBody(req);
-      form = parseMultipart(body, req.headers?.['content-type']);
+      body = await parseJsonBody(req);
     } catch (err) {
       return sendErr(res, 413, err.message || 'The upload could not be read'), true;
     }
-    if (!form.ok) return sendErr(res, 400, form.message), true;
+    const form = readFontUploadBody(body);
+    if (!form.ok) return sendErr(res, form.status, form.message), true;
     const result = await uploadProjectFont(form, scope, deps);
     if (!result.ok) return fail(res, result, 'Could not save the font');
     return sendOk(res, 201, { font: result.data }), true;
