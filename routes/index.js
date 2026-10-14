@@ -79,6 +79,7 @@ const siteImport  = require('./siteImport');
 const siteExport  = require('./siteExport');
 const themeWizard = require('./themeWizard');
 const themeUsage  = require('./themeUsage');
+const fonts       = require('./fonts');
 const publicSite  = require('./publicSite');
 
 // Route modules are tried in order — first match wins.
@@ -128,6 +129,7 @@ const ROUTE_MODULES = [
   builder,
   siteImport,
   siteExport,
+  fonts,
   seoAltText,
   communityAssets,
   messaging,
