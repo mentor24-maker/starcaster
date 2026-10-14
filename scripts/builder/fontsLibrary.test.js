@@ -423,3 +423,66 @@ test('the route does not claim paths that are not its own', async (t) => {
   assert.equal(await route.handle(fakeReq({ method: 'GET' }), fakeRes(), '/api/fontsx', 'GET'), false);
   assert.equal(await route.handle(fakeReq({ method: 'GET' }), fakeRes(), '/api/fonts/a/b', 'GET'), false);
 });
+
+// ── The public read a published page loads its fonts from (3/7, 86bchyd46) ──
+
+test('the public font read returns only what a browser needs, for the slugs named', async () => {
+  const { store, restore } = withStore();
+  try {
+    await platformFont(store, 'Orbitron');
+    await platformFont(store, 'Space Mono');
+    await platformFont(store, 'Lobster');
+    const res = await store.listPublicFontsBySlugs(['orbitron', 'space-mono', 'not-a-font'], '');
+    assert.equal(res.ok, true, res.error);
+    assert.deepEqual(res.data.map((f) => f.slug), ['orbitron', 'space-mono']);
+    assert.deepEqual(Object.keys(res.data[0]).sort(), ['category', 'family', 'slug', 'styles']);
+    assert.deepEqual(res.data[0].styles, [{ weight: 400, style: 'normal', url: 'https://blob.test/Orbitron.woff2', format: '' }]);
+  } finally {
+    restore();
+  }
+});
+
+test('the public font read sees a project font only when that project is named, and prefers it', async () => {
+  const { store, restore } = withStore();
+  try {
+    await platformFont(store, 'Orbitron');
+    const own = await store.createFont({
+      family: 'Orbitron', category: 'display', licence: 'OFL-1.1',
+      styles: [{ weight: 700, style: 'normal', url: 'https://blob.test/own-orbitron.woff2' }],
+    }, SCOPE_A);
+    assert.equal(own.ok, true, own.error);
+    const mine = await store.createFont({
+      family: 'Secret Face', category: 'display', licence: 'OFL-1.1',
+      styles: [{ weight: 400, style: 'normal', url: 'https://blob.test/secret.woff2' }],
+    }, SCOPE_A);
+    assert.equal(mine.ok, true, mine.error);
+
+    const asA = await store.listPublicFontsBySlugs(['orbitron', 'secret-face'], 'proj_a');
+    assert.deepEqual(asA.data.map((f) => [f.slug, f.styles[0].url]), [
+      ['orbitron', 'https://blob.test/own-orbitron.woff2'],
+      ['secret-face', 'https://blob.test/secret.woff2'],
+    ]);
+    const asB = await store.listPublicFontsBySlugs(['orbitron', 'secret-face'], 'proj_b');
+    assert.deepEqual(asB.data.map((f) => [f.slug, f.styles[0].url]), [['orbitron', 'https://blob.test/Orbitron.woff2']]);
+    const asNobody = await store.listPublicFontsBySlugs(['secret-face'], '');
+    assert.deepEqual(asNobody.data, []);
+  } finally {
+    restore();
+  }
+});
+
+test('the public font read refuses no slugs, bad slugs and too many slugs in plain words', async () => {
+  const { store, restore } = withStore();
+  try {
+    const none = await store.listPublicFontsBySlugs([], '');
+    assert.equal(none.ok, false);
+    assert.match(none.error, /Name at least one font slug/);
+    const bad = await store.listPublicFontsBySlugs(['a,b)', 'x;drop'], '');
+    assert.equal(bad.ok, false);
+    const many = await store.listPublicFontsBySlugs(Array.from({ length: 9 }, (_, i) => `font-${i}`), '');
+    assert.equal(many.ok, false);
+    assert.match(many.error, /At most 8 fonts/);
+  } finally {
+    restore();
+  }
+});

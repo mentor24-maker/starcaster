@@ -2161,6 +2161,50 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'heading-renders-in-a-library-font',
+    why:
+      'Font Library 3/7, task 86bchyd46: a font slot takes a font from Starcaster\'s own font library ' +
+      '("lf:<slug>"), and the page loads that font\'s files. Two halves, and either can fail alone: ' +
+      'the name can be dropped before it reaches the page (the Google-font failure, 86bce9wwv), or ' +
+      'the name can arrive with no @font-face behind it, so the browser quietly draws the fallback ' +
+      'and the page looks almost right. The font read is answered here from a committed file, so ' +
+      'this needs no database.',
+    module: { type: 'heading', text: 'Library font heading', settings: { fontFamily: 'lf:geist-mono' } },
+    serve: [
+      {
+        url: /\/api\/public\/fonts\?/,
+        json: {
+          ok: true,
+          data: {
+            fonts: [{
+              slug: 'geist-mono',
+              family: 'Geist Mono',
+              category: 'monospace',
+              styles: [{ weight: 400, style: 'normal', url: '/__render-contract/geist-mono.woff2', format: 'woff2' }],
+            }],
+          },
+        },
+      },
+      { url: /\/__render-contract\/geist-mono\.woff2$/, file: 'fixtures/render-fixture-geist-mono.woff2', contentType: 'font/woff2' },
+    ],
+    fontFaces: ['lf-geist-mono'],
+    selector: '.builder-preview-heading',
+    read: ['fontFamily'],
+    expect(sample) {
+      if (!/lf-geist-mono/.test(sample.styles.fontFamily)) {
+        return `the heading asked for library font lf:geist-mono but rendered in ${sample.styles.fontFamily} — the font key was dropped before it reached the page.`;
+      }
+      const statuses = sample.fontFaces?.['lf-geist-mono'] || [];
+      if (!statuses.length) {
+        return 'the heading names lf-geist-mono but the page declared no @font-face for it — the font\'s files were never asked for, so it draws in the fallback.';
+      }
+      return statuses.includes('loaded')
+        ? null
+        : `the @font-face for lf-geist-mono was declared but did not load (status: ${statuses.join(', ')}).`;
+    },
+  },
+
+  {
     id: 'gradient-background-still-runs-at-135-degrees-by-default',
     why:
       'THE SAFETY HALF OF THE ANGLE SETTING, and the one worth measuring. Every gradient in the ' +

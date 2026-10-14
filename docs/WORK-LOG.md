@@ -1,3 +1,14 @@
+## 2026-10-14 — A theme can use a font from Starcaster's own font library, and live pages load it (#857)
+
+The font picker in Builder → Themes now has a third choice, "Library font…", next
+to the ten built-in fonts and "Google font…". It lists the fonts in Starcaster's
+own font library by name. Pick one, save, and the Builder, the preview and the
+published site all draw that theme's text in it. A page only downloads the font
+files it actually uses; a page using no library font downloads nothing extra. A
+browser check now proves the font really loads on a page, not just that its name
+arrived, and that check was made to fail on purpose to show it can. The library
+is empty until the Fonts screen (2/7) or the starter pack (4/7) fills it; until
+then the picker says so plainly.
 ## 2026-10-14 — One command fills the font library with 288 free fonts, sci-fi and display first (#859)
 
 The font library built yesterday was empty. Now `npm run fonts:import` pulls a
