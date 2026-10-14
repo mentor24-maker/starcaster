@@ -9,6 +9,7 @@ import ConnectionsPanel from './components/connections/connections-panel';
 import AiSpendPanel from './components/observe/ai-spend-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 import FootagePanel from './components/studio/footage-panel';
+import FontsManager from './components/fonts/fonts-manager';
 import WordPressExportPanel from './components/settings/wordpress-export-panel';
 import YoutubeOutreachPanel from './components/youtube-outreach/youtube-outreach-panel';
 import SubstackNotesPanel from './components/substack-notes/substack-notes-panel';
@@ -65,6 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (footageHost) {
     createRoot(footageHost).render(<FootagePanel />);
+  }
+
+  const fontsHost = document.getElementById('assetsFontsReactRoot');
+
+  if (fontsHost) {
+    createRoot(fontsHost).render(<FontsManager />);
   }
 
   const youtubeOutreachHost = document.getElementById('youtubeOutreachReactRoot');

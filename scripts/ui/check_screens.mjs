@@ -88,6 +88,7 @@ const SCREENS = [
     inReachFrom: 1440,
   },
   { id: 'assetsFootagePage', label: 'Assets: Footage' },
+  { id: 'assetsFontsPage', label: 'Assets: Fonts' },
   { id: 'assetsFootagePage', label: 'Assets: Footage, transcript open', open: '[data-testid="studio-transcript-open"]' },
   {
     id: 'assetsFootagePage',

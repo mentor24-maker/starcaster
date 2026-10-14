@@ -1,0 +1,168 @@
+/* Assets › Fonts — the React island at #assetsFontsReactRoot
+   (components/fonts/fonts-manager.tsx). Font Library 2 of 7.
+
+   Same conventions as the other React islands (_reddit-comments.css,
+   _substack-miner.css): every flex/grid box sets min-width: 0 (UI_RULES T8),
+   no pixel min-widths (T9), text controls stop at --builder-field-long-max
+   (W9), so the page body never scrolls sideways (T0). */
+
+.fonts-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.fonts-manager .btn,
+.fonts-manager .tiny-btn {
+  margin: 0;
+}
+
+.fonts-manager p {
+  margin: 0;
+}
+
+.fonts-manager-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fonts-manager-empty,
+.fonts-manager-notice {
+  font-size: var(--text-base);
+}
+
+.fonts-manager-empty {
+  opacity: 0.75;
+}
+
+.fonts-manager-error {
+  color: var(--status-warn-ink);
+  font-weight: 600;
+}
+
+/* The Add Font form. The COLUMN is the grid, not the field (UI_RULES W0):
+   each label is display: contents, so one pair of tracks measures the longest
+   label and the longest control across the whole form. */
+.fonts-manager-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+}
+
+/* Only the label/control pairs live in the grid. A full-width row inside it
+   (the error sentence) would count toward the label track's size and push
+   the controls off to the right. */
+.fonts-manager-form-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, var(--builder-field-long-max, 560px));
+  justify-content: start;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.fonts-manager-form-title {
+  margin: 0;
+}
+
+.fonts-manager-field {
+  display: contents;
+}
+
+.fonts-manager-field > span:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fonts-manager-field input[type="text"],
+.fonts-manager-field input[type="url"],
+.fonts-manager-field select {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.fonts-manager-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.fonts-manager-help {
+  opacity: 0.75;
+}
+
+.fonts-manager-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--space-2);
+}
+
+/* The table. The Font column is what a row is for: it takes the room and
+   wraps, never truncates (UI_RULES T-1). */
+.fonts-manager-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.fonts-manager-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fonts-manager-table th,
+.fonts-manager-table td {
+  vertical-align: middle;
+}
+
+.fonts-manager-name-cell {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.fonts-manager-preview {
+  display: block;
+  font-size: var(--text-2xl);
+  line-height: 1.25;
+}
+
+.fonts-manager-scope {
+  display: block;
+  font-size: var(--text-sm);
+  opacity: 0.65;
+}
+
+/* Breaks between words only (UI_RULES L4); a long bare URL may still break. */
+.fonts-manager-source {
+  overflow-wrap: break-word;
+}
+
+.fonts-manager-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.fonts-manager-chip {
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--surface-2, rgba(0, 0, 0, 0.06));
+  white-space: nowrap;
+}
+
+.fonts-manager-confirm {
+  flex-wrap: wrap;
+  align-items: center;
+}
