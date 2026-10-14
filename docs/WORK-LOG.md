@@ -1,3 +1,15 @@
+## 2026-10-13 — Starcaster has a place to keep its own fonts, and refuses ones a business may not use (#854)
+
+Sites could only use the ten built-in fonts or a Google Font. Now Starcaster can
+store font files itself: a shared library every project can use (which no single
+project can change or delete), plus fonts a project uploads for its own sites.
+Before anything is stored, the upload is checked: the font's licence must be one
+that allows use on a business website (SIL Open Font License, Apache 2.0 or public
+domain — "free for personal use" is refused with a plain explanation), each file
+must really be a font, and the name must be safe to use in a web page. A refused
+upload leaves nothing behind. There is no screen yet; the Fonts screen is the next
+ticket.
+
 ## 2026-10-13 — The Mac Mini can post approved Reddit comments, with proof (#851)
 
 Comments approved on Engage → Comments are now picked up by the Mac Mini, which
