@@ -30,6 +30,9 @@
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 
+/** Reddit's pace (Reddit comments 4/4). The numbers and why they are low: lib/redditPace.js. */
+const { REDDIT_PACE } = require('../../lib/redditPace');
+
 function isValidTimeZone(zone) {
   if (!zone) return false;
   try {
@@ -218,6 +221,7 @@ function checkItemRules({ settings, target, videoHistory, now, timeZone }) {
 }
 
 module.exports = {
+  REDDIT_PACE,
   checkAccountLimits,
   checkItemRules,
   jitterMinutesFor,

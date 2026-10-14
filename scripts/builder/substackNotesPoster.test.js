@@ -188,9 +188,10 @@ test('the poster\'s columns exist on substack_notes_items, and the file still ap
 });
 
 test('the worker lists the Substack adapter beside YouTube, on the same project setting', () => {
-  assert.deepEqual(poster.ADAPTERS.map((a) => a.name), ['youtube', 'substack']);
+  // Reddit comments 4/4 (86bch3jpg) added the third site.
+  assert.deepEqual(poster.ADAPTERS.map((a) => a.name), ['youtube', 'substack', 'reddit']);
   const built = poster.buildAdapters({ YOUTUBE_OUTREACH_PROJECT_ID: PROJECT });
-  assert.deepEqual(built.adapters.map((a) => a.name), ['youtube', 'substack'], built.problems.join('; '));
+  assert.deepEqual(built.adapters.map((a) => a.name), ['youtube', 'substack', 'reddit'], built.problems.join('; '));
   const off = poster.buildAdapters({});
   assert.ok(off.problems.some((p) => /^substack: .*projectId/.test(p)), off.problems.join('; '));
 });

@@ -69,6 +69,15 @@ function text(value) {
  * The signed-in one is the line that ticket asked its screen to show.
  */
 const SITE_WORDING = {
+  // Reddit comments 4/4 (86bch3jpg): the ticket's own sentences. `who` is
+  // blank until Dane names the account (lib/openclawSignIn.js
+  // EXPECTED_REDDIT_ACCOUNT), and then the sentence leaves it out rather than
+  // printing an empty name.
+  reddit: {
+    signed_in: ({ label, who }) => `Mini: signed in to ${label}${who ? ` as ${who}` : ''}.`,
+    signed_out: ({ label, who, profile }) => `${label} on the Mini is signed out${who ? ` of ${who}` : ''}. Sign in again in the ${profile} browser.`,
+    cannot_tell: ({ label, who, detail }) => `The Mini could not tell whether ${label} is signed in${who ? ` as ${who}` : ''}${detail ? `: ${detail}` : '.'}`,
+  },
   substack: {
     signed_in: ({ label, who }) => `Mini: signed in to ${label} as ${who}.`,
     signed_out: ({ label, who, profile }) => `${label} on the Mini is signed out of ${who}. Sign in again in the ${profile} browser.`,
@@ -76,7 +85,7 @@ const SITE_WORDING = {
 };
 
 /** The bus title each site's alarms carry, so a Substack alarm never reads as YouTube's. */
-const SITE_TITLES = { youtube: 'YouTube outreach', substack: 'Substack Notes' };
+const SITE_TITLES = { youtube: 'YouTube outreach', substack: 'Substack Notes', reddit: 'Reddit comments' };
 
 /** The gateway is shared by every site, so its alarm names the machine's job, not a site. */
 const GATEWAY_TITLE = 'Posting browser';

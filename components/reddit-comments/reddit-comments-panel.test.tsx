@@ -7,7 +7,9 @@ import RedditCommentsPanel, {
   canonLine,
   canonName,
   isCommentLink,
+  paceLine,
   postPreview,
+  signInLine,
   tabFor,
   withScheme,
   type RedditItem,
@@ -32,9 +34,10 @@ const CANON = [
   { docKey: "ECOSYSTEM", syncedAt: "2026-10-12T15:00:00Z" },
 ];
 const BLOCKED = "delve into";
+const PACE = { maxCommentsPerDay: 3, minMinutesBetween: 20, jitterMinutes: 10 };
 const POST_LINK = "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/";
 
-type Store = { items: RedditItem[]; readable: boolean };
+type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable" };
 let stores: Record<string, Store>;
 let activeProject = "proj_doe";
 let requests: Array<{ method: string; path: string; body: any }>;
@@ -99,6 +102,10 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       store.items.unshift(made);
       return { ok: true, data: { ...made } };
     }
+  }
+  if (path === "/api/engage/reddit-comments/status") {
+    if (store.status === "unreadable") fail("status endpoint down", 502);
+    return { ok: true, data: store.status || { account: "", pace: PACE, browserCheck: { state: "", message: "", checkedAt: null, signedInAt: null }, browserCheckError: "" } };
   }
   const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject)$/);
   if (decision) {
@@ -361,6 +368,45 @@ describe("Reddit comments screen", () => {
     expect(row(failed.id).textContent).toContain("Reddit said the thread is locked.");
   });
 
+  it("shows the Mini's sign-in and pace at the top, and why an approved comment waits", async () => {
+    stores.proj_doe.status = {
+      account: "danetest",
+      pace: PACE,
+      browserCheck: { state: "signed_in", message: "Mini: signed in to Reddit as danetest.", checkedAt: new Date(Date.now() - 5 * 60000).toISOString(), signedInAt: null },
+      browserCheckError: "",
+    };
+    stores.proj_doe.items = [item({ status: "approved", finalText: "Waiting words", waitReason: "Waiting for tomorrow's allowance — 3 of 3 comments a day already posted today (UTC)." })];
+    await mount();
+    expect(el(".reddit-comments-signin").textContent).toBe("Mini: signed in to Reddit as danetest, checked 5 minutes ago.");
+    expect(el(".reddit-comments-pace").textContent).toContain("at most 3 comments a day, at least 20 minutes apart");
+    await click(button("Approvals"));
+    expect(row(stores.proj_doe.items[0].id).textContent).toContain("Waiting for tomorrow's allowance");
+  });
+
+  it("a status that cannot be read says so and still shows the comments", async () => {
+    stores.proj_doe.status = "unreadable";
+    stores.proj_doe.items = [item({ postTitle: "Still listed" })];
+    await mount();
+    expect(text()).toContain("Still listed");
+    expect(el(".reddit-comments-signin").textContent).toContain("could not be read: status endpoint down");
+  });
+
+  it("a comment the Mini could not prove sits on Posted as a hand check, with its link", async () => {
+    stores.proj_doe.items = [item({
+      status: "posting", needsHandCheck: true, finalText: "Maybe live",
+      postedUrl: "https://www.reddit.com/r/astronomy/comments/abc123/comment/def456/",
+      error: "OpenClaw says it posted, but Reddit blocked this server (403), so the link could not be checked.",
+    })];
+    await mount();
+    await click(button("Posted"));
+    const r = row(stores.proj_doe.items[0].id);
+    expect(r.textContent).toContain("Check this one by hand");
+    expect(r.textContent).toContain("Reddit blocked this server");
+    expect([...r.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toContain("https://www.reddit.com/r/astronomy/comments/abc123/comment/def456/");
+    await click(button("Approvals"));
+    expect(text()).not.toContain("Maybe live");
+  });
+
   it("says which read failed when the list cannot be read", async () => {
     (window as unknown as { App: { api: ReturnType<typeof vi.fn> } }).App.api.mockRejectedValueOnce(new Error("database unreachable"));
     await mount();
@@ -382,8 +428,35 @@ describe("helpers", () => {
   });
 
   it("tabFor puts each status on one tab, and rejected on none", () => {
-    expect(["idea", "draft", "approved", "posting", "posted", "failed", "rejected"].map(tabFor))
+    expect(["idea", "draft", "approved", "posting", "posted", "failed", "rejected"].map((s) => tabFor(s)))
       .toEqual(["write", "approvals", "approvals", "approvals", "posted", "posted", null]);
+  });
+
+  it("tabFor moves a posting row the Mini could not prove onto Posted", () => {
+    expect(tabFor("posting", true)).toBe("posted");
+    expect(tabFor("approved", true)).toBe("approvals");
+  });
+
+  it("signInLine says signed in with when, and never reads silence or an old reading as fine", () => {
+    const now = Date.parse("2026-10-13T12:00:00Z");
+    const check = (state: string, checkedAt: string | null, message = "") => ({
+      account: "danetest", pace: PACE, browserCheckError: "",
+      browserCheck: { state, message, checkedAt, signedInAt: null },
+    }) as any;
+    expect(signInLine(check("signed_in", "2026-10-13T11:48:00Z", "Mini: signed in to Reddit as danetest."), now))
+      .toEqual({ tone: "ok", state: "signed_in", text: "Mini: signed in to Reddit as danetest, checked 12 minutes ago." });
+    expect(signInLine(check("signed_out", "2026-10-13T11:48:00Z", "Reddit on the Mini is signed out of danetest. Sign in again in the dane-of-earth browser."), now).tone).toBe("alarm");
+    expect(signInLine(check("", null), now).state).toBe("unknown");
+    expect(signInLine(check("signed_in", "2026-10-13T08:00:00Z", "Mini: signed in to Reddit as danetest."), now).state).toBe("stale");
+    expect(signInLine({ account: "", pace: null, browserCheck: null, browserCheckError: "database down" }, now).text)
+      .toContain("could not be read: database down");
+  });
+
+  it("paceLine states the pace, and says nothing posts until an account is named", () => {
+    expect(paceLine({ account: "danetest", pace: PACE, browserCheck: null, browserCheckError: "" }))
+      .toBe("The Mini posts as u/danetest at most 3 comments a day, at least 20 minutes apart (plus up to 10 minutes at random).");
+    expect(paceLine({ account: "", pace: PACE, browserCheck: null, browserCheckError: "" }))
+      .toContain("No Reddit account has been chosen for it to post as yet");
   });
 
   it("postPreview keeps the first lines and trims long ones", () => {
