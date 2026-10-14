@@ -1,3 +1,18 @@
+## 2026-10-14 — Imported sites now get a Top Menu with their logo, and a Footer Menu (#855)
+
+When an imported website is built into pages, the importer now also makes two
+saved sections and puts them on every imported page: a **Top Menu**, with the
+site's logo on the left and its menu (dropdowns included) on the right, and a
+**Footer Menu**, with the footer's links. Before this, the menu was a separate
+optional step that made a plain one-column "Header" with no logo and no footer.
+The logo is copied into the project's own storage, so it never depends on the
+client's old server. Nothing the project already has gets overwritten: if it
+already has a "Top Menu", the new one is named "Top Menu (strandsmovie.com)".
+Running the build again updates the same two sections instead of making copies.
+The "Designed by Elegant Themes | Powered by WordPress" line is also dropped
+from the pages. One thing is left for a decision: the old footer's links still
+sit on the page just above the new Footer Menu, so they show twice.
+
 ## 2026-10-13 — Site Import now writes down a website's logo and its footer links (#852)
 
 When Site Import copies a website, it now records the site's logo (the picture
