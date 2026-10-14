@@ -9,6 +9,29 @@ browser check now proves the font really loads on a page, not just that its name
 arrived, and that check was made to fail on purpose to show it can. The library
 is empty until the Fonts screen (2/7) or the starter pack (4/7) fills it; until
 then the picker says so plainly.
+## 2026-10-14 — One command fills the font library with 288 free fonts, sci-fi and display first (#859)
+
+The font library built yesterday was empty. Now `npm run fonts:import` pulls a
+hand-picked starter pack of 288 free fonts from Fontsource — Orbitron,
+Audiowide, Michroma and the other sci-fi and display faces first, then everyday
+sans, serif, handwriting and code fonts, including some good free ones that are
+not on Google Fonts. Every font passes the same licence check uploads do; two
+(Ubuntu and Ubuntu Mono) are refused because their licence does not allow
+business use, and the report says so. Run it once to see what it would do, add
+`--apply` to do it, and running it again changes nothing. It is proven on the
+local database; production is waiting on one thing — the font library's table
+from yesterday has not been created in the live database yet.
+## 2026-10-14 — The Imports screen now shows which menus an import will get (#858)
+
+The Imports screen's build panel has a new **Menus** block. Before you build an
+imported site, it shows whether its menus came through: the **Top Menu** (how
+many links, and whether a logo was found) and the **Footer Menu** (how many
+links). When one is missing, it gives the reason in plain words. For example,
+"no links found in the footer" means the old site's footer really had none, so
+it is not a bug. After the build has run, it also names the saved section each
+menu became. Imports rehearsed before menus were captured say so, and ask for a
+re-run, instead of wrongly claiming the site has no menus.
+
 ## 2026-10-14 — Imported sites now get a Top Menu with their logo, and a Footer Menu (#855)
 
 When an imported website is built into pages, the importer now also makes two
