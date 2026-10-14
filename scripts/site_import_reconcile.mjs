@@ -181,7 +181,10 @@ function docSections(page) {
 
 /** Flatten the IR's header nav tree to { label, path } in menu order. */
 function flattenNav(navs) {
-  const header = (navs || []).find((n) => n.location === 'header') || (navs || [])[0];
+  // Footer trees built from plain link lists (source "footer-links") are not
+  // the site's menu; read only trees that came from a real <nav>.
+  const menus = (navs || []).filter((n) => n?.source !== 'footer-links');
+  const header = menus.find((n) => n.location === 'header') || menus[0];
   const out = [];
   const walk = (items) => {
     for (const item of items || []) {

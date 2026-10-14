@@ -31,6 +31,7 @@ import {
   type ElementIR,
   type NavItem,
   type NavTree,
+  type SiteLogo,
   type PageIR,
   type SectionIR,
   type SiteIR,
@@ -817,7 +818,224 @@ function extractNavs($: CheerioApi, pageUrl: string): NavTree[] {
       navs.push({ location: navLocation(node), pageUrl, items });
     }
   });
+  navs.push(...extractFooterLinks($, pageUrl));
   return navs;
+}
+
+/* ---------------------------------------------------------------------------
+ * Header logo + footer links outside a <nav> (task 86bchydp2)
+ *
+ * Only <nav> elements used to become menus, and most footers have none:
+ * strandsmovie.com (Divi) keeps its social links in a bare ul.et-social-icons
+ * and its logo in div.logo_container, so an import of it arrived with a top
+ * menu and nothing else.
+ * ------------------------------------------------------------------------ */
+
+/** The outermost elements of a page region — header or footer — found by the
+ *  same signals navLocation reads: the tag, the ARIA landmark role, or a
+ *  region class on anything but <body>/<html>. A region nested inside another
+ *  of the same kind is part of it, not a second one. */
+function findRegions($: CheerioApi, kind: "header" | "footer"): DomNode[] {
+  const tag = kind;
+  const role = kind === "header" ? "banner" : "contentinfo";
+  const classRe = kind === "header" ? HEADER_CLASS_RE : FOOTER_CLASS_RE;
+  const isRegion = (node: DomNode): boolean => {
+    const name = (node.name || "").toLowerCase();
+    if (name === "body" || name === "html") return false;
+    const attribs = node.attribs || {};
+    return (
+      name === tag ||
+      (attribs.role || "").toLowerCase() === role ||
+      classRe.test(attribs.class || "")
+    );
+  };
+  const out: DomNode[] = [];
+  $("*").each((_i, el) => {
+    const node = el as unknown as DomNode;
+    if (!isRegion(node)) return;
+    for (let cur = node.parent; cur; cur = cur.parent) {
+      if (cur.type === "tag" && isRegion(cur)) return;
+    }
+    out.push(node);
+  });
+  return out;
+}
+
+function resolveUrl(href: string, base: string): URL | null {
+  try {
+    return new URL(href, base);
+  } catch {
+    return null;
+  }
+}
+
+const ROOT_PATHS = new Set(["", "/", "/index.html", "/index.htm", "/index.php"]);
+
+/** Does this link go to the site's home page? */
+function pointsAtSiteRoot(href: string, pageUrl: string): boolean {
+  const target = resolveUrl(href, pageUrl);
+  const page = resolveUrl(pageUrl, pageUrl);
+  if (!target || !page) return false;
+  const host = (u: URL) => u.hostname.toLowerCase().replace(/^www\./, "");
+  return host(target) === host(page) && ROOT_PATHS.has(target.pathname) && !target.search;
+}
+
+function closestAnchor(node: DomNode, stop: DomNode): DomNode | null {
+  for (let cur = node.parent; cur && cur !== stop.parent; cur = cur.parent) {
+    if ((cur.name || "").toLowerCase() === "a") return cur;
+  }
+  return null;
+}
+
+function descendantsNamed(scope: DomNode, tag: string): DomNode[] {
+  const out: DomNode[] = [];
+  const walk = (node: DomNode): void => {
+    for (const child of elementChildren(node)) {
+      if ((child.name || "").toLowerCase() === tag) out.push(child);
+      walk(child);
+    }
+  };
+  walk(scope);
+  return out;
+}
+
+/** An <img>'s real source: lazy-loaders park it in data-src and leave a
+ *  data: placeholder (or nothing) in src. */
+function imageSrc(img: DomNode): string {
+  const a = img.attribs || {};
+  const src = (a.src || "").trim();
+  if (src && !src.startsWith("data:")) return src;
+  return (a["data-src"] || a["data-lazy-src"] || "").trim();
+}
+
+function positiveInt(value: string | undefined): number | undefined {
+  const n = parseInt(String(value || ""), 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
+ * The site's logo: the first image in the header whose wrapping link goes to
+ * the home page, or failing that the first whose id, class or alt says
+ * "logo". Undefined — never an empty object — when there is neither.
+ */
+function extractLogo(
+  $: CheerioApi,
+  pageUrl: string,
+  assetLookup: AssetLookup
+): SiteLogo | undefined {
+  const images = findRegions($, "header").flatMap((region) =>
+    descendantsNamed(region, "img").map((img) => ({ img, link: closestAnchor(img, region) }))
+  );
+  const usable = images.filter(({ img }) => imageSrc(img));
+  const saysLogo = ({ img }: { img: DomNode }) => {
+    const a = img.attribs || {};
+    return /logo/i.test([a.id, a.class, a.alt].join(" "));
+  };
+  const chosen =
+    usable.find(({ link }) => link && pointsAtSiteRoot((link.attribs || {}).href || "", pageUrl)) ||
+    usable.find(saysLogo);
+  if (!chosen) return undefined;
+
+  const a = chosen.img.attribs || {};
+  const rawSrc = imageSrc(chosen.img);
+  const src = resolveUrl(rawSrc, pageUrl)?.href || rawSrc;
+  const rawHref = chosen.link ? (chosen.link.attribs || {}).href || "" : "";
+  const href = rawHref ? resolveUrl(rawHref, pageUrl)?.href || rawHref : "";
+  const logo: SiteLogo = { src, alt: collapseWhitespace(a.alt || ""), href };
+  const width = positiveInt(a.width);
+  const height = positiveInt(a.height);
+  if (width) logo.width = width;
+  if (height) logo.height = height;
+  const [assetId] = matchAssetRefs(`<img src="${rawSrc}">`, {}, pageUrl, assetLookup);
+  if (assetId) logo.assetId = assetId;
+  return logo;
+}
+
+/** Social networks named the way their own buttons name them. */
+const SOCIAL_LABELS: [RegExp, string][] = [
+  [/(^|\.)facebook\.com$|(^|\.)fb\.com$/, "Facebook"],
+  [/(^|\.)(x|twitter)\.com$/, "X"],
+  [/(^|\.)instagram\.com$/, "Instagram"],
+  [/(^|\.)linkedin\.com$/, "LinkedIn"],
+  [/(^|\.)(youtube\.com|youtu\.be)$/, "YouTube"],
+  [/(^|\.)tiktok\.com$/, "TikTok"],
+  [/(^|\.)pinterest\.com$/, "Pinterest"],
+  [/(^|\.)threads\.net$/, "Threads"],
+  [/(^|\.)vimeo\.com$/, "Vimeo"],
+];
+
+/** A link's label: its visible text, else aria-label/title, else a name made
+ *  from where it points — icon-only social links carry no text at all. */
+function linkLabel(link: DomNode, pageUrl: string): string {
+  const text = collapseWhitespace(getText(link));
+  if (text) return text;
+  const a = link.attribs || {};
+  const named = collapseWhitespace(a["aria-label"] || a.title || "");
+  if (named) return named;
+  const target = resolveUrl(a.href || "", pageUrl);
+  if (!target || !/^https?:$/.test(target.protocol)) return "";
+  const host = target.hostname.toLowerCase().replace(/^www\./, "");
+  const social = SOCIAL_LABELS.find(([re]) => re.test(host));
+  if (social) return social[1];
+  const name = host.split(".").slice(-2)[0] || host;
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Platform and theme credits — the builder's signature, not the client's
+ *  menu. A label or a destination either one marks a credit. */
+const CREDIT_LABEL_RE = /^(designed|powered|built|made|created|developed|theme)\b.*\bby\b|^proudly powered\b/i;
+const CREDIT_HOST_RE =
+  /(^|\.)(elegantthemes\.com|wordpress\.(org|com)|wix\.com|squarespace\.com|weebly\.com|webflow\.(com|io)|shopify\.com|godaddy\.com|themeforest\.net|elementor\.com|wpastra\.com|generatepress\.com|studiopress\.com|siteorigin\.com|themeisle\.com|jimdo\.com|duda\.co)$/i;
+
+function isCreditLink(label: string, href: string, pageUrl: string): boolean {
+  if (CREDIT_LABEL_RE.test(label)) return true;
+  const target = resolveUrl(href, pageUrl);
+  return !!target && CREDIT_HOST_RE.test(target.hostname);
+}
+
+/**
+ * Link lists in the footer that sit outside any <nav> — column menus, social
+ * icons — as one extra footer tree per footer region. Lists inside a <nav>
+ * are left to extractNavs, so a footer that already uses <nav> keeps exactly
+ * the tree it had.
+ */
+function extractFooterLinks($: CheerioApi, pageUrl: string): NavTree[] {
+  const trees: NavTree[] = [];
+  for (const region of findRegions($, "footer")) {
+    const lists: DomNode[] = [];
+    const walk = (node: DomNode): void => {
+      for (const child of elementChildren(node)) {
+        const name = (child.name || "").toLowerCase();
+        if (name === "nav") continue;
+        if (name === "ul" || name === "ol") {
+          lists.push(child);
+          continue;
+        }
+        walk(child);
+      }
+    };
+    walk(region);
+    const fromList = (list: DomNode): NavItem[] => {
+      const items: NavItem[] = [];
+      for (const li of elementChildren(list)) {
+        if ((li.name || "").toLowerCase() !== "li") continue;
+        const link = findItemLink(li);
+        const children = findOutermostLists(li).flatMap(fromList);
+        const href = link ? (link.attribs || {}).href || "" : "";
+        const label = link ? linkLabel(link, pageUrl) : collapseWhitespace(ownText(li));
+        if (link && isCreditLink(label, href, pageUrl)) continue;
+        // A footer list item with no link and nothing under it is text
+        // (an address line, opening hours), not a menu entry.
+        if (!link && !children.length) continue;
+        if (!label && !children.length) continue;
+        items.push({ label, href, children });
+      }
+      return items;
+    };
+    const items = lists.flatMap(fromList);
+    if (items.length) trees.push({ location: "footer", pageUrl, items, source: "footer-links" });
+  }
+  return trees;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1055,7 +1273,8 @@ function normalizePage(
     fontFamilies: TokenTally;
     spacing: TokenTally;
   },
-  navSink: NavTree[]
+  navSink: NavTree[],
+  logoSink: { logo?: SiteLogo }
 ): PageBuild {
   const desktop = captures.desktop;
   const url = desktop.finalUrl || desktop.url || "";
@@ -1237,6 +1456,7 @@ function normalizePage(
   }
 
   navSink.push(...extractNavs($, url));
+  if (!logoSink.logo) logoSink.logo = extractLogo($, url, assetLookup);
 
   const meta = desktop.meta || {
     title: "", metaDescription: "", ogTags: {}, canonicalUrl: "", lang: "",
@@ -1294,6 +1514,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
   };
   const evidence = newStyleEvidence();
   const navs: NavTree[] = [];
+  const logoSink: { logo?: SiteLogo } = {};
   const captured: CoverageCounts = {};
   const pages: PageIR[] = [];
   const usesByAsset = new Map<string, { pageUrl: string; sourceId: string }[]>();
@@ -1302,7 +1523,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
     if (!captures || !captures.desktop) return;
     let build: PageBuild;
     try {
-      build = normalizePage(pageIdx, captures, assetLookup, tokens, navs);
+      build = normalizePage(pageIdx, captures, assetLookup, tokens, navs, logoSink);
       collectStyleEvidence(captures.desktop, evidence);
     } catch {
       build = degradedPage(pageIdx, captures);
@@ -1335,6 +1556,7 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
     assets,
     taxonomy: {
       navs: dedupeNavs(navs),
+      ...(logoSink.logo ? { logo: logoSink.logo } : {}),
       pageOrder: pages.map((p) => p.path),
     },
     rawTokens: {

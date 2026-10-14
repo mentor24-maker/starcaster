@@ -266,7 +266,8 @@ SiteIR {
   pages: PageIR[],
   assets: AssetRef[],          // mirrors app_site_import_assets
   taxonomy: {                  // nav trees, breadcrumb trails, sitemap order
-    navs: NavTree[], pageOrder: string[]
+    navs: NavTree[], pageOrder: string[],
+    logo?: SiteLogo            // header logo (src, alt, href, assetId) — added 2026-10-13
   },
   rawTokens: {                 // every observed value with occurrence counts
     colors:    { value, count }[],

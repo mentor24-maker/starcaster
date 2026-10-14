@@ -27,7 +27,7 @@
 
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
-import type { AssetRef, ElementIR, NavItem, PageIR, SectionIR, SiteIR } from "./ir";
+import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
 import { importSurfaceColor } from "./theme";
 import {
@@ -296,6 +296,16 @@ export function pathOfWriteKey(key: string): string {
 }
 
 /** What a capture SAYS, without the ids capture invents per visit. */
+/**
+ * The nav trees the mapping step reads as menus. Footer trees built from
+ * plain link lists (source "footer-links", task 86bchydp2) are skipped until
+ * slice 2 maps them on purpose: their links are still page content here, so
+ * they stay on the imported page and never become the top menu.
+ */
+export function menuNavs(ir: SiteIR): NavTree[] {
+  return (ir.taxonomy?.navs || []).filter((n) => n.source !== "footer-links");
+}
+
 function captureFingerprint(page: PageIR): string {
   return JSON.stringify(
     (page.sections || []).map((section) =>
@@ -914,7 +924,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       collectNav(item.children || []);
     }
   };
-  for (const nav of ir.taxonomy?.navs || []) collectNav(nav.items);
+  for (const nav of menuNavs(ir)) collectNav(nav.items);
 
   const surfaceColor = importSurfaceColor(ir);
   const assetByUrl = new Map<string, AssetRef>();
@@ -1701,8 +1711,8 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
 
   // Nav tree → navigation-module items (header tree preferred).
   const headerNav =
-    (ir.taxonomy?.navs || []).find((n) => n.location === "header") ||
-    (ir.taxonomy?.navs || [])[0] ||
+    menuNavs(ir).find((n) => n.location === "header") ||
+    menuNavs(ir)[0] ||
     null;
   const navItems: MapOutput["navItems"] = [];
   if (headerNav) {

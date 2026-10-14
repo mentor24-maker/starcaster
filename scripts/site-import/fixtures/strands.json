@@ -1,0 +1,57 @@
+{
+  "__comment": "Strands-shaped capture (task 86bchydp2), hand-built from strandsmovie.com's live markup checked 2026-10-13: a Divi header with the logo in div.logo_container beside nav#top-menu-nav (7 top items, 5 dropdowns, 25 links), and a footer with NO <nav> — only ul.et-social-icons and a theme-credit line.",
+  "jobId": "job-fixture-strands",
+  "sourceUrl": "https://strandsmovie.com/",
+  "capturedAt": "2026-10-13T00:00:00.000Z",
+  "assets": [
+    {
+      "id": "asset-logo",
+      "originalUrl": "https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png",
+      "storageUrl": "SiteImport/job-fixture-strands/assets/logo.png",
+      "contentHash": "fixture",
+      "mimeType": "image/png",
+      "byteSize": 12345,
+      "width": 1000,
+      "height": 300,
+      "altText": "Strands",
+      "referencedBy": [],
+      "status": "downloaded",
+      "error": ""
+    }
+  ],
+  "pageStats": {
+    "discovered": 1,
+    "captured": 1,
+    "failed": 0
+  },
+  "capsHit": [],
+  "pages": [
+    {
+      "desktop": {
+        "url": "https://strandsmovie.com/",
+        "finalUrl": "https://strandsmovie.com/",
+        "viewport": "desktop",
+        "html": "<html lang=\"en-US\"><head><title>Strands</title></head><body class=\"home page-template-default et_pb_footer_columns4 et_header_style_left\" data-scim=\"1\"><div id=\"page-container\"><header id=\"main-header\" data-height-onload=\"66\" data-scim=\"2\"><div class=\"container clearfix et_menu_container\"><div class=\"logo_container\"><span class=\"logo_helper\"></span><a href=\"https://strandsmovie.com/\"><img src=\"https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png\" width=\"1000\" height=\"300\" alt=\"Strands\" id=\"logo\" data-height-percentage=\"54\" /></a></div><div id=\"et-top-navigation\"><nav id=\"top-menu-nav\"><ul id=\"top-menu\" class=\"nav\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/\">Home</a></li><li class=\"menu-item menu-item-has-children\"><a href=\"https://strandsmovie.com/about/\">About</a><ul class=\"sub-menu\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/the-film/\">The Film</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/directors-statement/\">Directors Statement</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/production-notes/\">Production Notes</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/awards/\">Awards</a></li></ul></li><li class=\"menu-item menu-item-has-children\"><a href=\"https://strandsmovie.com/cast-crew/\">Cast & Crew</a><ul class=\"sub-menu\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/cast/\">Cast</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/crew/\">Crew</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/producers/\">Producers</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/composer/\">Composer</a></li></ul></li><li class=\"menu-item menu-item-has-children\"><a href=\"https://strandsmovie.com/story/\">Story</a><ul class=\"sub-menu\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/synopsis/\">Synopsis</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/characters/\">Characters</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/setting/\">Setting</a></li></ul></li><li class=\"menu-item menu-item-has-children\"><a href=\"https://strandsmovie.com/media/\">Media</a><ul class=\"sub-menu\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/trailer/\">Trailer</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/photos/\">Photos</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/posters/\">Posters</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/press-kit/\">Press Kit</a></li></ul></li><li class=\"menu-item menu-item-has-children\"><a href=\"https://strandsmovie.com/news/\">News</a><ul class=\"sub-menu\"><li class=\"menu-item\"><a href=\"https://strandsmovie.com/press/\">Press</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/festivals/\">Festivals</a></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/updates/\">Updates</a></li></ul></li><li class=\"menu-item\"><a href=\"https://strandsmovie.com/contact/\">Contact</a></li></ul></nav></div></div></header><div id=\"et-main-area\"><div id=\"main-content\" data-scim=\"3\"><h1>Strands</h1><p>A feature film about the threads that bind us.</p></div><footer id=\"main-footer\" data-scim=\"4\"><div id=\"footer-bottom\"><div class=\"container clearfix\"><ul class=\"et-social-icons\"><li class=\"et-social-icon et-social-facebook\"><a href=\"https://www.facebook.com/profile.php?id=61576242464283\" class=\"icon\"><span>Facebook</span></a></li><li class=\"et-social-icon et-social-twitter\"><a href=\"https://x.com/StrandsMovie\" class=\"icon\"><span>X</span></a></li></ul><p id=\"footer-info\">Designed by <a href=\"https://www.elegantthemes.com\" title=\"Premium WordPress Themes\">Elegant Themes</a> | Powered by <a href=\"https://www.wordpress.org\">WordPress</a></p></div></div></footer></div></div></body></html>",
+        "styles": {},
+        "fullPageScreenshot": "SiteImport/job-fixture-strands/shots/home.desktop.full.png",
+        "sectionScreenshots": {},
+        "elementScreenshots": {},
+        "assetUrls": [
+          {
+            "url": "https://strandsmovie.com/wp-content/uploads/2025/05/logo_strands_1000x300.png",
+            "via": "img",
+            "alt": "Strands"
+          }
+        ],
+        "fontFamilies": [],
+        "meta": {
+          "title": "Strands",
+          "metaDescription": "",
+          "ogTags": {},
+          "canonicalUrl": "https://strandsmovie.com/",
+          "lang": "en-US"
+        }
+      }
+    }
+  ]
+}
