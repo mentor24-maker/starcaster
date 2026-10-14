@@ -224,6 +224,7 @@ import { SpeechBubblePreview } from "@/components/builder/speech-bubble-preview"
 import { resolveEmailMergeTokensForPreview } from "@/lib/builder-email-template";
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
 import { useGoogleFontLinks } from "@/components/builder/use-google-font-links";
+import { useLibraryFontFaces } from "@/components/builder/use-library-font-faces";
 
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
@@ -1486,6 +1487,8 @@ export function BuilderTemplatePreview({
   const sitePlayerRegistered = useSitePlayerRegistration();
   // Any Google Font the theme or a module names (gf:<Family>) loads here.
   useGoogleFontLinks([theme, layoutSections], emailPreview);
+  // And any font-library font (lf:<slug>) — its files, for this project only.
+  useLibraryFontFaces([theme, layoutSections], projectId || resolveSessionProjectId(), emailPreview);
 
   function handleAdminLogoutLinkClick(event: MouseEvent<HTMLDivElement>) {
     if (emailPreview) return;

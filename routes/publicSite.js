@@ -17,6 +17,7 @@ const {
 } = require('../lib/publicSiteHostBinding');
 const { writeProjectFaviconResponse } = require('../lib/projectFavicon');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
+const { listPublicFontsBySlugs } = require('../lib/fontsStore');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 const { forwardBugReport } = require('../lib/bugReportForward');
 const { emailBugReport } = require('../lib/bugReportEmail');
@@ -122,6 +123,22 @@ async function handle(req, res, pathname, method) {
     const renditions = await buildRenditionMapForPages(scopedProjectId, result.data);
 
     return respondJson(res, req, 200, { ok: true, pages: result.data, renditions }), true;
+  }
+
+  // GET /api/public/fonts?slugs=orbitron,space-mono&projectId=... — the files
+  // for the font-library fonts ("lf:<slug>") a page names, so a published page
+  // can load them (Font Library 3/7, task 86bchyd46). projectId is optional:
+  // without it only the shared library answers. The renderer asks only when a
+  // page names at least one library font.
+  if (pathname === '/api/public/fonts' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    const { searchParams } = getUrlObj(req);
+    const projectId = String(searchParams.get('projectId') || '').trim();
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+    const slugs = String(searchParams.get('slugs') || '').split(',').map((slug) => slug.trim()).filter(Boolean);
+    const result = await listPublicFontsBySlugs(slugs, bind.projectId || projectId);
+    if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Could not read the fonts'), true;
+    return respondJson(res, req, 200, { ok: true, data: { fonts: result.data } }), true;
   }
 
   // GET /api/public/page?projectId=...&slug=... — ONE published page.

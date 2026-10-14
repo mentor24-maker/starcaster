@@ -852,6 +852,28 @@ try {
      * phone frame and 90px on an actual 420px browser, so the preview was
      * quietly disagreeing with the device it is named after (task 86bc14pgq).
      */
+    /*
+     * Optional SERVED RESPONSES (Font Library 3/7, task 86bchyd46). A library
+     * font's files come from a database read, and this check keeps its
+     * bargain of no database: a contract names the request and what answers
+     * it — `json` for an API reply, `file` (relative to this folder) for a
+     * binary such as a font. Routed on the page before render and removed
+     * after, so no other contract ever sees the answer.
+     */
+    const served = [];
+    for (const answer of contract.serve || []) {
+      const handler = async (route) => {
+        if (answer.json !== undefined) {
+          await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer.json) });
+        } else {
+          const body = await readFile(path.join(path.dirname(fileURLToPath(import.meta.url)), answer.file));
+          await route.fulfill({ status: 200, contentType: answer.contentType || 'application/octet-stream', body });
+        }
+      };
+      await page.route(answer.url, handler);
+      served.push([answer.url, handler]);
+    }
+
     await render(
       page,
       contract.section ? documentForSection(contract.section) : documentFor(contract.module),
@@ -1032,6 +1054,27 @@ try {
     );
 
     if (result && contract.pointer) result.pointer = pointerReadings;
+    /*
+     * Optional FONT FACES: for each family named, the status of every
+     * @font-face the page declared under it ("loaded", "error", …). Read off
+     * document.fonts rather than document.fonts.check(), because check()
+     * answers TRUE for a family nothing declared at all — "nothing needs
+     * loading" — which would pass on the exact failure this exists to catch.
+     */
+    if (result && contract.fontFaces) {
+      result.fontFaces = await target.evaluate(async (families) => {
+        await Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 4000))]);
+        const faces = Array.from(document.fonts);
+        const out = {};
+        for (const family of families) {
+          const matching = faces.filter((face) => face.family.replace(/^["']|["']$/g, '') === family);
+          await Promise.all(matching.map((face) => face.load().catch(() => null)));
+          out[family] = matching.map((face) => face.status);
+        }
+        return out;
+      }, contract.fontFaces);
+    }
+    for (const [url, handler] of served) await page.unroute(url, handler);
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
     if (contract.emulate?.viewport && DEFAULT_VIEWPORT) await page.setViewportSize(DEFAULT_VIEWPORT);
     // The frame needs no reset: `render` writes the device key on every
