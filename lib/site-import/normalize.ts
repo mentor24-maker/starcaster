@@ -987,7 +987,7 @@ const CREDIT_LABEL_RE = /^(designed|powered|built|made|created|developed|theme)\
 const CREDIT_HOST_RE =
   /(^|\.)(elegantthemes\.com|wordpress\.(org|com)|wix\.com|squarespace\.com|weebly\.com|webflow\.(com|io)|shopify\.com|godaddy\.com|themeforest\.net|elementor\.com|wpastra\.com|generatepress\.com|studiopress\.com|siteorigin\.com|themeisle\.com|jimdo\.com|duda\.co)$/i;
 
-function isCreditLink(label: string, href: string, pageUrl: string): boolean {
+export function isCreditLink(label: string, href: string, pageUrl: string): boolean {
   if (CREDIT_LABEL_RE.test(label)) return true;
   const target = resolveUrl(href, pageUrl);
   return !!target && CREDIT_HOST_RE.test(target.hostname);
