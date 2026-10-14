@@ -1,6 +1,12 @@
 import { Component, useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { appApi, unwrapEnvelope, type StarcasterEnvelope } from "@/lib/adapters/starcaster-app";
+import {
+  mapReportUrl,
+  pluralize,
+  summarizeBuildReport,
+  type MapReportData,
+} from "./site-import-build-report";
 
 /**
  * Site Import (staff-only) — queue a site-capture job and review its
@@ -21,7 +27,10 @@ type Job = {
   claimedBy: string;
   attempts: number;
   clientAuthorization: string;
-  checkpoints: Record<string, { at?: string; blobPath?: string; notes?: string } | boolean | undefined> & {
+  checkpoints: Record<
+    string,
+    { at?: string; blobPath?: string; notes?: string; reportUrl?: string } | boolean | undefined
+  > & {
     cancelRequested?: boolean;
   };
   coverage: {
@@ -120,7 +129,10 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function checkpointOf(job: Job, stage: string): { at?: string; blobPath?: string; notes?: string } | null {
+function checkpointOf(
+  job: Job,
+  stage: string
+): { at?: string; blobPath?: string; notes?: string; reportUrl?: string } | null {
   const value = job.checkpoints?.[stage];
   return value && typeof value === "object" ? value : null;
 }
@@ -221,6 +233,8 @@ export default function SiteImportPage() {
   const [pages, setPages] = useState<CaptureIndexPage[] | null>(null);
   const [irText, setIrText] = useState<string | null>(null);
   const [showIr, setShowIr] = useState(false);
+  // undefined = still looking; null = no rehearsal report exists for this job.
+  const [mapReport, setMapReport] = useState<MapReportData | null | undefined>(undefined);
   const [sourceUrl, setSourceUrl] = useState("");
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -261,6 +275,18 @@ export default function SiteImportPage() {
           setAssets(readEnvelopeList<Asset>(assetsBody, "assets"));
         } catch {
           setAssets([]);
+        }
+        const reportUrl = mapReportUrl(id, checkpointOf(fresh, "map")?.reportUrl, captureCp.blobPath);
+        if (reportUrl) {
+          try {
+            const res = await fetch(reportUrl, { cache: "no-store" });
+            const report = res.ok ? await res.json() : null;
+            setMapReport(report && Array.isArray(report.pages) ? report : null);
+          } catch {
+            setMapReport(null);
+          }
+        } else {
+          setMapReport(null);
         }
         const normalizeCp = checkpointOf(fresh, "normalize");
         if (normalizeCp?.blobPath) {
@@ -305,6 +331,7 @@ export default function SiteImportPage() {
     setPages(null);
     setIrText(null);
     setShowIr(false);
+    setMapReport(undefined);
     setBuilderPages(null);
     setBuilderPagesError("");
     void loadJobDetail(selectedId);
@@ -538,6 +565,10 @@ export default function SiteImportPage() {
                 </p>
               ) : null}
 
+              {checkpointOf(job, "capture") ? (
+                <BuildReportPanel report={mapReport} built={Boolean(checkpointOf(job, "map"))} />
+              ) : null}
+
               {pages && pages.length > 0 ? (
                 <>
                   <h4>Captured pages</h4>
@@ -594,6 +625,77 @@ export default function SiteImportPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What the build step (scripts/site_import_map.mjs) will create — or did
+ * create, once its `--apply` run has recorded the map checkpoint. Read-only;
+ * running the mapper stays a terminal step (task 86bch6e2q non-goal).
+ */
+function BuildReportPanel({ report, built }: { report: MapReportData | null | undefined; built: boolean }) {
+  const title = built ? "What the build step created" : "What the build step will create";
+  if (report === undefined) {
+    return (
+      <div className="site-import-build-report">
+        <h4>{title}</h4>
+        <p className="meta">Looking for the build step&apos;s report…</p>
+      </div>
+    );
+  }
+  if (report === null) {
+    return (
+      <div className="site-import-build-report">
+        <h4>{title}</h4>
+        <p className="meta">No rehearsal has been run for this import yet, so there is nothing to show here.</p>
+      </div>
+    );
+  }
+  const summary = summarizeBuildReport(report);
+  return (
+    <div className="site-import-build-report">
+      <h4>{title}</h4>
+      <p className="meta">
+        {pluralize(summary.rows.length, "page")}
+        {summary.leftoverCount
+          ? `, ${summary.leftoverCount} of them probably not pages you want in your menu`
+          : ""}
+        . {pluralize(summary.placeholderTotal, "grey placeholder")}
+        {summary.placeholderKinds.length
+          ? ` (${summary.placeholderKinds.map((k) => pluralize(k.count, k.kind)).join(", ")})`
+          : ""}
+        .
+      </p>
+      <p className="meta">
+        {summary.theme
+          ? `Import theme: ${summary.theme.name ?? "unnamed"}${
+              summary.theme.notes?.length ? ` — ${summary.theme.notes.join("; ")}` : ""
+            }`
+          : "This report does not say which theme the build step makes the default; that is only printed in the terminal today."}
+      </p>
+      <table className="site-import-build-pages">
+        <thead>
+          <tr>
+            <th>Old address</th>
+            <th>New page</th>
+            <th>Modules</th>
+            <th>Placeholders</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {summary.rows.map((row, index) => (
+            <tr key={`${row.slug}-${index}`} className={row.leftover ? "is-leftover" : ""}>
+              <td>{row.path}</td>
+              <td>/{row.slug}</td>
+              <td>{row.modules}</td>
+              <td>{row.placeholders}</td>
+              <td>{row.leftover ? `Probably not a page you want in your menu — ${row.leftover}` : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

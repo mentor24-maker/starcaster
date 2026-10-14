@@ -10,6 +10,37 @@ screen says so. Nothing posts until Dane names which Reddit account to use and
 signs the Mini in once. One catch, measured before building: Reddit currently
 refuses to show its records to the Mini, so for now a real post lands as "check
 this one by hand", with its link, instead of "posted and proven".
+## 2026-10-12 — The Imports screen shows what building the pages would make, before you build them (#843)
+
+Before turning an imported website into pages, the only way to see what you
+would get was for an agent to run a rehearsal in a terminal and read it out.
+Now each import on the Imports screen has a panel listing every page it would
+create — the old address, the new page, how many pieces of content and how
+many grey placeholders each one gets — with the WordPress leftovers
+highlighted in plain words (author and category pages, dated posts, extra
+copies of the home page). It also totals the placeholders by kind: for Strands
+Movie, 59 forms, 16 tables and 11 embeds. Once the pages have actually been
+built, the panel's title changes to "What the build step created". An import
+with no rehearsal says so instead of showing an empty space.
+
+## 2026-10-12 — An imported site's theme can no longer put black text on a black page (#844)
+
+When Starcaster imports a website it builds a theme from the site's own
+colours, and it chose the page colour and the text colour separately without
+asking whether one can be read on the other. The Strands Movie import came out
+black on black, so every page would have looked blank. Now a pair that is hard
+to read (under the usual 4.5:1 standard) is never used. The page colour moves
+to the light area the text actually sits on, or to white. If no light colour
+works, the text colour changes instead. The import report says in a plain line
+what was rejected and why. A review caught that the first version changed the
+text colour in a place nothing on the page reads, so the page would still have
+looked blank while the report said it was fixed; now the colours the page
+actually paints body text and headings with are the ones replaced. A second
+review ran it on the real Strands import and found its white links (they sat
+on the black areas) would vanish on the new white page; links now get the same
+check whenever the import has changed the page's colours, taking the site's
+own button colour (navy, on Strands) when that reads.
+
 ## 2026-10-13 — Engage → Comments is now the screen for Reddit comments in Dane's voice (#846)
 
 The Comments screen under Engage used to be a bare form that tried to post
