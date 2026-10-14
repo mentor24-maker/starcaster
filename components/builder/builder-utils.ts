@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { getCarouselImageShadow } from "@/lib/builder-carousel-image-frame";
 import { googleFontStack } from "@/lib/builder-google-fonts";
+import { libraryFontStack } from "@/lib/builder-library-fonts";
 import { getModuleTrigger } from "@/lib/module-trigger";
 import type {
   BackgroundSettings,
@@ -1390,6 +1391,7 @@ export function getHeadingFontStack(fontFamily: string | undefined): string | un
   return (
     BUILDER_HEADING_FONTS.find((font) => font.key === fontFamily)?.stack ||
     googleFontStack(fontFamily) ||
+    libraryFontStack(fontFamily) ||
     undefined
   );
 }

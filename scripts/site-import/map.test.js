@@ -30,6 +30,11 @@ const {
   summarizePageWrites,
   pathOfWriteKey,
   TEXT_MODULE_CHAR_BUDGET,
+  buildMenuSection,
+  planMenuTarget,
+  attachMenuInstances,
+  menuSiteLabel,
+  topMenuLogoWidthPx,
 } = require('../../lib/site-import/dist/map.js');
 const { serializeBuilderDocument } = require('../../lib/builder/document.js');
 
@@ -729,11 +734,33 @@ test('footer link lists outside a <nav> stay on the page and out of navConsumed'
   assert.deepEqual(marked[0].items.map((i) => i.label), ['Privacy Policy', 'Contact us']);
 
   const without = { ...ir, taxonomy: { ...ir.taxonomy, navs: ir.taxonomy.navs.filter((n) => n.source !== 'footer-links') } };
-  const withTree = mapSite(ir, { existingSlugs: [] });
-  const baseline = mapSite(without, { existingSlugs: [] });
+  // Menus off (--no-menus / --nav): the tree changes nothing at all.
+  const withTree = mapSite(ir, { existingSlugs: [], menus: false });
+  const baseline = mapSite(without, { existingSlugs: [], menus: false });
   assert.equal(withTree.report.elements.mapped, baseline.report.elements.mapped);
   assert.equal(withTree.report.elements.navConsumed, baseline.report.elements.navConsumed);
   assert.deepEqual(withTree.navItems, baseline.navItems);
+
+  // Menus on (task 86bchydp6): the links still stay on the page — only the
+  // credits paragraph goes, and it is accounted for with a reason.
+  const withMenus = mapSite(ir, { existingSlugs: [] });
+  assert.equal(withMenus.report.elements.navConsumed, baseline.report.elements.navConsumed);
+  assert.equal(withMenus.report.elements.mapped, baseline.report.elements.mapped - 1);
+  assert.equal(withMenus.report.skipped.length, 1);
+  assert.match(withMenus.report.skipped[0].reason, /theme\/platform credit .*Elegant Themes/);
+  assert.ok(reportReconciles(withMenus.report));
+  const text = JSON.stringify(withMenus.pages);
+  assert.ok(text.includes('Privacy Policy'), 'footer links must stay on the page');
+  assert.ok(!/Elegant Themes/.test(text), 'the credits paragraph must not reach the page');
+});
+
+test('a paragraph mixing a credit with the client\'s own words is kept', () => {
+  const ir = normalizeSite(strandsWith((html) =>
+    html.replace(/<p id="footer-info">[\s\S]*?<\/p>/, '<p id="footer-info">© 2026 Strands Movie LLC. Designed by <a href="https://www.elegantthemes.com">Elegant Themes</a></p>')
+  )).ir;
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.equal(out.report.skipped.length, 0);
+  assert.ok(JSON.stringify(out.pages).includes('Strands Movie LLC'));
 });
 
 test('a site with no header <nav> does not get its footer links as its menu', () => {
@@ -746,4 +773,155 @@ test('a site with no header <nav> does not get its footer links as its menu', ()
   assert.ok(ir.taxonomy.navs.some((n) => n.source === 'footer-links'), 'fixture must carry a footer-links tree');
   const out = mapSite(ir, { existingSlugs: [] });
   assert.deepEqual(out.navItems, []);
+});
+
+// --- Top Menu + Footer Menu (task 86bchydp6) -------------------------------
+
+function strandsIr(edit = (html) => html) {
+  return normalizeSite(strandsWith(edit)).ir;
+}
+
+test('strands: the menu plan has a 25-link top menu with its logo, and a 2-link footer', () => {
+  const out = mapSite(strandsIr(), { existingSlugs: [] });
+  const { top, footer } = out.menus;
+  assert.ok(top, 'top menu missing');
+  assert.equal(top.items.length, 25);
+  assert.equal(top.items.filter((i) => !i.parentId).length, 7);
+  assert.deepEqual(out.navItems, top.items, 'navItems (used by --nav) is the top menu');
+  assert.ok(top.logo, 'the logo is missing from the top menu');
+  // The captured copy, never the client's server.
+  assert.equal(top.logo.url, 'SiteImport/job-fixture-strands/assets/logo.png');
+  assert.equal(top.logo.alt, 'Strands');
+  assert.ok(
+    out.copyPlan.assets.some((a) => a.assetId === 'asset-logo' && a.fromUrl === top.logo.url),
+    'the logo must go through the copy plan so --apply copies it into the project'
+  );
+  assert.ok(footer, 'footer menu missing');
+  assert.deepEqual(footer.items.map((i) => i.label), ['Facebook', 'X']);
+  assert.deepEqual(out.report.menus, { top: { items: 25, topLevel: 7, logo: true }, footer: { items: 2 }, notes: [] });
+});
+
+test('strands: the Top Menu section is two columns — logo left, menu right', () => {
+  const out = mapSite(strandsIr(), { existingSlugs: [] });
+  const section = buildMenuSection('top', out.menus, 'job1');
+  assert.equal(section.layout, 'one-three');
+  assert.equal(section.title, 'Top Menu');
+  const logo = section.modules.find((m) => m.type === 'image');
+  const nav = section.modules.find((m) => m.type === 'navigation');
+  assert.ok(logo, 'the Top Menu has no logo column');
+  assert.equal(logo.column, 'left');
+  assert.equal(logo.settings.url, out.menus.top.logo.url);
+  assert.equal(logo.settings.linkUrl, '/');
+  // 1000x300 shown 80px tall → 267px wide, not the full column.
+  assert.equal(logo.settings.maxWidthPx, '267');
+  assert.equal(nav.column, 'right');
+  assert.equal(nav.settings.navAlignment, 'right');
+  assert.equal(nav.settings.navDirection, 'horizontal');
+  assert.equal(JSON.parse(nav.settings.navItems).length, 25);
+
+  const footer = buildMenuSection('footer', out.menus, 'job1');
+  assert.equal(footer.layout, 'single');
+  assert.equal(footer.title, 'Footer Menu');
+  assert.equal(footer.modules.length, 1);
+  assert.equal(footer.modules[0].settings.menuLocation, 'footer');
+  assert.deepEqual(JSON.parse(footer.modules[0].settings.navItems).map((i) => i.label), ['Facebook', 'X']);
+});
+
+test('the Top Menu sections survive the server-side normalizer as a two-column section', () => {
+  const out = mapSite(strandsIr(), { existingSlugs: [] });
+  const section = buildMenuSection('top', out.menus, 'job1');
+  const round = serializeBuilderDocument({ layoutSections: [section] }).sections[0];
+  assert.ok(round, 'section lost in serialization');
+  assert.equal(round.layout, 'one-three');
+  assert.deepEqual(round.modules.map((m) => [m.type, m.column]), [['image', 'left'], ['navigation', 'right']]);
+  const nav = round.modules[1];
+  assert.equal(JSON.parse(nav.settings.navItems).length, 25, 'nav items lost in normalization');
+  assert.equal(nav.settings.navAlignment, 'right');
+  assert.equal(round.modules[0].settings.maxWidthPx, '267');
+});
+
+test('no logo: the Top Menu plan is one column, and the report says why', () => {
+  const ir = strandsIr();
+  delete ir.taxonomy.logo;
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.equal(out.menus.top.logo, null);
+  assert.equal(out.menus.top.items.length, 25);
+  assert.equal(out.report.menus.top.logo, false);
+  assert.ok(out.report.menus.notes.some((n) => /no logo found in the header/.test(n)), out.report.menus.notes.join('; '));
+  const section = buildMenuSection('top', out.menus, 'job1');
+  assert.equal(section.layout, 'single');
+  assert.deepEqual(section.modules.map((m) => [m.type, m.column]), [['navigation', 'main']]);
+});
+
+test('no footer links: footer is null, and the report says why', () => {
+  const out = mapSite(strandsIr((html) => html.replace(SOCIAL_LIST, '')), { existingSlugs: [] });
+  assert.equal(out.menus.footer, null);
+  assert.equal(out.report.menus.footer, null);
+  assert.ok(out.report.menus.notes.some((n) => /footer/.test(n) && /no Footer Menu/.test(n)), out.report.menus.notes.join('; '));
+  assert.equal(buildMenuSection('footer', out.menus, 'job1'), null);
+});
+
+test('footer links to imported pages are localised like the header', () => {
+  const out = mapSite(strandsIr((html) => html.replace(SOCIAL_LIST, TEXT_LINKS)), { existingSlugs: [] });
+  assert.deepEqual(
+    out.menus.footer.items.map((i) => [i.label, i.href]),
+    [['Privacy Policy', '/privacy'], ['Contact us', '/contact']]
+  );
+});
+
+test('a logo missing from the asset manifest is still copied, never left on the old server', () => {
+  const ir = strandsIr();
+  delete ir.taxonomy.logo.assetId;
+  ir.taxonomy.logo.src = 'https://strandsmovie.com/brand/other-logo.svg';
+  const out = mapSite(ir, { existingSlugs: [] });
+  const promotion = out.copyPlan.assets.find((a) => a.assetId === 'site-logo');
+  assert.ok(promotion, 'the logo was not put in the copy plan');
+  assert.equal(promotion.fromUrl, 'https://strandsmovie.com/brand/other-logo.svg');
+  assert.equal(promotion.mimeType, 'image/svg+xml');
+  // The section carries fromUrl, which --apply rewrites to the project copy.
+  assert.equal(out.menus.top.logo.url, promotion.fromUrl);
+});
+
+test('logo width cap keeps proportions and never upscales a short logo', () => {
+  assert.equal(topMenuLogoWidthPx({ url: '', alt: '', width: 1000, height: 300, assetId: '' }), 267);
+  assert.equal(topMenuLogoWidthPx({ url: '', alt: '', width: 120, height: 40, assetId: '' }), 120);
+  assert.equal(topMenuLogoWidthPx({ url: '', alt: '', width: 0, height: 0, assetId: '' }), 240);
+});
+
+test('menu names: never write to a section the project already has', () => {
+  const site = menuSiteLabel('https://www.strandsmovie.com/about/');
+  assert.equal(site, 'strandsmovie.com');
+  assert.deepEqual(planMenuTarget('top', [], '', site), { action: 'create', id: '', name: 'Top Menu' });
+  const existing = [{ id: 's1', name: 'Top Menu' }, { id: 's2', name: 'footer menu' }];
+  assert.deepEqual(planMenuTarget('top', existing, '', site), { action: 'create', id: '', name: 'Top Menu (strandsmovie.com)' });
+  assert.deepEqual(planMenuTarget('footer', existing, '', site), { action: 'create', id: '', name: 'Footer Menu (strandsmovie.com)' });
+  const crowded = [...existing, { id: 's3', name: 'Top Menu (strandsmovie.com)' }];
+  assert.equal(planMenuTarget('top', crowded, '', site).name, 'Top Menu (strandsmovie.com) 2');
+});
+
+test('menu names: a re-run updates the section this job made, even if it was renamed', () => {
+  const existing = [{ id: 's1', name: 'Top Menu' }, { id: 's9', name: 'Strands header' }];
+  assert.deepEqual(planMenuTarget('top', existing, 's9', 'strandsmovie.com'), { action: 'update', id: 's9', name: 'Strands header' });
+  // Deleted since the last run → a new one, under a free name.
+  assert.deepEqual(planMenuTarget('top', existing, 's404', 'strandsmovie.com'), { action: 'create', id: '', name: 'Top Menu (strandsmovie.com)' });
+});
+
+test('attaching menus: Top Menu first, Footer Menu last, and a second attach changes nothing', () => {
+  const out = mapSite(strandsIr(), { existingSlugs: [] });
+  const menus = {
+    top: { savedSectionId: 'top1', section: buildMenuSection('top', out.menus, 'job1') },
+    footer: { savedSectionId: 'foot1', section: buildMenuSection('footer', out.menus, 'job1') },
+  };
+  const body = [{ id: 'a' }, { id: 'b' }];
+  const first = attachMenuInstances(body, '1497', menus);
+  assert.equal(first.changed, true);
+  assert.deepEqual(first.sections.map((s) => s.savedSectionId || s.id), ['top1', 'a', 'b', 'foot1']);
+  assert.equal(first.sections[0].canonical, true);
+  assert.equal(first.sections[3].canonical, true);
+  const again = attachMenuInstances(first.sections, '1497', menus);
+  assert.equal(again.changed, false);
+  assert.equal(again.sections.length, 4);
+  // No footer this time → only the top menu is attached.
+  const topOnly = attachMenuInstances(body, '1500', { top: menus.top, footer: null });
+  assert.deepEqual(topOnly.sections.map((s) => s.savedSectionId || s.id), ['top1', 'a', 'b']);
 });

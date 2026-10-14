@@ -301,6 +301,36 @@
   color: var(--status-warn-ink);
 }
 
+/* The Menus block inside the build report — task 86bchydp7. */
+.site-import-menus {
+  margin: 8px 0 12px;
+}
+
+.site-import-menus h5 {
+  margin: 0 0 4px;
+  font-size: var(--text-sm);
+}
+
+.site-import-menus-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+}
+
+.site-import-menus-list > li + li {
+  margin-top: 4px;
+}
+
+.site-import-menus-built {
+  color: var(--subtext);
+}
+
+.site-import-menus-reasons {
+  margin: 2px 0 0;
+  padding-left: 18px;
+  color: var(--subtext);
+}
+
 @media (max-width: 900px) {
   .site-import-columns {
     flex-direction: column;

@@ -2,6 +2,8 @@
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { useGoogleFontLinks } from "./builder/use-google-font-links";
+import { useLibraryFontFaces } from "./builder/use-library-font-faces";
+import { resolveSessionProjectId } from "@/lib/adapters/starcaster-app";
 import { buildBulkCreatePageBody } from "@/lib/bulk-create-page-body";
 import {
   ALREADY_UNDONE_MESSAGE,
@@ -398,6 +400,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   // The editing canvas draws modules itself, so it loads the page's Google
   // Fonts (gf:<Family>) here as well as in the shared renderer.
   useGoogleFontLinks([canvasTheme, draft.layoutSections]);
+  useLibraryFontFaces([canvasTheme, draft.layoutSections], resolveSessionProjectId());
   const workspaceShellLayers = useMemo(
     () => getShellBackgroundLayers(draft.pageBackground, linkedTheme),
     [draft.pageBackground, linkedTheme]

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { normalizeEmailFunction, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { isGoogleFontKey } from "./builder-google-fonts";
+import { isLibraryFontKey } from "./builder-library-fonts";
 import { CONFETTI_EFFECT_DEFAULTS, normalizeConfettiModuleSettings } from "@/lib/confetti-effect";
 import { normalizeCurrentPollModuleWidth } from "@/lib/current-poll-module";
 import {
@@ -1415,7 +1416,8 @@ export function normalizeDecimalValue(value: unknown, fallback: string, min: num
 }
 
 // Keep these in sync with BUILDER_HEADING_FONTS in components/builder/builder-utils.ts.
-// Any Google Font is ALSO valid, stored as "gf:<Family>" — see isAllowedFontKey.
+// Any Google Font is ALSO valid, stored as "gf:<Family>", and so is a font-library
+// font, stored as "lf:<slug>" — see isAllowedFontKey.
 const HEADING_FONT_KEYS = new Set([
   "",
   "inter",
@@ -1880,11 +1882,12 @@ function normalizeThemeNumber(value: unknown, min: number, max: number): number 
   return Math.min(max, Math.max(min, num));
 }
 
-/** A built-in font key or a Google Font ("gf:Open Sans"). Anything else
+/** A built-in font key, a Google Font ("gf:Open Sans") or a font from
+ *  Starcaster's font library ("lf:orbitron", task 86bchyd46). Anything else
  *  normalizes to "" (inherit) — before 2026-10-06 a Google family was
  *  blanked here on every save (task 86bce9wwv). */
 function isAllowedFontKey(key: string): boolean {
-  return HEADING_FONT_KEYS.has(key) || isGoogleFontKey(key);
+  return HEADING_FONT_KEYS.has(key) || isGoogleFontKey(key) || isLibraryFontKey(key);
 }
 
 function normalizeThemeFontKey(value: unknown): string {
