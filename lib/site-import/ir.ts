@@ -365,6 +365,15 @@ export type NavTree = {
   /** Page the tree was extracted from. */
   pageUrl: string;
   items: NavItem[];
+  /**
+   * Set to "footer-links" on a footer tree built from plain link lists
+   * outside any <nav> (task 86bchydp2). The mapping step and the reconcile
+   * runner skip marked trees: before this slice those links were page
+   * content, and reading them as a menu would drop them from the imported
+   * page (navConsumed) or promote them to the site's top menu. Slice 2
+   * reads them on purpose. Absent on every tree that came from a real <nav>.
+   */
+  source?: "footer-links";
 };
 
 /**

@@ -1033,7 +1033,7 @@ function extractFooterLinks($: CheerioApi, pageUrl: string): NavTree[] {
       return items;
     };
     const items = lists.flatMap(fromList);
-    if (items.length) trees.push({ location: "footer", pageUrl, items });
+    if (items.length) trees.push({ location: "footer", pageUrl, items, source: "footer-links" });
   }
   return trees;
 }

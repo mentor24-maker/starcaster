@@ -202,6 +202,7 @@ test('strands: footer links outside a <nav> become a footer menu, credits droppe
   const { ir } = normalizeSite(loadJson('strands.json'));
   const footers = ir.taxonomy.navs.filter((n) => n.location === 'footer');
   assert.equal(footers.length, 1, 'expected one footer menu');
+  assert.equal(footers[0].source, 'footer-links', 'a tree built outside <nav> must be marked so map skips it');
   assert.deepEqual(
     footers[0].items.map((i) => [i.label, i.href]),
     [

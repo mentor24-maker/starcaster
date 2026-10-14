@@ -552,7 +552,8 @@
               "href": "https://x.com/StrandsMovie",
               "children": []
             }
-          ]
+          ],
+          "source": "footer-links"
         }
       ],
       "logo": {
