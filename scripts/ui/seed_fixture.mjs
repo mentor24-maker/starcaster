@@ -1348,6 +1348,17 @@ const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   // `check:panels` measures that those controls stay inside the cell.
   modules: [
     { id: 'panel-columns-left', type: 'text', text: '<p>Left column</p>', column: 'left', settings: {} },
+    // A Button in a half-width cell, linked to an outside address so its
+    // Link picker opens in Custom mode with its address box showing. In a
+    // column this narrow the panel used to stay full width: Link and Text ran
+    // past the cell and the address box was drawn wholly outside it, where
+    // the operator could not see it (task 86bchyhje). check:panels measures
+    // that every settings control here stays inside the cell.
+    {
+      id: 'panel-columns-left-button', type: 'button', column: 'left', name: 'Outside Link',
+      text: 'Reserve a court',
+      settings: { href: 'https://www.example.com/reservations', alignment: 'left' },
+    },
     {
       id: 'panel-columns-right', type: 'heading', column: 'right', settings: {},
       text: 'Rightcolumnheadingwithoneunbrokenwordthatcannotwrapanywhereatallsoitiswiderthananycellcanbe',

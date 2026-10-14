@@ -2064,6 +2064,9 @@ function assertColumnStrips(columns, width) {
  *
  * Runs last, because it opens every multi-column cell's Content panel and the
  * measurements above must keep seeing the page they always saw.
+ *
+ * Module settings controls are measured too (task 86bchyhje) — the fixture's
+ * two-column row carries a Button in Custom-link mode for exactly that.
  */
 async function measureCellControls(page) {
   await page.evaluate(() => {
@@ -2078,6 +2081,10 @@ async function measureCellControls(page) {
       '.builder-panel-toggle-row button',
       '.builder-cell-repository-actions select',
       '.builder-module-header .builder-section-actions button',
+      // A module's own settings, too (task 86bchyhje): a Button in a column
+      // kept its full-width panel, and its Link, Text and Custom-address box
+      // ran past the cell where nobody could reach them.
+      '.builder-module-editor :is(input[type="text"], input[type="url"], select, textarea)',
     ].join(', ');
     const out = [];
     document.querySelectorAll('.builder-columns:not(.builder-columns-1)').forEach((row) => {
