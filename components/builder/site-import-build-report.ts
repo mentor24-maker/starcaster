@@ -25,6 +25,19 @@ export type MapReportData = {
   placeholderPatterns?: { signature: string; count: number }[];
   /** Not written by the mapper today; shown if a future report carries it. */
   theme?: { name?: string; notes?: string[] } | null;
+  /**
+   * The Top Menu / Footer Menu the build step plans (task 86bchydp6, mirrored
+   * from `MapReport.menus`). Absent on every report written before that
+   * shipped — which is NOT the same as "this site has no menus".
+   */
+  menus?: MapReportMenus;
+};
+
+export type MapReportMenus = {
+  top?: { items?: number; topLevel?: number; logo?: boolean } | null;
+  footer?: { items?: number } | null;
+  /** Why a part is absent, in plain words: "no logo found in the header — …". */
+  notes?: string[];
 };
 
 /**
@@ -91,6 +104,84 @@ export function summarizeBuildReport(report: MapReportData): BuildReportSummary 
     placeholderKinds,
     theme: report?.theme && typeof report.theme === "object" ? report.theme : null,
   };
+}
+
+export type MenuKind = "top" | "footer";
+
+export const MENU_LABELS: Record<MenuKind, string> = { top: "Top Menu", footer: "Footer Menu" };
+
+export type MenuLine = {
+  kind: MenuKind;
+  label: string;
+  /** Null when the build step makes no section for this menu. */
+  detail: string | null;
+  /** The report's own reasons for what is missing, verbatim. */
+  reasons: string[];
+  /**
+   * After an `--apply` run: what this menu became, in words — the saved
+   * section's name, or why it cannot be named. Null before a build.
+   */
+  built: string | null;
+};
+
+export type MenusSummary =
+  | { predates: true; message: string }
+  | { predates: false; lines: MenuLine[] };
+
+export const MENUS_PREDATE_MESSAGE =
+  "This job's rehearsal predates menu capture — re-run the build step to see its menus.";
+
+/**
+ * What an `--apply` run left behind for the menus: the saved-section ids it
+ * recorded on the map checkpoint, and the project's saved sections to name
+ * them by (null when that read failed, with `error` saying why).
+ */
+export type BuiltMenus = {
+  ids: Partial<Record<MenuKind, string>>;
+  sections: Array<{ id: string; name?: string }> | null;
+  error?: string;
+};
+
+/**
+ * The Menus block: one line per menu, or the "predates" line for a report
+ * written before menus were captured (task 86bchydp7). A missing `menus` key
+ * must never read as "no menus" — on those reports nobody looked.
+ */
+export function summarizeMenus(report: MapReportData, built: BuiltMenus | null = null): MenusSummary {
+  const menus = report?.menus;
+  if (!menus || typeof menus !== "object") return { predates: true, message: MENUS_PREDATE_MESSAGE };
+  const notes = Array.isArray(menus.notes) ? menus.notes.map(String) : [];
+  // Every note names the part it is about; the footer's all say "footer".
+  const notesFor = (kind: MenuKind) => notes.filter((n) => /footer/i.test(n) === (kind === "footer"));
+
+  const top = menus.top && typeof menus.top === "object" ? menus.top : null;
+  const footer = menus.footer && typeof menus.footer === "object" ? menus.footer : null;
+  const details: Record<MenuKind, string | null> = {
+    top: top
+      ? `${pluralize(Number(top.items) || 0, "link")} (${Number(top.topLevel) || 0} at the top)${top.logo ? ", logo found" : ""}`
+      : null,
+    footer: footer ? pluralize(Number(footer.items) || 0, "link") : null,
+  };
+
+  const lines = (["top", "footer"] as MenuKind[]).map((kind) => ({
+    kind,
+    label: MENU_LABELS[kind],
+    detail: details[kind],
+    reasons: notesFor(kind),
+    built: built && details[kind] !== null ? builtMenuName(built, kind) : null,
+  }));
+  return { predates: false, lines };
+}
+
+function builtMenuName(built: BuiltMenus, kind: MenuKind): string {
+  const id = built.ids?.[kind];
+  if (!id) return "no saved section was recorded for it on this import";
+  if (!built.sections) {
+    return `saved section ${id} (could not read its name${built.error ? `: ${built.error}` : ""})`;
+  }
+  const found = built.sections.find((s) => String(s.id) === String(id));
+  if (!found) return `saved section ${id} no longer exists in this project`;
+  return `saved section “${found.name || id}”`;
 }
 
 /**
