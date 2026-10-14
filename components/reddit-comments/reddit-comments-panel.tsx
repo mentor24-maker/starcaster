@@ -1,0 +1,564 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { whenText } from '../youtube-outreach/youtube-outreach-panel';
+
+/**
+ * Engage › Comments — Reddit comments written in Dane's voice. Reddit
+ * comments 3/4 (task 86bch3jp7).
+ *
+ * A React island in the frozen vanilla app, mounted into
+ * #redditCommentsReactRoot by react-entry.js. Data:
+ * /api/engage/reddit-comments (routes/redditComments.js over
+ * lib/redditCommentsStore.js, slice 2/4). It replaced the old vanilla form,
+ * which tried to post straight through a Reddit login that was never set up.
+ *
+ * Dane pastes a link; the post is read from Reddit and lands on "To write".
+ * Reddit refuses unauthenticated reads (measured 2026-10-12), so when Add
+ * answers POST_TEXT_NEEDED the screen shows the server's reason and asks for
+ * the post pasted by hand, then sends Add again with it. "Write with AI" puts
+ * a draft on Approvals in an editable box, under the canon it was written
+ * from; Approve sends the box's words and the SERVER checks them against the
+ * blocklist, so its refusal is shown word for word. Nothing here posts — 4/4
+ * does, from the Mini, and fills the Posted tab.
+ *
+ * The shape is components/substack-notes/substack-notes-panel.tsx's on
+ * purpose: it (re)loads when its page is SHOWN and when the project is
+ * SWITCHED, and drops a reply that lands after a newer request or a switch.
+ *
+ * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17), and a read that fails
+ * says which read failed.
+ */
+
+const ITEMS_PATH = '/api/engage/reddit-comments/items';
+
+/** The window event public/js/projectContext.js emits on every project switch. */
+export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
+
+export type CanonUsed = { docKey: string; syncedAt: string | null };
+
+export type RedditItem = {
+  id: string;
+  targetUrl: string;
+  postId: string;
+  parentCommentId: string;
+  subreddit: string;
+  postTitle: string;
+  postBody: string;
+  postAuthor: string;
+  parentCommentAuthor: string;
+  parentCommentText: string;
+  postReadFrom: string;
+  draftText: string;
+  finalText: string;
+  canonUsed: CanonUsed[];
+  status: string;
+  approvedAt: string | null;
+  postedUrl: string;
+  screenshotUrl: string;
+  postedAt: string | null;
+  error: string;
+  createdAt: string;
+  updatedAt: string;
+  /** 4/4: the Mini could not prove either way whether it posted. */
+  needsHandCheck?: boolean;
+};
+
+type Tab = 'write' | 'approvals' | 'posted';
+
+type AppShape = {
+  api?: (path: string, options?: RequestInit) => Promise<Record<string, any>>;
+};
+
+function getApi(): AppShape['api'] | null {
+  const app = (window as unknown as { App?: AppShape }).App;
+  return typeof app?.api === 'function' ? app.api : null;
+}
+
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function errorCode(err: unknown): string {
+  return String((err as { code?: unknown } | null)?.code || '');
+}
+
+/** The canon documents' keys, as Dane knows them. Unknown keys are tidied, not dropped. */
+const CANON_NAMES: Record<string, string> = {
+  'DANE-OF-EARTH': 'Dane of Earth',
+  VOICE: 'Voice',
+  DEO: 'DEO',
+  ECOSYSTEM: 'Ecosystem',
+  'AIISM-BLOCKLIST': 'AI-ism blocklist',
+};
+
+/** Words that stay in capitals inside a longer key ("DEO-DATA-THESIS" → "DEO data thesis"). */
+const CANON_ACRONYMS = new Set(['DEO']);
+
+export function canonName(docKey: string): string {
+  if (CANON_NAMES[docKey]) return CANON_NAMES[docKey];
+  const words = docKey.split('-').filter(Boolean).map((w) => (CANON_ACRONYMS.has(w) ? w : w.toLowerCase()));
+  if (!words.length) return docKey;
+  words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1);
+  return words.join(' ');
+}
+
+/**
+ * "Written from: Dane of Earth, Voice, DEO, Ecosystem — canon copied Oct 12".
+ * The date is the newest copy among the documents used, which is the one that
+ * says how fresh the draft's sources were.
+ */
+export function canonLine(used: CanonUsed[] | null | undefined): string {
+  const list = Array.isArray(used) ? used.filter((d) => d && d.docKey) : [];
+  if (!list.length) return 'Written from: no canon was recorded for this draft.';
+  const names = list.map((d) => canonName(d.docKey)).join(', ');
+  const times = list.map((d) => (d.syncedAt ? Date.parse(d.syncedAt) : NaN)).filter(Number.isFinite);
+  if (!times.length) return `Written from: ${names} — when the canon was copied is not recorded.`;
+  const copied = new Date(Math.max(...times)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `Written from: ${names} — canon copied ${copied}`;
+}
+
+/** The first few lines of the post, for its row. */
+export function postPreview(body: string, max = 280): string {
+  const text = String(body || '').trim();
+  if (!text) return '';
+  const lines = text.split(/\n+/).slice(0, 3).join('\n');
+  return lines.length > max ? `${lines.slice(0, max).trimEnd()}…` : lines;
+}
+
+export function subredditLabel(item: Pick<RedditItem, 'subreddit'>): string {
+  return item.subreddit ? `r/${item.subreddit}` : 'Subreddit not known';
+}
+
+/** People paste "reddit.com/r/x/…" without the https://. Add it rather than refuse. */
+export function withScheme(link: string): string {
+  const trimmed = link.trim();
+  if (!trimmed || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+}
+
+/** Is this a link to one comment inside a post (so the reply is to that comment)? */
+export function isCommentLink(link: string): boolean {
+  return /\/comments\/[a-z0-9]+\/[^/?#]*\/[a-z0-9]+/i.test(link) || /\/comment\/[a-z0-9]+/i.test(link);
+}
+
+/** Which tab a row lives on. Rejected rows are on none; the To write tab counts them. */
+export function tabFor(status: string): Tab | null {
+  if (status === 'idea') return 'write';
+  if (status === 'draft' || status === 'approved' || status === 'posting') return 'approvals';
+  if (status === 'posted' || status === 'failed') return 'posted';
+  return null;
+}
+
+export function postedStatusText(item: Pick<RedditItem, 'status' | 'postedAt' | 'needsHandCheck'>): string {
+  if (item.needsHandCheck) return 'Check this one by hand — the Mini could not tell whether it posted';
+  if (item.status === 'failed') return 'Failed to post';
+  return item.postedAt ? `Posted ${whenText(item.postedAt)}` : 'Posted';
+}
+
+function PostSummary({ item }: { item: RedditItem }): React.ReactElement {
+  const preview = postPreview(item.postBody);
+  return (
+    <div className="reddit-comments-post">
+      <p className="reddit-comments-post-sub">
+        <strong>{subredditLabel(item)}</strong>
+        {item.postReadFrom === 'pasted' ? <span className="reddit-comments-muted"> · pasted by hand</span> : null}
+      </p>
+      <p className="reddit-comments-post-title">{item.postTitle || '(no title)'}</p>
+      {preview ? <p className="reddit-comments-text reddit-comments-muted">{preview}</p> : null}
+      {item.parentCommentId && item.parentCommentText ? (
+        <p className="reddit-comments-text">
+          <strong>{item.parentCommentAuthor ? `Replying to ${item.parentCommentAuthor}: ` : 'Replying to: '}</strong>
+          {postPreview(item.parentCommentText, 200)}
+        </p>
+      ) : null}
+      {item.targetUrl ? (
+        <a className="reddit-comments-link" href={item.targetUrl} target="_blank" rel="noopener noreferrer">Open on Reddit</a>
+      ) : null}
+    </div>
+  );
+}
+
+function DraftCard({ item, busy, error, onApprove, onReject, onRedraft }: {
+  item: RedditItem;
+  busy: string;
+  error: string;
+  onApprove: (text: string) => void;
+  onReject: () => void;
+  onRedraft: () => void;
+}): React.ReactElement {
+  const [text, setText] = useState(item.draftText);
+  const boxId = `rc-draft-${item.id}`;
+  return (
+    <article className="reddit-comments-card" data-item-id={item.id} aria-label="Comment waiting for approval">
+      <PostSummary item={item} />
+      <label className="reddit-comments-label" htmlFor={boxId}>Your comment</label>
+      <textarea id={boxId} className="reddit-comments-draft" rows={6} value={text} onChange={(e) => setText(e.target.value)} />
+      <p className="reddit-comments-help">{`${text.trim().length} characters`}</p>
+      <p className="reddit-comments-help reddit-comments-canon">{canonLine(item.canonUsed)}</p>
+      {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
+      <div className="reddit-comments-actions">
+        <button type="button" className="btn" disabled={Boolean(busy)} onClick={onRedraft}>
+          {busy === 'draft' ? 'Writing… (about 20 seconds)' : 'Write another'}
+        </button>
+        <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={onReject}>Reject</button>
+        <button type="button" className="btn btn-primary" disabled={Boolean(busy) || !text.trim()} onClick={() => onApprove(text)}>
+          {busy === 'approve' ? 'Approving…' : 'Approve'}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ApprovedCard({ item, busy, error, onReject }: {
+  item: RedditItem;
+  busy: string;
+  error: string;
+  onReject: () => void;
+}): React.ReactElement {
+  const waiting = item.status === 'posting' ? 'Posting now — the Mini has it' : 'Approved — waiting for the Mini to post it';
+  return (
+    <article className="reddit-comments-card" data-item-id={item.id} aria-label="Approved comment">
+      <PostSummary item={item} />
+      <p className="reddit-comments-status">{waiting}</p>
+      <p className="reddit-comments-text">{item.finalText || item.draftText}</p>
+      {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
+      {item.status === 'approved' ? (
+        <div className="reddit-comments-actions">
+          <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={onReject}>Reject</button>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function PostedRow({ item }: { item: RedditItem }): React.ReactElement {
+  return (
+    <li className="reddit-comments-posted-row" data-item-id={item.id}>
+      {item.screenshotUrl ? (
+        <a className="reddit-comments-posted-shot" href={item.screenshotUrl} target="_blank" rel="noopener noreferrer">
+          <img src={item.screenshotUrl} alt="Screenshot of the posted comment" />
+        </a>
+      ) : null}
+      <div className="reddit-comments-posted-body">
+        <p className="reddit-comments-status">{postedStatusText(item)}</p>
+        <p>{`${subredditLabel(item)} — ${item.postTitle || '(no title)'}`}</p>
+        <p className="reddit-comments-text">{item.finalText || item.draftText}</p>
+        {item.error ? <p className="reddit-comments-error">{item.error}</p> : null}
+        <div className="reddit-comments-actions reddit-comments-actions--start">
+          {item.postedUrl ? (
+            <a className="btn" href={item.postedUrl} target="_blank" rel="noopener noreferrer">Open the comment</a>
+          ) : null}
+          {item.targetUrl ? (
+            <a className="btn" href={item.targetUrl} target="_blank" rel="noopener noreferrer">Open the post</a>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+export default function RedditCommentsPanel(): React.ReactElement {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const requestSeq = useRef(0);
+  // Bumped on every project switch; a write started under one project checks
+  // it before showing its reply, so the old client's row never lands here.
+  const projectEpoch = useRef(0);
+  const [items, setItems] = useState<RedditItem[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [tab, setTab] = useState<Tab>('write');
+  const [link, setLink] = useState('');
+  // Reddit refused the read: the post, pasted by hand, goes with the next Add.
+  const [needsPaste, setNeedsPaste] = useState(false);
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [pasteBody, setPasteBody] = useState('');
+  const [pasteComment, setPasteComment] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [rowBusy, setRowBusy] = useState<{ id: string; what: string }>({ id: '', what: '' });
+  const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
+
+  const load = useCallback(async () => {
+    const api = getApi();
+    if (!api) {
+      setError('The admin app is still loading — try again in a moment.');
+      return;
+    }
+    const seq = ++requestSeq.current;
+    setLoading(true);
+    try {
+      const reply = await api(ITEMS_PATH);
+      if (seq !== requestSeq.current) return;
+      setItems(Array.isArray(reply?.data) ? (reply.data as RedditItem[]) : []);
+      setError('');
+    } catch (err) {
+      if (seq !== requestSeq.current) return;
+      setItems(null);
+      setError(`The Reddit comments could not be read: ${errorText(err, 'unknown error')}`);
+    }
+    setLoading(false);
+  }, []);
+
+  // Load each time the page is shown.
+  useEffect(() => {
+    const page = hostRef.current?.closest('.app-page');
+    const visible = () => !page || !page.classList.contains('hidden');
+    if (visible()) void load();
+    if (!page || typeof MutationObserver === 'undefined') return undefined;
+    let wasVisible = visible();
+    const observer = new MutationObserver(() => {
+      const now = visible();
+      if (now && !wasVisible) void load();
+      wasVisible = now;
+    });
+    observer.observe(page, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [load]);
+
+  // A project switch: drop the old client's rows at once and read the new one's.
+  useEffect(() => {
+    const onSwitch = () => {
+      requestSeq.current += 1;
+      projectEpoch.current += 1;
+      setItems(null);
+      setError('');
+      setNotice('');
+      setAddError('');
+      setLoading(false);
+      setAdding(false);
+      setRowBusy({ id: '', what: '' });
+      setRowError({ id: '', message: '' });
+      // Half-typed words belong to the old client; Add must not file them here.
+      setLink('');
+      setNeedsPaste(false);
+      setPasteTitle('');
+      setPasteBody('');
+      setPasteComment('');
+      const page = hostRef.current?.closest('.app-page');
+      if (!page || !page.classList.contains('hidden')) void load();
+    };
+    window.addEventListener(PROJECT_SWITCH_EVENT, onSwitch);
+    return () => window.removeEventListener(PROJECT_SWITCH_EVENT, onSwitch);
+  }, [load]);
+
+  const replaceItem = (next: RedditItem) => {
+    setItems((list) => (list || []).map((i) => (i.id === next.id ? next : i)));
+  };
+
+  const addItem = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const api = getApi();
+    const url = withScheme(link);
+    if (!api || !url) return;
+    const body: Record<string, string> = { url };
+    if (needsPaste) {
+      if (pasteTitle.trim()) body.postTitle = pasteTitle.trim();
+      if (pasteBody.trim()) body.postBody = pasteBody.trim();
+      if (pasteComment.trim()) body.parentCommentText = pasteComment.trim();
+    }
+    const epoch = projectEpoch.current;
+    setAdding(true);
+    setAddError('');
+    setNotice('');
+    try {
+      const reply = await api(ITEMS_PATH, { method: 'POST', body: JSON.stringify(body) });
+      if (epoch !== projectEpoch.current) return;
+      const made = reply?.data as RedditItem;
+      setItems((list) => [made, ...(list || [])]);
+      setLink('');
+      setNeedsPaste(false);
+      setPasteTitle('');
+      setPasteBody('');
+      setPasteComment('');
+      setTab('write');
+      setNotice(`Added: ${made.postTitle || made.targetUrl}`);
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      if (errorCode(err) === 'POST_TEXT_NEEDED') setNeedsPaste(true);
+      setAddError(errorText(err, 'The link was not added.'));
+    } finally {
+      if (epoch === projectEpoch.current) setAdding(false);
+    }
+  };
+
+  /** One row action; the server's refusal is shown on that row, word for word. */
+  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject', body?: Record<string, unknown>) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setRowBusy({ id: item.id, what });
+    setRowError({ id: '', message: '' });
+    setNotice('');
+    try {
+      const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/${what}`, {
+        method: 'POST',
+        body: JSON.stringify(body || {}),
+      });
+      if (epoch !== projectEpoch.current) return;
+      const next = reply?.data as RedditItem;
+      replaceItem(next);
+      if (what === 'draft') {
+        setTab('approvals');
+        setNotice(item.status === 'draft' ? 'A new draft was written.' : 'Draft written — it is on Approvals, ready to edit.');
+      } else if (what === 'approve') {
+        setNotice('Approved — waiting for the Mini to post it.');
+      } else {
+        setNotice('Rejected. It will not be posted.');
+      }
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setRowError({ id: item.id, message: errorText(err, 'That did not work, and the server gave no reason.') });
+    } finally {
+      if (epoch === projectEpoch.current) setRowBusy({ id: '', what: '' });
+    }
+  };
+
+  const reject = (item: RedditItem) => {
+    if (!window.confirm('Reject this comment? It will not be posted, and this screen cannot bring it back.')) return;
+    void runAction(item, 'reject');
+  };
+
+  const all = items || [];
+  const toWrite = all.filter((i) => tabFor(i.status) === 'write');
+  const approvals = all.filter((i) => tabFor(i.status) === 'approvals');
+  const posted = all.filter((i) => tabFor(i.status) === 'posted');
+  const rejectedCount = all.filter((i) => i.status === 'rejected').length;
+  const busyFor = (item: RedditItem) => (rowBusy.id === item.id ? rowBusy.what : '');
+  const errorFor = (item: RedditItem) => (rowError.id === item.id ? rowError.message : '');
+
+  const tabButton = (value: Tab, label: string) => (
+    <button
+      type="button"
+      role="tab"
+      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      aria-selected={tab === value}
+      onClick={() => { setTab(value); setNotice(''); }}
+    >
+      {label}
+    </button>
+  );
+
+  // Nothing was read, so nothing can be said about what is or is not here.
+  const unread = items === null;
+  const rejectedNote = rejectedCount
+    ? `${rejectedCount} rejected ${rejectedCount === 1 ? 'comment is' : 'comments are'} not shown.`
+    : '';
+
+  return (
+    <div ref={hostRef} className="reddit-comments-panel">
+      <form className="reddit-comments-add" onSubmit={addItem}>
+        <label className="reddit-comments-label" htmlFor="rc-link">Paste a Reddit post or comment link</label>
+        <div className="reddit-comments-add-row">
+          <input
+            id="rc-link"
+            type="text"
+            value={link}
+            placeholder="https://www.reddit.com/r/…/comments/…"
+            onChange={(e) => setLink(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary" disabled={adding || !link.trim()}>
+            {adding ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+        {addError ? <p className="reddit-comments-error" role="alert">{addError}</p> : null}
+        {needsPaste ? (
+          <div className="reddit-comments-paste">
+            <p className="reddit-comments-help">Open the link, copy the post into these boxes, then click Add again.</p>
+            <label className="reddit-comments-label" htmlFor="rc-paste-title">Post title</label>
+            <input id="rc-paste-title" type="text" value={pasteTitle} onChange={(e) => setPasteTitle(e.target.value)} />
+            <label className="reddit-comments-label" htmlFor="rc-paste-body">Post text</label>
+            <textarea id="rc-paste-body" rows={5} value={pasteBody} onChange={(e) => setPasteBody(e.target.value)} />
+            {isCommentLink(link) ? (
+              <>
+                <label className="reddit-comments-label" htmlFor="rc-paste-comment">The comment you are replying to</label>
+                <textarea id="rc-paste-comment" rows={3} value={pasteComment} onChange={(e) => setPasteComment(e.target.value)} />
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
+
+      <div className="reddit-comments-toolbar">
+        <div className="reddit-comments-tabs" role="tablist" aria-label="Reddit comments">
+          {tabButton('write', toWrite.length ? `To write (${toWrite.length})` : 'To write')}
+          {tabButton('approvals', approvals.length ? `Approvals (${approvals.length})` : 'Approvals')}
+          {tabButton('posted', posted.length ? `Posted (${posted.length})` : 'Posted')}
+        </div>
+        <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
+          {loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
+      {notice ? <p className="reddit-comments-notice" role="status">{notice}</p> : null}
+
+      {tab === 'write' ? (
+        <div className="reddit-comments-tabpanel" role="tabpanel" aria-label="To write">
+          {unread ? null : toWrite.length ? (
+            <ul className="reddit-comments-list">
+              {toWrite.map((item) => (
+                <li key={item.id} className="reddit-comments-card" data-item-id={item.id}>
+                  <PostSummary item={item} />
+                  {errorFor(item) ? <p className="reddit-comments-error" role="alert">{errorFor(item)}</p> : null}
+                  <div className="reddit-comments-actions">
+                    <button type="button" className="btn btn-danger" disabled={Boolean(busyFor(item))} onClick={() => reject(item)}>Reject</button>
+                    <button type="button" className="btn btn-primary" disabled={Boolean(busyFor(item))} onClick={() => void runAction(item, 'draft')}>
+                      {busyFor(item) === 'draft' ? 'Writing… (about 20 seconds)' : 'Write with AI'}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="reddit-comments-empty">
+              {all.length
+                ? 'Nothing waiting to be written — every post added so far has a draft or has been dealt with.'
+                : 'No Reddit posts added yet — paste a link above.'}
+            </p>
+          )}
+          {rejectedNote ? <p className="reddit-comments-help">{rejectedNote}</p> : null}
+        </div>
+      ) : null}
+
+      {tab === 'approvals' ? (
+        <div className="reddit-comments-tabpanel" role="tabpanel" aria-label="Approvals">
+          {unread ? null : approvals.length ? (
+            approvals.map((item) => (item.status === 'draft' ? (
+              <DraftCard
+                key={`${item.id}:${item.draftText}`}
+                item={item}
+                busy={busyFor(item)}
+                error={errorFor(item)}
+                onApprove={(text) => void runAction(item, 'approve', { text })}
+                onReject={() => reject(item)}
+                onRedraft={() => void runAction(item, 'draft')}
+              />
+            ) : (
+              <ApprovedCard key={item.id} item={item} busy={busyFor(item)} error={errorFor(item)} onReject={() => reject(item)} />
+            )))
+          ) : (
+            <p className="reddit-comments-empty">
+              {toWrite.length
+                ? 'No drafts yet — click Write with AI on a post in To write.'
+                : 'No drafts yet — paste a Reddit link above, then click Write with AI on it.'}
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {tab === 'posted' ? (
+        <div className="reddit-comments-tabpanel" role="tabpanel" aria-label="Posted">
+          {unread ? null : posted.length ? (
+            <ul className="reddit-comments-list">
+              {posted.map((item) => <PostedRow key={item.id} item={item} />)}
+            </ul>
+          ) : (
+            <p className="reddit-comments-empty">
+              Nothing posted yet — the Mac Mini posts approved comments, and that part is not switched on yet.
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}

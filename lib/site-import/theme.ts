@@ -113,6 +113,16 @@ export function contrastText(hex: string): string {
   return onWhite >= onDark ? "#ffffff" : "#111111";
 }
 
+/** WCAG contrast ratio between two colours, 1 (identical) – 21 (black on white). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** WCAG AA for body text. Below this the import theme does not ship a
+ *  surface/text pair (task 86bch6geu). */
+export const READABLE_CONTRAST = 4.5;
+
 const px = (value: string | undefined): number => {
   const n = parseFloat(String(value || ""));
   return Number.isFinite(n) ? n : 0;
@@ -159,13 +169,54 @@ export function nextThemeName(siteName: string, existingNames: string[]): string
   return `${siteName} ${max + 1}`;
 }
 
+/** The most common text colour across the site, as hex ("" if none measured). */
+function measuredTextColor(ir: SiteIR): string {
+  const texts = (ir.pages || [])
+    .flatMap((p) => (p.sections || []).flatMap((s) => s.elements || []))
+    .filter((e) => e.class === "text");
+  return toHex(mode(texts.map((e) => (e.computedStyles || {}).color)));
+}
+
+/** The page surface and, when the obvious choice was refused, why.
+ *
+ *  The obvious choice is the most common page background — but that is the
+ *  <body>, and a site with a black body behind a white content column reads
+ *  as black there. With the site's text also black, the theme shipped black
+ *  on black and every imported page looked blank (Strands Movie,
+ *  2026-10-12, task 86bch6geu). So a surface must be readable against the
+ *  measured text: else the biggest LIGHT painted area that is (the content
+ *  column), else white. Only light ones: the mapper unsets every band painted
+ *  the surface colour, so moving the surface onto a dark band — which is
+ *  where white text usually sits — would strip that band's colour from the
+ *  import. When nothing light reads, the surface stays and the text is
+ *  replaced instead (deriveImportTheme). */
+function pickSurface(ir: SiteIR): { surface: string; note: string } {
+  const sum = ir.styleSummary;
+  if (!sum) return { surface: "", note: "" };
+  const measured = toHex(top(sum.pageBackgrounds));
+  const text = measuredTextColor(ir);
+  const readable = (hex: string) => !text || contrastRatio(hex, text) >= READABLE_CONTRAST;
+  if (!measured) return { surface: "#ffffff", note: "" };
+  if (readable(measured)) return { surface: measured, note: "" };
+  const area = (sum.backgroundsByArea || [])
+    .map((t) => toHex(t.value))
+    .find((h) => h && luminance(h) >= 0.45 && readable(h));
+  const surface = area || (readable("#ffffff") ? "#ffffff" : "");
+  if (!surface) return { surface: measured, note: "" };
+  const why = area ? "the biggest light area, which the text reads on" : "white, as no light area measured reads with it";
+  return {
+    surface,
+    note: `surface: rejected the page background ${measured} — the site's text ${text} on it is ${contrastRatio(measured, text).toFixed(1)}:1, under ${READABLE_CONTRAST}:1 — using ${surface} (${why})`,
+  };
+}
+
 /** The colour the import theme gives the page surface: the most common page
- *  background, white when backgrounds were measured but none was painted,
+ *  background when the site's text reads on it, else a readable one (see
+ *  pickSurface); white when backgrounds were measured but none was painted,
  *  "" when the capture predates the measurement. The mapper leaves a band or
  *  card of exactly this colour unset, so it follows the theme. */
 export function importSurfaceColor(ir: SiteIR): string {
-  const sum = ir.styleSummary;
-  return toHex(top(sum?.pageBackgrounds)) || (sum ? "#ffffff" : "");
+  return pickSurface(ir).surface;
 }
 
 /* ---------- the derivation ---------- */
@@ -222,10 +273,57 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // Palette, from the role-separated evidence (absent on old captures).
   const sum = ir.styleSummary;
   const palette: Record<string, string> = {};
-  const surface = importSurfaceColor(ir);
+  const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
+  // An OUTLINED button (no fill, coloured text + border) has no Builder
+  // equivalent — the theme's button is a fill — so its colour becomes the
+  // fill and the text is whichever of white/near-black reads better on it.
+  const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
+  const fill = toHex(buttonFill) || toHex(buttonText);
+  let readableLink = link;
+  const { surface, note: surfaceNote } = pickSurface(ir);
+  if (surfaceNote) notes.push(surfaceNote);
   if (surface) {
     palette.surface = surface;
-    if (text) palette.surfaceText = text;
+    const readsOnSurface = (hex: string) => contrastRatio(surface, hex) >= READABLE_CONTRAST;
+    // Near-black tops out near 4.35:1 on a mid grey; pure black never
+    // drops under 4.5:1 wherever white does.
+    const fallback = readsOnSurface(contrastText(surface)) ? contrastText(surface) : "#000000";
+    if (text && readsOnSurface(text)) palette.surfaceText = text;
+    else if (text) {
+      // No light surface reads with this text (white text, or a pale grey
+      // one): keep the surface, give it text that reads. The page paints
+      // body text from typography.colors.text, not palette.surfaceText
+      // (--bx-text; --lp-surface-text is read by nothing), so replacing only
+      // the palette left the page as blank as before while the note claimed
+      // a fix (review round 1, task 86bch6geu).
+      palette.surfaceText = fallback;
+      colors.text = fallback;
+      notes.push(`surface text: rejected ${text} on ${surface} (${contrastRatio(surface, text).toFixed(1)}:1) — using ${fallback}`);
+    }
+    // Headings paint from colors.heading, measured separately — or the
+    // rejected text colour inherited above — so they get the same check
+    // against whichever surface was chosen.
+    if (colors.heading && !readsOnSurface(colors.heading)) {
+      const was = colors.heading;
+      colors.heading = colors.text && readsOnSurface(colors.text) ? colors.text : fallback;
+      notes.push(`heading colour: rejected ${was} on ${surface} (${contrastRatio(surface, was).toFixed(1)}:1) — using ${colors.heading}`);
+    }
+    // Links in body text paint from colors.link (--bx-link) and the <a>
+    // element override. On Strands the links were white on the black body;
+    // once the surface moved to the white content column they were white on
+    // white and the notes said nothing (review round 2, task 86bch6geu).
+    // Only checked once this import has already overridden the page's own
+    // colours (moved the surface, or replaced unreadable text): until then a
+    // link sits where the site designed it to, and a brand blue at 2.8:1 on
+    // white is the site's choice, not an import defect to rewrite. Prefer the
+    // button colour — the site's own accent — when it reads.
+    const overridden = Boolean(surfaceNote) || colors.text !== text;
+    if (link && overridden && !readsOnSurface(link)) {
+      readableLink = fill && readsOnSurface(fill) ? fill : fallback;
+      colors.link = readableLink;
+      colors.linkHover = readableLink;
+      notes.push(`link colour: rejected ${link} on ${surface} (${contrastRatio(surface, link).toFixed(1)}:1) — using ${readableLink}`);
+    }
   }
   const bands = (sum?.backgroundsByArea || []).map((t) => toHex(t.value)).filter((h) => h && h !== surface);
   const band = bands.find((h) => luminance(h) >= 0.45);
@@ -244,12 +342,6 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
     palette.headerText = contrastText(header) === "#ffffff" ? "#ffffff" : text || "#111111";
   }
   let borderRadius: number | undefined;
-  const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
-  // An OUTLINED button (no fill, coloured text + border) has no Builder
-  // equivalent — the theme's button is a fill — so its colour becomes the
-  // fill and the text is whichever of white/near-black reads better on it.
-  const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
-  const fill = toHex(buttonFill) || toHex(buttonText);
   if (fill) {
     palette.button = fill;
     palette.buttonText = outlined ? contrastText(fill) : toHex(buttonText) || contrastText(fill);
@@ -265,14 +357,14 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
 
   return {
     name,
-    primaryColor: fill || link || "",
+    primaryColor: fill || readableLink || "",
     secondaryColor: band || "",
     backgroundColor: surface || "",
-    accentColor: link || fill || "",
+    accentColor: readableLink || fill || "",
     ...(borderRadius !== undefined ? { borderRadius } : {}),
     ...(contentWidth ? { contentWidth } : {}),
     palette,
-    typography: { fonts, scale, colors, elements: link ? { a: { color: link } } : {} },
+    typography: { fonts, scale, colors, elements: readableLink ? { a: { color: readableLink } } : {} },
     notes,
   };
 }

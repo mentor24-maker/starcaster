@@ -98,6 +98,9 @@ App.engageComments = (function () {
     init,
     refresh: async function refresh() {},
     onPageActivated: async function onPageActivated() {
+      // Reddit comments 3/4: the page is the React screen now and this form is
+      // gone, so there is no connection status to check or show.
+      if (!byId('engageCommentsForm')) return;
       await refreshStatus();
     },
   };

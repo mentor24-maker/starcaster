@@ -11,6 +11,36 @@ Movie, 59 forms, 16 tables and 11 embeds. Once the pages have actually been
 built, the panel's title changes to "What the build step created". An import
 with no rehearsal says so instead of showing an empty space.
 
+## 2026-10-12 — An imported site's theme can no longer put black text on a black page (#844)
+
+When Starcaster imports a website it builds a theme from the site's own
+colours, and it chose the page colour and the text colour separately without
+asking whether one can be read on the other. The Strands Movie import came out
+black on black, so every page would have looked blank. Now a pair that is hard
+to read (under the usual 4.5:1 standard) is never used. The page colour moves
+to the light area the text actually sits on, or to white. If no light colour
+works, the text colour changes instead. The import report says in a plain line
+what was rejected and why. A review caught that the first version changed the
+text colour in a place nothing on the page reads, so the page would still have
+looked blank while the report said it was fixed; now the colours the page
+actually paints body text and headings with are the ones replaced. A second
+review ran it on the real Strands import and found its white links (they sat
+on the black areas) would vanish on the new white page; links now get the same
+check whenever the import has changed the page's colours, taking the site's
+own button colour (navy, on Strands) when that reads.
+
+## 2026-10-13 — Engage → Comments is now the screen for Reddit comments in Dane's voice (#846)
+
+The Comments screen under Engage used to be a bare form that tried to post
+straight to Reddit through a login that was never set up. Now it is the screen
+for the comment-writing built in the last ticket. Paste a Reddit link and the
+post appears. Click Write with AI and a comment lands in a box you can edit,
+with a line saying which canon documents it was written from and when they were
+copied. Approve it and it waits for the Mac Mini, which the next ticket teaches
+to post it. Reddit blocks unsigned reads, so when it refuses, the screen says so
+and gives you boxes to paste the post into. If the server refuses your edit
+(say it contains a banned phrase), the reason shows word for word and your
+words stay in the box.
 ## 2026-10-12 — The Imports screen's Jobs list names each website again (#845)
 
 On the Site Import screen, the list of imports on the left showed a coloured
