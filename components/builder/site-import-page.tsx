@@ -5,6 +5,8 @@ import {
   mapReportUrl,
   pluralize,
   summarizeBuildReport,
+  summarizeMenus,
+  type BuiltMenus,
   type MapReportData,
 } from "./site-import-build-report";
 
@@ -146,6 +148,8 @@ export type MapCheckpoint = {
   at?: string;
   pageIds?: Record<string, string>;
   theme?: { id?: string; name?: string; previousDefaultName?: string };
+  /** Saved-section ids of the Top Menu / Footer Menu the run made (86bchydp6). */
+  menus?: { top?: string; footer?: string };
 };
 
 export function mapCheckpointOf(job: Pick<Job, "checkpoints">): MapCheckpoint | null {
@@ -242,6 +246,9 @@ export default function SiteImportPage() {
   // pages it built. null = not read (or the read failed — see builderPagesError).
   const [builderPages, setBuilderPages] = useState<Array<{ id: string; name?: string; slug?: string }> | null>(null);
   const [builderPagesError, setBuilderPagesError] = useState("");
+  // The menus an --apply run made, with the project's saved sections to name
+  // them by. null = no build recorded menu ids.
+  const [builtMenus, setBuiltMenus] = useState<BuiltMenus | null>(null);
   const detailFetchedFor = useRef<string>("");
 
   const loadJobs = useCallback(async () => {
@@ -311,6 +318,23 @@ export default function SiteImportPage() {
             setBuilderPages(null);
             setBuilderPagesError((err as Error).message);
           }
+          const menuIds = mapCheckpointOf(fresh)?.menus;
+          if (menuIds && (menuIds.top || menuIds.footer)) {
+            try {
+              const sectionsBody = await appApi("/api/builder/saved-sections");
+              const data = unwrapEnvelope<unknown>(sectionsBody);
+              setBuiltMenus({
+                ids: menuIds,
+                sections: Array.isArray(data)
+                  ? (data as Array<{ id: string; name?: string }>)
+                  : readEnvelopeList(sectionsBody, "savedSections"),
+              });
+            } catch (err) {
+              setBuiltMenus({ ids: menuIds, sections: null, error: (err as Error).message });
+            }
+          } else {
+            setBuiltMenus({ ids: {}, sections: [] });
+          }
         }
       }
     } catch (err) {
@@ -334,6 +358,7 @@ export default function SiteImportPage() {
     setMapReport(undefined);
     setBuilderPages(null);
     setBuilderPagesError("");
+    setBuiltMenus(null);
     void loadJobDetail(selectedId);
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -566,7 +591,11 @@ export default function SiteImportPage() {
               ) : null}
 
               {checkpointOf(job, "capture") ? (
-                <BuildReportPanel report={mapReport} built={Boolean(checkpointOf(job, "map"))} />
+                <BuildReportPanel
+                  report={mapReport}
+                  built={Boolean(checkpointOf(job, "map"))}
+                  builtMenus={builtMenus}
+                />
               ) : null}
 
               {pages && pages.length > 0 ? (
@@ -634,7 +663,15 @@ export default function SiteImportPage() {
  * create, once its `--apply` run has recorded the map checkpoint. Read-only;
  * running the mapper stays a terminal step (task 86bch6e2q non-goal).
  */
-function BuildReportPanel({ report, built }: { report: MapReportData | null | undefined; built: boolean }) {
+function BuildReportPanel({
+  report,
+  built,
+  builtMenus,
+}: {
+  report: MapReportData | null | undefined;
+  built: boolean;
+  builtMenus: BuiltMenus | null;
+}) {
   const title = built ? "What the build step created" : "What the build step will create";
   if (report === undefined) {
     return (
@@ -674,6 +711,7 @@ function BuildReportPanel({ report, built }: { report: MapReportData | null | un
             }`
           : "This report does not say which theme the build step makes the default; that is only printed in the terminal today."}
       </p>
+      <MenusBlock report={report} builtMenus={built ? builtMenus : null} />
       <table className="site-import-build-pages">
         <thead>
           <tr>
@@ -696,6 +734,41 @@ function BuildReportPanel({ report, built }: { report: MapReportData | null | un
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * The Top Menu and Footer Menu the build step makes (task 86bchydp7) — and,
+ * where one is missing, the report's own reason, because "no Footer Menu"
+ * alone reads as broken when the site's footer simply has no links.
+ */
+function MenusBlock({ report, builtMenus }: { report: MapReportData; builtMenus: BuiltMenus | null }) {
+  const menus = summarizeMenus(report, builtMenus);
+  return (
+    <div className="site-import-menus">
+      <h5>Menus</h5>
+      {menus.predates ? (
+        <p className="meta">{menus.message}</p>
+      ) : (
+        <ul className="site-import-menus-list">
+          {menus.lines.map((line) => (
+            <li key={line.kind}>
+              <strong>{line.label}</strong> — {line.detail ?? "none"}
+              {line.built ? <span className="site-import-menus-built"> → {line.built}</span> : null}
+              {line.reasons.length ? (
+                <ul className="site-import-menus-reasons">
+                  {line.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              ) : line.detail === null ? (
+                <span className="meta"> (the report gives no reason)</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

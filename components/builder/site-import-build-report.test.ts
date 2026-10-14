@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { leftoverReason, mapReportUrl, summarizeBuildReport } from './site-import-build-report';
+import {
+  MENUS_PREDATE_MESSAGE,
+  leftoverReason,
+  mapReportUrl,
+  summarizeBuildReport,
+  summarizeMenus,
+} from './site-import-build-report';
 
 /**
  * Task 86bch6e2q. The fixture is a trimmed copy of the REAL map report for
@@ -115,5 +121,87 @@ describe('mapReportUrl', () => {
   it('returns null when there is nothing to derive from', () => {
     expect(mapReportUrl('simp_1', undefined, undefined)).toBeNull();
     expect(mapReportUrl('simp_2', undefined, capture)).toBeNull();
+  });
+});
+
+/**
+ * Task 86bchydp7. The `menus` shapes are what lib/site-import/map.ts writes
+ * (86bchydp6); the notes are copied from it word for word.
+ */
+describe('summarizeMenus', () => {
+  const withBoth = {
+    pages: [],
+    menus: { top: { items: 25, topLevel: 7, logo: true }, footer: { items: 2 }, notes: [] },
+  };
+
+  it('describes both menus', () => {
+    const summary = summarizeMenus(withBoth);
+    expect(summary.predates).toBe(false);
+    if (summary.predates) return;
+    expect(summary.lines).toEqual([
+      { kind: 'top', label: 'Top Menu', detail: '25 links (7 at the top), logo found', reasons: [], built: null },
+      { kind: 'footer', label: 'Footer Menu', detail: '2 links', reasons: [], built: null },
+    ]);
+  });
+
+  it('gives both reasons verbatim when there is no logo and no footer', () => {
+    const logoNote = 'no logo found in the header — the Top Menu is one column, menu only';
+    const footerNote = 'no links found in the footer — no Footer Menu';
+    const summary = summarizeMenus({
+      pages: [],
+      menus: { top: { items: 1, topLevel: 1, logo: false }, footer: null, notes: [logoNote, footerNote] },
+    });
+    if (summary.predates) throw new Error('read as predating menus');
+    const [top, footer] = summary.lines;
+    expect(top.detail).toBe('1 link (1 at the top)');
+    expect(top.reasons).toEqual([logoNote]);
+    expect(footer.detail).toBeNull();
+    expect(footer.reasons).toEqual([footerNote]);
+  });
+
+  it('routes a missing Top Menu reason to the Top Menu, not the footer', () => {
+    const summary = summarizeMenus({
+      pages: [],
+      menus: {
+        top: null,
+        footer: { items: 4 },
+        notes: [
+          'no logo found in the header — the Top Menu is one column, menu only',
+          'no header menu found — the Top Menu has no links',
+          'no header menu and no logo — no Top Menu',
+        ],
+      },
+    });
+    if (summary.predates) throw new Error('read as predating menus');
+    expect(summary.lines[0].detail).toBeNull();
+    expect(summary.lines[0].reasons).toHaveLength(3);
+    expect(summary.lines[1].reasons).toEqual([]);
+  });
+
+  it('says a pre-menu report predates menu capture, never "no menus"', () => {
+    const summary = summarizeMenus(strands);
+    expect(summary).toEqual({ predates: true, message: MENUS_PREDATE_MESSAGE });
+    expect(MENUS_PREDATE_MESSAGE).toMatch(/predates menu capture/);
+    expect(MENUS_PREDATE_MESSAGE).not.toMatch(/no menus/i);
+  });
+
+  it('names the saved section each menu became after a build', () => {
+    const summary = summarizeMenus(withBoth, {
+      ids: { top: 'ss_1', footer: 'ss_2' },
+      sections: [
+        { id: 'ss_1', name: 'Top Menu (strandsmovie.com)' },
+        { id: 'ss_9', name: 'Footer Menu' },
+      ],
+    });
+    if (summary.predates) throw new Error('read as predating menus');
+    expect(summary.lines[0].built).toBe('saved section “Top Menu (strandsmovie.com)”');
+    expect(summary.lines[1].built).toBe('saved section ss_2 no longer exists in this project');
+  });
+
+  it('says why a built menu cannot be named', () => {
+    const failed = summarizeMenus(withBoth, { ids: { top: 'ss_1' }, sections: null, error: 'HTTP 500' });
+    if (failed.predates) throw new Error('read as predating menus');
+    expect(failed.lines[0].built).toBe('saved section ss_1 (could not read its name: HTTP 500)');
+    expect(failed.lines[1].built).toBe('no saved section was recorded for it on this import');
   });
 });
