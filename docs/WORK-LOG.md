@@ -1,3 +1,15 @@
+## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
+
+There is now an **Assets → Fonts** screen. It lists every font in the library
+(the shared ones and this project's own), and each font's name is written in
+that font, so you can see what it looks like without opening anything. **Add
+Font** uploads a new one: you give the name, the kind of font, its licence and
+where it came from, and pick the files. If the licence is "Other / not sure",
+the form refuses it and explains why in red, and nothing is saved. Only a
+project's own fonts can be deleted; the shared ones cannot. An empty library
+says so in words instead of showing a blank table. One thing to know: the
+database table the fonts live in has not been set up on the live site yet, so
+the live screen will show an error until it is.
 ## 2026-10-13 — Starcaster has a place to keep its own fonts, and refuses ones a business may not use (#854)
 
 Sites could only use the ten built-in fonts or a Google Font. Now Starcaster can
