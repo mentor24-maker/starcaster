@@ -1,3 +1,16 @@
+## 2026-10-13 — Starcaster has a place to keep its own fonts, and refuses ones a business may not use (#854)
+
+Sites could only use the ten built-in fonts or a Google Font. Now Starcaster can
+store font files itself: a shared library every project can use (which no single
+project can change or delete), plus fonts a project uploads for its own sites.
+Before anything is stored, the upload is checked: the font's licence must be one
+that allows use on a business website (SIL Open Font License, Apache 2.0 or public
+domain — "free for personal use" is refused with a plain explanation), each file
+must really be a font, and the name must be safe to use in a web page. A refused
+upload leaves nothing behind. There is no screen yet; the Fonts screen is the next
+ticket. (Review caught that the first version sent fonts as a browser form upload,
+which the live server swallows before Starcaster sees it, so every upload would
+have hung; fonts now travel the same way every other upload here does.)
 ## 2026-10-13 — Site Import now writes down a website's logo and its footer links (#852)
 
 When Site Import copies a website, it now records the site's logo (the picture
