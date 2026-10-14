@@ -265,6 +265,42 @@
   font-size: 12px;
 }
 
+/* "What the build step will create" — task 86bch6e2q. */
+.site-import-build-report {
+  margin: 8px 0 4px;
+}
+
+.site-import-build-pages {
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  width: 100%;
+}
+
+.site-import-build-pages th,
+.site-import-build-pages td {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  text-align: left;
+  vertical-align: top;
+}
+
+.site-import-build-pages td:nth-child(3),
+.site-import-build-pages td:nth-child(4) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.site-import-build-pages td:first-child,
+.site-import-build-pages td:nth-child(2) {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.site-import-build-pages tr.is-leftover td {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-ink);
+}
+
 @media (max-width: 900px) {
   .site-import-columns {
     flex-direction: column;

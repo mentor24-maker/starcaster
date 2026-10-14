@@ -1,3 +1,16 @@
+## 2026-10-12 — The Imports screen shows what building the pages would make, before you build them (#843)
+
+Before turning an imported website into pages, the only way to see what you
+would get was for an agent to run a rehearsal in a terminal and read it out.
+Now each import on the Imports screen has a panel listing every page it would
+create — the old address, the new page, how many pieces of content and how
+many grey placeholders each one gets — with the WordPress leftovers
+highlighted in plain words (author and category pages, dated posts, extra
+copies of the home page). It also totals the placeholders by kind: for Strands
+Movie, 59 forms, 16 tables and 11 embeds. Once the pages have actually been
+built, the panel's title changes to "What the build step created". An import
+with no rehearsal says so instead of showing an empty space.
+
 ## 2026-10-12 — An imported site's theme can no longer put black text on a black page (#844)
 
 When Starcaster imports a website it builds a theme from the site's own
