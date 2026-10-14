@@ -30,6 +30,7 @@ import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
 import { importSurfaceColor } from "./theme";
+import { isCreditLink } from "./normalize";
 import {
   hasPaint,
   keepCellFill,
@@ -167,6 +168,33 @@ export type MapReport = {
    * written — that is exactly how image-only tables were found.
    */
   placeholderPatterns: { signature: string; count: number; sampleSourceId: string }[];
+  /**
+   * The menus --apply will build, in counts and plain words, so the dry run
+   * and the Imports screen can say what is coming — and, when a part is
+   * missing, why (task 86bchydp6).
+   */
+  menus: {
+    top: { items: number; topLevel: number; logo: boolean } | null;
+    footer: { items: number } | null;
+    /** Why a part is absent: "no logo found in the header", … */
+    notes: string[];
+  };
+};
+
+/** One link in the navigation module's flat `navItems` shape. */
+export type MenuNavItem = { id: string; label: string; href: string; parentId: string; target: string };
+
+/** The site's logo as the Top Menu will show it. `url` is the copy the
+ *  import makes (rewritten to the project's namespace on --apply). */
+export type MenuLogo = { url: string; alt: string; width: number; height: number; assetId: string };
+
+export type MenuPlan = {
+  /** Null only when the site has neither a header menu nor a logo. */
+  top: { items: MenuNavItem[]; logo: MenuLogo | null } | null;
+  /** Null when the footer has no links. */
+  footer: { items: MenuNavItem[] } | null;
+  /** Why a part is absent, in plain words. */
+  notes: string[];
 };
 
 /** One consolidation the mapper performed — surfaced in the dry run so a
@@ -216,8 +244,12 @@ export type MapOutput = {
   slideshows: SlideshowPlan[];
   /** Card grids this run will create (empty when none qualify). */
   cardGrids: CardGridPlan[];
-  /** Header nav for --nav, in navigation-module navItems shape. */
-  navItems: { id: string; label: string; href: string; parentId: string; target: string }[];
+  /** Header nav for --nav, in navigation-module navItems shape. The same
+   *  list as menus.top.items (an empty list when there is no top menu). */
+  navItems: MenuNavItem[];
+  /** The Top Menu and Footer Menu saved sections --apply builds (task
+   *  86bchydp6). */
+  menus: MenuPlan;
   copyPlan: {
     crops: CropCopy[];
     assets: AssetPromotion[];
@@ -246,6 +278,14 @@ export type MapOptions = {
   skipAllCardGrids?: boolean;
   /** IR page paths to leave as separate modules. */
   skipCardGridPaths?: string[];
+  /**
+   * Build the Top Menu / Footer Menu (default true; the script's --no-menus
+   * and --nav turn it off). When on, a paragraph that is only a
+   * theme/platform credit ("Designed by Elegant Themes | Powered by
+   * WordPress") is dropped from the page — the same rule that keeps credits
+   * out of the Footer Menu. When off, pages map exactly as before 86bchydp6.
+   */
+  menus?: boolean;
 };
 
 /* ---------------------------------------------------------------------------
@@ -297,10 +337,11 @@ export function pathOfWriteKey(key: string): string {
 
 /** What a capture SAYS, without the ids capture invents per visit. */
 /**
- * The nav trees the mapping step reads as menus. Footer trees built from
- * plain link lists (source "footer-links", task 86bchydp2) are skipped until
- * slice 2 maps them on purpose: their links are still page content here, so
- * they stay on the imported page and never become the top menu.
+ * The nav trees the mapping step matches page links against, and may fall
+ * back to for the top menu. Footer trees built from plain link lists (source
+ * "footer-links", task 86bchydp2) are left out: their links are still page
+ * content, so they stay on the imported page and never become the top menu.
+ * The Footer Menu reads them on purpose (task 86bchydp6, in mapSite).
  */
 export function menuNavs(ir: SiteIR): NavTree[] {
   return (ir.taxonomy?.navs || []).filter((n) => n.source !== "footer-links");
@@ -925,6 +966,27 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     }
   };
   for (const nav of menuNavs(ir)) collectNav(nav.items);
+  const menusOn = opts.menus !== false;
+  // The footer's own links stay on the page even with a Footer Menu: on a
+  // site whose footer band is nothing but links, consuming them deletes the
+  // band and its background (the Dane of Earth fixture's #222 footer).
+  // Whether the menu should REPLACE the band is a separate decision.
+  const footerLinkTrees = (ir.taxonomy?.navs || []).filter((n) => n.source === "footer-links");
+  /** A paragraph that is nothing but "Designed by X | Powered by Y". */
+  const isCreditOnly = (el: ElementIR): boolean => {
+    if (!menusOn || !footerLinkTrees.length || !/<a\b/i.test(el.html)) return false;
+    const $ = cheerio.load(el.html);
+    const anchors = $("a").toArray();
+    if (!anchors.length) return false;
+    if (!anchors.every((a) => isCreditLink(collapse($(a).text()), $(a).attr("href") || "", ir.sourceUrl))) return false;
+    $("a").remove();
+    const glue = collapse($.root().text())
+      .toLowerCase()
+      .replace(/\b(proudly|designed|powered|built|made|created|developed|theme|by|with|and)\b/g, "")
+      .replace(/[|·•,\-–—&]/g, "")
+      .trim();
+    return glue === "";
+  };
 
   const surfaceColor = importSurfaceColor(ir);
   const assetByUrl = new Map<string, AssetRef>();
@@ -945,6 +1007,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
     repeatCaptures,
     placeholderPatterns: [],
+    menus: { top: null, footer: null, notes: [] },
   };
   for (const repeat of repeatCaptures) {
     report.elements.total += repeat.elements;
@@ -1515,6 +1578,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         }
 
         if (PROSE_CLASSES.has(el.class)) {
+          if (isCreditOnly(el)) {
+            report.elements.skipped += 1;
+            report.skipped.push({
+              sourceId: el.sourceId,
+              class: el.class,
+              reason: `theme/platform credit ("${collapse(el.textContent).slice(0, 80)}") — the site builder's signature, not the client's content; dropped with the Footer Menu`,
+            });
+            continue;
+          }
           if (el.class === "link") {
             const pair = `${collapse(el.textContent).toLowerCase()}|${normalizeHref(attrFromHtml(el.html, "href"))}`;
             if (navPairs.has(pair)) {
@@ -1709,29 +1781,91 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     });
   }
 
-  // Nav tree → navigation-module items (header tree preferred).
+  // Nav trees → the Top Menu and Footer Menu (task 86bchydp6). The header
+  // tree is preferred for the top menu; the footer menu reads every footer
+  // tree — including the plain link lists slice 1 records outside a <nav> —
+  // except one already used as the top menu.
   const headerNav =
     menuNavs(ir).find((n) => n.location === "header") ||
     menuNavs(ir)[0] ||
     null;
-  const navItems: MapOutput["navItems"] = [];
-  if (headerNav) {
-    let navSeq = 0;
-    const push = (items: NavItem[], parentId: string) => {
-      for (const item of items || []) {
-        const id = `impnav_${navSeq++}`;
-        navItems.push({
-          id,
-          label: collapse(item.label),
-          href: item.href || "#",
-          parentId,
-          target: "",
-        });
+  let navSeq = 0;
+  const flattenNav = (items: NavItem[], prefix: string): MenuNavItem[] => {
+    const out: MenuNavItem[] = [];
+    const push = (list: NavItem[], parentId: string) => {
+      for (const item of list || []) {
+        const id = `${prefix}${navSeq++}`;
+        out.push({ id, label: collapse(item.label), href: item.href || "#", parentId, target: "" });
         push(item.children || [], id);
       }
     };
-    push(headerNav.items, "");
+    push(items, "");
+    return out;
+  };
+  const navItems: MapOutput["navItems"] = headerNav ? flattenNav(headerNav.items, "impnav_") : [];
+
+  const footerItems: MenuNavItem[] = [];
+  const seenFooter = new Set<string>();
+  const footerTrees = (ir.taxonomy?.navs || []).filter((n) => n.location === "footer" && n !== headerNav);
+  const droppedFooter = new Set<string>();
+  for (const tree of footerTrees) {
+    for (const item of flattenNav(tree.items, "impfoot_")) {
+      // The same top-level link in two footer lists is one menu item, and a
+      // dropped item takes its children with it.
+      const key = `${item.label.toLowerCase()}|${normalizeHref(item.href)}`;
+      if (droppedFooter.has(item.parentId) || (!item.parentId && seenFooter.has(key))) {
+        droppedFooter.add(item.id);
+        continue;
+      }
+      seenFooter.add(key);
+      footerItems.push(item);
+    }
   }
+
+  // The logo goes through the copy plan like any content image, so it lands
+  // in the project's library and never points at the client's old server.
+  // It is promoted here, on its own, so the repeating-header-image dedupe
+  // above (slideshow chrome runs) can never drop it.
+  const siteLogo = ir.taxonomy?.logo;
+  let menuLogo: MenuLogo | null = null;
+  if (siteLogo?.src) {
+    const asset = siteLogo.assetId ? promoteAsset(siteLogo.assetId) : null;
+    let url = asset ? asset.storageUrl || asset.originalUrl : "";
+    if (!url) {
+      // Not in the captured manifest: copy it straight from its source on
+      // --apply. The page JSON only ever carries the copy.
+      const ext = (siteLogo.src.match(/\.([a-z0-9]{2,5})(?:[?#]|$)/i) || [])[1] || "";
+      if (!promotions.has("site-logo")) {
+        promotions.set("site-logo", {
+          assetId: "site-logo",
+          fromUrl: siteLogo.src,
+          originalUrl: siteLogo.src,
+          altText: siteLogo.alt || "",
+          mimeType: ext ? (ext.toLowerCase() === "svg" ? "image/svg+xml" : `image/${ext.toLowerCase() === "jpg" ? "jpeg" : ext.toLowerCase()}`) : "",
+        });
+      }
+      url = siteLogo.src;
+    }
+    menuLogo = {
+      url,
+      alt: siteLogo.alt || asset?.altText || "",
+      width: Number(siteLogo.width || asset?.width) || 0,
+      height: Number(siteLogo.height || asset?.height) || 0,
+      assetId: siteLogo.assetId || "site-logo",
+    };
+  }
+
+  const menuNotes: string[] = [];
+  if (!menuLogo) menuNotes.push("no logo found in the header — the Top Menu is one column, menu only");
+  if (!headerNav) menuNotes.push("no header menu found — the Top Menu has no links");
+  if (!footerTrees.length) menuNotes.push("no links found in the footer — no Footer Menu");
+  else if (!footerItems.length) menuNotes.push("the footer has no links — no Footer Menu");
+  if (!menuLogo && !navItems.length) menuNotes.push("no header menu and no logo — no Top Menu");
+  const menus: MenuPlan = {
+    top: menuLogo || navItems.length ? { items: navItems, logo: menuLogo } : null,
+    footer: footerItems.length ? { items: footerItems } : null,
+    notes: menuNotes,
+  };
 
   // --- Localize links between imported pages (nav + in-content) ----------
   // A link that points at a page we ALSO imported should navigate the
@@ -1810,9 +1944,20 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       }
     }
   }
-  for (const item of navItems) {
+  for (const item of [...navItems, ...footerItems]) {
     item.href = localizeHref(item.href);
   }
+  report.menus = {
+    top: menus.top
+      ? {
+          items: menus.top.items.length,
+          topLevel: menus.top.items.filter((i) => !i.parentId).length,
+          logo: Boolean(menus.top.logo),
+        }
+      : null,
+    footer: menus.footer ? { items: menus.footer.items.length } : null,
+    notes: menus.notes,
+  };
 
   report.placeholderPatterns = Array.from(patternTally.entries())
     .map(([signature, v]) => ({ signature, count: v.count, sampleSourceId: v.sampleSourceId }))
@@ -1826,9 +1971,161 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     slideshows: slideshowPlans,
     cardGrids: cardGridPlans,
     navItems,
+    menus,
     copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
     report,
   };
+}
+
+/* ---------------------------------------------------------------------------
+ * Top Menu + Footer Menu saved sections (task 86bchydp6)
+ *
+ * Pure, so the script's --apply step is a thin loop over store calls and
+ * everything that decides WHAT is written is tested here. Header vs footer
+ * is position only: a canonical instance at the front of a page reads as its
+ * header, one at the end as its footer (builder-template-frame.ts).
+ * ------------------------------------------------------------------------ */
+
+export type MenuKind = "top" | "footer";
+export const MENU_SECTION_NAMES: Record<MenuKind, string> = { top: "Top Menu", footer: "Footer Menu" };
+/** How tall the logo sits in the Top Menu. The image module sizes by width,
+ *  so this becomes a width cap from the logo's own proportions. */
+export const TOP_MENU_LOGO_HEIGHT_PX = 80;
+
+type MenuModule = { id: string; type: string; column: string; name: string; text: string; settings: Record<string, string> };
+export type MenuSection = {
+  id: string;
+  title: string;
+  layout: string;
+  widthMode: string;
+  background: { mode: string; color: string; color2: string; imageUrl: string; styleKey: string };
+  modules: MenuModule[];
+};
+
+/** "https://www.strandsmovie.com/x" → "strandsmovie.com". */
+export function menuSiteLabel(sourceUrl: string): string {
+  try {
+    return new URL(sourceUrl).hostname.replace(/^www\./, "") || "imported site";
+  } catch {
+    return "imported site";
+  }
+}
+
+/** The logo's width cap, so it shows at TOP_MENU_LOGO_HEIGHT_PX tall (or its
+ *  own height when smaller) instead of filling the column. */
+export function topMenuLogoWidthPx(logo: MenuLogo): number {
+  if (logo.width > 0 && logo.height > 0) {
+    const shownHeight = Math.min(logo.height, TOP_MENU_LOGO_HEIGHT_PX);
+    return Math.max(1, Math.round((logo.width * shownHeight) / logo.height));
+  }
+  return logo.width > 0 ? Math.min(logo.width, 240) : 240;
+}
+
+/**
+ * The saved section for one menu, or null when the plan has nothing for it.
+ * Top Menu: logo left + menu right ("one-three"); one column when either
+ * half is missing. Footer Menu: one column, footer navigation.
+ */
+export function buildMenuSection(kind: MenuKind, plan: MenuPlan, idBase: string): MenuSection | null {
+  const base = String(idBase || "import").replace(/[^a-zA-Z0-9_-]+/g, "");
+  const section = (layout: string, modules: MenuModule[]): MenuSection => ({
+    id: `impmenu_${kind}_${base}`,
+    title: MENU_SECTION_NAMES[kind],
+    layout,
+    widthMode: "contained",
+    background: { mode: "none", color: "", color2: "", imageUrl: "", styleKey: "" },
+    modules,
+  });
+  const nav = (column: string, items: MenuNavItem[], extra: Record<string, string>): MenuModule => ({
+    id: `impmenu_${kind}_nav_${base}`,
+    type: "navigation",
+    column,
+    name: MENU_SECTION_NAMES[kind],
+    text: "",
+    settings: { navItems: JSON.stringify(items), navDirection: "horizontal", menuName: MENU_SECTION_NAMES[kind], ...extra },
+  });
+
+  if (kind === "footer") {
+    if (!plan.footer?.items.length) return null;
+    return section("single", [nav("main", plan.footer.items, { menuLocation: "footer", navAlignment: "center" })]);
+  }
+
+  const top = plan.top;
+  if (!top) return null;
+  const logo = top.logo;
+  const logoModule = (column: string): MenuModule => ({
+    id: `impmenu_top_logo_${base}`,
+    type: "image",
+    column,
+    name: "Logo",
+    text: "",
+    settings: {
+      url: logo!.url,
+      alt: logo!.alt,
+      linkUrl: "/",
+      size: "100",
+      maxWidthPx: String(topMenuLogoWidthPx(logo!)),
+    },
+  });
+  if (logo && top.items.length) {
+    return section("one-three", [
+      logoModule("left"),
+      nav("right", top.items, { menuLocation: "primary", navAlignment: "right" }),
+    ]);
+  }
+  if (logo) return section("single", [logoModule("main")]);
+  return section("single", [nav("main", top.items, { menuLocation: "primary", navAlignment: "center" })]);
+}
+
+export type MenuTarget = { action: "create" | "update"; id: string; name: string };
+
+/**
+ * Which saved section a menu is written to. A section this job created
+ * before (its id is in the job's map checkpoint and it still exists) is
+ * updated, under whatever name it carries now. Otherwise a NEW one is
+ * created under the first name nobody is using — "Top Menu", then
+ * "Top Menu (strandsmovie.com)", then "… 2" — so a section the project
+ * already has is never written to.
+ */
+export function planMenuTarget(
+  kind: MenuKind,
+  existing: { id: string; name: string }[],
+  priorId: string,
+  siteLabel: string
+): MenuTarget {
+  const mine = priorId ? existing.find((s) => String(s.id) === String(priorId)) : null;
+  if (mine) return { action: "update", id: String(mine.id), name: mine.name || MENU_SECTION_NAMES[kind] };
+  const taken = new Set(existing.map((s) => String(s.name || "").trim().toLowerCase()));
+  const base = MENU_SECTION_NAMES[kind];
+  const candidates = [base, `${base} (${siteLabel})`];
+  for (let n = 2; n < 1000; n++) candidates.push(`${base} (${siteLabel}) ${n}`);
+  const name = candidates.find((c) => !taken.has(c.toLowerCase())) || `${base} (${siteLabel}) ${Date.now()}`;
+  return { action: "create", id: "", name };
+}
+
+/**
+ * A page's sections with the menus attached as canonical instances: the Top
+ * Menu first, the Footer Menu last. A page already carrying an instance of a
+ * menu is left as it is for that menu, wherever the instance sits.
+ */
+export function attachMenuInstances<S extends { id?: string; savedSectionId?: string }>(
+  sections: S[],
+  pageId: string,
+  menus: { top?: { savedSectionId: string; section: MenuSection } | null; footer?: { savedSectionId: string; section: MenuSection } | null }
+): { sections: (S | MenuSection & { savedSectionId: string; canonical: true })[]; changed: boolean } {
+  const list: (S | (MenuSection & { savedSectionId: string; canonical: true }))[] = [...(sections || [])];
+  const has = (id: string) => list.some((s) => (s as { savedSectionId?: string }).savedSectionId === id);
+  const pid = String(pageId).replace(/[^a-zA-Z0-9_-]+/g, "");
+  let changed = false;
+  if (menus.top && !has(menus.top.savedSectionId)) {
+    list.unshift({ ...menus.top.section, id: `impmenu_top_inst_${pid}`, savedSectionId: menus.top.savedSectionId, canonical: true });
+    changed = true;
+  }
+  if (menus.footer && !has(menus.footer.savedSectionId)) {
+    list.push({ ...menus.footer.section, id: `impmenu_footer_inst_${pid}`, savedSectionId: menus.footer.savedSectionId, canonical: true });
+    changed = true;
+  }
+  return { sections: list, changed };
 }
 
 /** The reconciliation rule (spec: refuse --apply unless this holds). */
