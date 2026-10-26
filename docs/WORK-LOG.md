@@ -1,3 +1,17 @@
+## 2026-10-26 — Engage has an Outreach screen that shows where YouTube, Substack and Reddit stand (#860)
+
+There is now an **Engage → Outreach** screen, the first item under Engage.
+Before this, one channel's outreach work was spread across two to four
+screens, so it was hard to tell what was done and what came next. Pick
+YouTube, Substack or Reddit and you see five stages: Connect, Find creators,
+Find conversations, Write replies, and Learn. Each stage has one sentence
+that says what it counted, for example "17 writers approved". The first
+stage that is not done is highlighted, and it has one button that opens the
+screen where you do that step. The screen only reads and changes nothing. If
+part of it cannot be read, that stage says "Cannot tell" and gives the
+reason. It is never shown as done. This is step 1 of 19. Later steps move
+the actual work into this screen.
+
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
