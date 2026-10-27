@@ -72,6 +72,7 @@ const substackNotes = require('./substackNotes');
 const redditComments = require('./redditComments');
 const substackMiner = require('./substackMiner');
 const outreach    = require('./outreach');
+const browserView = require('./browserView');
 const eventCategories = require('./eventCategories');
 const eventHarvest = require('./eventHarvest');
 const admin       = require('./admin');
@@ -147,6 +148,7 @@ const ROUTE_MODULES = [
   studio,
   youtubeOutreach,
   outreach,
+  browserView,
   eventCategories,
   eventHarvest,
   publicSite,
