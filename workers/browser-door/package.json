@@ -1,0 +1,16 @@
+{
+  "name": "starcaster-browser-door",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The door keeper: opens one project's Chrome on the Mini, streams a live picture of it and relays clicks and keys back, for signing in to sites from inside Starcaster. Loopback only.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}

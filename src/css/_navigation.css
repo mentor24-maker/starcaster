@@ -16,9 +16,14 @@ header {
 
 .brand-wordmark {
   display: block;
-  height: 147px;
+  /* Sized by WIDTH so it can shrink: 980px is the old fixed 147px height on
+     the 1200x180 image, so desktop is unchanged. A fixed height pinned the
+     width at 980px too, and on a 390px phone every admin page scrolled
+     sideways (task 86bcrye97, measured 2026-10-27). */
+  width: 980px;
+  max-width: 100%;
+  height: auto;
   max-height: none;
-  width: auto;
   object-fit: contain;
 }
 
