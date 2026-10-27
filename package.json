@@ -132,6 +132,7 @@
     "backup:node": "node scripts/backup_node.mjs",
     "restore:node": "node scripts/restore_node.mjs",
     "check:drilldown": "node scripts/ui/check_drilldown.mjs",
+    "fonts:autotag": "node scripts/fonts_autotag.mjs",
     "fonts:import": "node scripts/fonts_import_fontsource.mjs"
   },
   "devDependencies": {

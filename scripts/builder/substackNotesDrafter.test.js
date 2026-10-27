@@ -15,6 +15,8 @@ const path = require('path');
 
 const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'substack_notes_setup.sql');
 const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+const { withCanon, CANON_DOCS } = require('./canonFixture.js');
+const { prepareCanon } = require('../../lib/canonPrompt.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
@@ -31,7 +33,7 @@ function withDb() {
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
@@ -86,20 +88,28 @@ test('checkNoteText names the link, avoid-word and length rules it catches', () 
   assert.equal(drafter.checkNoteText('  ', { kind: 'note', settings: {} }).problems[0].rule, 'empty');
 });
 
-test('the prompt carries the idea, the voice, the avoid list and the link rule', () => {
+test('the prompt carries the canon, then the extra notes, plus the idea, the avoid list and the link rule', () => {
+  const canon = prepareCanon(CANON_DOCS);
   const { system, prompt } = drafter.buildPrompt({
     item: { kind: 'note', source: 'jotted', ideaText: 'Winter stars' },
     settings: { voice: 'Warm, plain, a little wry.', avoidWords: ['synergy'], linkPolicy: 'never' },
+    canon,
   });
   assert.match(system, /Substack Note/);
+  assert.match(system, /HOW DANE WRITES[\s\S]*Every sentence gets its predicate/);
+  assert.match(system, /THE AI-ISM BLOCKLIST:[\s\S]*"delve into"/);
+  assert.match(system, /background only[\s\S]*A stewardship ethic/);
+  // The free-text setting comes AFTER the canon, under its new name.
+  assert.match(system, /THE AI-ISM BLOCKLIST[\s\S]*EXTRA NOTES FOR THIS CHANNEL[^\n]*\nWarm, plain, a little wry\./);
+  assert.doesNotMatch(prompt, /Voice — how the account sounds/);
   assert.match(prompt, /Idea: Winter stars/);
-  assert.match(prompt, /Voice — how the account sounds: Warm, plain, a little wry\./);
   assert.match(prompt, /Never use these words: synergy\./);
   assert.match(prompt, /Do not include any link/);
 
   const reply = drafter.buildPrompt({
     item: { kind: 'reply', source: 'target', targetText: 'Their thought', ideaText: 'Agree, add winter' },
     settings: {},
+    canon,
   }).prompt;
   assert.match(reply, /Their Note: Their thought/);
   assert.match(reply, /roughly: Agree, add winter/);
@@ -110,7 +120,7 @@ test('a draft that breaks a rule twice is refused with the rule named; one fixed
   const item = { kind: 'note', source: 'jotted', ideaText: 'x' };
 
   const twice = scripted('So much synergy here.');
-  const refused = await drafter.writeDraft({ item, settings }, { generate: twice.generate });
+  const refused = await drafter.writeDraft({ item, settings, canonDocs: CANON_DOCS }, { generate: twice.generate });
   assert.equal(refused.ok, false);
   assert.equal(refused.status, 422);
   assert.match(refused.error, /"synergy", which is on the account's words-to-avoid list/);
@@ -118,11 +128,11 @@ test('a draft that breaks a rule twice is refused with the rule named; one fixed
   assert.match(twice.asked[1].prompt, /Your last draft broke these rules: it uses "synergy"/);
 
   const fixed = scripted('See example.com for more.', GOOD);
-  const kept = await drafter.writeDraft({ item, settings }, { generate: fixed.generate });
+  const kept = await drafter.writeDraft({ item, settings, canonDocs: CANON_DOCS }, { generate: fixed.generate });
   assert.equal(kept.ok, true, kept.error);
   assert.equal(kept.data.text, GOOD);
 
-  const down = await drafter.writeDraft({ item, settings }, { generate: async () => ({ ok: false, error: 'overloaded' }) });
+  const down = await drafter.writeDraft({ item, settings, canonDocs: CANON_DOCS }, { generate: async () => ({ ok: false, error: 'overloaded' }) });
   assert.equal(down.status, 502);
   assert.match(down.error, /overloaded/);
 });
@@ -170,8 +180,12 @@ test('Write a draft turns an idea into a draft; Approve with an edit saves the e
     assert.equal(drafted.ok, true, drafted.error);
     assert.equal(drafted.data.status, 'draft');
     assert.equal(drafted.data.draftText, GOOD);
-    assert.match(model.asked[0].prompt, /Warm and plain\./);
+    assert.match(model.asked[0].system, /EXTRA NOTES FOR THIS CHANNEL[^\n]*\nWarm and plain\./);
     assert.equal(store.awaitsApproval(drafted.data), true);
+    // Outreach wizard 8/19: the draft records the canon it was written from — read back, not the write's echo.
+    const back = await store.getItemById(idea.id, SCOPE_A);
+    assert.deepEqual(back.data.canonUsed, CANON_DOCS.map((d) => ({ docKey: d.docKey, syncedAt: d.syncedAt })));
+    assert.equal(back.data.canonUsed.length, 7);
 
     const approved = await store.approveItem(idea.id, { text: 'My edited words.' }, SCOPE_A);
     assert.equal(approved.ok, true, approved.error);
@@ -305,6 +319,44 @@ test('another project cannot draft, approve or reject this one\'s items', async 
     assert.equal((await store.writeDraftForItem(idea.id, SCOPE_B, { generate: scripted(GOOD).generate })).status, 404);
     assert.equal((await store.approveItem(idea.id, {}, SCOPE_B)).status, 404);
     assert.equal((await store.rejectItem(idea.id, SCOPE_B)).status, 404);
+    assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
+  } finally {
+    restore();
+  }
+});
+
+// ── The canon (Outreach wizard 8/19, 86bcrmbje) ───────────────────────────
+
+test('a blocklisted phrase from the stand-in AI is refused twice and never saved; an edit carrying one is never approved', async () => {
+  const { store, restore } = withDb();
+  try {
+    const idea = await addIdea(store);
+    const model = scripted('Let us delve into the winter sky together.');
+    const refused = await store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate });
+    assert.equal(refused.status, 422);
+    assert.match(refused.error, /"delve into", which is on the AI-ism blocklist/);
+    assert.equal(model.asked.length, 2);
+    assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
+
+    await store.writeDraftForItem(idea.id, SCOPE_A, { generate: scripted(GOOD).generate });
+    const edited = await store.approveItem(idea.id, { text: 'A rich tapestry of stars.' }, SCOPE_A);
+    assert.equal(edited.status, 422);
+    assert.match(edited.error, /"tapestry", which is on the AI-ism blocklist/);
+    assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'draft');
+  } finally {
+    restore();
+  }
+});
+
+test('with no canon copied, no draft is written and the AI is never asked', async () => {
+  const { store, restore } = withDb();
+  try {
+    const idea = await addIdea(store);
+    const model = scripted(GOOD);
+    const refused = await store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate, canonDocs: [] });
+    assert.equal(refused.status, 409);
+    assert.match(refused.error, /no canon copied yet — run npm run canon:sync/);
+    assert.equal(model.asked.length, 0);
     assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
   } finally {
     restore();

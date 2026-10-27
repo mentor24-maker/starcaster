@@ -351,6 +351,21 @@ test('BREAK TEST: a model that says "check out Dane of Earth" twice is refused w
   }
 });
 
+test('a model that uses a blocklisted phrase twice is refused with the phrase named, and nothing is saved (Outreach wizard 8/19)', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    const model = scripted('It is deceptively simple to sit still.');
+    const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.status, 422);
+    assert.match(drafted.error, /"deceptively simple", which is on the AI-ism blocklist/);
+    assert.equal(model.asked.length, 2, 'one retry, then refused');
+    assert.equal((await store.getItemById(item.id, SCOPE_A)).data.status, 'idea');
+  } finally {
+    restore();
+  }
+});
+
 test('a draft that breaks a rule once and keeps them the second time is kept', async () => {
   const { store, restore } = withDb();
   try {

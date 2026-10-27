@@ -1,0 +1,52 @@
+# The tags the AI may give a font (Font Library 5/7, task 86bchyd4k).
+#
+# lib/fontAutoTag.js reads this file: a suggested tag that is not on this list
+# is dropped, except for at most ONE free tag per font, so the tag list stays
+# short enough to filter by. One tag per line, lowercase; "#" starts a comment.
+# People editing tags on the Fonts screen are not limited to this list.
+
+# Mood and genre
+sci-fi
+futuristic
+retro
+vintage
+classic
+elegant
+playful
+friendly
+grunge
+horror
+techno
+art-deco
+western
+gothic
+minimal
+corporate
+
+# Shape
+geometric
+rounded
+condensed
+wide
+humanist
+high-contrast
+slab
+stencil
+pixel
+outline
+
+# Writing style
+handwritten
+script
+calligraphy
+brush
+typewriter
+monospace
+
+# What it is good for
+headline
+bold-display
+body-text
+logo
+ui
+code
