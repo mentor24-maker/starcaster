@@ -172,7 +172,7 @@ gateway is not listening there at all. Slice 3 repeats it from outside.
 **Found in slice 3 (2026-10-27): "loopback only" does not hold against the
 tailnet.** Tailscale on the Mini runs in userspace mode (no root), and in that
 mode a connection from another tailnet device to the Mini's tailnet address is
-handed to the same port on `127.0.0.1`. From the MacBook, `100.108.7.116:18789`
+handed to the same port on `127.0.0.1`. From the MacBook, `<Mini-tailnet-address>:18789`
 served OpenClaw's control page, and a throwaway door keeper bound to
 `127.0.0.1:8091` answered there too. From the internet (pinned to the Funnel
 servers' public address) and from the home network, neither was reachable. So
