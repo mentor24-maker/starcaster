@@ -100,3 +100,13 @@ alter table public.youtube_outreach_comments add column if not exists screenshot
 alter table public.youtube_outreach_comments add column if not exists post_note text not null default '';
 alter table public.youtube_outreach_comments add column if not exists wait_reason text not null default '';
 alter table public.youtube_outreach_comments add column if not exists wait_checked_at timestamptz;
+
+-- ── Outreach wizard 8/19 (86bcrmbje): which canon a draft was written from ──
+--
+--   canon_used  the canon documents (lib/canonPrompt.js) the draft was written
+--               from, as [{ docKey, syncedAt }] — the same record
+--               reddit_comment_items keeps. '[]' on rows drafted before the
+--               canon was used. Also in docs/SQL/outreach_canon_used.sql, the
+--               one file to run on a database that already has this table.
+
+alter table public.youtube_outreach_comments add column if not exists canon_used jsonb not null default '[]'::jsonb;
