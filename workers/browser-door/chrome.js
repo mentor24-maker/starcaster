@@ -90,6 +90,11 @@ class Cdp {
     this.waiting = new Map();
     this.listeners = new Set();
     ws.on('message', (data) => this.onMessage(data));
+    // `connect` only listens for the FIRST error. Without a lasting listener a
+    // later socket error is unhandled and takes down the whole door keeper —
+    // every other project's open window with it. The 'close' that follows an
+    // error is what rejects the waiting calls.
+    ws.on('error', () => {});
     ws.on('close', () => {
       for (const { reject } of this.waiting.values()) reject(new Error('Chrome connection closed'));
       this.waiting.clear();
@@ -156,32 +161,46 @@ class Cdp {
  *   { kind: 'launch', chromePath, profileDir }  — start a Chrome of our own
  *   { kind: 'attach', port }                    — a tab in a Chrome already running on 127.0.0.1:<port>
  */
-async function openBrowser(target, { spawnFn = spawn } = {}) {
+async function openBrowser(target, { spawnFn = spawn, portTimeoutMs } = {}) {
   let child = null;
-  let wsUrl;
-  if (target.kind === 'launch') {
-    const args = chromeArgs(target.profileDir);
-    for (const flag of FORBIDDEN_FLAGS) {
-      if (args.some((a) => a === flag || a.startsWith(`${flag}=`))) throw new Error(`refusing to start Chrome with ${flag}`);
+  let cdp = null;
+  let targetId;
+  let sessionId;
+  try {
+    let wsUrl;
+    if (target.kind === 'launch') {
+      const args = chromeArgs(target.profileDir);
+      for (const flag of FORBIDDEN_FLAGS) {
+        if (args.some((a) => a === flag || a.startsWith(`${flag}=`))) throw new Error(`refusing to start Chrome with ${flag}`);
+      }
+      try {
+        fs.unlinkSync(path.join(target.profileDir, 'DevToolsActivePort'));
+      } catch {
+        /* not there — the usual case */
+      }
+      child = spawnFn(target.chromePath, args, { stdio: 'ignore' });
+      ({ wsUrl } = await readDevToolsActivePort(target.profileDir, { child, timeoutMs: portTimeoutMs }));
+    } else if (target.kind === 'attach') {
+      const res = await fetch(`http://127.0.0.1:${Number(target.port)}/json/version`);
+      if (!res.ok) throw new Error(`no Chrome answering on 127.0.0.1:${target.port} (HTTP ${res.status})`);
+      wsUrl = (await res.json()).webSocketDebuggerUrl;
+    } else {
+      throw new Error(`unknown browser target kind "${target.kind}"`);
     }
-    try {
-      fs.unlinkSync(path.join(target.profileDir, 'DevToolsActivePort'));
-    } catch {
-      /* not there — the usual case */
-    }
-    child = spawnFn(target.chromePath, args, { stdio: 'ignore' });
-    ({ wsUrl } = await readDevToolsActivePort(target.profileDir, { child }));
-  } else if (target.kind === 'attach') {
-    const res = await fetch(`http://127.0.0.1:${Number(target.port)}/json/version`);
-    if (!res.ok) throw new Error(`no Chrome answering on 127.0.0.1:${target.port} (HTTP ${res.status})`);
-    wsUrl = (await res.json()).webSocketDebuggerUrl;
-  } else {
-    throw new Error(`unknown browser target kind "${target.kind}"`);
-  }
 
-  const cdp = await Cdp.connect(wsUrl);
-  const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
-  const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
+    cdp = await Cdp.connect(wsUrl);
+    ({ targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' }));
+    ({ sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true }));
+  } catch (err) {
+    // A Chrome we started and could not take control of must not outlive the
+    // failure: it holds that project's signed-in profile with its control port
+    // on, escapes the 15-minute maximum, and makes every later window for the
+    // project fail (a second Chrome on the same profile hands off to it and
+    // exits). Review round 1, ticket 86bcrmbb4.
+    if (cdp) cdp.close();
+    if (child) await stopChild(child);
+    throw err;
+  }
 
   let closed = false;
   return {
@@ -209,6 +228,17 @@ async function openBrowser(target, { spawnFn = spawn } = {}) {
       cdp.close();
     },
   };
+}
+
+/** SIGTERM, then SIGKILL if it has not gone within a few seconds. */
+async function stopChild(child, ms = 3000) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  try {
+    child.kill('SIGTERM');
+  } catch {
+    /* already gone */
+  }
+  await waitForExit(child, ms);
 }
 
 async function waitForExit(child, ms) {

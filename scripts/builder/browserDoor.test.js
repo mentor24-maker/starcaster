@@ -500,6 +500,75 @@ test('Chrome is started with its control port on loopback and no flag that marks
   assert.ok(!/require\(['"]playwright/.test(src), 'the door keeper must never use Playwright');
 });
 
+// ── A launch that fails ─────────────────────────────────────────────────────
+// Review round 1: a Chrome the door keeper started and then could not take
+// control of was left running — holding the project's signed-in profile with
+// its control port on, past the 15-minute maximum, and blocking every later
+// window for that project. A stand-in process plays Chrome here.
+
+function standIn() {
+  const kids = [];
+  const spawnFn = () => {
+    const kid = require('node:child_process').spawn('sleep', ['60'], { stdio: 'ignore' });
+    kids.push(kid);
+    return kid;
+  };
+  const gone = (kid) => kid.exitCode !== null || kid.signalCode !== null;
+  return { kids, spawnFn, gone };
+}
+
+test('a Chrome that never reports its control port is stopped, not left running', async (t) => {
+  const s = standIn();
+  t.after(() => s.kids.forEach((k) => k.kill('SIGKILL')));
+  await assert.rejects(
+    chrome.openBrowser({ kind: 'launch', chromePath: 'stand-in', profileDir: tmpDir('door-fail-') }, { spawnFn: s.spawnFn, portTimeoutMs: 300 }),
+    /did not report a control port/,
+  );
+  assert.equal(s.kids.length, 1);
+  assert.ok(s.gone(s.kids[0]), 'the stand-in Chrome is still running after the failed launch');
+});
+
+test('a Chrome that refuses to open a tab is stopped, and its connection closed', async (t) => {
+  const wss = new WebSocket.Server({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => wss.once('listening', resolve));
+  let socketClosed = false;
+  wss.on('connection', (ws) => {
+    ws.on('close', () => {
+      socketClosed = true;
+    });
+    ws.on('message', (data) => {
+      const { id } = JSON.parse(String(data));
+      ws.send(JSON.stringify({ id, error: { message: 'no tabs for you' } }));
+    });
+  });
+  const s = standIn();
+  t.after(() => {
+    s.kids.forEach((k) => k.kill('SIGKILL'));
+    for (const client of wss.clients) client.terminate();
+    wss.close();
+  });
+  const profileDir = tmpDir('door-fail-');
+  const spawnFn = (...args) => {
+    const kid = s.spawnFn(...args);
+    fs.writeFileSync(path.join(profileDir, 'DevToolsActivePort'), `${wss.address().port}\n/devtools/browser/stand-in\n`);
+    return kid;
+  };
+  await assert.rejects(
+    chrome.openBrowser({ kind: 'launch', chromePath: 'stand-in', profileDir }, { spawnFn, portTimeoutMs: 2000 }),
+    /no tabs for you/,
+  );
+  assert.ok(s.gone(s.kids[0]), 'the stand-in Chrome is still running after the failed launch');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.ok(socketClosed, 'the control connection was left open');
+});
+
+test('a socket error after connecting does not take the door keeper down', () => {
+  const ws = new (require('node:events'))();
+  const cdp = new chrome.Cdp(ws);
+  assert.doesNotThrow(() => ws.emit('error', new Error('ECONNRESET')));
+  assert.ok(cdp);
+});
+
 // ── The REAL Chrome ─────────────────────────────────────────────────────────
 
 const CHROME = chrome.findChrome();
