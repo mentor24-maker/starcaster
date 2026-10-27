@@ -1,3 +1,12 @@
+## 2026-10-27 — On a phone, the Starcaster logo fits the screen instead of pushing every admin page sideways (#869)
+
+The logo at the top of the admin app was always drawn about 980 pixels wide,
+which is more than twice the width of a phone. So on a phone every admin page
+slid left and right. The logo now shrinks to fit narrow screens. On a desktop
+it is exactly the same size as before (the header was compared pixel for
+pixel). A few screens, such as Contacts, still slide sideways on a phone for a
+separate reason: the row of buttons beside the page title is too wide. That is
+noted on the ticket and left for its own fix.
 ## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
 
 With nearly 300 fonts in the library, scrolling to find one stopped being
