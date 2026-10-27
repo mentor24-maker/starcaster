@@ -3324,6 +3324,17 @@ Alphire's button and left all three gaps for the next import to hit.
   workaround today, take it, then say in the report which ticket retires it.
   Shipping a workaround without that ticket is papering over.
 
+**Every site import is a feature survey.** Dane, the same day, after the
+import came out looking nothing like the original: *"every website import is
+actually the impetus for a whole slew of new features. The more websites we
+import, the more features and functionality we will assimilate."* That is this
+rule applied on purpose. An import is not finished when its pages exist. Each
+difference between the original and the import is a capability the Builder
+lacks, and it is filed as one. That day it produced the `site-import-fidelity`
+epic: eleven tickets, led by a side-by-side difference report so the next
+import's gaps come out as a list instead of a comparison by eye. Measure an
+import against that report, and file what it shows.
+
 **How this sits beside §6.24.** §6.24 limits tickets the pipeline files *about
 itself* to failures that cost something. This section is about missing
 *product* capability. It does not relax §6.24, because here the cost is built
