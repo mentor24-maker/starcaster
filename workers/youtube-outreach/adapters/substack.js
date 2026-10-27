@@ -43,8 +43,6 @@ const { normalizeWords, screenshotPathAllowed } = require('./youtube.js');
 const DEFAULT_PROFILES = Object.freeze({ dane_of_earth: 'dane-of-earth' });
 
 /** How the account is named on Substack — the agent checks it before acting. */
-const DEFAULT_ACCOUNT_NAMES = Object.freeze({ dane_of_earth: 'Dane of Earth' });
-
 /** A browser posting one Note: open, type, click, read the link back. */
 const POST_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -173,7 +171,15 @@ function createSubstackAdapter(options = {}) {
     homedir: options.homedir || os.homedir(),
   };
   const profiles = { ...DEFAULT_PROFILES, ...(options.profiles || {}) };
-  const accountNames = { ...DEFAULT_ACCOUNT_NAMES, ...(options.accountNames || {}) };
+  // The account each key posts as: chosen on Engage › Outreach and read every
+  // pass (Outreach wizard 2/19). `accountNames` fixes them, for tests.
+  const chosen = require('../chosenAccount.js').createAccountReader({
+    site: 'substack',
+    label: 'Substack',
+    projectId,
+    fixedNames: options.accountNames ? { ...options.accountNames } : null,
+    readAccount: options.readAccount || null,
+  });
 
   // Per pass: one read of each account's settings and history.
   let accounts = new Map();
@@ -205,6 +211,7 @@ function createSubstackAdapter(options = {}) {
     beginPass() {
       accounts = new Map();
       zoneCache = null;
+      chosen.reset();
     },
 
     async listApproved() {
@@ -225,6 +232,8 @@ function createSubstackAdapter(options = {}) {
           reason: `Not posting: no browser on the Mini is set up for the "${item.accountKey}" account.`,
         };
       }
+      // Holds every action on the account until Dane chooses who posts.
+      if (!(await chosen.chosen(item.accountKey))) return { ok: false, scope: 'account', reason: chosen.reason };
       if ((item.kind === 'note' || item.kind === 'reply') && !text(item.text)) {
         return { ok: false, scope: 'item', reason: `Not posting: this ${KIND_WORDS[item.kind]} has no words.` };
       }
@@ -276,6 +285,8 @@ function createSubstackAdapter(options = {}) {
     flagForHandCheck: (item, details) => deps.store.flagForHandCheck(item.id, details, scope),
 
     async post(item) {
+      const accountName = await chosen.chosen(item.accountKey);
+      if (!accountName) return { ok: false, error: chosen.reason };
       const res = await deps.callOpenClaw({
         user: 'starcaster:substack-notes-poster',
         timeoutMs: POST_TIMEOUT_MS,
@@ -284,7 +295,7 @@ function createSubstackAdapter(options = {}) {
         input: buildPostInstructions({
           item,
           profile: profiles[item.accountKey],
-          accountName: accountNames[item.accountKey] || item.accountKey,
+          accountName,
         }),
       });
       if (!res.ok) {

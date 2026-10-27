@@ -11,6 +11,41 @@ minutes or 15 minutes in all. One check is knowingly left failing: since a
 recent Chrome update, the browser admits it is remote-controlled whenever this
 feature is on. A setting exists to hide that, and you chose to keep Chrome
 honest instead; the Google sign-in slice will find out whether Google minds.
+## 2026-10-27 — On a phone, the Starcaster logo fits the screen instead of pushing every admin page sideways (#869)
+
+The logo at the top of the admin app was always drawn about 980 pixels wide,
+which is more than twice the width of a phone. So on a phone every admin page
+slid left and right. The logo now shrinks to fit narrow screens. On a desktop
+it is exactly the same size as before (the header was compared pixel for
+pixel). A few screens, such as Contacts, still slide sideways on a phone for a
+separate reason: the row of buttons beside the page title is too wide. That is
+noted on the ticket and left for its own fix.
+## 2026-10-26 — You choose which account each outreach channel posts as, and nothing posts until you do (#867)
+
+On **Engage → Outreach**, the Connect stage of each channel (YouTube, Substack,
+Reddit) now says which account the Mini's browser is signed in as, and you
+choose the account that channel posts as: **Post as this account**, or **I'll
+sign in as someone else** and type the name. Until you choose, nothing posts on
+that channel, and every approved comment says "Waiting: choose the account to
+post as". Before this, the names were written into the code. Substack expected
+"Dane of Earth" while the Mini is signed in as "Dane Christensen", and Reddit
+had no name at all, so it refused to post. **Check now** asks the Mini to
+re-check its sign-in within about half a minute. Reddit's pace (3 a day, 20
+minutes apart) can now be changed on the same screen. The Mini's posting job
+itself gets installed right after this goes live, not before: today's code
+would have posted as accounts you never confirmed.
+
+## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
+
+With nearly 300 fonts in the library, scrolling to find one stopped being
+practical. **Assets → Fonts** now has a **Search** box (it matches the font's
+name and its tags), buttons for each kind of font (Sans, Serif, Display,
+Monospace, Handwriting), and a **Sample text** box: type a word and every row
+shows that word in its own font, at whatever size the slider is set to. If a
+search finds nothing, it says which search ("No display fonts match 'zzzz'")
+instead of showing an empty table. The screen also only downloads a font when
+its row is on screen — opening the full library now fetches 6 font files
+instead of all of them, so it opens quickly.
 ## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
 
 The **Used by Sites** column on Assets → Fonts now works. Each font has a

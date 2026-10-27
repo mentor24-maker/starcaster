@@ -8,6 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const overview = require('../../lib/outreachOverview');
 const route = require('../../routes/outreach');
+const accounts = require('../../lib/outreachAccounts');
 const { PROJECT_ADMIN_SESSION_DENY_PREFIXES } = require('../../lib/projectAdminApiAuth');
 
 const NOW = Date.parse('2026-10-26T20:00:00Z');
@@ -18,6 +19,15 @@ function ok(data) { return { ok: true, status: 200, data }; }
 function rows(status, n, extra = {}) { return Array.from({ length: n }, () => ({ status, ...extra })); }
 function signedIn(name, minutesAgo) {
   return { state: 'signed_in', message: `Signed in to the site as "${name}".`, checkedAt: new Date(NOW - minutesAgo * MIN).toISOString(), signedInAt: null };
+}
+
+const ACCOUNTS = {
+  youtube: { expected_account: 'Dane of Earth', browser_account: 'Dane of Earth' },
+  substack: { expected_account: 'Dane of Earth', browser_account: '' },
+  reddit: { expected_account: '', browser_account: 'Exotic-Break-7850' },
+};
+function account(site, row) {
+  return accounts.rowToAccount(site, row);
 }
 
 function fakeDeps(overrides = {}) {
@@ -44,6 +54,11 @@ function fakeDeps(overrides = {}) {
     },
     canonStore: {
       listCanon: async () => ok([{ docKey: 'VOICE', syncedAt: '2026-10-12T15:00:00Z' }]),
+    },
+    // Outreach wizard 2/19: YouTube and Substack have a chosen account;
+    // Reddit has none yet, and the Mini has seen who it is signed in as.
+    outreachAccounts: {
+      getAccount: async (site) => ok(account(site, ACCOUNTS[site])),
     },
     ...overrides,
   };
@@ -181,4 +196,77 @@ test('the route answers GET only, needs a project, and is closed to a client sit
   const noProject = fakeRes();
   await route.handle({ headers: {} }, noProject, '/api/outreach/overview', 'GET', { build });
   assert.equal(noProject.statusCode, 400);
+});
+
+// ── Outreach wizard 2/19 (86bcrmba0): which account each channel posts as ──
+
+test('CONNECT ASKS THE ACCOUNT FIRST: with none chosen it is Dane\'s, names who the Mini sees, and says nothing posts', async () => {
+  const result = await overview.buildOverview(scope, { deps: fakeDeps(), now: NOW });
+  const reddit = find(result, 'reddit', 'connect');
+  assert.equal(reddit.state, 'needs_you');
+  assert.equal(reddit.sentence, 'The Mini is signed in to Reddit as Exotic-Break-7850. Choose the account to post as — nothing posts on Reddit until you do.');
+  const ch = result.channels.find((c) => c.key === 'reddit');
+  assert.equal(ch.account.observedAccount, 'Exotic-Break-7850');
+  assert.equal(ch.account.expectedAccount, '');
+  assert.deepEqual(ch.account.pace, { maxCommentsPerDay: 3, minMinutesBetween: 20 });
+  // Even a signed-in browser does not make Connect done without a choice.
+  const deps = fakeDeps({ outreachAccounts: { getAccount: async (site) => ok(account(site, { browser_account: '' })) } });
+  const yt = find(await overview.buildOverview(scope, { deps, now: NOW }), 'youtube', 'connect');
+  assert.equal(yt.state, 'needs_you');
+  assert.match(yt.sentence, /has not yet read which account.*Choose the account to post as/);
+});
+
+test('an account read that fails makes Connect "cannot tell", never done', async () => {
+  const deps = fakeDeps({ outreachAccounts: { getAccount: async () => ({ ok: false, status: 502, error: 'no row for you' }) } });
+  const result = await overview.buildOverview(scope, { deps, now: NOW });
+  const yt = find(result, 'youtube', 'connect');
+  assert.equal(yt.state, 'cannot_tell');
+  assert.match(yt.sentence, /The YouTube account to post as could not be read: no row for you/);
+});
+
+test('the account routes: choose, check now and Reddit pace reach the store with the request\'s scope', async () => {
+  const seen = [];
+  const fake = {
+    SITES: accounts.SITES,
+    chooseAccount: async (site, name, sc) => { seen.push(['choose', site, name, sc]); return ok({}); },
+    requestCheck: async (site, sc) => { seen.push(['check', site, sc]); return ok({}); },
+    saveRedditPace: async (body, sc) => { seen.push(['pace', body, sc]); return ok({}); },
+  };
+  function fakeRes() {
+    const res = { statusCode: 0, body: '', headers: {} };
+    res.setHeader = (k, v) => { res.headers[k] = v; };
+    res.writeHead = (st, h) => { res.statusCode = st; Object.assign(res.headers, h || {}); };
+    res.end = (b) => { res.body = String(b || ''); };
+    return res;
+  }
+  const { Readable } = require('node:stream');
+  function req(body) {
+    const r = Readable.from([Buffer.from(JSON.stringify(body || {}))]);
+    Object.assign(r, { projectContext: { project: { id: 'p1' } }, authUser: { id: 'u1' }, headers: { 'content-type': 'application/json' } });
+    return r;
+  }
+  const r1 = fakeRes();
+  await route.handle(req({ account: 'Dane Christensen' }), r1, '/api/outreach/accounts/substack/choose', 'POST', { accounts: fake });
+  assert.equal(r1.statusCode, 200, r1.body);
+  const r2 = fakeRes();
+  await route.handle(req(), r2, '/api/outreach/accounts/reddit/check', 'POST', { accounts: fake });
+  assert.equal(r2.statusCode, 200, r2.body);
+  const r3 = fakeRes();
+  await route.handle(req({ maxCommentsPerDay: 4 }), r3, '/api/outreach/accounts/reddit/pace', 'POST', { accounts: fake });
+  assert.equal(r3.statusCode, 200, r3.body);
+  assert.deepEqual(seen, [
+    ['choose', 'substack', 'Dane Christensen', scope],
+    ['check', 'reddit', scope],
+    ['pace', { maxCommentsPerDay: 4 }, scope],
+  ]);
+  // Pace is Reddit's alone; an unknown site is not an endpoint; GET is refused.
+  const r4 = fakeRes();
+  await route.handle(req(), r4, '/api/outreach/accounts/youtube/pace', 'POST', { accounts: fake });
+  assert.equal(r4.statusCode, 404);
+  const r5 = fakeRes();
+  await route.handle(req(), r5, '/api/outreach/accounts/myspace/choose', 'POST', { accounts: fake });
+  assert.equal(r5.statusCode, 404);
+  const r6 = fakeRes();
+  await route.handle(req(), r6, '/api/outreach/accounts/reddit/check', 'GET', { accounts: fake });
+  assert.equal(r6.statusCode, 405);
 });
