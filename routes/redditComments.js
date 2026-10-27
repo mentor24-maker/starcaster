@@ -28,7 +28,7 @@ const { sendOk, sendErr, parseJsonBody, getUrlObj } = require('./http');
 const store = require('../lib/redditCommentsStore');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { REDDIT_PACE } = require('../lib/redditPace');
-const { EXPECTED_REDDIT_ACCOUNT } = require('../lib/openclawSignIn');
+const outreachAccounts = require('../lib/outreachAccounts');
 
 const PREFIX = '/api/engage/reddit-comments';
 
@@ -102,15 +102,19 @@ async function handle(req, res, pathname, method) {
   if (pathname === `${PREFIX}/status`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     const check = await store.getBrowserCheck(scope);
-    // The pace and the account are code, not settings: always answerable. A
-    // sign-in reading that cannot be read is said on its own line, so the
-    // screen can show the pace and name the failed read.
+    // The account and the pace live on the Reddit settings row since Outreach
+    // wizard 2/19 (chosen on Engage › Outreach). A row that cannot be read
+    // falls back to the plain default pace and no account — which is also
+    // what holds every post — and says so on its own line, like the sign-in
+    // reading below.
+    const chosen = await outreachAccounts.getAccount('reddit', scope);
     return reply(res, {
       ok: true,
       status: 200,
       data: {
-        account: EXPECTED_REDDIT_ACCOUNT,
-        pace: REDDIT_PACE,
+        account: chosen.ok ? chosen.data.expectedAccount : '',
+        accountError: chosen.ok ? '' : chosen.error,
+        pace: chosen.ok ? chosen.data.pace : REDDIT_PACE,
         browserCheck: check.ok ? check.data : null,
         browserCheckError: check.ok ? '' : check.error,
       },

@@ -45,16 +45,27 @@ function overviewFor(project: string): OutreachOverview {
         st("replies", "not_started", "0 Notes."),
         st("learn", "not_started", "Nothing learnt."),
       ]),
-      channel("reddit", "Reddit", [
+      { ...channel("reddit", "Reddit", [
         st("connect", "needs_you", "No Reddit account chosen."),
         st("creators", "not_started", "No subreddits."),
         st("conversations", "needs_you", "0 links pasted."),
         st("replies", "not_started", "0 comments."),
         st("learn", "not_started", "Nothing learnt."),
-      ]),
+      ]), account: redditAccount },
     ],
   };
 }
+
+// Outreach wizard 2/19: the Mini sees Exotic-Break-7850; nothing is chosen yet.
+let redditAccount: OutreachChannel["account"] = {
+  expectedAccount: "",
+  observedAccount: "Exotic-Break-7850",
+  confirmedAt: null,
+  checkRequestedAt: null,
+  browserCheckedAt: "2026-10-26T19:50:00Z",
+  pace: { maxCommentsPerDay: 3, minMinutesBetween: 20 },
+};
+let posts: Array<{ path: string; body: any }> = [];
 
 let activeProject = "proj_doe";
 let failNext = "";
@@ -67,11 +78,19 @@ beforeEach(() => {
   activeProject = "proj_doe";
   failNext = "";
   calls = 0;
+  posts = [];
+  redditAccount = { ...redditAccount!, expectedAccount: "" };
   window.localStorage.clear();
   setActivePage = vi.fn();
   (window as any).App = {
     setActivePage,
-    api: async (path: string) => {
+    api: async (path: string, options?: RequestInit) => {
+      if (options?.method === "POST") {
+        const body = JSON.parse(String(options.body || "{}"));
+        posts.push({ path, body });
+        if (path.endsWith("/choose")) redditAccount = { ...redditAccount!, expectedAccount: body.account };
+        return { ok: true, data: {} };
+      }
       calls += 1;
       if (path !== "/api/outreach/overview") throw new Error(`unexpected ${path}`);
       if (failNext) {
@@ -185,5 +204,58 @@ describe("OutreachWizardPanel", () => {
     await act(async () => {});
     expect(calls).toBe(2);
     expect(stages()[0].textContent).toContain("proj_other:");
+  });
+});
+
+describe("Connect: the account each channel posts as (Outreach wizard 2/19)", () => {
+  function button(label: string) {
+    const b = Array.from(container!.querySelectorAll<HTMLButtonElement>("button")).find((x) => x.textContent === label);
+    if (!b) throw new Error(`no button ${label}`);
+    return b;
+  }
+
+  it("names who the Mini is signed in as, and Post as this account chooses it", async () => {
+    await mount();
+    await act(async () => tab("Reddit").click());
+    const connect = stages()[0];
+    expect(connect.textContent).not.toContain("Posting as");
+    await act(async () => button("Post as this account").click());
+    await act(async () => {});
+    expect(posts).toEqual([{ path: "/api/outreach/accounts/reddit/choose", body: { account: "Exotic-Break-7850" } }]);
+    expect(stages()[0].textContent).toContain("Posting as Exotic-Break-7850.");
+    // Once chosen, the button offering the same account goes away.
+    expect(Array.from(container!.querySelectorAll("button")).some((b) => b.textContent === "Post as this account")).toBe(false);
+    // Still exactly one primary on the screen.
+    expect(container!.querySelectorAll(".btn-primary")).toHaveLength(1);
+  });
+
+  it("I'll sign in as someone else takes a different name, and Check now asks the Mini", async () => {
+    await mount();
+    await act(async () => tab("Reddit").click());
+    await act(async () => button("I'll sign in as someone else").click());
+    const input = container!.querySelector<HTMLInputElement>("#outreach-account-reddit")!;
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "DaneOfEarth");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { input.form!.requestSubmit(); });
+    await act(async () => {});
+    expect(posts[0]).toEqual({ path: "/api/outreach/accounts/reddit/choose", body: { account: "DaneOfEarth" } });
+    expect(container!.textContent).toContain("Sign the Mini's browser in as DaneOfEarth");
+    await act(async () => button("Check now").click());
+    await act(async () => {});
+    expect(posts[1].path).toBe("/api/outreach/accounts/reddit/check");
+    expect(container!.textContent).toContain("Check asked for at");
+  });
+
+  it("shows Reddit's pace with its plain defaults, and saves it", async () => {
+    await mount();
+    await act(async () => tab("Reddit").click());
+    expect(container!.querySelector<HTMLInputElement>("#outreach-reddit-per-day")!.value).toBe("3");
+    expect(container!.querySelector<HTMLInputElement>("#outreach-reddit-gap")!.value).toBe("20");
+    await act(async () => button("Save pace").click());
+    await act(async () => {});
+    expect(posts[0]).toEqual({ path: "/api/outreach/accounts/reddit/pace", body: { maxCommentsPerDay: 3, minMinutesBetween: 20 } });
   });
 });
