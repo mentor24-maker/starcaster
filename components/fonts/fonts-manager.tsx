@@ -22,6 +22,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): an empty library, a read
  * that failed, and a library still loading are three different sentences.
  *
+ * FINDING A FONT IN HUNDREDS (7/7, task 86bchyd4v): a search box over the
+ * family name and tags, category buttons, and a Sample text box whose words
+ * replace every row's sample line, at a size the slider sets. A filter that
+ * matches nothing names the filter ("No display fonts match 'orbit'").
+ *
+ * ONLY ROWS ON SCREEN DOWNLOAD THEIR FONT. A browser fetches a font file for
+ * any element in the page that is set in it, scrolled into view or not, so a
+ * 300-row table would fetch 300 fonts on open. The @font-face rules are
+ * therefore written only for rows that have come within reach of the screen
+ * (IntersectionObserver); a row never seen has no rule, so nothing to fetch.
+ *
+ * The search box, the category buttons and the Tag box all apply at once: a
+ * font is listed only if it passes every one of them.
+ *
  * USED BY SITES (6/7) IS READ ON DEMAND. Each row asks
  * GET /api/fonts/:id/usage only when its "Show sites" button is pressed. One
  * answer reads every published page it may list, so asking for every row on
@@ -33,8 +47,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * × per chip and a "+ tag" box; shared-library fonts get neither, because the
  * server refuses to change them (routes/fonts.js) and offering a button that
  * always fails is worse than not offering it. The AI's tags arrive on upload.
- *
- * Not here yet, by design: text search and category filters (7/7).
  */
 
 const FONTS_PATH = '/api/fonts';
@@ -96,6 +108,13 @@ export const LICENCE_OPTIONS: { value: string; label: string; short: string; url
   { value: 'other', label: 'Other / not sure', short: 'Other', url: '' },
 ];
 
+/** Each row's sample line when neither the Sample box nor the font says otherwise. */
+export const DEFAULT_SAMPLE = 'The quick brown fox jumps over the lazy dog';
+
+export const SAMPLE_SIZE_MIN = 16;
+export const SAMPLE_SIZE_MAX = 72;
+export const SAMPLE_SIZE_DEFAULT = 32;
+
 /** lib/fontLicence.js CATEGORIES, in that order. */
 export const CATEGORY_OPTIONS: { value: string; label: string }[] = [
   { value: 'serif', label: 'Serif' },
@@ -122,6 +141,7 @@ export type FontRow = {
   sourceUrl: string;
   sourceName: string;
   tags: string[];
+  previewText?: string;
   visibility: 'platform' | 'project';
 };
 
@@ -167,6 +187,45 @@ export function categoryLabel(category: string): string {
   return CATEGORY_OPTIONS.find((o) => o.value === category)?.label || category || '—';
 }
 
+/** The category buttons above the table, in the order the ticket names them. */
+export const FILTER_CATEGORIES: { value: string; label: string; noun: string }[] = [
+  { value: '', label: 'All', noun: '' },
+  { value: 'sans', label: 'Sans', noun: 'sans-serif' },
+  { value: 'serif', label: 'Serif', noun: 'serif' },
+  { value: 'display', label: 'Display', noun: 'display' },
+  { value: 'monospace', label: 'Monospace', noun: 'monospace' },
+  { value: 'handwriting', label: 'Handwriting', noun: 'handwriting' },
+];
+
+/** Case-insensitive match on the family name and, where a font has them, its tags. */
+export function filterFonts(fonts: FontRow[], query: string, category: string): FontRow[] {
+  const q = query.trim().toLowerCase();
+  return fonts.filter((f) => {
+    if (category && f.category !== category) return false;
+    if (!q) return true;
+    if (String(f.family || '').toLowerCase().includes(q)) return true;
+    return (f.tags || []).some((t) => String(t).toLowerCase().includes(q));
+  });
+}
+
+/** Why the table is empty when the library is not: every filter in force, named. */
+export function noMatchSentence(query: string, category: string, tags: string[] = []): string {
+  const q = query.trim();
+  if (tags.length && !q && !category) return noTagMatchSentence(tags);
+  const noun = FILTER_CATEGORIES.find((c) => c.value === category)?.noun || category;
+  let fonts = noun ? `${noun} fonts` : 'fonts';
+  if (tags.length) fonts += ` tagged '${tags.join(', ')}'`;
+  if (q) return `No ${fonts} match '${q}'.`;
+  if (tags.length) return `No ${fonts}.`;
+  return `No ${fonts} in the library yet.`;
+}
+
+/** What a row's sample line says: the Sample box, else the font's own line, else the pangram. */
+export function sampleLine(font: { previewText?: string }, typed: string): string {
+  if (typed.trim()) return typed;
+  return (font.previewText || '').trim() || DEFAULT_SAMPLE;
+}
+
 const CSS_FORMATS: Record<string, string> = {
   woff2: 'woff2',
   woff: 'woff',
@@ -210,6 +269,16 @@ function readAsBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error(`${file.name} could not be read from your computer.`));
     reader.readAsDataURL(file);
   });
+}
+
+function EditIcon(): React.ReactElement {
+  // App.ACTION_ICONS.edit (public/js/core.js).
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 /**
@@ -483,6 +552,20 @@ export default function FontsManager(): React.ReactElement {
   const [confirmingDelete, setConfirmingDelete] = useState('');
   const [deleting, setDeleting] = useState('');
   const [notice, setNotice] = useState('');
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('');
+  const [sample, setSample] = useState('');
+  const [sampleSize, setSampleSize] = useState(SAMPLE_SIZE_DEFAULT);
+  const [editingSample, setEditingSample] = useState('');
+  const [sampleDraft, setSampleDraft] = useState('');
+  const [savingSample, setSavingSample] = useState(false);
+  const [sampleError, setSampleError] = useState('');
+  // Font ids whose row has come near the screen. null = no IntersectionObserver
+  // here, so every row counts as seen (and every font loads, as before).
+  const [seen, setSeen] = useState<Set<string> | null>(() => (
+    typeof IntersectionObserver === 'undefined' ? null : new Set()
+  ));
+  const tbodyRef = useRef<HTMLTableSectionElement | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [savingTags, setSavingTags] = useState('');
   const requestSeq = useRef(0);
@@ -547,9 +630,84 @@ export default function FontsManager(): React.ReactElement {
     return () => window.removeEventListener(PROJECT_SWITCH_EVENT, onSwitch);
   }, [load]);
 
-  const faces = useMemo(() => fontFaceCss(fonts || []), [fonts]);
   const filterTags = useMemo(() => parseTagList(tagFilter), [tagFilter]);
-  const shown = useMemo(() => filterByTags(fonts || [], filterTags), [fonts, filterTags]);
+  const shown = useMemo(
+    () => filterByTags(filterFonts(fonts || [], query, category), filterTags),
+    [fonts, query, category, filterTags],
+  );
+
+  // Watch the rows that are in the table now; each one that comes within
+  // 300px of the screen joins `seen` for good (scrolling back costs nothing).
+  useEffect(() => {
+    if (seen === null || typeof IntersectionObserver === 'undefined') return undefined;
+    const body = tbodyRef.current;
+    if (!body) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      const ids = entries
+        .filter((e) => e.isIntersecting)
+        .map((e) => (e.target as HTMLElement).dataset.fontId || '')
+        .filter(Boolean);
+      if (!ids.length) return;
+      setSeen((prev) => {
+        if (!prev) return prev;
+        if (ids.every((id) => prev.has(id))) return prev;
+        const next = new Set(prev);
+        ids.forEach((id) => next.add(id));
+        return next;
+      });
+    }, { rootMargin: '300px 0px' });
+    body.querySelectorAll<HTMLElement>('tr[data-font-id]').forEach((row) => {
+      if (!seen.has(row.dataset.fontId || '')) observer.observe(row);
+    });
+    return () => observer.disconnect();
+  }, [shown, seen]);
+
+  const faces = useMemo(
+    () => fontFaceCss((fonts || []).filter((f) => seen === null || seen.has(f.id))),
+    [fonts, seen],
+  );
+
+  const filtered = Boolean(query.trim() || category || tagFilter || sample || sampleSize !== SAMPLE_SIZE_DEFAULT);
+  const clearFilters = () => {
+    setTagFilter('');
+    setQuery('');
+    setCategory('');
+    setSample('');
+    setSampleSize(SAMPLE_SIZE_DEFAULT);
+  };
+
+  const startSampleEdit = (font: FontRow) => {
+    setEditingSample(font.id);
+    setSampleDraft(font.previewText || '');
+    setSampleError('');
+    setConfirmingDelete('');
+  };
+
+  const saveSample = async (font: FontRow) => {
+    const api = getApp()?.api;
+    if (typeof api !== 'function') return;
+    setSavingSample(true);
+    setSampleError('');
+    try {
+      const body = await api(`${FONTS_PATH}/${encodeURIComponent(font.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ previewText: sampleDraft.trim() }),
+      });
+      if (!body?.ok) {
+        setSampleError(body?.error?.message || `The sample line for ${font.family} could not be saved.`);
+        return;
+      }
+      const saved = body.data?.font as FontRow | undefined;
+      const previewText = saved ? (saved.previewText || '') : sampleDraft.trim();
+      setFonts((list) => (list || []).map((f) => (f.id === font.id ? { ...f, previewText } : f)));
+      setEditingSample('');
+      setNotice(`${font.family}'s sample line was saved.`);
+    } catch (err) {
+      setSampleError(err instanceof Error ? err.message : `The sample line for ${font.family} could not be saved.`);
+    } finally {
+      setSavingSample(false);
+    }
+  };
 
   /** Save a project font's whole tag list; the row shows what the server stored. */
   const saveTags = async (font: FontRow, tags: string[]): Promise<boolean> => {
@@ -632,6 +790,70 @@ export default function FontsManager(): React.ReactElement {
         ) : null}
       </div>
 
+      {fonts && fonts.length ? (
+        <div className="fonts-manager-filters" role="search" aria-label="Find a font">
+          <div className="fonts-manager-filter-grid">
+            <label className="fonts-manager-field">
+              <span>Search</span>
+              <input
+                type="search"
+                name="fontSearch"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Font name or tag"
+              />
+            </label>
+            <div className="fonts-manager-field" role="group" aria-label="Category">
+              <span>Category</span>
+              <span className="fonts-manager-category-buttons">
+                {FILTER_CATEGORIES.map((c) => (
+                  <button
+                    key={c.value || 'all'}
+                    type="button"
+                    className={`btn tiny-btn${category === c.value ? ' btn-primary' : ''}`}
+                    aria-pressed={category === c.value}
+                    onClick={() => setCategory(c.value)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </span>
+            </div>
+            <label className="fonts-manager-field">
+              <span>Sample text</span>
+              <input
+                type="text"
+                name="sampleText"
+                value={sample}
+                onChange={(e) => setSample(e.target.value)}
+                placeholder="Type your own words"
+              />
+            </label>
+            <label className="fonts-manager-field">
+              <span>Size</span>
+              <span className="fonts-manager-size">
+                <input
+                  type="range"
+                  name="sampleSize"
+                  min={SAMPLE_SIZE_MIN}
+                  max={SAMPLE_SIZE_MAX}
+                  step={1}
+                  value={sampleSize}
+                  onChange={(e) => setSampleSize(Number(e.target.value) || SAMPLE_SIZE_DEFAULT)}
+                />
+                <output className="fonts-manager-size-value">{sampleSize}px</output>
+              </span>
+            </label>
+          </div>
+          <div className="fonts-manager-actions">
+            <button type="button" className="btn" onClick={clearFilters} disabled={!filtered}>Clear</button>
+            <span className="fonts-manager-count" role="status">
+              {shown.length === fonts.length ? `${fonts.length} fonts` : `${shown.length} of ${fonts.length} fonts`}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {adding ? (
         <AddFontForm
           onCancel={() => setAdding(false)}
@@ -648,11 +870,11 @@ export default function FontsManager(): React.ReactElement {
       {notice ? <p className="fonts-manager-notice" role="status">{notice}</p> : null}
       {status ? <p className={error ? 'fonts-manager-error' : 'fonts-manager-empty'} role={error ? 'alert' : undefined}>{status}</p> : null}
 
-      {fonts && fonts.length && filterTags.length && !shown.length ? (
-        <p className="fonts-manager-empty">{noTagMatchSentence(filterTags)}</p>
+      {fonts && fonts.length && !shown.length ? (
+        <p className="fonts-manager-empty">{noMatchSentence(query, category, filterTags)}</p>
       ) : null}
 
-      {fonts && shown.length ? (
+      {fonts && fonts.length && shown.length ? (
         <div className="table-wrap fonts-manager-table-wrap">
           <table className="fonts-manager-table">
             <thead>
@@ -667,16 +889,42 @@ export default function FontsManager(): React.ReactElement {
                 <th scope="col" className="actions-col">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tbodyRef}>
               {shown.map((font) => {
                 const licence = licenceInfo(font.licence);
                 const shared = font.visibility === 'platform';
+                const family = `"${previewFamily(font)}", var(--font-body, sans-serif)`;
                 return (
                   <tr key={font.id} data-font-id={font.id}>
                     <td className="fonts-manager-name-cell">
-                      <span className="fonts-manager-preview" style={{ fontFamily: `"${previewFamily(font)}", var(--font-body, sans-serif)` }}>
+                      <span className="fonts-manager-preview" style={{ fontFamily: family }}>
                         {font.family}
                       </span>
+                      {editingSample === font.id ? (
+                        <form
+                          className="fonts-manager-sample-edit"
+                          aria-label={`Sample line for ${font.family}`}
+                          onSubmit={(e) => { e.preventDefault(); void saveSample(font); }}
+                        >
+                          <input
+                            type="text"
+                            name="previewText"
+                            value={sampleDraft}
+                            maxLength={300}
+                            onChange={(e) => setSampleDraft(e.target.value)}
+                            placeholder={DEFAULT_SAMPLE}
+                          />
+                          <button type="submit" className="btn btn-primary tiny-btn" disabled={savingSample}>
+                            {savingSample ? 'Saving…' : 'Save'}
+                          </button>
+                          <button type="button" className="btn tiny-btn" disabled={savingSample} onClick={() => setEditingSample('')}>Cancel</button>
+                          {sampleError ? <span className="fonts-manager-error" role="alert">{sampleError}</span> : null}
+                        </form>
+                      ) : (
+                        <span className="fonts-manager-sample" style={{ fontFamily: family, fontSize: `${sampleSize}px` }}>
+                          {sampleLine(font, sample)}
+                        </span>
+                      )}
                       <span className="fonts-manager-scope">{shared ? 'Shared library' : 'This project'}</span>
                     </td>
                     <td>{categoryLabel(font.category)}</td>
@@ -714,6 +962,15 @@ export default function FontsManager(): React.ReactElement {
                         </div>
                       ) : (
                         <div className="table-actions-row">
+                          <button
+                            type="button"
+                            className="tiny-btn icon-btn"
+                            title={`Edit ${font.family}'s sample line`}
+                            aria-label={`Edit ${font.family}'s sample line`}
+                            onClick={() => startSampleEdit(font)}
+                          >
+                            <span className="icon-btn-glyph"><EditIcon /></span>
+                          </button>
                           <button
                             type="button"
                             className="tiny-btn icon-btn icon-btn-danger"
