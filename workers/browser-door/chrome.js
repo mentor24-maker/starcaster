@@ -65,11 +65,19 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Chrome writes its chosen port and browser path to this file once it is listening. */
-async function readDevToolsActivePort(profileDir, { timeoutMs = 20000, child } = {}) {
+/**
+ * Chrome writes its chosen port and browser path to this file once it is listening.
+ * `failed()` returns the error a spawn failure raised (a Chrome that could not be
+ * started at all never sets an exit code we could poll for), and `signal` is the
+ * window being closed while Chrome is still starting.
+ */
+async function readDevToolsActivePort(profileDir, { timeoutMs = 20000, child, failed = () => null, signal } = {}) {
   const file = path.join(profileDir, 'DevToolsActivePort');
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    const spawnError = failed();
+    if (spawnError) throw spawnError;
+    if (signal && signal.aborted) throw new Error('the window was closed while Chrome was starting');
     if (child && child.exitCode !== null) throw new Error(`Chrome exited (code ${child.exitCode}) before it was listening`);
     try {
       const [port, wsPath] = fs.readFileSync(file, 'utf8').split('\n');
@@ -80,6 +88,15 @@ async function readDevToolsActivePort(profileDir, { timeoutMs = 20000, child } =
     await sleep(100);
   }
   throw new Error(`Chrome did not report a control port within ${timeoutMs} ms`);
+}
+
+/** Settle with `promise`, or reject after `ms` — for calls to a Chrome that may have hung. */
+function withTimeout(promise, ms, what) {
+  let timer;
+  const late = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} got no answer within ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
 }
 
 /** A minimal CDP client over one browser-level WebSocket, with flattened page sessions. */
@@ -161,7 +178,7 @@ class Cdp {
  *   { kind: 'launch', chromePath, profileDir }  — start a Chrome of our own
  *   { kind: 'attach', port }                    — a tab in a Chrome already running on 127.0.0.1:<port>
  */
-async function openBrowser(target, { spawnFn = spawn, portTimeoutMs } = {}) {
+async function openBrowser(target, { spawnFn = spawn, portTimeoutMs, signal, closeTimeoutMs = 3000, exitTimeoutMs = 5000 } = {}) {
   let child = null;
   let cdp = null;
   let targetId;
@@ -179,7 +196,15 @@ async function openBrowser(target, { spawnFn = spawn, portTimeoutMs } = {}) {
         /* not there — the usual case */
       }
       child = spawnFn(target.chromePath, args, { stdio: 'ignore' });
-      ({ wsUrl } = await readDevToolsActivePort(target.profileDir, { child, timeoutMs: portTimeoutMs }));
+      // A Chrome that cannot be started at all (its files mid-swap by the
+      // auto-updater: ENOENT, EACCES) reports it as an 'error' event. Unheard,
+      // that event takes down the whole door keeper and every other project's
+      // window with it. Review round 2, ticket 86bcrmbb4.
+      let spawnError = null;
+      child.once('error', (err) => {
+        spawnError = err;
+      });
+      ({ wsUrl } = await readDevToolsActivePort(target.profileDir, { child, timeoutMs: portTimeoutMs, failed: () => spawnError, signal }));
     } else if (target.kind === 'attach') {
       const res = await fetch(`http://127.0.0.1:${Number(target.port)}/json/version`);
       if (!res.ok) throw new Error(`no Chrome answering on 127.0.0.1:${target.port} (HTTP ${res.status})`);
@@ -212,18 +237,20 @@ async function openBrowser(target, { spawnFn = spawn, portTimeoutMs } = {}) {
     async close() {
       if (closed) return;
       closed = true;
+      // Each call is bounded: a hung Chrome never answers, and without a limit
+      // the kill below is never reached and the project stays "already open".
       try {
-        await cdp.send('Target.closeTarget', { targetId });
+        await withTimeout(cdp.send('Target.closeTarget', { targetId }), closeTimeoutMs, 'Target.closeTarget');
       } catch {
-        /* the tab or the browser is already gone */
+        /* the tab or the browser is already gone, or hung */
       }
       if (child) {
         try {
-          await cdp.send('Browser.close');
+          await withTimeout(cdp.send('Browser.close'), closeTimeoutMs, 'Browser.close');
         } catch {
           /* fall through to the signal */
         }
-        await waitForExit(child, 5000);
+        await waitForExit(child, exitTimeoutMs);
       }
       cdp.close();
     },

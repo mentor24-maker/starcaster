@@ -218,6 +218,11 @@ function createDoor({
       openedAt: now(),
       inputs: { mouse: 0, key: 0, paste: 0, rejected: 0 },
       browser: null,
+      // The launch while it is still under way, and the means to call it off.
+      // Closing a window mid-launch must stop THAT Chrome, not find nothing to
+      // close and free the project's slot while it is still starting.
+      opening: null,
+      abort: new AbortController(),
       throttle: null,
       clock: null,
       closing: null,
@@ -238,9 +243,11 @@ function createDoor({
         door.writeNoPasswordPrefs(profileDir);
         target = { kind: 'launch', chromePath, profileDir };
       }
-      win.browser = await openBrowser(target);
+      win.opening = openBrowser(target, { signal: win.abort.signal });
+      win.browser = await win.opening;
       if (win.closing) {
-        await win.browser.close();
+        // closeWindow is already shutting what the launch returned.
+        await win.closing;
         return;
       }
       log('window-opened', { windowId: id, projectId, site, mode: target.kind });
@@ -315,7 +322,12 @@ function createDoor({
       if (win.clock) win.clock.stop();
       if (win.throttle) win.throttle.stop();
       bye(ws, reason);
-      if (win.browser) await win.browser.close().catch(() => {});
+      win.abort.abort();
+      // A launch still under way is waited for and whatever it opened is shut,
+      // so neither a shutdown nor a viewer leaving mid-launch strands a Chrome
+      // on the project's profile. Review round 2, ticket 86bcrmbb4.
+      const browser = win.browser || (win.opening ? await win.opening.catch(() => null) : null);
+      if (browser) await browser.close().catch(() => {});
       if (windows.get(win.projectId) === win) windows.delete(win.projectId);
       log('window-closed', {
         windowId: win.id,

@@ -569,6 +569,113 @@ test('a socket error after connecting does not take the door keeper down', () =>
   assert.ok(cdp);
 });
 
+// Review round 2: a Chrome that cannot be started at all must not take the
+// whole door keeper down, a shutdown mid-launch must stop the Chrome being
+// launched, and a hung Chrome must not keep its project locked forever.
+
+test('a Chrome that cannot be started is refused, and the door keeper keeps running', async () => {
+  const dir = tmpDir('door-noexec-');
+  const notRunnable = path.join(dir, 'Google Chrome');
+  fs.writeFileSync(notRunnable, '#!/bin/sh\nsleep 60\n');
+  fs.chmodSync(notRunnable, 0o644);
+  await assert.rejects(
+    chrome.openBrowser({ kind: 'launch', chromePath: notRunnable, profileDir: tmpDir('door-fail-') }, { portTimeoutMs: 5000 }),
+    (err) => err.code === 'EACCES',
+  );
+  // Reaching this line at all is the proof: an unheard spawn 'error' exits the process.
+  await settle(50);
+  assert.ok(true);
+});
+
+test('shutting the door keeper down while a Chrome is starting stops that Chrome', { timeout: 15_000 }, async (t) => {
+  const s = standIn();
+  t.after(() => s.kids.forEach((k) => k.kill('SIGKILL')));
+  const d = createDoor({
+    secret: SECRET,
+    profilesRoot: tmpDir('door-profiles-'),
+    chromePath: 'stand-in',
+    // The stand-in never reports a control port, so the launch is still waiting when close() comes.
+    openBrowser: (target, opts) => chrome.openBrowser(target, { ...opts, spawnFn: s.spawnFn, portTimeoutMs: 10_000 }),
+  });
+  const { port } = await d.listen(0);
+  const pass = newPass();
+  assert.equal((await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' })).status, 200);
+  const v = viewer(port, { type: 'hello', pass });
+  await v.ready();
+  const deadline = Date.now() + 5000;
+  while (!s.kids.length && Date.now() < deadline) await settle(20);
+  assert.equal(s.kids.length, 1, 'the launch never started');
+  assert.ok(!s.gone(s.kids[0]));
+  const started = Date.now();
+  await d.close();
+  assert.ok(s.gone(s.kids[0]), 'the stand-in Chrome is still running after the door keeper closed');
+  assert.ok(Date.now() - started < 8000, 'close() waited out the whole launch instead of calling it off');
+  assert.equal(d.windows.size, 0);
+});
+
+test('a viewer leaving mid-launch keeps the project closed until that Chrome has stopped', { timeout: 15_000 }, async (t) => {
+  const s = standIn();
+  const d = createDoor({
+    secret: SECRET,
+    profilesRoot: tmpDir('door-profiles-'),
+    chromePath: 'stand-in',
+    openBrowser: (target, opts) => chrome.openBrowser(target, { ...opts, spawnFn: s.spawnFn, portTimeoutMs: 10_000 }),
+  });
+  t.after(async () => {
+    s.kids.forEach((k) => k.kill('SIGKILL'));
+    await d.close();
+  });
+  const { port } = await d.listen(0);
+  const pass = newPass();
+  await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' });
+  const v = viewer(port, { type: 'hello', pass });
+  await v.ready();
+  const deadline = Date.now() + 5000;
+  while (!s.kids.length && Date.now() < deadline) await settle(20);
+  assert.equal(s.kids.length, 1, 'the launch never started');
+  v.ws.close();
+  // While the project still counts as open its Chrome may still be running;
+  // the moment the slot is free, it must not be.
+  while (d.windows.size && Date.now() < deadline + 5000) await settle(5);
+  assert.equal(d.windows.size, 0, 'the window was never released');
+  assert.ok(s.gone(s.kids[0]), "the project's slot was freed while its Chrome was still running");
+});
+
+test('a Chrome that stops answering is still stopped when its window closes', { timeout: 10_000 }, async (t) => {
+  // A control socket that accepts the launch, then never answers again.
+  const wss = new WebSocket.Server({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => wss.once('listening', resolve));
+  let answered = 0;
+  wss.on('connection', (ws) => {
+    ws.on('message', (data) => {
+      const { id, method } = JSON.parse(String(data));
+      if (method === 'Target.createTarget') ws.send(JSON.stringify({ id, result: { targetId: 'T1' } }));
+      else if (method === 'Target.attachToTarget') ws.send(JSON.stringify({ id, result: { sessionId: 'S1' } }));
+      else return;
+      answered += 1;
+    });
+  });
+  const s = standIn();
+  t.after(() => {
+    s.kids.forEach((k) => k.kill('SIGKILL'));
+    for (const client of wss.clients) client.terminate();
+    wss.close();
+  });
+  const profileDir = tmpDir('door-hung-');
+  const spawnFn = (...args) => {
+    const kid = s.spawnFn(...args);
+    fs.writeFileSync(path.join(profileDir, 'DevToolsActivePort'), `${wss.address().port}\n/devtools/browser/stand-in\n`);
+    return kid;
+  };
+  const browser = await chrome.openBrowser(
+    { kind: 'launch', chromePath: 'stand-in', profileDir },
+    { spawnFn, portTimeoutMs: 2000, closeTimeoutMs: 300, exitTimeoutMs: 300 },
+  );
+  assert.equal(answered, 2);
+  await browser.close();
+  assert.ok(s.gone(s.kids[0]), 'the hung Chrome was never killed');
+});
+
 // ── The REAL Chrome ─────────────────────────────────────────────────────────
 
 const CHROME = chrome.findChrome();
