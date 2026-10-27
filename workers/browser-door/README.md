@@ -38,6 +38,10 @@ is a separate Tailscale Funnel path (slice 3); the Starcaster screen is slice 4.
 * **The window closes itself** after 3 minutes with no input and after 15
   minutes in all, and the viewer is told which.
 * **About 15 pictures a second** at most.
+* **It does not disguise Chrome.** On current Chrome the window reports
+  `navigator.webdriver = true` because its remote-control port is on. Dane
+  chose to leave that honest rather than hide it (ticket `86bcrmbb4`, option
+  B); its test is a known-failing TODO, and slice 5 tests whether Google minds.
 * **Never Playwright's launch.** It starts the real Chrome binary itself.
 
 ## Running it

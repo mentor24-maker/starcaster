@@ -21,6 +21,9 @@ const WebSocket = require('ws');
  * itself automated (`navigator.webdriver`), and whether a password typed
  * through the window ends up anywhere it should not.
  *
+ * The `navigator.webdriver` one is KNOWN-FAILING on current Chrome and is
+ * marked as a TODO, by Dane's decision — see the note above it.
+ *
  * Those real-Chrome tests run only on a Mac with Chrome installed — the Mini,
  * where the door keeper lives. CI's Linux runner has no screen for a visible
  * Chrome, and the door keeper never runs a hidden one (a hidden Chrome reports
@@ -511,7 +514,18 @@ test('Chrome is installed on this Mac, or the real-Chrome proof below is not bei
 
 const chromeSkip = realSkip || (!CHROME && 'Chrome is not installed');
 
-test('the Chrome the door keeper opens does not call itself automated (navigator.webdriver is false)', { skip: chromeSkip, timeout: 60_000 }, async () => {
+// KNOWN-FAILING, by Dane's decision (option B on ticket 86bcrmbb4, 2026-10-26).
+// The plan measured `false` in October. On the Mini's Chrome 156 just switching
+// on the remote-control port makes it `true`, with nothing connected. The only
+// fix found is a flag that HIDES the signal from sites, and Dane chose to leave
+// Chrome honest and let slice 5 find out whether Google refuses a real sign-in.
+// So this still runs and still reports what it reads, but as a TODO: a `true`
+// is expected and does not fail the suite. If it ever reads `false` again, the
+// TODO line says so and this marker can come off.
+const WEBDRIVER_KNOWN_FAILING = 'known-failing: Chrome 156 reports navigator.webdriver=true whenever its '
+  + 'remote-control port is on; Dane chose to leave Chrome honest (86bcrmbb4, option B) — slice 5 tests Google';
+
+test('the Chrome the door keeper opens does not call itself automated (navigator.webdriver is false)', { skip: chromeSkip, todo: WEBDRIVER_KNOWN_FAILING, timeout: 60_000 }, async () => {
   const profileDir = tmpDir('door-chrome-');
   const b = await chrome.openBrowser({ kind: 'launch', chromePath: CHROME, profileDir });
   try {

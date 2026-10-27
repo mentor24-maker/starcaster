@@ -1,3 +1,17 @@
+## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
+
+First piece of the sign-in window: a small program on the Mac Mini, the "door
+keeper", opens one project's own Chrome, sends a live picture of it (about 15
+a second) and passes clicks, keys and pastes back. It listens only on the
+Mini's inside address for now, so nothing outside can reach it yet. A one-time
+pass decides which project's browser opens, so a pass for one client can never
+open another's. Keys are counted in the log but never recorded, Chrome is told
+not to offer to save passwords, and the window closes itself after 3 idle
+minutes or 15 minutes in all. One check is knowingly left failing: since a
+recent Chrome update, the browser admits it is remote-controlled whenever this
+feature is on. A setting exists to hide that, and you chose to keep Chrome
+honest instead; the Google sign-in slice will find out whether Google minds.
+
 ## 2026-10-26 — Fonts can be found by style: AI tags every font, and you can filter by tag (#863)
 
 Every font now carries a few style words, like "sci-fi", "elegant" or

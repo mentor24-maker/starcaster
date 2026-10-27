@@ -90,6 +90,26 @@ google/playwright: password field shown=false; "may not be secure" shown=true; "
 google/playwright: page text: Loading Couldn't sign you in This browser or app may not be secure. Learn more Try using a different browser. ...
 ```
 
+### Update, 2026-10-26: current Chrome says "automated" anyway
+
+The `false` in the second row no longer holds. On the Mini's Chrome
+156.0.8078.48, switching on the remote-control port **by itself** makes
+`navigator.webdriver` read `true`, with nothing connected and no Playwright.
+Measured with a page that reports the value to a local server:
+
+```
+{ extra: [], v: 'false' }
+{ extra: [ '--remote-debugging-port=0' ], v: 'true' }
+{ extra: [ '--remote-debugging-port=0', '--disable-blink-features=AutomationControlled' ], v: 'false' }
+```
+
+The only fix found is the third line's flag, which **hides** the signal from
+sites. Dane chose not to use it (ticket `86bcrmbb4`, option B): Chrome stays
+honest, slice 1's `navigator.webdriver` test is kept as a known-failing TODO,
+and **slice 5 finds out whether Google refuses a real sign-in because of it.**
+OpenClaw's Chrome also runs with a remote-control port, so it very likely
+reads `true` too since Chrome updated.
+
 ## 2. How the picture and the clicks travel: three approaches compared
 
 | | (a) Chrome's own screen feed, from a small Mini program | (b) A VNC view of a separate screen | (c) OpenClaw's own live view |
@@ -291,7 +311,8 @@ per second; click, key and paste relay; 3-minute idle and 15-minute total
 close; logs input counts only; turns off "save passwords" in each profile it
 creates.
 **Acceptance:** tests prove `navigator.webdriver` is false in the opened
-Chrome; a pass for project A cannot reach project B; a marker password typed
+Chrome (known-failing on Chrome 156 and kept as a TODO by Dane's choice — see
+§1's update); a pass for project A cannot reach project B; a marker password typed
 through it appears in no log and no saved-password list; idle close fires.
 **Non-goals:** no internet route, no Starcaster screen.
 **Risk:** medium (it drives signed-in browsers).
@@ -337,7 +358,9 @@ Substack, through the window, and OpenClaw can use those sign-ins.
 **Scope:** Dane types the password himself (an agent session never does);
 record what Google showed at the password and two-step steps; connect the
 Substack Notes and YouTube outreach screens to "Connect"; if Google refuses,
-stop and bring it to Dane before going further.
+stop and bring it to Dane before going further. Since Chrome 156 the window's
+browser reports `navigator.webdriver = true` (§1's update), so this slice is
+also the first real test of whether Google accepts that.
 **Acceptance:** a link to one real comment or Note posted after a sign-in made
 through the window.
 **Risk:** medium (the Google answer can still change the YouTube plan).

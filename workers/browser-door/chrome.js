@@ -9,8 +9,14 @@
  * remote-control port switched on — measured on the Mini, docs/LIVE_BROWSER_VIEW.md
  * §1. So this file spawns the Chrome binary itself, with no `--enable-automation`
  * and no other flag a test harness would add, and speaks Chrome's remote-control
- * protocol (CDP) over a plain WebSocket. A test asserts `navigator.webdriver`
- * is false in what it opens, and another fails if a forbidden flag creeps in.
+ * protocol (CDP) over a plain WebSocket. A test fails if a forbidden flag creeps in.
+ *
+ * `navigator.webdriver` IS TRUE in what it opens, on current Chrome. The plan
+ * measured `false` in October; on the Mini's Chrome 156 switching on the
+ * remote-control port by itself makes it `true`. The only fix found is a flag
+ * that hides the signal from sites, and Dane chose not to disguise the browser
+ * (ticket 86bcrmbb4, option B). Its test is kept as a known-failing TODO, and
+ * slice 5 finds out whether Google refuses a real sign-in because of it.
  *
  * The control port is `--remote-debugging-port=0`: Chrome picks a free port and
  * listens on 127.0.0.1 only, which is its default and which nothing here
