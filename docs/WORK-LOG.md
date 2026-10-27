@@ -1,3 +1,17 @@
+## 2026-10-27 — The Mini's sign-in window gets its internet route, and a check that nothing else is open (#874)
+
+Third piece of the sign-in window. There is now an installer that keeps the
+Mini's "door keeper" running all the time and gives it one public address
+path (`/live`), so Starcaster's server will be able to reach it. A separate
+check runs from the MacBook and tries every way in: from the internet, from
+the home network, and from the private Tailscale network. It confirms the
+door keeper shows nothing without a one-time pass, and that nothing else on
+the Mini answers. That check found a real gap. Anything on the Mini that
+should only be reachable from the Mini itself, such as the OpenClaw gateway,
+can be reached from Dane's other Tailscale devices (not from the internet).
+One Tailscale setting ("shields up") closes it, and that is Dane's call. The
+installer is written but has not been run yet: it waits for Dane to add the
+shared secret the Mini and Starcaster will use.
 ## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
 
 First piece of the sign-in window: a small program on the Mac Mini, the "door
