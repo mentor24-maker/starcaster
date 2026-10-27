@@ -9,6 +9,9 @@ import RedditCommentsPanel, {
   isCommentLink,
   paceLine,
   postPreview,
+  readingLine,
+  READING_POLL_MS,
+  READ_SLOW_MS,
   signInLine,
   tabFor,
   withScheme,
@@ -21,8 +24,10 @@ import RedditCommentsPanel, {
  * showing the old client's rows" after a switch is distinguishable from
  * "empty", and every save is read back from the fake's store — a remount is
  * the reload — rather than from the screen's own state. The fake refuses the
- * way lib/redditCommentsStore.js does: Reddit's read refused (409
- * POST_TEXT_NEEDED) and a blocklisted phrase on approve (422).
+ * way lib/redditCommentsStore.js does: the Mini not signed in (409
+ * POST_TEXT_NEEDED) and a blocklisted phrase on approve (422). A link added
+ * while the Mini can read lands as `readState: reading`, as the store saves
+ * it (Outreach wizard 17/19); a test plays the Mini by filling the row in.
  */
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -37,6 +42,7 @@ const BLOCKED = "delve into";
 const PACE = { maxCommentsPerDay: 3, minMinutesBetween: 20, jitterMinutes: 10 };
 const POST_LINK = "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/";
 
+/** `readable`: the Mini is signed in, so Add queues a read instead of refusing. */
 type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable" };
 let stores: Record<string, Store>;
 let activeProject = "proj_doe";
@@ -94,11 +100,11 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       if (!/reddit\.com\/r\//.test(body.url)) fail(`${body.url} is not a Reddit link — it should start https://www.reddit.com/r/…`);
       const pasted = body.postTitle || body.postBody;
       if (!pasted && !store.readable) {
-        fail("The post could not be read from Reddit: Reddit refused the read (403). Paste the post's title and text, then Add again.", 409, "POST_TEXT_NEEDED");
+        fail("The Mini is not signed in to Reddit (signed out), so it cannot read the post. Paste the post's title and text instead.", 409, "POST_TEXT_NEEDED");
       }
       const made = item(pasted
         ? { targetUrl: body.url, postTitle: body.postTitle || "", postBody: body.postBody || "", postReadFrom: "pasted" }
-        : { targetUrl: body.url });
+        : { targetUrl: body.url, subreddit: "", postTitle: "", postBody: "", postAuthor: "", readState: "reading", readRequestedAt: new Date().toISOString() });
       store.items.unshift(made);
       return { ok: true, data: { ...made } };
     }
@@ -107,10 +113,16 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
     if (store.status === "unreadable") fail("status endpoint down", 502);
     return { ok: true, data: store.status || { account: "", pace: PACE, browserCheck: { state: "", message: "", checkedAt: null, signedInAt: null }, browserCheckError: "" } };
   }
-  const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject)$/);
+  const decision = path.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again)$/);
   if (decision) {
     const found = store.items.find((i) => i.id === decision[1]) || fail("Reddit comment not found in this project", 404);
-    if (decision[2] === "draft") {
+    if (decision[2] === "paste") {
+      if (!["reading", "failed"].includes(found.readState || "")) fail("This post is already in, so there is nothing to paste.", 409);
+      Object.assign(found, { postTitle: body.postTitle, postBody: body.postBody, postReadFrom: "pasted", readState: "", readError: "" });
+    } else if (decision[2] === "read-again") {
+      if (!store.readable) fail("The Mini is not signed in to Reddit (signed out), so it cannot read the post. Paste the post's title and text instead.", 409, "POST_TEXT_NEEDED");
+      Object.assign(found, { readState: "reading", readError: "", readRequestedAt: new Date().toISOString() });
+    } else if (decision[2] === "draft") {
       drafts += 1;
       Object.assign(found, { status: "draft", draftText: `The air bends the light, draft ${drafts}.`, finalText: "", canonUsed: CANON });
     } else if (decision[2] === "approve") {
@@ -228,11 +240,31 @@ describe("Reddit comments screen", () => {
     expect(text()).toContain("Nothing posted yet");
   });
 
-  it("adds a link and shows the subreddit, title, first lines and a Reddit link", async () => {
+  it("adds a link as Reading…, and the post appears by itself once the Mini reads it", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     await mount();
     await addLink("www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/");
     expect(requests.find((r) => r.method === "POST")?.body).toEqual({ url: POST_LINK });
     const id = stores.proj_doe.items[0].id;
+    expect(text()).toContain("Added — the Mini is reading the post.");
+    expect(row(id).textContent).toContain("Reading… the Mini is opening this post in its browser.");
+    expect(row(id).textContent).not.toContain("Write with AI");
+    expect(row(id).querySelector("#rc-title-" + id)).toBeNull();
+
+    // The Mini reads it; the screen re-reads the list on its own.
+    Object.assign(stores.proj_doe.items[0], {
+      subreddit: "astronomy", postTitle: "Why do stars twinkle?", postBody: "I always wondered.\nIs it the air?", readState: "",
+    });
+    const before = requests.filter((r) => r.method === "GET" && r.path.endsWith("/items")).length;
+    await act(async () => { vi.advanceTimersByTime(READING_POLL_MS); });
+    await flush();
+    expect(requests.filter((r) => r.method === "GET" && r.path.endsWith("/items")).length).toBe(before + 1);
+    expect(row(id).textContent).toContain("Write with AI");
+    // Nothing is reading now, so it stops asking.
+    await act(async () => { vi.advanceTimersByTime(READING_POLL_MS * 3); });
+    await flush();
+    expect(requests.filter((r) => r.method === "GET" && r.path.endsWith("/items")).length).toBe(before + 1);
+    vi.useRealTimers();
     expect(row(id).textContent).toContain("r/astronomy");
     expect(row(id).textContent).toContain("Why do stars twinkle?");
     expect(row(id).textContent).toContain("Is it the air?");
@@ -240,12 +272,12 @@ describe("Reddit comments screen", () => {
     expect(el<HTMLInputElement>("#rc-link").value).toBe("");
   });
 
-  it("when Reddit refuses the read, says why and saves the post pasted by hand", async () => {
+  it("with the Mini signed out, says why and saves the post pasted by hand", async () => {
     stores.proj_doe.readable = false;
     await mount();
     await addLink(POST_LINK);
     expect(stores.proj_doe.items).toEqual([]);
-    expect(text()).toContain("The post could not be read from Reddit: Reddit refused the read (403).");
+    expect(text()).toContain("The Mini is not signed in to Reddit (signed out), so it cannot read the post.");
     expect(el<HTMLInputElement>("#rc-link").value).toBe(POST_LINK);
 
     type(el<HTMLInputElement>("#rc-paste-title"), "Why do stars twinkle?");
@@ -256,6 +288,32 @@ describe("Reddit comments screen", () => {
     });
     await reload();
     expect(row(stores.proj_doe.items[0].id).textContent).toContain("pasted by hand");
+  });
+
+  it("a post the Mini could not read says why, takes the post pasted onto it, or is read again", async () => {
+    stores.proj_doe.items = [
+      item({ id: "gone", postTitle: "", postBody: "", readState: "failed", readError: "Reddit says this post was removed (by the moderators), so there is nothing to answer." }),
+      item({ id: "retry", postTitle: "", postBody: "", readState: "failed", readError: "The Mini's browser could not read the post (OpenClaw: timeout)." }),
+    ];
+    await mount();
+    expect(row("gone").textContent).toContain("Reddit says this post was removed (by the moderators)");
+    expect(row("gone").textContent).not.toContain("Write with AI");
+    expect(button("Save", row("gone")).disabled).toBe(true);
+
+    type(el<HTMLInputElement>("#rc-title-gone"), "Why do stars twinkle?");
+    type(el<HTMLTextAreaElement>("#rc-body-gone"), "Pasted body");
+    await click(button("Save", row("gone")));
+    expect(requests.find((r) => r.path.endsWith("/gone/paste"))?.body).toEqual({
+      postTitle: "Why do stars twinkle?", postBody: "Pasted body", parentCommentText: "",
+    });
+    expect(text()).toContain("Saved — the post is in.");
+    expect(row("gone").textContent).toContain("Write with AI");
+
+    await click(button("Try reading again", row("retry")));
+    expect(requests.some((r) => r.path.endsWith("/retry/read-again"))).toBe(true);
+    expect(row("retry").textContent).toContain("Reading…");
+    await reload();
+    expect(row("gone").textContent).toContain("pasted by hand");
   });
 
   it("refuses a link that is not Reddit with the server's sentence", async () => {
@@ -462,6 +520,19 @@ describe("helpers", () => {
   it("postPreview keeps the first lines and trims long ones", () => {
     expect(postPreview("a\nb\nc\nd")).toBe("a\nb\nc");
     expect(postPreview("x".repeat(300), 10)).toBe(`${"x".repeat(10)}…`);
+  });
+
+  it("readingLine says Reading…, offers the paste box once a read is slow, and shows a failed read's reason", () => {
+    const now = Date.parse("2026-10-27T12:00:00Z");
+    const at = (minutes: number) => new Date(now - minutes * 60000).toISOString();
+    expect(readingLine({ readState: "", readError: "", readRequestedAt: null }, now)).toBeNull();
+    expect(readingLine({ readState: "reading", readRequestedAt: at(1) }, now)).toMatchObject({ offerPaste: false, slow: false });
+    const slow = readingLine({ readState: "reading", readRequestedAt: at(READ_SLOW_MS / 60000 + 3) }, now)!;
+    expect(slow.offerPaste).toBe(true);
+    expect(slow.text).toMatch(/^Still waiting for the Mini to read this post — asked .+\. Its worker may not be running\./);
+    expect(readingLine({ readState: "failed", readError: "Reddit says this post was removed." }, now)).toEqual({
+      text: "Reddit says this post was removed.", offerPaste: true, slow: false,
+    });
   });
 
   it("withScheme and isCommentLink read pasted links", () => {

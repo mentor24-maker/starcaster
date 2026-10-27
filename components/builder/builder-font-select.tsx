@@ -7,7 +7,8 @@ import { BUILDER_HEADING_FONTS } from "./builder-utils";
 const GOOGLE_OPTION = "__google__";
 const LIBRARY_OPTION = "__library__";
 
-export type LibraryFontChoice = { slug: string; family: string };
+/** isFavorite: the signed-in person starred it on the Fonts screen (Font Library 8). */
+export type LibraryFontChoice = { slug: string; family: string; isFavorite?: boolean };
 
 type LibraryState =
   | { status: "idle" | "loading" }
@@ -31,7 +32,11 @@ export function loadLibraryFontChoices(fetchImpl: typeof fetch = fetch): Promise
         const fonts = Array.isArray(body?.data?.fonts) ? body.data.fonts : [];
         return fonts
           .filter((font: { slug?: unknown }) => Boolean(libraryFontKey(String(font?.slug ?? ""))))
-          .map((font: { slug: string; family?: string }) => ({ slug: font.slug, family: String(font.family || font.slug) }));
+          .map((font: { slug: string; family?: string; isFavorite?: unknown }) => ({
+            slug: font.slug,
+            family: String(font.family || font.slug),
+            isFavorite: font.isFavorite === true,
+          }));
       })
       .catch((err) => {
         libraryRequest = null;
@@ -44,6 +49,27 @@ export function loadLibraryFontChoices(fetchImpl: typeof fetch = fetch): Promise
 /** Test seam: forget the shared read. */
 export function resetLibraryFontChoicesForTest() {
   libraryRequest = null;
+}
+
+function fontOptions(fonts: LibraryFontChoice[]) {
+  return fonts.map((font) => (
+    <option key={font.slug} value={font.slug}>
+      {font.family}
+    </option>
+  ));
+}
+
+/** The person's starred fonts first, under "Favourites"; the rest under
+ *  "All fonts". With nothing starred, one plain list (Font Library 8). */
+function libraryOptions(fonts: LibraryFontChoice[]) {
+  const favourites = fonts.filter((font) => font.isFavorite);
+  if (!favourites.length) return fontOptions(fonts);
+  return (
+    <>
+      <optgroup label="Favourites">{fontOptions(favourites)}</optgroup>
+      <optgroup label="All fonts">{fontOptions(fonts.filter((font) => !font.isFavorite))}</optgroup>
+    </>
+  );
 }
 
 function initialMode(value: string): "builtin" | "google" | "library" {
@@ -186,11 +212,7 @@ export function BuilderFontSelect({
                 ? `"${librarySlug}" is no longer in the font library — pick another`
                 : "Pick a font from the library"}
             </option>
-            {libraryFonts.map((font) => (
-              <option key={font.slug} value={font.slug}>
-                {font.family}
-              </option>
-            ))}
+            {libraryOptions(libraryFonts)}
           </select>
         ) : (
           <p className="builder-font-select-note" role={library.status === "error" ? "alert" : undefined}>

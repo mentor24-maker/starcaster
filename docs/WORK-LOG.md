@@ -10,6 +10,36 @@ new log: who opened it, which site, when, when it closed, how long it lasted
 and why it closed. Attempts that never opened (the Mini switched off, not set
 up yet) are logged too, with the reason. Nothing is visible yet: the window
 itself is a later slice, and the log table needs one SQL paste on production.
+## 2026-10-27 — The Mini reads a Reddit post for you, so you no longer paste it by hand (#870)
+
+On **Engage → Comments (Reddit)**, adding a post link now says **Reading…**,
+and within a couple of minutes the Mac Mini's signed-in browser fills in the
+subreddit, title, text and top comments by itself. Before this you had to copy
+the post in by hand, because Reddit refuses to show posts to anything that is
+not signed in. If the Mini cannot read a post, the card says why in plain words
+— for example "Reddit says this post was removed" — and offers the paste box
+and **Try reading again**. If the Mini is not signed in to Reddit when you click
+Add, nothing is saved and the paste box appears straight away with that reason.
+This starts working once the Mini's posting job is installed and the new
+database columns are added; until then Add shows the paste box and says the
+Mini has not checked its sign-in yet.
+
+## 2026-10-26 — You can star your favourite fonts and show only those on the Fonts screen (#866)
+
+Every font on **Assets → Fonts** now has a star at the start of its row. Click
+it and it fills in; click again and it empties. Above the table there is a
+switch, **All fonts** or **Favourites (N)**, where N is how many you have
+starred, and the screen remembers which one you were on the next time you
+open it. Your stars are yours alone and follow you to every site you work on;
+another admin's stars never show up in your list. In Builder → Themes, the
+"Library font…" list now puts your favourites at the top under a
+"Favourites" heading, so with hundreds of fonts your go-to ones are one click
+away. Favourites works together with the search box, the category buttons and
+the Tag box: pick Favourites, click Display, and you see only the display fonts
+you starred, with a line saying "1 of 3 favourite fonts". One new database
+table goes with this; the agent session that merges it adds the table to the
+live site and checks it is there. Until then the Fonts screen still works but
+says your favourites could not be read.
 ## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
 
 First piece of the sign-in window: a small program on the Mac Mini, the "door
