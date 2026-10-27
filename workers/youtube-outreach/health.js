@@ -115,9 +115,12 @@ function sentence(state, { site = 'youtube', who = 'Dane of Earth', profile = 'd
 
 /**
  * What the browser's answer means. `call` is the OpenClaw reply envelope;
- * `extractJson` reads the JSON out of its text.
+ * `extractJson` reads the JSON out of its text; `who` is the account to compare
+ * with (left out: the site's first-run default). `account` is whoever the
+ * browser said is signed in — saved so the Outreach screen can offer it
+ * (Outreach wizard 2/19).
  */
-function readCall(call, site, extractJson) {
+function readCall(call, site, extractJson, who) {
   if (!call || !call.ok) {
     // The probe found the gateway up a moment ago, so a refused connection
     // now is the gateway going down mid-check — still the gateway's alarm.
@@ -126,10 +129,11 @@ function readCall(call, site, extractJson) {
     }
     return { state: 'cannot_tell', detail: text(call?.error) || 'OpenClaw gave no answer' };
   }
-  const verdict = signIn.judge(extractJson(call.text), site);
-  if (verdict.kind === 'wrong_account') return { state: 'wrong_account', detail: verdict.name };
-  if (verdict.kind === 'cannot_tell') return { state: 'cannot_tell', detail: verdict.message };
-  return { state: verdict.kind, detail: verdict.name || '' };
+  const verdict = signIn.judge(extractJson(call.text), site, who);
+  const account = verdict.name || '';
+  if (verdict.kind === 'wrong_account') return { state: 'wrong_account', detail: verdict.name, account };
+  if (verdict.kind === 'cannot_tell') return { state: 'cannot_tell', detail: verdict.message, account };
+  return { state: verdict.kind, detail: verdict.name || '', account };
 }
 
 /**
@@ -187,9 +191,12 @@ function writeLedger(file, ledger) {
 /**
  * One check of every account, plus the alarms it calls for.
  *
- *   checks  [{ site, accountKey, profile, who, record(reading) }] — from the
- *           adapters' browserChecks() plus the sign-in-only checks in
- *           poster.js SIGN_IN_CHECKS; `record` writes the settings row.
+ *   checks  [{ site, accountKey, profile, who, resolve?(), record(reading) }]
+ *           — from the adapters' browserChecks() plus the sign-in-only checks
+ *           in poster.js SIGN_IN_CHECKS; `record` writes the settings row.
+ *           `resolve` reads the account Dane chose on the Outreach screen at
+ *           check time (Outreach wizard 2/19) and answers `{ who }`; `who` is
+ *           the fallback when there is no resolve or it cannot read.
  *   deps    { probe(), ask(request), extractJson(text), post(text),
  *             readLedger(), writeLedger(ledger), node }
  *
@@ -207,7 +214,18 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
     gateway = { up: false, why: `the probe itself failed: ${err.message}` };
   }
 
-  for (const check of checks) {
+  for (const listed of checks) {
+    // The account to compare with is read NOW, so a choice made on the
+    // Outreach screen counts from the very next check, not the next restart.
+    let check = listed;
+    if (typeof listed.resolve === 'function') {
+      try {
+        const resolved = await listed.resolve();
+        if (resolved && typeof resolved.who === 'string') check = { ...listed, who: resolved.who };
+      } catch (err) {
+        problems.push(`${listed.site}/${listed.accountKey}: the chosen account could not be read (${err.message}); compared with "${listed.who}"`);
+      }
+    }
     let reading;
     if (!gateway.up) {
       reading = { state: 'gateway_down', detail: gateway.why };
@@ -218,12 +236,15 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
       } catch (err) {
         call = { ok: false, error: `the check threw: ${err.message}` };
       }
-      reading = readCall(call, check.site, deps.extractJson);
+      reading = readCall(call, check.site, deps.extractJson, check.who);
     }
     const message = sentence(reading.state, { site: check.site, who: check.who, profile: check.profile, detail: reading.detail });
     let write;
     try {
-      write = await check.record({ state: reading.state, message, checkedAt });
+      const saved = { state: reading.state, message, checkedAt };
+      // Only a reading that names somebody replaces the last name seen.
+      if (reading.account) saved.account = reading.account;
+      write = await check.record(saved);
     } catch (err) {
       write = { ok: false, error: err.message };
     }

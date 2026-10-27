@@ -391,7 +391,7 @@ test('NOTHING POSTS WITHOUT A NAMED ACCOUNT: every approved comment waits, says 
     assert.equal(ins.calls.length, 0);
     const row = await readRow(env, item.id);
     assert.equal(row.status, 'approved');
-    assert.match(row.waitReason, /no Reddit account has been chosen/);
+    assert.match(row.waitReason, /choose the account to post as/);
   } finally {
     env.restore();
   }

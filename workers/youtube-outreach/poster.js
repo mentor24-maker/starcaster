@@ -61,6 +61,9 @@ const DEFAULT_PASS_EVERY_MS = 2 * 60 * 1000;
 /** How often a beat is written — every pass would do, this keeps the file quiet. */
 const DEFAULT_BEAT_EVERY_MS = 5 * 60 * 1000;
 
+/** How often a pending "Check now" from the Outreach screen is looked for. */
+const CHECK_REQUEST_POLL_MS = 30 * 1000;
+
 function text(value) {
   return String(value == null ? '' : value).trim();
 }
@@ -330,6 +333,13 @@ const SIGN_IN_CHECKS = [
         accountKey,
         profile: 'dane-of-earth',
         who: require('../../lib/openclawSignIn.js').SITES.substack.expected,
+        // The account Dane chose on Engage › Outreach, read at check time
+        // (Outreach wizard 2/19); the line above is the first-run default.
+        resolve: async () => {
+          const res = await require('../../lib/outreachAccounts').readAccountForWorker('substack', projectId, accountKey);
+          if (!res.ok) throw new Error(res.error);
+          return { who: res.data.compareWith };
+        },
         record: (reading) => store.recordBrowserCheck(reading, { projectId }, { accountKey }),
       }];
     },
@@ -368,6 +378,18 @@ function buildSignInChecks(env = process.env, list = SIGN_IN_CHECKS) {
   return { checks, problems };
 }
 
+/**
+ * The real "Check now" lookup: any site whose settings row was asked for a
+ * check after the last one ran (lib/outreachAccounts.js requestCheck).
+ */
+function defaultCheckRequested(adapters) {
+  const projectIds = {};
+  for (const a of adapters) if (a.projectId) projectIds[a.name] = a.projectId;
+  // Substack is watched by a sign-in-only check, and is Dane of Earth's too.
+  if (!projectIds.substack && projectIds.youtube) projectIds.substack = projectIds.youtube;
+  return (sinceMs) => require('../../lib/outreachAccounts').checkRequestedSince(projectIds, sinceMs);
+}
+
 /** The real hourly check: every account, through OpenClaw, alarms to the bus. */
 function defaultHealthCheck(node, extraChecks = []) {
   const health = require('./health.js');
@@ -403,6 +425,11 @@ async function runPoster(options = {}) {
     // (adapters) => Promise<string|''>: one sign-in check, returning its log
     // lines. Injectable so the loop's tests never reach a browser or the bus.
     checkHealth = null,
+    // (sinceMs) => Promise<boolean>: has the Outreach screen's "Check now"
+    // been pressed since then? Injectable for the same reason.
+    checkRequested = null,
+    // How often a pending "Check now" is looked for while waiting between passes.
+    requestPollMs = CHECK_REQUEST_POLL_MS,
   } = options;
 
   let adapters = options.adapters;
@@ -430,6 +457,20 @@ async function runPoster(options = {}) {
     for (const problem of signInOnly.problems) write(`[outreach-health] a sign-in check is OFF — ${problem}`);
     health = defaultHealthCheck(node, signInOnly.checks);
   }
+
+  // Adapters handed in are a test's stand-ins: nothing to ask a database about.
+  const standIns = Boolean(options.adapters) && !checkRequested;
+  const requested = checkRequested || (standIns ? async () => false : defaultCheckRequested(adapters));
+  // With nothing to listen to, the wait is one sleep, as it always was.
+  const sliceMs = standIns ? passEveryMs : Math.max(1, requestPollMs);
+  const askedSince = async (sinceMs) => {
+    try {
+      return await requested(sinceMs);
+    } catch (err) {
+      write(`[outreach-health] could not look for a "Check now" request: ${err.message} — the hourly check still runs`);
+      return false;
+    }
+  };
 
   let lastBeat = 0;
   let lastHealth = 0;
@@ -460,9 +501,10 @@ async function runPoster(options = {}) {
     }
 
     // THE HOURLY LOOK AT THE BROWSER. Runs on the first pass too, so a worker
-    // started against a signed-out browser says so within minutes, not an hour.
+    // started against a signed-out browser says so within minutes, not an hour
+    // — and early whenever the Outreach screen's "Check now" asked for it.
     const healthAt = clock();
-    if (!lastHealth || healthAt - lastHealth >= healthEveryMs) {
+    if (!lastHealth || healthAt - lastHealth >= healthEveryMs || await askedSince(lastHealth)) {
       lastHealth = healthAt;
       try {
         const lines = await health(adapters);
@@ -474,7 +516,15 @@ async function runPoster(options = {}) {
 
     passes += 1;
     if (stopAfterPasses && passes >= stopAfterPasses) break;
-    if (!stopping) await sleep(passEveryMs);
+    // The wait is cut into slices so a "Check now" is answered within about
+    // half a minute rather than at the next pass.
+    let waited = 0;
+    while (!stopping && waited < passEveryMs) {
+      const slice = Math.min(sliceMs, passEveryMs - waited);
+      await sleep(slice);
+      waited += slice;
+      if (waited < passEveryMs && await askedSince(lastHealth)) break;
+    }
   }
 
   if (ownsSignals) {

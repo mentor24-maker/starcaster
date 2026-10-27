@@ -26,9 +26,11 @@
  * written. A weaker proof is Dane's decision, not this file's (comment on the
  * ticket, same time).
  *
- * NOTHING POSTS UNTIL AN ACCOUNT IS NAMED. lib/openclawSignIn.js holds the one
- * account name the Mini posts as; while it is blank every approved comment
- * waits and says why, because "whoever is signed in" is not an account.
+ * NOTHING POSTS UNTIL AN ACCOUNT IS CHOSEN. Dane chooses the Reddit account on
+ * Engage › Outreach (Outreach wizard 2/19); it is saved on the channel's
+ * settings row (lib/outreachAccounts.js) and read again every pass. While none
+ * is chosen every approved comment waits and says why, because "whoever is
+ * signed in" is not an account. The pace lives on the same row.
  *
  * Every dependency is a seam (`options`), so the tests run the whole adapter
  * against a stand-in OpenClaw, a stand-in Reddit and the SQL-backed fake
@@ -54,6 +56,9 @@ const VERIFY_WAIT_MS = 15 * 1000;
 
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 const READ_TIMEOUT_MS = 10000;
+
+/** Why every comment waits while no account is chosen — the wording the ticket asked for. */
+const CHOOSE_ACCOUNT_REASON = 'Waiting: choose the account to post as — Engage › Outreach, Reddit, Connect.';
 
 /** What Reddit shows in place of a comment taken down. */
 const GONE = new Set(['[removed]', '[deleted]']);
@@ -163,15 +168,35 @@ function createRedditAdapter(options = {}) {
     statFile: options.statFile || ((file) => fs.statSync(file)),
     sleep: options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     homedir: options.homedir || os.homedir(),
+    // The account Dane chose, and the pace, from the channel's settings row.
+    readAccount: options.readAccount
+      || ((accountKey) => require('../../../lib/outreachAccounts').readAccountForWorker('reddit', projectId, accountKey)),
   };
   const profiles = { ...DEFAULT_PROFILES, ...(options.profiles || {}) };
-  // The one Reddit account the Mini posts as. The option exists for tests.
-  const accountName = signIn.redditUsername(options.accountName !== undefined ? options.accountName : signIn.EXPECTED_REDDIT_ACCOUNT);
-  const pace = { ...limits.REDDIT_PACE, ...(options.pace || {}) };
+  // A fixed account and pace, for tests; otherwise both are read every pass.
+  const fixedAccount = options.accountName !== undefined ? signIn.redditUsername(options.accountName) : null;
+  const fixedPace = options.pace ? { ...limits.REDDIT_PACE, ...options.pace } : null;
 
-  // Per pass: one read of each account's history.
+  // Per pass: one read of each account's settings and history.
   let accounts = new Map();
+  let settingsCache = new Map();
   let zoneCache = null;
+
+  /** { accountName, pace } for this pass: '' means nobody has chosen one. */
+  async function settingsFor(accountKey) {
+    if (settingsCache.has(accountKey)) return settingsCache.get(accountKey);
+    let found = { accountName: fixedAccount || '', pace: fixedPace || { ...limits.REDDIT_PACE } };
+    if (fixedAccount === null || !fixedPace) {
+      const res = await deps.readAccount(accountKey);
+      if (!res.ok) throw new Error(`could not read which Reddit account to post as: ${res.error}`);
+      found = {
+        accountName: fixedAccount !== null ? fixedAccount : signIn.redditUsername(res.data.expectedAccount),
+        pace: fixedPace || { ...limits.REDDIT_PACE, ...(res.data.pace || {}) },
+      };
+    }
+    settingsCache.set(accountKey, found);
+    return found;
+  }
 
   async function timeZone() {
     if (zoneCache === null) zoneCache = text(await deps.projectTimeZone(projectId));
@@ -191,10 +216,12 @@ function createRedditAdapter(options = {}) {
     label: 'Reddit',
     handCheckWords: 'Open the post on Reddit and check by hand.',
     projectId,
-    pace,
+    // Before any pass has read the row: the fixed pace, or the defaults.
+    pace: fixedPace || { ...limits.REDDIT_PACE },
 
     beginPass() {
       accounts = new Map();
+      settingsCache = new Map();
       zoneCache = null;
     },
 
@@ -217,13 +244,8 @@ function createRedditAdapter(options = {}) {
         };
       }
       // Holds every comment, so it is account-wide: nothing posts as "whoever is signed in".
-      if (!accountName) {
-        return {
-          ok: false,
-          scope: 'account',
-          reason: 'Waiting: no Reddit account has been chosen for the Mini to post as yet. Dane names it on the Reddit sign-in card.',
-        };
-      }
+      const { accountName, pace } = await settingsFor(item.accountKey);
+      if (!accountName) return { ok: false, scope: 'account', reason: CHOOSE_ACCOUNT_REASON };
       if (!text(item.text)) return { ok: false, scope: 'item', reason: 'Not posting: this comment has no words.' };
       if (!text(item.targetUrl) || !text(item.postId)) {
         return { ok: false, scope: 'item', reason: 'Not posting: this comment names no Reddit post to go on.' };
@@ -245,6 +267,8 @@ function createRedditAdapter(options = {}) {
     flagForHandCheck: (item, details) => deps.store.flagForHandCheck(item.id, details, scope),
 
     async post(item) {
+      const { accountName } = await settingsFor(item.accountKey);
+      if (!accountName) return { ok: false, error: CHOOSE_ACCOUNT_REASON };
       const res = await deps.callOpenClaw({
         user: 'starcaster:reddit-comments-poster',
         timeoutMs: POST_TIMEOUT_MS,
@@ -272,6 +296,7 @@ function createRedditAdapter(options = {}) {
     },
 
     async verify(item, url) {
+      const { accountName } = await settingsFor(item.accountKey);
       const link = parsePermalink(url);
       if (!link.ok) return { verdict: 'refuted', reason: `The link OpenClaw returned is not a link to a Reddit comment: ${link.why}.` };
       if (link.postId !== text(item.postId).toLowerCase()) {
@@ -321,7 +346,14 @@ function createRedditAdapter(options = {}) {
         site: 'reddit',
         accountKey,
         profile: profiles[accountKey],
-        who: accountName,
+        who: fixedAccount || '',
+        // The account Dane chose, read at check time (../health.js).
+        resolve: async () => {
+          if (fixedAccount !== null) return { who: fixedAccount };
+          const res = await deps.readAccount(accountKey);
+          if (!res.ok) throw new Error(res.error);
+          return { who: signIn.redditUsername(res.data.compareWith) };
+        },
         record: (reading) => deps.store.recordBrowserCheck(reading, scope, { accountKey }),
       }));
     },
@@ -362,4 +394,5 @@ module.exports = {
   readCommentFromReddit,
   DEFAULT_PROFILES,
   VERIFY_ATTEMPTS,
+  CHOOSE_ACCOUNT_REASON,
 };
