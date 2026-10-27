@@ -289,7 +289,7 @@ export function previewFamily(font: { id: string }): string {
  * inside url("…"), so a quote or newline in it would end the rule early —
  * such a file is left out rather than escaped into something else.
  */
-export function fontFaceCss(fonts: FontRow[]): string {
+export function fontFaceCss(fonts: Array<Pick<FontRow, 'id' | 'styles'>>): string {
   const rules: string[] = [];
   for (const font of fonts) {
     for (const s of font.styles || []) {

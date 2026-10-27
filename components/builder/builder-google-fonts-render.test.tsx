@@ -70,11 +70,10 @@ describe("the font picker", () => {
   it("takes a Google font by name and refuses a bad one", () => {
     const onChange = vi.fn();
     mount(<BuilderFontSelect ariaLabel="Heading font" value="inter" onChange={onChange} />);
-    const select = container!.querySelector("select")!;
-    act(() => {
-      select.value = "__google__";
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    act(() => container!.querySelector("button.builder-font-select-trigger")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const google = document.body.querySelector<HTMLButtonElement>("[role=dialog] button.builder-font-picker-google")!;
+    act(() => google.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(document.body.querySelector("[role=dialog]")).toBeNull();
     const input = container!.querySelector<HTMLInputElement>("input.builder-font-select-google")!;
     expect(input).toBeTruthy();
 
@@ -101,7 +100,7 @@ describe("the font picker", () => {
 
   it("shows a saved Google font as chosen", () => {
     mount(<BuilderFontSelect value="gf:Open Sans" onChange={() => {}} />);
-    expect(container!.querySelector("select")!.value).toBe("__google__");
+    expect(container!.querySelector(".builder-font-select-current")!.textContent).toBe("Google font: Open Sans");
     expect(container!.querySelector<HTMLInputElement>("input")!.value).toBe("Open Sans");
   });
 });
