@@ -3280,6 +3280,58 @@ about findings that should never have been dispatched to the queue at all.
 Both are the same underlying question — *who is this for, and will they act on
 it?*
 
+### 6.25 When a missing feature blocks the job, build the feature — do not patch around it
+
+**2026-10-27, Dane's standing instruction; task 86bctakp3.** Verbatim:
+*"Whenever you are blocked from accomplishing an objective due to a lack of
+functionality within Starcaster, pursue that underlying lack of functionality
+with additional tickets. We do not want to paper over infrastructure.
+Superficial tweaks that point to more fundamental architecture needs are
+opportunities to exploit. Look for opportunities to build a robust system."*
+
+**The incident.** Unsticking the Alphire import that day ran into five walls,
+one after another. The job had sat queued for 14 days because nothing runs the
+import worker. The page builder crashed because it was running out-of-date
+compiled code and nothing said so. One image the origin refused (HTTP 403)
+stopped all 17 pages. The import theme painted white buttons on a white page.
+And the only way to add the theme afterwards was to re-run the whole import.
+Each one had a quick patch: run the worker by hand, rebuild the folder, swap
+one colour. The quick patch for the button was a single colour swap. Behind it
+were three missing capabilities: the theme cannot describe an outlined button,
+it has one button colour for every background, and its readability check
+covers some colour pairs but not others. The patch would have handled
+Alphire's button and left all three gaps for the next import to hit.
+
+**The rule.**
+
+- **Unblock the objective, then name what blocked it.** Getting the operator's
+  job done is still the first deliverable. Once it is done, or while it is
+  being done, ask: *which capability was missing, so that a person or an agent
+  had to step in by hand?* Missing capability means the product could not do
+  this on its own.
+- **File the capability, not the instance.** The ticket says what the product
+  cannot do and who feels it ("Themes cannot have outlined buttons…"). It does
+  not describe the one-off workaround ("swap Alphire's button to grey"). The
+  instance is the incident cited in the description.
+- **Prefer the fix that makes the whole class impossible.** If a defect is one
+  member of a family, the ticket fixes the family. For example, one
+  readability guard over every colour pair in a theme, rather than a fourth
+  hand-written check for the fourth pair that failed.
+- **A manual step is a finding.** If an agent session had to run something by
+  hand, rebuild something nobody said was stale, or re-run a whole process to
+  get one part of it, that step is itself a missing feature.
+- **A workaround is temporary and says so.** If the objective needs a
+  workaround today, take it, then say in the report which ticket retires it.
+  Shipping a workaround without that ticket is papering over.
+
+**How this sits beside §6.24.** §6.24 limits tickets the pipeline files *about
+itself* to failures that cost something. This section is about missing
+*product* capability. It does not relax §6.24, because here the cost is built
+in: an objective was blocked, which is the cost, and the ticket names that
+incident. A gap noticed in passing that blocked nothing is still the
+parked-backlog line §6.24 describes. Tickets filed under this section follow
+§6.19 (search the queue first) and §6.24's title rule.
+
 ## 7. Operator-facing gotchas
 
 Worth knowing before they cost an hour.
