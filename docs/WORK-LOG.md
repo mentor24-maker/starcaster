@@ -1,3 +1,45 @@
+## 2026-10-26 — Fonts can be found by style: AI tags every font, and you can filter by tag (#863)
+
+Every font now carries a few style words, like "sci-fi", "elegant" or
+"headline". An AI picks them from a fixed list of about forty words, so the
+same few words get reused and filtering by them actually finds things. A font
+you upload is tagged before the upload finishes; if the AI is down, the font is
+still saved and the screen says it could not be tagged. On the **Assets →
+Fonts** screen, clicking a tag shows only fonts with that tag, and a **Tag**
+box at the top takes several at once ("sci-fi, wide" means both). On your own
+fonts you can remove a tag with its × or add more in the "+ tag" box; the
+shared fonts can be filtered but not changed. A filter nothing matches says
+"No fonts tagged …" instead of an empty table. To tag the fonts already in the
+library there is `npm run fonts:autotag`, which only ever touches fonts with no
+tags at all, so tags a person chose are never overwritten.
+## 2026-10-26 — Engage has an Outreach screen that shows where YouTube, Substack and Reddit stand (#860)
+
+There is now an **Engage → Outreach** screen, the first item under Engage.
+Before this, one channel's outreach work was spread across two to four
+screens, so it was hard to tell what was done and what came next. Pick
+YouTube, Substack or Reddit and you see five stages: Connect, Find creators,
+Find conversations, Write replies, and Learn. Each stage has one sentence
+that says what it counted, for example "17 writers approved". The first
+stage that is not done is highlighted, and it has one button that opens the
+screen where you do that step. The screen only reads and changes nothing. If
+part of it cannot be read, that stage says "Cannot tell" and gives the
+reason. It is never shown as done. This is step 1 of 19. Later steps move
+the actual work into this screen.
+## 2026-10-26 — YouTube comments and Substack Notes now sound like Dane, the same as Reddit (#862)
+
+Reddit comments were already written from Dane of Earth's canon — his voice
+document, his list of phrases that sound like an AI wrote them, and his thesis
+documents as background. YouTube comments and Substack Notes only had a short
+"Voice" box, so the three did not sound like the same person. Now all three
+read the same canon. The old "Voice" box is still there on both settings
+screens, renamed **Extra notes for this channel**, and is added after the
+canon. A draft that uses a banned phrase is thrown away and never shown for
+approval, and an edit that adds one cannot be approved — on all three
+channels. Each draft also records which canon documents it was written from.
+One step before this goes live: a small database change
+(`docs/SQL/outreach_canon_used.sql`) has to be run, or new YouTube and
+Substack drafts will be refused with a message naming that file.
+
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
