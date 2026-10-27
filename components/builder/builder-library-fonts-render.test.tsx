@@ -138,6 +138,29 @@ describe("the font picker offers the font library", () => {
     expect(library.value).toBe("orbitron");
   });
 
+  it("the person's favourite fonts come first, under a Favourites heading (Font Library 8)", async () => {
+    fetchMock.mockImplementation(() => json({ ok: true, data: { fonts: [
+      { slug: "bungee", family: "Bungee", isFavorite: false },
+      { slug: "orbitron", family: "Orbitron", isFavorite: false },
+      { slug: "space-mono", family: "Space Mono", isFavorite: true },
+    ] } }));
+    const onChange = vi.fn();
+    mount(<BuilderFontSelect value="inter" onChange={onChange} />);
+    choose(container!.querySelector("select")!, "__library__");
+    await flush();
+    const library = container!.querySelector<HTMLSelectElement>("select.builder-font-select-library")!;
+    const groups = Array.from(library.querySelectorAll("optgroup")).map((g) => [
+      g.label,
+      Array.from(g.querySelectorAll("option")).map((o) => o.textContent),
+    ]);
+    expect(groups).toEqual([
+      ["Favourites", ["Space Mono"]],
+      ["All fonts", ["Bungee", "Orbitron"]],
+    ]);
+    choose(library, "space-mono");
+    expect(onChange).toHaveBeenCalledWith("lf:space-mono");
+  });
+
   it("an empty library says so instead of offering an empty list", async () => {
     fetchMock.mockImplementation(() => json({ ok: true, data: { fonts: [] } }));
     mount(<BuilderFontSelect value="inter" onChange={() => {}} />);

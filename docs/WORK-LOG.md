@@ -1,3 +1,19 @@
+## 2026-10-26 — You can star your favourite fonts and show only those on the Fonts screen (#866)
+
+Every font on **Assets → Fonts** now has a star at the start of its row. Click
+it and it fills in; click again and it empties. Above the table there is a
+switch, **All fonts** or **Favourites (N)**, where N is how many you have
+starred, and the screen remembers which one you were on the next time you
+open it. Your stars are yours alone and follow you to every site you work on;
+another admin's stars never show up in your list. In Builder → Themes, the
+"Library font…" list now puts your favourites at the top under a
+"Favourites" heading, so with hundreds of fonts your go-to ones are one click
+away. Favourites works together with the search box, the category buttons and
+the Tag box: pick Favourites, click Display, and you see only the display fonts
+you starred, with a line saying "1 of 3 favourite fonts". One new database
+table goes with this; the agent session that merges it adds the table to the
+live site and checks it is there. Until then the Fonts screen still works but
+says your favourites could not be read.
 ## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
 
 First piece of the sign-in window: a small program on the Mac Mini, the "door

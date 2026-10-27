@@ -22,6 +22,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): an empty library, a read
  * that failed, and a library still loading are three different sentences.
  *
+ * FAVOURITES (Font Library 8, task 86bchydpv). Each person stars fonts with
+ * the ☆ at the start of a row; the switch above the table shows All fonts or
+ * Favourites (N), where N is every font this person has starred. The stars
+ * live on the server, per person (PUT/DELETE /api/fonts/:id/favorite); which
+ * view is showing is remembered in this browser only. Favourites is the list
+ * the search, category and tag filters then narrow, so Favourites + Display
+ * shows only starred display fonts, and the count line says "2 of 3 favourite
+ * fonts" rather than counting the whole library.
+ *
  * FINDING A FONT IN HUNDREDS (7/7, task 86bchyd4v): a search box over the
  * family name and tags, category buttons, and a Sample text box whose words
  * replace every row's sample line, at a size the slider sets. A filter that
@@ -100,6 +109,30 @@ export function noTagMatchSentence(tags: string[]): string {
 export const EMPTY_LIBRARY_SENTENCE =
   'No fonts in the library yet. Add one, or ask CC to run the starter-pack import (Font Library 4/7).';
 
+export const NO_FAVOURITES_SENTENCE =
+  'You have no favourite fonts yet. Click the ☆ beside a font to add it.';
+
+/** Where this browser remembers whether the Fonts screen shows All or Favourites. */
+export const VIEW_STORAGE_KEY = 'starcaster.fonts.view';
+
+export type FontsView = 'all' | 'favorites';
+
+export function readStoredView(): FontsView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'favorites' ? 'favorites' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function storeView(view: FontsView): void {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // Private browsing can refuse storage; the switch still works for this visit.
+  }
+}
+
 /** The three licences lib/fontLicence.js accepts, plus the one it exists to refuse. */
 export const LICENCE_OPTIONS: { value: string; label: string; short: string; url: string }[] = [
   { value: 'OFL-1.1', label: 'SIL Open Font License', short: 'OFL', url: 'https://openfontlicense.org/' },
@@ -143,6 +176,8 @@ export type FontRow = {
   tags: string[];
   previewText?: string;
   visibility: 'platform' | 'project';
+  /** Starred by the signed-in person (GET /api/fonts, Font Library 8). */
+  isFavorite?: boolean;
 };
 
 type AppShape = {
@@ -208,16 +243,27 @@ export function filterFonts(fonts: FontRow[], query: string, category: string): 
   });
 }
 
-/** Why the table is empty when the library is not: every filter in force, named. */
-export function noMatchSentence(query: string, category: string, tags: string[] = []): string {
+/**
+ * Why the table is empty when the library is not: every filter in force,
+ * named — and, on the Favourites view, that it was the favourites searched
+ * ("No favourite display fonts match 'orbit'.").
+ */
+export function noMatchSentence(query: string, category: string, tags: string[] = [], favourites = false): string {
   const q = query.trim();
-  if (tags.length && !q && !category) return noTagMatchSentence(tags);
+  if (tags.length && !q && !category && !favourites) return noTagMatchSentence(tags);
   const noun = FILTER_CATEGORIES.find((c) => c.value === category)?.noun || category;
   let fonts = noun ? `${noun} fonts` : 'fonts';
+  if (favourites) fonts = `favourite ${fonts}`;
   if (tags.length) fonts += ` tagged '${tags.join(', ')}'`;
   if (q) return `No ${fonts} match '${q}'.`;
   if (tags.length) return `No ${fonts}.`;
   return `No ${fonts} in the library yet.`;
+}
+
+/** The count beside Clear: what is listed, out of the list it was filtered from. */
+export function countLine(shown: number, of: number, favourites: boolean): string {
+  const noun = `${favourites ? 'favourite ' : ''}${of === 1 ? 'font' : 'fonts'}`;
+  return shown === of ? `${of} ${noun}` : `${shown} of ${of} ${noun}`;
 }
 
 /** What a row's sample line says: the Sample box, else the font's own line, else the pangram. */
@@ -552,6 +598,9 @@ export default function FontsManager(): React.ReactElement {
   const [confirmingDelete, setConfirmingDelete] = useState('');
   const [deleting, setDeleting] = useState('');
   const [notice, setNotice] = useState('');
+  const [view, setView] = useState<FontsView>(readStoredView);
+  const [favoritesError, setFavoritesError] = useState('');
+  const [starring, setStarring] = useState('');
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
   const [sample, setSample] = useState('');
@@ -586,6 +635,7 @@ export default function FontsManager(): React.ReactElement {
         setFonts(null);
       } else {
         setError('');
+        setFavoritesError(String(body.data?.favoritesError || ''));
         setFonts((body.data?.fonts || []) as FontRow[]);
       }
     } catch (err) {
@@ -631,10 +681,43 @@ export default function FontsManager(): React.ReactElement {
   }, [load]);
 
   const filterTags = useMemo(() => parseTagList(tagFilter), [tagFilter]);
+  const favorites = useMemo(() => (fonts || []).filter((f) => f.isFavorite), [fonts]);
+  const favoriteCount = favorites.length;
+  // Favourites picks the list; search, category and tags narrow whichever it picked.
+  const base = useMemo(() => (view === 'favorites' ? favorites : (fonts || [])), [view, favorites, fonts]);
   const shown = useMemo(
-    () => filterByTags(filterFonts(fonts || [], query, category), filterTags),
-    [fonts, query, category, filterTags],
+    () => filterByTags(filterFonts(base, query, category), filterTags),
+    [base, query, category, filterTags],
   );
+
+  const chooseView = (next: FontsView) => {
+    setView(next);
+    storeView(next);
+  };
+
+  // The star shows what the SERVER answered, not what was clicked, so a
+  // refused write never leaves a ★ that will be gone after a reload.
+  const toggleFavorite = async (font: FontRow) => {
+    const api = getApp()?.api;
+    if (typeof api !== 'function') return;
+    setStarring(font.id);
+    setNotice('');
+    try {
+      const body = await api(`${FONTS_PATH}/${encodeURIComponent(font.id)}/favorite`, {
+        method: font.isFavorite ? 'DELETE' : 'PUT',
+      });
+      if (!body?.ok) {
+        setNotice(body?.error?.message || `${font.family} could not be ${font.isFavorite ? 'removed from' : 'added to'} your favourites.`);
+        return;
+      }
+      const isFavorite = Boolean(body.data?.isFavorite);
+      setFonts((list) => (list || []).map((f) => (f.id === font.id ? { ...f, isFavorite } : f)));
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : `${font.family} could not be changed.`);
+    } finally {
+      setStarring('');
+    }
+  };
 
   // Watch the rows that are in the table now; each one that comes within
   // 300px of the screen joins `seen` for good (scrolling back costs nothing).
@@ -763,6 +846,9 @@ export default function FontsManager(): React.ReactElement {
   if (error) status = error;
   else if (!fonts && loading) status = 'Reading the font library…';
   else if (fonts && !fonts.length) status = EMPTY_LIBRARY_SENTENCE;
+  else if (fonts && view === 'favorites' && !favoriteCount) status = favoritesError || NO_FAVOURITES_SENTENCE;
+  // Nothing starred at all is said once, above — not again as "no match".
+  const noneStarred = view === 'favorites' && !favoriteCount;
 
   return (
     <div ref={hostRef} className="fonts-manager">
@@ -789,6 +875,28 @@ export default function FontsManager(): React.ReactElement {
           </label>
         ) : null}
       </div>
+
+      {fonts && fonts.length ? (
+        <div className="fonts-manager-view-switch" role="group" aria-label="Which fonts to show">
+          <button
+            type="button"
+            className={`btn${view === 'all' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'all'}
+            onClick={() => chooseView('all')}
+          >
+            All fonts
+          </button>
+          <button
+            type="button"
+            className={`btn${view === 'favorites' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'favorites'}
+            title={`The ${favoriteCount} ${favoriteCount === 1 ? 'font' : 'fonts'} you have starred`}
+            onClick={() => chooseView('favorites')}
+          >
+            Favourites ({favoriteCount})
+          </button>
+        </div>
+      ) : null}
 
       {fonts && fonts.length ? (
         <div className="fonts-manager-filters" role="search" aria-label="Find a font">
@@ -848,7 +956,7 @@ export default function FontsManager(): React.ReactElement {
           <div className="fonts-manager-actions">
             <button type="button" className="btn" onClick={clearFilters} disabled={!filtered}>Clear</button>
             <span className="fonts-manager-count" role="status">
-              {shown.length === fonts.length ? `${fonts.length} fonts` : `${shown.length} of ${fonts.length} fonts`}
+              {countLine(shown.length, base.length, view === 'favorites')}
             </span>
           </div>
         </div>
@@ -868,10 +976,13 @@ export default function FontsManager(): React.ReactElement {
       ) : null}
 
       {notice ? <p className="fonts-manager-notice" role="status">{notice}</p> : null}
+      {favoritesError && !noneStarred ? (
+        <p className="fonts-manager-error" role="alert">{favoritesError}</p>
+      ) : null}
       {status ? <p className={error ? 'fonts-manager-error' : 'fonts-manager-empty'} role={error ? 'alert' : undefined}>{status}</p> : null}
 
-      {fonts && fonts.length && !shown.length ? (
-        <p className="fonts-manager-empty">{noMatchSentence(query, category, filterTags)}</p>
+      {fonts && fonts.length && !shown.length && !noneStarred ? (
+        <p className="fonts-manager-empty">{noMatchSentence(query, category, filterTags, view === 'favorites')}</p>
       ) : null}
 
       {fonts && fonts.length && shown.length ? (
@@ -879,6 +990,7 @@ export default function FontsManager(): React.ReactElement {
           <table className="fonts-manager-table">
             <thead>
               <tr>
+                <th scope="col" className="fonts-manager-star-col" title="Favourite" aria-label="Favourite">★</th>
                 <th scope="col">Font</th>
                 <th scope="col">Category</th>
                 <th scope="col">Styles</th>
@@ -896,6 +1008,19 @@ export default function FontsManager(): React.ReactElement {
                 const family = `"${previewFamily(font)}", var(--font-body, sans-serif)`;
                 return (
                   <tr key={font.id} data-font-id={font.id}>
+                    <td className="fonts-manager-star-col">
+                      <button
+                        type="button"
+                        className={`fonts-manager-star${font.isFavorite ? ' is-favorite' : ''}`}
+                        aria-pressed={Boolean(font.isFavorite)}
+                        aria-label={font.isFavorite ? `Remove ${font.family} from favourites` : `Add ${font.family} to favourites`}
+                        title={font.isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+                        disabled={starring === font.id}
+                        onClick={() => void toggleFavorite(font)}
+                      >
+                        {font.isFavorite ? '★' : '☆'}
+                      </button>
+                    </td>
                     <td className="fonts-manager-name-cell">
                       <span className="fonts-manager-preview" style={{ fontFamily: family }}>
                         {font.family}
