@@ -1,3 +1,15 @@
+## 2026-10-27 — Starcaster can give a project admin a one-time pass to the Mini's browser, and logs every window (#871)
+
+Second piece of the sign-in window. When a project's owner or admin asks to
+sign in to YouTube, Substack, Reddit or Google, Starcaster now makes a fresh
+one-time pass, tells the Mac Mini "this pass may open this project's browser"
+with a signed message only the Mini can verify, and hands the pass back. The
+pass works once, within 60 seconds; anyone who is not an owner or admin of the
+project is turned away before anything happens. Every window is written to a
+new log: who opened it, which site, when, when it closed, how long it lasted
+and why it closed. Attempts that never opened (the Mini switched off, not set
+up yet) are logged too, with the reason. Nothing is visible yet: the window
+itself is a later slice, and the log table needs one SQL paste on production.
 ## 2026-10-27 — The Mini reads a Reddit post for you, so you no longer paste it by hand (#870)
 
 On **Engage → Comments (Reddit)**, adding a post link now says **Reading…**,
