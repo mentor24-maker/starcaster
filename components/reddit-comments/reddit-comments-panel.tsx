@@ -12,10 +12,15 @@ import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/
  * lib/redditCommentsStore.js, slice 2/4). It replaced the old vanilla form,
  * which tried to post straight through a Reddit login that was never set up.
  *
- * Dane pastes a link; the post is read from Reddit and lands on "To write".
- * Reddit refuses unauthenticated reads (measured 2026-10-12), so when Add
- * answers POST_TEXT_NEEDED the screen shows the server's reason and asks for
- * the post pasted by hand, then sends Add again with it. "Write with AI" puts
+ * Dane pastes a link and it lands on "To write" as "Reading…": the Mini's
+ * signed-in browser opens it and fills in the post and its top comments
+ * within a couple of minutes (Outreach wizard 17/19, task 86bcrmbuv), and
+ * this screen re-reads the list by itself while anything is reading. Reddit
+ * refuses reads that are not signed in (measured 2026-10-12), so when the
+ * Mini is not signed in Add answers POST_TEXT_NEEDED: the screen shows the
+ * server's reason and asks for the post pasted by hand, then sends Add again
+ * with it. A post the Mini could not read says why on its card, with the
+ * same paste box and "Try reading again". "Write with AI" puts
  * a draft on Approvals in an editable box, under the canon it was written
  * from; Approve sends the box's words and the SERVER checks them against the
  * blocklist, so its refusal is shown word for word. Since Outreach wizard 9/19
@@ -56,6 +61,11 @@ export type RedditItem = {
   parentCommentAuthor: string;
   parentCommentText: string;
   postReadFrom: string;
+  /** 17/19: '' (the post is in), 'reading' (the Mini has it) or 'failed'. */
+  readState?: string;
+  readError?: string;
+  readCode?: string;
+  readRequestedAt?: string | null;
   draftText: string;
   finalText: string;
   canonUsed: CanonUsed[];
@@ -131,6 +141,36 @@ export function paceLine(status: RedditStatus | null): string {
   const who = status?.account ? ` as u/${status.account}` : '';
   const named = status?.account ? '' : ' No Reddit account has been chosen for it to post as yet, so nothing posts until one is.';
   return `The Mini posts${who} at most ${day}, at least ${pace.minMinutesBetween} minutes apart${extra}.${named}`;
+}
+
+/** A read taking longer than this is past the ticket's "a couple of minutes": offer the paste box. */
+export const READ_SLOW_MS = 5 * 60 * 1000;
+
+/** How often the list is re-read while a post is being read. */
+export const READING_POLL_MS = 15 * 1000;
+
+/**
+ * The line on a card whose post is not in yet, and whether to offer the
+ * paste box under it. Always says how long, so a worker that is not running
+ * reads as that, not as "still reading" forever (landmine 17).
+ */
+export function readingLine(
+  item: Pick<RedditItem, 'readState' | 'readError' | 'readRequestedAt'>,
+  now: number = Date.now(),
+): { text: string; offerPaste: boolean; slow: boolean } | null {
+  if (item.readState === 'failed') {
+    return { text: item.readError || 'The Mini could not read this post, and nothing said why.', offerPaste: true, slow: false };
+  }
+  if (item.readState !== 'reading') return null;
+  const asked = item.readRequestedAt ? Date.parse(item.readRequestedAt) : NaN;
+  if (Number.isFinite(asked) && now - asked > READ_SLOW_MS) {
+    return {
+      text: `Still waiting for the Mini to read this post — asked ${agoText(item.readRequestedAt, now)}. Its worker may not be running. You can paste the post instead.`,
+      offerPaste: true,
+      slow: true,
+    };
+  }
+  return { text: 'Reading… the Mini is opening this post in its browser. It shows here within a couple of minutes.', offerPaste: false, slow: false };
 }
 
 type Tab = 'write' | 'approvals' | 'posted';
@@ -250,6 +290,71 @@ function PostSummary({ item }: { item: RedditItem }): React.ReactElement {
         <a className="reddit-comments-link" href={item.targetUrl} target="_blank" rel="noopener noreferrer">Open on Reddit</a>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * A post on To write that is not in yet: "Reading…", or why the Mini could
+ * not read it, with the paste box and "Try reading again".
+ */
+function ReadingCard({ item, busy, error, onPaste, onReadAgain, onReject }: {
+  item: RedditItem;
+  busy: string;
+  error: string;
+  onPaste: (fields: Record<string, string>) => void;
+  onReadAgain: () => void;
+  onReject: () => void;
+}): React.ReactElement {
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [comment, setComment] = useState('');
+  const line = readingLine(item);
+  const failed = item.readState === 'failed';
+  const id = (what: string) => `rc-${what}-${item.id}`;
+  return (
+    <li className="reddit-comments-card" data-item-id={item.id} data-read-state={item.readState || ''}>
+      <div className="reddit-comments-post">
+        <p className="reddit-comments-post-sub"><strong>{subredditLabel(item)}</strong></p>
+        <a className="reddit-comments-link" href={item.targetUrl} target="_blank" rel="noopener noreferrer">{item.targetUrl}</a>
+      </div>
+      {line ? (
+        <p className={failed ? 'reddit-comments-error' : 'reddit-comments-status'} role={failed ? 'alert' : 'status'}>{line.text}</p>
+      ) : null}
+      {line?.offerPaste ? (
+        <div className="reddit-comments-paste">
+          <p className="reddit-comments-help">Open the link, copy the post into these boxes, then click Save.</p>
+          <label className="reddit-comments-label" htmlFor={id('title')}>Post title</label>
+          <input id={id('title')} type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <label className="reddit-comments-label" htmlFor={id('body')}>Post text</label>
+          <textarea id={id('body')} rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
+          {item.parentCommentId ? (
+            <>
+              <label className="reddit-comments-label" htmlFor={id('comment')}>The comment you are replying to</label>
+              <textarea id={id('comment')} rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {error ? <p className="reddit-comments-error" role="alert">{error}</p> : null}
+      <div className="reddit-comments-actions">
+        <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={onReject}>Reject</button>
+        {failed ? (
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={onReadAgain}>
+            {busy === 'read-again' ? 'Asking…' : 'Try reading again'}
+          </button>
+        ) : null}
+        {line?.offerPaste ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={Boolean(busy) || !(title.trim() || body.trim())}
+            onClick={() => onPaste({ postTitle: title.trim(), postBody: body.trim(), parentCommentText: comment.trim() })}
+          >
+            {busy === 'paste' ? 'Saving…' : 'Save'}
+          </button>
+        ) : null}
+      </div>
+    </li>
   );
 }
 
@@ -447,6 +552,18 @@ export default function RedditCommentsPanel(): React.ReactElement {
     return () => window.removeEventListener(PROJECT_SWITCH_EVENT, onSwitch);
   }, [load]);
 
+  // While the Mini is reading a post, re-read the list so the post appears
+  // by itself. Only while the page is shown; stops when nothing is reading.
+  const anyReading = (items || []).some((i) => i.readState === 'reading');
+  useEffect(() => {
+    if (!anyReading) return undefined;
+    const timer = window.setInterval(() => {
+      const page = hostRef.current?.closest('.app-page');
+      if (!page || !page.classList.contains('hidden')) void load();
+    }, READING_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [anyReading, load]);
+
   const replaceItem = (next: RedditItem) => {
     setItems((list) => (list || []).map((i) => (i.id === next.id ? next : i)));
   };
@@ -477,7 +594,9 @@ export default function RedditCommentsPanel(): React.ReactElement {
       setPasteBody('');
       setPasteComment('');
       setTab('write');
-      setNotice(`Added: ${made.postTitle || made.targetUrl}`);
+      setNotice(made.readState === 'reading'
+        ? 'Added — the Mini is reading the post. It shows here within a couple of minutes.'
+        : `Added: ${made.postTitle || made.targetUrl}`);
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
       if (errorCode(err) === 'POST_TEXT_NEEDED') setNeedsPaste(true);
@@ -488,7 +607,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
   };
 
   /** One row action; the server's refusal is shown on that row, word for word. */
-  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject', body?: Record<string, unknown>) => {
+  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject' | 'paste' | 'read-again', body?: Record<string, unknown>) => {
     const api = getApi();
     if (!api) return;
     const epoch = projectEpoch.current;
@@ -510,6 +629,10 @@ export default function RedditCommentsPanel(): React.ReactElement {
         setNotice(item.status === 'draft' ? `${written} — the old ones are replaced.` : `${written} — on Approvals, ready to pick.`);
       } else if (what === 'approve') {
         setNotice('Approved — waiting for the Mini to post it.');
+      } else if (what === 'paste') {
+        setNotice('Saved — the post is in. Click Write with AI on it.');
+      } else if (what === 'read-again') {
+        setNotice('Asked the Mini to read it again.');
       } else {
         setNotice('Rejected. It will not be posted.');
       }
@@ -606,7 +729,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
           {tabButton('approvals', approvals.length ? `Approvals (${approvals.length})` : 'Approvals')}
           {tabButton('posted', posted.length ? `Posted (${posted.length})` : 'Posted')}
         </div>
-        <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
+        <button type="button" className="btn" onClick={() => { setNotice(''); void load(); }} disabled={loading}>
           {loading ? 'Loading…' : 'Refresh'}
         </button>
       </div>
@@ -618,7 +741,17 @@ export default function RedditCommentsPanel(): React.ReactElement {
         <div className="reddit-comments-tabpanel" role="tabpanel" aria-label="To write">
           {unread ? null : toWrite.length ? (
             <ul className="reddit-comments-list">
-              {toWrite.map((item) => (
+              {toWrite.map((item) => (item.readState === 'reading' || item.readState === 'failed' ? (
+                <ReadingCard
+                  key={item.id}
+                  item={item}
+                  busy={busyFor(item)}
+                  error={errorFor(item)}
+                  onPaste={(fields) => void runAction(item, 'paste', fields)}
+                  onReadAgain={() => void runAction(item, 'read-again')}
+                  onReject={() => reject(item)}
+                />
+              ) : (
                 <li key={item.id} className="reddit-comments-card" data-item-id={item.id}>
                   <PostSummary item={item} />
                   {errorFor(item) ? <p className="reddit-comments-error" role="alert">{errorFor(item)}</p> : null}
@@ -629,7 +762,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
                     </button>
                   </div>
                 </li>
-              ))}
+              )))}
             </ul>
           ) : (
             <p className="reddit-comments-empty">

@@ -3,8 +3,10 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FontsManager, {
-  EMPTY_LIBRARY_SENTENCE, NOT_USED_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, noTagMatchSentence, parseTagList, previewFamily,
-  stylesSentence, type FontRow, type FontUsage,
+  DEFAULT_SAMPLE, EMPTY_LIBRARY_SENTENCE, NOT_USED_SENTENCE, NO_FAVOURITES_SENTENCE, PROJECT_SWITCH_EVENT,
+  VIEW_STORAGE_KEY, countLine, fontFaceCss, filterFonts,
+  noMatchSentence, noTagMatchSentence, parseTagList, previewFamily, stylesSentence,
+  type FontRow, type FontUsage,
 } from "./fonts-manager";
 
 /**
@@ -48,9 +50,13 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let library: FontRow[] = [];
 let posts: Record<string, unknown>[] = [];
-let patches: { path: string; body: { tags: string[] } }[] = [];
+let patches: { path: string; body: Record<string, any> }[] = [];
 let reads: string[] = [];
 let activeProject = "proj_a";
+/** The server's stars: what GET reports and what PUT / DELETE …/favorite change. */
+let starred = new Set<string>();
+let favoritesError = "";
+let refuseStar = "";
 let usageByFont: Record<string, FontUsage> = {};
 
 async function flush() {
@@ -113,9 +119,13 @@ function rowNames(): string[] {
 beforeEach(() => {
   library = [];
   posts = [];
-  patches = [];
   reads = [];
+  patches = [];
   activeProject = "proj_a";
+  starred = new Set();
+  favoritesError = "";
+  refuseStar = "";
+  window.localStorage.clear();
   usageByFont = {};
   (window as unknown as { App: unknown }).App = {
     api: async (path: string, options: RequestInit = {}) => {
@@ -127,7 +137,15 @@ beforeEach(() => {
           const id = decodeURIComponent(usage[1]);
           return { ok: true, data: usageByFont[id] || { sites: [], totalPages: 0, truncated: false } };
         }
-        return { ok: true, data: { fonts: library, total: library.length } };
+        const fonts = library.map((f) => ({ ...f, isFavorite: starred.has(f.id) }));
+        return { ok: true, data: { fonts, total: fonts.length, favoritesError } };
+      }
+      const fav = /^\/api\/fonts\/([^/]+)\/favorite$/.exec(path);
+      if (fav && (method === "PUT" || method === "DELETE")) {
+        if (refuseStar) return { ok: false, error: { message: refuseStar } };
+        const id = decodeURIComponent(fav[1]);
+        if (method === "PUT") starred.add(id); else starred.delete(id);
+        return { ok: true, data: { fontId: id, isFavorite: starred.has(id) } };
       }
       if (method === "POST") {
         const body = JSON.parse(String(options.body));
@@ -140,14 +158,18 @@ beforeEach(() => {
         return { ok: true, data: { font: saved } };
       }
       if (method === "PATCH") {
-        // Stand-in for routes/fonts.js: stores the list as lib/fontsStore.js cleanTags would.
+        // Stand-in for routes/fonts.js: stores tags as lib/fontsStore.js cleanTags
+        // would, and a sample line as given.
         const body = JSON.parse(String(options.body));
         patches.push({ path, body });
         const id = decodeURIComponent(path.split("/").pop() || "");
         const target = library.find((f) => f.id === id)!;
         if (target.visibility === "platform") throw new Error("shared font library");
-        library = library.map((f) => (f.id === id ? { ...f, tags: parseTagList(body.tags.join(",")) } : f));
-        return { ok: true, data: { font: library.find((f) => f.id === id) } };
+        const next = { ...target };
+        if (Array.isArray(body.tags)) next.tags = parseTagList(body.tags.join(","));
+        if (typeof body.previewText === "string") next.previewText = body.previewText;
+        library = library.map((f) => (f.id === id ? next : f));
+        return { ok: true, data: { font: next } };
       }
       if (method === "DELETE") {
         return { ok: true, data: { font: library[0], filesRemoved: 2, filesNotRemoved: [] } };
@@ -158,6 +180,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   act(() => { root?.unmount(); });
   container?.remove();
   container = null;
@@ -241,6 +264,302 @@ describe("FontsManager", () => {
     expect(reads).toEqual(["proj_a /api/fonts", "proj_b /api/fonts"]);
     expect(rowNames()).toEqual([]);
     expect(container!.textContent).toContain(EMPTY_LIBRARY_SENTENCE);
+  });
+});
+
+describe("FontsManager favourites (Font Library 8)", () => {
+  const three = () => [
+    font({ id: "f-bungee", family: "Bungee", visibility: "platform" }),
+    font({ id: "f-exo", family: "Exo", visibility: "platform" }),
+    font({ id: "f-orbitron", family: "Orbitron", visibility: "platform" }),
+  ];
+  const star = (family: string) => container!.querySelector(
+    `button[aria-label='Add ${family} to favourites'], button[aria-label='Remove ${family} from favourites']`,
+  ) as HTMLButtonElement;
+  const favouritesButton = () => [...container!.querySelectorAll(".fonts-manager-view-switch button")]
+    .find((b) => (b.textContent || "").startsWith("Favourites")) as HTMLButtonElement;
+
+  async function remount() {
+    act(() => { root?.unmount(); });
+    container?.remove();
+    await mount();
+  }
+
+  it("clicking ☆ turns it to ★, and after a reload it is still ★", async () => {
+    library = three();
+    await mount();
+    expect(star("Orbitron").textContent).toBe("☆");
+    click(star("Orbitron"));
+    await flush();
+    expect(star("Orbitron").textContent).toBe("★");
+    expect(star("Orbitron").getAttribute("aria-pressed")).toBe("true");
+    expect([...starred]).toEqual(["f-orbitron"]);
+
+    await remount();
+    expect(star("Orbitron").textContent).toBe("★");
+    expect(star("Exo").textContent).toBe("☆");
+  });
+
+  it("Favourites (N) shows exactly the starred fonts, N matches, and unstarring removes one", async () => {
+    library = three();
+    starred = new Set(["f-orbitron", "f-bungee"]);
+    await mount();
+    expect(favouritesButton().textContent).toBe("Favourites (2)");
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+
+    click(favouritesButton());
+    expect(rowNames()).toEqual(["Bungee", "Orbitron"]);
+
+    click(star("Bungee"));
+    await flush();
+    expect(rowNames()).toEqual(["Orbitron"]);
+    expect(favouritesButton().textContent).toBe("Favourites (1)");
+
+    click(button("All fonts"));
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+  });
+
+  it("with nothing starred the Favourites view says why, with no table", async () => {
+    library = three();
+    await mount();
+    click(favouritesButton());
+    expect(container!.textContent).toContain(NO_FAVOURITES_SENTENCE);
+    expect(container!.querySelector("table")).toBeNull();
+    // The switch stays, so the way back to All fonts is still on screen.
+    expect(button("All fonts")).toBeTruthy();
+  });
+
+  it("the switch remembers its position after a reload", async () => {
+    library = three();
+    starred = new Set(["f-exo"]);
+    await mount();
+    click(favouritesButton());
+    expect(window.localStorage.getItem(VIEW_STORAGE_KEY)).toBe("favorites");
+
+    await remount();
+    expect(favouritesButton().getAttribute("aria-pressed")).toBe("true");
+    expect(rowNames()).toEqual(["Exo"]);
+
+    click(button("All fonts"));
+    await remount();
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+  });
+
+  it("a refused star stays ☆ and says why", async () => {
+    library = three();
+    refuseStar = "Nobody is signed in, so there is no list of favourite fonts to read or change.";
+    await mount();
+    click(star("Exo"));
+    await flush();
+    expect(star("Exo").textContent).toBe("☆");
+    expect(container!.textContent).toContain(refuseStar);
+  });
+
+  it("when the server could not read the stars, the Favourites view says that instead of 'no favourites'", async () => {
+    library = three();
+    favoritesError = "Your favourite fonts could not be read: relation \"font_favorites\" does not exist";
+    await mount();
+    expect(container!.textContent).toContain(favoritesError);
+    click(favouritesButton());
+    expect(container!.textContent).toContain(favoritesError);
+    expect(container!.textContent).not.toContain(NO_FAVOURITES_SENTENCE);
+  });
+
+  it("Favourites + a category shows only starred fonts of that category, and the count says what it counts", async () => {
+    library = [
+      font({ id: "f-orbitron", family: "Orbitron", category: "display", visibility: "platform" }),
+      font({ id: "f-audiowide", family: "Audiowide", category: "display", visibility: "platform" }),
+      font({ id: "f-exo", family: "Exo", category: "sans", tags: ["sci-fi"], visibility: "platform" }),
+      font({ id: "f-lora", family: "Lora", category: "serif", visibility: "platform" }),
+    ];
+    starred = new Set(["f-orbitron", "f-exo", "f-lora"]);
+    await mount();
+    click(favouritesButton());
+    expect(rowNames()).toEqual(["Orbitron", "Exo", "Lora"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("3 favourite fonts");
+
+    click(button("Display"));
+    // Audiowide is display but not starred; Exo and Lora are starred but not display.
+    expect(rowNames()).toEqual(["Orbitron"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("1 of 3 favourite fonts");
+    // N counts every starred font, not what the filters left.
+    expect(favouritesButton().textContent).toBe("Favourites (3)");
+
+    click(button("All fonts"));
+    expect(rowNames()).toEqual(["Orbitron", "Audiowide"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("2 of 4 fonts");
+  });
+
+  it("Favourites + search or tag that matches no starred font names the favourites, not 'no favourites'", async () => {
+    library = [
+      font({ id: "f-orbitron", family: "Orbitron", category: "display", visibility: "platform" }),
+      font({ id: "f-exo", family: "Exo", category: "sans", tags: ["sci-fi"], visibility: "platform" }),
+    ];
+    starred = new Set(["f-orbitron"]);
+    await mount();
+    click(favouritesButton());
+    change(container!.querySelector("input[name='tagFilter']") as HTMLInputElement, "sci-fi");
+    expect(rowNames()).toEqual([]);
+    expect(container!.textContent).toContain("No favourite fonts tagged 'sci-fi'.");
+    expect(container!.textContent).not.toContain(NO_FAVOURITES_SENTENCE);
+
+    click(button("Clear"));
+    change(container!.querySelector("input[name='fontSearch']") as HTMLInputElement, "exo");
+    expect(container!.textContent).toContain("No favourite fonts match 'exo'.");
+  });
+});
+
+describe("countLine / noMatchSentence on Favourites", () => {
+  it("names favourites when that is the list being filtered", () => {
+    expect(countLine(3, 3, true)).toBe("3 favourite fonts");
+    expect(countLine(1, 3, true)).toBe("1 of 3 favourite fonts");
+    expect(countLine(2, 4, false)).toBe("2 of 4 fonts");
+    expect(countLine(1, 1, true)).toBe("1 favourite font");
+    expect(noMatchSentence("orbit", "display", [], true)).toBe("No favourite display fonts match 'orbit'.");
+    expect(noMatchSentence("", "", ["wide"], true)).toBe("No favourite fonts tagged 'wide'.");
+  });
+});
+
+/** A library like the starter pack, in miniature: three categories, one tagged font. */
+function starterLibrary(): FontRow[] {
+  return [
+    font({ id: "f-orbitron", family: "Orbitron", category: "display", visibility: "platform" }),
+    font({ id: "f-exo", family: "Exo", category: "sans", tags: ["sci-fi"], visibility: "platform" }),
+    font({ id: "f-audiowide", family: "Audiowide", category: "display", visibility: "platform", previewText: "Launch sequence" }),
+    font({ id: "f-lora", family: "Lora", category: "serif", visibility: "project" }),
+  ];
+}
+
+function sampleLines(): string[] {
+  return [...(container?.querySelectorAll(".fonts-manager-sample") || [])].map((el) => el.textContent || "");
+}
+
+function input(name: string): HTMLInputElement {
+  return container!.querySelector(`input[name='${name}']`) as HTMLInputElement;
+}
+
+describe("FontsManager — finding a font in hundreds (7/7)", () => {
+  it("typing 'orb' shows Orbitron and hides every font that does not match", async () => {
+    library = starterLibrary();
+    await mount();
+    change(input("fontSearch"), "orb");
+    expect(rowNames()).toEqual(["Orbitron"]);
+    change(input("fontSearch"), "ORB");
+    expect(rowNames()).toEqual(["Orbitron"]);
+  });
+
+  it("search matches a tag as well as the family name", async () => {
+    library = starterLibrary();
+    await mount();
+    change(input("fontSearch"), "sci-fi");
+    expect(rowNames()).toEqual(["Exo"]);
+  });
+
+  it("search, category and the Tag box apply together, and an empty result names all three", async () => {
+    library = [
+      ...starterLibrary(),
+      font({ id: "f-orb2", family: "Orbit Sans", category: "sans", tags: ["wide"], visibility: "platform" }),
+    ];
+    await mount();
+    change(input("fontSearch"), "orb");
+    expect(rowNames()).toEqual(["Orbitron", "Orbit Sans"]);
+    change(input("tagFilter"), "wide");
+    expect(rowNames()).toEqual(["Orbit Sans"]);
+    click(button("Display"));
+    expect(rowNames()).toEqual([]);
+    expect(container!.textContent).toContain("No display fonts tagged 'wide' match 'orb'.");
+  });
+
+  it("clicking Display shows only display fonts, and All brings the rest back", async () => {
+    library = starterLibrary();
+    await mount();
+    click(button("Display"));
+    expect(rowNames()).toEqual(["Orbitron", "Audiowide"]);
+    expect(button("Display").getAttribute("aria-pressed")).toBe("true");
+    click(button("All"));
+    expect(rowNames()).toHaveLength(4);
+  });
+
+  it("typed sample text replaces every row's line, in that row's font, at the slider's size", async () => {
+    library = starterLibrary();
+    await mount();
+    expect(sampleLines()).toEqual([DEFAULT_SAMPLE, DEFAULT_SAMPLE, "Launch sequence", DEFAULT_SAMPLE]);
+    change(input("sampleText"), "STRANDS");
+    expect(sampleLines()).toEqual(["STRANDS", "STRANDS", "STRANDS", "STRANDS"]);
+    const first = container!.querySelector(".fonts-manager-sample") as HTMLElement;
+    expect(first.style.fontFamily).toContain("scfl-f-orbitron");
+    expect(first.style.fontSize).toBe("32px");
+    change(input("sampleSize"), "64");
+    const sizes = [...container!.querySelectorAll(".fonts-manager-sample")].map((el) => (el as HTMLElement).style.fontSize);
+    expect(sizes).toEqual(["64px", "64px", "64px", "64px"]);
+  });
+
+  it("a filter that matches nothing says which filter, and Clear puts everything back", async () => {
+    library = starterLibrary();
+    await mount();
+    click(button("Display"));
+    change(input("fontSearch"), "zzzz");
+    expect(rowNames()).toEqual([]);
+    expect(container!.textContent).toContain("No display fonts match 'zzzz'.");
+    expect(container!.textContent).not.toContain(EMPTY_LIBRARY_SENTENCE);
+    click(button("Clear"));
+    expect(rowNames()).toHaveLength(4);
+    expect(input("fontSearch").value).toBe("");
+  });
+
+  it("only rows that have come near the screen get a font file to download", async () => {
+    const observed: Element[] = [];
+    let fire: ((entries: { target: Element; isIntersecting: boolean }[]) => void) | null = null;
+    (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = class {
+      constructor(cb: (entries: { target: Element; isIntersecting: boolean }[]) => void) { fire = cb; }
+      observe(el: Element) { observed.push(el); }
+      disconnect() {}
+      unobserve() {}
+    };
+    library = starterLibrary();
+    await mount();
+    expect(observed.length).toBe(4);
+    // Nothing reported on screen yet: no @font-face rule at all, so nothing to fetch.
+    expect(container!.querySelector("style[data-fonts-manager-faces]")).toBeNull();
+    const row = (id: string) => container!.querySelector(`tr[data-font-id='${id}']`)!;
+    await act(async () => { fire!([{ target: row("f-orbitron"), isIntersecting: true }, { target: row("f-exo"), isIntersecting: true }]); });
+    await flush();
+    const faces = container!.querySelector("style[data-fonts-manager-faces]")!.textContent || "";
+    expect(faces).toContain("scfl-f-orbitron");
+    expect(faces).toContain("scfl-f-exo");
+    expect(faces).not.toContain("scfl-f-audiowide");
+    expect(faces).not.toContain("scfl-f-lora");
+  });
+
+  it("a project font's sample line can be edited, and is saved with PATCH", async () => {
+    library = starterLibrary();
+    await mount();
+    const lora = container!.querySelector("tr[data-font-id='f-lora']")!;
+    click(lora.querySelector("button[aria-label=\"Edit Lora's sample line\"]")!);
+    const form = container!.querySelector("form[aria-label='Sample line for Lora']")!;
+    change(form.querySelector("input[name='previewText']") as HTMLInputElement, "Serve and volley");
+    await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    await flush();
+    expect(patches).toEqual([{ path: "/api/fonts/f-lora", body: { previewText: "Serve and volley" } }]);
+    expect(sampleLines()[3]).toBe("Serve and volley");
+    // A shared-library font is the platform's; the server refuses edits to it, so no button.
+    const orbitron = container!.querySelector("tr[data-font-id='f-orbitron'] td.actions-col")!;
+    expect(orbitron.querySelector("button")).toBeNull();
+  });
+});
+
+describe("filterFonts / noMatchSentence", () => {
+  it("narrows by category and query together", () => {
+    const lib = starterLibrary();
+    expect(filterFonts(lib, "", "").map((f) => f.family)).toHaveLength(4);
+    expect(filterFonts(lib, "orb", "display").map((f) => f.family)).toEqual(["Orbitron"]);
+  });
+  it("names the category and the words", () => {
+    expect(noMatchSentence("orbit", "display")).toBe("No display fonts match 'orbit'.");
+    expect(noMatchSentence("zzzz", "")).toBe("No fonts match 'zzzz'.");
+    expect(noMatchSentence("", "monospace")).toBe("No monospace fonts in the library yet.");
+    expect(noMatchSentence("", "", ["wide"])).toBe("No fonts tagged 'wide'.");
+    expect(noMatchSentence("orb", "serif", ["wide"])).toBe("No serif fonts tagged 'wide' match 'orb'.");
   });
 });
 

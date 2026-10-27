@@ -26,9 +26,21 @@
  * written. A weaker proof is Dane's decision, not this file's (comment on the
  * ticket, same time).
  *
- * NOTHING POSTS UNTIL AN ACCOUNT IS NAMED. lib/openclawSignIn.js holds the one
- * account name the Mini posts as; while it is blank every approved comment
- * waits and says why, because "whoever is signed in" is not an account.
+ * NOTHING POSTS UNTIL AN ACCOUNT IS CHOSEN. Dane chooses the Reddit account on
+ * Engage › Outreach (Outreach wizard 2/19); it is saved on the channel's
+ * settings row (lib/outreachAccounts.js) and read again every pass. While none
+ * is chosen every approved comment waits and says why, because "whoever is
+ * signed in" is not an account. The pace lives on the same row.
+ *
+ * IT ALSO READS POSTS (Outreach wizard 17/19, task 86bcrmbuv). Reddit refuses
+ * its public JSON to anything not signed in, so Dane used to paste each post
+ * by hand. Now Add saves the row `read_state: reading`, and once a pass
+ * (`readPending`, called by ../poster.js before it posts) this adapter opens
+ * the oldest such link in the same signed-in browser and writes back the
+ * subreddit, title, body, author and top comments — or a sentence saying why
+ * it could not, which the screen shows above the paste box. Reading changes
+ * nothing on Reddit, so unlike posting there is no proof rule: Dane sees what
+ * was read and can open the post beside it.
  *
  * Every dependency is a seam (`options`), so the tests run the whole adapter
  * against a stand-in OpenClaw, a stand-in Reddit and the SQL-backed fake
@@ -44,9 +56,15 @@ const { normalizeWords, screenshotPathAllowed } = require('./youtube.js');
 
 /** Which OpenClaw browser profile posts for which account. */
 const DEFAULT_PROFILES = Object.freeze({ dane_of_earth: 'dane-of-earth' });
+const DEFAULT_ACCOUNT_KEY = 'dane_of_earth';
 
 /** A browser posting one comment: open, type, click, read the link back. */
 const POST_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** A browser reading one post and its top comments. */
+const READ_TIMEOUT_BROWSER_MS = 3 * 60 * 1000;
+/** How many of the post's top comments a read asks for. */
+const READ_TOP_COMMENTS = 20;
 
 /** Reddit's public JSON can lag a just-posted comment by a few seconds. */
 const VERIFY_ATTEMPTS = 3;
@@ -54,6 +72,9 @@ const VERIFY_WAIT_MS = 15 * 1000;
 
 const MAX_SCREENSHOT_BYTES = 10 * 1024 * 1024;
 const READ_TIMEOUT_MS = 10000;
+
+/** Why every comment waits while no account is chosen — the wording the ticket asked for. */
+const CHOOSE_ACCOUNT_REASON = 'Waiting: choose the account to post as — Engage › Outreach, Reddit, Connect.';
 
 /** What Reddit shows in place of a comment taken down. */
 const GONE = new Set(['[removed]', '[deleted]']);
@@ -111,6 +132,99 @@ function buildPostInstructions({ item, profile, accountName }) {
   ].join('\n');
 }
 
+/** The browser instructions for reading one post. Pure — tested directly. */
+function buildReadInstructions({ item, profile }) {
+  const comment = item.parentCommentId
+    ? [
+      `This link points at one comment (id ${item.parentCommentId}). Read that comment too: its id, its author and its full text. If it is gone, or says [removed] or [deleted], say so in "comment".`,
+    ]
+    : [];
+  return [
+    `Use the browser tool with profile "${profile}".`,
+    `Open ${item.targetUrl} and wait for the page to load.`,
+    'Check whether the browser is signed in to Reddit (the avatar menu, top right, shows u/name). Read the page either way, and report what you saw.',
+    'If Reddit says the post does not exist, set "found" to false. If it says the post was removed or deleted (by the author, the moderators or Reddit), set "removed" to true and say by whom if the page says.',
+    'Otherwise read the subreddit name, the post\'s title, its full text (empty if it is only a link or a picture) and its author\'s username.',
+    ...comment,
+    `Then read up to ${READ_TOP_COMMENTS} of the top comments under the post, highest first: each one's id (from its link, after /comment/ or the last part of /comments/<post>/<slug>/<id>/), its author, its full text and its score.`,
+    'Do not click Reply, vote, join, follow, message or change anything. Only read.',
+    'Reply with ONLY this JSON and nothing else:',
+    '{"signedIn": true or false, "found": true or false, "removed": true or false, "removedBy": "who removed it, or null", '
+      + '"subreddit": "the name without r/", "title": "...", "body": "...", "author": "the username without u/", '
+      + '"comment": {"id": "...", "author": "...", "body": "..."} or null, '
+      + '"topComments": [{"id": "...", "author": "...", "body": "...", "score": a number}], '
+      + '"problem": "anything that went wrong, in your own words, or null"}',
+  ].join('\n');
+}
+
+function bare(value, prefix) {
+  return text(value).replace(new RegExp(`^/?${prefix}/`, 'i'), '');
+}
+
+/**
+ * What the browser read, judged: `{ ok: true, post }` ready for the store,
+ * or `{ ok: false, code, error }` with a sentence for the screen. Pure.
+ */
+function interpretRead(item, answer, said = '') {
+  if (!answer || typeof answer !== 'object') {
+    return {
+      ok: false,
+      code: 'READ_NO_ANSWER',
+      error: `The Mini's browser answered, but not with the post's details${said ? `. It said: ${said.slice(0, 300)}` : ''}.`,
+    };
+  }
+  const problem = text(answer.problem);
+  if (answer.signedIn === false) {
+    return {
+      ok: false,
+      code: 'MINI_SIGNED_OUT',
+      error: 'The Mini\'s browser is not signed in to Reddit, so Reddit would not show it the post. Paste the post\'s title and text instead, and sign the Mini in again (Engage › Outreach, Reddit, Connect).',
+    };
+  }
+  if (answer.removed === true) {
+    const by = text(answer.removedBy);
+    return { ok: false, code: 'REDDIT_REMOVED', error: `Reddit says this post was removed${by ? ` (by ${by})` : ''}, so there is nothing to answer.` };
+  }
+  if (answer.found === false) {
+    return { ok: false, code: 'REDDIT_NOT_FOUND', error: 'Reddit says there is no such post — the link may be mistyped, or the post deleted.' };
+  }
+  const title = text(answer.title);
+  if (!title) {
+    return {
+      ok: false,
+      code: 'READ_NO_TITLE',
+      error: `The Mini opened the link but read no title from it, so it is not counted as read${problem ? ` (it said: ${problem.slice(0, 300)})` : ''}.`,
+    };
+  }
+  let comment = null;
+  if (item.parentCommentId) {
+    const c = answer.comment && typeof answer.comment === 'object' ? answer.comment : null;
+    if (!c || !text(c.body)) {
+      return { ok: false, code: 'REDDIT_COMMENT_NOT_FOUND', error: `The Mini read the post but not comment ${item.parentCommentId} — it may have been deleted.` };
+    }
+    if (GONE.has(text(c.body))) {
+      return { ok: false, code: 'REDDIT_COMMENT_GONE', error: 'Reddit says the comment being replied to was removed or deleted, so there is nothing to reply to.' };
+    }
+    comment = { author: bare(c.author, 'u'), body: text(c.body) };
+  }
+  const body = GONE.has(text(answer.body)) ? '' : text(answer.body);
+  const topComments = (Array.isArray(answer.topComments) ? answer.topComments : [])
+    .filter((c) => c && typeof c === 'object' && text(c.body) && !GONE.has(text(c.body)))
+    .slice(0, READ_TOP_COMMENTS)
+    .map((c) => ({ id: text(c.id), author: bare(c.author, 'u'), body: text(c.body), score: Number(c.score) || 0 }));
+  return {
+    ok: true,
+    post: {
+      subreddit: bare(answer.subreddit, 'r') || text(item.subreddit),
+      title,
+      body,
+      author: bare(answer.author, 'u'),
+      comment,
+      topComments,
+    },
+  };
+}
+
 /**
  * Read one comment from Reddit's public JSON. A refusal is `ok: false` with
  * Reddit's own reason in a sentence; no such comment is `found: false`.
@@ -163,15 +277,35 @@ function createRedditAdapter(options = {}) {
     statFile: options.statFile || ((file) => fs.statSync(file)),
     sleep: options.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     homedir: options.homedir || os.homedir(),
+    // The account Dane chose, and the pace, from the channel's settings row.
+    readAccount: options.readAccount
+      || ((accountKey) => require('../../../lib/outreachAccounts').readAccountForWorker('reddit', projectId, accountKey)),
   };
   const profiles = { ...DEFAULT_PROFILES, ...(options.profiles || {}) };
-  // The one Reddit account the Mini posts as. The option exists for tests.
-  const accountName = signIn.redditUsername(options.accountName !== undefined ? options.accountName : signIn.EXPECTED_REDDIT_ACCOUNT);
-  const pace = { ...limits.REDDIT_PACE, ...(options.pace || {}) };
+  // A fixed account and pace, for tests; otherwise both are read every pass.
+  const fixedAccount = options.accountName !== undefined ? signIn.redditUsername(options.accountName) : null;
+  const fixedPace = options.pace ? { ...limits.REDDIT_PACE, ...options.pace } : null;
 
-  // Per pass: one read of each account's history.
+  // Per pass: one read of each account's settings and history.
   let accounts = new Map();
+  let settingsCache = new Map();
   let zoneCache = null;
+
+  /** { accountName, pace } for this pass: '' means nobody has chosen one. */
+  async function settingsFor(accountKey) {
+    if (settingsCache.has(accountKey)) return settingsCache.get(accountKey);
+    let found = { accountName: fixedAccount || '', pace: fixedPace || { ...limits.REDDIT_PACE } };
+    if (fixedAccount === null || !fixedPace) {
+      const res = await deps.readAccount(accountKey);
+      if (!res.ok) throw new Error(`could not read which Reddit account to post as: ${res.error}`);
+      found = {
+        accountName: fixedAccount !== null ? fixedAccount : signIn.redditUsername(res.data.expectedAccount),
+        pace: fixedPace || { ...limits.REDDIT_PACE, ...(res.data.pace || {}) },
+      };
+    }
+    settingsCache.set(accountKey, found);
+    return found;
+  }
 
   async function timeZone() {
     if (zoneCache === null) zoneCache = text(await deps.projectTimeZone(projectId));
@@ -191,10 +325,12 @@ function createRedditAdapter(options = {}) {
     label: 'Reddit',
     handCheckWords: 'Open the post on Reddit and check by hand.',
     projectId,
-    pace,
+    // Before any pass has read the row: the fixed pace, or the defaults.
+    pace: fixedPace || { ...limits.REDDIT_PACE },
 
     beginPass() {
       accounts = new Map();
+      settingsCache = new Map();
       zoneCache = null;
     },
 
@@ -217,13 +353,8 @@ function createRedditAdapter(options = {}) {
         };
       }
       // Holds every comment, so it is account-wide: nothing posts as "whoever is signed in".
-      if (!accountName) {
-        return {
-          ok: false,
-          scope: 'account',
-          reason: 'Waiting: no Reddit account has been chosen for the Mini to post as yet. Dane names it on the Reddit sign-in card.',
-        };
-      }
+      const { accountName, pace } = await settingsFor(item.accountKey);
+      if (!accountName) return { ok: false, scope: 'account', reason: CHOOSE_ACCOUNT_REASON };
       if (!text(item.text)) return { ok: false, scope: 'item', reason: 'Not posting: this comment has no words.' };
       if (!text(item.targetUrl) || !text(item.postId)) {
         return { ok: false, scope: 'item', reason: 'Not posting: this comment names no Reddit post to go on.' };
@@ -238,6 +369,36 @@ function createRedditAdapter(options = {}) {
       });
     },
 
+    /**
+     * Read the oldest post waiting for the Mini (17/19). One per pass, like
+     * posting. Returns null when nothing waits, else `{ id, outcome, why }`
+     * with outcome `read`, `failed`, or `unsaved` (the browser answered but
+     * the row could not be written: Dane pasted it meanwhile, which wins, or
+     * the database refused, which leaves it `reading` for the next pass).
+     */
+    async readPending() {
+      const pending = await deps.store.listPendingReads(1, scope);
+      if (!pending.ok) throw new Error(`could not read the posts waiting to be read: ${pending.error}`);
+      const item = pending.data[0];
+      if (!item) return null;
+      const profile = profiles[item.accountKey] || profiles[DEFAULT_ACCOUNT_KEY];
+      const res = await deps.callOpenClaw({
+        user: 'starcaster:reddit-post-reader',
+        timeoutMs: READ_TIMEOUT_BROWSER_MS,
+        instructions: 'You are reading ONE Reddit post and its top comments so a person can answer it. '
+          + 'Only read. Do not post, vote, join, follow, message or change anything.',
+        input: buildReadInstructions({ item, profile }),
+      });
+      const judged = res.ok
+        ? interpretRead(item, deps.extractJson(res.text), text(res.text))
+        : { ok: false, code: 'READ_BROWSER_FAILED', error: `The Mini's browser could not read the post (OpenClaw: ${res.error}).` };
+      const write = judged.ok
+        ? await deps.store.markRead(item.id, judged.post, scope)
+        : await deps.store.markReadFailed(item.id, { error: judged.error, code: judged.code }, scope);
+      if (!write.ok) return { id: item.id, outcome: 'unsaved', why: write.error };
+      return { id: item.id, outcome: judged.ok ? 'read' : 'failed', why: judged.ok ? '' : judged.error };
+    },
+
     noteWaiting: (item, reason) => deps.store.noteWaiting(item.id, reason, scope),
     markPosting: (item) => deps.store.markPosting(item.id, scope),
     markPosted: (item, proof) => deps.store.markPosted(item.id, proof, scope),
@@ -245,6 +406,8 @@ function createRedditAdapter(options = {}) {
     flagForHandCheck: (item, details) => deps.store.flagForHandCheck(item.id, details, scope),
 
     async post(item) {
+      const { accountName } = await settingsFor(item.accountKey);
+      if (!accountName) return { ok: false, error: CHOOSE_ACCOUNT_REASON };
       const res = await deps.callOpenClaw({
         user: 'starcaster:reddit-comments-poster',
         timeoutMs: POST_TIMEOUT_MS,
@@ -272,6 +435,7 @@ function createRedditAdapter(options = {}) {
     },
 
     async verify(item, url) {
+      const { accountName } = await settingsFor(item.accountKey);
       const link = parsePermalink(url);
       if (!link.ok) return { verdict: 'refuted', reason: `The link OpenClaw returned is not a link to a Reddit comment: ${link.why}.` };
       if (link.postId !== text(item.postId).toLowerCase()) {
@@ -321,7 +485,14 @@ function createRedditAdapter(options = {}) {
         site: 'reddit',
         accountKey,
         profile: profiles[accountKey],
-        who: accountName,
+        who: fixedAccount || '',
+        // The account Dane chose, read at check time (../health.js).
+        resolve: async () => {
+          if (fixedAccount !== null) return { who: fixedAccount };
+          const res = await deps.readAccount(accountKey);
+          if (!res.ok) throw new Error(res.error);
+          return { who: signIn.redditUsername(res.data.compareWith) };
+        },
         record: (reading) => deps.store.recordBrowserCheck(reading, scope, { accountKey }),
       }));
     },
@@ -357,9 +528,13 @@ function createRedditAdapter(options = {}) {
 module.exports = {
   createRedditAdapter,
   buildPostInstructions,
+  buildReadInstructions,
+  interpretRead,
+  READ_TOP_COMMENTS,
   parsePermalink,
   commentWords,
   readCommentFromReddit,
   DEFAULT_PROFILES,
   VERIFY_ATTEMPTS,
+  CHOOSE_ACCOUNT_REASON,
 };

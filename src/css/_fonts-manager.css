@@ -167,6 +167,127 @@
   align-items: center;
 }
 
+/* Favourites (Font Library 8): the All fonts | Favourites (N) switch and the
+   ☆ / ★ button at the start of every row. */
+.fonts-manager-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Finding a font (Font Library 7/7): search, category buttons, sample text
+   and size. Same W0 grid as the Add Font form — one pair of tracks for the
+   whole block, so the four labels line up by construction. */
+.fonts-manager-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fonts-manager-filter-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, var(--builder-field-long-max, 560px));
+  justify-content: start;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.fonts-manager-field input[type="search"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.fonts-manager-category-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.fonts-manager-size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fonts-manager-table .fonts-manager-star-col {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fonts-manager-star {
+  margin: 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  font-size: var(--text-xl);
+  line-height: 1;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.fonts-manager-star:hover,
+.fonts-manager-star:focus-visible {
+  opacity: 1;
+}
+
+.fonts-manager-star.is-favorite {
+  color: var(--accent, #d4a017);
+  opacity: 1;
+}
+
+.fonts-manager-star:disabled {
+  cursor: progress;
+}
+
+.fonts-manager-size input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.fonts-manager-size-value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fonts-manager-count {
+  align-self: center;
+  opacity: 0.75;
+}
+
+/* Each row's sample line, set in the row's font at the slider's size. */
+.fonts-manager-sample {
+  display: block;
+  margin-bottom: var(--space-1);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.fonts-manager-sample-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: var(--space-1) 0;
+}
+
+.fonts-manager-sample-edit input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  margin: 0;
+}
+
 /* Used by Sites (Font Library 6/7): one line per site, opening to its pages. */
 .fonts-manager-usage {
   display: flex;

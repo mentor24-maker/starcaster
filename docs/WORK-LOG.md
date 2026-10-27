@@ -12,6 +12,96 @@ will learn from that. YouTube and Substack will use the same cards next. This
 needs one small database change (`docs/SQL/reddit_comments_draft_options.sql`).
 Until it runs, Write with AI says which file to run instead of failing.
 
+## 2026-10-27 — Starcaster can give a project admin a one-time pass to the Mini's browser, and logs every window (#871)
+
+Second piece of the sign-in window. When a project's owner or admin asks to
+sign in to YouTube, Substack, Reddit or Google, Starcaster now makes a fresh
+one-time pass, tells the Mac Mini "this pass may open this project's browser"
+with a signed message only the Mini can verify, and hands the pass back. The
+pass works once, within 60 seconds; anyone who is not an owner or admin of the
+project is turned away before anything happens. Every window is written to a
+new log: who opened it, which site, when, when it closed, how long it lasted
+and why it closed. Attempts that never opened (the Mini switched off, not set
+up yet) are logged too, with the reason. Nothing is visible yet: the window
+itself is a later slice, and the log table needs one SQL paste on production.
+## 2026-10-27 — The Mini reads a Reddit post for you, so you no longer paste it by hand (#870)
+
+On **Engage → Comments (Reddit)**, adding a post link now says **Reading…**,
+and within a couple of minutes the Mac Mini's signed-in browser fills in the
+subreddit, title, text and top comments by itself. Before this you had to copy
+the post in by hand, because Reddit refuses to show posts to anything that is
+not signed in. If the Mini cannot read a post, the card says why in plain words
+— for example "Reddit says this post was removed" — and offers the paste box
+and **Try reading again**. If the Mini is not signed in to Reddit when you click
+Add, nothing is saved and the paste box appears straight away with that reason.
+This starts working once the Mini's posting job is installed and the new
+database columns are added; until then Add shows the paste box and says the
+Mini has not checked its sign-in yet.
+
+## 2026-10-26 — You can star your favourite fonts and show only those on the Fonts screen (#866)
+
+Every font on **Assets → Fonts** now has a star at the start of its row. Click
+it and it fills in; click again and it empties. Above the table there is a
+switch, **All fonts** or **Favourites (N)**, where N is how many you have
+starred, and the screen remembers which one you were on the next time you
+open it. Your stars are yours alone and follow you to every site you work on;
+another admin's stars never show up in your list. In Builder → Themes, the
+"Library font…" list now puts your favourites at the top under a
+"Favourites" heading, so with hundreds of fonts your go-to ones are one click
+away. Favourites works together with the search box, the category buttons and
+the Tag box: pick Favourites, click Display, and you see only the display fonts
+you starred, with a line saying "1 of 3 favourite fonts". One new database
+table goes with this; the agent session that merges it adds the table to the
+live site and checks it is there. Until then the Fonts screen still works but
+says your favourites could not be read.
+## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
+
+First piece of the sign-in window: a small program on the Mac Mini, the "door
+keeper", opens one project's own Chrome, sends a live picture of it (about 15
+a second) and passes clicks, keys and pastes back. It listens only on the
+Mini's inside address for now, so nothing outside can reach it yet. A one-time
+pass decides which project's browser opens, so a pass for one client can never
+open another's. Keys are counted in the log but never recorded, Chrome is told
+not to offer to save passwords, and the window closes itself after 3 idle
+minutes or 15 minutes in all. One check is knowingly left failing: since a
+recent Chrome update, the browser admits it is remote-controlled whenever this
+feature is on. A setting exists to hide that, and you chose to keep Chrome
+honest instead; the Google sign-in slice will find out whether Google minds.
+## 2026-10-27 — On a phone, the Starcaster logo fits the screen instead of pushing every admin page sideways (#869)
+
+The logo at the top of the admin app was always drawn about 980 pixels wide,
+which is more than twice the width of a phone. So on a phone every admin page
+slid left and right. The logo now shrinks to fit narrow screens. On a desktop
+it is exactly the same size as before (the header was compared pixel for
+pixel). A few screens, such as Contacts, still slide sideways on a phone for a
+separate reason: the row of buttons beside the page title is too wide. That is
+noted on the ticket and left for its own fix.
+## 2026-10-26 — You choose which account each outreach channel posts as, and nothing posts until you do (#867)
+
+On **Engage → Outreach**, the Connect stage of each channel (YouTube, Substack,
+Reddit) now says which account the Mini's browser is signed in as, and you
+choose the account that channel posts as: **Post as this account**, or **I'll
+sign in as someone else** and type the name. Until you choose, nothing posts on
+that channel, and every approved comment says "Waiting: choose the account to
+post as". Before this, the names were written into the code. Substack expected
+"Dane of Earth" while the Mini is signed in as "Dane Christensen", and Reddit
+had no name at all, so it refused to post. **Check now** asks the Mini to
+re-check its sign-in within about half a minute. Reddit's pace (3 a day, 20
+minutes apart) can now be changed on the same screen. The Mini's posting job
+itself gets installed right after this goes live, not before: today's code
+would have posted as accounts you never confirmed.
+
+## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
+
+With nearly 300 fonts in the library, scrolling to find one stopped being
+practical. **Assets → Fonts** now has a **Search** box (it matches the font's
+name and its tags), buttons for each kind of font (Sans, Serif, Display,
+Monospace, Handwriting), and a **Sample text** box: type a word and every row
+shows that word in its own font, at whatever size the slider is set to. If a
+search finds nothing, it says which search ("No display fonts match 'zzzz'")
+instead of showing an empty table. The screen also only downloads a font when
+its row is on screen — opening the full library now fetches 6 font files
+instead of all of them, so it opens quickly.
 ## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
 
 The **Used by Sites** column on Assets → Fonts now works. Each font has a
