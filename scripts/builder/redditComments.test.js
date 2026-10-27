@@ -21,6 +21,7 @@ const path = require('path');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SQL_FILES = ['reddit_comments_setup.sql', 'reddit_comments_posting.sql', 'reddit_comments_browser_read.sql'];
+const OPTIONS_SQL_FILE = 'reddit_comments_draft_options.sql';
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
@@ -70,10 +71,15 @@ const CANON = [
   { docKey: 'DEO', title: 'DEO', body: '# DEO\nThe organism thesis.', syncedAt: '2026-10-12T22:47:41.066Z' },
 ];
 
-/** The SQL files, minus each one's trailing grant to the read-only login, which is not schema. */
-function schemaText() {
+/**
+ * The SQL files, minus each one's trailing grant to the read-only login, which
+ * is not schema — plus 9/19's option columns unless `withOptions` is false (the
+ * database before that SQL has run).
+ */
+function schemaText({ withOptions = true } = {}) {
   const grant = /\ndo \$\$[\s\S]*?end \$\$;\s*$/i;
-  return SQL_FILES.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')).join('\n');
+  const files = withOptions ? [...SQL_FILES, OPTIONS_SQL_FILE] : SQL_FILES;
+  return files.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')).join('\n');
 }
 
 /**
@@ -81,8 +87,8 @@ function schemaText() {
  * the schema fake: that table's own tests are scripts/builder/canonStore.test.js,
  * and the fake does not parse its table-level unique constraint.
  */
-function withDb({ canonRows = [] } = {}) {
-  const db = createFakeDb(parseSchemaText(schemaText()));
+function withDb({ canonRows = [], withOptions = true } = {}) {
+  const db = createFakeDb(parseSchemaText(schemaText({ withOptions })));
   const canonQueries = [];
   const fakeSupabase = {
     isConfigured: () => true,
@@ -127,13 +133,25 @@ function fakeReddit(response) {
   return { fetch, asked };
 }
 
-/** A "model" that answers with each of `replies` in turn, recording what it was asked. */
+/**
+ * A "model" that answers with each of `replies` in turn, recording what it was
+ * asked. A string is one reply written as one option per slot asked for (so
+ * three on the first call, and as many as the retry asks for); an array of
+ * strings is those options exactly; an object is the raw answer.
+ */
 function scripted(...replies) {
   const asked = [];
   const generate = async (system, prompt) => {
     asked.push({ system, prompt });
     const next = replies[Math.min(asked.length - 1, replies.length - 1)];
-    return typeof next === 'string' ? { ok: true, text: JSON.stringify({ text: next }) } : next;
+    if (typeof next === 'string') {
+      const wanted = Number((/Write (\d+) new repl/.exec(prompt) || [])[1]) || 3;
+      return { ok: true, text: JSON.stringify({ options: Array.from({ length: wanted }, (_, i) => ({ angle: `angle ${i + 1}`, text: next })) }) };
+    }
+    if (Array.isArray(next)) {
+      return { ok: true, text: JSON.stringify({ options: next.map((text, i) => ({ angle: `angle ${i + 1}`, text })) }) };
+    }
+    return next;
   };
   return { generate, asked };
 }
@@ -453,7 +471,7 @@ test('BREAK TEST: a model that says "check out Dane of Earth" twice is refused w
     assert.equal(drafted.status, 422);
     assert.match(drafted.error, /names Dane of Earth.*no self-promotion unless Dane adds it/);
     assert.equal(model.asked.length, 2, 'one retry, then refused');
-    assert.match(model.asked[1].prompt, /Your last draft broke these rules: it names Dane of Earth/);
+    assert.match(model.asked[1].prompt, /These replies broke the rules — option 1 \("angle 1"\): it names Dane of Earth/);
     const after = (await store.getItemById(item.id, SCOPE_A)).data;
     assert.equal(after.status, 'idea');
     assert.equal(after.draftText, '');
@@ -512,9 +530,9 @@ test('with no canon copied, no draft is written and the AI is never asked', asyn
 
 // ── Approval ───────────────────────────────────────────────────────────────
 
-async function draftedItem(store) {
+async function draftedItem(store, reply = GOOD) {
   const item = await addFromReddit(store);
-  const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted(GOOD).generate, canonDocs: CANON });
+  const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted(reply).generate, canonDocs: CANON });
   assert.equal(drafted.ok, true, drafted.error);
   return drafted.data;
 }
@@ -585,4 +603,222 @@ test('drafting reads the canon from the database, scoped to the project', async 
   } finally {
     restore();
   }
+});
+
+// ── Three to choose from (Outreach wizard 9/19, task 86bcrmbke) ───────────
+
+const draftOptions = require('../../lib/draftOptions.js');
+
+const STORY = 'I quit three times before it stuck. What changed was sitting right after coffee, so it hung off something I already did.';
+const QUESTION = 'What happens on the day you stop — is it boredom, or does something else take the slot?';
+const RESOURCE = 'The two-minute rule helped me more than any app: sit for two minutes and let yourself stop there.';
+
+test('Write with AI saves three labelled options, each checked on its own, and the first as the draft', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    const model = scripted([STORY, QUESTION, RESOURCE]);
+    const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.equal(model.asked.length, 1, 'one AI call for all three');
+    assert.match(model.asked[0].system, /Write 3 different replies[\s\S]*adds a personal story[\s\S]*asks a question back[\s\S]*offers a resource/);
+    assert.match(model.asked[0].system, /"options"/);
+    assert.doesNotMatch(model.asked[0].system, /exactly \{"text"/, 'the one-draft answer shape is not asked for as well');
+
+    // Read back from the database, not the write's echo.
+    const back = (await store.getItemById(item.id, SCOPE_A)).data;
+    assert.deepEqual(back.draftOptions.map((o) => [o.angle, o.text, o.rule.ok]), [
+      ['angle 1', STORY, true], ['angle 2', QUESTION, true], ['angle 3', RESOURCE, true],
+    ]);
+    assert.equal(back.draftText, STORY);
+    assert.equal(back.chosenOption, null);
+  } finally {
+    restore();
+  }
+});
+
+test('BREAK TEST: an option that names Dane of Earth twice is dropped and named; the other two are kept, never padded', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    const bad = 'Check out Dane of Earth, it covers exactly this.';
+    const model = scripted([STORY, bad, RESOURCE], 'Again, Dane of Earth has a video on it.');
+    const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.equal(model.asked.length, 2, 'the broken one is asked for once more, then dropped');
+    assert.match(model.asked[1].prompt, /option 2 \("angle 2"\): it names Dane of Earth/);
+    assert.match(model.asked[1].prompt, /Write 1 new reply to replace it/);
+    assert.match(model.asked[1].prompt, /different approach from the ones already kept: "angle 1", "angle 3"/);
+
+    const back = (await store.getItemById(item.id, SCOPE_A)).data;
+    const kept = back.draftOptions.filter((o) => !o.dropped);
+    const dropped = back.draftOptions.filter((o) => o.dropped);
+    assert.deepEqual(kept.map((o) => o.text), [STORY, RESOURCE]);
+    assert.equal(dropped.length, 1);
+    assert.equal(dropped[0].text, undefined, 'a dropped option\'s words are not kept, so it cannot be picked');
+    assert.match(dropped[0].rule.reason, /^it names Dane of Earth/);
+    assert.match(draftOptions.droppedSentence(dropped.map((d) => d.rule)), /^One option was dropped: it names Dane of Earth/);
+  } finally {
+    restore();
+  }
+});
+
+test('an option that breaks a rule once and keeps them on its second try is kept', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    const model = scripted([STORY, 'More at daneofearth.org', RESOURCE], [QUESTION]);
+    const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.deepEqual(drafted.data.draftOptions.map((o) => o.text), [STORY, QUESTION, RESOURCE], 'the replacement takes the slot it replaces');
+  } finally {
+    restore();
+  }
+});
+
+test('Approve records which option Dane picked AND his edited words', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted([STORY, QUESTION, RESOURCE]).generate, canonDocs: CANON });
+    const edited = QUESTION.replace('boredom', 'plain boredom');
+    const approved = await store.approveItem(item.id, { text: edited, option: 1 }, SCOPE_A, { canonDocs: CANON });
+    assert.equal(approved.ok, true, approved.error);
+    const back = (await store.getItemById(item.id, SCOPE_A)).data;
+    assert.equal(back.chosenOption, 1);
+    assert.equal(back.finalText, edited);
+    assert.equal(back.status, 'approved');
+  } finally {
+    restore();
+  }
+});
+
+test('Approve with a pick and no edit approves that option\'s words', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted([STORY, QUESTION, RESOURCE]).generate, canonDocs: CANON });
+    const approved = await store.approveItem(item.id, { option: 2 }, SCOPE_A, { canonDocs: CANON });
+    assert.equal(approved.data.finalText, RESOURCE);
+    assert.equal(approved.data.chosenOption, 2);
+  } finally {
+    restore();
+  }
+});
+
+test('Approve refuses a pick that is not a kept option, and the draft stays a draft', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    await store.writeDraftForItem(item.id, SCOPE_A, {
+      generate: scripted([STORY, 'Dane of Earth again', RESOURCE], 'Still Dane of Earth').generate,
+      canonDocs: CANON,
+    });
+    // Kept options are 0 and 1 (STORY, RESOURCE); the dropped one is 2.
+    for (const option of [2, 7, -1, '1', 1.5]) {
+      // eslint-disable-next-line no-await-in-loop
+      const refused = await store.approveItem(item.id, { option }, SCOPE_A, { canonDocs: CANON });
+      assert.equal(refused.status, 400, String(option));
+      assert.match(refused.error, /option must be the number of one of this draft's replies \(0, 1\)/);
+    }
+    assert.equal((await store.getItemById(item.id, SCOPE_A)).data.status, 'draft');
+  } finally {
+    restore();
+  }
+});
+
+test('Three more replaces all three options and clears the old pick', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addFromReddit(store);
+    await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted([STORY, QUESTION, RESOURCE]).generate, canonDocs: CANON });
+    const again = await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted([RESOURCE, STORY, QUESTION]).generate, canonDocs: CANON });
+    assert.equal(again.ok, true, again.error);
+    assert.deepEqual(again.data.draftOptions.map((o) => o.text), [RESOURCE, STORY, QUESTION]);
+    assert.equal(again.data.draftText, RESOURCE);
+  } finally {
+    restore();
+  }
+});
+
+test('on a database without the option columns, Write with AI says which SQL to run instead of failing vaguely', async () => {
+  const { store, restore } = withDb({ withOptions: false });
+  try {
+    const item = await addFromReddit(store);
+    const drafted = await store.writeDraftForItem(item.id, SCOPE_A, { generate: scripted([STORY, QUESTION, RESOURCE]).generate, canonDocs: CANON });
+    assert.equal(drafted.ok, false);
+    assert.equal(drafted.code, 'SQL_NOT_RUN');
+    assert.match(drafted.error, /run docs\/SQL\/reddit_comments_draft_options\.sql/);
+    assert.equal((await store.getItemById(item.id, SCOPE_A)).data.status, 'idea', 'nothing half-saved');
+  } finally {
+    restore();
+  }
+});
+
+// ── lib/draftOptions.js on its own ─────────────────────────────────────────
+
+const passAll = () => ({ ok: true, problems: [] });
+const noDane = (text) => (/Dane/.test(text)
+  ? { ok: false, problems: [{ rule: 'self_promotion', message: 'it named Dane of Earth' }] }
+  : { ok: true, problems: [] });
+
+function answers(...list) {
+  const asked = [];
+  return {
+    asked,
+    generate: async (system, prompt) => {
+      asked.push({ system, prompt });
+      return list[Math.min(asked.length - 1, list.length - 1)];
+    },
+  };
+}
+
+test('parseOptions reads fenced JSON, a bare array, and nothing from prose', () => {
+  assert.deepEqual(
+    draftOptions.parseOptions('```json\n{"options":[{"angle":"asks back","text":" Why? "}]}\n```'),
+    [{ angle: 'asks back', text: 'Why?' }],
+  );
+  assert.deepEqual(draftOptions.parseOptions('[{"angle":"a","text":"b"}]'), [{ angle: 'a', text: 'b' }]);
+  assert.deepEqual(draftOptions.parseOptions('Here are three replies: …'), []);
+});
+
+test('a missing option counts as broken: asked for once, then dropped — the card is never padded', async () => {
+  const model = answers(
+    { ok: true, text: JSON.stringify({ options: [{ angle: 'a', text: 'one' }, { angle: 'b', text: 'two' }] }) },
+    { ok: true, text: JSON.stringify({ options: [] }) },
+  );
+  const written = await draftOptions.writeOptions({ system: 'S', prompt: 'P', check: passAll, generate: model.generate });
+  assert.equal(written.ok, true);
+  assert.deepEqual(written.data.options.map((o) => o.text), ['one', 'two']);
+  assert.equal(written.data.dropped.length, 1);
+  assert.match(draftOptions.droppedSentence(written.data.dropped), /^One option was dropped: the AI wrote no reply for it\.$/);
+});
+
+test('when the retry itself fails, the broken option is dropped with that reason', async () => {
+  const model = answers(
+    { ok: true, text: JSON.stringify({ options: [{ angle: 'a', text: 'fine' }, { angle: 'b', text: 'Dane says' }, { angle: 'c', text: 'also fine' }] }) },
+    { ok: false, error: 'overloaded' },
+  );
+  const written = await draftOptions.writeOptions({ system: 'S', prompt: 'P', check: noDane, generate: model.generate });
+  assert.deepEqual(written.data.options.map((o) => o.text), ['fine', 'also fine']);
+  assert.match(written.data.dropped[0].reason, /second try could not be written \(overloaded\)/);
+  assert.equal(written.data.dropped[0].angle, 'b');
+});
+
+test('every option dropped is a 422 naming each reason; no answer at all is a 502', async () => {
+  const allBad = answers({ ok: true, text: JSON.stringify({ options: [1, 2, 3].map((n) => ({ angle: `x${n}`, text: `Dane ${n}` })) }) });
+  const refused = await draftOptions.writeOptions({ system: 'S', prompt: 'P', check: noDane, generate: allBad.generate });
+  assert.equal(refused.status, 422);
+  assert.match(refused.error, /Every reply broke a rule, so none was kept: it named Dane of Earth; it named Dane of Earth; it named Dane of Earth/);
+  assert.equal(allBad.asked.length, 2);
+
+  const silent = answers({ ok: false, error: 'timeout' });
+  const none = await draftOptions.writeOptions({ system: 'S', prompt: 'P', check: passAll, generate: silent.generate });
+  assert.equal(none.status, 502);
+  assert.match(none.error, /did not write any replies: timeout/);
+});
+
+test('droppedSentence counts in words', () => {
+  assert.equal(draftOptions.droppedSentence([]), '');
+  assert.equal(draftOptions.droppedSentence([{ reason: 'r1' }, { reason: 'r2' }]), 'Two options were dropped: r1; r2.');
 });

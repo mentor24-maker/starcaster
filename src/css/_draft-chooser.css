@@ -1,0 +1,126 @@
+/* Three replies to choose from — components/outreach-wizard/draft-chooser.tsx.
+   Outreach wizard 9/19. Shared by every channel's approval card.
+
+   _reddit-comments.css's conventions: every flex/grid box sets min-width: 0
+   (UI_RULES T8), no pixel min-widths (T9), the text box stops at
+   --builder-field-long-max (W9), so the page never scrolls sideways (T0). */
+
+.draft-chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.draft-chooser p {
+  margin: 0;
+}
+
+/* Side by side while each card keeps a readable width; stacked on a phone. */
+.draft-chooser-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.draft-chooser-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  /* The app's button styles centre their content; a reply reads from the left. */
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: left;
+  cursor: pointer;
+}
+
+.draft-chooser-option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* Keyboard focus is an outline, so it never looks like the pick. */
+.draft-chooser-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The pick: a thicker border AND a tinted fill, so it reads at a glance. */
+.draft-chooser-option--picked {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.draft-chooser-option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.draft-chooser-angle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.draft-chooser-key {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.5em;
+  height: 1.5em;
+  border: 1px solid var(--border-light);
+  border-radius: 4px;
+  font-size: var(--text-sm, 0.85em);
+}
+
+.draft-chooser-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.draft-chooser-label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.draft-chooser-box {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.draft-chooser-help,
+.draft-chooser-dropped {
+  font-size: var(--text-base);
+  opacity: 0.75;
+}
+
+.draft-chooser-error {
+  color: var(--status-warn-ink);
+}
+
+.draft-chooser-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+/* The app's buttons carry a top margin meant for stacked forms. */
+.draft-chooser .btn {
+  margin: 0;
+}
