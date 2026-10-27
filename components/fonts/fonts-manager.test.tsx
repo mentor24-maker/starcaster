@@ -3,7 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FontsManager, {
-  EMPTY_LIBRARY_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, previewFamily, stylesSentence,
+  EMPTY_LIBRARY_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, noTagMatchSentence, parseTagList, previewFamily, stylesSentence,
   type FontRow,
 } from "./fonts-manager";
 
@@ -48,6 +48,7 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let library: FontRow[] = [];
 let posts: Record<string, unknown>[] = [];
+let patches: { path: string; body: { tags: string[] } }[] = [];
 let reads: string[] = [];
 let activeProject = "proj_a";
 
@@ -111,6 +112,7 @@ function rowNames(): string[] {
 beforeEach(() => {
   library = [];
   posts = [];
+  patches = [];
   reads = [];
   activeProject = "proj_a";
   (window as unknown as { App: unknown }).App = {
@@ -129,6 +131,16 @@ beforeEach(() => {
         const saved = font({ id: "f-new", family: body.family });
         library = [...library, saved];
         return { ok: true, data: { font: saved } };
+      }
+      if (method === "PATCH") {
+        // Stand-in for routes/fonts.js: stores the list as lib/fontsStore.js cleanTags would.
+        const body = JSON.parse(String(options.body));
+        patches.push({ path, body });
+        const id = decodeURIComponent(path.split("/").pop() || "");
+        const target = library.find((f) => f.id === id)!;
+        if (target.visibility === "platform") throw new Error("shared font library");
+        library = library.map((f) => (f.id === id ? { ...f, tags: parseTagList(body.tags.join(",")) } : f));
+        return { ok: true, data: { font: library.find((f) => f.id === id) } };
       }
       if (method === "DELETE") {
         return { ok: true, data: { font: library[0], filesRemoved: 2, filesNotRemoved: [] } };
@@ -222,6 +234,89 @@ describe("FontsManager", () => {
     expect(reads).toEqual(["proj_a /api/fonts", "proj_b /api/fonts"]);
     expect(rowNames()).toEqual([]);
     expect(container!.textContent).toContain(EMPTY_LIBRARY_SENTENCE);
+  });
+});
+
+describe("FontsManager tags (Font Library 5/7)", () => {
+  function row(id: string): HTMLElement {
+    return container!.querySelector(`tr[data-font-id='${id}']`) as HTMLElement;
+  }
+  function chips(id: string): string[] {
+    return [...row(id).querySelectorAll(".fonts-manager-chip-filter")].map((el) => el.textContent || "");
+  }
+  function typeTags(id: string, text: string) {
+    const input = row(id).querySelector(".fonts-manager-tag-input") as HTMLInputElement;
+    change(input, text);
+    act(() => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+  }
+
+  it("typing 'sci-fi, wide' in + tag adds two chips, and × removes one — both saved through PATCH", async () => {
+    library = [font({ id: "f-own", tags: ["geometric"] })];
+    await mount();
+    typeTags("f-own", "Sci-Fi, wide");
+    await flush();
+    expect(patches[0]).toEqual({ path: "/api/fonts/f-own", body: { tags: ["geometric", "sci-fi", "wide"] } });
+    expect(chips("f-own")).toEqual(["geometric", "sci-fi", "wide"]);
+    expect((row("f-own").querySelector(".fonts-manager-tag-input") as HTMLInputElement).value).toBe("");
+
+    click(row("f-own").querySelector("button[aria-label='Remove tag wide from Orbitron']")!);
+    await flush();
+    expect(patches[1].body.tags).toEqual(["geometric", "sci-fi"]);
+    expect(chips("f-own")).toEqual(["geometric", "sci-fi"]);
+    expect(library[0].tags).toEqual(["geometric", "sci-fi"]);
+  });
+
+  it("a shared-library font shows its chips but offers no × and no + tag", async () => {
+    library = [font({ id: "f-shared", visibility: "platform", tags: ["sci-fi", "wide"] })];
+    await mount();
+    expect(chips("f-shared")).toEqual(["sci-fi", "wide"]);
+    expect(row("f-shared").querySelector(".fonts-manager-chip-remove")).toBeNull();
+    expect(row("f-shared").querySelector(".fonts-manager-tag-input")).toBeNull();
+  });
+
+  it("clicking a chip shows only fonts with that tag; a tag nobody carries says so", async () => {
+    library = [
+      font({ id: "f-orb", family: "Orbitron", visibility: "platform", tags: ["sci-fi", "wide"] }),
+      font({ id: "f-lob", family: "Lobster", visibility: "platform", tags: ["script", "retro"] }),
+      font({ id: "f-exo", family: "Exo", visibility: "platform", tags: ["sci-fi"] }),
+    ];
+    await mount();
+    expect(rowNames()).toEqual(["Orbitron", "Lobster", "Exo"]);
+
+    click([...row("f-orb").querySelectorAll(".fonts-manager-chip-filter")].find((b) => b.textContent === "sci-fi")!);
+    expect(rowNames()).toEqual(["Orbitron", "Exo"]);
+    const box = container!.querySelector("input[name='tagFilter']") as HTMLInputElement;
+    expect(box.value).toBe("sci-fi");
+
+    change(box, "sci-fi, wide");
+    expect(rowNames()).toEqual(["Orbitron"]);
+
+    change(box, "nothing-has-this");
+    expect(rowNames()).toEqual([]);
+    expect(container!.textContent).toContain("No fonts tagged 'nothing-has-this'.");
+    expect(container!.textContent).not.toContain(EMPTY_LIBRARY_SENTENCE);
+
+    click(button("Clear"));
+    expect(rowNames()).toEqual(["Orbitron", "Lobster", "Exo"]);
+  });
+
+  it("an upload the AI could not tag says so instead of passing silently", async () => {
+    (window as unknown as { App: { api: unknown } }).App.api = async (path: string, options: RequestInit = {}) => {
+      if (String(options.method || "GET").toUpperCase() === "POST") {
+        return { ok: true, data: { font: font({ id: "f-new" }), autoTagError: "The AI refused: credit exhausted" } };
+      }
+      return { ok: true, data: { fonts: [], total: 0 } };
+    };
+    await mount();
+    await fillAndSave("OFL-1.1");
+    expect(container!.textContent).toContain("could not be tagged automatically (The AI refused: credit exhausted)");
+  });
+});
+
+describe("parseTagList", () => {
+  it("trims, lowercases, collapses spaces and drops duplicates and blanks", () => {
+    expect(parseTagList(" Sci-Fi ,  WIDE,, sci-fi , bold   display")).toEqual(["sci-fi", "wide", "bold display"]);
+    expect(noTagMatchSentence(["sci-fi", "script"])).toBe("No fonts tagged 'sci-fi, script'.");
   });
 });
 

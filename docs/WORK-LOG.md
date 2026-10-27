@@ -1,3 +1,17 @@
+## 2026-10-26 — Fonts can be found by style: AI tags every font, and you can filter by tag (#863)
+
+Every font now carries a few style words, like "sci-fi", "elegant" or
+"headline". An AI picks them from a fixed list of about forty words, so the
+same few words get reused and filtering by them actually finds things. A font
+you upload is tagged before the upload finishes; if the AI is down, the font is
+still saved and the screen says it could not be tagged. On the **Assets →
+Fonts** screen, clicking a tag shows only fonts with that tag, and a **Tag**
+box at the top takes several at once ("sci-fi, wide" means both). On your own
+fonts you can remove a tag with its × or add more in the "+ tag" box; the
+shared fonts can be filtered but not changed. A filter nothing matches says
+"No fonts tagged …" instead of an empty table. To tag the fonts already in the
+library there is `npm run fonts:autotag`, which only ever touches fonts with no
+tags at all, so tags a person chose are never overwritten.
 ## 2026-10-26 — Engage has an Outreach screen that shows where YouTube, Substack and Reddit stand (#860)
 
 There is now an **Engage → Outreach** screen, the first item under Engage.
