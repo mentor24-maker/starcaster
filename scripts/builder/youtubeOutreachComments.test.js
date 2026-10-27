@@ -18,6 +18,7 @@ const path = require('path');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
+const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon, CANON_DOCS } = require('./canonFixture.js');
 const { prepareCanon } = require('../../lib/canonPrompt.js');
@@ -34,8 +35,10 @@ const VIDEO_1 = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
 
 const GOOD_MEDIUM = 'The bit about practising the serve toss without a racket first finally made it click for me. Does the same drill work for a kick serve?';
 
-function schemaText() {
-  return `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}`;
+/** Both setup files, plus 10/19's option columns unless `withOptions` is false (the database before that SQL has run). */
+function schemaText({ withOptions = true } = {}) {
+  const base = `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}`;
+  return withOptions ? `${base}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}` : base;
 }
 
 async function fakeLookup(videoId) {
@@ -47,19 +50,31 @@ async function fakeLookup(videoId) {
 
 const quietVideo = async () => ({ description: 'A serve lesson.', topComments: [{ author: 'Sam', text: 'Great drill' }], note: '' });
 
-/** A "model" that answers with each of `replies` in turn, recording what it was asked. */
+/**
+ * A "model" that answers with each of `replies` in turn, recording what it
+ * was asked. Since 10/19 a draft is THREE options: a string is that wording
+ * for every option asked for (three, or as many as a retry names); an array
+ * of strings is those options exactly; an object is the raw answer.
+ */
 function scripted(...replies) {
   const asked = [];
   const generate = async (system, prompt) => {
     asked.push({ system, prompt });
     const next = replies[Math.min(asked.length - 1, replies.length - 1)];
-    return typeof next === 'string' ? { ok: true, text: JSON.stringify({ comment: next }) } : next;
+    if (typeof next === 'string') {
+      const wanted = Number((/Write (\d+) new repl/.exec(prompt) || [])[1]) || 3;
+      return { ok: true, text: JSON.stringify({ options: Array.from({ length: wanted }, (_, i) => ({ angle: `angle ${i + 1}`, text: next })) }) };
+    }
+    if (Array.isArray(next)) {
+      return { ok: true, text: JSON.stringify({ options: next.map((text, i) => ({ angle: `angle ${i + 1}`, text })) }) };
+    }
+    return next;
   };
   return { generate, asked };
 }
 
-function withDb() {
-  const schema = parseSchemaText(schemaText());
+function withDb({ withOptions = true } = {}) {
+  const schema = parseSchemaText(schemaText({ withOptions }));
   const db = createFakeDb(schema);
   const fakeSupabase = {
     isConfigured: () => true,
@@ -239,7 +254,7 @@ test('Write a draft saves a draft that followed the target, tenant columns fille
   }
 });
 
-test('a draft with a link under a Never policy gets one retry naming the rule, and is NOT saved if it breaks it again', async () => {
+test('options with a link under a Never policy get one retry naming the rule, and nothing is saved if every one breaks it again', async () => {
   const { db, targets, comments, restore } = withDb();
   try {
     const target = await addTarget(targets);
@@ -247,9 +262,9 @@ test('a draft with a link under a Never policy gets one retry naming the rule, a
     const made = await draft(comments, target.id, model);
     assert.equal(made.ok, false);
     assert.equal(made.status, 422);
-    assert.match(made.error, /link setting is Never/);
-    assert.equal(model.asked.length, drafter.DRAFT_ATTEMPTS);
-    assert.match(model.asked[1].prompt, /Your last draft broke these rules: it contains a link/);
+    assert.match(made.error, /Every reply broke a rule, so none was kept: .*link setting is Never/);
+    assert.equal(model.asked.length, 2, 'one call for three options, one retry for the broken ones');
+    assert.match(model.asked[1].prompt, /These replies broke the rules — option 1 \("angle 1"\): it contains a link/);
     assert.equal(db.data.get('youtube_outreach_comments').length, 0, 'a rule-breaking draft must never be saved as approvable');
   } finally {
     restore();
@@ -298,7 +313,7 @@ test('a paused target, an avoided channel and an AI failure each refuse with the
     await targets.saveSettings({ avoidChannels: [] }, SCOPE_A);
     const down = await draft(comments, target.id, scripted({ ok: false, error: 'overloaded' }));
     assert.equal(down.status, 502);
-    assert.match(down.error, /The AI did not write a draft: overloaded/);
+    assert.match(down.error, /The AI did not write any replies: overloaded/);
   } finally {
     restore();
   }
@@ -487,4 +502,114 @@ test('with no canon copied, no draft is written and the AI is never asked', asyn
   } finally {
     restore();
   }
+});
+
+// ── Three to choose from (Outreach wizard 10/19, task 86bcrmbm0) ───────────
+
+const OTHER_A = 'I tried the toss drill this morning and my first serves went in far more often. Any tips for keeping it going under match pressure?';
+const OTHER_B = 'Loved how you slowed the footage down at the release point. It made the whole motion easier to see than any written guide has.';
+
+test('Write a draft saves three labelled options, the first as draft_text', async () => {
+  const { db, targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const model = scripted([GOOD_MEDIUM, OTHER_A, OTHER_B]);
+    const made = await draft(comments, target.id, model);
+    assert.equal(made.ok, true, made.error);
+    assert.equal(model.asked.length, 1, 'three options come from ONE AI call');
+    assert.match(model.asked[0].system, /Write 3 different replies/);
+    assert.doesNotMatch(model.asked[0].system, /"comment"/, 'the one-draft answer shape is left off');
+    assert.deepEqual(made.data.draftOptions.map((o) => [o.angle, o.text]), [
+      ['angle 1', GOOD_MEDIUM], ['angle 2', OTHER_A], ['angle 3', OTHER_B],
+    ]);
+    assert.equal(made.data.draftText, GOOD_MEDIUM);
+    assert.equal(made.data.chosenOption, null);
+    assert.equal(db.data.get('youtube_outreach_comments')[0].draft_options.length, 3);
+  } finally {
+    restore();
+  }
+});
+
+test('an option that breaks a rule twice is dropped and named; the other two are kept', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const linked = `${OTHER_A} https://example.com`;
+    const model = scripted([GOOD_MEDIUM, linked, OTHER_B], [linked]);
+    const made = await draft(comments, target.id, model);
+    assert.equal(made.ok, true, made.error);
+    assert.equal(model.asked.length, 2);
+    assert.match(model.asked[1].prompt, /option 2 \("angle 2"\): it contains a link/);
+    const options = made.data.draftOptions;
+    assert.deepEqual(options.filter((o) => !o.dropped).map((o) => o.text), [GOOD_MEDIUM, OTHER_B]);
+    const dropped = options.find((o) => o.dropped);
+    assert.equal(dropped.text, undefined, 'a dropped option\'s words are never kept');
+    assert.match(dropped.rule.reason, /link setting is Never/);
+  } finally {
+    restore();
+  }
+});
+
+test('Approve with a pick takes that option\'s words, records which one, and refuses a dropped or unknown pick', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const linked = `${OTHER_A} https://example.com`;
+    const made = await draft(comments, target.id, scripted([GOOD_MEDIUM, linked, OTHER_B], [linked]));
+    const droppedIndex = made.data.draftOptions.findIndex((o) => o.dropped);
+    const keptLast = made.data.draftOptions.findIndex((o) => o.text === OTHER_B);
+
+    for (const bad of [droppedIndex, 7, '1']) {
+      const refused = await comments.approveComment(made.data.id, { option: bad }, SCOPE_A);
+      assert.equal(refused.ok, false, `option ${JSON.stringify(bad)} must be refused`);
+      assert.match(refused.error, /option must be the number of one of this draft's comments/);
+    }
+
+    const approved = await comments.approveComment(made.data.id, { option: keptLast }, SCOPE_A);
+    assert.equal(approved.ok, true, approved.error);
+    const readBack = await comments.getComment(made.data.id, SCOPE_A);
+    assert.equal(readBack.data.finalText, OTHER_B);
+    assert.equal(readBack.data.chosenOption, keptLast);
+  } finally {
+    restore();
+  }
+});
+
+test('Approve with a pick AND an edit stores the edit, still re-checked against the rules', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const made = await draft(comments, target.id, scripted([GOOD_MEDIUM, OTHER_A, OTHER_B]));
+    const withLink = await comments.approveComment(made.data.id, { option: 1, text: `${OTHER_A} https://example.com` }, SCOPE_A);
+    assert.equal(withLink.status, 422);
+    assert.match(withLink.error, /link setting is Never/);
+
+    const approved = await comments.approveComment(made.data.id, { option: 1, text: `${OTHER_A} Thanks!` }, SCOPE_A);
+    assert.equal(approved.ok, true, approved.error);
+    assert.equal(approved.data.finalText, `${OTHER_A} Thanks!`);
+    assert.equal(approved.data.chosenOption, 1);
+  } finally {
+    restore();
+  }
+});
+
+test('on a database without the option columns, Write a draft says which SQL to run instead of failing vaguely', async () => {
+  const { db, targets, comments, restore } = withDb({ withOptions: false });
+  try {
+    const target = await addTarget(targets);
+    const made = await draft(comments, target.id, scripted(GOOD_MEDIUM));
+    assert.equal(made.ok, false);
+    assert.equal(made.code, 'SQL_NOT_RUN');
+    assert.match(made.error, /run docs\/SQL\/youtube_outreach_draft_options\.sql/);
+    assert.equal(db.data.get('youtube_outreach_comments').length, 0, 'nothing half-saved');
+  } finally {
+    restore();
+  }
+});
+
+test('the options SQL only adds columns, with defaults, and is idempotent', () => {
+  const sql = fs.readFileSync(OPTIONS_SQL, 'utf8');
+  const statements = sql.split('\n').filter((l) => l.trim() && !l.trim().startsWith('--'));
+  for (const line of statements) assert.match(line, /^alter table public\.youtube_outreach_comments add column if not exists /);
+  assert.doesNotThrow(() => parseSchemaText(`${schemaText()}\n${sql}`));
 });

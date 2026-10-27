@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
 
 /**
  * Engage › YouTube Outreach — the list of videos the outreach agent should
@@ -40,6 +41,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
  * re-checks it against the link and avoid-word rules and refuses by name, so
  * an edit cannot approve something the rules forbid. A rejected draft leaves
  * the tab and stays in that video's History.
+ *
+ * THREE TO CHOOSE FROM (Outreach wizard 10/19, task 86bcrmbm0). Write a draft
+ * — and the scheduled pass — now writes three comments, each with a short
+ * label naming its approach, shown by the shared
+ * components/outreach-wizard/draft-chooser.tsx that Reddit uses. Picking one
+ * makes it the editable box; Approve sends its words and which one was picked.
+ * A draft written before then has no options and keeps its single box.
  *
  * POSTING (5/7, task 86bcda68h). Nothing here posts — the Mini's worker does
  * (workers/youtube-outreach/poster.js). An approved card shows the worker's own
@@ -151,6 +159,10 @@ export type OutreachComment = {
   followed: FollowedSettings;
   draftText: string;
   finalText: string;
+  /** 10/19: the comments to choose from — kept and dropped, in order. Empty on an older draft. */
+  draftOptions?: DraftOption[];
+  /** 10/19: which of draftOptions was approved. */
+  chosenOption?: number | null;
   status: string;
   approvedAt: string | null;
   rejectedAt: string | null;
@@ -418,17 +430,48 @@ function VideoHeading({ comment }: { comment: OutreachComment }): React.ReactEle
 
 // ── One comment on the Approvals tab ───────────────────────────────────────
 
+/** "3 comments to choose from" — the notice after a draft is written. */
+export function optionsNotice(comment: OutreachComment | null | undefined): string {
+  const n = keptOptions(comment?.draftOptions).length;
+  if (!n) return '';
+  return n === 1 ? 'One comment to choose from' : `${n} comments to choose from`;
+}
+
 function DraftCard({ comment, busy, error, onApprove, onReject, onRedraft }: {
   comment: OutreachComment;
-  busy: boolean;
+  /** What this card is busy with, if anything: 'draft' (Three More) | 'approve' | 'reject' | ''. */
+  busy: string;
   error: string;
-  onApprove: (text: string) => void;
+  onApprove: (text: string, option?: number) => void;
   onReject: () => void;
   onRedraft: () => void;
 }): React.ReactElement {
   const [text, setText] = useState(() => commentWords(comment));
   const deciding = comment.status === 'draft';
   const boxId = `yto-draft-${comment.id}`;
+
+  if (deciding && keptOptions(comment.draftOptions).length) {
+    return (
+      <article className="yt-outreach-card yt-outreach-draft" data-comment-id={comment.id} aria-label={`Draft for ${comment.videoTitle || comment.videoId}`}>
+        <VideoHeading comment={comment} />
+        <p className="yt-outreach-card-note">
+          <strong>Followed: </strong>
+          {followedSummary(comment.followed || {}) || 'the settings were not recorded'}
+        </p>
+        <p className="yt-outreach-draft-status">{COMMENT_STATUS_LABELS[comment.status] || comment.status}</p>
+        <DraftChooser
+          options={comment.draftOptions || []}
+          idPrefix={boxId}
+          busy={busy}
+          error={error}
+          footnote={comment.note || ''}
+          onApprove={(words, option) => onApprove(words, option)}
+          onReject={onReject}
+          onMore={onRedraft}
+        />
+      </article>
+    );
+  }
 
   return (
     <article className="yt-outreach-card yt-outreach-draft" data-comment-id={comment.id} aria-label={`Draft for ${comment.videoTitle || comment.videoId}`}>
@@ -458,9 +501,9 @@ function DraftCard({ comment, busy, error, onApprove, onReject, onRedraft }: {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       {deciding ? (
         <div className="yt-outreach-actions">
-          <button type="button" className="btn" disabled={busy} onClick={onRedraft}>Write another</button>
-          <button type="button" className="btn btn-danger" disabled={busy} onClick={onReject}>Reject</button>
-          <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => onApprove(text)}>
+          <button type="button" className="btn" disabled={Boolean(busy)} onClick={onRedraft}>Write another</button>
+          <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={onReject}>Reject</button>
+          <button type="button" className="btn btn-primary" disabled={Boolean(busy) || !text.trim()} onClick={() => onApprove(text)}>
             {busy ? 'Working…' : 'Approve'}
           </button>
         </div>
@@ -852,6 +895,8 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   const [postedError, setPostedError] = useState('');
   const [draftingId, setDraftingId] = useState('');
   const [commentBusy, setCommentBusy] = useState('');
+  /** What the busy comment is doing — the chooser says "Writing…" only for Three More. */
+  const [commentBusyAction, setCommentBusyAction] = useState('');
   const [commentErrors, setCommentErrors] = useState<Record<string, string>>({});
   const [historyId, setHistoryId] = useState('');
   const [history, setHistory] = useState<OutreachComment[] | null>(null);
@@ -1069,7 +1114,10 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       const made = body?.data as OutreachComment;
       setComments((list) => [made, ...(list || [])]);
       if (historyId === target.id) setHistory((list) => (list ? [made, ...list] : list));
-      setNotice(`A draft for "${name}" is waiting on the Approvals tab.`);
+      const choices = optionsNotice(made);
+      setNotice(choices
+        ? `${choices} for "${name}" — on the Approvals tab, ready to pick.`
+        : `A draft for "${name}" is waiting on the Approvals tab.`);
       setTab('approvals');
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
@@ -1101,17 +1149,18 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   };
 
   /** Approve / reject / write another — each answered by the server, never assumed. */
-  const decide = async (comment: OutreachComment, action: 'approve' | 'reject' | 'redraft', text?: string) => {
+  const decide = async (comment: OutreachComment, action: 'approve' | 'reject' | 'redraft', text?: string, option?: number) => {
     const api = getApi();
     if (!api) return;
     const epoch = projectEpoch.current;
     setCommentBusy(comment.id);
+    setCommentBusyAction(action === 'redraft' ? 'draft' : action);
     setCommentErrors((errors) => ({ ...errors, [comment.id]: '' }));
     setNotice('');
     try {
       const body = await api(`${COMMENTS_PATH}/${encodeURIComponent(comment.id)}/${action}`, {
         method: 'POST',
-        body: JSON.stringify(action === 'approve' ? { text } : {}),
+        body: JSON.stringify(action !== 'approve' ? {} : option === undefined ? { text } : { text, option }),
       });
       if (epoch !== projectEpoch.current) return;
       const next = body?.data as OutreachComment;
@@ -1123,7 +1172,10 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
         setNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`);
       } else {
         setComments((list) => [next, ...(list || []).filter((c) => c.id !== comment.id)]);
-        setNotice('A new draft replaced the old one, which is kept in the history as rejected.');
+        const choices = optionsNotice(next);
+        setNotice(choices
+          ? `${choices} — the old ones are kept in the history as rejected.`
+          : 'A new draft replaced the old one, which is kept in the history as rejected.');
       }
       if (historyId === comment.targetId) setHistoryId('');
     } catch (err) {
@@ -1131,6 +1183,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       setCommentErrors((errors) => ({ ...errors, [comment.id]: errorText(err, 'unknown error') }));
     } finally {
       setCommentBusy('');
+      setCommentBusyAction('');
     }
   };
 
@@ -1222,9 +1275,9 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
             <DraftCard
               key={`${comment.id}:${comment.status}`}
               comment={comment}
-              busy={commentBusy === comment.id}
+              busy={commentBusy === comment.id ? commentBusyAction || 'approve' : ''}
               error={commentErrors[comment.id] || ''}
-              onApprove={(text) => void decide(comment, 'approve', text)}
+              onApprove={(text, option) => void decide(comment, 'approve', text, option)}
               onReject={() => void decide(comment, 'reject')}
               onRedraft={() => void decide(comment, 'redraft')}
             />

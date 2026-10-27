@@ -22,6 +22,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
+const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
 const REPO = path.join(__dirname, '..', '..');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
@@ -44,7 +45,7 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 
 function schemaText() {
-  return `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}`;
+  return `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}`;
 }
 
 async function fakeLookup(videoId) {
@@ -96,7 +97,7 @@ async function approvedComment({ targets, comments }, { videoId = 'dQw4w9WgXcQ',
   }
   assert.equal(made.ok, true, made.error);
   const draft = await comments.writeDraftForTarget(made.data.id, SCOPE, {
-    generate: async () => ({ ok: true, text: JSON.stringify({ comment: words }) }),
+    generate: async () => ({ ok: true, text: JSON.stringify({ options: [1, 2, 3].map((n) => ({ angle: `angle ${n}`, text: words })) }) }),
     readVideo: async () => ({ description: '', topComments: [], note: '' }),
   });
   assert.equal(draft.ok, true, draft.error);

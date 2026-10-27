@@ -80,6 +80,14 @@ function defaults(): OutreachSettings {
 
 type Store = { targets: Target[]; settings: OutreachSettings; comments: OutreachComment[] };
 let draftSeq = 0;
+/**
+ * 10/19: when true the fake server answers Write a draft the way
+ * lib/youtubeOutreachCommentsStore.js now does — three labelled options. With
+ * `dropOne` the second broke a rule twice and was dropped, words unkept. The
+ * older tests leave it false: a draft written before options keeps its box.
+ */
+let threeOptions = false;
+let dropOne = false;
 /** What the fake "agent" writes next; a string starting "REFUSE:" is a server refusal instead. */
 let nextDraft = "Slowing the toss down in that clip fixed my serve. Does it work for a kick serve too?";
 
@@ -96,6 +104,16 @@ function makeComment(t: Target, text: string): OutreachComment {
       linkPolicy: t.linkPolicy, mentionPolicy: t.mentionPolicy,
     },
     draftText: text,
+    ...(threeOptions ? {
+      draftOptions: [
+        { angle: "asks a question back", text, rule: { ok: true } },
+        dropOne
+          ? { angle: "shares an insight", dropped: true, rule: { ok: false, reason: "it contains a link (x.com), and this video's link setting is Never" } }
+          : { angle: "shares an insight", text: `The release point matters more than the height, ${draftSeq}.`, rule: { ok: true } },
+        { angle: "thanks the creator", text: `Thanks for filming it from the side, ${draftSeq}.`, rule: { ok: true } },
+      ],
+      chosenOption: null,
+    } : {}),
     finalText: "",
     status: "draft",
     approvedAt: null,
@@ -144,7 +162,7 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     if (c.status !== "draft") fail(`This comment is ${c.status}, not waiting for approval, so it cannot be changed here.`);
     if (decision[2] === "approve") {
       if (/https?:\/\//.test(body.text)) fail("Not approved: it contains a link, and this video's link setting is Never.");
-      Object.assign(c, { status: "approved", finalText: body.text, approvedAt: "2026-10-07T12:30:00Z" });
+      Object.assign(c, { status: "approved", finalText: body.text, chosenOption: body.option ?? null, approvedAt: "2026-10-07T12:30:00Z" });
       return { ok: true, data: { ...c } };
     }
     if (decision[2] === "reject") {
@@ -259,6 +277,8 @@ beforeEach(() => {
     proj_delray: { targets: [target("delray1", "Delray serve clinic")], settings: defaults(), comments: [] },
   };
   draftSeq = 0;
+  threeOptions = false;
+  dropOne = false;
   nextDraft = "Slowing the toss down in that clip fixed my serve. Does it work for a kick serve too?";
   activeProject = "proj_doe";
   requests = [];
@@ -814,5 +834,87 @@ describe("form helpers", () => {
   it("describes repeats in words", () => {
     expect(repeatSummary({ repeatMode: "once", repeatEveryDays: null, repeatMaxTimes: null })).toBe("One-off");
     expect(repeatSummary({ repeatMode: "repeat", repeatEveryDays: 7, repeatMaxTimes: 3 })).toBe("Repeats every 7 days, up to 3 times");
+  });
+});
+
+describe("three comments to choose from (Outreach wizard 10/19)", () => {
+  beforeEach(() => {
+    threeOptions = true;
+  });
+
+  function draftCard(id: string): HTMLElement {
+    const found = container!.querySelector(`article[data-comment-id="${id}"]`);
+    if (!found) throw new Error(`no draft card ${id} in: ${text()}`);
+    return found as HTMLElement;
+  }
+  const options = (id: string) => [...draftCard(id).querySelectorAll<HTMLButtonElement>(".draft-chooser-option")];
+
+  it("Write a draft shows three labelled comments; picking the second fills the box, and Approve sends his edit and the pick", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Write a draft", row("abc")));
+    expect(text()).toContain('3 comments to choose from for "First video" — on the Approvals tab, ready to pick.');
+    expect(options("c1").map((o) => o.querySelector(".draft-chooser-angle")?.textContent))
+      .toEqual(["1asks a question back", "2shares an insight", "3thanks the creator"]);
+    // Nothing is approvable until he picks one.
+    expect(container!.querySelector("#yto-draft-c1-box")).toBeNull();
+    expect(button("Approve", draftCard("c1")).disabled).toBe(true);
+
+    await click(options("c1")[1]);
+    expect(options("c1")[1].getAttribute("aria-pressed")).toBe("true");
+    const box = container!.querySelector<HTMLTextAreaElement>("#yto-draft-c1-box")!;
+    expect(box.value).toBe("The release point matters more than the height, 1.");
+
+    type(box, "The release point matters more than the height — that fixed it for me.");
+    await click(button("Approve", draftCard("c1")));
+    expect(requests.pop()?.body).toEqual({ text: "The release point matters more than the height — that fixed it for me.", option: 1 });
+    expect(stores.proj_doe.comments[0].status).toBe("approved");
+    expect(stores.proj_doe.comments[0].chosenOption).toBe(1);
+    expect(draftCard("c1").textContent).toContain("Approved — waiting to post");
+  });
+
+  it("a draft the scheduled pass wrote is waiting with its three choices already", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    stores.proj_doe.comments = [makeComment(stores.proj_doe.targets[0], "Written overnight by the pass.")];
+    await mount();
+    await click(button("Approvals (1)"));
+    expect(options("c1").map((o) => o.querySelector(".draft-chooser-text")?.textContent)).toEqual([
+      "Written overnight by the pass.", "The release point matters more than the height, 1.", "Thanks for filming it from the side, 1.",
+    ]);
+  });
+
+  it("names a dropped comment and its reason, and Approve sends the kept one's stored index", async () => {
+    dropOne = true;
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Write a draft", row("abc")));
+    expect(text()).toContain("2 comments to choose from");
+    expect(options("c1").length).toBe(2);
+    expect(draftCard("c1").textContent).toContain("One option was dropped: it contains a link (x.com), and this video's link setting is Never.");
+    await click(options("c1")[1]);
+    await click(button("Approve", draftCard("c1")));
+    expect(requests.pop()?.body).toEqual({ text: "Thanks for filming it from the side, 1.", option: 2 });
+  });
+
+  it("Three More replaces all three, and the old set stays in the history as rejected", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Write a draft", row("abc")));
+    await click(button("Three More", draftCard("c1")));
+    expect(text()).toContain("3 comments to choose from — the old ones are kept in the history as rejected.");
+    expect(container!.querySelector('article[data-comment-id="c1"]')).toBeNull();
+    expect(options("c2").length).toBe(3);
+    expect(stores.proj_doe.comments.find((c) => c.id === "c1")!.status).toBe("rejected");
+  });
+
+  it("a refused Approve shows the rule on the card and keeps the pick", async () => {
+    stores.proj_doe.targets = [target("abc", "First video")];
+    await mount();
+    await click(button("Write a draft", row("abc")));
+    await click(options("c1")[0]);
+    type(container!.querySelector<HTMLTextAreaElement>("#yto-draft-c1-box")!, "See https://example.com");
+    await click(button("Approve", draftCard("c1")));
+    expect(draftCard("c1").textContent).toContain("Not approved: it contains a link, and this video's link setting is Never.");
+    expect(stores.proj_doe.comments[0].status).toBe("draft");
   });
 });
