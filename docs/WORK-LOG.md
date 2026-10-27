@@ -1,3 +1,17 @@
+## 2026-10-27 — Reddit gives Dane three replies to choose from, not one (#868)
+
+**Write with AI** on the Reddit screen now writes **three replies at once**.
+Each has a short label saying what it does, like "adds a personal story" or
+"asks a question back". Dane clicks one (or presses 1, 2 or 3), it goes into
+the edit box, and he edits and approves it as before. **Three More** swaps all
+three for a fresh set. Each reply is checked against his rules separately. If
+one breaks a rule twice, for example by naming Dane of Earth, it is dropped and
+the card says so and why, so a card with only two never looks broken. The
+system saves which reply he picked as well as his final words. The next step
+will learn from that. YouTube and Substack will use the same cards next. This
+needs one small database change (`docs/SQL/reddit_comments_draft_options.sql`).
+Until it runs, Write with AI says which file to run instead of failing.
+
 ## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
 
 The **Used by Sites** column on Assets → Fonts now works. Each font has a
