@@ -19,7 +19,7 @@
  *
  *   POST   /api/youtube-outreach/targets/:id/drafts             write a draft (AI)
  *   GET    /api/youtube-outreach/comments    ?status=draft,approved&targetId=
- *   POST   /api/youtube-outreach/comments/:id/approve   { text }  (edited wording)
+ *   POST   /api/youtube-outreach/comments/:id/approve   { text, option? }  (edited wording, and which of the three he picked — 10/19)
  *   POST   /api/youtube-outreach/comments/:id/reject
  *   POST   /api/youtube-outreach/comments/:id/redraft            "Write another"
  *
