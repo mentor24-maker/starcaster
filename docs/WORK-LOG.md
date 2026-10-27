@@ -8,9 +8,13 @@ open it. Your stars are yours alone and follow you to every site you work on;
 another admin's stars never show up in your list. In Builder → Themes, the
 "Library font…" list now puts your favourites at the top under a
 "Favourites" heading, so with hundreds of fonts your go-to ones are one click
-away. One thing to know: this needs one new database table on the live site.
-Until it is added, the Fonts screen still works but says your favourites could
-not be read.
+away. Favourites works together with the search box, the category buttons and
+the Tag box: pick Favourites, click Display, and you see only the display fonts
+you starred, with a line saying "1 of 3 favourite fonts". One new database
+table goes with this; the agent session that merges it adds the table to the
+live site and checks it is there. Until then the Fonts screen still works but
+says your favourites could not be read.
+
 ## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
 
 With nearly 300 fonts in the library, scrolling to find one stopped being
