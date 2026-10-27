@@ -11,6 +11,7 @@ import SubstackNotesPanel, {
   settingsPatchFromForm,
   settingsToForm,
   latestMessage,
+  optionsNotice,
   splitItems,
   splitLines,
   statusLabel,
@@ -102,6 +103,15 @@ let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
+/**
+ * 11/19: when true the fake server answers Write a draft the way
+ * lib/substackNotesStore.js now does — three labelled options. With `dropOne`
+ * the second broke a rule twice and was dropped, words unkept. The older tests
+ * leave it false: a draft written before options keeps its single box.
+ */
+let threeOptions = false;
+let dropOne = false;
+let draftRound = 0;
 
 function fail(message: string): never {
   throw new Error(message);
@@ -170,12 +180,24 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     if (decision[2] === "draft") {
       found.draftText = `Draft about: ${found.ideaText || found.targetUrl}`;
       found.status = "draft";
+      if (threeOptions) {
+        draftRound += 1;
+        found.draftOptions = [
+          { angle: "adds a personal story", text: found.draftText, rule: { ok: true } },
+          dropOne
+            ? { angle: "asks a question back", dropped: true, rule: { ok: false, reason: "it uses \"synergy\", which is on the account's words-to-avoid list" } }
+            : { angle: "asks a question back", text: `Does anyone else see it, round ${draftRound}?`, rule: { ok: true } },
+          { angle: "offers a resource", text: `A star chart helps, round ${draftRound}.`, rule: { ok: true } },
+        ];
+        found.chosenOption = null;
+      }
     } else if (decision[2] === "approve") {
       const words = body?.text ?? found.draftText;
       // The server's avoid-list rule, in its own words (lib/substackNotesDrafter.js checkNoteText).
       const avoided = store.settings.avoidWords.filter((w) => words && new RegExp(`\\b${w}\\b`, "i").test(words));
       if (avoided.length) fail(`Not approved: it uses "${avoided[0]}", which is on the account's words-to-avoid list.`);
       found.finalText = words || "";
+      found.chosenOption = body?.option ?? null;
       found.status = "approved";
     } else {
       found.status = "rejected";
@@ -264,6 +286,9 @@ async function submit(form: HTMLFormElement) {
 
 beforeEach(() => {
   seq = 0;
+  threeOptions = false;
+  dropOne = false;
+  draftRound = 0;
   stores = {
     proj_doe: { items: [], settings: defaults() },
     proj_delray: {
@@ -840,5 +865,118 @@ describe("the Mini's Substack sign-in line (YouTube outreach 7/7)", () => {
   it("a row the Mini has never written says so on screen", async () => {
     await mount();
     expect(el(".substack-notes-signin").textContent).toMatch(/has not checked its Substack sign-in yet/);
+  });
+});
+
+describe("three Notes or replies to choose from (Outreach wizard 11/19)", () => {
+  beforeEach(() => {
+    threeOptions = true;
+  });
+
+  function card(id: string): HTMLElement {
+    return el<HTMLElement>(`article[data-item-id="${id}"]`);
+  }
+  const options = (id: string) => [...card(id).querySelectorAll<HTMLButtonElement>(".draft-chooser-option")];
+
+  it("Write a draft shows three labelled Notes; picking the second fills the box, and Approve sends his edit and the pick", async () => {
+    stores.proj_doe.items = [item({ ideaText: "Why the stars feel closer in winter" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write a draft", row(id)));
+    expect(text()).toContain("3 Notes to choose from — on the Approvals tab, ready to pick.");
+
+    await click(button("Approvals"));
+    expect(options(id).map((o) => o.querySelector(".draft-chooser-angle")?.textContent))
+      .toEqual(["1adds a personal story", "2asks a question back", "3offers a resource"]);
+    // Nothing is approvable until he picks one.
+    expect(container!.querySelector(`#sn-draft-${id}-box`)).toBeNull();
+    expect(button("Approve", card(id)).disabled).toBe(true);
+
+    await click(options(id)[1]);
+    expect(options(id)[1].getAttribute("aria-pressed")).toBe("true");
+    const box = el<HTMLTextAreaElement>(`#sn-draft-${id}-box`);
+    expect(box.value).toBe("Does anyone else see it, round 1?");
+    type(box, "Does anyone else see the stars closer in winter?");
+    await click(button("Approve", card(id)));
+    expect(requests.filter((r) => r.path.endsWith("/approve")).pop()?.body)
+      .toEqual({ text: "Does anyone else see the stars closer in winter?", option: 1 });
+    expect(stores.proj_doe.items[0]).toMatchObject({ status: "approved", chosenOption: 1, finalText: "Does anyone else see the stars closer in winter?" });
+  });
+
+  it("a draft the scheduled pass wrote is waiting with its three choices already", async () => {
+    stores.proj_doe.items = [item({
+      ideaText: "night sky",
+      source: "topic",
+      status: "draft",
+      draftText: "Written overnight by the pass.",
+      draftOptions: [
+        { angle: "adds a personal story", text: "Written overnight by the pass.", rule: { ok: true } },
+        { angle: "asks a question back", text: "Who else was out last night?", rule: { ok: true } },
+        { angle: "offers a resource", text: "The dark-sky map is worth a look.", rule: { ok: true } },
+      ],
+    })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals (1)"));
+    expect(options(id).map((o) => o.querySelector(".draft-chooser-text")?.textContent)).toEqual([
+      "Written overnight by the pass.", "Who else was out last night?", "The dark-sky map is worth a look.",
+    ]);
+  });
+
+  it("a reply says replies, names a dropped one and its reason, and Approve sends the kept one's stored index", async () => {
+    dropOne = true;
+    stores.proj_doe.items = [item({ kind: "reply", source: "target", targetUrl: "https://substack.com/@a/note/c-1" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Engage"));
+    await click(button("Write a draft", row(id)));
+    expect(text()).toContain("2 replies to choose from — on the Approvals tab, ready to pick.");
+    await click(button("Approvals"));
+    expect(options(id).length).toBe(2);
+    expect(card(id).textContent).toContain("One option was dropped: it uses \"synergy\", which is on the account's words-to-avoid list.");
+    await click(options(id)[1]);
+    await click(button("Approve", card(id)));
+    expect(requests.filter((r) => r.path.endsWith("/approve")).pop()?.body).toEqual({ text: "A star chart helps, round 1.", option: 2 });
+  });
+
+  it("Three More asks for a fresh set and shows it", async () => {
+    stores.proj_doe.items = [item({ ideaText: "Stars" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write a draft", row(id)));
+    await click(button("Approvals"));
+    await click(button("Three More", card(id)));
+    expect(requests.filter((r) => r.path.endsWith(`/items/${id}/draft`)).length).toBe(2);
+    expect(options(id)[2].querySelector(".draft-chooser-text")?.textContent).toBe("A star chart helps, round 2.");
+  });
+
+  it("a refused Approve shows the rule on the card and leaves it waiting", async () => {
+    stores.proj_doe.settings.avoidWords = ["synergy"];
+    stores.proj_doe.items = [item({ ideaText: "Stars" })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write a draft", row(id)));
+    await click(button("Approvals"));
+    await click(options(id)[0]);
+    type(el<HTMLTextAreaElement>(`#sn-draft-${id}-box`), "Pure synergy.");
+    await click(button("Approve", card(id)));
+    expect(card(id).textContent).toContain('Not approved: it uses "synergy", which is on the account\'s words-to-avoid list.');
+    expect(stores.proj_doe.items[0].status).toBe("draft");
+  });
+
+  it("a draft written before options keeps its single box and Write another", async () => {
+    stores.proj_doe.items = [item({ ideaText: "Stars", status: "draft", draftText: "An older single draft." })];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Approvals (1)"));
+    expect(el<HTMLTextAreaElement>(`#sn-draft-${id}`).value).toBe("An older single draft.");
+    expect(card(id).querySelector(".draft-chooser")).toBeNull();
+    expect(button("Write another", card(id))).toBeTruthy();
+  });
+
+  it("optionsNotice counts only the kept options and says Note or reply", () => {
+    expect(optionsNotice({ kind: "note", draftOptions: [] })).toBe("");
+    expect(optionsNotice({ kind: "reply", draftOptions: [{ text: "a" }, { dropped: true }] })).toBe("One reply to choose from");
+    expect(optionsNotice({ kind: "note", draftOptions: [{ text: "a" }, { text: "b" }, { text: "c" }] })).toBe("3 Notes to choose from");
   });
 });
