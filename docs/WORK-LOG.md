@@ -1,3 +1,18 @@
+## 2026-10-26 — YouTube comments and Substack Notes now sound like Dane, the same as Reddit (#862)
+
+Reddit comments were already written from Dane of Earth's canon — his voice
+document, his list of phrases that sound like an AI wrote them, and his thesis
+documents as background. YouTube comments and Substack Notes only had a short
+"Voice" box, so the three did not sound like the same person. Now all three
+read the same canon. The old "Voice" box is still there on both settings
+screens, renamed **Extra notes for this channel**, and is added after the
+canon. A draft that uses a banned phrase is thrown away and never shown for
+approval, and an edit that adds one cannot be approved — on all three
+channels. Each draft also records which canon documents it was written from.
+One step before this goes live: a small database change
+(`docs/SQL/outreach_canon_used.sql`) has to be run, or new YouTube and
+Substack drafts will be refused with a message naming that file.
+
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
