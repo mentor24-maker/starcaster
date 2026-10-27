@@ -174,7 +174,15 @@ function createYoutubeAdapter(options = {}) {
     homedir: options.homedir || os.homedir(),
   };
   const profiles = { ...DEFAULT_PROFILES, ...(options.profiles || {}) };
-  const accountNames = { ...DEFAULT_ACCOUNT_NAMES, ...(options.accountNames || {}) };
+  // The account each key posts as: chosen on Engage › Outreach and read every
+  // pass (Outreach wizard 2/19). `accountNames` fixes them, for tests.
+  const chosen = require('../chosenAccount.js').createAccountReader({
+    site: 'youtube',
+    label: 'YouTube',
+    projectId,
+    fixedNames: options.accountNames ? { ...options.accountNames } : null,
+    readAccount: options.readAccount || null,
+  });
   const expectedChannelId = text(options.expectedChannelId);
 
   // Per pass: one read of each account's settings and history, one of each target.
@@ -218,6 +226,7 @@ function createYoutubeAdapter(options = {}) {
       accounts = new Map();
       targetCache = new Map();
       zoneCache = null;
+      chosen.reset();
     },
 
     async listApproved() {
@@ -238,6 +247,8 @@ function createYoutubeAdapter(options = {}) {
           reason: `Not posting: no browser on the Mini is set up for the "${item.accountKey}" account.`,
         };
       }
+      // Holds every comment on the account until Dane chooses who posts.
+      if (!(await chosen.chosen(item.accountKey))) return { ok: false, scope: 'account', reason: chosen.reason };
       const ctx = await accountContext(item.accountKey);
       const target = await targetFor(item.targetId);
       const videoHistory = ctx.history.filter((h) => h.videoId === item.videoId && h.id !== item.id);
@@ -265,6 +276,8 @@ function createYoutubeAdapter(options = {}) {
       if (placement === 'reply_specific' && !replyToCommentId) {
         return { ok: false, error: 'This comment is meant as a reply to a specific comment, but its target names no comment to reply to.' };
       }
+      const accountName = await chosen.chosen(item.accountKey);
+      if (!accountName) return { ok: false, error: chosen.reason };
       const res = await deps.callOpenClaw({
         user: 'starcaster:youtube-outreach-poster',
         timeoutMs: POST_TIMEOUT_MS,
@@ -275,7 +288,7 @@ function createYoutubeAdapter(options = {}) {
           placement,
           replyToCommentId,
           profile: profiles[item.accountKey],
-          accountName: accountNames[item.accountKey] || item.accountKey,
+          accountName,
         }),
       });
       if (!res.ok) {
@@ -335,7 +348,9 @@ function createYoutubeAdapter(options = {}) {
         site: 'youtube',
         accountKey,
         profile: profiles[accountKey],
-        who: accountNames[accountKey] || accountKey,
+        who: options.accountNames?.[accountKey] || DEFAULT_ACCOUNT_NAMES[accountKey] || accountKey,
+        // The account Dane chose, read at check time (../health.js).
+        resolve: async () => ({ who: await chosen.compareWith(accountKey) }),
         record: (reading) => deps.targets.recordBrowserCheck(reading, scope, { accountKey }),
       }));
     },

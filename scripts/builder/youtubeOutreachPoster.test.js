@@ -169,6 +169,8 @@ function adapterFor(env, ins, extra = {}) {
     readFile: () => Buffer.from('png bytes'),
     statFile: () => ({ size: 9 }),
     sleep: async () => {},
+    // Dane has chosen the account (Outreach wizard 2/19); the row read is tested on its own.
+    accountNames: { dane_of_earth: 'Dane of Earth' },
     ...extra,
   });
 }
