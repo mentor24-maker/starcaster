@@ -1,3 +1,22 @@
+## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
+
+The **Used by Sites** column on Assets → Fonts now works. Each font has a
+**Show sites** button. Press it and you get one line per website that uses the
+font, like "Strands (3 pages)". Click that line to see the page names, and click
+a page to open it on the live site in a new tab, so you can see the font in real
+use. A font nobody uses says "Not used on any published page yet." A page counts
+whether it uses the font in one of its own modules or through its theme, and it
+counts once even if it uses the font in several places. Only published, public
+pages are listed, from every Starcaster site; hidden drafts and private pages
+never are. Each font is only looked up when you press its button, so the screen
+does not get slower as more fonts are added.
+
+Fixed after the first review: the ten fonts the Builder came with (Montserrat,
+Inter, Poppins, Lora and the rest) are saved differently from library fonts, so
+they used to say "Not used" even on sites built entirely in them. They are
+counted now. Montserrat, for example, lists all 36 public pages of the Marinoff
+site, whose theme uses it.
+
 ## 2026-10-26 — Fonts can be found by style: AI tags every font, and you can filter by tag (#863)
 
 Every font now carries a few style words, like "sci-fi", "elegant" or
