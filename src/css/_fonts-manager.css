@@ -188,3 +188,53 @@
   margin: var(--space-1) 0 0;
   padding-left: var(--space-4);
 }
+
+/* Tags (Font Library 5/7). A chip is two buttons: the word filters the list,
+   the × (project fonts only) removes it. */
+.fonts-manager-tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.fonts-manager-tag-filter input {
+  width: 16ch;
+}
+
+.fonts-manager-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fonts-manager-chip-filter,
+.fonts-manager-chip-remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fonts-manager-chip-filter:hover {
+  text-decoration: underline;
+}
+
+.fonts-manager-chip-remove {
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.fonts-manager-chip-remove:hover {
+  opacity: 1;
+}
+
+.fonts-manager-tag-input {
+  width: 8ch;
+  font-size: inherit;
+}

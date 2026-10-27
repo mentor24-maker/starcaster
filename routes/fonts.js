@@ -4,10 +4,15 @@
  * The font library API (Font Library 1/7, task 86bchyd3n).
  *
  *   GET    /api/fonts        → { ok, data: { fonts, total } }   shared library + this project's own
- *   POST   /api/fonts        → { ok, data: { font } }           JSON: family + category + licence
+ *   POST   /api/fonts        → { ok, data: { font, autoTagError? } }  JSON: family + category + licence
  *                                                                + files [{ name, data: base64 }]
  *                                                                (lib/fontUploadBody.js has the rest)
- *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }
+ *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }; tags is a
+ *                                                                list or a comma-separated string, stored
+ *                                                                trimmed, lowercased and deduplicated
+ *
+ * An upload with no tags is tagged by AI before it answers (lib/fontAutoTag.js,
+ * Font Library 5/7); a tagging failure is named in `autoTagError`, never fatal.
  *   DELETE /api/fonts/:id    → { ok, data: { font, filesRemoved, filesNotRemoved } }
  *   GET    /api/fonts/:id/usage → { ok, data: { font, sites, totalPages, truncated } }
  *                                the published public pages using it, by site
@@ -28,6 +33,7 @@ const fontsStore = require('../lib/fontsStore');
 const { uploadProjectFont, removeFontFiles } = require('../lib/fontUpload');
 const { readFontUploadBody } = require('../lib/fontUploadBody');
 const { getFontUsage } = require('../lib/fontUsageStore');
+const { autoTagFont } = require('../lib/fontAutoTag');
 
 const manifest = {
   id: 'fonts',
@@ -37,6 +43,11 @@ const manifest = {
 
 const ID_PATH = /^\/api\/fonts\/([^/]+)\/?$/;
 const USAGE_PATH = /^\/api\/fonts\/([^/]+)\/usage\/?$/;
+
+/** PATCH takes a list, or one "sci-fi, wide" string the way the "+ tag" box is typed. */
+function splitTags(tags) {
+  return typeof tags === 'string' ? tags.split(',') : tags;
+}
 
 function fail(res, result, fallback) {
   return sendErr(res, result.status || 500, result.error || fallback), true;
@@ -83,7 +94,14 @@ async function handle(req, res, pathname, method, deps = {}) {
     if (!form.ok) return sendErr(res, form.status, form.message), true;
     const result = await uploadProjectFont(form, scope, deps);
     if (!result.ok) return fail(res, result, 'Could not save the font');
-    return sendOk(res, 201, { font: result.data }), true;
+    // Font Library 5/7: an upload that arrived without tags gets the AI's.
+    // The font is saved whatever happens here; a tagging failure is named in
+    // the answer rather than failing an upload that succeeded.
+    const tagged = await autoTagFont(result.data, { scope, ...(deps.autoTag || {}) });
+    return sendOk(res, 201, {
+      font: tagged.font,
+      ...(tagged.ok ? {} : { autoTagError: tagged.error }),
+    }), true;
   }
 
   if (idMatch && verb === 'PATCH') {
@@ -95,7 +113,7 @@ async function handle(req, res, pathname, method, deps = {}) {
     }
     const result = await fontsStore.updateFontTags(
       decodeURIComponent(idMatch[1]),
-      { tags: body?.tags, previewText: body?.previewText },
+      { tags: splitTags(body?.tags), previewText: body?.previewText },
       scope
     );
     if (!result.ok) return fail(res, result, 'Could not change the font');
