@@ -262,7 +262,7 @@ export function noMatchSentence(query: string, category: string, tags: string[] 
 
 /** The count beside Clear: what is listed, out of the list it was filtered from. */
 export function countLine(shown: number, of: number, favourites: boolean): string {
-  const noun = favourites ? 'favourite fonts' : 'fonts';
+  const noun = `${favourites ? 'favourite ' : ''}${of === 1 ? 'font' : 'fonts'}`;
   return shown === of ? `${of} ${noun}` : `${shown} of ${of} ${noun}`;
 }
 
@@ -877,6 +877,28 @@ export default function FontsManager(): React.ReactElement {
       </div>
 
       {fonts && fonts.length ? (
+        <div className="fonts-manager-view-switch" role="group" aria-label="Which fonts to show">
+          <button
+            type="button"
+            className={`btn${view === 'all' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'all'}
+            onClick={() => chooseView('all')}
+          >
+            All fonts
+          </button>
+          <button
+            type="button"
+            className={`btn${view === 'favorites' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'favorites'}
+            title={`The ${favoriteCount} ${favoriteCount === 1 ? 'font' : 'fonts'} you have starred`}
+            onClick={() => chooseView('favorites')}
+          >
+            Favourites ({favoriteCount})
+          </button>
+        </div>
+      ) : null}
+
+      {fonts && fonts.length ? (
         <div className="fonts-manager-filters" role="search" aria-label="Find a font">
           <div className="fonts-manager-filter-grid">
             <label className="fonts-manager-field">
@@ -951,28 +973,6 @@ export default function FontsManager(): React.ReactElement {
             setFonts((list) => [...(list || []), font].sort((a, b) => a.family.localeCompare(b.family)));
           }}
         />
-      ) : null}
-
-      {fonts && fonts.length ? (
-        <div className="fonts-manager-view-switch" role="group" aria-label="Which fonts to show">
-          <button
-            type="button"
-            className={`btn${view === 'all' ? ' btn-primary' : ''}`}
-            aria-pressed={view === 'all'}
-            onClick={() => chooseView('all')}
-          >
-            All fonts
-          </button>
-          <button
-            type="button"
-            className={`btn${view === 'favorites' ? ' btn-primary' : ''}`}
-            aria-pressed={view === 'favorites'}
-            title={`The ${favoriteCount} ${favoriteCount === 1 ? 'font' : 'fonts'} you have starred`}
-            onClick={() => chooseView('favorites')}
-          >
-            Favourites ({favoriteCount})
-          </button>
-        </div>
       ) : null}
 
       {notice ? <p className="fonts-manager-notice" role="status">{notice}</p> : null}

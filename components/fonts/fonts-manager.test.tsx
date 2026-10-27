@@ -414,6 +414,7 @@ describe("countLine / noMatchSentence on Favourites", () => {
     expect(countLine(3, 3, true)).toBe("3 favourite fonts");
     expect(countLine(1, 3, true)).toBe("1 of 3 favourite fonts");
     expect(countLine(2, 4, false)).toBe("2 of 4 fonts");
+    expect(countLine(1, 1, true)).toBe("1 favourite font");
     expect(noMatchSentence("orbit", "display", [], true)).toBe("No favourite display fonts match 'orbit'.");
     expect(noMatchSentence("", "", ["wide"], true)).toBe("No favourite fonts tagged 'wide'.");
   });
