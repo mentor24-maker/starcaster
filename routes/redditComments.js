@@ -7,13 +7,18 @@
  *   GET    /api/engage/reddit-comments/items              ?status=&limit=
  *   POST   /api/engage/reddit-comments/items              { url, postTitle?, postBody?, parentCommentText? }
  *   GET    /api/engage/reddit-comments/items/:id
- *   POST   /api/engage/reddit-comments/items/:id/draft    write a draft (AI); "Write another" too
- *   POST   /api/engage/reddit-comments/items/:id/approve  { text? }  (Dane's edited wording)
+ *   POST   /api/engage/reddit-comments/items/:id/draft    write three options (AI, 9/19); "Three more" too
+ *   POST   /api/engage/reddit-comments/items/:id/approve  { text?, option? }  (his wording, and which option he picked)
  *   POST   /api/engage/reddit-comments/items/:id/reject
+ *   POST   /api/engage/reddit-comments/items/:id/paste       { postTitle, postBody, parentCommentText? }
+ *   POST   /api/engage/reddit-comments/items/:id/read-again  ask the Mini to read it again
  *   GET    /api/engage/reddit-comments/status             the Mini's Reddit sign-in, and the pace
  *
- * Add answers 409 `POST_TEXT_NEEDED` when Reddit refuses the read, with the
- * reason; sending Add again with the post pasted saves it.
+ * Add saves the row as `readState: reading` and the Mini's signed-in browser
+ * fills the post in (Outreach wizard 17/19). While the Mini is not signed in
+ * to Reddit, Add answers 409 `POST_TEXT_NEEDED` with that reason instead, and
+ * sending Add again with the post pasted saves it. A row the Mini could not
+ * read takes the post pasted onto it (`paste`) or another try (`read-again`).
  *
  * Nothing here posts: the Mini's worker does (workers/youtube-outreach/
  * adapters/reddit.js, 4/4). `status` only READS what that worker last wrote
@@ -92,7 +97,7 @@ async function handle(req, res, pathname, method) {
       // Logged so the first real Add in production records whether Reddit
       // answers Vercel at all (measured blocked from the Mini, 2026-10-12).
       if (!added.ok && added.code === 'POST_TEXT_NEEDED') {
-        console.warn(`[reddit-comments] add: Reddit read refused (${added.readerCode || 'unknown'}) — ${added.error}`);
+        console.warn(`[reddit-comments] add: the Mini was not asked to read the post (${added.readerCode || 'unknown'}) — ${added.error}`);
       }
       return reply(res, added, 201);
     }
@@ -121,10 +126,16 @@ async function handle(req, res, pathname, method) {
     });
   }
 
-  const decision = pathname.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject)$/);
+  const decision = pathname.match(/^\/api\/engage\/reddit-comments\/items\/([^/]+)\/(draft|approve|reject|paste|read-again)$/);
   if (decision) {
     if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
     const id = decodeURIComponent(decision[1]);
+    if (decision[2] === 'paste') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.pasteForItem(id, body, scope));
+    }
+    if (decision[2] === 'read-again') return reply(res, await store.readAgain(id, scope));
     if (decision[2] === 'approve') {
       const body = await readBody(req, res);
       if (!body) return true;

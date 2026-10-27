@@ -12,6 +12,46 @@ can be reached from Dane's other Tailscale devices (not from the internet).
 One Tailscale setting ("shields up") closes it, and that is Dane's call. The
 installer is written but has not been run yet: it waits for Dane to add the
 shared secret the Mini and Starcaster will use.
+## 2026-10-27 — Reddit gives Dane three replies to choose from, not one (#868)
+
+**Write with AI** on the Reddit screen now writes **three replies at once**.
+Each has a short label saying what it does, like "adds a personal story" or
+"asks a question back". Dane clicks one (or presses 1, 2 or 3), it goes into
+the edit box, and he edits and approves it as before. **Three More** swaps all
+three for a fresh set. Each reply is checked against his rules separately. If
+one breaks a rule twice, for example by naming Dane of Earth, it is dropped and
+the card says so and why, so a card with only two never looks broken. The
+system saves which reply he picked as well as his final words. The next step
+will learn from that. YouTube and Substack will use the same cards next. This
+needs one small database change (`docs/SQL/reddit_comments_draft_options.sql`).
+Until it runs, Write with AI says which file to run instead of failing.
+
+## 2026-10-27 — Starcaster can give a project admin a one-time pass to the Mini's browser, and logs every window (#871)
+
+Second piece of the sign-in window. When a project's owner or admin asks to
+sign in to YouTube, Substack, Reddit or Google, Starcaster now makes a fresh
+one-time pass, tells the Mac Mini "this pass may open this project's browser"
+with a signed message only the Mini can verify, and hands the pass back. The
+pass works once, within 60 seconds; anyone who is not an owner or admin of the
+project is turned away before anything happens. Every window is written to a
+new log: who opened it, which site, when, when it closed, how long it lasted
+and why it closed. Attempts that never opened (the Mini switched off, not set
+up yet) are logged too, with the reason. Nothing is visible yet: the window
+itself is a later slice, and the log table needs one SQL paste on production.
+## 2026-10-27 — The Mini reads a Reddit post for you, so you no longer paste it by hand (#870)
+
+On **Engage → Comments (Reddit)**, adding a post link now says **Reading…**,
+and within a couple of minutes the Mac Mini's signed-in browser fills in the
+subreddit, title, text and top comments by itself. Before this you had to copy
+the post in by hand, because Reddit refuses to show posts to anything that is
+not signed in. If the Mini cannot read a post, the card says why in plain words
+— for example "Reddit says this post was removed" — and offers the paste box
+and **Try reading again**. If the Mini is not signed in to Reddit when you click
+Add, nothing is saved and the paste box appears straight away with that reason.
+This starts working once the Mini's posting job is installed and the new
+database columns are added; until then Add shows the paste box and says the
+Mini has not checked its sign-in yet.
+
 ## 2026-10-26 — You can star your favourite fonts and show only those on the Fonts screen (#866)
 
 Every font on **Assets → Fonts** now has a star at the start of its row. Click
