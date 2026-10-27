@@ -676,6 +676,171 @@ test('a Chrome that stops answering is still stopped when its window closes', { 
   assert.ok(s.gone(s.kids[0]), 'the hung Chrome was never killed');
 });
 
+// Review round 3: one bad message from anyone must not crash the door keeper,
+// and a Chrome that hangs AFTER reporting its port must not lock its project.
+
+test('a viewer sending a message over the size limit is cut off, and the door keeper keeps working', { timeout: 10_000 }, async (t) => {
+  const fake = fakeBrowserFactory();
+  const d = createDoor({ secret: SECRET, profilesRoot: tmpDir('door-profiles-'), openBrowser: fake.openBrowser });
+  t.after(() => d.close());
+  const { port } = await d.listen(0);
+  // No pass at all: this is anyone who can reach the socket.
+  const v = viewer(port);
+  v.ws.on('error', () => {});
+  await v.ready();
+  const closed = new Promise((resolve) => v.ws.once('close', resolve));
+  v.ws.send('x'.repeat(100 * 1024));
+  await closed;
+  assert.equal(v.ws.readyState, WebSocket.CLOSED);
+  // Reaching here with the door keeper still answering is the proof: an
+  // unheard socket 'error' ends the process.
+  const pass = newPass();
+  assert.equal((await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' })).status, 200);
+  const w = viewer(port, { type: 'hello', pass });
+  await w.ready();
+  const deadline = Date.now() + 3000;
+  while (!fake.opened.length && Date.now() < deadline) await settle(20);
+  assert.equal(fake.opened.length, 1, 'a good pass no longer opens a window after the bad message');
+});
+
+/** A port that accepts a connection and never says a word — a hung Chrome. */
+async function silentPort(t) {
+  const sockets = new Set();
+  const server = require('node:net').createServer((sock) => {
+    sockets.add(sock);
+    sock.on('error', () => {});
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => {
+    for (const sock of sockets) sock.destroy();
+    server.close();
+  });
+  return server.address().port;
+}
+
+test('a Chrome that hangs after reporting its port does not lock the project when the viewer leaves', { timeout: 15_000 }, async (t) => {
+  const hungPort = await silentPort(t);
+  const s = standIn();
+  const d = createDoor({
+    secret: SECRET,
+    profilesRoot: tmpDir('door-profiles-'),
+    chromePath: 'stand-in',
+    // A long step limit, so it is the viewer leaving that has to release the wait.
+    openBrowser: (target, opts) => chrome.openBrowser(target, {
+      ...opts,
+      portTimeoutMs: 5000,
+      stepTimeoutMs: 60_000,
+      spawnFn: (...args) => {
+        const kid = s.spawnFn(...args);
+        fs.writeFileSync(path.join(target.profileDir, 'DevToolsActivePort'), `${hungPort}\n/devtools/browser/stand-in\n`);
+        return kid;
+      },
+    }),
+  });
+  t.after(() => s.kids.forEach((k) => k.kill('SIGKILL')));
+  const { port } = await d.listen(0);
+  const pass = newPass();
+  await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' });
+  const v = viewer(port, { type: 'hello', pass });
+  await v.ready();
+  const deadline = Date.now() + 5000;
+  while (!s.kids.length && Date.now() < deadline) await settle(20);
+  assert.equal(s.kids.length, 1, 'the launch never started');
+  await settle(300); // now waiting on the silent connection
+  v.ws.close();
+  const released = Date.now() + 4000;
+  while (d.windows.size && Date.now() < released) await settle(20);
+  assert.equal(d.windows.size, 0, 'the project still counts as open with its Chrome hung');
+  assert.ok(s.gone(s.kids[0]), 'the hung Chrome is still running');
+  const started = Date.now();
+  await d.close();
+  assert.ok(Date.now() - started < 2000, 'shutting down still waited on the hung Chrome');
+});
+
+test('a Chrome that hangs after reporting its port is given up on, stopped, and the viewer told', { timeout: 15_000 }, async (t) => {
+  const hungPort = await silentPort(t);
+  const s = standIn();
+  const d = createDoor({
+    secret: SECRET,
+    profilesRoot: tmpDir('door-profiles-'),
+    chromePath: 'stand-in',
+    openBrowser: (target, opts) => chrome.openBrowser(target, {
+      ...opts,
+      portTimeoutMs: 5000,
+      stepTimeoutMs: 500,
+      spawnFn: (...args) => {
+        const kid = s.spawnFn(...args);
+        fs.writeFileSync(path.join(target.profileDir, 'DevToolsActivePort'), `${hungPort}\n/devtools/browser/stand-in\n`);
+        return kid;
+      },
+    }),
+  });
+  t.after(async () => {
+    s.kids.forEach((k) => k.kill('SIGKILL'));
+    await d.close();
+  });
+  const { port } = await d.listen(0);
+  const pass = newPass();
+  await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' });
+  const v = viewer(port, { type: 'hello', pass });
+  await v.ready();
+  const bye = await v.waitFor((m) => m.type === 'closed', 5000);
+  assert.equal(bye.reason, 'error');
+  const released = Date.now() + 4000;
+  while (d.windows.size && Date.now() < released) await settle(20);
+  assert.equal(d.windows.size, 0);
+  assert.ok(s.gone(s.kids[0]), 'the hung Chrome is still running');
+});
+
+test('a Chrome that connects but never opens a tab is given up on and stopped', { timeout: 10_000 }, async (t) => {
+  const wss = new WebSocket.Server({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => wss.once('listening', resolve));
+  t.after(() => {
+    for (const client of wss.clients) client.terminate();
+    wss.close();
+  });
+  const s = standIn();
+  t.after(() => s.kids.forEach((k) => k.kill('SIGKILL')));
+  const profileDir = tmpDir('door-hung-');
+  const spawnFn = (...args) => {
+    const kid = s.spawnFn(...args);
+    fs.writeFileSync(path.join(profileDir, 'DevToolsActivePort'), `${wss.address().port}\n/devtools/browser/stand-in\n`);
+    return kid;
+  };
+  await assert.rejects(
+    chrome.openBrowser({ kind: 'launch', chromePath: 'stand-in', profileDir }, { spawnFn, portTimeoutMs: 2000, stepTimeoutMs: 300 }),
+    /Target\.createTarget got no answer/,
+  );
+  assert.ok(s.gone(s.kids[0]), 'the hung Chrome is still running');
+});
+
+test('an attached Chrome that never answers is given up on', { timeout: 10_000 }, async (t) => {
+  const hungPort = await silentPort(t);
+  const started = Date.now();
+  await assert.rejects(chrome.openBrowser({ kind: 'attach', port: hungPort }, { stepTimeoutMs: 300 }));
+  assert.ok(Date.now() - started < 3000, 'the attach waited far past its limit');
+});
+
+test('a Chrome that hangs while the page is being set up closes the window with "could not be opened"', { timeout: 10_000 }, async (t) => {
+  const fake = fakeBrowserFactory();
+  const hanging = async (target, opts) => {
+    const handle = await fake.openBrowser(target, opts);
+    const page = handle.page;
+    handle.page = (method, params) => (method === 'Page.enable' ? new Promise(() => {}) : page(method, params));
+    return handle;
+  };
+  const d = createDoor({ secret: SECRET, profilesRoot: tmpDir('door-profiles-'), openBrowser: hanging, pageStepTimeoutMs: 300 });
+  t.after(() => d.close());
+  const { port } = await d.listen(0);
+  const pass = newPass();
+  await signedOpen(port, { pass, project_id: 'project-a', site: 'reddit' });
+  const v = viewer(port, { type: 'hello', pass });
+  await v.ready();
+  const bye = await v.waitFor((m) => m.type === 'closed', 3000);
+  assert.equal(bye.reason, 'error');
+  assert.ok(fake.opened[0].closed, 'the browser was not shut');
+});
+
 // ── The REAL Chrome ─────────────────────────────────────────────────────────
 
 const CHROME = chrome.findChrome();

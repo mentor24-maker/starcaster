@@ -90,13 +90,26 @@ async function readDevToolsActivePort(profileDir, { timeoutMs = 20000, child, fa
   throw new Error(`Chrome did not report a control port within ${timeoutMs} ms`);
 }
 
-/** Settle with `promise`, or reject after `ms` — for calls to a Chrome that may have hung. */
-function withTimeout(promise, ms, what) {
+/**
+ * Settle with `promise`, or reject after `ms` — for calls to a Chrome that may
+ * have hung — or as soon as `signal` (the window being closed) fires, so a
+ * closing window is never left waiting on a Chrome that will not answer.
+ */
+function withTimeout(promise, ms, what, signal) {
   let timer;
+  let onAbort = null;
   const late = new Promise((resolve, reject) => {
     timer = setTimeout(() => reject(new Error(`${what} got no answer within ${ms} ms`)), ms);
+    if (signal) {
+      onAbort = () => reject(new Error(`the window was closed while waiting for ${what}`));
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
   });
-  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+  return Promise.race([promise, late]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) signal.removeEventListener('abort', onAbort);
+  });
 }
 
 /** A minimal CDP client over one browser-level WebSocket, with flattened page sessions. */
@@ -119,12 +132,26 @@ class Cdp {
     });
   }
 
-  static connect(wsUrl) {
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl, { perMessageDeflate: false, maxPayload: 256 * 1024 * 1024 });
-      ws.once('open', () => resolve(new Cdp(ws)));
-      ws.once('error', reject);
+  /**
+   * Bounded, and called off by `signal`: a Chrome that wrote its port file and
+   * then hung accepts the connection and never answers it, and an unbounded
+   * wait here kept that project "already open" for good, with no window clock
+   * yet to rescue it. Review round 3, ticket 86bcrmbb4.
+   */
+  static connect(wsUrl, { timeoutMs = 5000, signal } = {}) {
+    const ws = new WebSocket(wsUrl, { perMessageDeflate: false, maxPayload: 256 * 1024 * 1024, handshakeTimeout: timeoutMs });
+    const opened = new Promise((resolve, reject) => {
+      ws.once('open', resolve);
+      // Lasting, not once: giving up below makes the socket raise its own error.
+      ws.on('error', reject);
     });
+    return withTimeout(opened, timeoutMs, 'the Chrome connection', signal).then(
+      () => new Cdp(ws),
+      (err) => {
+        ws.terminate();
+        throw err;
+      },
+    );
   }
 
   onMessage(data) {
@@ -164,9 +191,13 @@ class Cdp {
     return () => this.listeners.delete(fn);
   }
 
+  /**
+   * Cut, not a polite close: a polite close waits up to 30 s for a hung Chrome
+   * to answer it, and every call still waiting would wait with it.
+   */
   close() {
     try {
-      this.ws.close();
+      this.ws.terminate();
     } catch {
       /* already closed */
     }
@@ -178,7 +209,7 @@ class Cdp {
  *   { kind: 'launch', chromePath, profileDir }  — start a Chrome of our own
  *   { kind: 'attach', port }                    — a tab in a Chrome already running on 127.0.0.1:<port>
  */
-async function openBrowser(target, { spawnFn = spawn, portTimeoutMs, signal, closeTimeoutMs = 3000, exitTimeoutMs = 5000 } = {}) {
+async function openBrowser(target, { spawnFn = spawn, portTimeoutMs, signal, stepTimeoutMs = 5000, closeTimeoutMs = 3000, exitTimeoutMs = 5000 } = {}) {
   let child = null;
   let cdp = null;
   let targetId;
@@ -200,22 +231,29 @@ async function openBrowser(target, { spawnFn = spawn, portTimeoutMs, signal, clo
       // auto-updater: ENOENT, EACCES) reports it as an 'error' event. Unheard,
       // that event takes down the whole door keeper and every other project's
       // window with it. Review round 2, ticket 86bcrmbb4.
+      // Lasting, not once: a later kill that fails raises a second 'error'.
       let spawnError = null;
-      child.once('error', (err) => {
-        spawnError = err;
+      child.on('error', (err) => {
+        if (!spawnError) spawnError = err;
       });
       ({ wsUrl } = await readDevToolsActivePort(target.profileDir, { child, timeoutMs: portTimeoutMs, failed: () => spawnError, signal }));
     } else if (target.kind === 'attach') {
-      const res = await fetch(`http://127.0.0.1:${Number(target.port)}/json/version`);
-      if (!res.ok) throw new Error(`no Chrome answering on 127.0.0.1:${target.port} (HTTP ${res.status})`);
-      wsUrl = (await res.json()).webSocketDebuggerUrl;
+      // The fetch AND reading its body are bounded and called off by the window.
+      const stop = AbortSignal.any([AbortSignal.timeout(stepTimeoutMs), ...(signal ? [signal] : [])]);
+      const version = (async () => {
+        const res = await fetch(`http://127.0.0.1:${Number(target.port)}/json/version`, { signal: stop });
+        if (!res.ok) throw new Error(`no Chrome answering on 127.0.0.1:${target.port} (HTTP ${res.status})`);
+        return res.json();
+      })();
+      wsUrl = (await withTimeout(version, stepTimeoutMs, `Chrome on 127.0.0.1:${target.port}`, signal)).webSocketDebuggerUrl;
     } else {
       throw new Error(`unknown browser target kind "${target.kind}"`);
     }
 
-    cdp = await Cdp.connect(wsUrl);
-    ({ targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' }));
-    ({ sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true }));
+    // Everything after the port file is bounded too (review round 3).
+    cdp = await Cdp.connect(wsUrl, { timeoutMs: stepTimeoutMs, signal });
+    ({ targetId } = await withTimeout(cdp.send('Target.createTarget', { url: 'about:blank' }), stepTimeoutMs, 'Target.createTarget', signal));
+    ({ sessionId } = await withTimeout(cdp.send('Target.attachToTarget', { targetId, flatten: true }), stepTimeoutMs, 'Target.attachToTarget', signal));
   } catch (err) {
     // A Chrome we started and could not take control of must not outlive the
     // failure: it holds that project's signed-in profile with its control port
@@ -278,4 +316,4 @@ async function waitForExit(child, ms) {
   }
 }
 
-module.exports = { FORBIDDEN_FLAGS, findChrome, chromeArgs, openBrowser, readDevToolsActivePort, Cdp };
+module.exports = { FORBIDDEN_FLAGS, findChrome, chromeArgs, openBrowser, readDevToolsActivePort, withTimeout, Cdp };

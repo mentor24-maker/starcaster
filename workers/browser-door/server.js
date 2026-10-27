@@ -53,6 +53,8 @@ const chrome = require('./chrome.js');
 const HOST = '127.0.0.1';
 const HELLO_TIMEOUT_MS = 5000;
 const MAX_OPEN_BODY = 4096;
+/** The most one setup call to Chrome may take before the window gives up on it. */
+const PAGE_STEP_TIMEOUT_MS = 10_000;
 
 const CLOSE_MESSAGES = {
   finished: 'Window closed.',
@@ -69,10 +71,15 @@ const CLOSE_MESSAGES = {
  * the screen feed in that instant answers "Not attached to an active page"
  * (seen on the Mini about one launch in two). Only that answer is retried.
  */
-async function startScreencast(browser, { tries = 10, waitMs = 200 } = {}) {
+async function startScreencast(browser, { tries = 10, waitMs = 200, timeoutMs = PAGE_STEP_TIMEOUT_MS, signal } = {}) {
   for (let i = 1; ; i += 1) {
     try {
-      return await browser.page('Page.startScreencast', { format: 'jpeg', quality: 70, maxWidth: 1280, maxHeight: 900 });
+      return await chrome.withTimeout(
+        browser.page('Page.startScreencast', { format: 'jpeg', quality: 70, maxWidth: 1280, maxHeight: 900 }),
+        timeoutMs,
+        'Page.startScreencast',
+        signal,
+      );
     } catch (err) {
       if (i >= tries || !/not attached to an active page/i.test(String(err && err.message))) throw err;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
@@ -104,6 +111,7 @@ function createDoor({
   sites = door.SITES,
   chromePath,
   openBrowser = chrome.openBrowser,
+  pageStepTimeoutMs = PAGE_STEP_TIMEOUT_MS,
   now = Date.now,
   setTimer = setTimeout,
   clearTimer = clearTimeout,
@@ -158,14 +166,28 @@ function createDoor({
     });
   }
 
+  // EVERY SOCKET THE DOOR KEEPER OWNS HAS A LASTING 'error' LISTENER. An
+  // unheard 'error' on any of them ends the process, and every project's open
+  // window with it — one malformed message from anyone was enough (review
+  // round 3, ticket 86bcrmbb4). The error is logged by kind, never by content.
+  const quietly = (where) => (err) => log('socket-error', { where, code: (err && err.code) || 'error' });
+
   const server = http.createServer((req, res) => {
+    req.on('error', quietly('open-request'));
+    res.on('error', quietly('open-response'));
     const url = new URL(req.url, 'http://door');
     if (req.method === 'POST' && url.pathname === '/open') return handleOpen(req, res);
     return refuse(res, 404);
   });
+  server.on('clientError', (err, socket) => {
+    quietly('http')(err);
+    socket.destroy();
+  });
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+  wss.on('error', quietly('live-server'));
   server.on('upgrade', (req, socket, head) => {
+    socket.on('error', quietly('live-upgrade'));
     const url = new URL(req.url, 'http://door');
     if (url.pathname !== '/live') {
       socket.end('HTTP/1.1 404 Not Found\r\n\r\n');
@@ -185,7 +207,12 @@ function createDoor({
 
   /** Nothing is shown and nothing is opened until the first message carries a good pass. */
   function greet(ws) {
+    // Before anything else, and for the socket's whole life: a message over the
+    // size limit, or a broken frame, is an 'error' on this socket. The 'close'
+    // that always follows is what shuts a window, if one was opened.
+    ws.on('error', quietly('live'));
     const timer = setTimer(() => bye(ws, 'refused'), HELLO_TIMEOUT_MS);
+    ws.once('close', () => clearTimer(timer));
     ws.once('message', (data) => {
       clearTimer(timer);
       let hello;
@@ -273,7 +300,11 @@ function createDoor({
         }
       });
 
-      await win.browser.page('Page.enable');
+      // Each setup call is bounded and called off by the window closing: a
+      // Chrome that hangs here shows "could not be opened" instead of a blank
+      // window until the 3-minute close (review round 3).
+      const step = (method, params) => chrome.withTimeout(win.browser.page(method, params), pageStepTimeoutMs, method, win.abort.signal);
+      await step('Page.enable');
       const loaded = new Promise((resolve) => {
         const off = win.browser.cdp.on((msg) => {
           if (msg.sessionId === win.browser.sessionId && msg.method === 'Page.loadEventFired') {
@@ -283,9 +314,9 @@ function createDoor({
         });
         setTimeout(() => { off(); resolve(); }, 10_000);
       });
-      await win.browser.page('Page.navigate', { url: sites[site] });
+      await step('Page.navigate', { url: sites[site] });
       await loaded;
-      await startScreencast(win.browser);
+      await startScreencast(win.browser, { timeoutMs: pageStepTimeoutMs, signal: win.abort.signal });
 
       ws.off('message', onMessage);
       ws.on('message', (data) => relay(win, ws, data));
@@ -349,7 +380,11 @@ function createDoor({
     listen(port) {
       return new Promise((resolve, reject) => {
         server.once('error', reject);
-        server.listen(port, HOST, () => resolve(server.address()));
+        server.listen(port, HOST, () => {
+          server.off('error', reject);
+          server.on('error', quietly('listener'));
+          resolve(server.address());
+        });
       });
     },
     async close() {
