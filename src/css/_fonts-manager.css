@@ -166,3 +166,44 @@
   flex-wrap: wrap;
   align-items: center;
 }
+
+/* Favourites (Font Library 8): the All fonts | Favourites (N) switch and the
+   ☆ / ★ button at the start of every row. */
+.fonts-manager-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.fonts-manager-table .fonts-manager-star-col {
+  width: 1%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fonts-manager-star {
+  margin: 0;
+  padding: 0 var(--space-1);
+  border: 0;
+  background: none;
+  font-size: var(--text-xl);
+  line-height: 1;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.fonts-manager-star:hover,
+.fonts-manager-star:focus-visible {
+  opacity: 1;
+}
+
+.fonts-manager-star.is-favorite {
+  color: var(--accent, #d4a017);
+  opacity: 1;
+}
+
+.fonts-manager-star:disabled {
+  cursor: progress;
+}

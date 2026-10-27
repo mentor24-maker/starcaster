@@ -3,12 +3,17 @@
 /**
  * The font library API (Font Library 1/7, task 86bchyd3n).
  *
- *   GET    /api/fonts        → { ok, data: { fonts, total } }   shared library + this project's own
+ *   GET    /api/fonts        → { ok, data: { fonts, total, favoritesError } }
+ *                                                                shared library + this project's own;
+ *                                                                each font carries isFavorite for the
+ *                                                                signed-in person (Font Library 8)
  *   POST   /api/fonts        → { ok, data: { font } }           JSON: family + category + licence
  *                                                                + files [{ name, data: base64 }]
  *                                                                (lib/fontUploadBody.js has the rest)
  *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }
  *   DELETE /api/fonts/:id    → { ok, data: { font, filesRemoved, filesNotRemoved } }
+ *   PUT    /api/fonts/:id/favorite → { ok, data: { fontId, isFavorite } }   star it for me
+ *   DELETE /api/fonts/:id/favorite → { ok, data: { fontId, isFavorite } }   unstar it
  *
  * A project may change and delete only its own fonts; a shared-library font
  * answers 403 with the reason. Uploads are refused unless the licence allows
@@ -32,6 +37,7 @@ const manifest = {
 };
 
 const ID_PATH = /^\/api\/fonts\/([^/]+)\/?$/;
+const FAVORITE_PATH = /^\/api\/fonts\/([^/]+)\/favorite\/?$/;
 
 function fail(res, result, fallback) {
   return sendErr(res, result.status || 500, result.error || fallback), true;
@@ -42,7 +48,8 @@ async function handle(req, res, pathname, method, deps = {}) {
   const verb = String(method || '').toUpperCase();
   const isCollection = path === '/api/fonts' || path === '/api/fonts/';
   const idMatch = path.match(ID_PATH);
-  if (!isCollection && !idMatch) return false;
+  const favoriteMatch = path.match(FAVORITE_PATH);
+  if (!isCollection && !idMatch && !favoriteMatch) return false;
 
   const scope = requestProjectScope(req);
   if (!scope.projectId) return sendErr(res, 400, 'No active project', { code: 'PROJECT_REQUIRED' }), true;
@@ -50,7 +57,23 @@ async function handle(req, res, pathname, method, deps = {}) {
   if (isCollection && verb === 'GET') {
     const result = await fontsStore.listFonts(500, scope);
     if (!result.ok) return fail(res, result, 'Could not read the font library');
-    return sendOk(res, 200, { fonts: result.data, total: result.data.length }), true;
+    // A favourites read that fails does not hide the library: every font is
+    // sent unstarred and the reason travels with it, so the screen can say
+    // why the stars are empty instead of showing nothing starred as true.
+    const favorites = await fontsStore.listFavoriteFontIds(scope);
+    const starred = new Set(favorites.ok ? favorites.data : []);
+    const fonts = result.data.map((font) => ({ ...font, isFavorite: starred.has(String(font.id)) }));
+    return sendOk(res, 200, {
+      fonts,
+      total: fonts.length,
+      favoritesError: favorites.ok ? '' : `Your favourite fonts could not be read: ${favorites.error || 'the database refused'}`,
+    }), true;
+  }
+
+  if (favoriteMatch && (verb === 'PUT' || verb === 'DELETE')) {
+    const result = await fontsStore.setFontFavorite(decodeURIComponent(favoriteMatch[1]), verb === 'PUT', scope);
+    if (!result.ok) return fail(res, result, 'Could not change your favourite fonts');
+    return sendOk(res, 200, result.data), true;
   }
 
   if (isCollection && verb === 'POST') {

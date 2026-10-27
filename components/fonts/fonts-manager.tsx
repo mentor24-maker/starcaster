@@ -22,8 +22,15 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): an empty library, a read
  * that failed, and a library still loading are three different sentences.
  *
+ * FAVOURITES (Font Library 8, task 86bchydpv). Each person stars fonts with
+ * the ☆ at the start of a row; the switch above the table shows All fonts or
+ * Favourites (N). The stars live on the server, per person
+ * (PUT/DELETE /api/fonts/:id/favorite); which view is showing is remembered in
+ * this browser only.
+ *
  * Not here yet, by design: search and filters (7/7), tag editing (5/7), which
- * sites use a font (6/7 fills the Used by Sites column).
+ * sites use a font (6/7 fills the Used by Sites column). When they land they
+ * filter `shown`, which is already the Favourites-or-All list.
  */
 
 const FONTS_PATH = '/api/fonts';
@@ -40,6 +47,30 @@ export const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 export const EMPTY_LIBRARY_SENTENCE =
   'No fonts in the library yet. Add one, or ask CC to run the starter-pack import (Font Library 4/7).';
+
+export const NO_FAVOURITES_SENTENCE =
+  'You have no favourite fonts yet. Click the ☆ beside a font to add it.';
+
+/** Where this browser remembers whether the Fonts screen shows All or Favourites. */
+export const VIEW_STORAGE_KEY = 'starcaster.fonts.view';
+
+export type FontsView = 'all' | 'favorites';
+
+export function readStoredView(): FontsView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'favorites' ? 'favorites' : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function storeView(view: FontsView): void {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // Private browsing can refuse storage; the switch still works for this visit.
+  }
+}
 
 /** The three licences lib/fontLicence.js accepts, plus the one it exists to refuse. */
 export const LICENCE_OPTIONS: { value: string; label: string; short: string; url: string }[] = [
@@ -76,6 +107,8 @@ export type FontRow = {
   sourceName: string;
   tags: string[];
   visibility: 'platform' | 'project';
+  /** Starred by the signed-in person (GET /api/fonts, Font Library 8). */
+  isFavorite?: boolean;
 };
 
 type AppShape = {
@@ -301,6 +334,9 @@ export default function FontsManager(): React.ReactElement {
   const [confirmingDelete, setConfirmingDelete] = useState('');
   const [deleting, setDeleting] = useState('');
   const [notice, setNotice] = useState('');
+  const [view, setView] = useState<FontsView>(readStoredView);
+  const [favoritesError, setFavoritesError] = useState('');
+  const [starring, setStarring] = useState('');
   const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -319,6 +355,7 @@ export default function FontsManager(): React.ReactElement {
         setFonts(null);
       } else {
         setError('');
+        setFavoritesError(String(body.data?.favoritesError || ''));
         setFonts((body.data?.fonts || []) as FontRow[]);
       }
     } catch (err) {
@@ -364,6 +401,40 @@ export default function FontsManager(): React.ReactElement {
   }, [load]);
 
   const faces = useMemo(() => fontFaceCss(fonts || []), [fonts]);
+  const favoriteCount = useMemo(() => (fonts || []).filter((f) => f.isFavorite).length, [fonts]);
+  const shown = useMemo(
+    () => (view === 'favorites' ? (fonts || []).filter((f) => f.isFavorite) : (fonts || [])),
+    [fonts, view],
+  );
+
+  const chooseView = (next: FontsView) => {
+    setView(next);
+    storeView(next);
+  };
+
+  // The star shows what the SERVER answered, not what was clicked, so a
+  // refused write never leaves a ★ that will be gone after a reload.
+  const toggleFavorite = async (font: FontRow) => {
+    const api = getApp()?.api;
+    if (typeof api !== 'function') return;
+    setStarring(font.id);
+    setNotice('');
+    try {
+      const body = await api(`${FONTS_PATH}/${encodeURIComponent(font.id)}/favorite`, {
+        method: font.isFavorite ? 'DELETE' : 'PUT',
+      });
+      if (!body?.ok) {
+        setNotice(body?.error?.message || `${font.family} could not be ${font.isFavorite ? 'removed from' : 'added to'} your favourites.`);
+        return;
+      }
+      const isFavorite = Boolean(body.data?.isFavorite);
+      setFonts((list) => (list || []).map((f) => (f.id === font.id ? { ...f, isFavorite } : f)));
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : `${font.family} could not be changed.`);
+    } finally {
+      setStarring('');
+    }
+  };
 
   const remove = async (font: FontRow) => {
     const api = getApp()?.api;
@@ -393,6 +464,7 @@ export default function FontsManager(): React.ReactElement {
   if (error) status = error;
   else if (!fonts && loading) status = 'Reading the font library…';
   else if (fonts && !fonts.length) status = EMPTY_LIBRARY_SENTENCE;
+  else if (fonts && view === 'favorites' && !shown.length) status = favoritesError || NO_FAVOURITES_SENTENCE;
 
   return (
     <div ref={hostRef} className="fonts-manager">
@@ -415,14 +487,39 @@ export default function FontsManager(): React.ReactElement {
         />
       ) : null}
 
+      {fonts && fonts.length ? (
+        <div className="fonts-manager-view-switch" role="group" aria-label="Which fonts to show">
+          <button
+            type="button"
+            className={`btn${view === 'all' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'all'}
+            onClick={() => chooseView('all')}
+          >
+            All fonts
+          </button>
+          <button
+            type="button"
+            className={`btn${view === 'favorites' ? ' btn-primary' : ''}`}
+            aria-pressed={view === 'favorites'}
+            onClick={() => chooseView('favorites')}
+          >
+            Favourites ({favoriteCount})
+          </button>
+        </div>
+      ) : null}
+
       {notice ? <p className="fonts-manager-notice" role="status">{notice}</p> : null}
+      {favoritesError && !(view === 'favorites' && !shown.length) ? (
+        <p className="fonts-manager-error" role="alert">{favoritesError}</p>
+      ) : null}
       {status ? <p className={error ? 'fonts-manager-error' : 'fonts-manager-empty'} role={error ? 'alert' : undefined}>{status}</p> : null}
 
-      {fonts && fonts.length ? (
+      {shown.length ? (
         <div className="table-wrap fonts-manager-table-wrap">
           <table className="fonts-manager-table">
             <thead>
               <tr>
+                <th scope="col" className="fonts-manager-star-col" title="Favourite" aria-label="Favourite">★</th>
                 <th scope="col">Font</th>
                 <th scope="col">Category</th>
                 <th scope="col">Styles</th>
@@ -434,11 +531,24 @@ export default function FontsManager(): React.ReactElement {
               </tr>
             </thead>
             <tbody>
-              {fonts.map((font) => {
+              {shown.map((font) => {
                 const licence = licenceInfo(font.licence);
                 const shared = font.visibility === 'platform';
                 return (
                   <tr key={font.id} data-font-id={font.id}>
+                    <td className="fonts-manager-star-col">
+                      <button
+                        type="button"
+                        className={`fonts-manager-star${font.isFavorite ? ' is-favorite' : ''}`}
+                        aria-pressed={Boolean(font.isFavorite)}
+                        aria-label={font.isFavorite ? `Remove ${font.family} from favourites` : `Add ${font.family} to favourites`}
+                        title={font.isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+                        disabled={starring === font.id}
+                        onClick={() => void toggleFavorite(font)}
+                      >
+                        {font.isFavorite ? '★' : '☆'}
+                      </button>
+                    </td>
                     <td className="fonts-manager-name-cell">
                       <span className="fonts-manager-preview" style={{ fontFamily: `"${previewFamily(font)}", var(--font-body, sans-serif)` }}>
                         {font.family}
