@@ -1,3 +1,15 @@
+## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
+
+The **Used by Sites** column on Assets → Fonts now works. Each font has a
+**Show sites** button. Press it and you get one line per website that uses the
+font, like "Strands (3 pages)". Click that line to see the page names, and click
+a page to open it on the live site in a new tab, so you can see the font in real
+use. A font nobody uses says "Not used on any published page yet." A page counts
+whether it uses the font in one of its own modules or through its theme, and it
+counts once even if it uses the font in several places. Only published, public
+pages are listed, from every Starcaster site; hidden drafts and private pages
+never are. Each font is only looked up when you press its button, so the screen
+does not get slower as more fonts are added.
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
