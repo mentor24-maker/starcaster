@@ -1,3 +1,16 @@
+## 2026-10-26 — You can star your favourite fonts and show only those on the Fonts screen (#866)
+
+Every font on **Assets → Fonts** now has a star at the start of its row. Click
+it and it fills in; click again and it empties. Above the table there is a
+switch, **All fonts** or **Favourites (N)**, where N is how many you have
+starred, and the screen remembers which one you were on the next time you
+open it. Your stars are yours alone and follow you to every site you work on;
+another admin's stars never show up in your list. In Builder → Themes, the
+"Library font…" list now puts your favourites at the top under a
+"Favourites" heading, so with hundreds of fonts your go-to ones are one click
+away. One thing to know: this needs one new database table on the live site.
+Until it is added, the Fonts screen still works but says your favourites could
+not be read.
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
