@@ -1,3 +1,18 @@
+## 2026-10-26 — You choose which account each outreach channel posts as, and nothing posts until you do (#867)
+
+On **Engage → Outreach**, the Connect stage of each channel (YouTube, Substack,
+Reddit) now says which account the Mini's browser is signed in as, and you
+choose the account that channel posts as: **Post as this account**, or **I'll
+sign in as someone else** and type the name. Until you choose, nothing posts on
+that channel, and every approved comment says "Waiting: choose the account to
+post as". Before this, the names were written into the code. Substack expected
+"Dane of Earth" while the Mini is signed in as "Dane Christensen", and Reddit
+had no name at all, so it refused to post. **Check now** asks the Mini to
+re-check its sign-in within about half a minute. Reddit's pace (3 a day, 20
+minutes apart) can now be changed on the same screen. The Mini's posting job
+itself gets installed right after this goes live, not before: today's code
+would have posted as accounts you never confirmed.
+
 ## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
 
 The **Used by Sites** column on Assets → Fonts now works. Each font has a
