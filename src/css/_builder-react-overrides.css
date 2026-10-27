@@ -11742,9 +11742,9 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   background: var(--surface, #fff); padding: 4px 0;
 }
 .builder-font-picker-group {
-  position: sticky; top: -4px; z-index: 1; margin: 0; padding: 8px 14px 4px;
+  margin: 0; padding: 10px 14px 4px;
   font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--muted); background: var(--surface, #fff);
+  color: var(--muted);
 }
 .builder-font-picker-option {
   display: block; width: 100%; padding: 8px 14px; text-align: left;
