@@ -20,7 +20,10 @@ const {
   pageLiveUrl,
   usageProjectIds,
   USAGE_ACROSS_ALL_SITES,
+  BUILT_IN_FONT_FAMILIES,
 } = require('../../lib/fontUsage.js');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const ORBITRON = { id: 'font_orb', slug: 'orbitron', family: 'Orbitron', visibility: 'platform', projectId: null };
 
@@ -107,6 +110,66 @@ test('scope: shared fonts search every site; a project upload only its own proje
   assert.equal(USAGE_ACROSS_ALL_SITES, true);
   assert.equal(usageProjectIds(ORBITRON, 'p'), null);
   assert.deepEqual(usageProjectIds({ ...ORBITRON, visibility: 'project', projectId: 'own' }, 'p'), ['own']);
+});
+
+// --- the ten built-in fonts, stored as a bare key (review round 1) ----------
+
+const MONTSERRAT = { id: 'font_mont', slug: 'montserrat', family: 'Montserrat', visibility: 'platform', projectId: null };
+
+test('a theme-less page whose default theme is "montserrat" lists under the library Montserrat', () => {
+  const usage = findFontUsage({
+    font: MONTSERRAT,
+    pages: [{
+      id: 'gn1', projectId: 'go-navy', name: 'Home', slug: 'home', layoutSections: { sections: [] },
+      // what pickThemeForPage hands a page with no theme of its own: the default theme
+      themeTypography: { fonts: { heading: 'montserrat', body: 'montserrat' } },
+    }],
+    projects: new Map([['go-navy', { name: 'Go Navy', domain: 'gonavy.example' }]]),
+  });
+  assert.equal(usage.totalPages, 1);
+  assert.equal(usage.sites[0].name, 'Go Navy');
+});
+
+test('a bare key counts in a module fontFamily and a theme element style', () => {
+  const keys = fontUsageKeys({ slug: 'bebas-neue', family: 'Bebas Neue' });
+  assert.equal(keys.builtIn, 'bebas');
+  assert.equal(namesFont({ sections: [{ modules: [heading('bebas')] }] }, keys), true);
+  assert.equal(namesFont({ elements: { h1: { fontFamily: 'bebas' } } }, keys), true);
+});
+
+test('a bare key is only a font where a font is stored — page text or a slug "lora" is not', () => {
+  const keys = fontUsageKeys({ slug: 'lora', family: 'Lora' });
+  assert.equal(keys.builtIn, 'lora');
+  assert.equal(namesFont({ slug: 'lora' }, keys), false);
+  assert.equal(namesFont({ settings: { html: 'lora', text: 'Lora' } }, keys), false);
+  assert.equal(namesFont({ heading: 'lora' }, keys), false, 'heading outside a fonts object is not a slot');
+  assert.equal(namesFont({ fonts: { title: 'lora' } }, keys), false);
+  const usage = findFontUsage({
+    font: { slug: 'lora', family: 'Lora' },
+    pages: [{ id: 'lp', projectId: 'a', name: 'Lora', slug: 'lora',
+      layoutSections: { sections: [{ modules: [{ type: 'text', settings: { html: 'lora' } }] }] } }],
+  });
+  assert.equal(usage.totalPages, 0);
+});
+
+test('a font that is not one of the ten has no bare key', () => {
+  assert.equal(fontUsageKeys(ORBITRON).builtIn, '');
+  assert.equal(namesFont({ fontFamily: 'orbitron' }, fontUsageKeys(ORBITRON)), false);
+});
+
+test('the built-in list matches BUILDER_HEADING_FONTS and HEADING_FONT_KEYS', () => {
+  const root = path.join(__dirname, '..', '..');
+  const utils = fs.readFileSync(path.join(root, 'components/builder/builder-utils.ts'), 'utf8');
+  const block = utils.slice(utils.indexOf('export const BUILDER_HEADING_FONTS'));
+  const list = block.slice(0, block.indexOf('] as const'));
+  const fromUtils = {};
+  for (const m of list.matchAll(/\{\s*key:\s*"([^"]*)",\s*label:\s*"([^"]*)"/g)) if (m[1]) fromUtils[m[1]] = m[2];
+  assert.deepEqual(fromUtils, { ...BUILT_IN_FONT_FAMILIES });
+
+  const tpl = fs.readFileSync(path.join(root, 'lib/builder-client/builder-template.ts'), 'utf8');
+  const set = tpl.slice(tpl.indexOf('const HEADING_FONT_KEYS = new Set(['));
+  const keys = [...set.slice(0, set.indexOf(']);')).matchAll(/"([^"\n]*)"/g)].map((m) => m[1]).filter(Boolean).sort();
+  assert.deepEqual(keys, Object.keys(BUILT_IN_FONT_FAMILIES).sort());
 });
 
 test('a font used nowhere comes back empty, not as an error', () => {
