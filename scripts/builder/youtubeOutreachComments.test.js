@@ -19,6 +19,8 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
+const { withCanon, CANON_DOCS } = require('./canonFixture.js');
+const { prepareCanon } = require('../../lib/canonPrompt.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
@@ -66,7 +68,7 @@ function withDb() {
       youtubeOutreachSettings: 'youtube_outreach_settings',
       youtubeOutreachComments: 'youtube_outreach_comments',
     }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
@@ -181,20 +183,26 @@ test('length bounds follow the setting for a draft, and not for an approval', ()
   assert.equal(drafter.checkComment('x'.repeat(10001), { target: short, settings: {} }, { forApproval: true }).ok, false);
 });
 
-test('the prompt carries the target settings, the voice and the avoid list', () => {
-  const { prompt } = drafter.buildPrompt({
+test('the prompt carries the canon, then the extra notes, plus the target settings and the avoid list', () => {
+  const { system, prompt } = drafter.buildPrompt({
     target: {
       videoTitle: 'Serve clinic', channelName: 'Tennis Co', objective: 'appreciation', commentPlacement: 'top_level',
       messageTypes: ['question'], commentLength: 'short', linkPolicy: 'never', mentionPolicy: 'never', notes: 'Mention the toss.',
     },
     settings: { voice: 'Warm, plain, a coach.', avoidWords: ['subscribe'] },
     video: { description: 'How to serve.', topComments: [{ author: 'Sam', text: 'Love it' }] },
+    canon: prepareCanon(CANON_DOCS),
   });
+  assert.match(system, /HOW DANE WRITES[\s\S]*Every sentence gets its predicate/);
+  assert.match(system, /THE AI-ISM BLOCKLIST:[\s\S]*"delve into"/);
+  assert.match(system, /background only[\s\S]*The organism thesis/);
+  // The free-text setting comes AFTER the canon, under its new name.
+  assert.match(system, /THE AI-ISM BLOCKLIST[\s\S]*EXTRA NOTES FOR THIS CHANNEL[^\n]*\nWarm, plain, a coach\./);
+  assert.doesNotMatch(prompt, /Voice — how the account sounds/);
   assert.match(prompt, /thank the creator/);
   assert.match(prompt, /under 200 characters/);
   assert.match(prompt, /Do not include any link/);
   assert.match(prompt, /Never use these words: subscribe/);
-  assert.match(prompt, /Warm, plain, a coach/);
   assert.match(prompt, /Mention the toss/);
   assert.match(prompt, /Sam: Love it/);
 });
@@ -423,6 +431,59 @@ test('no project selected is a refusal, never every project\'s comments', async 
     assert.match(listed.error, /No project is selected/);
     const bad = await comments.listComments(200, SCOPE_A, { statuses: ['nonsense'] });
     assert.equal(bad.status, 400);
+  } finally {
+    restore();
+  }
+});
+
+// ── The canon (Outreach wizard 8/19, 86bcrmbje) ───────────────────────────
+
+test('a draft records the 7 canon documents it was written from, read back from the database', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const model = scripted(GOOD_MEDIUM);
+    const drafted = await draft(comments, target.id, model);
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.match(model.asked[0].system, /HOW DANE WRITES[\s\S]*Every sentence gets its predicate/);
+    const back = await comments.getComment(drafted.data.id, SCOPE_A);
+    assert.deepEqual(back.data.canonUsed, CANON_DOCS.map((d) => ({ docKey: d.docKey, syncedAt: d.syncedAt })));
+    assert.equal(back.data.canonUsed.length, 7);
+  } finally {
+    restore();
+  }
+});
+
+test('a blocklisted phrase from the stand-in AI is refused twice and never saved; an edit carrying one is never approved', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const model = scripted(`${GOOD_MEDIUM} Let me delve into it.`);
+    const refused = await draft(comments, target.id, model);
+    assert.equal(refused.status, 422);
+    assert.match(refused.error, /"delve into", which is on the AI-ism blocklist/);
+    assert.equal(model.asked.length, 2);
+    assert.equal((await comments.listComments(10, SCOPE_A, { targetId: target.id })).data.length, 0);
+
+    const kept = await draft(comments, target.id, scripted(GOOD_MEDIUM));
+    const edited = await comments.approveComment(kept.data.id, { text: `${GOOD_MEDIUM} A tapestry of serves.` }, SCOPE_A);
+    assert.equal(edited.status, 422);
+    assert.match(edited.error, /"tapestry", which is on the AI-ism blocklist/);
+    assert.equal((await comments.getComment(kept.data.id, SCOPE_A)).data.status, 'draft');
+  } finally {
+    restore();
+  }
+});
+
+test('with no canon copied, no draft is written and the AI is never asked', async () => {
+  const { targets, comments, restore } = withDb();
+  try {
+    const target = await addTarget(targets);
+    const model = scripted(GOOD_MEDIUM);
+    const refused = await comments.writeDraftForTarget(target.id, SCOPE_A, { generate: model.generate, readVideo: quietVideo, canonDocs: [] });
+    assert.equal(refused.status, 409);
+    assert.match(refused.error, /no canon copied yet — run npm run canon:sync/);
+    assert.equal(model.asked.length, 0);
   } finally {
     restore();
   }
