@@ -21,6 +21,7 @@ const path = require('path');
 const FIXTURES = path.join(__dirname, 'fixtures', 'substack-notes');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
+const { withCanon } = require('./canonFixture.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
@@ -48,7 +49,7 @@ function withDb(options = {}) {
       substackNotesItems: 'substack_notes_items',
       substackNotesSettings: 'substack_notes_settings',
     }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
