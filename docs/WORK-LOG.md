@@ -1,3 +1,17 @@
+## 2026-10-27 — The Mini reads a Reddit post for you, so you no longer paste it by hand (#870)
+
+On **Engage → Comments (Reddit)**, adding a post link now says **Reading…**,
+and within a couple of minutes the Mac Mini's signed-in browser fills in the
+subreddit, title, text and top comments by itself. Before this you had to copy
+the post in by hand, because Reddit refuses to show posts to anything that is
+not signed in. If the Mini cannot read a post, the card says why in plain words
+— for example "Reddit says this post was removed" — and offers the paste box
+and **Try reading again**. If the Mini is not signed in to Reddit when you click
+Add, nothing is saved and the paste box appears straight away with that reason.
+This starts working once the Mini's posting job is installed and the new
+database columns are added; until then Add shows the paste box and says the
+Mini has not checked its sign-in yet.
+
 ## 2026-10-26 — You choose which account each outreach channel posts as, and nothing posts until you do (#867)
 
 On **Engage → Outreach**, the Connect stage of each channel (YouTube, Substack,
