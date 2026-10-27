@@ -13,6 +13,17 @@ minutes apart) can now be changed on the same screen. The Mini's posting job
 itself gets installed right after this goes live, not before: today's code
 would have posted as accounts you never confirmed.
 
+## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
+
+With nearly 300 fonts in the library, scrolling to find one stopped being
+practical. **Assets → Fonts** now has a **Search** box (it matches the font's
+name and its tags), buttons for each kind of font (Sans, Serif, Display,
+Monospace, Handwriting), and a **Sample text** box: type a word and every row
+shows that word in its own font, at whatever size the slider is set to. If a
+search finds nothing, it says which search ("No display fonts match 'zzzz'")
+instead of showing an empty table. The screen also only downloads a font when
+its row is on screen — opening the full library now fetches 6 font files
+instead of all of them, so it opens quickly.
 ## 2026-10-26 — The Fonts screen shows which sites use each font, with links to the live pages (#864)
 
 The **Used by Sites** column on Assets → Fonts now works. Each font has a
