@@ -18,6 +18,7 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SETUP_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8');
 const SWITCH_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_auto_topic_drafts.sql'), 'utf8');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
+const { withCanon } = require('./canonFixture.js');
 const schedule = require('../../lib/substackNotesSchedule.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
@@ -175,7 +176,7 @@ function withDb() {
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
@@ -234,7 +235,7 @@ test('before the 5/7 SQL runs, every other setting still saves and the switch sa
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };

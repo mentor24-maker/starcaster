@@ -810,7 +810,7 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
         <Field label="Words to avoid" htmlFor="yto-avoid-words" help="One per line.">
           <textarea id="yto-avoid-words" rows={3} value={form.avoidWords} onChange={(e) => set('avoidWords', e.target.value)} />
         </Field>
-        <Field label="Voice" htmlFor="yto-voice" help="How the comments should sound, in your own words.">
+        <Field label="Extra notes for this channel" htmlFor="yto-voice" help="Comments are written from your canon, the same as Reddit comments. Anything here is added after it, for YouTube only.">
           <textarea id="yto-voice" rows={4} value={form.voice} onChange={(e) => set('voice', e.target.value)} />
         </Field>
       </div>
