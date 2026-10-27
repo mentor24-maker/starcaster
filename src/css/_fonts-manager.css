@@ -176,6 +176,46 @@
   min-width: 0;
 }
 
+/* Finding a font (Font Library 7/7): search, category buttons, sample text
+   and size. Same W0 grid as the Add Font form — one pair of tracks for the
+   whole block, so the four labels line up by construction. */
+.fonts-manager-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fonts-manager-filter-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, var(--builder-field-long-max, 560px));
+  justify-content: start;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.fonts-manager-field input[type="search"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.fonts-manager-category-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.fonts-manager-size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .fonts-manager-table .fonts-manager-star-col {
   width: 1%;
   text-align: center;
@@ -206,4 +246,116 @@
 
 .fonts-manager-star:disabled {
   cursor: progress;
+}
+
+.fonts-manager-size input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.fonts-manager-size-value {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fonts-manager-count {
+  align-self: center;
+  opacity: 0.75;
+}
+
+/* Each row's sample line, set in the row's font at the slider's size. */
+.fonts-manager-sample {
+  display: block;
+  margin-bottom: var(--space-1);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.fonts-manager-sample-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: var(--space-1) 0;
+}
+
+.fonts-manager-sample-edit input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: var(--builder-field-long-max, 560px);
+  margin: 0;
+}
+
+/* Used by Sites (Font Library 6/7): one line per site, opening to its pages. */
+.fonts-manager-usage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+
+.fonts-manager-usage-none {
+  opacity: 0.65;
+}
+
+.fonts-manager-usage-site summary {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fonts-manager-usage-pages {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+}
+
+/* Tags (Font Library 5/7). A chip is two buttons: the word filters the list,
+   the × (project fonts only) removes it. */
+.fonts-manager-tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.fonts-manager-tag-filter input {
+  width: 16ch;
+}
+
+.fonts-manager-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fonts-manager-chip-filter,
+.fonts-manager-chip-remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fonts-manager-chip-filter:hover {
+  text-decoration: underline;
+}
+
+.fonts-manager-chip-remove {
+  opacity: 0.6;
+  line-height: 1;
+}
+
+.fonts-manager-chip-remove:hover {
+  opacity: 1;
+}
+
+.fonts-manager-tag-input {
+  width: 8ch;
+  font-size: inherit;
 }

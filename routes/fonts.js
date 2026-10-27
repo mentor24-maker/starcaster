@@ -7,11 +7,19 @@
  *                                                                shared library + this project's own;
  *                                                                each font carries isFavorite for the
  *                                                                signed-in person (Font Library 8)
- *   POST   /api/fonts        → { ok, data: { font } }           JSON: family + category + licence
+ *   POST   /api/fonts        → { ok, data: { font, autoTagError? } }  JSON: family + category + licence
  *                                                                + files [{ name, data: base64 }]
  *                                                                (lib/fontUploadBody.js has the rest)
- *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }
+ *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }; tags is a
+ *                                                                list or a comma-separated string, stored
+ *                                                                trimmed, lowercased and deduplicated
+ *
+ * An upload with no tags is tagged by AI before it answers (lib/fontAutoTag.js,
+ * Font Library 5/7); a tagging failure is named in `autoTagError`, never fatal.
  *   DELETE /api/fonts/:id    → { ok, data: { font, filesRemoved, filesNotRemoved } }
+ *   GET    /api/fonts/:id/usage → { ok, data: { font, sites, totalPages, truncated } }
+ *                                the published public pages using it, by site
+ *                                (Font Library 6/7, lib/fontUsageStore.js)
  *   PUT    /api/fonts/:id/favorite → { ok, data: { fontId, isFavorite } }   star it for me
  *   DELETE /api/fonts/:id/favorite → { ok, data: { fontId, isFavorite } }   unstar it
  *
@@ -29,6 +37,8 @@ const { requestProjectScope } = require('../lib/requestProjectScope');
 const fontsStore = require('../lib/fontsStore');
 const { uploadProjectFont, removeFontFiles } = require('../lib/fontUpload');
 const { readFontUploadBody } = require('../lib/fontUploadBody');
+const { getFontUsage } = require('../lib/fontUsageStore');
+const { autoTagFont } = require('../lib/fontAutoTag');
 
 const manifest = {
   id: 'fonts',
@@ -37,7 +47,13 @@ const manifest = {
 };
 
 const ID_PATH = /^\/api\/fonts\/([^/]+)\/?$/;
+const USAGE_PATH = /^\/api\/fonts\/([^/]+)\/usage\/?$/;
 const FAVORITE_PATH = /^\/api\/fonts\/([^/]+)\/favorite\/?$/;
+
+/** PATCH takes a list, or one "sci-fi, wide" string the way the "+ tag" box is typed. */
+function splitTags(tags) {
+  return typeof tags === 'string' ? tags.split(',') : tags;
+}
 
 function fail(res, result, fallback) {
   return sendErr(res, result.status || 500, result.error || fallback), true;
@@ -48,8 +64,9 @@ async function handle(req, res, pathname, method, deps = {}) {
   const verb = String(method || '').toUpperCase();
   const isCollection = path === '/api/fonts' || path === '/api/fonts/';
   const idMatch = path.match(ID_PATH);
+  const usageMatch = path.match(USAGE_PATH);
   const favoriteMatch = path.match(FAVORITE_PATH);
-  if (!isCollection && !idMatch && !favoriteMatch) return false;
+  if (!isCollection && !idMatch && !usageMatch && !favoriteMatch) return false;
 
   const scope = requestProjectScope(req);
   if (!scope.projectId) return sendErr(res, 400, 'No active project', { code: 'PROJECT_REQUIRED' }), true;
@@ -76,6 +93,13 @@ async function handle(req, res, pathname, method, deps = {}) {
     return sendOk(res, 200, result.data), true;
   }
 
+  if (usageMatch) {
+    if (verb !== 'GET') return sendErr(res, 405, `${verb} is not supported on ${path}`), true;
+    const result = await (deps.getFontUsage || getFontUsage)(decodeURIComponent(usageMatch[1]), scope);
+    if (!result.ok) return fail(res, result, 'Could not read which sites use this font');
+    return sendOk(res, 200, result.data), true;
+  }
+
   if (isCollection && verb === 'POST') {
     // Refused BEFORE the body is read. On Vercel a multipart (or untyped)
     // body has already been read and discarded by the runtime, so waiting on
@@ -93,7 +117,14 @@ async function handle(req, res, pathname, method, deps = {}) {
     if (!form.ok) return sendErr(res, form.status, form.message), true;
     const result = await uploadProjectFont(form, scope, deps);
     if (!result.ok) return fail(res, result, 'Could not save the font');
-    return sendOk(res, 201, { font: result.data }), true;
+    // Font Library 5/7: an upload that arrived without tags gets the AI's.
+    // The font is saved whatever happens here; a tagging failure is named in
+    // the answer rather than failing an upload that succeeded.
+    const tagged = await autoTagFont(result.data, { scope, ...(deps.autoTag || {}) });
+    return sendOk(res, 201, {
+      font: tagged.font,
+      ...(tagged.ok ? {} : { autoTagError: tagged.error }),
+    }), true;
   }
 
   if (idMatch && verb === 'PATCH') {
@@ -105,7 +136,7 @@ async function handle(req, res, pathname, method, deps = {}) {
     }
     const result = await fontsStore.updateFontTags(
       decodeURIComponent(idMatch[1]),
-      { tags: body?.tags, previewText: body?.previewText },
+      { tags: splitTags(body?.tags), previewText: body?.previewText },
       scope
     );
     if (!result.ok) return fail(res, result, 'Could not change the font');

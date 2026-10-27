@@ -52,6 +52,8 @@ function withStore() {
 
   const blobs = { puts: [], deletes: [] };
   const deps = {
+    // No test reaches a real AI provider; the 5/7 tests below pass their own.
+    autoTag: { query: async () => ({ ok: false, error: 'no AI in tests' }) },
     uploadBufferToBlobAtPath: async ({ pathname }) => {
       blobs.puts.push(pathname);
       return { ok: true, status: 201, data: { location: `https://blob.test/${pathname}`, pathname } };
@@ -485,4 +487,139 @@ test('the public font read refuses no slugs, bad slugs and too many slugs in pla
   } finally {
     restore();
   }
+});
+
+// ── AI tags (5/7, 86bchyd4k) ────────────────────────────────────────────────
+
+const autoTagPath = require.resolve('../../lib/fontAutoTag.js');
+const { pickTags, readTagList, normaliseTag, loadVocabulary, suggestFontTags } = require(autoTagPath);
+
+/** A stand-in for the AI that answers with these words and counts its calls. */
+function fakeAi(answer) {
+  const calls = [];
+  const query = async (system, prompt) => {
+    calls.push(prompt);
+    return typeof answer === 'function' ? answer(prompt) : { ok: true, text: answer };
+  };
+  return { query, calls };
+}
+
+test('the vocabulary file is readable and holds the tags the ticket names', () => {
+  const vocab = loadVocabulary();
+  for (const tag of ['sci-fi', 'futuristic', 'geometric', 'rounded', 'condensed', 'wide', 'elegant', 'classic',
+    'playful', 'handwritten', 'script', 'bold-display', 'headline', 'body-text', 'monospace', 'retro', 'grunge', 'minimal']) {
+    assert.ok(vocab.includes(tag), `${tag} missing from docs/fonts/tag-vocabulary.txt`);
+  }
+  assert.ok(vocab.every((t) => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(t)), 'every vocabulary tag is lowercase-hyphenated');
+});
+
+test('AI tags: listed tags kept, ONE free tag kept, the rest dropped, at most six', () => {
+  const vocabulary = ['sci-fi', 'wide', 'geometric', 'headline', 'futuristic', 'techno', 'logo', 'minimal'];
+  assert.deepEqual(
+    pickTags(['Sci Fi', 'space-age', 'wide', 'spaceship', 'GEOMETRIC', 'wide'], { category: 'display', vocabulary }),
+    ['sci-fi', 'space-age', 'wide', 'geometric'],
+  );
+  assert.equal(
+    pickTags(['sci-fi', 'wide', 'geometric', 'headline', 'futuristic', 'techno', 'logo', 'minimal'], { vocabulary }).length,
+    6,
+  );
+});
+
+test('AI tags: a thin answer is topped up to three from the font category, all from the list', () => {
+  const tags = pickTags(['made-up', 'also-made-up'], { category: 'monospace' });
+  assert.equal(tags.length, 3);
+  assert.deepEqual(tags, ['made-up', 'monospace', 'code']);
+  assert.deepEqual(pickTags([], { category: 'handwriting' }), ['handwritten', 'script', 'playful']);
+});
+
+test('AI tags: the answer is read as a JSON list even with words around it; anything else is refused', async () => {
+  assert.deepEqual(readTagList('Sure! ["retro", "rounded"] hope that helps'), ['retro', 'rounded']);
+  assert.equal(readTagList('retro, rounded'), null);
+  assert.equal(normaliseTag('  Bold Display '), 'bold-display');
+  assert.equal(normaliseTag('<script>'), 'script');
+  assert.equal(normaliseTag('!!!'), '');
+
+  const prose = await suggestFontTags({ family: 'Orbitron', category: 'display' }, fakeAi('It looks futuristic.'));
+  assert.equal(prose.ok, false);
+  assert.match(prose.error, /did not answer with a list/);
+  const refused = await suggestFontTags({ family: 'Orbitron' }, { query: async () => ({ ok: false, error: 'credit exhausted' }) });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /credit exhausted/);
+});
+
+test('fillEmptyFontTags writes to an untagged font and refuses (409) one a person already tagged', async (t) => {
+  const { store, restore } = withStore();
+  t.after(restore);
+  const bare = await platformFont(store, 'Orbitron');
+  const filled = await store.fillEmptyFontTags(bare.id, ['Sci-Fi', 'wide']);
+  assert.equal(filled.ok, true, filled.error);
+  assert.deepEqual(filled.data.tags, ['sci-fi', 'wide']);
+
+  const again = await store.fillEmptyFontTags(bare.id, ['retro', 'grunge', 'playful']);
+  assert.equal(again.status, 409);
+  assert.match(again.error, /already has tags/);
+  const reread = await store.getFont(bare.id, SCOPE_A);
+  assert.deepEqual(reread.data.tags, ['sci-fi', 'wide'], 'the person\'s tags were overwritten');
+});
+
+test('POST /api/fonts: an upload with no tags comes back with the AI\'s 3–6 tags, saved', async (t) => {
+  const { db, route, deps, restore } = withStore();
+  t.after(restore);
+  const ai = fakeAi('["geometric", "futuristic", "headline", "wide"]');
+  const req = await vercelReq({
+    method: 'POST',
+    json: uploadJson(OFL_FIELDS, [{ fileName: 'SG-Regular.woff2', buffer: WOFF2 }]),
+  });
+  const res = fakeRes();
+  await withinOneSecond(route.handle(req, res, '/api/fonts', 'POST', { ...deps, autoTag: { query: ai.query } }));
+  assert.equal(res.statusCode, 201, res.body);
+  assert.deepEqual(res.json().data.font.tags, ['geometric', 'futuristic', 'headline', 'wide']);
+  assert.equal(res.json().data.autoTagError, undefined);
+  assert.match(ai.calls[0], /Font family: Space Grotesk/);
+  assert.deepEqual((await rawRows(db))[0].tags, ['geometric', 'futuristic', 'headline', 'wide']);
+});
+
+test('POST /api/fonts: the upload still succeeds when the AI fails, and says tagging failed', async (t) => {
+  const { db, route, deps, restore } = withStore();
+  t.after(restore);
+  const req = await vercelReq({
+    method: 'POST',
+    json: uploadJson(OFL_FIELDS, [{ fileName: 'SG-Regular.woff2', buffer: WOFF2 }]),
+  });
+  const res = fakeRes();
+  await withinOneSecond(route.handle(req, res, '/api/fonts', 'POST', {
+    ...deps, autoTag: { query: async () => ({ ok: false, error: 'credit exhausted' }) },
+  }));
+  assert.equal(res.statusCode, 201, res.body);
+  assert.deepEqual(res.json().data.font.tags, []);
+  assert.match(res.json().data.autoTagError, /credit exhausted/);
+  assert.equal((await rawRows(db)).length, 1, 'the font itself must still be saved');
+});
+
+test('POST /api/fonts: an upload that brought its own tags is never sent to the AI', async (t) => {
+  const { route, deps, restore } = withStore();
+  t.after(restore);
+  const ai = fakeAi('["retro"]');
+  const req = await vercelReq({
+    method: 'POST',
+    json: uploadJson({ ...OFL_FIELDS, tags: 'mine, chosen' }, [{ fileName: 'SG-Regular.woff2', buffer: WOFF2 }]),
+  });
+  const res = fakeRes();
+  await withinOneSecond(route.handle(req, res, '/api/fonts', 'POST', { ...deps, autoTag: { query: ai.query } }));
+  assert.equal(res.statusCode, 201, res.body);
+  assert.deepEqual(res.json().data.font.tags, ['mine', 'chosen']);
+  assert.equal(ai.calls.length, 0);
+});
+
+test('PATCH /api/fonts/:id takes "sci-fi, wide" as typed: trimmed, lowercased, deduplicated', async (t) => {
+  const { store, route, deps, restore } = withStore();
+  t.after(restore);
+  const own = await store.createFont({ ...OFL_FIELDS, styles: [{ weight: 400, style: 'normal', url: 'https://blob.test/sg.woff2' }] }, SCOPE_A);
+  const res = fakeRes();
+  await route.handle(
+    await vercelReq({ method: 'PATCH', json: { tags: ' Sci-Fi ,  wide, sci-fi,' } }),
+    res, `/api/fonts/${own.data.id}`, 'PATCH', deps,
+  );
+  assert.equal(res.statusCode, 200, res.body);
+  assert.deepEqual(res.json().data.font.tags, ['sci-fi', 'wide']);
 });

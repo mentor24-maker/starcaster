@@ -15,6 +15,7 @@ import YoutubeOutreachPanel from './components/youtube-outreach/youtube-outreach
 import SubstackNotesPanel from './components/substack-notes/substack-notes-panel';
 import SubstackMinerPanel from './components/substack-miner/substack-miner-panel';
 import RedditCommentsPanel from './components/reddit-comments/reddit-comments-panel';
+import OutreachWizardPanel from './components/outreach-wizard/outreach-wizard-panel';
 
 // Host ids that should receive an Associations panel. The vanilla screen names
 // the open object by dispatching starcaster:associations-target at the panel.
@@ -96,6 +97,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (redditCommentsHost) {
     createRoot(redditCommentsHost).render(<RedditCommentsPanel />);
+  }
+
+  const outreachWizardHost = document.getElementById('outreachWizardReactRoot');
+
+  if (outreachWizardHost) {
+    createRoot(outreachWizardHost).render(<OutreachWizardPanel />);
   }
 
   const noWorkspaceHost = document.getElementById('noWorkspaceReactRoot');

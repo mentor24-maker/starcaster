@@ -188,3 +188,27 @@ test('the setup SQL keeps one star per person per font, with RLS on', () => {
   assert.ok(unique, 'the (user_id, font_id) unique index is missing');
   assert.ok([...(schema.rlsEnabled || [])].includes('font_favorites'), 'RLS is not enabled on font_favorites');
 });
+
+test('GET carries isFavorite ALONGSIDE the tags and sample line 5/7 and 7/7 added — the star does not replace them', async (t) => {
+  const { store, route, restore } = withStore();
+  t.after(restore);
+  const created = await store.createFont({
+    family: 'Exo',
+    category: 'sans',
+    licence: 'OFL-1.1',
+    tags: ['sci-fi', 'wide'],
+    previewText: 'Launch sequence',
+    styles: [{ weight: 400, style: 'normal', url: 'https://blob.test/Exo.woff2' }],
+  }, null, { visibility: 'platform' });
+  assert.equal(created.ok, true, created.error);
+
+  await call(route, { method: 'PUT', path: `/api/fonts/${created.data.id}/favorite` });
+  const res = await call(route, { method: 'GET', path: '/api/fonts' });
+  assert.equal(res.statusCode, 200, res.body);
+  const exo = res.json().data.fonts.find((f) => f.family === 'Exo');
+  assert.equal(exo.isFavorite, true);
+  assert.deepEqual(exo.tags, ['sci-fi', 'wide']);
+  assert.equal(exo.previewText, 'Launch sequence');
+  assert.equal(exo.category, 'sans');
+  assert.ok(Array.isArray(exo.styles) && exo.styles.length === 1, 'styles survive');
+});
