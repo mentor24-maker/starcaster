@@ -14,6 +14,42 @@ you starred, with a line saying "1 of 3 favourite fonts". One new database
 table goes with this; the agent session that merges it adds the table to the
 live site and checks it is there. Until then the Fonts screen still works but
 says your favourites could not be read.
+## 2026-10-26 — The Mini can show a live picture of a browser and pass clicks and keys to it (#861)
+
+First piece of the sign-in window: a small program on the Mac Mini, the "door
+keeper", opens one project's own Chrome, sends a live picture of it (about 15
+a second) and passes clicks, keys and pastes back. It listens only on the
+Mini's inside address for now, so nothing outside can reach it yet. A one-time
+pass decides which project's browser opens, so a pass for one client can never
+open another's. Keys are counted in the log but never recorded, Chrome is told
+not to offer to save passwords, and the window closes itself after 3 idle
+minutes or 15 minutes in all. One check is knowingly left failing: since a
+recent Chrome update, the browser admits it is remote-controlled whenever this
+feature is on. A setting exists to hide that, and you chose to keep Chrome
+honest instead; the Google sign-in slice will find out whether Google minds.
+## 2026-10-27 — On a phone, the Starcaster logo fits the screen instead of pushing every admin page sideways (#869)
+
+The logo at the top of the admin app was always drawn about 980 pixels wide,
+which is more than twice the width of a phone. So on a phone every admin page
+slid left and right. The logo now shrinks to fit narrow screens. On a desktop
+it is exactly the same size as before (the header was compared pixel for
+pixel). A few screens, such as Contacts, still slide sideways on a phone for a
+separate reason: the row of buttons beside the page title is too wide. That is
+noted on the ticket and left for its own fix.
+## 2026-10-26 — You choose which account each outreach channel posts as, and nothing posts until you do (#867)
+
+On **Engage → Outreach**, the Connect stage of each channel (YouTube, Substack,
+Reddit) now says which account the Mini's browser is signed in as, and you
+choose the account that channel posts as: **Post as this account**, or **I'll
+sign in as someone else** and type the name. Until you choose, nothing posts on
+that channel, and every approved comment says "Waiting: choose the account to
+post as". Before this, the names were written into the code. Substack expected
+"Dane of Earth" while the Mini is signed in as "Dane Christensen", and Reddit
+had no name at all, so it refused to post. **Check now** asks the Mini to
+re-check its sign-in within about half a minute. Reddit's pace (3 a day, 20
+minutes apart) can now be changed on the same screen. The Mini's posting job
+itself gets installed right after this goes live, not before: today's code
+would have posted as accounts you never confirmed.
 
 ## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
 
