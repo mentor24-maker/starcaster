@@ -1,3 +1,15 @@
+## 2026-10-26 — The Fonts screen can search, filter by kind, and show your own words in every font (#865)
+
+With nearly 300 fonts in the library, scrolling to find one stopped being
+practical. **Assets → Fonts** now has a **Search** box (it matches the font's
+name and its tags), buttons for each kind of font (Sans, Serif, Display,
+Monospace, Handwriting), and a **Sample text** box: type a word and every row
+shows that word in its own font, at whatever size the slider is set to. If a
+search finds nothing, it says which search ("No display fonts match 'zzzz'")
+instead of showing an empty table. The screen also only downloads a font when
+its row is on screen — opening the full library now fetches 6 font files
+instead of all of them, so it opens quickly.
+
 ## 2026-10-14 — Assets has a Fonts screen, with every font written in its own lettering (#856)
 
 There is now an **Assets → Fonts** screen. It lists every font in the library
