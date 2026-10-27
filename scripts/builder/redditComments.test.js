@@ -9,13 +9,18 @@ const path = require('path');
  * Reddit comments 2/4 (86bch3jp3) — reading a Reddit post, writing a comment
  * on it in Dane's voice from his canon, and his approve / reject.
  *
- * The fake database reads its schema from docs/SQL/reddit_comments_setup.sql.
- * The Reddit read and the AI call are stand-ins: every test says exactly what
- * "Reddit" answered and what the "model" wrote, so a rule can be shown to
- * catch it.
+ * The fake database reads its schema from the Reddit SQL files, in the order
+ * they are run. The Reddit read, the Mini's sign-in check and the AI call are
+ * stand-ins: every test says exactly what "Reddit" answered and what the
+ * "model" wrote, so a rule can be shown to catch it.
+ *
+ * Since Outreach wizard 17/19 (86bcrmbuv) Add does not read Reddit itself: it
+ * queues the read for the Mini's browser while the Mini is signed in, and the
+ * worker writes the post back with markRead / markReadFailed.
  */
 
-const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'reddit_comments_setup.sql');
+const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
+const SQL_FILES = ['reddit_comments_setup.sql', 'reddit_comments_posting.sql', 'reddit_comments_browser_read.sql'];
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
@@ -65,12 +70,10 @@ const CANON = [
   { docKey: 'DEO', title: 'DEO', body: '# DEO\nThe organism thesis.', syncedAt: '2026-10-12T22:47:41.066Z' },
 ];
 
-/** The SQL file, minus its trailing grant to the read-only login, which is not schema. */
+/** The SQL files, minus each one's trailing grant to the read-only login, which is not schema. */
 function schemaText() {
-  const sql = fs.readFileSync(SQL_PATH, 'utf8');
   const grant = /\ndo \$\$[\s\S]*?end \$\$;\s*$/i;
-  assert.match(sql, grant, 'the setup file should end with the starcaster_readonly grant block');
-  return sql.replace(grant, '\n');
+  return SQL_FILES.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')).join('\n');
 }
 
 /**
@@ -135,11 +138,31 @@ function scripted(...replies) {
   return { generate, asked };
 }
 
-async function addFromReddit(store, scope = SCOPE_A, payload = listing()) {
-  const reddit = fakeReddit(answer(200, payload));
-  const added = await store.addItem({ url: POST_URL }, scope, { readPost: (url) => reader.readRedditPost(url, { fetch: reddit.fetch }) });
+/** The Mini's last Reddit sign-in check, as getBrowserCheck answers it. */
+function miniCheck(state = 'signed_in', { minutesAgo = 10, message = 'Signed in to Reddit as u/DaneOfEarth' } = {}) {
+  const checkedAt = new Date(Date.now() - minutesAgo * 60000).toISOString();
+  return async () => ({ ok: true, status: 200, data: { accountKey: 'dane_of_earth', state, message, checkedAt, signedInAt: checkedAt } });
+}
+const SIGNED_IN = { browserCheck: miniCheck() };
+
+/** The post as the Mini's browser reads it (workers/youtube-outreach/adapters/reddit.js). */
+const READ_POST = {
+  subreddit: 'Meditation',
+  title: 'How do you keep going?',
+  body: 'I keep quitting after a week.',
+  author: 'quietpond',
+  comment: null,
+  topComments: [{ id: 'c1', author: 'a', body: 'Two minutes a day.', score: 40 }],
+};
+
+/** Add a link while the Mini is signed in, then let "the Mini" read it. */
+async function addFromReddit(store, scope = SCOPE_A, post = READ_POST) {
+  const added = await store.addItem({ url: POST_URL }, scope, SIGNED_IN);
   assert.equal(added.ok, true, added.error);
-  return added.data;
+  assert.equal(added.data.readState, 'reading');
+  const read = await store.markRead(added.data.id, post, { projectId: scope.projectId });
+  assert.equal(read.ok, true, read.error);
+  return read.data;
 }
 
 // ── Reading the link ───────────────────────────────────────────────────────
@@ -207,10 +230,29 @@ test('every refusal from Reddit is a plain sentence naming which one it was', as
 
 // ── Adding ─────────────────────────────────────────────────────────────────
 
-test('adding a public post link stores the subreddit, title and body as read, with both tenant columns', async () => {
+test('adding a link while the Mini is signed in saves it as reading; the Mini\'s read fills in the post, with both tenant columns', async () => {
   const { db, store, restore } = withDb();
   try {
-    const item = await addFromReddit(store);
+    const queued = await store.addItem({ url: POST_URL }, SCOPE_A, SIGNED_IN);
+    assert.equal(queued.ok, true, queued.error);
+    assert.equal(queued.status, 201);
+    assert.equal(queued.data.readState, 'reading');
+    assert.equal(queued.data.postTitle, '', 'nothing is read on the server');
+    assert.ok(queued.data.readRequestedAt);
+    assert.deepEqual((await store.listPendingReads(10, { projectId: 'proj_a' })).data.map((i) => i.id), [queued.data.id]);
+    assert.equal((await store.listPendingReads(10, { projectId: 'proj_b' })).data.length, 0, 'another project\'s reads are not offered');
+    const early = await store.writeDraftForItem(queued.data.id, SCOPE_A, { generate: scripted(GOOD).generate, canonDocs: CANON });
+    assert.equal(early.status, 409);
+    assert.match(early.error, /still reading this post/);
+
+    const read = await store.markRead(queued.data.id, READ_POST, { projectId: 'proj_a' });
+    assert.equal(read.ok, true, read.error);
+    const item = read.data;
+    assert.equal(item.readState, '');
+    assert.ok(item.readFinishedAt);
+    assert.deepEqual(item.topComments, [{ id: 'c1', author: 'a', body: 'Two minutes a day.', score: 40 }]);
+    assert.equal((await store.listPendingReads(10, { projectId: 'proj_a' })).data.length, 0);
+    assert.equal((await store.markRead(item.id, READ_POST, { projectId: 'proj_a' })).status, 409, 'a read lands once');
     assert.equal(item.status, 'idea');
     assert.equal(item.subreddit, 'Meditation');
     assert.equal(item.postTitle, 'How do you keep going?');
@@ -230,26 +272,28 @@ test('adding a public post link stores the subreddit, title and body as read, wi
   }
 });
 
-test('when Reddit refuses the read, Add says why and accepts the post pasted by hand', async () => {
+test('BREAK TEST: with the Mini signed out, Add saves nothing, says so, and accepts the post pasted by hand', async () => {
   const { store, restore } = withDb();
   try {
-    const blocked = fakeReddit(answer(403, '<html>You\'ve been blocked by network security.</html>'));
-    const readPost = (url) => reader.readRedditPost(url, { fetch: blocked.fetch });
-    const refused = await store.addItem({ url: POST_URL }, SCOPE_A, { readPost });
+    let asked = 0;
+    const signedOut = miniCheck('signed_out', { message: 'The Mini\'s Reddit browser is signed out' });
+    const browserCheck = async () => { asked += 1; return signedOut(); };
+    const refused = await store.addItem({ url: POST_URL }, SCOPE_A, { browserCheck });
     assert.equal(refused.ok, false);
     assert.equal(refused.status, 409);
     assert.equal(refused.code, 'POST_TEXT_NEEDED');
-    assert.equal(refused.readerCode, 'REDDIT_BLOCKED');
-    assert.match(refused.error, /blocked this server.*Paste the post's title and text/);
-    assert.equal((await store.listItems(50, SCOPE_A)).data.length, 0, 'nothing is saved from a failed read');
+    assert.equal(refused.readerCode, 'MINI_SIGNED_OUT');
+    assert.match(refused.error, /^The Mini is not signed in to Reddit \(The Mini's Reddit browser is signed out\), so it cannot read the post\. Paste the post's title and text instead\.$/);
+    assert.equal((await store.listItems(50, SCOPE_A)).data.length, 0, 'nothing is saved while the Mini cannot read');
 
-    const pasted = await store.addItem({ url: POST_URL, postTitle: 'How do you keep going?', postBody: 'I keep quitting.' }, SCOPE_A, { readPost });
+    const pasted = await store.addItem({ url: POST_URL, postTitle: 'How do you keep going?', postBody: 'I keep quitting.' }, SCOPE_A, { browserCheck });
     assert.equal(pasted.ok, true, pasted.error);
     assert.equal(pasted.data.postReadFrom, 'pasted');
+    assert.equal(pasted.data.readState, '');
     assert.equal(pasted.data.subreddit, 'Meditation');
-    assert.equal(blocked.asked.length, 1, 'a pasted post is not read again');
+    assert.equal(asked, 1, 'a pasted post does not ask the Mini');
 
-    const commentNoParent = await store.addItem({ url: COMMENT_URL, postTitle: 'T', postBody: 'B' }, SCOPE_A, { readPost });
+    const commentNoParent = await store.addItem({ url: COMMENT_URL, postTitle: 'T', postBody: 'B' }, SCOPE_A, { browserCheck });
     assert.match(commentNoParent.error, /paste the comment being replied to/);
   } finally {
     restore();
@@ -260,10 +304,77 @@ test('Add refuses a missing project or user before reading anything', async () =
   const { store, restore } = withDb();
   try {
     let read = 0;
-    const readPost = async () => { read += 1; return { ok: false }; };
-    assert.match((await store.addItem({ url: POST_URL }, { projectId: 'proj_a' }, { readPost })).error, /both tenant columns/);
-    assert.match((await store.addItem({ url: POST_URL }, { userId: 'u' }, { readPost })).error, /No project/);
+    const browserCheck = async () => { read += 1; return { ok: false }; };
+    assert.match((await store.addItem({ url: POST_URL }, { projectId: 'proj_a' }, { browserCheck })).error, /both tenant columns/);
+    assert.match((await store.addItem({ url: POST_URL }, { userId: 'u' }, { browserCheck })).error, /No project/);
     assert.equal(read, 0);
+  } finally {
+    restore();
+  }
+});
+
+test('the Mini is only asked to read when its last check says signed in, recently — every other answer names why', async () => {
+  const { store, restore } = withDb();
+  try {
+    const cases = [
+      [miniCheck('signed_in', { minutesAgo: 30 }), null],
+      [miniCheck('signed_in', { minutesAgo: 3 * 60 }), /last checked its Reddit sign-in 3 hours ago, so its worker may have stopped/],
+      [miniCheck('wrong_account', { message: 'Signed in as u/someoneelse.' }), /not signed in to Reddit \(Signed in as u\/someoneelse\)/],
+      [miniCheck('gateway_down', { message: 'OpenClaw did not answer' }), /not signed in to Reddit \(OpenClaw did not answer\)/],
+      [async () => ({ ok: true, data: { state: '', checkedAt: null } }), /has never checked its Reddit sign-in — its worker may not be running/],
+      [async () => ({ ok: false, error: 'relation "reddit_comment_settings" does not exist' }), /could not be read \(relation "reddit_comment_settings" does not exist\)/],
+    ];
+    for (const [browserCheck, refusal] of cases) {
+      // eslint-disable-next-line no-await-in-loop
+      const verdict = await store.miniCanRead(SCOPE_A, { browserCheck });
+      if (!refusal) assert.equal(verdict.ok, true);
+      else {
+        assert.equal(verdict.ok, false);
+        assert.match(verdict.error, refusal);
+        assert.match(verdict.error, /Paste the post's title and text instead\.$/);
+      }
+    }
+  } finally {
+    restore();
+  }
+});
+
+test('a removed post says "Reddit says this post was removed"; the post can then be pasted onto it, or read again', async () => {
+  const { store, restore } = withDb();
+  try {
+    const added = await store.addItem({ url: POST_URL }, SCOPE_A, SIGNED_IN);
+    const failed = await store.markReadFailed(added.data.id, { code: 'REDDIT_REMOVED', error: 'Reddit says this post was removed (by moderators), so there is nothing to answer.' }, { projectId: 'proj_a' });
+    assert.equal(failed.ok, true, failed.error);
+    assert.equal(failed.data.readState, 'failed');
+    assert.equal(failed.data.readCode, 'REDDIT_REMOVED');
+    assert.match(failed.data.readError, /^Reddit says this post was removed/);
+    assert.match((await store.writeDraftForItem(added.data.id, SCOPE_A, { generate: scripted(GOOD).generate, canonDocs: CANON })).error, /could not read this post/);
+
+    // Try again: only while the Mini is signed in, and only from failed.
+    const stillOut = await store.readAgain(added.data.id, SCOPE_A, { browserCheck: miniCheck('signed_out') });
+    assert.equal(stillOut.code, 'POST_TEXT_NEEDED');
+    const again = await store.readAgain(added.data.id, SCOPE_A, SIGNED_IN);
+    assert.equal(again.ok, true, again.error);
+    assert.equal(again.data.readState, 'reading');
+    assert.equal(again.data.readError, '');
+    assert.equal((await store.readAgain(added.data.id, SCOPE_A, SIGNED_IN)).status, 409);
+
+    // Pasted while the Mini is still reading: the paste wins, and the late read is refused.
+    assert.match((await store.pasteForItem(added.data.id, {}, SCOPE_A)).error, /title or its text/);
+    const pasted = await store.pasteForItem(added.data.id, { postTitle: 'How do you keep going?', postBody: 'I keep quitting.' }, SCOPE_A);
+    assert.equal(pasted.ok, true, pasted.error);
+    assert.equal(pasted.data.readState, '');
+    assert.equal(pasted.data.postReadFrom, 'pasted');
+    assert.equal(pasted.data.postTitle, 'How do you keep going?');
+    assert.equal((await store.markRead(added.data.id, READ_POST, { projectId: 'proj_a' })).status, 409, 'the Mini does not overwrite a paste');
+    assert.equal((await store.pasteForItem(added.data.id, { postTitle: 'x' }, SCOPE_A)).status, 409);
+    assert.equal((await store.pasteForItem(added.data.id, { postTitle: 'x' }, SCOPE_B)).status, 404, 'another project cannot paste onto it');
+
+    // A comment link needs the comment pasted too.
+    const reply = await store.addItem({ url: COMMENT_URL }, SCOPE_A, SIGNED_IN);
+    assert.match((await store.pasteForItem(reply.data.id, { postTitle: 'T', postBody: 'B' }, SCOPE_A)).error, /paste the comment being replied to/);
+    const replyPasted = await store.pasteForItem(reply.data.id, { postTitle: 'T', postBody: 'B', parentCommentText: 'I tried apps.' }, SCOPE_A);
+    assert.equal(replyPasted.data.parentCommentText, 'I tried apps.');
   } finally {
     restore();
   }
