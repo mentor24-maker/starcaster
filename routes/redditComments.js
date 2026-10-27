@@ -7,8 +7,8 @@
  *   GET    /api/engage/reddit-comments/items              ?status=&limit=
  *   POST   /api/engage/reddit-comments/items              { url, postTitle?, postBody?, parentCommentText? }
  *   GET    /api/engage/reddit-comments/items/:id
- *   POST   /api/engage/reddit-comments/items/:id/draft    write a draft (AI); "Write another" too
- *   POST   /api/engage/reddit-comments/items/:id/approve  { text? }  (Dane's edited wording)
+ *   POST   /api/engage/reddit-comments/items/:id/draft    write three options (AI, 9/19); "Three more" too
+ *   POST   /api/engage/reddit-comments/items/:id/approve  { text?, option? }  (his wording, and which option he picked)
  *   POST   /api/engage/reddit-comments/items/:id/reject
  *   POST   /api/engage/reddit-comments/items/:id/paste       { postTitle, postBody, parentCommentText? }
  *   POST   /api/engage/reddit-comments/items/:id/read-again  ask the Mini to read it again

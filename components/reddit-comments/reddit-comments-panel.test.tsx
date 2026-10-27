@@ -43,7 +43,7 @@ const PACE = { maxCommentsPerDay: 3, minMinutesBetween: 20, jitterMinutes: 10 };
 const POST_LINK = "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/";
 
 /** `readable`: the Mini is signed in, so Add queues a read instead of refusing. */
-type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable" };
+type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable"; dropOne?: boolean };
 let stores: Record<string, Store>;
 let activeProject = "proj_doe";
 let requests: Array<{ method: string; path: string; body: any }>;
@@ -124,13 +124,25 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       Object.assign(found, { readState: "reading", readError: "", readRequestedAt: new Date().toISOString() });
     } else if (decision[2] === "draft") {
       drafts += 1;
-      Object.assign(found, { status: "draft", draftText: `The air bends the light, draft ${drafts}.`, finalText: "", canonUsed: CANON });
+      // Three options, the way lib/draftOptions.js stores them (9/19). With
+      // `dropOne` the second broke a rule twice and was dropped, words unkept.
+      const draftOptions = [
+        { angle: "adds a personal story", text: `The air bends the light, draft ${drafts}.`, rule: { ok: true } },
+        store.dropOne
+          ? { angle: "asks a question back", dropped: true, rule: { ok: false, reason: "it names Dane of Earth, and a drafted comment may never mention Dane's own projects" } }
+          : { angle: "asks a question back", text: `Have you watched a star near the horizon, draft ${drafts}?`, rule: { ok: true } },
+        { angle: "offers a resource", text: `Look up atmospheric seeing, draft ${drafts}.`, rule: { ok: true } },
+      ];
+      Object.assign(found, {
+        status: "draft", draftText: draftOptions[0].text!, draftOptions, chosenOption: null, finalText: "", canonUsed: CANON,
+        updatedAt: `2026-10-12T12:00:0${drafts}Z`,
+      });
     } else if (decision[2] === "approve") {
       const text = body.text ?? found.draftText;
       if (text.toLowerCase().includes(BLOCKED)) {
         fail(`Not approved: it uses "${BLOCKED}", which is on the AI-ism blocklist.`, 422, "RULE_BROKEN");
       }
-      Object.assign(found, { status: "approved", finalText: text });
+      Object.assign(found, { status: "approved", finalText: text, chosenOption: body.option ?? null });
     } else {
       found.status = "rejected";
     }
@@ -323,25 +335,84 @@ describe("Reddit comments screen", () => {
     expect(stores.proj_doe.items).toEqual([]);
   });
 
-  it("writes a draft, takes Dane's edit, and approves it to wait for the Mini", async () => {
+  it("Write with AI shows three labelled replies; picking the second fills the box, and Approve sends his edit and the pick", async () => {
     stores.proj_doe.items = [item({})];
     const id = stores.proj_doe.items[0].id;
     await mount();
     await click(button("Write with AI", row(id)));
-    expect(text()).toContain("Draft written — it is on Approvals");
-    const box = el<HTMLTextAreaElement>(`#rc-draft-${id}`);
-    expect(box.value).toBe("The air bends the light, draft 1.");
+    expect(text()).toContain("3 replies to choose from — on Approvals, ready to pick.");
+    const options = [...row(id).querySelectorAll<HTMLButtonElement>(".draft-chooser-option")];
+    expect(options.map((o) => o.querySelector(".draft-chooser-angle")?.textContent))
+      .toEqual(["1adds a personal story", "2asks a question back", "3offers a resource"]);
     expect(row(id).textContent).toContain("Written from: Dane of Earth, Voice, DEO, Ecosystem — canon copied Oct 12");
+    // Nothing is approvable until he picks one.
+    expect(container!.querySelector(`#rc-draft-${id}-box`)).toBeNull();
+    expect(button("Approve", row(id)).disabled).toBe(true);
 
-    type(box, "Turbulent air bends starlight — that's the twinkle.");
+    await click(options[1]);
+    expect(options[1].getAttribute("aria-pressed")).toBe("true");
+    const box = el<HTMLTextAreaElement>(`#rc-draft-${id}-box`);
+    expect(box.value).toBe("Have you watched a star near the horizon, draft 1?");
+
+    type(box, "Have you watched a star near the horizon? It twinkles most there.");
     await click(button("Approve", row(id)));
-    expect(requests.pop()?.body).toEqual({ text: "Turbulent air bends starlight — that's the twinkle." });
+    expect(requests.pop()?.body).toEqual({ text: "Have you watched a star near the horizon? It twinkles most there.", option: 1 });
     expect(stores.proj_doe.items[0].status).toBe("approved");
+    expect(stores.proj_doe.items[0].chosenOption).toBe(1);
 
     await reload();
     await click(button("Approvals"));
     expect(row(id).textContent).toContain("Approved — waiting for the Mini to post it");
-    expect(row(id).textContent).toContain("Turbulent air bends starlight");
+    expect(row(id).textContent).toContain("It twinkles most there.");
+  });
+
+  it("keys 1, 2 and 3 pick an option, but type normally inside the box", async () => {
+    stores.proj_doe.items = [item({})];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write with AI", row(id)));
+    const chooser = row(id).querySelector<HTMLElement>(".draft-chooser")!;
+    const press = (target: HTMLElement, key: string) => act(() => {
+      target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+    });
+    press(chooser.querySelector<HTMLElement>(".draft-chooser-option")!, "3");
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}-box`).value).toBe("Look up atmospheric seeing, draft 1.");
+    press(el<HTMLTextAreaElement>(`#rc-draft-${id}-box`), "1");
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}-box`).value).toBe("Look up atmospheric seeing, draft 1.");
+    press(chooser, "1");
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}-box`).value).toBe("The air bends the light, draft 1.");
+    press(chooser, "4");
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}-box`).value).toBe("The air bends the light, draft 1.");
+  });
+
+  it("names a dropped option and its reason, and shows only the two kept", async () => {
+    stores.proj_doe.items = [item({})];
+    stores.proj_doe.dropOne = true;
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write with AI", row(id)));
+    expect(text()).toContain("2 replies to choose from");
+    expect(row(id).querySelectorAll(".draft-chooser-option").length).toBe(2);
+    expect(row(id).textContent).toContain("One option was dropped: it names Dane of Earth");
+    expect(row(id).textContent).toContain("press 1 or 2");
+    // The second card is the THIRD stored option, and Approve sends its stored index.
+    await click(row(id).querySelectorAll<HTMLButtonElement>(".draft-chooser-option")[1]);
+    await click(button("Approve", row(id)));
+    expect(requests.pop()?.body).toEqual({ text: "Look up atmospheric seeing, draft 1.", option: 2 });
+  });
+
+  it("Three More replaces all three", async () => {
+    stores.proj_doe.items = [item({})];
+    const id = stores.proj_doe.items[0].id;
+    await mount();
+    await click(button("Write with AI", row(id)));
+    await click(row(id).querySelector<HTMLButtonElement>(".draft-chooser-option")!);
+    await click(button("Three More", row(id)));
+    expect(text()).toContain("3 replies to choose from — the old ones are replaced.");
+    expect([...row(id).querySelectorAll(".draft-chooser-text")].map((o) => o.textContent)).toEqual([
+      "The air bends the light, draft 2.", "Have you watched a star near the horizon, draft 2?", "Look up atmospheric seeing, draft 2.",
+    ]);
+    expect(container!.querySelector(`#rc-draft-${id}-box`)).toBeNull();
   });
 
   it("shows the server's refusal word for word when an edit breaks a rule", async () => {
@@ -358,13 +429,14 @@ describe("Reddit comments screen", () => {
     expect(el<HTMLTextAreaElement>(`#rc-draft-${id}`).value).toBe("Let us delve into the optics.");
   });
 
-  it("Write another replaces the draft in the box", async () => {
+  it("a draft written before options keeps its single box, and Write another turns it into three", async () => {
     stores.proj_doe.items = [item({ status: "draft", draftText: "First try.", canonUsed: CANON })];
     const id = stores.proj_doe.items[0].id;
     await mount();
     await click(button("Approvals"));
+    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}`).value).toBe("First try.");
     await click(button("Write another", row(id)));
-    expect(el<HTMLTextAreaElement>(`#rc-draft-${id}`).value).toBe("The air bends the light, draft 1.");
+    expect(row(id).querySelectorAll(".draft-chooser-option").length).toBe(3);
   });
 
   it("rejects from the server and says how many rejected rows are hidden", async () => {
