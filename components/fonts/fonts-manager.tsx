@@ -22,7 +22,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): an empty library, a read
  * that failed, and a library still loading are three different sentences.
  *
- * Not here yet, by design: search and filters (7/7), tag editing (5/7), which
+ * TAGS (Font Library 5/7, task 86bchyd4k). Every tag is a chip; clicking one
+ * filters the list to fonts carrying it, and the Tag box above the table takes
+ * several ("sci-fi, wide" = must have both). A project's own fonts also get an
+ * × per chip and a "+ tag" box; shared-library fonts get neither, because the
+ * server refuses to change them (routes/fonts.js) and offering a button that
+ * always fails is worse than not offering it. The AI's tags arrive on upload.
+ *
+ * Not here yet, by design: text search and category filters (7/7), which
  * sites use a font (6/7 fills the Used by Sites column).
  */
 
@@ -37,6 +44,30 @@ export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
  * run, with a bare error page instead of a sentence.
  */
 export const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+/**
+ * "Sci-Fi,  wide , sci-fi" → ["sci-fi", "wide"]: trimmed, lowercased, inner
+ * spaces collapsed, duplicates dropped — what lib/fontsStore.js cleanTags
+ * stores, so a typed filter matches the saved tag.
+ */
+export function parseTagList(text: string): string[] {
+  const out: string[] = [];
+  for (const part of String(text || '').split(',')) {
+    const tag = part.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (tag && !out.includes(tag)) out.push(tag);
+  }
+  return out;
+}
+
+/** Fonts carrying EVERY one of these tags; no tags means every font. */
+export function filterByTags<T extends { tags: string[] }>(fonts: T[], tags: string[]): T[] {
+  if (!tags.length) return fonts;
+  return fonts.filter((f) => tags.every((t) => (f.tags || []).includes(t)));
+}
+
+export function noTagMatchSentence(tags: string[]): string {
+  return `No fonts tagged '${tags.join(', ')}'.`;
+}
 
 export const EMPTY_LIBRARY_SENTENCE =
   'No fonts in the library yet. Add one, or ask CC to run the starter-pack import (Font Library 4/7).';
@@ -186,7 +217,10 @@ type FormState = {
 
 const EMPTY_FORM: FormState = { family: '', category: 'sans', licence: 'OFL-1.1', sourceUrl: '' };
 
-function AddFontForm({ onSaved, onCancel }: { onSaved: (font: FontRow) => void; onCancel: () => void }): React.ReactElement {
+function AddFontForm({ onSaved, onCancel }: {
+  onSaved: (font: FontRow, autoTagError?: string) => void;
+  onCancel: () => void;
+}): React.ReactElement {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -225,7 +259,7 @@ function AddFontForm({ onSaved, onCancel }: { onSaved: (font: FontRow) => void; 
         setError(body?.error?.message || 'The font could not be saved.');
         return;
       }
-      onSaved(body.data.font as FontRow);
+      onSaved(body.data.font as FontRow, body.data.autoTagError || undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The font could not be saved.');
     } finally {
@@ -292,6 +326,68 @@ function AddFontForm({ onSaved, onCancel }: { onSaved: (font: FontRow) => void; 
   );
 }
 
+function TagCell({ font, editable, busy, onFilter, onSave }: {
+  font: FontRow;
+  editable: boolean;
+  busy: boolean;
+  onFilter: (tag: string) => void;
+  onSave: (tags: string[]) => Promise<boolean>;
+}): React.ReactElement {
+  const [draft, setDraft] = useState('');
+  const add = async () => {
+    const typed = parseTagList(draft);
+    if (!typed.length) return;
+    const next = [...font.tags, ...typed.filter((t) => !font.tags.includes(t))];
+    if (await onSave(next)) setDraft('');
+  };
+  return (
+    <span className="fonts-manager-chips">
+      {font.tags.map((t) => (
+        <span key={t} className="fonts-manager-chip">
+          <button
+            type="button"
+            className="fonts-manager-chip-filter"
+            title={`Show only fonts tagged "${t}"`}
+            onClick={() => onFilter(t)}
+          >
+            {t}
+          </button>
+          {editable ? (
+            <button
+              type="button"
+              className="fonts-manager-chip-remove"
+              aria-label={`Remove tag ${t} from ${font.family}`}
+              title={`Remove "${t}"`}
+              disabled={busy}
+              onClick={() => void onSave(font.tags.filter((x) => x !== t))}
+            >
+              ×
+            </button>
+          ) : null}
+        </span>
+      ))}
+      {!font.tags.length && !editable ? '—' : null}
+      {editable ? (
+        <input
+          type="text"
+          className="fonts-manager-tag-input"
+          aria-label={`Add tags to ${font.family}`}
+          placeholder="+ tag"
+          value={draft}
+          disabled={busy}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void add();
+            }
+          }}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 export default function FontsManager(): React.ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [fonts, setFonts] = useState<FontRow[] | null>(null);
@@ -301,6 +397,8 @@ export default function FontsManager(): React.ReactElement {
   const [confirmingDelete, setConfirmingDelete] = useState('');
   const [deleting, setDeleting] = useState('');
   const [notice, setNotice] = useState('');
+  const [tagFilter, setTagFilter] = useState('');
+  const [savingTags, setSavingTags] = useState('');
   const requestSeq = useRef(0);
 
   const load = useCallback(async () => {
@@ -364,6 +462,34 @@ export default function FontsManager(): React.ReactElement {
   }, [load]);
 
   const faces = useMemo(() => fontFaceCss(fonts || []), [fonts]);
+  const filterTags = useMemo(() => parseTagList(tagFilter), [tagFilter]);
+  const shown = useMemo(() => filterByTags(fonts || [], filterTags), [fonts, filterTags]);
+
+  /** Save a project font's whole tag list; the row shows what the server stored. */
+  const saveTags = async (font: FontRow, tags: string[]): Promise<boolean> => {
+    const api = getApp()?.api;
+    if (typeof api !== 'function') return false;
+    setSavingTags(font.id);
+    setNotice('');
+    try {
+      const body = await api(`${FONTS_PATH}/${encodeURIComponent(font.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tags }),
+      });
+      if (!body?.ok) {
+        setNotice(body?.error?.message || `The tags on ${font.family} could not be saved.`);
+        return false;
+      }
+      const saved = body.data.font as FontRow;
+      setFonts((list) => (list || []).map((f) => (f.id === saved.id ? { ...f, tags: saved.tags } : f)));
+      return true;
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : `The tags on ${font.family} could not be saved.`);
+      return false;
+    } finally {
+      setSavingTags('');
+    }
+  };
 
   const remove = async (font: FontRow) => {
     const api = getApp()?.api;
@@ -402,14 +528,32 @@ export default function FontsManager(): React.ReactElement {
           Add Font
         </button>
         <button type="button" className="btn" onClick={() => void load()} disabled={loading}>Refresh</button>
+        {fonts && fonts.length ? (
+          <label className="fonts-manager-tag-filter">
+            <span>Tag</span>
+            <input
+              type="text"
+              name="tagFilter"
+              value={tagFilter}
+              placeholder="sci-fi, wide"
+              title="Show only fonts carrying every tag typed here, separated by commas"
+              onChange={(e) => setTagFilter(e.target.value)}
+            />
+            {tagFilter ? (
+              <button type="button" className="btn tiny-btn" onClick={() => setTagFilter('')}>Clear</button>
+            ) : null}
+          </label>
+        ) : null}
       </div>
 
       {adding ? (
         <AddFontForm
           onCancel={() => setAdding(false)}
-          onSaved={(font) => {
+          onSaved={(font, autoTagError) => {
             setAdding(false);
-            setNotice(`${font.family} was added to the library.`);
+            setNotice(autoTagError
+              ? `${font.family} was added to the library, but it could not be tagged automatically (${autoTagError}). Add its tags by hand.`
+              : `${font.family} was added to the library.`);
             setFonts((list) => [...(list || []), font].sort((a, b) => a.family.localeCompare(b.family)));
           }}
         />
@@ -418,7 +562,11 @@ export default function FontsManager(): React.ReactElement {
       {notice ? <p className="fonts-manager-notice" role="status">{notice}</p> : null}
       {status ? <p className={error ? 'fonts-manager-error' : 'fonts-manager-empty'} role={error ? 'alert' : undefined}>{status}</p> : null}
 
-      {fonts && fonts.length ? (
+      {fonts && fonts.length && filterTags.length && !shown.length ? (
+        <p className="fonts-manager-empty">{noTagMatchSentence(filterTags)}</p>
+      ) : null}
+
+      {fonts && shown.length ? (
         <div className="table-wrap fonts-manager-table-wrap">
           <table className="fonts-manager-table">
             <thead>
@@ -434,7 +582,7 @@ export default function FontsManager(): React.ReactElement {
               </tr>
             </thead>
             <tbody>
-              {fonts.map((font) => {
+              {shown.map((font) => {
                 const licence = licenceInfo(font.licence);
                 const shared = font.visibility === 'platform';
                 return (
@@ -460,11 +608,13 @@ export default function FontsManager(): React.ReactElement {
                       ) : (font.sourceName || '—')}
                     </td>
                     <td>
-                      {font.tags.length ? (
-                        <span className="fonts-manager-chips">
-                          {font.tags.map((t) => <span key={t} className="fonts-manager-chip">{t}</span>)}
-                        </span>
-                      ) : '—'}
+                      <TagCell
+                        font={font}
+                        editable={!shared}
+                        busy={savingTags === font.id}
+                        onFilter={(t) => setTagFilter(t)}
+                        onSave={(tags) => saveTags(font, tags)}
+                      />
                     </td>
                     <td />
                     <td className="actions-col">
