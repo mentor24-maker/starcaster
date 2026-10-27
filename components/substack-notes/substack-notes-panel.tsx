@@ -549,7 +549,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
         <Field label="Time zone" htmlFor="sn-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
           <input id="sn-time-zone" type="text" value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
         </Field>
-        <Field label="Voice" htmlFor="sn-voice" help="How the Notes should sound, in your own words.">
+        <Field label="Extra notes for this channel" htmlFor="sn-voice" help="Notes are written from your canon, the same as Reddit comments. Anything here is added after it, for Substack only.">
           <textarea id="sn-voice" rows={4} value={form.voice} onChange={(e) => set('voice', e.target.value)} />
         </Field>
         <Field label="Topics" htmlFor="sn-topics" help="One per line. They appear on the Ideas tab, ready to use.">

@@ -18,6 +18,7 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
+const { withCanon } = require('./canonFixture.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const projectScopePath = require.resolve('../../lib/projectScope.js');
@@ -129,7 +130,7 @@ function withDb() {
       youtubeOutreachSettings: 'youtube_outreach_settings',
       youtubeOutreachComments: 'youtube_outreach_comments',
     }),
-    sbQuery: db.sbQuery,
+    sbQuery: withCanon(db.sbQuery),
   };
   const realSupabase = require.cache[supabasePath];
   const paths = [projectScopePath, targetsStorePath, commentsStorePath, runDuePath];
