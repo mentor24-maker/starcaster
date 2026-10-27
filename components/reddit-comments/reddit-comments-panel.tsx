@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
+import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
 
 /**
  * Engage › Comments — Reddit comments written in Dane's voice. Reddit
@@ -17,7 +18,10 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
  * the post pasted by hand, then sends Add again with it. "Write with AI" puts
  * a draft on Approvals in an editable box, under the canon it was written
  * from; Approve sends the box's words and the SERVER checks them against the
- * blocklist, so its refusal is shown word for word. Nothing here posts — the
+ * blocklist, so its refusal is shown word for word. Since Outreach wizard 9/19
+ * (task 86bcrmbke) Write with AI gives THREE replies to choose from, shown by
+ * the shared components/outreach-wizard/draft-chooser.tsx; a draft written
+ * before then has no options and keeps its single box. Nothing here posts — the
  * Mini's worker does (workers/youtube-outreach/adapters/reddit.js, 4/4, task
  * 86bch3jpg) and fills the Posted tab. The line at the top says whether the
  * Mini's browser is signed in to Reddit and how fast it posts, read from
@@ -55,6 +59,10 @@ export type RedditItem = {
   draftText: string;
   finalText: string;
   canonUsed: CanonUsed[];
+  /** 9/19: the replies to choose from — kept and dropped, in order. Empty on an older draft. */
+  draftOptions?: DraftOption[];
+  /** 9/19: which of draftOptions was approved. */
+  chosenOption?: number | null;
   status: string;
   approvedAt: string | null;
   postedUrl: string;
@@ -249,11 +257,28 @@ function DraftCard({ item, busy, error, onApprove, onReject, onRedraft }: {
   item: RedditItem;
   busy: string;
   error: string;
-  onApprove: (text: string) => void;
+  onApprove: (text: string, option?: number) => void;
   onReject: () => void;
   onRedraft: () => void;
 }): React.ReactElement {
   const [text, setText] = useState(item.draftText);
+  if (keptOptions(item.draftOptions).length) {
+    return (
+      <article className="reddit-comments-card" data-item-id={item.id} aria-label="Comment waiting for approval">
+        <PostSummary item={item} />
+        <DraftChooser
+          options={item.draftOptions || []}
+          idPrefix={`rc-draft-${item.id}`}
+          busy={busy}
+          error={error}
+          footnote={canonLine(item.canonUsed)}
+          onApprove={(words, option) => onApprove(words, option)}
+          onReject={onReject}
+          onMore={onRedraft}
+        />
+      </article>
+    );
+  }
   const boxId = `rc-draft-${item.id}`;
   return (
     <article className="reddit-comments-card" data-item-id={item.id} aria-label="Comment waiting for approval">
@@ -480,7 +505,9 @@ export default function RedditCommentsPanel(): React.ReactElement {
       replaceItem(next);
       if (what === 'draft') {
         setTab('approvals');
-        setNotice(item.status === 'draft' ? 'A new draft was written.' : 'Draft written — it is on Approvals, ready to edit.');
+        const n = keptOptions(next?.draftOptions).length;
+        const written = n ? `${n === 1 ? 'One reply' : `${n} replies`} to choose from` : 'A draft';
+        setNotice(item.status === 'draft' ? `${written} — the old ones are replaced.` : `${written} — on Approvals, ready to pick.`);
       } else if (what === 'approve') {
         setNotice('Approved — waiting for the Mini to post it.');
       } else {
@@ -620,11 +647,11 @@ export default function RedditCommentsPanel(): React.ReactElement {
           {unread ? null : approvals.length ? (
             approvals.map((item) => (item.status === 'draft' ? (
               <DraftCard
-                key={`${item.id}:${item.draftText}`}
+                key={`${item.id}:${item.updatedAt}:${item.draftText}`}
                 item={item}
                 busy={busyFor(item)}
                 error={errorFor(item)}
-                onApprove={(text) => void runAction(item, 'approve', { text })}
+                onApprove={(text, option) => void runAction(item, 'approve', option === undefined ? { text } : { text, option })}
                 onReject={() => reject(item)}
                 onRedraft={() => void runAction(item, 'draft')}
               />
