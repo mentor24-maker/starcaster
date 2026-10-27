@@ -9,6 +9,9 @@
  *                                                                (lib/fontUploadBody.js has the rest)
  *   PATCH  /api/fonts/:id    → { ok, data: { font } }           JSON { tags?, previewText? }
  *   DELETE /api/fonts/:id    → { ok, data: { font, filesRemoved, filesNotRemoved } }
+ *   GET    /api/fonts/:id/usage → { ok, data: { font, sites, totalPages, truncated } }
+ *                                the published public pages using it, by site
+ *                                (Font Library 6/7, lib/fontUsageStore.js)
  *
  * A project may change and delete only its own fonts; a shared-library font
  * answers 403 with the reason. Uploads are refused unless the licence allows
@@ -24,6 +27,7 @@ const { requestProjectScope } = require('../lib/requestProjectScope');
 const fontsStore = require('../lib/fontsStore');
 const { uploadProjectFont, removeFontFiles } = require('../lib/fontUpload');
 const { readFontUploadBody } = require('../lib/fontUploadBody');
+const { getFontUsage } = require('../lib/fontUsageStore');
 
 const manifest = {
   id: 'fonts',
@@ -32,6 +36,7 @@ const manifest = {
 };
 
 const ID_PATH = /^\/api\/fonts\/([^/]+)\/?$/;
+const USAGE_PATH = /^\/api\/fonts\/([^/]+)\/usage\/?$/;
 
 function fail(res, result, fallback) {
   return sendErr(res, result.status || 500, result.error || fallback), true;
@@ -42,7 +47,8 @@ async function handle(req, res, pathname, method, deps = {}) {
   const verb = String(method || '').toUpperCase();
   const isCollection = path === '/api/fonts' || path === '/api/fonts/';
   const idMatch = path.match(ID_PATH);
-  if (!isCollection && !idMatch) return false;
+  const usageMatch = path.match(USAGE_PATH);
+  if (!isCollection && !idMatch && !usageMatch) return false;
 
   const scope = requestProjectScope(req);
   if (!scope.projectId) return sendErr(res, 400, 'No active project', { code: 'PROJECT_REQUIRED' }), true;
@@ -51,6 +57,13 @@ async function handle(req, res, pathname, method, deps = {}) {
     const result = await fontsStore.listFonts(500, scope);
     if (!result.ok) return fail(res, result, 'Could not read the font library');
     return sendOk(res, 200, { fonts: result.data, total: result.data.length }), true;
+  }
+
+  if (usageMatch) {
+    if (verb !== 'GET') return sendErr(res, 405, `${verb} is not supported on ${path}`), true;
+    const result = await (deps.getFontUsage || getFontUsage)(decodeURIComponent(usageMatch[1]), scope);
+    if (!result.ok) return fail(res, result, 'Could not read which sites use this font');
+    return sendOk(res, 200, result.data), true;
   }
 
   if (isCollection && verb === 'POST') {
