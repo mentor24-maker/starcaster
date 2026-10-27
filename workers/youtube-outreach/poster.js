@@ -128,9 +128,19 @@ async function settle(adapter, item, attempt) {
  * one its limits allow. Returns a report; throws nothing an adapter threw.
  */
 async function passForAdapter(adapter, now) {
-  const report = { site: adapter.name, posted: null, waiting: [], error: null };
+  const report = { site: adapter.name, posted: null, waiting: [], error: null, read: null };
   try {
     if (typeof adapter.beginPass === 'function') adapter.beginPass();
+    // A site that also READS for Dane (Reddit, Outreach wizard 17/19) reads
+    // one waiting post first. Its own try: a read that breaks never stops
+    // the posting below, and a post never waits behind more than one read.
+    if (typeof adapter.readPending === 'function') {
+      try {
+        report.read = await adapter.readPending();
+      } catch (err) {
+        report.read = { error: err.message };
+      }
+    }
     const listed = await adapter.listApproved();
     if (!listed.ok) {
       report.error = `could not read the approved comments: ${listed.error}`;
@@ -192,24 +202,35 @@ async function runPass({ adapters, now = Date.now() }) {
   return { at: new Date(now).toISOString(), reports };
 }
 
+/** The read a pass made for Dane (17/19), as its own line; '' when there was none. */
+function formatRead(r) {
+  const head = `[outreach-poster] ${r.site}`;
+  if (!r.read) return '';
+  if (r.read.error) return `${head}: COULD NOT READ the posts waiting to be read — ${r.read.error}\n`;
+  const words = { read: 'READ', failed: 'COULD NOT BE READ', unsaved: 'read, but NOT SAVED' }[r.read.outcome];
+  return `${head}: post ${r.read.id} ${words}${r.read.why ? ` — ${r.read.why}` : ''}\n`;
+}
+
+function formatPosting(r) {
+  const head = `[outreach-poster] ${r.site}`;
+  if (r.error) return `${head}: COULD NOT RUN — ${r.error}`;
+  if (r.posted) {
+    const words = {
+      posted: 'POSTED and proven',
+      failed: 'FAILED',
+      'hand-check': 'NEEDS A HAND CHECK (not retried)',
+    }[r.posted.outcome];
+    return `${head}: comment ${r.posted.id} ${words}${r.posted.why ? ` — ${r.posted.why}` : ''}`
+      + `${r.posted.writeProblem ? ` — AND the row could not be updated: ${r.posted.writeProblem}` : ''}`;
+  }
+  if (!r.approved) return `${head}: nothing approved to post`;
+  const first = r.waiting[0];
+  return `${head}: ${r.approved} approved, none posted — ${first ? first.reason : 'nothing was allowed'}`;
+}
+
 /** One line per site, in the shape a person reads at 8am with no context. */
 function formatPass(pass) {
-  return pass.reports.map((r) => {
-    const head = `[outreach-poster] ${r.site}`;
-    if (r.error) return `${head}: COULD NOT RUN — ${r.error}`;
-    if (r.posted) {
-      const words = {
-        posted: 'POSTED and proven',
-        failed: 'FAILED',
-        'hand-check': 'NEEDS A HAND CHECK (not retried)',
-      }[r.posted.outcome];
-      return `${head}: comment ${r.posted.id} ${words}${r.posted.why ? ` — ${r.posted.why}` : ''}`
-        + `${r.posted.writeProblem ? ` — AND the row could not be updated: ${r.posted.writeProblem}` : ''}`;
-    }
-    if (!r.approved) return `${head}: nothing approved to post`;
-    const first = r.waiting[0];
-    return `${head}: ${r.approved} approved, none posted — ${first ? first.reason : 'nothing was allowed'}`;
-  }).join('\n');
+  return pass.reports.map((r) => formatRead(r) + formatPosting(r)).join('\n');
 }
 
 // ── Configuration, read once at start ──────────────────────────────────────

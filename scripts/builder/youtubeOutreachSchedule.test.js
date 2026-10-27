@@ -17,6 +17,7 @@ const schedule = require('../../lib/youtubeOutreachSchedule.js');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
+const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 
@@ -121,7 +122,7 @@ test('"today" for the daily maximum is the account\'s own calendar day', () => {
 // ── The pass, against the fake database ─────────────────────────────────────
 
 function withDb() {
-  const schema = parseSchemaText(`${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}`);
+  const schema = parseSchemaText(`${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}`);
   const db = createFakeDb(schema);
   const fakeSupabase = {
     isConfigured: () => true,
@@ -152,7 +153,7 @@ const quietVideo = async () => ({ description: 'A serve lesson.', topComments: [
 
 function model() {
   const asked = [];
-  return { asked, generate: async (system, prompt) => { asked.push(prompt); return { ok: true, text: JSON.stringify({ comment: GOOD }) }; } };
+  return { asked, generate: async (system, prompt) => { asked.push(prompt); return { ok: true, text: JSON.stringify({ options: [1, 2, 3].map((n) => ({ angle: `angle ${n}`, text: GOOD })) }) }; } };
 }
 
 async function addTarget(targets, videoId, input = {}, scope = SCOPE_A) {
@@ -210,6 +211,23 @@ test('a target with a draft waiting gets no second draft on the next pass (nor t
     assert.equal(m.asked.length, asks, 'the AI was not even asked');
     const all = await comments.listComments(50, SCOPE_A, {});
     assert.equal(all.data.length, 2);
+  } finally {
+    restore();
+  }
+});
+
+test('a draft the scheduled pass writes arrives with three options to choose from (10/19)', async () => {
+  const { comments, targets, runner, restore } = withDb();
+  try {
+    await addTarget(targets, 'aaaaaaaaaaa');
+    const m = model();
+    const ran = await pass(runner, m);
+    assert.equal(ran.ok, true, ran.error);
+    assert.equal(ran.data.drafted.length, 1, JSON.stringify(ran.data));
+    const written = await comments.getComment(ran.data.drafted[0].commentId, SCOPE_A);
+    assert.equal(written.data.status, 'draft');
+    assert.deepEqual(written.data.draftOptions.map((o) => o.angle), ['angle 1', 'angle 2', 'angle 3']);
+    assert.ok(written.data.draftOptions.every((o) => o.text && o.rule.ok));
   } finally {
     restore();
   }

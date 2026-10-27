@@ -3,7 +3,8 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FontsManager, {
-  DEFAULT_SAMPLE, EMPTY_LIBRARY_SENTENCE, NOT_USED_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, filterFonts,
+  DEFAULT_SAMPLE, EMPTY_LIBRARY_SENTENCE, NOT_USED_SENTENCE, NO_FAVOURITES_SENTENCE, PROJECT_SWITCH_EVENT,
+  VIEW_STORAGE_KEY, countLine, fontFaceCss, filterFonts,
   noMatchSentence, noTagMatchSentence, parseTagList, previewFamily, stylesSentence,
   type FontRow, type FontUsage,
 } from "./fonts-manager";
@@ -52,6 +53,10 @@ let posts: Record<string, unknown>[] = [];
 let patches: { path: string; body: Record<string, any> }[] = [];
 let reads: string[] = [];
 let activeProject = "proj_a";
+/** The server's stars: what GET reports and what PUT / DELETE …/favorite change. */
+let starred = new Set<string>();
+let favoritesError = "";
+let refuseStar = "";
 let usageByFont: Record<string, FontUsage> = {};
 
 async function flush() {
@@ -117,6 +122,10 @@ beforeEach(() => {
   reads = [];
   patches = [];
   activeProject = "proj_a";
+  starred = new Set();
+  favoritesError = "";
+  refuseStar = "";
+  window.localStorage.clear();
   usageByFont = {};
   (window as unknown as { App: unknown }).App = {
     api: async (path: string, options: RequestInit = {}) => {
@@ -128,7 +137,15 @@ beforeEach(() => {
           const id = decodeURIComponent(usage[1]);
           return { ok: true, data: usageByFont[id] || { sites: [], totalPages: 0, truncated: false } };
         }
-        return { ok: true, data: { fonts: library, total: library.length } };
+        const fonts = library.map((f) => ({ ...f, isFavorite: starred.has(f.id) }));
+        return { ok: true, data: { fonts, total: fonts.length, favoritesError } };
+      }
+      const fav = /^\/api\/fonts\/([^/]+)\/favorite$/.exec(path);
+      if (fav && (method === "PUT" || method === "DELETE")) {
+        if (refuseStar) return { ok: false, error: { message: refuseStar } };
+        const id = decodeURIComponent(fav[1]);
+        if (method === "PUT") starred.add(id); else starred.delete(id);
+        return { ok: true, data: { fontId: id, isFavorite: starred.has(id) } };
       }
       if (method === "POST") {
         const body = JSON.parse(String(options.body));
@@ -247,6 +264,159 @@ describe("FontsManager", () => {
     expect(reads).toEqual(["proj_a /api/fonts", "proj_b /api/fonts"]);
     expect(rowNames()).toEqual([]);
     expect(container!.textContent).toContain(EMPTY_LIBRARY_SENTENCE);
+  });
+});
+
+describe("FontsManager favourites (Font Library 8)", () => {
+  const three = () => [
+    font({ id: "f-bungee", family: "Bungee", visibility: "platform" }),
+    font({ id: "f-exo", family: "Exo", visibility: "platform" }),
+    font({ id: "f-orbitron", family: "Orbitron", visibility: "platform" }),
+  ];
+  const star = (family: string) => container!.querySelector(
+    `button[aria-label='Add ${family} to favourites'], button[aria-label='Remove ${family} from favourites']`,
+  ) as HTMLButtonElement;
+  const favouritesButton = () => [...container!.querySelectorAll(".fonts-manager-view-switch button")]
+    .find((b) => (b.textContent || "").startsWith("Favourites")) as HTMLButtonElement;
+
+  async function remount() {
+    act(() => { root?.unmount(); });
+    container?.remove();
+    await mount();
+  }
+
+  it("clicking ☆ turns it to ★, and after a reload it is still ★", async () => {
+    library = three();
+    await mount();
+    expect(star("Orbitron").textContent).toBe("☆");
+    click(star("Orbitron"));
+    await flush();
+    expect(star("Orbitron").textContent).toBe("★");
+    expect(star("Orbitron").getAttribute("aria-pressed")).toBe("true");
+    expect([...starred]).toEqual(["f-orbitron"]);
+
+    await remount();
+    expect(star("Orbitron").textContent).toBe("★");
+    expect(star("Exo").textContent).toBe("☆");
+  });
+
+  it("Favourites (N) shows exactly the starred fonts, N matches, and unstarring removes one", async () => {
+    library = three();
+    starred = new Set(["f-orbitron", "f-bungee"]);
+    await mount();
+    expect(favouritesButton().textContent).toBe("Favourites (2)");
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+
+    click(favouritesButton());
+    expect(rowNames()).toEqual(["Bungee", "Orbitron"]);
+
+    click(star("Bungee"));
+    await flush();
+    expect(rowNames()).toEqual(["Orbitron"]);
+    expect(favouritesButton().textContent).toBe("Favourites (1)");
+
+    click(button("All fonts"));
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+  });
+
+  it("with nothing starred the Favourites view says why, with no table", async () => {
+    library = three();
+    await mount();
+    click(favouritesButton());
+    expect(container!.textContent).toContain(NO_FAVOURITES_SENTENCE);
+    expect(container!.querySelector("table")).toBeNull();
+    // The switch stays, so the way back to All fonts is still on screen.
+    expect(button("All fonts")).toBeTruthy();
+  });
+
+  it("the switch remembers its position after a reload", async () => {
+    library = three();
+    starred = new Set(["f-exo"]);
+    await mount();
+    click(favouritesButton());
+    expect(window.localStorage.getItem(VIEW_STORAGE_KEY)).toBe("favorites");
+
+    await remount();
+    expect(favouritesButton().getAttribute("aria-pressed")).toBe("true");
+    expect(rowNames()).toEqual(["Exo"]);
+
+    click(button("All fonts"));
+    await remount();
+    expect(rowNames()).toEqual(["Bungee", "Exo", "Orbitron"]);
+  });
+
+  it("a refused star stays ☆ and says why", async () => {
+    library = three();
+    refuseStar = "Nobody is signed in, so there is no list of favourite fonts to read or change.";
+    await mount();
+    click(star("Exo"));
+    await flush();
+    expect(star("Exo").textContent).toBe("☆");
+    expect(container!.textContent).toContain(refuseStar);
+  });
+
+  it("when the server could not read the stars, the Favourites view says that instead of 'no favourites'", async () => {
+    library = three();
+    favoritesError = "Your favourite fonts could not be read: relation \"font_favorites\" does not exist";
+    await mount();
+    expect(container!.textContent).toContain(favoritesError);
+    click(favouritesButton());
+    expect(container!.textContent).toContain(favoritesError);
+    expect(container!.textContent).not.toContain(NO_FAVOURITES_SENTENCE);
+  });
+
+  it("Favourites + a category shows only starred fonts of that category, and the count says what it counts", async () => {
+    library = [
+      font({ id: "f-orbitron", family: "Orbitron", category: "display", visibility: "platform" }),
+      font({ id: "f-audiowide", family: "Audiowide", category: "display", visibility: "platform" }),
+      font({ id: "f-exo", family: "Exo", category: "sans", tags: ["sci-fi"], visibility: "platform" }),
+      font({ id: "f-lora", family: "Lora", category: "serif", visibility: "platform" }),
+    ];
+    starred = new Set(["f-orbitron", "f-exo", "f-lora"]);
+    await mount();
+    click(favouritesButton());
+    expect(rowNames()).toEqual(["Orbitron", "Exo", "Lora"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("3 favourite fonts");
+
+    click(button("Display"));
+    // Audiowide is display but not starred; Exo and Lora are starred but not display.
+    expect(rowNames()).toEqual(["Orbitron"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("1 of 3 favourite fonts");
+    // N counts every starred font, not what the filters left.
+    expect(favouritesButton().textContent).toBe("Favourites (3)");
+
+    click(button("All fonts"));
+    expect(rowNames()).toEqual(["Orbitron", "Audiowide"]);
+    expect(container!.querySelector(".fonts-manager-count")?.textContent).toBe("2 of 4 fonts");
+  });
+
+  it("Favourites + search or tag that matches no starred font names the favourites, not 'no favourites'", async () => {
+    library = [
+      font({ id: "f-orbitron", family: "Orbitron", category: "display", visibility: "platform" }),
+      font({ id: "f-exo", family: "Exo", category: "sans", tags: ["sci-fi"], visibility: "platform" }),
+    ];
+    starred = new Set(["f-orbitron"]);
+    await mount();
+    click(favouritesButton());
+    change(container!.querySelector("input[name='tagFilter']") as HTMLInputElement, "sci-fi");
+    expect(rowNames()).toEqual([]);
+    expect(container!.textContent).toContain("No favourite fonts tagged 'sci-fi'.");
+    expect(container!.textContent).not.toContain(NO_FAVOURITES_SENTENCE);
+
+    click(button("Clear"));
+    change(container!.querySelector("input[name='fontSearch']") as HTMLInputElement, "exo");
+    expect(container!.textContent).toContain("No favourite fonts match 'exo'.");
+  });
+});
+
+describe("countLine / noMatchSentence on Favourites", () => {
+  it("names favourites when that is the list being filtered", () => {
+    expect(countLine(3, 3, true)).toBe("3 favourite fonts");
+    expect(countLine(1, 3, true)).toBe("1 of 3 favourite fonts");
+    expect(countLine(2, 4, false)).toBe("2 of 4 fonts");
+    expect(countLine(1, 1, true)).toBe("1 favourite font");
+    expect(noMatchSentence("orbit", "display", [], true)).toBe("No favourite display fonts match 'orbit'.");
+    expect(noMatchSentence("", "", ["wide"], true)).toBe("No favourite fonts tagged 'wide'.");
   });
 });
 

@@ -48,9 +48,15 @@ function schemaOf(file) {
   return sql.replace(grant, '\n');
 }
 
+/** 17/19's file only adds columns, so it carries no grant block to strip. */
+function browserReadSchema() {
+  return fs.readFileSync(path.join(SQL_DIR, 'reddit_comments_browser_read.sql'), 'utf8');
+}
+
 function schemaText({ twice = false } = {}) {
   const posting = schemaOf('reddit_comments_posting.sql');
-  return [schemaOf('reddit_comments_setup.sql'), posting, twice ? posting : ''].join('\n');
+  const read = browserReadSchema();
+  return [schemaOf('reddit_comments_setup.sql'), posting, read, twice ? `${posting}\n${read}` : ''].join('\n');
 }
 
 function withDb() {
@@ -530,4 +536,176 @@ test('a signed-in reading with no account named reads as could-not-tell, never a
   assert.equal(health.sentence('signed_in', { site: 'reddit', who: '' }), 'Mini: signed in to Reddit.');
   assert.equal(health.sentence('signed_out', { site: 'reddit', who: '', profile: 'dane-of-earth' }), 'Reddit on the Mini is signed out. Sign in again in the dane-of-earth browser.');
   assert.match(health.sentence('cannot_tell', { site: 'reddit', who: '', detail: 'no account named' }), /could not tell whether Reddit is signed in: no account named/);
+});
+
+// ── Reading posts for Dane (Outreach wizard 17/19, task 86bcrmbuv) ────────
+
+const DANE = { projectId: PROJECT, userId: 'user_dane' };
+const SIGNED_IN = {
+  browserCheck: async () => ({ ok: true, data: { state: 'signed_in', message: 'Signed in', checkedAt: new Date().toISOString() } }),
+};
+
+/** A stand-in OpenClaw that "reads" by answering `body` (an object, or raw text). */
+function reader(body, { fail = null } = {}) {
+  const calls = [];
+  return {
+    calls,
+    callOpenClaw: async (request) => {
+      calls.push(request);
+      if (fail) return { ok: false, status: fail.status || 502, error: fail.error };
+      return { ok: true, status: 200, text: typeof body === 'string' ? body : JSON.stringify(body) };
+    },
+  };
+}
+
+const READ_ANSWER = {
+  signedIn: true,
+  found: true,
+  removed: false,
+  removedBy: null,
+  subreddit: 'r/Meditation',
+  title: 'How do you keep going?',
+  body: 'I keep quitting after a week.',
+  author: 'u/quietpond',
+  comment: null,
+  topComments: [
+    { id: 'c1', author: 'a', body: 'Two minutes a day.', score: 40 },
+    { id: 'c2', author: 'b', body: '[removed]', score: 3 },
+  ],
+  problem: null,
+};
+
+test('the read columns are added idempotently, and only an idea row may be reading', () => {
+  const sql = browserReadSchema();
+  for (const column of ['read_state', 'read_error', 'read_code', 'read_requested_at', 'read_finished_at']) {
+    assert.match(sql, new RegExp(`add column if not exists ${column}\\b`), `${column} is added idempotently`);
+  }
+  assert.match(sql, /check \(read_state in \('', 'reading', 'failed'\)\)/);
+});
+
+test('the read instructions name the profile and the link, ask for ~20 top comments, and forbid any click that changes Reddit', () => {
+  const text = reddit.buildReadInstructions({ item: { targetUrl: POST_URL, parentCommentId: '' }, profile: 'dane-of-earth' });
+  assert.match(text, /profile "dane-of-earth"/);
+  assert.match(text, new RegExp(`Open ${POST_URL.replace(/[.?]/g, '\\$&')}`));
+  assert.match(text, /up to 20 of the top comments/);
+  assert.match(text, /Do not click Reply, vote, join, follow, message or change anything/);
+  assert.doesNotMatch(text, /comment \(id/);
+  const reply = reddit.buildReadInstructions({ item: { targetUrl: `${POST_URL}_/kx9yz12/`, parentCommentId: 'kx9yz12' }, profile: 'p' });
+  assert.match(reply, /one comment \(id kx9yz12\)/);
+});
+
+test('A POST LINK IS READ BY THE MINI: one pass fills in the title, body and top comments, with no pasting', async () => {
+  const env = withDb();
+  try {
+    const added = await env.store.addItem({ url: POST_URL }, DANE, SIGNED_IN);
+    assert.equal(added.data.readState, 'reading');
+    const ins = reader(READ_ANSWER);
+    const report = await onePass(adapterFor(env, ins));
+    assert.deepEqual(report.read, { id: added.data.id, outcome: 'read', why: '' });
+    assert.equal(ins.calls.length, 1, 'one read, and nothing approved to post');
+    assert.equal(ins.calls[0].user, 'starcaster:reddit-post-reader');
+    assert.match(ins.calls[0].input, /Only read|Do not click Reply/);
+
+    const row = await readRow(env, added.data.id);
+    assert.equal(row.readState, '');
+    assert.equal(row.postReadFrom, 'reddit');
+    assert.equal(row.subreddit, 'Meditation', 'r/ is dropped');
+    assert.equal(row.postTitle, 'How do you keep going?');
+    assert.equal(row.postBody, 'I keep quitting after a week.');
+    assert.equal(row.postAuthor, 'quietpond', 'u/ is dropped');
+    assert.deepEqual(row.topComments, [{ id: 'c1', author: 'a', body: 'Two minutes a day.', score: 40 }], 'a removed comment is not kept');
+    assert.match(poster.formatPass({ reports: [report] }), new RegExp(`reddit: post ${added.data.id} READ`));
+
+    const idle = await onePass(adapterFor(env, ins));
+    assert.equal(idle.read, null, 'nothing left to read');
+    assert.equal(ins.calls.length, 1);
+  } finally {
+    env.restore();
+  }
+});
+
+test('a comment link is read with the comment being replied to', async () => {
+  const env = withDb();
+  try {
+    const added = await env.store.addItem({ url: `${POST_URL}x/kx9yz12/` }, DANE, SIGNED_IN);
+    await onePass(adapterFor(env, reader({ ...READ_ANSWER, comment: { id: 'kx9yz12', author: 'u/replyto', body: 'I tried apps, none stuck.' } })));
+    const row = await readRow(env, added.data.id);
+    assert.equal(row.parentCommentAuthor, 'replyto');
+    assert.equal(row.parentCommentText, 'I tried apps, none stuck.');
+
+    const gone = await env.store.addItem({ url: `${POST_URL}x/kx9yz13/` }, DANE, SIGNED_IN);
+    await onePass(adapterFor(env, reader({ ...READ_ANSWER, comment: { id: 'kx9yz13', author: '[deleted]', body: '[deleted]' } })));
+    assert.match((await readRow(env, gone.data.id)).readError, /comment being replied to was removed or deleted/);
+  } finally {
+    env.restore();
+  }
+});
+
+test('A REMOVED POST says "Reddit says this post was removed", and every other failed read names its reason', async () => {
+  const cases = [
+    [{ ...READ_ANSWER, removed: true, removedBy: 'the moderators' }, 'REDDIT_REMOVED', /^Reddit says this post was removed \(by the moderators\), so there is nothing to answer\.$/],
+    [{ ...READ_ANSWER, removed: true, removedBy: null }, 'REDDIT_REMOVED', /^Reddit says this post was removed, so/],
+    [{ ...READ_ANSWER, signedIn: false }, 'MINI_SIGNED_OUT', /not signed in to Reddit.*Paste the post's title and text instead/],
+    [{ ...READ_ANSWER, found: false }, 'REDDIT_NOT_FOUND', /no such post/],
+    [{ ...READ_ANSWER, title: '' }, 'READ_NO_TITLE', /read no title/],
+    ['I could not find the page, sorry.', 'READ_NO_ANSWER', /not with the post's details\. It said: I could not find the page, sorry\./],
+  ];
+  for (const [answer, code, message] of cases) {
+    const env = withDb();
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const added = await env.store.addItem({ url: POST_URL }, DANE, SIGNED_IN);
+      // eslint-disable-next-line no-await-in-loop
+      const report = await onePass(adapterFor(env, reader(answer)));
+      assert.equal(report.read.outcome, 'failed', code);
+      // eslint-disable-next-line no-await-in-loop
+      const row = await readRow(env, added.data.id);
+      assert.equal(row.readState, 'failed');
+      assert.equal(row.readCode, code);
+      assert.match(row.readError, message);
+      assert.equal(row.postTitle, '', 'nothing is filled in from a failed read');
+    } finally {
+      env.restore();
+    }
+  }
+});
+
+test('OpenClaw not answering is a failed read that says so, and posting still runs in the same pass', async () => {
+  const env = withDb();
+  try {
+    const added = await env.store.addItem({ url: POST_URL }, DANE, SIGNED_IN);
+    const toPost = await approved(env);
+    const posting = standIns();
+    let first = true;
+    const callOpenClaw = async (request) => {
+      if (first) { first = false; return { ok: false, status: 504, error: 'OpenClaw did not answer within 180 seconds' }; }
+      return posting.callOpenClaw(request);
+    };
+    const report = await onePass(adapterFor(env, { ...posting, callOpenClaw }));
+    assert.equal(report.read.outcome, 'failed');
+    assert.match((await readRow(env, added.data.id)).readError, /^The Mini's browser could not read the post \(OpenClaw: OpenClaw did not answer within 180 seconds\)\.$/);
+    assert.equal(report.posted.outcome, 'posted', 'a failed read does not stop the post');
+    assert.equal((await readRow(env, toPost.id)).status, 'posted');
+  } finally {
+    env.restore();
+  }
+});
+
+test('a paste that lands while the Mini is reading wins; the Mini\'s late answer is not saved over it', async () => {
+  const env = withDb();
+  try {
+    const added = await env.store.addItem({ url: POST_URL }, DANE, SIGNED_IN);
+    const ins = reader(READ_ANSWER);
+    const slow = async (request) => {
+      await env.store.pasteForItem(added.data.id, { postTitle: 'Pasted title', postBody: 'Pasted body' }, DANE);
+      return ins.callOpenClaw(request);
+    };
+    const report = await onePass(adapterFor(env, { callOpenClaw: slow }));
+    assert.equal(report.read.outcome, 'unsaved');
+    const row = await readRow(env, added.data.id);
+    assert.equal(row.postTitle, 'Pasted title');
+    assert.equal(row.postReadFrom, 'pasted');
+  } finally {
+    env.restore();
+  }
 });
