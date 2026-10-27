@@ -10,6 +10,13 @@ counts once even if it uses the font in several places. Only published, public
 pages are listed, from every Starcaster site; hidden drafts and private pages
 never are. Each font is only looked up when you press its button, so the screen
 does not get slower as more fonts are added.
+
+Fixed after the first review: the ten fonts the Builder came with (Montserrat,
+Inter, Poppins, Lora and the rest) are saved differently from library fonts, so
+they used to say "Not used" even on sites built entirely in them. They are
+counted now. Montserrat, for example, lists all 36 public pages of the Marinoff
+site, whose theme uses it.
+
 ## 2026-10-26 — Engage has an Outreach screen that shows where YouTube, Substack and Reddit stand (#860)
 
 There is now an **Engage → Outreach** screen, the first item under Engage.
