@@ -1,3 +1,32 @@
+## 2026-10-27 — YouTube gives Dane three comments to choose from, not one (#877)
+
+The YouTube screen now works the way Reddit does since this morning. **Write a
+draft** writes **three comments at once**, each with a short label saying what
+it does ("asks a question back", "thanks the creator"). The overnight
+scheduled pass does the same, so a draft waiting for him in the morning
+already has its three choices. He clicks one (or presses 1, 2 or 3), it goes
+into the edit box, and he edits and approves it as before; **Three More**
+swaps all three for a fresh set. Each comment is checked against that video's
+own rules on its own. One that breaks a rule twice (a link where the video
+says "never", say) is dropped and the card says so and why. The system saves
+which one he picked as well as his final words. This needs one small database
+change (`docs/SQL/youtube_outreach_draft_options.sql`); until it runs, Write a
+draft says which file to run instead of failing.
+
+## 2026-10-27 — Reddit gives Dane three replies to choose from, not one (#868)
+
+**Write with AI** on the Reddit screen now writes **three replies at once**.
+Each has a short label saying what it does, like "adds a personal story" or
+"asks a question back". Dane clicks one (or presses 1, 2 or 3), it goes into
+the edit box, and he edits and approves it as before. **Three More** swaps all
+three for a fresh set. Each reply is checked against his rules separately. If
+one breaks a rule twice, for example by naming Dane of Earth, it is dropped and
+the card says so and why, so a card with only two never looks broken. The
+system saves which reply he picked as well as his final words. The next step
+will learn from that. YouTube and Substack will use the same cards next. This
+needs one small database change (`docs/SQL/reddit_comments_draft_options.sql`).
+Until it runs, Write with AI says which file to run instead of failing.
+
 ## 2026-10-27 — Starcaster can give a project admin a one-time pass to the Mini's browser, and logs every window (#871)
 
 Second piece of the sign-in window. When a project's owner or admin asks to
