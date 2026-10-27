@@ -22,6 +22,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): an empty library, a read
  * that failed, and a library still loading are three different sentences.
  *
+ * USED BY SITES (6/7) IS READ ON DEMAND. Each row asks
+ * GET /api/fonts/:id/usage only when its "Show sites" button is pressed. One
+ * answer reads every published page it may list, so asking for every row on
+ * screen load would make the screen slower the more sites and fonts there are.
+ *
  * TAGS (Font Library 5/7, task 86bchyd4k). Every tag is a chip; clicking one
  * filters the list to fonts carrying it, and the Tag box above the table takes
  * several ("sci-fi, wide" = must have both). A project's own fonts also get an
@@ -29,8 +34,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
  * server refuses to change them (routes/fonts.js) and offering a button that
  * always fails is worse than not offering it. The AI's tags arrive on upload.
  *
- * Not here yet, by design: text search and category filters (7/7), which
- * sites use a font (6/7 fills the Used by Sites column).
+ * Not here yet, by design: text search and category filters (7/7).
  */
 
 const FONTS_PATH = '/api/fonts';
@@ -44,6 +48,18 @@ export const PROJECT_SWITCH_EVENT = 'projectContext:session-changed';
  * run, with a bare error page instead of a sentence.
  */
 export const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+export const NOT_USED_SENTENCE = 'Not used on any published page yet.';
+
+export type FontUsagePage = { id: string; name: string; slug: string; url: string };
+export type FontUsageSite = { projectId: string; name: string; url: string; pages: FontUsagePage[] };
+export type FontUsage = { sites: FontUsageSite[]; totalPages: number; truncated: boolean };
+
+/** "Strands (3 pages)" */
+export function siteUsageLabel(site: FontUsageSite): string {
+  const n = site.pages.length;
+  return `${site.name} (${n} ${n === 1 ? 'page' : 'pages'})`;
+}
 
 /**
  * "Sci-Fi,  wide , sci-fi" → ["sci-fi", "wide"]: trimmed, lowercased, inner
@@ -194,6 +210,76 @@ function readAsBase64(file: File): Promise<string> {
     reader.onerror = () => reject(new Error(`${file.name} could not be read from your computer.`));
     reader.readAsDataURL(file);
   });
+}
+
+/**
+ * The Used by Sites cell for one font. Reads nothing until asked; then one
+ * line per site ("Strands (3 pages)") that opens to its live pages, each in a
+ * new tab. A site with no web address of its own lists its pages unlinked and
+ * says why, rather than linking somewhere they are not.
+ */
+function UsedBySitesCell({ font }: { font: FontRow }): React.ReactElement {
+  const [usage, setUsage] = useState<FontUsage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const check = async () => {
+    const api = getApp()?.api;
+    if (typeof api !== 'function') {
+      setError('The admin app is still loading — try again in a moment.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const body = await api(`${FONTS_PATH}/${encodeURIComponent(font.id)}/usage`);
+      if (!body?.ok) {
+        setError(body?.error?.message || `Could not read which sites use ${font.family}.`);
+        return;
+      }
+      setUsage(body.data as FontUsage);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not read which sites use ${font.family}.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!usage) {
+    return (
+      <span className="fonts-manager-usage">
+        <button type="button" className="btn tiny-btn" disabled={busy} onClick={() => void check()}>
+          {busy ? 'Checking…' : 'Show sites'}
+        </button>
+        {error ? <span className="fonts-manager-error" role="alert">{error}</span> : null}
+      </span>
+    );
+  }
+  if (!usage.sites.length) {
+    return <span className="fonts-manager-usage fonts-manager-usage-none">{NOT_USED_SENTENCE}</span>;
+  }
+  return (
+    <span className="fonts-manager-usage">
+      {usage.sites.map((site) => (
+        <details key={site.projectId} className="fonts-manager-usage-site">
+          <summary>{siteUsageLabel(site)}</summary>
+          {site.url ? null : <small className="fonts-manager-help">This site has no web address set, so its pages cannot be linked.</small>}
+          <ul className="fonts-manager-usage-pages">
+            {site.pages.map((page) => (
+              <li key={page.id}>
+                {page.url ? (
+                  <a href={page.url} target="_blank" rel="noopener noreferrer">{page.name}</a>
+                ) : page.name}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+      {usage.truncated ? (
+        <small className="fonts-manager-help">Only the first 5,000 published pages were checked.</small>
+      ) : null}
+    </span>
+  );
 }
 
 function TrashIcon(): React.ReactElement {
@@ -577,7 +663,7 @@ export default function FontsManager(): React.ReactElement {
                 <th scope="col">Licence</th>
                 <th scope="col">Source</th>
                 <th scope="col">Tags</th>
-                <th scope="col" title="Which sites use each font. Not tracked yet — Font Library 6/7 fills this in.">Used by Sites</th>
+                <th scope="col" title="The published pages of every Starcaster site that use this font, directly or through their theme.">Used by Sites</th>
                 <th scope="col" className="actions-col">Actions</th>
               </tr>
             </thead>
@@ -616,7 +702,7 @@ export default function FontsManager(): React.ReactElement {
                         onSave={(tags) => saveTags(font, tags)}
                       />
                     </td>
-                    <td />
+                    <td><UsedBySitesCell font={font} /></td>
                     <td className="actions-col">
                       {shared ? null : confirmingDelete === font.id ? (
                         <div className="table-actions-row fonts-manager-confirm">

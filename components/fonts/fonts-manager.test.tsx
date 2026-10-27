@@ -3,8 +3,8 @@ import { act } from "react-dom/test-utils";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FontsManager, {
-  EMPTY_LIBRARY_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, noTagMatchSentence, parseTagList, previewFamily, stylesSentence,
-  type FontRow,
+  EMPTY_LIBRARY_SENTENCE, NOT_USED_SENTENCE, PROJECT_SWITCH_EVENT, fontFaceCss, noTagMatchSentence, parseTagList, previewFamily,
+  stylesSentence, type FontRow, type FontUsage,
 } from "./fonts-manager";
 
 /**
@@ -51,6 +51,7 @@ let posts: Record<string, unknown>[] = [];
 let patches: { path: string; body: { tags: string[] } }[] = [];
 let reads: string[] = [];
 let activeProject = "proj_a";
+let usageByFont: Record<string, FontUsage> = {};
 
 async function flush() {
   for (let i = 0; i < 6; i += 1) {
@@ -115,11 +116,17 @@ beforeEach(() => {
   patches = [];
   reads = [];
   activeProject = "proj_a";
+  usageByFont = {};
   (window as unknown as { App: unknown }).App = {
     api: async (path: string, options: RequestInit = {}) => {
       const method = String(options.method || "GET").toUpperCase();
       if (method === "GET") {
         reads.push(`${activeProject} ${path}`);
+        const usage = path.match(/^\/api\/fonts\/([^/]+)\/usage$/);
+        if (usage) {
+          const id = decodeURIComponent(usage[1]);
+          return { ok: true, data: usageByFont[id] || { sites: [], totalPages: 0, truncated: false } };
+        }
         return { ok: true, data: { fonts: library, total: library.length } };
       }
       if (method === "POST") {
@@ -218,7 +225,7 @@ describe("FontsManager", () => {
     const rows = [...container!.querySelectorAll("tbody tr")] as HTMLElement[];
     const shared = rows.find((r) => r.dataset.fontId === "f-shared")!;
     const own = rows.find((r) => r.dataset.fontId === "f-own")!;
-    expect(shared.querySelector("button")).toBeNull();
+    expect(shared.querySelector(".actions-col button")).toBeNull();
     expect(shared.textContent).toContain("Shared library");
     expect(own.querySelector("button[aria-label='Delete Orbitron']")).not.toBeNull();
   });
@@ -234,6 +241,63 @@ describe("FontsManager", () => {
     expect(reads).toEqual(["proj_a /api/fonts", "proj_b /api/fonts"]);
     expect(rowNames()).toEqual([]);
     expect(container!.textContent).toContain(EMPTY_LIBRARY_SENTENCE);
+  });
+});
+
+describe("Used by Sites (Font Library 6/7)", () => {
+  const strands = (pages: number) => ({
+    projectId: "strands",
+    name: "Strands",
+    url: "https://strands.example",
+    pages: Array.from({ length: pages }, (_, i) => ({
+      id: `p${i}`, name: `Page ${i}`, slug: `page-${i}`, url: `https://strands.example/page-${i}`,
+    })),
+  });
+
+  it("opening the screen asks no font which sites use it", async () => {
+    library = [font({ id: "f-a" }), font({ id: "f-b", family: "Inter" })];
+    await mount();
+    expect(rowNames()).toEqual(["Orbitron", "Inter"]);
+    expect(reads.filter((r) => r.includes("/usage"))).toEqual([]);
+  });
+
+  it("Show sites lists \"Strands (3 pages)\", opening to live links in a new tab", async () => {
+    library = [font({ id: "f-orbitron" })];
+    usageByFont["f-orbitron"] = { sites: [strands(3)], totalPages: 3, truncated: false };
+    await mount();
+    click(button("Show sites"));
+    await flush();
+    expect(reads.filter((r) => r.includes("/usage"))).toEqual(["proj_a /api/fonts/f-orbitron/usage"]);
+    const summary = container!.querySelector(".fonts-manager-usage-site summary");
+    expect(summary?.textContent).toBe("Strands (3 pages)");
+    const links = [...container!.querySelectorAll(".fonts-manager-usage-pages a")] as HTMLAnchorElement[];
+    expect(links.map((a) => a.href)).toEqual([
+      "https://strands.example/page-0", "https://strands.example/page-1", "https://strands.example/page-2",
+    ]);
+    expect(links.every((a) => a.target === "_blank" && a.rel.includes("noopener"))).toBe(true);
+  });
+
+  it("a font used nowhere says so in a sentence", async () => {
+    library = [font({ id: "f-lonely" })];
+    await mount();
+    click(button("Show sites"));
+    await flush();
+    expect(container!.querySelector(".fonts-manager-usage")?.textContent).toBe(NOT_USED_SENTENCE);
+  });
+
+  it("one page reads \"1 page\", and a site with no address lists it unlinked and says why", async () => {
+    library = [font({ id: "f-orbitron" })];
+    usageByFont["f-orbitron"] = {
+      sites: [{ projectId: "x", name: "No Domain Co", url: "", pages: [{ id: "h", name: "Home", slug: "home", url: "" }] }],
+      totalPages: 1,
+      truncated: false,
+    };
+    await mount();
+    click(button("Show sites"));
+    await flush();
+    expect(container!.querySelector(".fonts-manager-usage-site summary")?.textContent).toBe("No Domain Co (1 page)");
+    expect(container!.querySelector(".fonts-manager-usage-pages a")).toBeNull();
+    expect(container!.textContent).toContain("no web address set");
   });
 });
 
