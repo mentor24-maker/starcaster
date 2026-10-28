@@ -216,6 +216,9 @@ const PALETTE_ROLE_ROWS: Array<{ bg: keyof BuilderThemePalette; text: keyof Buil
   { bg: "band", text: "bandText", label: "Soft band" },
   { bg: "inverse", text: "inverseText", label: "Dark band" },
   { bg: "button", text: "buttonText", label: "Button" },
+  // Optional. Left unset, every section takes the Button pair above.
+  { bg: "surfaceButton", text: "surfaceButtonText", label: "Button on light" },
+  { bg: "inverseButton", text: "inverseButtonText", label: "Button on dark" },
 ];
 
 export function BuilderThemesPage() {

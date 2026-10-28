@@ -24,6 +24,7 @@ const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
 const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
 const REPO = path.join(__dirname, '..', '..');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 
@@ -45,7 +46,7 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 
 function schemaText() {
-  return `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}`;
+  return `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}\n${lessonsSql(['youtube_outreach_comments'])}`;
 }
 
 async function fakeLookup(videoId) {

@@ -10,6 +10,40 @@ page. A tick box decides whether it also becomes the site's default theme. It
 never overwrites an existing theme: a second one is named "alphire 2" and
 leaves "alphire 1" alone. The same thing is available from the terminal as
 `--theme-only`, which also checks that no page changed.
+## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
+
+A theme used to have a single button colour, so on a site like Alphire's,
+with light buttons on dark sections, any one choice disappeared somewhere.
+Themes now have two optional extra button colours, "Button on light" and
+"Button on dark", on the Themes screen. Each section works out whether it is
+light or dark (its theme band, its own colour, or a darkened photo), and the
+buttons in it that follow the theme use the matching colours automatically.
+Site Import fills both in from where the original site's buttons actually
+sat, and checks each one is readable against its own background. Themes
+that don't set the new colours look exactly as they did before.
+Caught up with the outlined-buttons change (#881) on the way in: the two features
+overlapped, and a section's light/dark button colour would have painted solid
+buttons back over an outline theme. The section's colour now draws the outline
+instead, and a render check holds it.
+
+## 2026-10-28 — Outreach drafts now learn from Dane's choices, as lessons he can read and change (#886)
+
+Every time Dane approved, edited or rejected an outreach draft, the reason was
+recorded — but the AI writer never looked at it, so it kept making the same
+mistakes. Now Starcaster turns those decisions into short, plain lessons such as
+"Never sound like you are selling something", and every new YouTube comment,
+Substack Note and Reddit comment is written following the ones that are on. The
+Outreach wizard's Learn stage lists them: each can be switched off, edited,
+deleted, or asked "Why", which shows the exact decisions it came from. Dane can
+add his own, for one channel or all of them. Lessons are suggested again after
+every five decisions, or with the Refresh Lessons button, and a refresh never
+brings back one he switched off (including one switched off for all channels)
+or overwrites one he edited. If an automatic refresh fails — no AI credit, say —
+the message after Approve or Reject now says so, rather than the lessons quietly
+going stale. The stage also
+shows a score — how many of the last 20 drafts he approved without changing a
+word — so he can see whether it is improving. One SQL file must be run before
+release; until then, writing a draft is refused with a message naming it.
 
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 

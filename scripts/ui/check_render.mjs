@@ -135,6 +135,9 @@ function documentForSection({
   cellOverlayScreens,
   spacers = 0,
   themeTreatments,
+  // The theme's role palette (surface / inverse / button pairs …), for
+  // rendering that depends on which ground a module sits on (86bctakk0).
+  themeRolePalette,
   // Tablet/phone row settings and the desktop top padding they differ from
   // (device styles, task 86bc13a6v).
   paddingTop,
@@ -234,7 +237,7 @@ function documentForSection({
    * Contracts that want no theme leave it out and the draft is byte-for-byte
    * what it always was — the keys are not written at all.
    */
-  const theme = themeTreatments
+  const theme = themeTreatments || themeRolePalette
     ? {
         themePalette: {
           primaryColor: '#1f4d8f',
@@ -247,7 +250,8 @@ function documentForSection({
           secondaryColor: '#8f1f4d',
           backgroundColor: '#ffffff',
           accentColor: '#4d8f1f',
-          treatments: themeTreatments,
+          ...(themeTreatments ? { treatments: themeTreatments } : {}),
+          ...(themeRolePalette ? { palette: themeRolePalette } : {}),
         },
       }
     : {};

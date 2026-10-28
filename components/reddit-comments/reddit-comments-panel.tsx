@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
-import ReasonPicker, { rejectNotice, type RejectReason } from '../outreach-wizard/reason-picker';
+import ReasonPicker, { decisionNotice, rejectNotice, type DecisionFeedback, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › Comments — Reddit comments written in Dane's voice. Reddit
@@ -631,13 +631,13 @@ export default function RedditCommentsPanel(): React.ReactElement {
         const written = n ? `${n === 1 ? 'One reply' : `${n} replies`} to choose from` : 'A draft';
         setNotice(item.status === 'draft' ? `${written} — the old ones are replaced.` : `${written} — on Approvals, ready to pick.`);
       } else if (what === 'approve') {
-        setNotice('Approved — waiting for the Mini to post it.');
+        setNotice(decisionNotice('Approved — waiting for the Mini to post it.', (reply?.data as { feedback?: DecisionFeedback })?.feedback));
       } else if (what === 'paste') {
         setNotice('Saved — the post is in. Click Write with AI on it.');
       } else if (what === 'read-again') {
         setNotice('Asked the Mini to read it again.');
       } else {
-        setNotice(rejectNotice('Rejected. It will not be posted.', (reply?.data as { feedback?: { recorded?: boolean; error?: string } })?.feedback));
+        setNotice(rejectNotice('Rejected. It will not be posted.', (reply?.data as { feedback?: DecisionFeedback })?.feedback));
       }
       return true;
     } catch (err) {

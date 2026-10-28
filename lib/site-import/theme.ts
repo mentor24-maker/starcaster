@@ -264,7 +264,15 @@ export const PALETTE_PAIRS: PalettePair[] = [
   // outline buttons, filled white on a white page at 1.0:1.
   { fg: "button", bg: "surface", min: 2, repair: "fg", why: "a button against the page" },
   { fg: "buttonText", bg: "button", min: READABLE_CONTRAST, repair: "fg", why: "a button's label" },
+  // The per-ground pairs (task 86bctakk0): each is checked against the ground
+  // it is FOR, which is the whole point of having them.
+  { fg: "surfaceButton", bg: "surface", min: 2, repair: "fg", why: "a button on a light section" },
+  { fg: "surfaceButtonText", bg: "surfaceButton", min: READABLE_CONTRAST, repair: "fg", why: "the label of a button on a light section" },
+  { fg: "inverseButton", bg: "inverse", min: 2, repair: "fg", why: "a button on a dark section" },
+  { fg: "inverseButtonText", bg: "inverseButton", min: READABLE_CONTRAST, repair: "fg", why: "the label of a button on a dark section" },
 ];
+
+const BUTTON_FILL_ROLES = new Set<string>(["button", "surfaceButton", "inverseButton"]);
 
 /** Below this a pairing is not a style choice, it is invisible. */
 export const INVISIBLE_BELOW = 1.5;
@@ -308,7 +316,7 @@ export function guardPaletteReadability(
     const floor = asPainted ? INVISIBLE_BELOW : pair.min;
     if (ratio >= floor) continue;
     let next: string;
-    if (pair.fg === "button") {
+    if (BUTTON_FILL_ROLES.has(pair.fg)) {
       const candidates = [palette.inverse, palette.header, ...brandCandidates, contrastText(bg), "#000000"];
       next = candidates.find((c) => c && contrastRatio(c, bg) >= pair.min) || "#000000";
     } else {
@@ -320,6 +328,8 @@ export function guardPaletteReadability(
     notes.push(`${pair.why}: rejected ${pair.fg} ${fg} on ${pair.bg} ${bg} (${ratio.toFixed(1)}:1, under ${floor}:1) — using ${next}`);
   }
 }
+
+type SurfaceButtonRoles = [BuilderThemePaletteRole, BuilderThemePaletteRole, "light" | "dark"];
 
 /* ---------- the derivation ---------- */
 
@@ -463,6 +473,34 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // fill and a real label colour; an outline conversion is the import's.
   const sitePainted = new Set<string>();
   if (fill && !outlined && toHex(buttonText)) sitePainted.add(pairKey({ fg: "buttonText", bg: "button" }));
+
+  // A button pair per GROUND, from where each captured button actually sat
+  // (task 86bctakk0). Alphire's light buttons sat on dark bands: as the one
+  // theme button they were white on a white section, and the guard's repair
+  // (a dark button) was then wrong on every dark band. With a pair per
+  // ground, each section takes the look the site gave buttons on that ground.
+  // 0.18 is the luminance where white and black text read equally well — the
+  // same line the renderer draws between a light and a dark section.
+  const grounded = (sum?.buttonsByGround || [])
+    .map((t) => {
+      const [groundFill = "", groundText = "", ground = ""] = t.value.split("|");
+      return { groundFill, groundText, ground: toHex(ground) };
+    })
+    .filter((b) => b.ground);
+  const perGround: Array<[SurfaceButtonRoles, (typeof grounded)[number] | undefined]> = [
+    [["surfaceButton", "surfaceButtonText", "light"], grounded.find((b) => luminance(b.ground) >= 0.18)],
+    [["inverseButton", "inverseButtonText", "dark"], grounded.find((b) => luminance(b.ground) < 0.18)],
+  ];
+  for (const [[fillRole, textRole, groundName], seen] of perGround) {
+    if (!seen) continue;
+    const seenOutlined = !toHex(seen.groundFill) && Boolean(toHex(seen.groundText));
+    const seenFill = toHex(seen.groundFill) || toHex(seen.groundText);
+    if (!seenFill) continue;
+    palette[fillRole] = seenFill;
+    palette[textRole] = seenOutlined ? contrastText(seenFill) : toHex(seen.groundText) || contrastText(seenFill);
+    if (!seenOutlined && toHex(seen.groundText)) sitePainted.add(pairKey({ fg: textRole, bg: fillRole }));
+    notes.push(`buttons on ${groundName} sections: ${seenFill} with ${palette[textRole]} text (sat on ${seen.ground} in the original${seenOutlined ? ", outlined there" : ""})`);
+  }
   guardPaletteReadability(palette, notes, [colors.heading, colors.text].filter(Boolean), sitePainted);
   notes.push(`palette: ${Object.entries(palette).map(([k, v]) => `${k} ${v}`).join(", ") || "no backgrounds measured (capture predates it)"}`);
 

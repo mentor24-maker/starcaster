@@ -14,6 +14,15 @@
  *                                                defaults plus every reason Dane
  *                                                has used before (Outreach wizard
  *                                                12/19, lib/outreachFeedbackStore.js)
+ *   GET  /api/outreach/lessons?channel=<c>       the Learn stage: this channel's
+ *                                                lessons and the all-channel ones,
+ *                                                and the score (Outreach wizard
+ *                                                13/19, lib/outreachLessons.js)
+ *   POST /api/outreach/lessons                   { channel, text } — his own lesson
+ *   POST /api/outreach/lessons/refresh           { channel } — suggest lessons
+ *                                                from his recent decisions (AI)
+ *   POST /api/outreach/lessons/:id               { text?, enabled? } — change it
+ *   DELETE /api/outreach/lessons/:id             delete it
  *
  * The three POSTs are Outreach wizard 2/19 (task 86bcrmba0), over
  * lib/outreachAccounts.js. Nothing on the internet can reach the Mini, so
@@ -35,6 +44,8 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { buildOverview } = require('../lib/outreachOverview');
 const outreachAccounts = require('../lib/outreachAccounts');
 const outreachFeedback = require('../lib/outreachFeedbackStore');
+const outreachLessons = require('../lib/outreachLessons');
+const { checkEndpointLimit } = require('../lib/rateLimiter');
 
 const PREFIX = '/api/outreach';
 
@@ -60,7 +71,9 @@ async function readBody(req, res) {
   }
 }
 
-async function handle(req, res, pathname, method, { build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback } = {}) {
+async function handle(req, res, pathname, method, {
+  build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback, lessons = outreachLessons,
+} = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
 
   if (pathname === `${PREFIX}/overview`) {
@@ -75,6 +88,36 @@ async function handle(req, res, pathname, method, { build = buildOverview, accou
   if (pathname === `${PREFIX}/feedback/reasons`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     return reply(res, await feedback.listReasons(requestScope(req))), true;
+  }
+
+  if (pathname === `${PREFIX}/lessons`) {
+    const scope = requestScope(req);
+    if (method === 'GET') {
+      const channel = new URL(req.url || '', 'http://localhost').searchParams.get('channel') || '';
+      return reply(res, await lessons.learnView(channel, scope)), true;
+    }
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await lessons.createLesson(body, scope)), true;
+  }
+
+  if (pathname === `${PREFIX}/lessons/refresh`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'outreach.lessons.refresh')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await lessons.refreshLessons(body.channel, requestScope(req))), true;
+  }
+
+  const lesson = pathname.match(/^\/api\/outreach\/lessons\/([^/]+)$/);
+  if (lesson) {
+    const id = decodeURIComponent(lesson[1]);
+    if (method === 'DELETE') return reply(res, await lessons.deleteLesson(id, requestScope(req))), true;
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await lessons.updateLesson(id, body, requestScope(req))), true;
   }
 
   const action = pathname.match(/^\/api\/outreach\/accounts\/([a-z]+)\/(choose|check|pace)$/);

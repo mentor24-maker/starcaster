@@ -71,6 +71,7 @@ let posts: Array<{ path: string; body: any }> = [];
 let activeProject = "proj_doe";
 let failNext = "";
 let calls = 0;
+let lessonReads: string[] = [];
 let setActivePage: ReturnType<typeof vi.fn>;
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -79,6 +80,7 @@ beforeEach(() => {
   activeProject = "proj_doe";
   failNext = "";
   calls = 0;
+  lessonReads = [];
   posts = [];
   redditAccount = { ...redditAccount!, expectedAccount: "" };
   window.localStorage.clear();
@@ -94,6 +96,12 @@ beforeEach(() => {
           return { ok: true, data: { session: { id: "bvs_9" }, pass: "P", viewerUrl: "wss://mini.example/live/live" } };
         }
         return { ok: true, data: {} };
+      }
+      // Outreach wizard 13/19: the Learn stage reads its own lessons. `calls`
+      // counts overview reads only.
+      if (path.startsWith("/api/outreach/lessons?")) {
+        lessonReads.push(path);
+        return { ok: true, data: { channel: "x", lessons: [], score: null, scoreError: "" } };
       }
       calls += 1;
       if (path !== "/api/outreach/overview") throw new Error(`unexpected ${path}`);
@@ -208,6 +216,14 @@ describe("OutreachWizardPanel", () => {
     await act(async () => {});
     expect(calls).toBe(2);
     expect(stages()[0].textContent).toContain("proj_other:");
+  });
+
+  it("the Learn stage shows its lessons on the wizard itself, for the channel picked (13/19)", async () => {
+    await mount();
+    const learn = container!.querySelector('[data-stage="learn"]')!;
+    expect(learn.querySelector("[data-learn]")?.getAttribute("data-learn")).toBe("youtube");
+    expect(lessonReads).toEqual(["/api/outreach/lessons?channel=youtube"]);
+    expect(learn.textContent).toContain("No lessons for YouTube yet.");
   });
 });
 

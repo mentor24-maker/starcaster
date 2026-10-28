@@ -437,6 +437,10 @@ export type StyleSummary = {
   headerBackgrounds: TokenCount[];
   /** Button looks as "fill|text colour|radius px", counted per button. */
   buttons: TokenCount[];
+  /** Button looks with what each one sat on, as "fill|text colour|ground
+   *  colour" — the ground being the nearest painted ancestor, else the page.
+   *  Absent on captures made before task 86bctakk0. */
+  buttonsByGround?: TokenCount[];
   /** Widths (px, nearest 10) of content containers — the page column. */
   contentWidths: TokenCount[];
 };
