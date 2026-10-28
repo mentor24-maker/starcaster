@@ -242,6 +242,50 @@
   user-select: none;
 }
 
+/* ── Substack: Find conversations (Outreach wizard 14/19) ───────────── */
+
+.outreach-conversations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.outreach-conversations-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.outreach-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.outreach-conversation-head,
+.outreach-conversation-why,
+.outreach-conversation-text {
+  overflow-wrap: anywhere;
+}
+
+.outreach-conversation-why {
+  font-style: italic;
+}
+
+.outreach-conversation-text {
+  opacity: 0.85;
+  white-space: pre-line;
+}
+
 /* ── Learn: lessons drafts are written with (Outreach wizard 13/19) ─────
    components/outreach-wizard/learn-controls.tsx. Each lesson is one line;
    its controls wrap under it on a narrow screen rather than squeezing it. */

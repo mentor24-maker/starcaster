@@ -1,3 +1,24 @@
+## 2026-10-28 — Substack now finds Notes to reply to on its own, ranked with a reason each (#887)
+
+Substack's two readers, one for approved writers' own Notes and one for Notes
+matching Dane's keywords, only ever ran when an agent session typed a
+command, so 17 approved writers had no Notes read. Now the first runs every
+two hours on Vercel, and the second runs every six hours on the Mac Mini
+(which has the signed-in browser it needs), followed by the Miner's
+Approve-or-Reject suggestions for any new writers it found. On Engage ›
+Outreach › Substack, **Find conversations** now lists what they found, best
+first, each with its writer, a link to their profile, and one sentence on
+why it ranked there: an approved writer or a keyword, how recent, which
+canon words it uses, and how many replies it already has. Each Note has
+**Write replies** (three options, ready on the Notes screen), **Skip** (asks
+why) and, for a writer a keyword found, **Add writer**. If a writer could
+not be read, the stage says "Cannot tell" and names them, rather than
+showing an empty list as "0 found". After merge, the Mini's schedule is
+installed with one script from its main folder. The six-hourly search takes
+one keyword per pass and moves to the next only after a pass that actually
+searched, so a keyword can no longer get stuck on the overnight slot and never
+be searched; and a pass that searched nothing records no "all is well" beat,
+so a schedule that never searches shows up as stale instead of healthy.
 ## 2026-10-28 — An imported site's theme can be made on its own (#884)
 
 The theme a Site Import captures (the original site's colours, fonts and

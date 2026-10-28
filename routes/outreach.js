@@ -24,7 +24,16 @@
  *   POST /api/outreach/lessons/:id               { text?, enabled? } — change it
  *   DELETE /api/outreach/lessons/:id             delete it
  *
- * The three POSTs are Outreach wizard 2/19 (task 86bcrmba0), over
+ *   GET  /api/outreach/substack/conversations    Find conversations: the Notes the
+ *                                                scheduled read and search found,
+ *                                                ranked, each with why (Outreach
+ *                                                wizard 14/19, lib/substackConversations.js)
+ *   POST /api/outreach/substack/conversations/reply  { url } — Write replies: line
+ *                                                up the reply and write its options
+ *   POST /api/outreach/substack/conversations/skip   { url, reasons, note } — Skip,
+ *                                                with the reason picker's reason
+ *
+ * The three account POSTs are Outreach wizard 2/19 (task 86bcrmba0), over
  * lib/outreachAccounts.js. Nothing on the internet can reach the Mini, so
  * "Check now" leaves a request on the channel's settings row and the posting
  * worker picks it up within about half a minute
@@ -44,6 +53,7 @@ const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { buildOverview } = require('../lib/outreachOverview');
 const outreachAccounts = require('../lib/outreachAccounts');
 const outreachFeedback = require('../lib/outreachFeedbackStore');
+const substackConversations = require('../lib/substackConversations');
 const outreachLessons = require('../lib/outreachLessons');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
@@ -72,7 +82,8 @@ async function readBody(req, res) {
 }
 
 async function handle(req, res, pathname, method, {
-  build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback, lessons = outreachLessons,
+  build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback,
+  conversations = substackConversations, lessons = outreachLessons,
 } = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
 
@@ -88,6 +99,23 @@ async function handle(req, res, pathname, method, {
   if (pathname === `${PREFIX}/feedback/reasons`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     return reply(res, await feedback.listReasons(requestScope(req))), true;
+  }
+
+  if (pathname === `${PREFIX}/substack/conversations`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await conversations.listSubstackConversations(requestScope(req))), true;
+  }
+
+  const verb14 = pathname.match(/^\/api\/outreach\/substack\/conversations\/(reply|skip)$/);
+  if (verb14) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    // Write replies is an AI call (three options), so it shares the drafting limit.
+    if (verb14[1] === 'reply' && checkEndpointLimit(req, res, 'substackNotes.drafts.create')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    const scope = requestScope(req);
+    if (verb14[1] === 'reply') return reply(res, await conversations.writeRepliesFor(body, scope)), true;
+    return reply(res, await conversations.skipConversation(body, scope)), true;
   }
 
   if (pathname === `${PREFIX}/lessons`) {

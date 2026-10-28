@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT } from '../reddit-comments/reddit-comments-panel';
 import SignInWindow from './sign-in-window';
+import SubstackConversations from './substack-conversations';
 import LearnControls from './learn-controls';
 
 export { PROJECT_SWITCH_EVENT };
@@ -23,9 +24,11 @@ export { PROJECT_SWITCH_EVENT };
  * browser inside this screen so Dane can sign in there (Outreach wizard 6/19,
  * task 86bcrmbfb, ./sign-in-window.tsx). Every other stage's one button opens
  * the existing screen for that step (slice 19 brings the work inside), except
- * Learn, whose lessons are read and changed right here (Outreach wizard 13/19,
- * task 86bcrmbpm, ./learn-controls.tsx). The first stage that is not done is
- * open and highlighted.
+ * Substack's Find conversations, which lists the ranked Notes right here
+ * (Outreach wizard 14/19, ./substack-conversations.tsx), and Learn, whose
+ * lessons are read and changed right here (Outreach wizard 13/19, task
+ * 86bcrmbpm, ./learn-controls.tsx). The first stage that is not done is open
+ * and highlighted.
  *
  * The shape is the Engage panels' on purpose: it (re)loads when its page is
  * SHOWN and when the project is SWITCHED, and drops a reply that lands after a
@@ -436,6 +439,10 @@ export default function OutreachWizardPanel(): React.ReactElement {
               <StageRow key={s.key} stage={s} index={i} open={i === openIndex}>
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
+                ) : null}
+                {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
+                {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
+                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
                 ) : null}
                 {s.key === 'learn' && s.state !== 'cannot_tell' ? (
                   <LearnControls key={current.key} channel={current.key} label={current.label} onChanged={() => void load()} />

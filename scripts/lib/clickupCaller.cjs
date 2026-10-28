@@ -50,6 +50,12 @@ const SCHEDULED_LAUNCHERS = {
       + 'a measured p90 of 94 requests in a pass — and the one that 429\'d on '
       + '2026-09-03 while reporting itself within budget.',
   },
+  'run_substack_notes_search.sh': {
+    job: 'substack-notes-search',
+    why: 'Every six hours on the Mini (Outreach wizard 14/19). The search itself '
+      + 'never touches ClickUp; its failure post and its beat do, through '
+      + 'report:failure and heartbeat.',
+  },
   'loop_runner.sh': {
     job: 'loop-build / loop-review',
     why: 'Both loop lanes. A headless Claude session on a timer is still a '
