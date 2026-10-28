@@ -109,6 +109,9 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       return { ok: true, data: { ...made } };
     }
   }
+  if (path === "/api/outreach/feedback/reasons") {
+    return { ok: true, data: { defaults: [{ reason: "too salesy", count: 2 }, { reason: "not my voice", count: 0 }, { reason: "misses the point", count: 0 }, { reason: "too long", count: 0 }, { reason: "too generic", count: 0 }], saved: [{ reason: "wrong subreddit", count: 1 }] } };
+  }
   if (path === "/api/engage/reddit-comments/status") {
     if (store.status === "unreadable") fail("status endpoint down", 502);
     return { ok: true, data: store.status || { account: "", pace: PACE, browserCheck: { state: "", message: "", checkedAt: null, signedInAt: null }, browserCheckError: "" } };
@@ -443,7 +446,13 @@ describe("Reddit comments screen", () => {
     stores.proj_doe.items = [item({})];
     await mount();
     await click(button("Reject", row(stores.proj_doe.items[0].id)));
+    // Reject asks why first (12/19): one click on a chip is the whole answer.
+    expect(stores.proj_doe.items[0].status).not.toBe("rejected");
+    expect(document.body.textContent).toContain("wrong subreddit");
+    await click(button("too salesy", document.body));
     expect(stores.proj_doe.items[0].status).toBe("rejected");
+    expect(requests.filter((r) => r.path.endsWith("/reject")).map((r) => r.body)).toEqual([{ reasons: ["too salesy"], note: "" }]);
+    expect(document.querySelector(".reason-picker")).toBeNull();
     await reload();
     expect(text()).toContain("1 rejected comment is not shown.");
     expect(text()).toContain("Nothing waiting to be written");
