@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
+import ReasonPicker, { rejectNotice, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › YouTube Outreach — the list of videos the outreach agent should
@@ -898,6 +899,8 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   /** What the busy comment is doing — the chooser says "Writing…" only for Three More. */
   const [commentBusyAction, setCommentBusyAction] = useState('');
   const [commentErrors, setCommentErrors] = useState<Record<string, string>>({});
+  /** The draft whose Reject is asking why (Outreach wizard 12/19); null when no picker is open. */
+  const [rejecting, setRejecting] = useState<OutreachComment | null>(null);
   const [historyId, setHistoryId] = useState('');
   const [history, setHistory] = useState<OutreachComment[] | null>(null);
   const [historyError, setHistoryError] = useState('');
@@ -1149,9 +1152,9 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
   };
 
   /** Approve / reject / write another — each answered by the server, never assumed. */
-  const decide = async (comment: OutreachComment, action: 'approve' | 'reject' | 'redraft', text?: string, option?: number) => {
+  const decide = async (comment: OutreachComment, action: 'approve' | 'reject' | 'redraft', text?: string, option?: number, why?: RejectReason): Promise<boolean> => {
     const api = getApi();
-    if (!api) return;
+    if (!api) return false;
     const epoch = projectEpoch.current;
     setCommentBusy(comment.id);
     setCommentBusyAction(action === 'redraft' ? 'draft' : action);
@@ -1160,16 +1163,16 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
     try {
       const body = await api(`${COMMENTS_PATH}/${encodeURIComponent(comment.id)}/${action}`, {
         method: 'POST',
-        body: JSON.stringify(action !== 'approve' ? {} : option === undefined ? { text } : { text, option }),
+        body: JSON.stringify(action === 'reject' ? why || {} : action !== 'approve' ? {} : option === undefined ? { text } : { text, option }),
       });
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       const next = body?.data as OutreachComment;
       if (action === 'approve') {
         setComments((list) => (list || []).map((c) => (c.id === comment.id ? next : c)));
         setNotice('Approved. The Mini posts it from Dane of Earth\'s browser once the account\'s limits allow — if it is waiting, the card says why.');
       } else if (action === 'reject') {
         setComments((list) => (list || []).filter((c) => c.id !== comment.id));
-        setNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`);
+        setNotice(rejectNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`, (body?.data as { feedback?: { recorded?: boolean; error?: string } })?.feedback));
       } else {
         setComments((list) => [next, ...(list || []).filter((c) => c.id !== comment.id)]);
         const choices = optionsNotice(next);
@@ -1178,13 +1181,21 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
           : 'A new draft replaced the old one, which is kept in the history as rejected.');
       }
       if (historyId === comment.targetId) setHistoryId('');
+      return true;
     } catch (err) {
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       setCommentErrors((errors) => ({ ...errors, [comment.id]: errorText(err, 'unknown error') }));
+      return false;
     } finally {
       setCommentBusy('');
       setCommentBusyAction('');
     }
+  };
+
+  /** Reject asks why first: the picker is the confirmation, and Cancel rejects nothing (12/19). */
+  const confirmReject = async (why: RejectReason) => {
+    if (!rejecting) return;
+    if (await decide(rejecting, 'reject', undefined, undefined, why)) setRejecting(null);
   };
 
   const editing = (targets || []).find((t) => t.id === editingId) || null;
@@ -1278,7 +1289,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
               busy={commentBusy === comment.id ? commentBusyAction || 'approve' : ''}
               error={commentErrors[comment.id] || ''}
               onApprove={(text, option) => void decide(comment, 'approve', text, option)}
-              onReject={() => void decide(comment, 'reject')}
+              onReject={() => { setCommentErrors((errors) => ({ ...errors, [comment.id]: '' })); setRejecting(comment); }}
               onRedraft={() => void decide(comment, 'redraft')}
             />
           ))}
@@ -1414,6 +1425,17 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
             </div>
           ) : null}
         </>
+      ) : null}
+
+      {rejecting ? (
+        <ReasonPicker
+          title={`Reject this comment on "${rejecting.videoTitle || rejecting.videoId}"?`}
+          api={getApi()}
+          busy={commentBusy === rejecting.id && commentBusyAction === 'reject'}
+          error={commentErrors[rejecting.id] || ''}
+          onCancel={() => setRejecting(null)}
+          onConfirm={(why) => void confirmReject(why)}
+        />
       ) : null}
     </div>
   );

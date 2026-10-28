@@ -80,7 +80,7 @@ function item(overrides: Partial<NoteItem>): NoteItem {
   };
 }
 
-type Store = { items: NoteItem[]; settings: NotesSettings; watch?: WatchStatus; latest?: Record<string, any> };
+type Store = { items: NoteItem[]; settings: NotesSettings; watch?: WatchStatus; latest?: Record<string, any>; feedbackError?: string };
 
 /** What the server's watch-status says when nothing has been checked yet (lib/substackNotesContentWatch.js describeWatch). */
 function watchFor(settings: NotesSettings): WatchStatus {
@@ -201,6 +201,9 @@ async function fakeApi(path: string, options: RequestInit = {}) {
       found.status = "approved";
     } else {
       found.status = "rejected";
+      found.updatedAt = `2026-10-08T12:00:${String(requests.length).padStart(2, "0")}Z`;
+      // The decision stands even when WHY could not be saved (12/19); the screen must say so.
+      return { ok: true, data: { ...found, feedback: store.feedbackError ? { recorded: false, error: store.feedbackError } : { recorded: true, error: "" } } };
     }
     found.updatedAt = `2026-10-08T12:00:${String(requests.length).padStart(2, "0")}Z`;
     return { ok: true, data: { ...found } };
@@ -514,6 +517,7 @@ describe("Substack Notes topic drafts on a timer (5/7)", () => {
     expect(el("[data-topic-plan]").textContent).toBe("No topic draft for now: 1 already waiting for your approval (the most per day is 1)");
     await click(button("Approvals"));
     await click(button("Reject"));
+    await click(button("too long", document.body));
     await click(button("Ideas"));
     expect(el("[data-topic-plan]").textContent).toBe('Next topic draft: about 12:30 PM ("night sky")');
   });
@@ -575,9 +579,19 @@ describe("Substack Notes approvals (3/7)", () => {
   it("Reject takes it off Approvals and leaves its row marked Rejected", async () => {
     stores.proj_doe.items = [item({ ideaText: "Night music", status: "draft", draftText: "Some words" })];
     const id = stores.proj_doe.items[0].id;
+    stores.proj_doe.feedbackError = "this database does not have the outreach feedback table yet; run docs/SQL/outreach_feedback_setup.sql";
     await mount();
     await click(button("Approvals"));
     await click(button("Reject", el(`article[data-item-id="${id}"]`)));
+    // A sentence typed first rides along with the chip he clicks.
+    const note = document.querySelector<HTMLTextAreaElement>("#reason-picker-note")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(note, "Reads like a press release.");
+      note.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click(button("too salesy", document.body));
+    expect(requests.filter((r) => r.path.endsWith("/reject")).map((r) => r.body)).toEqual([{ reasons: ["too salesy"], note: "Reads like a press release." }]);
+    expect(text()).toContain("Rejected. It stays on its row, marked rejected. The reason was NOT saved: this database does not have the outreach feedback table yet");
     expect(stores.proj_doe.items[0].status).toBe("rejected");
     expect(container!.querySelector(`article[data-item-id="${id}"]`)).toBeNull();
     await click(button("Ideas"));
