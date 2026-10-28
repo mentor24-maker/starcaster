@@ -22,6 +22,9 @@
  *                                                          lib/acquire/SubstackNotesCapture.js)
  *   POST   /api/acquire/substack-miner/read-notes          { anyHour?: true } — read every approved writer's newest
  *                                                          Notes not read in 7 days (lib/acquire/SubstackNotesReadRun.js)
+ *   GET|POST /api/acquire/substack-miner/read-notes-due     Vercel Cron only, every 2 hours: the read above for every
+ *                                                          project with approved writers (Outreach wizard 14/19,
+ *                                                          lib/acquire/SubstackNotesReadDue.js)
  *   POST   /api/acquire/substack-miner/notes-search        { keyword, notes: [{ authorHandle, authorName, url, text }] }
  *                                                          — what the Mini's Notes search found for one keyword: each
  *                                                          author's publication added (or merged) as a candidate, the
@@ -58,6 +61,7 @@ const { minerStats } = require('../lib/acquire/SubstackMinerStats');
 const { importSubscribers } = require('../lib/acquire/SubstackSubscriberImport');
 const { captureCandidateNotes } = require('../lib/acquire/SubstackNotesCapture');
 const { runSubstackNotesRead } = require('../lib/acquire/SubstackNotesReadRun');
+const { runNotesReadDue, formatReadDueLog } = require('../lib/acquire/SubstackNotesReadDue');
 const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 const { importSeedList } = require('../lib/acquire/SubstackSeedImport');
 const { runSubstackSuggestions } = require('../lib/acquire/SubstackSuggestRun');
@@ -180,6 +184,30 @@ async function handle(req, res, pathname, method) {
     // The project's own zone decides the active hours when the account sets none.
     const projectTimeZone = async () => String(req?.projectContext?.project?.timezone || '');
     return reply(res, await runSubstackNotesRead({ anyHour: body.anyHour === true }, scope, { projectTimeZone }));
+  }
+
+  // CRON ONLY, like Substack Notes' run-due: it reads every project's approved
+  // writers at once, so a session is deliberately not enough. `req.cronPublish`
+  // is set in routes/index.js only for a CRON_PATHS path carrying Vercel's cron
+  // header or the CRON_SECRET bearer token. Vercel's scheduler sends GET.
+  // Outreach wizard 14/19 (lib/acquire/SubstackNotesReadDue.js).
+  if (pathname === `${PREFIX}/read-notes-due`) {
+    if (method !== 'GET' && method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'The scheduled Notes read runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const result = await runNotesReadDue();
+    if (!result.ok) {
+      console.error(`[substack-miner] read-notes-due REFUSED: ${result.error}`);
+      return reply(res, result);
+    }
+    // Logged on every run, the quiet ones too: "nothing was due" and "never
+    // ran" must not look the same in the log.
+    for (const line of formatReadDueLog(result.data)) {
+      if (/ (FAILED|NOT READ|NOT REACHED) /.test(line)) console.error(line);
+      else console.log(line);
+    }
+    return reply(res, result);
   }
 
   if (pathname === `${PREFIX}/notes-search`) {
