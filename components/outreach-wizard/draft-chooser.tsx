@@ -4,8 +4,8 @@ import React, { useState } from 'react';
  * Three replies to choose from — Outreach wizard 9/19 (task 86bcrmbke).
  *
  * Shared by every channel's approval card: Reddit uses it first
- * (components/reddit-comments/reddit-comments-panel.tsx); YouTube (10/19) and
- * Substack (11/19) are next. The server (lib/draftOptions.js) writes the
+ * (components/reddit-comments/reddit-comments-panel.tsx), then YouTube (10/19) and
+ * Substack (11/19, which names its box "Your Note" or "Your reply"). The server (lib/draftOptions.js) writes the
  * options and checks each against the rules; this only shows them.
  *
  * Three cards side by side (stacked on a phone). Clicking one — or pressing
@@ -64,13 +64,15 @@ export type DraftChooserProps = {
   error: string;
   /** A line under the box — e.g. which canon the replies were written from. */
   footnote?: string;
+  /** The editable box's label. Reddit and YouTube post comments; Substack posts a Note or a reply (11/19). */
+  boxLabel?: string;
   onApprove: (text: string, option: number) => void;
   onReject: () => void;
   /** "Three more" — asks for a fresh set; the parent re-renders with new options. */
   onMore: () => void;
 };
 
-export default function DraftChooser({ options, idPrefix, busy, error, footnote, onApprove, onReject, onMore }: DraftChooserProps): React.ReactElement {
+export default function DraftChooser({ options, idPrefix, busy, error, footnote, boxLabel = 'Your comment', onApprove, onReject, onMore }: DraftChooserProps): React.ReactElement {
   const kept = keptOptions(options);
   const [picked, setPicked] = useState<number | null>(null);
   const [text, setText] = useState('');
@@ -121,7 +123,7 @@ export default function DraftChooser({ options, idPrefix, busy, error, footnote,
       {dropped ? <p className="draft-chooser-dropped">{dropped}</p> : null}
       {picked !== null ? (
         <>
-          <label className="draft-chooser-label" htmlFor={boxId}>Your comment</label>
+          <label className="draft-chooser-label" htmlFor={boxId}>{boxLabel}</label>
           <textarea id={boxId} className="draft-chooser-box" rows={6} value={text} onChange={(e) => setText(e.target.value)} />
           <p className="draft-chooser-help">{`${text.trim().length} characters`}</p>
         </>

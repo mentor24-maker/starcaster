@@ -668,6 +668,7 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
         <DraftChooser
           options={item.draftOptions || []}
           idPrefix={boxId}
+          boxLabel={item.kind === 'reply' ? 'Your reply' : 'Your Note'}
           busy={busy}
           error={error}
           onApprove={(words, option) => onApprove(words, option)}

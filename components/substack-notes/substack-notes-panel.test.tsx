@@ -896,6 +896,7 @@ describe("three Notes or replies to choose from (Outreach wizard 11/19)", () => 
     expect(options(id)[1].getAttribute("aria-pressed")).toBe("true");
     const box = el<HTMLTextAreaElement>(`#sn-draft-${id}-box`);
     expect(box.value).toBe("Does anyone else see it, round 1?");
+    expect(card(id).querySelector(`label[for="sn-draft-${id}-box"]`)?.textContent).toBe("Your Note");
     type(box, "Does anyone else see the stars closer in winter?");
     await click(button("Approve", card(id)));
     expect(requests.filter((r) => r.path.endsWith("/approve")).pop()?.body)
@@ -935,6 +936,7 @@ describe("three Notes or replies to choose from (Outreach wizard 11/19)", () => 
     expect(options(id).length).toBe(2);
     expect(card(id).textContent).toContain("One option was dropped: it uses \"synergy\", which is on the account's words-to-avoid list.");
     await click(options(id)[1]);
+    expect(card(id).querySelector(`label[for="sn-draft-${id}-box"]`)?.textContent).toBe("Your reply");
     await click(button("Approve", card(id)));
     expect(requests.filter((r) => r.path.endsWith("/approve")).pop()?.body).toEqual({ text: "A star chart helps, round 1.", option: 2 });
   });
