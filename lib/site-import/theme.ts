@@ -264,13 +264,13 @@ export const PALETTE_PAIRS: PalettePair[] = [
   { fg: "buttonText", bg: "button", min: READABLE_CONTRAST, repair: "fg", why: "a button's label" },
 ];
 
-/** Which roles the pairs above cover — the test compares this with
- *  THEME_PALETTE_ROLE_KEYS. */
 /** Below this a pairing is not a style choice, it is invisible. */
 export const INVISIBLE_BELOW = 1.5;
 
 export const pairKey = (pair: Pick<PalettePair, "fg" | "bg">) => `${pair.fg}/${pair.bg}`;
 
+/** Which roles the pairs above cover — the test compares this with
+ *  THEME_PALETTE_ROLE_KEYS. */
 export function uncoveredPaletteRoles(): BuilderThemePaletteRole[] {
   const covered = new Set(PALETTE_PAIRS.flatMap((p) => [p.fg, p.bg]));
   return THEME_PALETTE_ROLE_KEYS.filter((role) => !covered.has(role));
@@ -284,19 +284,26 @@ export function uncoveredPaletteRoles(): BuilderThemePaletteRole[] {
  *  (pure black if neither does). A BUTTON that vanishes into the page takes
  *  the first of the site's own dark/brand colours (inverse, header, heading,
  *  body text) that stands out — the site's colour, not an invented one — and
- *  only then a neutral. */
+ *  only then a neutral.
+ *
+ *  A site-painted pair stops being the site's design the moment the guard
+ *  replaces either of its colours: a white button with a dark label, turned
+ *  near-black because it vanished into a white page, now carries a label the
+ *  site never put on it, so that label is held to the full `min`. */
 export function guardPaletteReadability(
   palette: Record<string, string>,
   notes: string[],
   brandCandidates: string[] = [],
   sitePainted: Set<string> = new Set(),
 ): void {
+  const repaired = new Set<string>();
   for (const pair of PALETTE_PAIRS) {
     const fg = palette[pair.fg];
     const bg = palette[pair.bg];
     if (!fg || !bg) continue;
     const ratio = contrastRatio(fg, bg);
-    const floor = sitePainted.has(pairKey(pair)) ? INVISIBLE_BELOW : pair.min;
+    const asPainted = sitePainted.has(pairKey(pair)) && !repaired.has(pair.fg) && !repaired.has(pair.bg);
+    const floor = asPainted ? INVISIBLE_BELOW : pair.min;
     if (ratio >= floor) continue;
     let next: string;
     if (pair.fg === "button") {
@@ -307,7 +314,8 @@ export function guardPaletteReadability(
       next = contrastRatio(neutral, bg) >= pair.min ? neutral : luminance(bg) > 0.18 ? "#000000" : "#ffffff";
     }
     palette[pair.fg] = next;
-    notes.push(`${pair.why}: rejected ${pair.fg} ${fg} on ${pair.bg} ${bg} (${ratio.toFixed(1)}:1, under ${pair.min}:1) — using ${next}`);
+    repaired.add(pair.fg);
+    notes.push(`${pair.why}: rejected ${pair.fg} ${fg} on ${pair.bg} ${bg} (${ratio.toFixed(1)}:1, under ${floor}:1) — using ${next}`);
   }
 }
 

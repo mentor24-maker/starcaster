@@ -372,3 +372,15 @@ test('the guard repairs a composed pair to the AA line, but leaves a site-painte
   guardPaletteReadability(invisible, [], [], new Set(['buttonText/button']));
   assert.notEqual(invisible.buttonText, '#fefefe', 'even a site-painted pair is fixed when it is invisible');
 });
+
+test('a button the guard recoloured no longer counts as site-painted, so its label is held to the AA line', () => {
+  // Round-1 review of 86bctakh4: a white filled button with a dark grey label
+  // on a white page. The button is turned near-black, and the label the site
+  // put on a WHITE button (#333333) is 1.6:1 on the new one.
+  const notes = [];
+  const p = { surface: '#ffffff', inverse: '#03050a', button: '#ffffff', buttonText: '#333333' };
+  guardPaletteReadability(p, notes, [], new Set(['buttonText/button']));
+  assert.equal(p.button, '#03050a', 'the button takes the site\'s dark colour');
+  assert.ok(contrastRatio(p.buttonText, p.button) >= 4.5, `label ${p.buttonText} on ${p.button} must read`);
+  assert.ok(notes.some((n) => n.includes("a button's label") && n.includes('#333333')), 'the label repair is named');
+});
