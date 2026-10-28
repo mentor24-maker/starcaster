@@ -51,6 +51,14 @@ function fakeDeps(overrides = {}) {
     youtubeCreatorsStore: {
       listCreators: async () => ok([...rows('approved', 3), ...rows('candidate', 4), ...rows('candidate', 2, { suggestion: { action: 'approved' } }), ...rows('rejected', 1)]),
     },
+    // Outreach wizard 16/19: five comments worth replying to across two videos.
+    youtubeConversations: {
+      listYoutubeConversations: async () => ok({
+        videos: [{ comments: [{}, {}, {}] }, { comments: [{}, {}] }, { comments: [] }],
+        newCount: 5,
+        reading: { state: 'current', sentence: 'All 3 approved channels were read in the last 12 hours.' },
+      }),
+    },
     redditCommentsStore: {
       getBrowserCheck: async () => ok(signedIn('someone', 4)),
       listItems: async () => ok([]),
@@ -117,7 +125,9 @@ test('sentences name what they count', async () => {
   assert.equal(conversations.sentence, '17 writers approved, 0 Notes found to reply to yet.');
 
   const ytConv = find(result, 'youtube', 'conversations');
-  assert.equal(ytConv.sentence, '3 videos added, 2 active.');
+  assert.equal(ytConv.state, 'needs_you');
+  assert.equal(ytConv.sentence, '5 comments worth replying to on 2 videos, best first.');
+  assert.equal(ytConv.inline, true);
 
   const ytReplies = find(result, 'youtube', 'replies');
   assert.equal(ytReplies.state, 'needs_you');
