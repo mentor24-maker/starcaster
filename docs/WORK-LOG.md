@@ -1,3 +1,17 @@
+## 2026-10-27 — Themes can have outline buttons and rounded button corners (#881)
+
+A theme could only describe a solid, filled button. When the Site Import copied
+alphire.agency, whose buttons are white outlines on dark sections, they came out
+as solid white blocks that vanished on white sections. The rounded corners it
+measured never reached a button either. Themes now have two new settings under
+**Hero & Treatments**. **Button style** is Filled or Outline. An outline button
+has a see-through middle with a border and label in the theme's button colour,
+and fills in on hover. **Button corners** sets how rounded the buttons are. The
+Site Import now uses both, so an imported outline button stays an outline.
+Existing sites look exactly the same: a theme that sets neither option changes
+nothing, and a button with its own colours keeps them. A real-browser check now
+measures the outline button and its square, filled counterpart.
+
 ## 2026-10-27 — Substack drafts now come as three choices, like Reddit and YouTube (#879)
 
 When Dane asks for a Substack Note or a reply, he now gets three different
