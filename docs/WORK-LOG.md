@@ -1,3 +1,17 @@
+## 2026-10-27 — Imported themes can no longer ship invisible buttons or unreadable text (#876)
+
+When Site Import builds a theme from a site, it now checks every colour that
+gets painted on top of another one: text on the page, text on light and dark
+bands, menu text in the header, a button against the page, and a button's
+label. Before, only some of those were checked, which is how Alphire's import
+produced white buttons on a white page. Anything that does not read is
+swapped for a readable colour, preferring the site's own dark or brand
+colours, and the theme's notes say what was changed. A site's own button and
+label are left alone unless they are truly invisible, so brand colours are
+not "corrected". If the check has to recolour a button, its label is checked
+again against the new colour. Adding a new theme colour without saying what
+it sits on now fails a test.
+
 ## 2026-10-27 — The Mini's sign-in window gets its internet route, and a check that nothing else is open (#874)
 
 Third piece of the sign-in window. There is now an installer that keeps the
