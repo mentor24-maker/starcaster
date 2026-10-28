@@ -40,6 +40,7 @@ const {
 const auth        = require('./auth');
 const projectAdmin = require('./projectAdmin');
 const projectSupport = require('./projectSupport');
+const projectShares = require('./projectShares');
 const projects    = require('./projects');
 const invitations = require('./invitations');
 const settings    = require('./settings');
@@ -91,6 +92,10 @@ const ROUTE_MODULES = [
   auth,
   projectAdmin,
   projectSupport,
+  // Ahead of `projects`, which answers 404 to any /api/projects path it does
+  // not know — '/api/projects/:id/shares' would never arrive otherwise. It
+  // also owns '/api/builder/shared', well ahead of `builder`.
+  projectShares,
   projects,
   invitations,
   settings,
