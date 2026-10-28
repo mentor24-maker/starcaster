@@ -13,8 +13,12 @@ const path = require('path');
  * what the "model" wrote, so a rule check can be shown to catch it.
  */
 
-const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'substack_notes_setup.sql');
-const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+const fs = require('fs');
+
+const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
+const SETUP_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8');
+const OPTIONS_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8');
+const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon, CANON_DOCS } = require('./canonFixture.js');
 const { prepareCanon } = require('../../lib/canonPrompt.js');
 
@@ -28,8 +32,8 @@ const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 const NOTE_URL = 'https://substack.com/@someone/note/c-12345';
 const GOOD = 'Winter air is drier, so the stars look sharper. I stood outside for an hour last night and it felt like the sky had moved closer.';
 
-function withDb() {
-  const db = createFakeDb(parseSchemaFile(SQL_PATH));
+function withDb({ withOptionsSql = true } = {}) {
+  const db = createFakeDb(parseSchemaText(withOptionsSql ? `${SETUP_SQL}\n${OPTIONS_SQL}` : SETUP_SQL));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
@@ -47,13 +51,20 @@ function withDb() {
   return { db, store, restore };
 }
 
-/** A "model" that answers with each of `replies` in turn, recording what it was asked. */
+/**
+ * A "model" that answers with each of `replies` in turn, recording what it was
+ * asked. A string reply is written in BOTH answer shapes — `text` for the
+ * one-draft writer, and three `options` carrying it for the three-option one
+ * the store uses since 11/19 — so every older test reads the words it scripted.
+ */
 function scripted(...replies) {
   const asked = [];
   const generate = async (system, prompt) => {
     asked.push({ system, prompt });
     const next = replies[Math.min(asked.length - 1, replies.length - 1)];
-    return typeof next === 'string' ? { ok: true, text: JSON.stringify({ text: next }) } : next;
+    if (typeof next !== 'string') return next;
+    const options = [1, 2, 3].map((n) => ({ angle: `angle ${n}`, text: next }));
+    return { ok: true, text: JSON.stringify({ text: next, options }) };
   };
   return { generate, asked };
 }
@@ -357,6 +368,141 @@ test('with no canon copied, no draft is written and the AI is never asked', asyn
     assert.equal(refused.status, 409);
     assert.match(refused.error, /no canon copied yet — run npm run canon:sync/);
     assert.equal(model.asked.length, 0);
+    assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
+  } finally {
+    restore();
+  }
+});
+
+// ── Three to choose from (Outreach wizard 11/19, task 86bcrmbmy) ────────────
+
+/** A "model" answering with three labelled options; `texts[i]` per slot, then `retry` for any second try. */
+function threeOptions(texts, retry = null) {
+  const asked = [];
+  const generate = async (system, prompt) => {
+    asked.push({ system, prompt });
+    const list = asked.length === 1 ? texts : retry;
+    return { ok: true, text: JSON.stringify({ options: list.map((text, i) => ({ angle: `angle ${i + 1}`, text })) }) };
+  };
+  return { generate, asked };
+}
+
+const OTHER = 'The cold makes everything quieter, and the sky does the talking.';
+const THIRD = 'Has anyone else noticed the stars seem closer once the leaves are down?';
+
+test('Write a draft saves three labelled options; the first is the draft text, and the prompt asks for three', async () => {
+  const { store, restore } = withDb();
+  try {
+    const idea = await addIdea(store);
+    const model = threeOptions([GOOD, OTHER, THIRD]);
+    const drafted = await store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.equal(model.asked.length, 1);
+    assert.match(model.asked[0].system, /Write 3 different replies/);
+    assert.doesNotMatch(model.asked[0].system, /exactly \{"text"/);
+
+    const back = await store.getItemById(idea.id, SCOPE_A);
+    assert.equal(back.data.status, 'draft');
+    assert.equal(back.data.draftText, GOOD);
+    assert.deepEqual(back.data.draftOptions.map((o) => [o.angle, o.text, o.rule.ok]), [
+      ['angle 1', GOOD, true], ['angle 2', OTHER, true], ['angle 3', THIRD, true],
+    ]);
+    assert.equal(back.data.chosenOption, null);
+  } finally {
+    restore();
+  }
+});
+
+test('an option that breaks a rule twice is dropped and named; the others are kept', async () => {
+  const { store, restore } = withDb();
+  try {
+    await store.saveSettings({ avoidWords: ['synergy'] }, SCOPE_A);
+    const idea = await addIdea(store);
+    const model = threeOptions([GOOD, 'Pure synergy tonight.', THIRD], ['Still synergy.']);
+    const drafted = await store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.equal(model.asked.length, 2);
+    const options = (await store.getItemById(idea.id, SCOPE_A)).data.draftOptions;
+    assert.deepEqual(options.filter((o) => !o.dropped).map((o) => o.text), [GOOD, THIRD]);
+    const dropped = options.filter((o) => o.dropped);
+    assert.equal(dropped.length, 1);
+    assert.equal(dropped[0].text, undefined, 'a dropped option keeps no words to pick');
+    assert.match(dropped[0].rule.reason, /"synergy", which is on the account's words-to-avoid list/);
+  } finally {
+    restore();
+  }
+});
+
+test('Approve with a pick records which option it was, and the words default to that option', async () => {
+  const { store, restore } = withDb();
+  try {
+    const idea = await addIdea(store);
+    await store.writeDraftForItem(idea.id, SCOPE_A, { generate: threeOptions([GOOD, OTHER, THIRD]).generate });
+
+    const bad = await store.approveItem(idea.id, { option: 7 }, SCOPE_A);
+    assert.equal(bad.status, 400);
+    assert.match(bad.error, /option must be the number of one of this draft's Notes \(0, 1, 2\) — got 7/);
+
+    const approved = await store.approveItem(idea.id, { option: 1 }, SCOPE_A);
+    assert.equal(approved.ok, true, approved.error);
+    const back = await store.getItemById(idea.id, SCOPE_A);
+    assert.equal(back.data.status, 'approved');
+    assert.equal(back.data.chosenOption, 1);
+    assert.equal(back.data.finalText, OTHER);
+  } finally {
+    restore();
+  }
+});
+
+test('an edited pick is checked against the rules and saved with its option number', async () => {
+  const { store, restore } = withDb();
+  try {
+    await store.saveSettings({ avoidWords: ['synergy'] }, SCOPE_A);
+    const idea = await addIdea(store);
+    await store.writeDraftForItem(idea.id, SCOPE_A, { generate: threeOptions([GOOD, OTHER, THIRD]).generate });
+
+    const refused = await store.approveItem(idea.id, { option: 2, text: 'Synergy under the stars.' }, SCOPE_A);
+    assert.equal(refused.status, 422);
+    assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'draft');
+
+    const approved = await store.approveItem(idea.id, { option: 2, text: `${THIRD} Mine are.` }, SCOPE_A);
+    assert.equal(approved.ok, true, approved.error);
+    const back = await store.getItemById(idea.id, SCOPE_A);
+    assert.equal(back.data.chosenOption, 2);
+    assert.equal(back.data.finalText, `${THIRD} Mine are.`);
+  } finally {
+    restore();
+  }
+});
+
+test('a draft written before options keeps approving as one draft, with no option recorded', async () => {
+  const { store, restore } = withDb();
+  try {
+    const item = await addIdea(store);
+    // An old-style draft, the way 3/7 wrote them: words, and no options.
+    const moved = await store.updateItem(item.id, { draftText: GOOD, status: 'draft' }, SCOPE_A);
+    assert.equal(moved.ok, true, moved.error);
+    assert.deepEqual(moved.data.draftOptions, []);
+    const picked = await store.approveItem(moved.data.id, { option: 0 }, SCOPE_A);
+    assert.equal(picked.status, 400);
+    assert.match(picked.error, /nothing to choose from/);
+    const approved = await store.approveItem(moved.data.id, {}, SCOPE_A);
+    assert.equal(approved.ok, true, approved.error);
+    assert.equal(approved.data.finalText, GOOD);
+    assert.equal(approved.data.chosenOption, null);
+  } finally {
+    restore();
+  }
+});
+
+test('without docs/SQL/substack_notes_draft_options.sql, Write a draft refuses and names the file', async () => {
+  const { store, restore } = withDb({ withOptionsSql: false });
+  try {
+    const idea = await addIdea(store);
+    const refused = await store.writeDraftForItem(idea.id, SCOPE_A, { generate: threeOptions([GOOD, OTHER, THIRD]).generate });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'SQL_NOT_RUN');
+    assert.match(refused.error, /run docs\/SQL\/substack_notes_draft_options\.sql/);
     assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
   } finally {
     restore();

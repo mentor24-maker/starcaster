@@ -11,6 +11,31 @@ label are left alone unless they are truly invisible, so brand colours are
 not "corrected". If the check has to recolour a button, its label is checked
 again against the new colour. Adding a new theme colour without saying what
 it sits on now fails a test.
+## 2026-10-27 — A Connect button opens the Mini's browser inside the Outreach screen (#880)
+
+Fourth piece of the sign-in window. On Engage › Outreach, the Connect stage
+now has a "Connect Reddit" (or YouTube, or Substack) button. It opens a live
+picture of the Mini's browser right inside Starcaster, already on the site's
+sign-in page, with a countdown and a Close button. Clicking and typing in the
+picture happens on the Mini, and the password goes straight to the Mini, never
+through Starcaster's server. When the window closes it always says why, saves
+that on the window's log, then asks the Mini who is signed in and offers
+"Signed in as X. Post as this account?". It was rehearsed end to end on the
+Mini against a throwaway test login page: typed in, signed in, closed. Real
+sign-ins to Reddit, YouTube and Substack are the next pieces.
+## 2026-10-27 — Substack drafts now come as three choices, like Reddit and YouTube (#879)
+
+When Dane asks for a Substack Note or a reply, he now gets three different
+versions side by side instead of one, the same picker Reddit and YouTube
+already have. The overnight automatic drafts come with three choices too, so
+anything waiting for his approval is ready to pick from. Each version is
+checked against the account's rules (length, links, words to avoid). One that
+breaks a rule is left out, and the card says which rule it broke. Clicking a
+version puts it in the edit box, and Approve records which one he chose. The
+box is labelled "Your Note" or "Your reply" (the shared picker used to say
+"Your comment", which is Reddit's word). This needs one small database
+change (`docs/SQL/substack_notes_draft_options.sql`). Until it runs, Write a
+draft stops and names that file.
 
 ## 2026-10-27 — The Mini's sign-in window gets its internet route, and a check that nothing else is open (#874)
 
