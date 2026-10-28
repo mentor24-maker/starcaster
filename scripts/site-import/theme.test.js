@@ -130,12 +130,21 @@ test('system fonts and built-ins are not requested from Google', () => {
   assert.equal(t.typography.fonts.heading, 'playfair');
 });
 
-test('an outlined button becomes a filled one in its colour, and says so', () => {
-  const t = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(46, 163, 242)|3', count: 7 }] }), 'x 1');
+test('an outlined button becomes an outline theme in its colour, and says so', () => {
+  // alphire.agency, 2026-10-27: white outlines became solid white blocks
+  // because a theme could only describe a fill (task 86bctakhj).
+  const t = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(46, 163, 242)|60', count: 7 }] }), 'x 1');
   assert.equal(t.palette.button, '#2ea3f2');
-  assert.equal(t.palette.buttonText, '#111111');
-  assert.equal(t.borderRadius, 3);
-  assert.ok(t.notes.some((n) => n.includes('outlined')));
+  assert.equal(t.palette.buttonText, '#111111', 'the text on the hover fill');
+  assert.equal(t.treatments.buttonStyle, 'outline');
+  assert.equal(t.treatments.buttonRadius, 60, 'the measured corners reach the buttons');
+  assert.ok(t.notes.some((n) => n.includes('outlines')));
+});
+
+test('a filled button stays a filled theme and its corners still reach the buttons', () => {
+  const t = deriveImportTheme(siteIr(SUMMARY), 'x 1');
+  assert.equal(t.treatments.buttonStyle, undefined);
+  assert.equal(t.treatments.buttonRadius, 3);
 });
 
 /** Every text element in the fixture painted one colour. */

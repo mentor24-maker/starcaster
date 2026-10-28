@@ -807,6 +807,60 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'button-follows-an-outline-theme',
+    why:
+      'A theme could only describe a FILLED button, so alphire.agency\'s white outline buttons imported ' +
+      'as solid white blocks, invisible on white (task 86bctakhj). A theme with Button style Outline ' +
+      'must draw every Button that has no colour of its own with a transparent fill, a visible border ' +
+      'in the button colour, and the theme\'s button corners. The harness theme has no palette, so the ' +
+      'border falls back to its primary colour, #1f4d8f.',
+    section: {
+      layout: 'single',
+      themeTreatments: { buttonStyle: 'outline', buttonRadius: 24 },
+      modules: [{ type: 'button', text: 'Outline from the theme', settings: {} }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopColor', 'borderTopWidth', 'borderTopStyle', 'borderTopLeftRadius', 'color'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent') {
+        return `an outline-theme button is filled with ${s.backgroundColor} — the theme's button style is not reaching it.`;
+      }
+      if (s.borderTopColor !== 'rgb(31, 77, 143)' || s.borderTopStyle === 'none' || !(parseFloat(s.borderTopWidth) > 0)) {
+        return `an outline-theme button has no visible border in the button colour: ${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}.`;
+      }
+      if (s.color !== 'rgb(31, 77, 143)') {
+        return `an outline-theme button's label is ${s.color}, not the button colour — on a transparent fill it may be unreadable.`;
+      }
+      if (s.borderTopLeftRadius !== '24px') {
+        return `the theme's 24px button corners did not reach the button: border-radius is ${s.borderTopLeftRadius}.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'button-without-a-theme-style-stays-filled-and-square',
+    why:
+      'The pair to the contract above, so it cannot pass on a build where every button went see-through: ' +
+      'a page whose theme sets no button style keeps the filled, square button every existing site has.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Filled as before', settings: {} }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopLeftRadius'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor === 'rgba(0, 0, 0, 0)' || s.backgroundColor === 'transparent') {
+        return 'a button on an unstyled theme rendered with no fill — the outline style is leaking onto every button.';
+      }
+      if (s.borderTopLeftRadius !== '0px') {
+        return `a button on an unstyled theme has ${s.borderTopLeftRadius} corners — existing buttons must stay square.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'heading-nudged-over-an-image-stacks-behind-it-in-page-order',
     why:
       'THE CONTROL for the contract below. A heading nudged DOWN over the image after it (Vertical ' +
