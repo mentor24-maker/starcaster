@@ -439,7 +439,7 @@ export default function OutreachWizardPanel(): React.ReactElement {
                 ) : null}
                 {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
                 {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
-                  <SubstackConversations key={overview?.generatedAt || 'substack'} />
+                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
                 ) : null}
               </StageRow>
             ))}

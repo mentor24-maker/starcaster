@@ -20,7 +20,8 @@ const conversations = require('../../lib/substackConversations');
 const readDue = require('../../lib/acquire/SubstackNotesReadDue');
 const searchDue = require('../../lib/acquire/SubstackNotesSearchDue');
 const { parseProfileNotes } = require('../../lib/acquire/SubstackNotesReadRun');
-const { pickKeyword } = require('../../lib/acquire/SubstackNotesSearch');
+const os = require('os');
+const { activeHoursVerdict } = require('../../lib/acquire/SubstackNotesReadRun');
 
 const ROOT = path.join(__dirname, '..', '..');
 const NOW = Date.parse('2026-10-28T12:00:00Z');
@@ -142,6 +143,20 @@ test('the list ranks the read Notes and names their writer, with a profile link'
   assert.equal(res.data.reading.state, 'current');
 });
 
+test('the count is every Note found, not the 50 listed; the reading sentence says 8 days and minds its grammar', async () => {
+  const many = Array.from({ length: 70 }, (_, i) => note(i + 1));
+  const { deps } = fakeDeps({ candidates: [ANN({ recentNotes: many })] });
+  const res = await conversations.listSubstackConversations(SCOPE, deps);
+  assert.equal(res.data.items.length, 50);
+  assert.equal(res.data.newCount, 70);
+  assert.equal(res.data.reading.sentence, 'The one approved writer was read in the last 8 days.');
+  const two = await conversations.listSubstackConversations(SCOPE, fakeDeps({ candidates: [ANN(), ANN({ id: 'w2', handle: 'bo', name: 'Bo', recentNotes: [] })] }).deps);
+  assert.equal(two.data.reading.sentence, 'All 2 approved writers were read in the last 8 days.');
+  const { conversationsStage } = require('../../lib/outreachOverview');
+  const stage = await conversationsStage({ listSubstackConversations: async () => res }, SCOPE, { label: 'x', page: 'y' });
+  assert.equal(stage.sentence, '70 new Notes worth replying to; the best 50 are listed, best first.');
+});
+
 test('an approved writer never read is CANNOT TELL — never "0 found"', async () => {
   const { deps } = fakeDeps({ candidates: [ANN({ lastNotesReadAt: null, recentNotes: [] })] });
   const res = await conversations.listSubstackConversations(SCOPE, deps);
@@ -154,7 +169,7 @@ test('a writer whose reading is overdue (refused or timed out every pass) is nam
   const { deps } = fakeDeps({ candidates: [ANN({ lastNotesReadAt: new Date(NOW - 9 * DAY).toISOString() })] });
   const res = await conversations.listSubstackConversations(SCOPE, deps);
   assert.equal(res.data.reading.state, 'cannot_tell');
-  assert.match(res.data.reading.sentence, /not been read for over a week \(Ann\)/);
+  assert.match(res.data.reading.sentence, /not been read for over 8 days \(Ann\)/);
 });
 
 test('rejected writers, skipped Notes, decided replies and stale Notes are left out; an open reply is kept', async () => {
@@ -262,18 +277,136 @@ test('the read is scheduled every two hours and is a cron-only path', () => {
 
 // ── the six-hourly search on the Mini ──────────────────────────────────────
 
-test('the keyword walk advances once per six-hour pass, so every keyword gets its turn', () => {
+/** A walk kept in memory, so no test writes the real file in the home folder. */
+function memoryWalk(initial = {}) {
+  const box = { walk: JSON.parse(JSON.stringify(initial)), writes: 0 };
+  box.deps = {
+    readWalk: () => ({ walk: JSON.parse(JSON.stringify(box.walk)), note: '' }),
+    writeWalk: (walk) => { box.walk = JSON.parse(JSON.stringify(walk)); box.writes += 1; return { ok: true }; },
+  };
+  return box;
+}
+
+test('the keyword walk takes the keyword after the last one searched, and starts again when that one is gone', () => {
+  const words = ['a', 'b', 'c'];
+  assert.equal(searchDue.nextKeyword(words, '').keyword, 'a');
+  assert.equal(searchDue.nextKeyword(words, 'a').keyword, 'b');
+  assert.equal(searchDue.nextKeyword(words, 'C').keyword, 'a', 'wraps, and matches regardless of case');
+  assert.equal(searchDue.nextKeyword(words, 'removed since').keyword, 'a');
+  assert.equal(searchDue.nextKeyword([], 'a').ok, false);
+});
+
+test('every keyword is searched, even with the active hours refusing the night pass', async () => {
+  // Round-1 review of 86bcrmbqu: walked by six-hour period, four keywords each
+  // landed on the same time of day for ever, and the one on the night slot was
+  // refused on every pass. Run the walk THROUGH the real active-hours check.
   const words = ['a', 'b', 'c', 'd'];
-  const picked = [0, 1, 2, 3].map((i) => pickKeyword(words, '', i * searchDue.PASS_PERIOD_MS, searchDue.PASS_PERIOD_MS).keyword);
-  assert.deepEqual(picked.sort(), words);
-  // The hourly walk read at six-hour steps would only ever land on two of four.
-  const hourly = [0, 1, 2, 3].map((i) => pickKeyword(words, '', i * searchDue.PASS_PERIOD_MS).keyword);
-  assert.equal(new Set(hourly).size, 2);
+  const zone = 'America/Denver';
+  const hours = { activeStartHour: 8, activeEndHour: 22 };
+  const box = memoryWalk();
+  const searched = [];
+  const start = Date.parse('2026-10-28T00:00:00Z');
+  for (let i = 0; i < 16; i += 1) {
+    const at = start + i * 6 * HOUR;
+    // eslint-disable-next-line no-await-in-loop
+    await searchDue.runNotesSearchDue({
+      ...box.deps,
+      now: () => at,
+      projectTimeZone: async () => zone,
+      discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u', keywords: words }] }),
+      search: async (input) => {
+        if (!activeHoursVerdict(hours, at, zone).ok) return { ok: false, status: 409, error: 'outside the active hours' };
+        searched.push(input.keyword);
+        return { ok: true, data: { keyword: input.keyword } };
+      },
+      suggest: async () => ({ ok: true, data: {} }),
+    });
+  }
+  for (const w of words) {
+    assert.ok(searched.filter((k) => k === w).length >= 2, `"${w}" searched at least twice in four days (got ${searched.join(',')})`);
+  }
+  assert.deepEqual(searched.slice(0, 4), words, 'in order, one per pass that searched');
+});
+
+test('only a pass that searched moves the walk on; a refused or failed one keeps the keyword\'s turn', async () => {
+  const box = memoryWalk({ p1: { lastKeyword: 'a' }, p2: { lastKeyword: 'a' }, p3: { lastKeyword: 'a' } });
+  const asked = [];
+  const res = await searchDue.runNotesSearchDue({
+    ...box.deps,
+    now: () => NOW,
+    projectTimeZone: async () => 'UTC',
+    discover: async () => ({ ok: true, data: ['p1', 'p2', 'p3'].map((projectId) => ({ projectId, userId: 'u', keywords: ['a', 'b', 'c'] })) }),
+    search: async (input, scope) => {
+      asked.push([scope.projectId, input.keyword]);
+      if (scope.projectId === 'p2') return { ok: false, status: 409, error: 'not now' };
+      if (scope.projectId === 'p3') return { ok: false, status: 502, error: 'browser down' };
+      return { ok: true, data: { keyword: input.keyword } };
+    },
+    suggest: async () => ({ ok: true, data: {} }),
+  });
+  assert.deepEqual(asked, [['p1', 'b'], ['p2', 'b'], ['p3', 'b']]);
+  assert.equal(box.walk.p1.lastKeyword, 'b');
+  assert.equal(box.walk.p2.lastKeyword, 'a', 'not now: b waits for the next pass');
+  assert.equal(box.walk.p3.lastKeyword, 'a', 'failed: b waits for the next pass');
+  assert.equal(res.data.searched, 1);
+});
+
+test('a walk that cannot be saved is a failure, or every pass would search the same keyword', async () => {
+  const res = await searchDue.runNotesSearchDue({
+    readWalk: () => ({ walk: {}, note: '' }),
+    writeWalk: () => ({ ok: false, error: 'The keyword walk could not be saved to X: EACCES' }),
+    now: () => NOW,
+    projectTimeZone: async () => 'UTC',
+    discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u', keywords: ['a'] }] }),
+    search: async (input) => ({ ok: true, data: { keyword: input.keyword } }),
+    suggest: async () => ({ ok: true, data: {} }),
+  });
+  assert.equal(res.data.failed, 1);
+  assert.match(searchDue.formatSearchDueLog(res.data, { formatSearchSummary: () => 's' }), /WALK NOT SAVED: .*EACCES/);
+});
+
+test('the walk file: missing is a first pass, unreadable starts again and says so, and a save reads back', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'notes-walk-'));
+  try {
+    const file = path.join(dir, 'nested', 'walk.json');
+    assert.deepEqual(searchDue.readWalk({ file }), { walk: {}, note: '' });
+    assert.equal(searchDue.writeWalk({ p1: { lastKeyword: 'b' } }, { file }).ok, true);
+    assert.equal(searchDue.readWalk({ file }).walk.p1.lastKeyword, 'b');
+    fs.writeFileSync(file, '{not json');
+    const broken = searchDue.readWalk({ file });
+    assert.deepEqual(broken.walk, {});
+    assert.match(broken.note, /starting it again at the first keyword/);
+    assert.match(searchDue.walkFile('/Users/x'), /Application Support\/starcaster\/substack-notes-search-walk\.json$/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a pass that searched nothing is not a clean pass: it exits 4 and the runner records no beat for it', async () => {
+  const res = await searchDue.runNotesSearchDue({
+    ...memoryWalk().deps,
+    now: () => NOW,
+    projectTimeZone: async () => 'UTC',
+    discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u', keywords: ['a'] }] }),
+    search: async () => ({ ok: false, status: 409, error: 'outside the active hours' }),
+    suggest: async () => ({ ok: true, data: {} }),
+  });
+  assert.equal(res.data.searched, 0);
+  assert.equal(res.data.failed, 0);
+  assert.match(searchDue.formatSearchDueLog(res.data, { formatSearchSummary: () => 's' }), /Nothing was searched this pass, so no beat/);
+  const script = fs.readFileSync(path.join(ROOT, 'scripts/substack_notes_search_due.mjs'), 'utf8');
+  assert.match(script, /process\.exit\(run\.data\.searched \? 0 : NOTHING_SEARCHED\)/);
+  assert.match(script, /const NOTHING_SEARCHED = 4;/);
+  const runner = fs.readFileSync(path.join(ROOT, 'scripts/run_substack_notes_search.sh'), 'utf8');
+  const branch = runner.match(/elif \[ "\$status" -eq 4 \]; then\n([\s\S]*?)\nelse/);
+  assert.ok(branch, 'the runner has its own branch for exit 4');
+  assert.doesNotMatch(branch[1], /heartbeat|report:failure/, 'exit 4 neither beats nor posts a failure');
 });
 
 test('Suggest runs after every successful search; a refused search is a failure, not "found nothing"', async () => {
   const suggested = [];
   const res = await searchDue.runNotesSearchDue({
+    ...memoryWalk().deps,
     now: () => NOW,
     projectTimeZone: async () => 'UTC',
     discover: async () => ({ ok: true, data: [
@@ -327,20 +460,4 @@ test('the Find conversations stage says how many, and is CANNOT TELL — never "
   assert.match(quiet.sentence, /^Nothing new to reply to\. All 4/);
   const broken = await conversationsStage({ listSubstackConversations: async () => ({ ok: false, error: 'db down' }) }, SCOPE, next);
   assert.equal(broken.state, 'cannot_tell');
-});
-
-test('the scheduled search itself walks the keywords by six-hour pass, not by the hour', async () => {
-  const searched = [];
-  const words = ['a', 'b', 'c', 'd'];
-  for (let i = 0; i < 4; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
-    await searchDue.runNotesSearchDue({
-      now: () => i * searchDue.PASS_PERIOD_MS,
-      projectTimeZone: async () => 'UTC',
-      discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u', keywords: words }] }),
-      search: async (input) => { searched.push(input.keyword); return { ok: false, status: 409, error: 'not now' }; },
-      suggest: async () => ({ ok: true, data: {} }),
-    });
-  }
-  assert.deepEqual([...searched].sort(), words, 'four passes, four different keywords');
 });

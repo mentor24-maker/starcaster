@@ -16,14 +16,20 @@
  * if a saved setting would send the gateway token anywhere else
  * (workers/youtube-outreach/poster.js configureOpenClaw).
  *
- * Exit: 0 every project searched or not due (outside its active hours), 1 a
- * search refused or failed for at least one project — signed out, the browser
- * down, an answer it could not read — or the project list could not be read.
- * A failed search is never "found nothing": the runner records no beat for it.
+ * Exit: 0 at least one project searched and none failed; 1 a search refused or
+ * failed for at least one project — signed out, the browser down, an answer it
+ * could not read — or the project list or the keyword walk could not be read or
+ * saved; 4 NOTHING was searched (every project outside its active hours, or no
+ * project has keywords). A failed search is never "found nothing", and a pass
+ * that searched nothing is not a clean pass: the runner records no beat for
+ * either, so a schedule that never searches goes stale on the roll call.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+
+/** Nothing was due: no beat, and no failure post either. */
+const NOTHING_SEARCHED = 4;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -56,4 +62,5 @@ if (!run.ok) {
   process.exit(1);
 }
 console.log(formatSearchDueLog(run.data, { formatSearchSummary }));
-process.exit(run.data.failed ? 1 : 0);
+if (run.data.failed) process.exit(1);
+process.exit(run.data.searched ? 0 : NOTHING_SEARCHED);

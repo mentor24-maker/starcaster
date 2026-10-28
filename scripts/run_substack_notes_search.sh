@@ -11,6 +11,10 @@
 # value is ever written to the plist, the disk or the log.
 #
 #   exit 0     -> a beat for `substack-notes-search` (clears its failure alarm)
+#   exit 4     -> nothing was searched (every project outside its active hours,
+#                 or no keywords anywhere): NO beat and no failure post. A
+#                 schedule that never searches must go stale on the roll call
+#                 (`npm run heartbeat -- --stale-check`), not read as healthy.
 #   otherwise  -> one bus post per 6 hours (scripts/report_job_failure.mjs)
 #
 # A machine that does not own the role exits 3 having done nothing, and records
@@ -41,6 +45,8 @@ doppler run --scope "$DOPPLER_SCOPE" --project starcaster --config "$DOPPLER_CON
 
 if [ "$status" -eq 0 ]; then
   npm run --silent heartbeat -- --beat --role "$ROLE" || true
+elif [ "$status" -eq 4 ]; then
+  echo "=== $ROLE: nothing was searched this pass — no beat recorded"
 else
   echo "=== $ROLE pass exited $status"
   npm run --silent report:failure -- --job "$ROLE" --status "$status" --log "$LOG" || true

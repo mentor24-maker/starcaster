@@ -15,7 +15,12 @@ import ReasonPicker, { type RejectReason } from './reason-picker';
  *
  * A reading that has not come back says "Cannot tell" and names the writers —
  * an empty list is never drawn as "0 found" unless every approved writer was
- * read in the last week (lib/substackConversations.js readingVerdict).
+ * read in the last 8 days (lib/substackConversations.js readingVerdict).
+ *
+ * The count above the list is the stage's sentence, which the wizard reads
+ * from the overview. So every action that changes the list calls `onChanged`
+ * for the wizard to re-read it, and the wizard hands the new overview's time
+ * back as `version` — the list then re-reads too, in place, keeping its notice.
  */
 
 export const CONVERSATIONS_PATH = '/api/outreach/substack/conversations';
@@ -65,12 +70,29 @@ export function replyLabel(c: Conversation): string {
   return 'Write replies';
 }
 
+/**
+ * What to say once the reply call answers. `drafted: false` means the reply was
+ * already a draft and nothing new was written — saying "Replies written" then
+ * would claim work that did not happen.
+ */
+export function replyNotice(c: Conversation, reply: Record<string, any> | null | undefined): string {
+  if (reply?.data?.drafted === false) return `Already drafted — open ${c.writer.name}'s reply on the Substack Notes screen.`;
+  return `Replies written for ${c.writer.name}'s Note — choose one on the Substack Notes screen.`;
+}
+
+type Props = {
+  /** Something on the list changed: re-read the stage sentence above it. */
+  onChanged?: () => void;
+  /** The overview's time; a new one re-reads the list in place. */
+  version?: string;
+};
+
 function excerpt(text: string): string {
   const t = String(text || '').replace(/\s+/g, ' ').trim();
   return t.length > 280 ? `${t.slice(0, 277)}…` : t;
 }
 
-export default function SubstackConversations(): React.ReactElement {
+export default function SubstackConversations({ onChanged, version }: Props = {}): React.ReactElement {
   const [data, setData] = useState<ConversationsReply | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -102,7 +124,7 @@ export default function SubstackConversations(): React.ReactElement {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, version]);
 
   const post = async (path: string, body: unknown, method = 'POST') => {
     const api = getApp()?.api;
@@ -114,11 +136,11 @@ export default function SubstackConversations(): React.ReactElement {
     setBusy({ url: c.url, action: 'reply' });
     setRowError(null);
     try {
-      await post(`${CONVERSATIONS_PATH}/reply`, { url: c.url });
-      setNotice(`Replies written for ${c.writer.name}'s Note — choose one on the Substack Notes screen.`);
+      const reply = await post(`${CONVERSATIONS_PATH}/reply`, { url: c.url });
+      setNotice(replyNotice(c, reply));
       const app = getApp();
       if (typeof app?.setActivePage === 'function') app.setActivePage(NOTES_PAGE);
-      void load();
+      onChanged?.();
     } catch (err) {
       setRowError({ url: c.url, message: `No replies written: ${errorText(err, 'unknown error')}` });
     } finally {
@@ -136,6 +158,7 @@ export default function SubstackConversations(): React.ReactElement {
       setSkipping(null);
       setNotice(`Skipped ${c.writer.name}'s Note${why.reasons.length ? ` (${why.reasons.join(', ')})` : ''}.`);
       setData((d) => (d ? { ...d, items: d.items.filter((i) => i.url !== c.url), newCount: Math.max(0, d.newCount - 1) } : d));
+      onChanged?.();
     } catch (err) {
       setRowError({ url: c.url, message: `Not skipped: ${errorText(err, 'unknown error')}` });
     } finally {
@@ -149,7 +172,7 @@ export default function SubstackConversations(): React.ReactElement {
     try {
       await post(`${MINER_CANDIDATES_PATH}/${encodeURIComponent(c.writer.id)}`, { status: 'approved' }, 'PATCH');
       setNotice(`${c.writer.name} is approved — their Notes are read on the next scheduled pass.`);
-      void load();
+      onChanged?.();
     } catch (err) {
       setRowError({ url: c.url, message: `${c.writer.name} was not added: ${errorText(err, 'unknown error')}` });
     } finally {

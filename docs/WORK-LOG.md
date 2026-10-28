@@ -14,7 +14,11 @@ canon words it uses, and how many replies it already has. Each Note has
 why) and, for a writer a keyword found, **Add writer**. If a writer could
 not be read, the stage says "Cannot tell" and names them, rather than
 showing an empty list as "0 found". After merge, the Mini's schedule is
-installed with one script from its main folder.
+installed with one script from its main folder. The six-hourly search takes
+one keyword per pass and moves to the next only after a pass that actually
+searched, so a keyword can no longer get stuck on the overnight slot and never
+be searched; and a pass that searched nothing records no "all is well" beat,
+so a schedule that never searches shows up as stale instead of healthy.
 
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
