@@ -1,3 +1,19 @@
+## 2026-10-28 — Outreach drafts now learn from Dane's choices, as lessons he can read and change (#886)
+
+Every time Dane approved, edited or rejected an outreach draft, the reason was
+recorded — but the AI writer never looked at it, so it kept making the same
+mistakes. Now Starcaster turns those decisions into short, plain lessons such as
+"Never sound like you are selling something", and every new YouTube comment,
+Substack Note and Reddit comment is written following the ones that are on. The
+Outreach wizard's Learn stage lists them: each can be switched off, edited,
+deleted, or asked "Why", which shows the exact decisions it came from. Dane can
+add his own, for one channel or all of them. Lessons are suggested again after
+every five decisions, or with the Refresh Lessons button, and a refresh never
+brings back one he switched off or overwrites one he edited. The stage also
+shows a score — how many of the last 20 drafts he approved without changing a
+word — so he can see whether it is improving. One SQL file must be run before
+release; until then, writing a draft is refused with a message naming it.
+
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
 Rejecting a draft comment or Note used to throw it away with no record of
