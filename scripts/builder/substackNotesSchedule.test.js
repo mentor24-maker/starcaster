@@ -17,6 +17,7 @@ const path = require('path');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SETUP_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8');
 const SWITCH_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_auto_topic_drafts.sql'), 'utf8');
+const OPTIONS_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 const schedule = require('../../lib/substackNotesSchedule.js');
@@ -172,7 +173,7 @@ test('a topic drafted in the last 7 days waits while another has not been', () =
 // ── The pass, against the fake database ────────────────────────────────────
 
 function withDb() {
-  const db = createFakeDb(parseSchemaText(`${SETUP_SQL}\n${SWITCH_SQL}`));
+  const db = createFakeDb(parseSchemaText(`${SETUP_SQL}\n${SWITCH_SQL}\n${OPTIONS_SQL}`));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
@@ -197,7 +198,7 @@ function writer() {
   const generate = async (system, prompt) => {
     asked.push(prompt);
     const topic = (/night sky|living off grid/.exec(prompt) || ['something'])[0];
-    return { ok: true, text: JSON.stringify({ text: `A short Note about ${topic}, written for the test.` }) };
+    return { ok: true, text: JSON.stringify({ options: [1, 2, 3].map((n) => ({ angle: `angle ${n}`, text: `A short Note about ${topic}, written for the test (${n}).` })) }) };
   };
   return { generate, asked };
 }
@@ -258,6 +259,22 @@ test('before the 5/7 SQL runs, every other setting still saves and the switch sa
     if (realSupabase) require.cache[supabasePath] = realSupabase;
     else delete require.cache[supabasePath];
     for (const p of [projectScopePath, storePath, runDuePath]) delete require.cache[p];
+  }
+});
+
+test('a topic draft the scheduled pass writes arrives with three options to choose from (11/19)', async () => {
+  const { store, runDue, restore } = withDb();
+  try {
+    await store.saveSettings(settings(), SCOPE_A);
+    const pass = await runDue.runDue({ ...PASS, generate: writer().generate });
+    assert.equal(pass.ok, true, pass.error);
+    assert.ok(pass.data.drafted.length >= 1, JSON.stringify(pass.data));
+    const written = await store.getItemById(pass.data.drafted[0].itemId, SCOPE_A);
+    assert.equal(written.data.status, 'draft');
+    assert.deepEqual(written.data.draftOptions.map((o) => o.angle), ['angle 1', 'angle 2', 'angle 3']);
+    assert.ok(written.data.draftOptions.every((o) => o.text && o.rule.ok));
+  } finally {
+    restore();
   }
 });
 

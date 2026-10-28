@@ -16,7 +16,7 @@
  * Drafts and approval (3/7, task 86bcet6pa — lib/substackNotesDrafter.js):
  *
  *   POST   /api/engage/substack-notes/items/:id/draft     write a draft (AI); "Write another" too
- *   POST   /api/engage/substack-notes/items/:id/approve   { text? }  (edited wording)
+ *   POST   /api/engage/substack-notes/items/:id/approve   { text?, option? }  (edited wording, and which of the three he picked — 11/19)
  *   POST   /api/engage/substack-notes/items/:id/reject
  *
  * Topic drafts on a timer (5/7, task 86bcet77n — lib/substackNotesRunDue.js):

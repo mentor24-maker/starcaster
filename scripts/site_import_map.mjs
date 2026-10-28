@@ -61,6 +61,7 @@ import crypto from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { mainCheckoutDir } from './lib/main_checkout.mjs';
+import { copyPromotedAssets, SourceUnreachableError } from './lib/site_import_copy.mjs';
 import { createRequire } from 'node:module';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -167,9 +168,14 @@ async function fetchJson(url) {
 }
 
 async function copyBlob(fromUrl, toPathname, mimeType) {
-  const res = await fetch(fromUrl, { signal: AbortSignal.timeout(60000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} copying ${fromUrl}`);
-  const buffer = Buffer.from(await res.arrayBuffer());
+  let buffer;
+  try {
+    const res = await fetch(fromUrl, { signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    buffer = Buffer.from(await res.arrayBuffer());
+  } catch (err) {
+    throw new SourceUnreachableError(`${err.message || err} copying ${fromUrl}`);
+  }
   const up = await uploadBufferToBlobAtPath({ pathname: toPathname, mimeType, fileBuffer: buffer });
   return must(up, `Blob copy to ${toPathname}`).location;
 }
@@ -351,10 +357,10 @@ async function main() {
     if (urlMap.has(crop.fromUrl)) continue;
     urlMap.set(crop.fromUrl, await copyBlob(crop.fromUrl, `${applied}/crops/${crop.sourceId}.png`, 'image/png'));
   }
-  for (const asset of out.copyPlan.assets) {
-    if (!asset.fromUrl || urlMap.has(asset.fromUrl)) continue;
-    const ext = (asset.fromUrl.match(/\.([a-z0-9]{2,5})(?:\?|$)/i) || [])[1] || 'bin';
-    urlMap.set(asset.fromUrl, await copyBlob(asset.fromUrl, `${applied}/assets/${asset.assetId}.${ext}`, asset.mimeType || 'application/octet-stream'));
+  const uncopyable = await copyPromotedAssets(out.copyPlan.assets, copyBlob, applied, urlMap);
+  if (uncopyable.length) {
+    log(`${uncopyable.length} image(s) could not be copied — the original site refused them; they keep their original address:`);
+    for (const s of uncopyable) log(`  ${s.fromUrl}  (${s.reason})`);
   }
   const overflowUrls = new Map();
   for (const overflow of out.copyPlan.sourceOverflows) {
