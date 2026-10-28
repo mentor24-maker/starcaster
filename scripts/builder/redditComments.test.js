@@ -22,6 +22,7 @@ const path = require('path');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SQL_FILES = ['reddit_comments_setup.sql', 'reddit_comments_posting.sql', 'reddit_comments_browser_read.sql'];
 const OPTIONS_SQL_FILE = 'reddit_comments_draft_options.sql';
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
@@ -79,7 +80,7 @@ const CANON = [
 function schemaText({ withOptions = true } = {}) {
   const grant = /\ndo \$\$[\s\S]*?end \$\$;\s*$/i;
   const files = withOptions ? [...SQL_FILES, OPTIONS_SQL_FILE] : SQL_FILES;
-  return files.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')).join('\n');
+  return [...files.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')), lessonsSql(['reddit_comment_items'])].join('\n');
 }
 
 /**
@@ -821,4 +822,50 @@ test('every option dropped is a 422 naming each reason; no answer at all is a 50
 test('droppedSentence counts in words', () => {
   assert.equal(draftOptions.droppedSentence([]), '');
   assert.equal(draftOptions.droppedSentence([{ reason: 'r1' }, { reason: 'r2' }]), 'Two options were dropped: r1; r2.');
+});
+
+// ── Lessons (Outreach wizard 13/19, 86bcrmbpm) ─────────────────────────────
+
+test('reddit: a draft is written with the lessons that are ON, after the canon, and records them as lessons_used', async () => {
+  const ctx = withDb();
+  const lessons = require('../../lib/outreachLessons');
+  try {
+    const mine = await lessons.createLesson({ channel: 'reddit', text: 'Never open with a compliment.' }, SCOPE_A);
+    const everywhere = await lessons.createLesson({ channel: 'all', text: 'End on a question.' }, SCOPE_A);
+    const off = await lessons.createLesson({ channel: 'reddit', text: 'Mention the weather.' }, SCOPE_A);
+    const elsewhere = await lessons.createLesson({ channel: 'youtube', text: 'Two sentences at most.' }, SCOPE_A);
+    for (const r of [mine, everywhere, off, elsewhere]) assert.equal(r.ok, true, r.error);
+    assert.equal((await lessons.updateLesson(off.data.id, { enabled: false }, SCOPE_A)).ok, true);
+    const item = await addFromReddit(ctx.store);
+    const model = scripted(GOOD);
+    const drafted = await ctx.store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.ok, true, drafted.error);
+    const system = model.asked[0].system;
+    assert.match(system, /HOW DANE WRITES[\s\S]*LESSONS FROM DANE'S PAST CHOICES[^\n]*\n- End on a question\.\n- Never open with a compliment\./);
+    // BREAK TEST: a lesson switched off, or another channel's, never reaches the prompt.
+    assert.doesNotMatch(system, /Mention the weather/);
+    assert.doesNotMatch(system, /Two sentences at most/);
+    const back = await ctx.store.getItemById(item.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, [
+      { id: everywhere.data.id, text: 'End on a question.' },
+      { id: mine.data.id, text: 'Never open with a compliment.' },
+    ]);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('reddit: with no lessons the prompt has no lessons heading, and the draft records an empty list', async () => {
+  const ctx = withDb();
+  try {
+    const item = await addFromReddit(ctx.store);
+    const model = scripted(GOOD);
+    const drafted = await ctx.store.writeDraftForItem(item.id, SCOPE_A, { generate: model.generate, canonDocs: CANON });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.doesNotMatch(model.asked[0].system, /LESSONS FROM DANE/);
+    const back = await ctx.store.getItemById(item.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, []);
+  } finally {
+    ctx.restore();
+  }
 });

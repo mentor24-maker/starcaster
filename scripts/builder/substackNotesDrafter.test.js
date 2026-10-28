@@ -18,6 +18,7 @@ const fs = require('fs');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SETUP_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8');
 const OPTIONS_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon, CANON_DOCS } = require('./canonFixture.js');
 const { prepareCanon } = require('../../lib/canonPrompt.js');
@@ -33,7 +34,7 @@ const NOTE_URL = 'https://substack.com/@someone/note/c-12345';
 const GOOD = 'Winter air is drier, so the stars look sharper. I stood outside for an hour last night and it felt like the sky had moved closer.';
 
 function withDb({ withOptionsSql = true } = {}) {
-  const db = createFakeDb(parseSchemaText(withOptionsSql ? `${SETUP_SQL}\n${OPTIONS_SQL}` : SETUP_SQL));
+  const db = createFakeDb(parseSchemaText(`${withOptionsSql ? `${SETUP_SQL}\n${OPTIONS_SQL}` : SETUP_SQL}\n${lessonsSql(['substack_notes_items'])}`));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
@@ -506,5 +507,51 @@ test('without docs/SQL/substack_notes_draft_options.sql, Write a draft refuses a
     assert.equal((await store.getItemById(idea.id, SCOPE_A)).data.status, 'idea');
   } finally {
     restore();
+  }
+});
+
+// ── Lessons (Outreach wizard 13/19, 86bcrmbpm) ─────────────────────────────
+
+test('substack: a draft is written with the lessons that are ON, after the canon, and records them as lessons_used', async () => {
+  const ctx = withDb();
+  const lessons = require('../../lib/outreachLessons');
+  try {
+    const mine = await lessons.createLesson({ channel: 'substack', text: 'Never open with a compliment.' }, SCOPE_A);
+    const everywhere = await lessons.createLesson({ channel: 'all', text: 'End on a question.' }, SCOPE_A);
+    const off = await lessons.createLesson({ channel: 'substack', text: 'Mention the weather.' }, SCOPE_A);
+    const elsewhere = await lessons.createLesson({ channel: 'reddit', text: 'Two sentences at most.' }, SCOPE_A);
+    for (const r of [mine, everywhere, off, elsewhere]) assert.equal(r.ok, true, r.error);
+    assert.equal((await lessons.updateLesson(off.data.id, { enabled: false }, SCOPE_A)).ok, true);
+    const idea = await addIdea(ctx.store);
+    const model = scripted(GOOD);
+    const drafted = await ctx.store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate });
+    assert.equal(drafted.ok, true, drafted.error);
+    const system = model.asked[0].system;
+    assert.match(system, /HOW DANE WRITES[\s\S]*LESSONS FROM DANE'S PAST CHOICES[^\n]*\n- End on a question\.\n- Never open with a compliment\./);
+    // BREAK TEST: a lesson switched off, or another channel's, never reaches the prompt.
+    assert.doesNotMatch(system, /Mention the weather/);
+    assert.doesNotMatch(system, /Two sentences at most/);
+    const back = await ctx.store.getItemById(idea.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, [
+      { id: everywhere.data.id, text: 'End on a question.' },
+      { id: mine.data.id, text: 'Never open with a compliment.' },
+    ]);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('substack: with no lessons the prompt has no lessons heading, and the draft records an empty list', async () => {
+  const ctx = withDb();
+  try {
+    const idea = await addIdea(ctx.store);
+    const model = scripted(GOOD);
+    const drafted = await ctx.store.writeDraftForItem(idea.id, SCOPE_A, { generate: model.generate });
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.doesNotMatch(model.asked[0].system, /LESSONS FROM DANE/);
+    const back = await ctx.store.getItemById(idea.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, []);
+  } finally {
+    ctx.restore();
   }
 });

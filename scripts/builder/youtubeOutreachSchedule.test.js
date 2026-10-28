@@ -18,6 +18,7 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
 const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 
@@ -122,7 +123,7 @@ test('"today" for the daily maximum is the account\'s own calendar day', () => {
 // ── The pass, against the fake database ─────────────────────────────────────
 
 function withDb() {
-  const schema = parseSchemaText(`${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}`);
+  const schema = parseSchemaText(`${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}\n${lessonsSql(['youtube_outreach_comments'])}`);
   const db = createFakeDb(schema);
   const fakeSupabase = {
     isConfigured: () => true,

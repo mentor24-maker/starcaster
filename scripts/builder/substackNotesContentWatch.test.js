@@ -20,6 +20,7 @@ const path = require('path');
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'substack-notes');
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 
@@ -39,6 +40,7 @@ function sqlText({ withWatchSql = true } = {}) {
   const parts = [fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8')];
   if (withWatchSql) parts.push(fs.readFileSync(path.join(SQL_DIR, 'substack_notes_content_unique.sql'), 'utf8'));
   parts.push(fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8'));
+  parts.push(lessonsSql(['substack_notes_items']));
   return parts.join('\n');
 }
 
