@@ -1074,6 +1074,7 @@ type StyleEvidence = {
   backgroundsByArea: TokenTally;
   headerBackgrounds: TokenTally;
   buttons: TokenTally;
+  buttonsByGround: TokenTally;
   contentWidths: TokenTally;
 };
 
@@ -1084,6 +1085,7 @@ function newStyleEvidence(): StyleEvidence {
     backgroundsByArea: new Map(),
     headerBackgrounds: new Map(),
     buttons: new Map(),
+    buttonsByGround: new Map(),
     contentWidths: new Map(),
   };
 }
@@ -1140,6 +1142,19 @@ function collectStyleEvidence(desktop: CaptureResult, ev: StyleEvidence): void {
       const radius = Math.round(parseFloat(st["border-radius"] || "0") || 0);
       const fill = isClearColor(bg) ? "" : bg;
       tally(ev.buttons, `${fill}|${st.color || ""}|${radius}`);
+      // What the button SAT ON: the nearest painted ancestor, else the page.
+      // One theme button colour cannot suit both a dark band and a white
+      // section (Alphire, task 86bctakk0), so the theme needs to know which
+      // look went on which ground.
+      let ground = "";
+      $(node).parents("[data-scim]").each((_, parent) => {
+        if (ground) return;
+        const parentKey = ((parent as { attribs?: Record<string, string> }).attribs || {})["data-scim"];
+        const parentBg = (styles[parentKey] || {})["background-color"];
+        if (!isClearColor(parentBg)) ground = parentBg;
+      });
+      if (!ground && desktop.pageBackground && !isClearColor(desktop.pageBackground)) ground = desktop.pageBackground;
+      if (ground) tally(ev.buttonsByGround, `${fill}|${st.color || ""}|${ground}`);
     }
     if (r && CONTAINER_HINT.test(hint) && r[2] >= 480) {
       tally(ev.contentWidths, String(Math.round(r[2] / 10) * 10));
@@ -1153,6 +1168,7 @@ function styleEvidenceToSummary(ev: StyleEvidence): StyleSummary {
     backgroundsByArea: tallyToTokens(ev.backgroundsByArea),
     headerBackgrounds: tallyToTokens(ev.headerBackgrounds),
     buttons: tallyToTokens(ev.buttons),
+    buttonsByGround: tallyToTokens(ev.buttonsByGround),
     contentWidths: tallyToTokens(ev.contentWidths),
   };
 }

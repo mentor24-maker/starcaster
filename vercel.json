@@ -60,6 +60,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/acquire/substack-miner/read-notes-due",
+      "schedule": "7 */2 * * *"
+    },
+    {
       "path": "/api/support/bug-reports/sweep-orphans",
       "schedule": "17 4 * * *"
     }

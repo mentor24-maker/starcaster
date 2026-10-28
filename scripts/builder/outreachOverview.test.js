@@ -60,6 +60,16 @@ function fakeDeps(overrides = {}) {
     outreachAccounts: {
       getAccount: async (site) => ok(account(site, ACCOUNTS[site])),
     },
+    // Outreach wizard 13/19: two lessons on and one off on every channel.
+    outreachLessons: {
+      REFRESH_EVERY: 5,
+      learnView: async (channel) => ok({
+        channel,
+        lessons: [{ enabled: true }, { enabled: true }, { enabled: false }],
+        score: { unedited: 6, counted: 20, window: 20, sentence: 'Approved without edits, last 20: 6 of 20.' },
+        scoreError: '',
+      }),
+    },
     ...overrides,
   };
 }
@@ -80,7 +90,9 @@ test('every channel has the five stages, in order, each with a known state and o
     for (const st of ch.stages) {
       assert.ok(overview.STATES.includes(st.state), `${ch.key}/${st.key} state ${st.state}`);
       assert.ok(st.sentence && st.sentence.length > 10, `${ch.key}/${st.key} has no sentence`);
-      assert.ok(st.next && st.next.label && Object.values(overview.PAGES).includes(st.next.page), `${ch.key}/${st.key} next ${JSON.stringify(st.next)}`);
+      // Learn's controls are on the wizard itself (13/19), so it opens no other screen.
+      if (st.key === 'learn') assert.equal(st.next, null, `${ch.key}/learn next ${JSON.stringify(st.next)}`);
+      else assert.ok(st.next && st.next.label && Object.values(overview.PAGES).includes(st.next.page), `${ch.key}/${st.key} next ${JSON.stringify(st.next)}`);
     }
   }
 });
@@ -269,4 +281,42 @@ test('the account routes: choose, check now and Reddit pace reach the store with
   const r6 = fakeRes();
   await route.handle(req(), r6, '/api/outreach/accounts/reddit/check', 'GET', { accounts: fake });
   assert.equal(r6.statusCode, 405);
+});
+
+// ── Outreach wizard 13/19 (86bcrmbpm): the Learn stage ─────────────────────
+
+function learnWith(view) {
+  return fakeDeps({ outreachLessons: { REFRESH_EVERY: 5, learnView: async (channel) => view(channel) } });
+}
+
+test('Learn: lessons on is done, and says how many are on, how many are off, and the score', async () => {
+  const result = await overview.buildOverview(scope, { deps: fakeDeps(), now: NOW });
+  const learn = find(result, 'reddit', 'learn');
+  assert.equal(learn.state, 'done');
+  assert.equal(learn.sentence, 'Drafts are written with 2 lessons (1 switched off). Approved without edits, last 20: 6 of 20.');
+});
+
+test('Learn: no lessons and fewer than five decisions is not started, naming the count', async () => {
+  const deps = learnWith(() => ok({ lessons: [], score: { unedited: 1, counted: 3, window: 20, sentence: 'x' }, scoreError: '' }));
+  const learn = find(await overview.buildOverview(scope, { deps, now: NOW }), 'youtube', 'learn');
+  assert.equal(learn.state, 'not_started');
+  assert.match(learn.sentence, /No lessons yet\. 3 decisions recorded; lessons are suggested after every 5/);
+});
+
+test('Learn: decisions enough to learn from and no lesson on needs Dane, and names the off ones', async () => {
+  const deps = learnWith(() => ok({
+    lessons: [{ enabled: false }],
+    score: { unedited: 2, counted: 9, window: 20, sentence: 'Approved without edits, last 9 (all there are so far): 2 of 9.' },
+    scoreError: '',
+  }));
+  const learn = find(await overview.buildOverview(scope, { deps, now: NOW }), 'substack', 'learn');
+  assert.equal(learn.state, 'needs_you');
+  assert.match(learn.sentence, /No lessons are on\. 1 lesson is switched off\. Approved without edits, last 9 \(all there are so far\): 2 of 9\. Click Refresh lessons/);
+});
+
+test('Learn: lessons that cannot be read are Cannot tell, never done', async () => {
+  const deps = learnWith(() => ({ ok: false, status: 500, error: 'relation outreach_lessons does not exist — run docs/SQL/outreach_lessons_setup.sql' }));
+  const learn = find(await overview.buildOverview(scope, { deps, now: NOW }), 'reddit', 'learn');
+  assert.equal(learn.state, 'cannot_tell');
+  assert.match(learn.sentence, /^Cannot tell\. The lessons could not be read: .*outreach_lessons_setup\.sql/);
 });

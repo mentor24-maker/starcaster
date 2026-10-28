@@ -19,6 +19,7 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const TARGETS_SQL = path.join(SQL_DIR, 'youtube_outreach_setup.sql');
 const COMMENTS_SQL = path.join(SQL_DIR, 'youtube_outreach_comments_setup.sql');
 const OPTIONS_SQL = path.join(SQL_DIR, 'youtube_outreach_draft_options.sql');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon, CANON_DOCS } = require('./canonFixture.js');
 const { prepareCanon } = require('../../lib/canonPrompt.js');
@@ -38,7 +39,8 @@ const GOOD_MEDIUM = 'The bit about practising the serve toss without a racket fi
 /** Both setup files, plus 10/19's option columns unless `withOptions` is false (the database before that SQL has run). */
 function schemaText({ withOptions = true } = {}) {
   const base = `${fs.readFileSync(TARGETS_SQL, 'utf8')}\n${fs.readFileSync(COMMENTS_SQL, 'utf8')}`;
-  return withOptions ? `${base}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}` : base;
+  const lessons = lessonsSql(['youtube_outreach_comments']);
+  return withOptions ? `${base}\n${fs.readFileSync(OPTIONS_SQL, 'utf8')}\n${lessons}` : `${base}\n${lessons}`;
 }
 
 async function fakeLookup(videoId) {
@@ -612,4 +614,50 @@ test('the options SQL only adds columns, with defaults, and is idempotent', () =
   const statements = sql.split('\n').filter((l) => l.trim() && !l.trim().startsWith('--'));
   for (const line of statements) assert.match(line, /^alter table public\.youtube_outreach_comments add column if not exists /);
   assert.doesNotThrow(() => parseSchemaText(`${schemaText()}\n${sql}`));
+});
+
+// ── Lessons (Outreach wizard 13/19, 86bcrmbpm) ─────────────────────────────
+
+test('youtube: a draft is written with the lessons that are ON, after the canon, and records them as lessons_used', async () => {
+  const ctx = withDb();
+  const lessons = require('../../lib/outreachLessons');
+  try {
+    const mine = await lessons.createLesson({ channel: 'youtube', text: 'Never open with a compliment.' }, SCOPE_A);
+    const everywhere = await lessons.createLesson({ channel: 'all', text: 'End on a question.' }, SCOPE_A);
+    const off = await lessons.createLesson({ channel: 'youtube', text: 'Mention the weather.' }, SCOPE_A);
+    const elsewhere = await lessons.createLesson({ channel: 'reddit', text: 'Two sentences at most.' }, SCOPE_A);
+    for (const r of [mine, everywhere, off, elsewhere]) assert.equal(r.ok, true, r.error);
+    assert.equal((await lessons.updateLesson(off.data.id, { enabled: false }, SCOPE_A)).ok, true);
+    const target = await addTarget(ctx.targets);
+    const model = scripted(GOOD_MEDIUM);
+    const drafted = await draft(ctx.comments, target.id, model);
+    assert.equal(drafted.ok, true, drafted.error);
+    const system = model.asked[0].system;
+    assert.match(system, /HOW DANE WRITES[\s\S]*LESSONS FROM DANE'S PAST CHOICES[^\n]*\n- End on a question\.\n- Never open with a compliment\./);
+    // BREAK TEST: a lesson switched off, or another channel's, never reaches the prompt.
+    assert.doesNotMatch(system, /Mention the weather/);
+    assert.doesNotMatch(system, /Two sentences at most/);
+    const back = await ctx.comments.getComment(drafted.data.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, [
+      { id: everywhere.data.id, text: 'End on a question.' },
+      { id: mine.data.id, text: 'Never open with a compliment.' },
+    ]);
+  } finally {
+    ctx.restore();
+  }
+});
+
+test('youtube: with no lessons the prompt has no lessons heading, and the draft records an empty list', async () => {
+  const ctx = withDb();
+  try {
+    const target = await addTarget(ctx.targets);
+    const model = scripted(GOOD_MEDIUM);
+    const drafted = await draft(ctx.comments, target.id, model);
+    assert.equal(drafted.ok, true, drafted.error);
+    assert.doesNotMatch(model.asked[0].system, /LESSONS FROM DANE/);
+    const back = await ctx.comments.getComment(drafted.data.id, SCOPE_A);
+    assert.deepEqual(back.data.lessonsUsed, []);
+  } finally {
+    ctx.restore();
+  }
 });
