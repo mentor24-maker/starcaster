@@ -1,3 +1,18 @@
+## 2026-10-28 — A report that lists what a site import lost, section by section (#892)
+
+Until now the only way to know what a site import got wrong was to put the
+original page and the imported one side by side and look. A new report does it
+for you: for every imported page it shows each section of the original next to
+a photo of the same section as imported, and lists underneath everything the
+import did not carry over, sorted into seven plain categories — background,
+decorative layers, shadows and glow, shapes, column layout, text styling, and
+files that were downloaded but never put on the page. Run against the Alphire
+import, it named the hero's glowing dark background as dropped, the hero
+picture as downloaded but never placed, the two-column hero as squashed into
+one, and the thin 300-weight heading as shown at the theme's 700. Where it
+cannot look — decorative layers the capture never records, or a page it could
+not photograph — it says CANNOT TELL instead of pretending nothing was lost.
+Every other fix in the site-import fidelity work will be measured with it.
 ## 2026-10-28 — Site Import notices when its compiled code is out of date (#889)
 
 The Site Import tools run from a compiled copy of the import engine. On
