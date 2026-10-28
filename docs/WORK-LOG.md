@@ -1,3 +1,18 @@
+## 2026-10-28 — YouTube gets a list of creators to approve or reject (#888)
+
+The Outreach screen's YouTube "Find creators" step used to say there was no
+list of creators — videos could only be added one link at a time. Now a
+**Find channels** button searches YouTube for Dane's subjects (starting from
+the Substack Miner's keywords), and shows each channel as a card with its
+picture, subscribers and three newest videos. Starcaster suggests Approve or
+Reject for each one, with a reason, from his past YouTube decisions and his
+canon; until he has decided a handful himself, every suggestion is marked low
+confidence. **Agree** takes the suggestion in one click, and Approve or Reject
+asks why, the same way the Substack Miner does. If YouTube's daily allowance
+runs out, the screen says so and when it comes back, rather than "nothing
+found". It needs one SQL file run before release. It also fixes a crash in
+Acquire's YouTube video list.
+
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
 Rejecting a draft comment or Note used to throw it away with no record of
