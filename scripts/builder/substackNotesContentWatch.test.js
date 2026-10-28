@@ -38,6 +38,7 @@ const lennyXml = fs.readFileSync(path.join(FIXTURES, 'substack-feed-lenny.xml'),
 function sqlText({ withWatchSql = true } = {}) {
   const parts = [fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8')];
   if (withWatchSql) parts.push(fs.readFileSync(path.join(SQL_DIR, 'substack_notes_content_unique.sql'), 'utf8'));
+  parts.push(fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8'));
   return parts.join('\n');
 }
 
@@ -89,7 +90,7 @@ const YT_URL = `https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}`;
 const SUB_URL = 'https://daneofearth.substack.com/feed';
 
 /** The AI, answering with a short clean Note every time. */
-const generate = async () => ({ ok: true, text: '{"text": "New piece out today, about building a company at sixty-four."}' });
+const generate = async () => ({ ok: true, text: JSON.stringify({ options: [1, 2, 3].map((n) => ({ angle: `angle ${n}`, text: `New piece out today, about building a company at sixty-four (${n}).` })) }) });
 
 async function saveSettings(store, extra = {}) {
   const saved = await store.saveSettings({ substackUrl: 'https://daneofearth.substack.com', youtubeChannelId: CHANNEL, maxActionsPerDay: 3, ...extra }, SCOPE);
