@@ -3,6 +3,8 @@ import { PROJECT_SWITCH_EVENT } from '../reddit-comments/reddit-comments-panel';
 import SignInWindow from './sign-in-window';
 import YoutubeCreators from './youtube-creators';
 import SubstackConversations from './substack-conversations';
+import RedditSubreddits from './reddit-subreddits';
+import RedditConversations from './reddit-conversations';
 import LearnControls from './learn-controls';
 
 export { PROJECT_SWITCH_EVENT };
@@ -30,7 +32,10 @@ export { PROJECT_SWITCH_EVENT };
  * lessons are read and changed right here (Outreach wizard 13/19, task
  * 86bcrmbpm, ./learn-controls.tsx), and YouTube's Find creators, whose
  * channel list is worked right here (Outreach wizard 15/19, task 86bcrmbrf,
- * ./youtube-creators.tsx). The first stage that is not done is open and
+ * ./youtube-creators.tsx), and Reddit's Find creators (the subreddits the
+ * Mini watches) and Find conversations (the ranked posts it found) —
+ * Outreach wizard 18/19, task 86bcrmbwm, ./reddit-subreddits.tsx and
+ * ./reddit-conversations.tsx. The first stage that is not done is open and
  * highlighted.
  *
  * The shape is the Engage panels' on purpose: it (re)loads when its page is
@@ -478,6 +483,13 @@ export default function OutreachWizardPanel(): React.ReactElement {
                 {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
                 {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
                   <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                ) : null}
+                {/* Outreach wizard 18/19: Reddit's watched subreddits and the posts found in them. */}
+                {s.key === 'creators' && current.key === 'reddit' && s.inline ? (
+                  <RedditSubreddits onChanged={() => void load()} />
+                ) : null}
+                {s.key === 'conversations' && current.key === 'reddit' && s.inline && s.state !== 'not_started' ? (
+                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} />
                 ) : null}
                 {s.key === 'learn' && s.state !== 'cannot_tell' ? (
                   <LearnControls key={current.key} channel={current.key} label={current.label} onChanged={() => void load()} />
