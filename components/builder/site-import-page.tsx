@@ -27,6 +27,7 @@ type Job = {
   sourceUrl: string;
   status: string;
   claimedBy: string;
+  claimedAt?: string | null;
   attempts: number;
   clientAuthorization: string;
   checkpoints: Record<
@@ -190,6 +191,51 @@ export function importStatus(job: Pick<Job, "status" | "checkpoints">): ImportSt
   const at = map.at ? new Date(map.at) : null;
   const day = at && !Number.isNaN(at.getTime()) ? ` on ${MOUNTAIN_DAY.format(at)}` : "";
   return { label: `Built ${pageCount} ${noun}${day}`, tone: "built", built: true, pageCount };
+}
+
+/** How long a queued import may wait before the screen says the worker is not running. */
+export const QUEUED_TOO_LONG_MS = 60 * 60 * 1000;
+
+function waitWords(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"}`;
+  return `${Math.floor(hours / 24)} days`;
+}
+
+/**
+ * What a queued job is waiting for, in words — or null when it is not waiting.
+ *
+ * alphire.agency sat "queued" here for 14 days (ticket 86bctakm0): nothing ran
+ * the worker, and the screen said only that the job "starts when the worker
+ * runs", which read as "soon". The worker now runs every five minutes on the
+ * Mac Mini, so a job waiting longer than an hour means it is NOT running, and
+ * the note says so plainly instead of leaving an unexplained "queued".
+ */
+export function queueWaitNote(
+  job: Pick<Job, "status" | "claimedAt" | "createdAt">,
+  now: number = Date.now()
+): { text: string; overdue: boolean } | null {
+  if (job.status !== "queued" || job.claimedAt) return null;
+  const created = job.createdAt ? Date.parse(job.createdAt) : NaN;
+  if (!Number.isFinite(created)) {
+    return {
+      text: "Waiting for the import worker, which has not picked this job up. When it was queued could not be read.",
+      overdue: true,
+    };
+  }
+  const waited = now - created;
+  if (waited <= QUEUED_TOO_LONG_MS) {
+    return {
+      text: `Waiting for the import worker — queued ${waitWords(waited)} ago. It checks for new imports every 5 minutes on the Mac Mini.`,
+      overdue: false,
+    };
+  }
+  return {
+    text: `Waiting for the import worker for ${waitWords(waited)}. It should pick a job up within minutes, so it is not running. The Mac Mini posts a notice on the bus about any import that waits over an hour.`,
+    overdue: true,
+  };
 }
 
 export type BuiltPageRow = { path: string; pageId: string; name: string; slug: string; missing: boolean };
@@ -383,7 +429,7 @@ export default function SiteImportPage() {
       const created = readEnvelopeObject<Job>(body, "job");
       setSourceUrl("");
       setStatus({
-        message: `Job ${created?.id ?? ""} queued. It starts when the worker runs on the operator's machine.`,
+        message: `Job ${created?.id ?? ""} queued. The import worker picks it up within about 5 minutes.`,
         isError: false,
       });
       await loadJobs();
@@ -415,6 +461,7 @@ export default function SiteImportPage() {
     ])
   ).sort();
   const jobStatus = job ? importStatus(job) : null;
+  const waitNote = job ? queueWaitNote(job) : null;
   const mapCp = job ? mapCheckpointOf(job) : null;
   const builtRows = mapCp ? builtPageRows(mapCp.pageIds, builderPages) : [];
   const failedAssets = (assets ?? []).filter((a) => a.status === "failed");
@@ -438,8 +485,7 @@ export default function SiteImportPage() {
         </button>
       </form>
       <p className="meta">
-        Queuing creates the job only. The capture runs from the operator&apos;s machine:&nbsp;
-        <code>doppler run --config prd -- node scripts/site_import_worker.mjs --watch</code>
+        The import worker runs on the Mac Mini every 5 minutes and picks up queued jobs on its own.
       </p>
       {status ? (
         <p className={`site-import-status${status.isError ? " is-error" : ""}`}>{status.message}</p>
@@ -488,6 +534,9 @@ export default function SiteImportPage() {
                 <p className="meta">Cancellation requested — waiting for the worker to reach a stage boundary.</p>
               ) : null}
               {job.error ? <p className="site-import-status is-error">{job.error}</p> : null}
+              {waitNote ? (
+                <p className={`site-import-status${waitNote.overdue ? " is-error" : ""}`}>{waitNote.text}</p>
+              ) : null}
 
               <div className="site-import-stages">
                 {["capture", "assets", "normalize"].map((stage) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { builtPageRows, importStatus, readEnvelopeList, readEnvelopeObject } from './site-import-page';
+import { builtPageRows, importStatus, queueWaitNote, readEnvelopeList, readEnvelopeObject } from './site-import-page';
 
 /**
  * Pins the envelope-reading behavior against the REAL server shape,
@@ -102,5 +102,38 @@ describe('builtPageRows — naming the pages the build step wrote', () => {
     expect(builtPageRows(pageIds, [{ id: '101', name: 'Home' }]).find((r) => r.path === '/about')?.missing).toBe(true);
     // An unread list (null) is "could not tell", never "deleted".
     expect(builtPageRows(pageIds, null).every((r) => !r.missing)).toBe(true);
+  });
+});
+
+/**
+ * Ticket 86bctakm0: alphire.agency sat "queued" for 14 days with nothing
+ * saying no worker was coming. The note must name the wait and, past an hour,
+ * say the worker is not running.
+ */
+describe('queueWaitNote', () => {
+  const NOW = Date.parse('2026-10-27T12:00:00Z');
+  const ago = (ms: number) => new Date(NOW - ms).toISOString();
+
+  it('says how long a fresh job has waited, without alarm', () => {
+    const note = queueWaitNote({ status: 'queued', claimedAt: null, createdAt: ago(3 * 60 * 1000) }, NOW);
+    expect(note?.overdue).toBe(false);
+    expect(note?.text).toMatch(/queued 3 minutes ago/);
+  });
+
+  it('says the worker is not running once a job has waited over an hour', () => {
+    const note = queueWaitNote({ status: 'queued', claimedAt: null, createdAt: ago(14 * 24 * 3600 * 1000) }, NOW);
+    expect(note?.overdue).toBe(true);
+    expect(note?.text).toMatch(/for 14 days/);
+    expect(note?.text).toMatch(/not running/);
+  });
+
+  it('says nothing about a job the worker has claimed or finished', () => {
+    expect(queueWaitNote({ status: 'queued', claimedAt: ago(0), createdAt: ago(3600 * 1000 * 5) }, NOW)).toBeNull();
+    expect(queueWaitNote({ status: 'capturing', claimedAt: ago(0), createdAt: ago(0) }, NOW)).toBeNull();
+    expect(queueWaitNote({ status: 'complete', claimedAt: null, createdAt: ago(0) }, NOW)).toBeNull();
+  });
+
+  it('a queued job with no readable date is still explained, never silent', () => {
+    expect(queueWaitNote({ status: 'queued', claimedAt: null, createdAt: null }, NOW)?.overdue).toBe(true);
   });
 });
