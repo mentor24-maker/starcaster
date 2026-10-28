@@ -1,3 +1,31 @@
+## 2026-10-27 — Substack drafts now come as three choices, like Reddit and YouTube (#879)
+
+When Dane asks for a Substack Note or a reply, he now gets three different
+versions side by side instead of one, the same picker Reddit and YouTube
+already have. The overnight automatic drafts come with three choices too, so
+anything waiting for his approval is ready to pick from. Each version is
+checked against the account's rules (length, links, words to avoid). One that
+breaks a rule is left out, and the card says which rule it broke. Clicking a
+version puts it in the edit box, and Approve records which one he chose. The
+box is labelled "Your Note" or "Your reply" (the shared picker used to say
+"Your comment", which is Reddit's word). This needs one small database
+change (`docs/SQL/substack_notes_draft_options.sql`). Until it runs, Write a
+draft stops and names that file.
+
+## 2026-10-27 — The Mini's sign-in window gets its internet route, and a check that nothing else is open (#874)
+
+Third piece of the sign-in window. There is now an installer that keeps the
+Mini's "door keeper" running all the time and gives it one public address
+path (`/live`), so Starcaster's server will be able to reach it. A separate
+check runs from the MacBook and tries every way in: from the internet, from
+the home network, and from the private Tailscale network. It confirms the
+door keeper shows nothing without a one-time pass, and that nothing else on
+the Mini answers. That check found a real gap. Anything on the Mini that
+should only be reachable from the Mini itself, such as the OpenClaw gateway,
+can be reached from Dane's other Tailscale devices (not from the internet).
+One Tailscale setting ("shields up") closes it, and that is Dane's call. The
+installer is written but has not been run yet: it waits for Dane to add the
+shared secret the Mini and Starcaster will use.
 ## 2026-10-27 — YouTube gives Dane three comments to choose from, not one (#877)
 
 The YouTube screen now works the way Reddit does since this morning. **Write a

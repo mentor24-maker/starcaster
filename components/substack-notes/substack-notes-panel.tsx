@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
+import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
 
 /**
  * Engage › Substack Notes — where Dane feeds the Substack Notes agent: ideas
@@ -18,6 +19,14 @@ import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-
  * and Reject. Approve sends the box's text and the SERVER checks it against
  * the account's rules (link setting, words to avoid, length), so an edit
  * cannot approve something the rules forbid; its refusal is shown as said.
+ *
+ * THREE TO CHOOSE FROM (Outreach wizard 11/19, task 86bcrmbmy). Write a draft
+ * — and both scheduled passes — now write three Notes or replies, each with a
+ * short label naming its approach, shown by the shared
+ * components/outreach-wizard/draft-chooser.tsx that Reddit and YouTube use.
+ * Picking one makes it the editable box; Approve sends its words and which one
+ * was picked. A draft written before then has no options and keeps its single
+ * box with Write another.
  *
  * The shape is components/youtube-outreach/youtube-outreach-panel.tsx's on
  * purpose: the server owns every rule and this screen shows its sentence when
@@ -63,6 +72,10 @@ export type NoteItem = {
   targetText: string;
   draftText: string;
   finalText: string;
+  /** 11/19: the Notes or replies to choose from — kept and dropped, in order. Empty on an older draft. */
+  draftOptions?: DraftOption[];
+  /** 11/19: which of draftOptions was approved. */
+  chosenOption?: number | null;
   status: string;
   postedUrl: string;
   error: string;
@@ -613,11 +626,21 @@ function TextEditor({ id, label, initial, busy, onSave, onCancel }: {
 
 // ── One item on the Approvals tab ──────────────────────────────────────────
 
+/** "3 Notes to choose from" — the notice after a draft is written. '' for an item with no options. */
+export function optionsNotice(item: Pick<NoteItem, 'kind' | 'draftOptions'> | null | undefined): string {
+  const n = keptOptions(item?.draftOptions).length;
+  if (!n) return '';
+  const reply = item?.kind === 'reply';
+  if (n === 1) return `One ${reply ? 'reply' : 'Note'} to choose from`;
+  return `${n} ${reply ? 'replies' : 'Notes'} to choose from`;
+}
+
 function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
   item: NoteItem;
-  busy: boolean;
+  /** What this card is busy with, if anything: 'draft' (Three More) | 'approve' | 'reject' | ''. */
+  busy: string;
   error: string;
-  onApprove: (text?: string) => void;
+  onApprove: (text?: string, option?: number) => void;
   onReject: () => void;
   onRedraft: () => void;
 }): React.ReactElement {
@@ -625,6 +648,7 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
   const [text, setText] = useState(item.draftText);
   const boxId = `sn-draft-${item.id}`;
   const kind = KIND_LABELS[item.kind] || item.kind;
+  const choosing = hasWords && keptOptions(item.draftOptions).length > 0;
 
   return (
     <article className="substack-notes-card substack-notes-approval" data-item-id={item.id} aria-label={`${kind} waiting for approval`}>
@@ -640,7 +664,19 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
       {item.kind === 'reply' && item.targetText ? (
         <p className="substack-notes-card-note substack-notes-text"><strong>Their Note: </strong>{item.targetText}</p>
       ) : null}
-      {hasWords ? (
+      {choosing ? (
+        <DraftChooser
+          options={item.draftOptions || []}
+          idPrefix={boxId}
+          boxLabel={item.kind === 'reply' ? 'Your reply' : 'Your Note'}
+          busy={busy}
+          error={error}
+          onApprove={(words, option) => onApprove(words, option)}
+          onReject={onReject}
+          onMore={onRedraft}
+        />
+      ) : null}
+      {choosing ? null : hasWords ? (
         <>
           <label className="substack-notes-add-label" htmlFor={boxId}>{kind}</label>
           <textarea id={boxId} className="substack-notes-draft-text" rows={5} value={text} onChange={(e) => setText(e.target.value)} />
@@ -649,14 +685,18 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
       ) : (
         <p className="substack-notes-card-note">{`No words — a ${kind.toLowerCase()} is just the click.`}</p>
       )}
-      {error ? <p className="substack-notes-error" role="alert">{error}</p> : null}
-      <div className="substack-notes-actions">
-        {hasWords ? <button type="button" className="btn" disabled={busy} onClick={onRedraft}>Write another</button> : null}
-        <button type="button" className="btn btn-danger" disabled={busy} onClick={onReject}>Reject</button>
-        <button type="button" className="btn btn-primary" disabled={busy || (hasWords && !text.trim())} onClick={() => onApprove(hasWords ? text : undefined)}>
-          {busy ? 'Working…' : 'Approve'}
-        </button>
-      </div>
+      {choosing ? null : (
+        <>
+          {error ? <p className="substack-notes-error" role="alert">{error}</p> : null}
+          <div className="substack-notes-actions">
+            {hasWords ? <button type="button" className="btn" disabled={Boolean(busy)} onClick={onRedraft}>Write another</button> : null}
+            <button type="button" className="btn btn-danger" disabled={Boolean(busy)} onClick={onReject}>Reject</button>
+            <button type="button" className="btn btn-primary" disabled={Boolean(busy) || (hasWords && !text.trim())} onClick={() => onApprove(hasWords ? text : undefined)}>
+              {busy ? 'Working…' : 'Approve'}
+            </button>
+          </div>
+        </>
+      )}
     </article>
   );
 }
@@ -721,6 +761,8 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
   const [rowBusy, setRowBusy] = useState('');
+  /** What the busy row is doing — the chooser says "Writing…" only for Three More. */
+  const [rowBusyAction, setRowBusyAction] = useState('');
   const [editingId, setEditingId] = useState('');
   // Which field the open row editor writes: the idea, or the pasted text of their Note.
   const [editingField, setEditingField] = useState<'ideaText' | 'targetText'>('ideaText');
@@ -906,34 +948,41 @@ export default function SubstackNotesPanel(): React.ReactElement {
     if (!api) return;
     const epoch = projectEpoch.current;
     setRowBusy(item.id);
+    setRowBusyAction('draft');
     setRowError({ id: '', message: '' });
     setNotice('');
     try {
       const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/draft`, { method: 'POST', body: '{}' });
       if (epoch !== projectEpoch.current) return;
-      replaceItem(reply?.data as NoteItem);
+      const next = reply?.data as NoteItem;
+      replaceItem(next);
       void refreshTopicPlan();
-      setNotice(`A draft ${item.kind === 'reply' ? 'reply' : 'Note'} is waiting on the Approvals tab.`);
+      const choices = optionsNotice(next);
+      setNotice(choices
+        ? `${choices} — on the Approvals tab, ready to pick.`
+        : `A draft ${item.kind === 'reply' ? 'reply' : 'Note'} is waiting on the Approvals tab.`);
     } catch (err) {
       if (epoch !== projectEpoch.current) return;
       setRowError({ id: item.id, message: `No draft written: ${errorText(err, 'unknown error')}` });
     } finally {
       setRowBusy('');
+      setRowBusyAction('');
     }
   };
 
   /** Approve / Reject on the Approvals tab — each answered by the server, never assumed. */
-  const decide = async (item: NoteItem, action: 'approve' | 'reject', text?: string) => {
+  const decide = async (item: NoteItem, action: 'approve' | 'reject', text?: string, option?: number) => {
     const api = getApi();
     if (!api) return;
     const epoch = projectEpoch.current;
     setRowBusy(item.id);
+    setRowBusyAction(action);
     setRowError({ id: '', message: '' });
     setNotice('');
     try {
       const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/${action}`, {
         method: 'POST',
-        body: JSON.stringify(action === 'approve' && text !== undefined ? { text } : {}),
+        body: JSON.stringify(action !== 'approve' || text === undefined ? {} : option === undefined ? { text } : { text, option }),
       });
       if (epoch !== projectEpoch.current) return;
       replaceItem(reply?.data as NoteItem);
@@ -949,6 +998,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       setRowError({ id: item.id, message: said.startsWith(lead) ? said : `${lead}: ${said}` });
     } finally {
       setRowBusy('');
+      setRowBusyAction('');
     }
   };
 
@@ -1355,9 +1405,9 @@ export default function SubstackNotesPanel(): React.ReactElement {
             <ApprovalCard
               key={`${item.id}:${item.updatedAt}`}
               item={item}
-              busy={rowBusy === item.id}
+              busy={rowBusy === item.id ? rowBusyAction || 'approve' : ''}
               error={rowError.id === item.id ? rowError.message : ''}
-              onApprove={(text) => void decide(item, 'approve', text)}
+              onApprove={(text, option) => void decide(item, 'approve', text, option)}
               onReject={() => void decide(item, 'reject')}
               onRedraft={() => void writeDraft(item)}
             />
