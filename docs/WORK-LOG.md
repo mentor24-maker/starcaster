@@ -1,3 +1,16 @@
+## 2026-10-28 — Projects can now share sections, templates and themes with each other, behind the scenes (#894)
+
+Dane wants one project to be able to offer its saved sections, page templates
+and themes to his other projects, without copying anything until somebody
+presses Import. This is the foundation: a new database table that records
+"Project A shares themes with Project B", and the server side that reads and
+writes it. Only an owner of a project can change what it shares, and only
+with projects that person already belongs to, so no client can ever see
+another client's site names. A project nothing is shared with sees nothing,
+and taking a tick away makes the items vanish from the other project at once.
+Sections marked Private are never shared. There is no screen yet; the "Share
+with" panel and the Import buttons are the next tickets. The table has to be
+created in the live database once before any of it works there.
 ## 2026-10-28 — Substack now finds Notes to reply to on its own, ranked with a reason each (#887)
 
 Substack's two readers, one for approved writers' own Notes and one for Notes
