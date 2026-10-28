@@ -241,3 +241,83 @@
   height: auto;
   user-select: none;
 }
+
+/* ── YouTube's Find creators (Outreach wizard 15/19) ───────────────────
+   components/outreach-wizard/youtube-creators.tsx. Cards wrap into as many
+   columns as fit and never force the page wider than the screen (T0). */
+
+.yt-creators {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.yt-creators-keywords {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.yt-creator-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.yt-creator-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+
+.yt-creator-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.yt-creator-head > div {
+  min-width: 0;
+}
+
+.yt-creator-avatar {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.yt-creator-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.yt-creator-meta {
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+.yt-creator-videos {
+  margin: 0;
+  padding-left: 1.2em;
+  min-width: 0;
+}
+
+.yt-creator-videos li {
+  overflow-wrap: anywhere;
+}
+
+.yt-creator-suggestion {
+  overflow-wrap: anywhere;
+}

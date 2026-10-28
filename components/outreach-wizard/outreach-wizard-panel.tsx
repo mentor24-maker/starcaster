@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT } from '../reddit-comments/reddit-comments-panel';
 import SignInWindow from './sign-in-window';
+import YoutubeCreators from './youtube-creators';
 
 export { PROJECT_SWITCH_EVENT };
 
@@ -22,7 +23,9 @@ export { PROJECT_SWITCH_EVENT };
  * browser inside this screen so Dane can sign in there (Outreach wizard 6/19,
  * task 86bcrmbfb, ./sign-in-window.tsx). Every other stage's one button opens
  * the existing screen for that step (slice 19 brings the work inside). The
- * first stage that is not done is open and highlighted.
+ * first stage that is not done is open and highlighted. YouTube's Find
+ * creators is worked here too (Outreach wizard 15/19, task 86bcrmbrf,
+ * ./youtube-creators.tsx).
  *
  * The shape is the Engage panels' on purpose: it (re)loads when its page is
  * SHOWN and when the project is SWITCHED, and drops a reply that lands after a
@@ -43,6 +46,8 @@ export type OutreachStage = {
   state: StageState;
   sentence: string;
   next: { label: string; page: string } | null;
+  /** The stage is worked on this screen, so it names no other screen (Outreach wizard 15/19). */
+  inline?: boolean;
 };
 
 /** The Connect stage's account question (lib/outreachOverview.js accountView). */
@@ -433,6 +438,9 @@ export default function OutreachWizardPanel(): React.ReactElement {
               <StageRow key={s.key} stage={s} index={i} open={i === openIndex}>
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
+                ) : null}
+                {s.key === 'creators' && current.key === 'youtube' && s.inline ? (
+                  <YoutubeCreators onChanged={() => void load()} />
                 ) : null}
               </StageRow>
             ))}

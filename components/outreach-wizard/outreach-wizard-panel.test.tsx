@@ -302,3 +302,31 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     delete (window as any).WebSocket;
   });
 });
+
+describe("YouTube's Find creators (Outreach wizard 15/19)", () => {
+  it("works the creator list on this screen when the stage is inline, and nowhere else", async () => {
+    await mount();
+    expect(container!.querySelector("[data-yt-creators]")).toBeNull();
+
+    const original = overviewFor;
+    const inlineOverview = (project: string): OutreachOverview => {
+      const o = original(project);
+      const yt = o.channels[0];
+      yt.stages[1] = { ...yt.stages[1], next: null, inline: true };
+      return o;
+    };
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") return { ok: true, data: inlineOverview(activeProject) };
+      if (path === "/api/outreach/youtube/creators") return { ok: true, data: { creators: [], keywords: { keywords: [], source: "none" } } };
+      return api(path, options);
+    };
+    act(() => root!.unmount());
+    container!.remove();
+    await mount();
+    const stage = container!.querySelector('[data-stage="creators"]')!;
+    expect(stage.querySelector("[data-yt-creators]")).not.toBeNull();
+    expect(stage.textContent).toContain("No channels found yet.");
+    expect(stage.querySelector("a.btn")).toBeNull();
+  });
+});
