@@ -24,6 +24,9 @@ const bundles = [
   { entry: 'image-topup.ts', outfile: 'image-topup.js' },
   { entry: 'columns.ts', outfile: 'columns.js' },
   { entry: 'surfaces.ts', outfile: 'surfaces.js' },
+  // The server requires this one (lib/siteImportTheme.js, the Site Import
+  // screen's "Create theme from this import"), so the full build makes it.
+  { entry: 'theme.ts', outfile: 'theme.js' },
 ];
 
 for (const { entry, outfile } of bundles) {

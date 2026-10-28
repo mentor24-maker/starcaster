@@ -9,6 +9,7 @@ import {
   type BuiltMenus,
   type MapReportData,
 } from "./site-import-build-report";
+import { SiteImportThemePanel, importThemeRecordOf } from "./site-import-theme-panel";
 
 /**
  * Site Import (staff-only) — queue a site-capture job and review its
@@ -516,14 +517,6 @@ export default function SiteImportPage() {
                   <h4>
                     Built pages ({builtRows.length}) — drafts, nothing published
                   </h4>
-                  {mapCp.theme?.name ? (
-                    <p className="meta">
-                      Theme &ldquo;{mapCp.theme.name}&rdquo; was created and made this project&apos;s default
-                      {mapCp.theme.previousDefaultName
-                        ? ` (the default before it was “${mapCp.theme.previousDefaultName}”).`
-                        : " (there was no default theme before it)."}
-                    </p>
-                  ) : null}
                   {builderPagesError ? (
                     <p className="site-import-status is-error">
                       Could not read this project&apos;s Builder pages to name them ({builderPagesError}). The
@@ -552,6 +545,14 @@ export default function SiteImportPage() {
                     </ul>
                   )}
                 </div>
+              ) : null}
+
+              {job.status === "complete" && checkpointOf(job, "normalize")?.blobPath ? (
+                <SiteImportThemePanel
+                  jobId={job.id}
+                  recorded={importThemeRecordOf(job.checkpoints as Record<string, unknown>)}
+                  onCreated={() => void loadJobDetail(job.id)}
+                />
               ) : null}
 
               {droppedTotal > 0 ? (
