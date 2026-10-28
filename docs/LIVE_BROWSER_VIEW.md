@@ -169,7 +169,24 @@ answer over ssh, and Tailscale (the other route) is down (next paragraph). A
 refusal on the Mini's own network address is the same test, because the
 gateway is not listening there at all. Slice 3 repeats it from outside.
 
-**Found while checking: Tailscale has not been running on the Mini since about
+**Found in slice 3 (2026-10-27): "loopback only" does not hold against the
+tailnet.** Tailscale on the Mini runs in userspace mode (no root), and in that
+mode a connection from another tailnet device to the Mini's tailnet address is
+handed to the same port on `127.0.0.1`. From the MacBook, `<Mini-tailnet-address>:18789`
+served OpenClaw's control page, and a throwaway door keeper bound to
+`127.0.0.1:8091` answered there too. From the internet (pinned to the Funnel
+servers' public address) and from the home network, neither was reachable. So
+the exposure is every device on Dane's tailnet (two today), and it includes
+OpenClaw's Chrome control port 18800 whenever that Chrome is running, which
+needs no password. Tailscale's "shields up" setting would close it, but it
+also turns Funnel off, so Dane chose not to use it (2026-10-27, option B on
+86bcrmbdw): the gap is closed instead by a Tailscale access rule, ticket
+86bctcm39. Until that lands, the outside check
+(`scripts/check_browser_door_route.sh`) reports the tailnet lines for 18789
+and 8091 as FAIL, and that FAIL is expected. The SSH route between the
+machines uses the home network (`mac-mini.local`), not the tailnet.
+
+**Found while checking (since fixed by `scripts/install_tailscale.sh`): Tailscale has not been running on the Mini since about
 Oct 5, 9:35pm.** Its last log line is from then, `tailscaled` is not running,
 and `tailscale funnel status` cannot reach it. So the `youtube-media` worker
 has probably been unreachable from production since then, and nothing said

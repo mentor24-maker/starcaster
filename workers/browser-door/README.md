@@ -60,7 +60,28 @@ BROWSER_DOOR_SECRET=<32 random bytes, shared with Starcaster only> node server.j
 | `BROWSER_DOOR_LOG` | Default `~/.starcaster/logs/browser-door.log`. |
 | `BROWSER_DOOR_CHROME` | Path to Chrome if it is not in `/Applications`. |
 
-Nothing installs it as a schedule yet; that is slice 3.
+## Installed on the Mini (slice 3)
+
+```
+./scripts/install_browser_door.sh --status       # installed? answering? shields? is /live routed?
+./scripts/install_browser_door.sh                # install (main checkout only; needs the secret below)
+./scripts/check_browser_door_route.sh --from macbook-pro   # the outside check — run it after every change
+```
+
+The installer keeps `server.js` alive under launchd (`com.starcaster.browser-door`),
+reads `BROWSER_DOOR_SECRET` from Doppler `prd` through the `~/Studio` key, and adds
+ONE Funnel path, `/live` → `127.0.0.1:8091`, only after the door keeper answers.
+Tailscale strips `/live` on the way in, so Starcaster's `BROWSER_DOOR_URL` is
+`https://<funnel host>/live`. It refuses without the secret (a new value is
+Dane's keystroke, `docs/DOCTRINE.md` §4.1) and without `com.starcaster.tailscaled`
+loaded.
+
+**"Loopback only" does not keep it off the tailnet.** Tailscale on the Mini runs
+without root, and in that mode a tailnet connection to the Mini is handed to the
+same port on `127.0.0.1`. Measured 2026-10-27: from the MacBook, the OpenClaw
+gateway (18789) and a door keeper on 8091 both answered on the Mini's tailnet
+address. The internet and the home network cannot reach either. `--status`
+reports this as `shields:`; Tailscale's "shields up" closes it.
 
 ## Tests
 
