@@ -1,3 +1,14 @@
+## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
+
+A theme used to have a single button colour, so on a site like Alphire's,
+with light buttons on dark sections, any one choice disappeared somewhere.
+Themes now have two optional extra button colours, "Button on light" and
+"Button on dark", on the Themes screen. Each section works out whether it is
+light or dark (its theme band, its own colour, or a darkened photo), and the
+buttons in it that follow the theme use the matching colours automatically.
+Site Import fills both in from where the original site's buttons actually
+sat, and checks each one is readable against its own background. Themes
+that don't set the new colours look exactly as they did before.
 ## 2026-10-27 — Imported themes can no longer ship invisible buttons or unreadable text (#876)
 
 When Site Import builds a theme from a site, it now checks every colour that
