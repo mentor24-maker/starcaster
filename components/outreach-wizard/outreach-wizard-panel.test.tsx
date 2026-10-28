@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OutreachWizardPanel, {
   CHANNEL_STORAGE_KEY,
+  CHECK_POLL_MS,
   PROJECT_SWITCH_EVENT,
   openStageIndex,
   type OutreachChannel,
@@ -89,6 +90,9 @@ beforeEach(() => {
         const body = JSON.parse(String(options.body || "{}"));
         posts.push({ path, body });
         if (path.endsWith("/choose")) redditAccount = { ...redditAccount!, expectedAccount: body.account };
+        if (path === "/api/browser-view/open") {
+          return { ok: true, data: { session: { id: "bvs_9" }, pass: "P", viewerUrl: "wss://mini.example/live/live" } };
+        }
         return { ok: true, data: {} };
       }
       calls += 1;
@@ -242,7 +246,7 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     await act(async () => { input.form!.requestSubmit(); });
     await act(async () => {});
     expect(posts[0]).toEqual({ path: "/api/outreach/accounts/reddit/choose", body: { account: "DaneOfEarth" } });
-    expect(container!.textContent).toContain("Sign the Mini's browser in as DaneOfEarth");
+    expect(container!.textContent).toContain("Click Connect Reddit, sign the Mini's browser in as DaneOfEarth");
     await act(async () => button("Check now").click());
     await act(async () => {});
     expect(posts[1].path).toBe("/api/outreach/accounts/reddit/check");
@@ -257,5 +261,44 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     await act(async () => button("Save pace").click());
     await act(async () => {});
     expect(posts[0]).toEqual({ path: "/api/outreach/accounts/reddit/pace", body: { maxCommentsPerDay: 3, minMinutesBetween: 20 } });
+  });
+
+  it("Connect opens the sign-in window; closing it runs the check at once and then offers 'Post as this account?'", async () => {
+    const sockets: any[] = [];
+    (window as any).WebSocket = class {
+      readyState = 0;
+      sent: string[] = [];
+      onopen: any; onmessage: any; onclose: any; onerror: any;
+      constructor(public url: string) { sockets.push(this); }
+      send(d: string) { this.sent.push(d); }
+      close() { this.readyState = 3; }
+    };
+    redditAccount = { ...redditAccount!, expectedAccount: "DaneOfEarth" };
+    await mount();
+    await act(async () => tab("Reddit").click());
+    await act(async () => button("Connect Reddit").click());
+    expect(posts[0]).toEqual({ path: "/api/browser-view/open", body: { site: "reddit" } });
+    expect(sockets[0].url).toBe("wss://mini.example/live/live");
+    await act(async () => { sockets[0].readyState = 1; sockets[0].onopen(); });
+    await act(async () => sockets[0].onmessage({ data: JSON.stringify({ type: "frame", data: "AA", metadata: { deviceWidth: 10, deviceHeight: 10 } }) }));
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    await act(async () => button("Close").click());
+    await act(async () => {});
+    expect(container!.textContent).toContain("You closed the window.");
+    expect(posts.map((p) => p.path)).toEqual([
+      "/api/browser-view/open",
+      "/api/browser-view/bvs_9/close",
+      "/api/outreach/accounts/reddit/check",
+    ]);
+    // The reading in hand predates the close, so it is not an answer yet.
+    expect(container!.querySelector("[data-after-window]")!.textContent).toContain("Checking which account");
+    // The Mini answers: it sees Exotic-Break-7850.
+    redditAccount = { ...redditAccount!, browserCheckedAt: new Date(Date.now() + 1000).toISOString() };
+    await act(async () => { vi.advanceTimersByTime(CHECK_POLL_MS); });
+    await act(async () => {});
+    vi.useRealTimers();
+    const after = container!.querySelector("[data-after-window]");
+    expect(after?.textContent).toContain("Signed in as Exotic-Break-7850. Post as this account?");
+    delete (window as any).WebSocket;
   });
 });
