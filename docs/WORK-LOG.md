@@ -12,6 +12,30 @@ by itself and writes three replies to choose from. There is also
 **Comment on the video**, **Skip** (asks why) and **Save as contact**. It
 needs two SQL files run on the live database before it shows anything there.
 One is the creator list from #888, which was never run.
+## 2026-10-28 — Projects can now share sections, templates and themes with each other, behind the scenes (#894)
+
+Dane wants one project to be able to offer its saved sections, page templates
+and themes to his other projects, without copying anything until somebody
+presses Import. This is the foundation: a new database table that records
+"Project A shares themes with Project B", and the server side that reads and
+writes it. Only an owner of a project can change what it shares, and only
+with projects that person already belongs to, so no client can ever see
+another client's site names. A project nothing is shared with sees nothing,
+and taking a tick away makes the items vanish from the other project at once.
+Sections marked Private are never shared. There is no screen yet; the "Share
+with" panel and the Import buttons are the next tickets. The table has to be
+created in the live database once before any of it works there.
+## 2026-10-28 — The sign-in window says why when the Mini never answers, and the outside check tests Dane's MacBook's route (#895)
+
+Clicking Connect on the MacBook left the window on "Opening the Mini's browser…"
+forever. The cause was the new Tailscale access rule: it lets Dane's own devices
+reach the Mini only on three ports, and the window's picture feed uses a fourth
+(443), so the MacBook's connection was silently dropped. The fix there is one
+more port in the rule, a change in the Tailscale console. This change makes the
+window give up after 30 seconds and say, in plain words, that Tailscale is the
+likely cause; and the Mini's outside check now tries the window's route the way
+a computer with Tailscale on does, so this cannot hide again.
+
 ## 2026-10-28 — YouTube gets a list of creators to approve or reject (#888)
 
 The Outreach screen's YouTube "Find creators" step used to say there was no
