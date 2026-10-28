@@ -9,7 +9,8 @@ import {
   BUILDER_GRADIENT_ANGLE_MIN,
   builderGradientAngleFromInput,
   createDefaultBackgroundSettings,
-  normalizeBuilderAssetUrl
+  normalizeBuilderAssetUrl,
+  normalizeBuilderGradientLayers
 } from "@/lib/builder-template";
 import { backgroundVideoSizeNotice, recallAssetByteSize } from "@/lib/background-video-size";
 import {
@@ -19,6 +20,7 @@ import {
   DEFAULT_BACKGROUND_PARALLAX_SPEED
 } from "@/lib/background-parallax";
 import { BuilderGalleryModal } from "./builder-gallery-modal";
+import { BuilderGradientLayersControls } from "./builder-gradient-layers-controls";
 import { BuilderModuleField, BuilderModuleFieldStrip } from "./builder-module-field";
 import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
@@ -110,6 +112,15 @@ type BuilderBackgroundControlsProps = {
    * the moment 86bbqa7a5 lands.
    */
   allowParallax?: boolean;
+  /**
+   * Whether a gradient may be built from stacked linear and radial layers
+   * (task 86bctde1m). OFF by default, on the same opt-in reasoning as
+   * `allowVideo`: the ticket covers section and column backgrounds, and a
+   * button or a poll pod has no use for a six-layer glow. A background that
+   * somehow carries layers still PAINTS them everywhere — this only decides
+   * where they can be edited.
+   */
+  allowGradientLayers?: boolean;
 };
 
 export function BuilderBackgroundControls({
@@ -130,7 +141,8 @@ export function BuilderBackgroundControls({
   themePrimaryColor,
   themeColors = [],
   allowVideo = false,
-  allowParallax = false
+  allowParallax = false,
+  allowGradientLayers = false
 }: BuilderBackgroundControlsProps) {
   const [isFallbackGalleryOpen, setIsFallbackGalleryOpen] = useState(false);
   /*
@@ -183,6 +195,23 @@ export function BuilderBackgroundControls({
     const parsed = builderGradientAngleFromInput(typed);
     if (parsed === null) return;
     onChange((current) => ({ ...current, gradientAngle: parsed }));
+  }
+
+  /*
+   * A layered gradient is edited layer by layer below, so the two-colour
+   * Color / Color 2 / Angle fields step aside — they still exist, mirroring the
+   * bottom layer for surfaces that only know two colours, but editing them here
+   * would change nothing a visitor sees.
+   */
+  const hasGradientLayers =
+    allowGradientLayers &&
+    background.mode === "gradient" &&
+    normalizeBuilderGradientLayers(background.gradientLayers).length > 0;
+  const showTwoColourGradient = background.mode === "gradient" && !hasGradientLayers;
+
+  function renderGradientLayerControls() {
+    if (!allowGradientLayers || background.mode !== "gradient") return null;
+    return <BuilderGradientLayersControls background={background} onChange={onChange} themeColors={themeColors} />;
   }
 
   const videoUrl = background.videoUrl ?? "";
@@ -631,7 +660,7 @@ export function BuilderBackgroundControls({
             </BuilderModuleField>
           ) : null}
 
-          {background.mode === "color" || background.mode === "gradient" ? (
+          {background.mode === "color" || showTwoColourGradient ? (
             <BuilderModuleField label="Color" width="color">
               <BuilderThemeColorField
                 fallback="#ffffff"
@@ -650,7 +679,7 @@ export function BuilderBackgroundControls({
             </BuilderModuleField>
           ) : null}
 
-          {background.mode === "gradient" ? (
+          {showTwoColourGradient ? (
             <BuilderModuleField label="Color 2" width="color">
               <BuilderThemeColorField
                 fallback="#eaf4ff"
@@ -666,7 +695,7 @@ export function BuilderBackgroundControls({
             </BuilderModuleField>
           ) : null}
 
-          {background.mode === "gradient" ? (
+          {showTwoColourGradient ? (
             <BuilderModuleField label="Angle" width="num">
               <input
                 type="number"
@@ -759,6 +788,7 @@ export function BuilderBackgroundControls({
           </>
         ) : null}
 
+        {renderGradientLayerControls()}
         {renderVideoControls()}
         {renderParallaxControls()}
       </div>
@@ -789,7 +819,7 @@ export function BuilderBackgroundControls({
           </select>
         </label>
 
-        {background.mode === "color" || background.mode === "gradient" ? (
+        {background.mode === "color" || showTwoColourGradient ? (
           <label className="field builder-background-inline-color-field">
             {showColorFieldLabel ? <span>Primary color</span> : null}
             <BuilderThemeColorField
@@ -809,7 +839,7 @@ export function BuilderBackgroundControls({
           </label>
         ) : null}
 
-        {background.mode === "gradient" ? (
+        {showTwoColourGradient ? (
           <label className="field builder-background-inline-color-field">
             <span>Secondary color</span>
             <BuilderThemeColorField
@@ -826,7 +856,7 @@ export function BuilderBackgroundControls({
           </label>
         ) : null}
 
-        {background.mode === "gradient" ? (
+        {showTwoColourGradient ? (
           <label className="field">
             <span>Angle</span>
             <input
@@ -913,6 +943,7 @@ export function BuilderBackgroundControls({
         </div>
       ) : null}
 
+      {renderGradientLayerControls()}
       {renderVideoControls()}
       {renderParallaxControls()}
     </div>

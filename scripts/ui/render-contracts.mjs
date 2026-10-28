@@ -2320,6 +2320,59 @@ export const RENDER_CONTRACTS = [
   },
 
   {
+    id: 'layered-gradient-background-paints-every-layer',
+    why:
+      'Task 86bctde1m. Alphire\'s hero is two soft radial glows over a three-stop linear wash, and ' +
+      'the importer used to drop all three, so the section arrived plain. Layers are one CSS ' +
+      'declaration, which makes the browser the only judge worth asking: ONE malformed layer — a ' +
+      'circle given a percentage size, a stop with no colour — voids the whole `background-image` ' +
+      'and the section paints nothing, with every unit test still green because they compare strings ' +
+      'this function built. Reading the COMPUTED value back proves the browser accepted every layer.',
+    section: {
+      layout: 'single',
+      background: {
+        mode: 'gradient',
+        color: '#020307',
+        color2: '#03111e',
+        gradientLayers: [
+          { kind: 'radial', shape: 'circle', x: 80, y: 18, stops: [
+            { color: '#00e5ff', alpha: 16, position: 0 }, { color: '#000000', alpha: 0, position: 42 } ] },
+          { kind: 'radial', shape: 'ellipse', size: '60% 50%', x: 50, y: 100, stops: [
+            { color: '#7c4dff', alpha: 12, position: 0 }, { color: '#000000', alpha: 0, position: 60 } ] },
+          { kind: 'linear', angle: 110, stops: [
+            { color: '#020307', alpha: 100, position: 0 },
+            { color: '#030a13', alpha: 100, position: 46 },
+            { color: '#03111e', alpha: 100, position: 100 } ] },
+        ],
+      },
+      modules: [{ type: 'heading', text: 'Layered gradient', settings: {} }],
+    },
+    selector: '.builder-preview-section-layout-single',
+    read: ['backgroundImage'],
+    expect(sample) {
+      const painted = sample.styles.backgroundImage || '';
+      const radials = (painted.match(/radial-gradient\(/g) || []).length;
+      const linears = (painted.match(/linear-gradient\(/g) || []).length;
+      if (radials !== 2 || linears !== 1) {
+        return `a three-layer background painted \`${painted || 'nothing'}\` — ${radials} radial and ` +
+          `${linears} linear layer(s), not 2 and 1. The layers are being dropped or the browser refused ` +
+          'the declaration.';
+      }
+      if (!/^radial-gradient\(circle at 80% 18%/.test(painted)) {
+        return `the top layer is not the cyan glow at 80% 18%: \`${painted.slice(0, 80)}\` — the order ` +
+          'is wrong, and the glow would be painted underneath the dark wash where nobody can see it.';
+      }
+      if (!/rgba\(0, 229, 255, 0\.16\)/.test(painted)) {
+        return 'the cyan glow lost its see-through colour — a 16% glow painted solid is a cyan block.';
+      }
+      if (!/linear-gradient\(110deg, rgb\(2, 3, 7\) 0%, rgb\(3, 10, 19\) 46%, rgb\(3, 17, 30\) 100%\)/.test(painted)) {
+        return `the dark wash did not keep its 110deg angle and middle stop: \`${painted}\``;
+      }
+      return null;
+    },
+  },
+
+  {
     id: 'video-background-renders-a-real-video',
     why:
       'Video is the one background mode that is not CSS. Every other mode is a property on the ' +
