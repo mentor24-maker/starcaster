@@ -1,3 +1,17 @@
+## 2026-10-28 — Site Imports are picked up on their own, and a stuck one is named (#885)
+
+When Dane queued an import of alphire.agency, it sat waiting for 14 days.
+Nothing ever ran the program that does the importing. It only ran when somebody
+typed a command, and nothing on the screen or the bus said nobody had. A second
+import, wavecenter.com, turned out to have been waiting 15 days the same way.
+The Mac Mini can now run that program every 5 minutes. It picks up whatever is
+queued and rebuilds the import engine from the latest code first. That second
+step matters: the Mini's copy had no built engine at all. If an import still
+waits more than an hour, the Mini says so once on the bus, naming the site.
+The Site Import screen now shows how long a queued job has waited. After an
+hour, it says plainly that the worker is not running. The schedule is switched
+on with one command on the Mini once this is merged.
+
 ## 2026-10-28 — A report that lists what a site import lost, section by section (#892)
 
 Until now the only way to know what a site import got wrong was to put the
