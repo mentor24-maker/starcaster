@@ -1,3 +1,16 @@
+## 2026-10-28 — An imported site's theme can be made on its own (#884)
+
+The theme a Site Import captures (the original site's colours, fonts and
+button style) could only be made by re-running the whole page import. That
+rebuilt every page just to get a theme, which is what happened to Alphire's
+17 pages on 2026-10-27. The Site Import screen now has a **Create theme from
+this import** button. It first shows the colours it found and any it replaced
+for readability, then saves them as a new theme without touching a single
+page. A tick box decides whether it also becomes the site's default theme. It
+never overwrites an existing theme: a second one is named "alphire 2" and
+leaves "alphire 1" alone. The same thing is available from the terminal as
+`--theme-only`, which also checks that no page changed.
+
 ## 2026-10-27 — Themes can have outline buttons and rounded button corners (#881)
 
 A theme could only describe a solid, filled button. When the Site Import copied
