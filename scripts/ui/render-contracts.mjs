@@ -75,6 +75,22 @@ const NAV_SUBMENU_ITEMS = JSON.stringify([
   { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
 ]);
 
+/** A theme with a button pair per ground (86bctakk0). The plain pair is navy,
+ *  which vanishes on a dark row — so only the per-ground pair can pass there. */
+const SURFACE_BUTTON_PALETTE = {
+  surface: '#ffffff', surfaceText: '#12294d',
+  inverse: '#0b1020', inverseText: '#ffffff',
+  button: '#12294d', buttonText: '#ffffff',
+  surfaceButton: '#12294d', surfaceButtonText: '#ffffff',
+  inverseButton: '#ffffff', inverseButtonText: '#12294d',
+};
+
+/** A Button that follows the theme: every colour left empty ("theme", A2). A
+ *  new Button arrives with #214c71 filled in, which never reads the theme. */
+const THEME_FOLLOWING_BUTTON = {
+  buttonColor: '', buttonHoverColor: '', textColor: '', textHoverColor: '', borderColor: '',
+};
+
 const PARALLAX_IMAGE_SECTION = {
   layout: 'single',
   spacers: 2,
@@ -734,6 +750,77 @@ export const RENDER_CONTRACTS = [
       return sample.styles.marginTop === '40px'
         ? null
         : `a module with Phone margin-top 40 rendered margin-top ${sample.styles.marginTop} at 420px — the phone rule is not reaching the module.`;
+    },
+  },
+  /*
+   * A BUTTON PER GROUND — task 86bctakk0.
+   *
+   * Alphire (2026-10-27) puts light buttons on dark sections and dark ones on
+   * white. A theme had one button pair, so whichever it chose vanished on the
+   * other ground. The theme now carries a pair per ground and each section
+   * hands its own to the buttons in it. The same theme, the same Button with
+   * no colour of its own, on a dark row and on a white one: it must read on
+   * both. The plain pair here is the navy that vanishes on the dark row, so
+   * a renderer that ignores the per-ground pairs fails the first contract.
+   */
+  ...[
+    { ground: 'dark', fill: '#0b1020', expectBg: 'rgb(255, 255, 255)' },
+    { ground: 'white', fill: '#ffffff', expectBg: 'rgb(18, 41, 77)' },
+  ].map(({ ground, fill, expectBg }) => ({
+    id: `button-follows-the-theme-pair-for-a-${ground}-section`,
+    why:
+      'One theme button colour cannot suit both a dark band and a white section: Alphire\'s light ' +
+      'buttons vanished on its white sections and any single choice was wrong somewhere (86bctakk0). ' +
+      'A Button following the theme must take the pair for the ground it actually sits on.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: fill },
+      themeRolePalette: SURFACE_BUTTON_PALETTE,
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button',
+    read: ['backgroundColor', 'color'],
+    series: { count: 1, everyMs: 0, read: ['backgroundColor'], selectors: { row: '.builder-preview-section' } },
+    expect(sample) {
+      const row = sample.series?.[0]?.row;
+      if (!row) return 'the row was not found, so there is no ground to measure the button against.';
+      const button = parseRgb(sample.styles.backgroundColor);
+      const label = parseRgb(sample.styles.color);
+      const behind = parseRgb(row.backgroundColor);
+      if (!button || !label || !behind) {
+        return `could not read the colours (button ${sample.styles.backgroundColor}, label ${sample.styles.color}, row ${row.backgroundColor}).`;
+      }
+      if (behind.a < 0.5) return `the row reads as ${row.backgroundColor}, see-through, so the scene is not the ${ground} ground it claims. Fix the scene.`;
+      const against = contrastRatio(button, behind);
+      if (against < 2) {
+        return `on a ${ground} row (${row.backgroundColor}) the theme button is ${sample.styles.backgroundColor} — ` +
+          `${against.toFixed(2)}:1, a button that is not there. The section is not handing its buttons the ${ground}-ground pair.`;
+      }
+      if (sample.styles.backgroundColor !== expectBg) {
+        return `the button is ${sample.styles.backgroundColor}, not the theme's ${ground}-ground button ${expectBg}.`;
+      }
+      const readable = contrastRatio(label, button);
+      return readable >= 4.5 ? null : `the label ${sample.styles.color} on ${sample.styles.backgroundColor} is ${readable.toFixed(2)}:1.`;
+    },
+  })),
+  {
+    id: 'button-on-a-theme-with-one-pair-is-unchanged',
+    why:
+      'Existing themes carry one button pair and must render exactly as before (86bctakk0): with no ' +
+      'per-ground pair, a dark row\'s button is still the plain theme button.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#0b1020' },
+      themeRolePalette: { button: '#d9e62e', buttonText: '#12294d' },
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button',
+    read: ['backgroundColor', 'color'],
+    expect(sample) {
+      if (sample.styles.backgroundColor !== 'rgb(217, 230, 46)') {
+        return `a theme with one button pair painted its button ${sample.styles.backgroundColor}, not its own #d9e62e — an existing theme changed.`;
+      }
+      return sample.styles.color === 'rgb(18, 41, 77)' ? null : `its label is ${sample.styles.color}, not the theme's #12294d.`;
     },
   },
   {

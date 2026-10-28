@@ -1885,6 +1885,82 @@ export function getThemePaletteRoleVars(
   return vars;
 }
 
+/**
+ * Whether a section is a LIGHT ground or a DARK one, for the theme's
+ * per-surface button pairs (task 86bctakk0). `undefined` = cannot say, and the
+ * section keeps the theme's plain button pair — a photo with no tint, a
+ * mostly-transparent colour, a video. Guessing there would swap a button that
+ * reads for one that might not.
+ *
+ *   - a theme band role: `inverse` is dark, `surface` and `band` are light;
+ *   - a hero tint over a photo is dark — its text is the inverse text;
+ *   - a colour or gradient the section chose is judged by its luminance.
+ */
+export type SectionSurfaceTone = "light" | "dark";
+
+export function getSectionSurfaceTone(input: {
+  background?: BackgroundSettings | null;
+  bandRole?: "surface" | "band" | "inverse";
+  heroTinted?: boolean;
+}): SectionSurfaceTone | undefined {
+  if (input.heroTinted) return "dark";
+  const background = input.background;
+  if (background && background.mode !== "none") {
+    // Under half opaque, the page behind decides what the button sits on.
+    if (clampBuilderOpacity(background.opacity) < 50) return undefined;
+    const colours = background.mode === "color"
+      ? [background.color]
+      : background.mode === "gradient"
+        ? [background.color, background.color2]
+        : [];
+    const lums = colours
+      .map((value) => normalizeBuilderHexColor(value, ""))
+      .filter((hex) => /^#[0-9a-f]{6}$/i.test(hex))
+      .map(hexLuminance);
+    if (!lums.length || lums.length !== colours.length) return undefined;
+    const mean = lums.reduce((sum, value) => sum + value, 0) / lums.length;
+    // 0.18 is where white text and black text read equally well.
+    return mean < 0.18 ? "dark" : "light";
+  }
+  if (input.bandRole === "inverse") return "dark";
+  if (input.bandRole === "surface" || input.bandRole === "band") return "light";
+  return undefined;
+}
+
+/**
+ * The button vars a section of this tone hands its modules. Written on the
+ * section, so a Button following the theme (`var(--lp-button-*)`) resolves
+ * the pair for the ground it actually sits on. Nothing is written when the
+ * theme has no pair for this tone — the root's plain `button` pair then
+ * reaches the button exactly as before, so every existing theme renders
+ * unchanged.
+ */
+export function getSectionButtonRoleVars(
+  palette: BuilderThemePalette | null | undefined,
+  tone: SectionSurfaceTone | undefined
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  if (!palette || !tone) return vars;
+  const fill = String((tone === "dark" ? palette.inverseButton : palette.surfaceButton) || "").trim();
+  const text = String((tone === "dark" ? palette.inverseButtonText : palette.surfaceButtonText) || "").trim();
+  if (fill) {
+    vars["--lp-button-bg"] = fill;
+    // Derived the same way the root's hover is, so the two cannot drift.
+    vars["--lp-button-hover"] = shadeHexColor(fill, -0.14);
+  }
+  if (text) vars["--lp-button-text"] = text;
+  return vars;
+}
+
+/** WCAG relative luminance of a '#rrggbb'. */
+function hexLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((offset) => {
+    const c = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 /** Lighten (amount > 0) or darken (amount < 0) a '#rrggbb' by a fraction. */
 function shadeHexColor(hex: string, amount: number): string {
   const normalized = normalizeBuilderHexColor(hex);

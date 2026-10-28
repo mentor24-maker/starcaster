@@ -295,7 +295,8 @@ test('normalize records the style evidence by role from the capture', () => {
     '<a data-scim="4" class="et_pb_button" href="/go">Go</a></div>' +
     '<form data-scim="7"><button data-scim="8">Search</button></form>' +
     '<form data-scim="9"><button data-scim="10">Search</button></form>' +
-    '<div data-scim="5" class="band"><p data-scim="6">Band</p></div>' +
+    '<div data-scim="5" class="band"><p data-scim="6">Band</p>' +
+    '<a data-scim="11" class="et_pb_button" href="/dark">Dark</a></div>' +
     '</body></html>';
   const desktop = {
     url: 'https://x.test/', finalUrl: 'https://x.test/', viewport: 'desktop', html,
@@ -307,8 +308,10 @@ test('normalize records the style evidence by role from the capture', () => {
       // Two grey search buttons outnumber the one real button — and must not count.
       8: { 'background-color': 'rgb(221, 221, 221)', color: 'rgb(102, 102, 102)' },
       10: { 'background-color': 'rgb(221, 221, 221)', color: 'rgb(102, 102, 102)' },
+      // A white OUTLINE button sitting on the dark band.
+      11: { color: 'rgb(255, 255, 255)', 'border-top-width': '2px' },
     },
-    rects: { 0: [0, 0, 1440, 80], 1: [100, 20, 60, 20], 2: [180, 100, 1080, 300], 3: [180, 100, 1080, 30], 4: [180, 200, 120, 40], 5: [0, 400, 1440, 400], 6: [180, 450, 1080, 30], 7: [0, 900, 300, 40], 8: [0, 900, 80, 40], 9: [0, 950, 300, 40], 10: [0, 950, 80, 40] },
+    rects: { 0: [0, 0, 1440, 80], 1: [100, 20, 60, 20], 2: [180, 100, 1080, 300], 3: [180, 100, 1080, 30], 4: [180, 200, 120, 40], 5: [0, 400, 1440, 400], 6: [180, 450, 1080, 30], 7: [0, 900, 300, 40], 8: [0, 900, 80, 40], 9: [0, 950, 300, 40], 10: [0, 950, 80, 40], 11: [180, 500, 120, 40] },
     pageBackground: 'rgb(255, 255, 255)',
     fullPageScreenshot: '', sectionScreenshots: {}, elementScreenshots: {}, assetUrls: [], fontFamilies: [],
     meta: { title: '', metaDescription: '', ogTags: {}, canonicalUrl: '', lang: '' },
@@ -319,8 +322,14 @@ test('normalize records the style evidence by role from the capture', () => {
   assert.equal(s.pageBackgrounds[0].value, 'rgb(255, 255, 255)');
   assert.equal(s.backgroundsByArea[0].value, 'rgb(26, 26, 26)', 'the biggest band wins by area');
   assert.equal(s.headerBackgrounds[0].value, 'rgb(255, 255, 255)');
-  assert.equal(s.buttons[0].value, 'rgb(46, 163, 242)|rgb(255, 255, 255)|3');
-  assert.equal(s.buttons.length, 1, 'search/form buttons are not the site button style');
+  assert.ok(s.buttons.some((t) => t.value === 'rgb(46, 163, 242)|rgb(255, 255, 255)|3'), 'the filled site button is recorded');
+  assert.equal(s.buttons.length, 2, 'search/form buttons are not the site button style');
+  // What each button sat on (task 86bctakk0): the nearest painted ancestor,
+  // and the page itself when nothing above the button is painted.
+  assert.equal(s.buttonsByGround.find((t) => t.value.startsWith('|')).value.split('|')[2], 'rgb(26, 26, 26)',
+    'the outline button sat on the dark band');
+  assert.equal(s.buttonsByGround.find((t) => t.value.startsWith('rgb(46, 163, 242)')).value.split('|')[2], 'rgb(255, 255, 255)',
+    'the blue button sat in an unpainted row, so its ground is the page');
   assert.equal(s.contentWidths[0].value, '1080');
 
   const { ir: old } = normalizeSite({ jobId: 'j', sourceUrl: 'https://x.test/', capturedAt: '', pages: [{ desktop: { ...desktop, rects: undefined } }], assets: [] });
@@ -355,6 +364,41 @@ test('Alphire: white outline buttons on a white page become visible, and every p
   assert.ok(contrastRatio(p.bandText, p.band) >= 4.5);
   assert.ok(t.notes.some((n) => n.includes('a button against the page') && n.includes('#ffffff')), 'the repair is named');
   assert.equal(t.primaryColor, p.button, 'the theme colour follows the repaired button');
+});
+
+test('Alphire: a button per ground — the dark sections keep the white buttons the site put there, the white ones get a visible one', () => {
+  // Task 86bctakk0. One theme button cannot be right on both grounds: white
+  // vanishes on the white section, and the repaired dark one is the wrong
+  // look on the dark band where the site actually put its white buttons.
+  const t = deriveImportTheme(siteIr({
+    ...SUMMARY,
+    pageBackgrounds: [{ value: 'rgb(255, 255, 255)', count: 40 }],
+    backgroundsByArea: [{ value: 'rgb(229, 228, 226)', count: 9 }, { value: 'rgb(3, 5, 10)', count: 8 }],
+    headerBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 17 }],
+    buttons: [{ value: '|rgb(255, 255, 255)|60', count: 17 }],
+    buttonsByGround: [{ value: '|rgb(255, 255, 255)|rgb(3, 5, 10)', count: 17 }],
+  }), 'alphire 1');
+  const p = t.palette;
+  assert.equal(p.inverseButton, '#ffffff', 'on the dark band the button keeps the white the site gave it');
+  assert.ok(contrastRatio(p.inverseButton, p.inverse) >= 2);
+  assert.ok(contrastRatio(p.inverseButtonText, p.inverseButton) >= 4.5, `label ${p.inverseButtonText} on ${p.inverseButton}`);
+  assert.notEqual(p.button, '#ffffff', 'the plain button, which light sections use, is still not white on white');
+  assert.equal(p.surfaceButton, undefined, 'no button sat on a light ground, so none is invented for it');
+  assert.ok(t.notes.some((n) => n.startsWith('buttons on dark sections: #ffffff')), 'the per-ground pair is named in the notes');
+
+  // A capture from before the ground was recorded keeps exactly today's palette.
+  const old = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(255, 255, 255)|60', count: 17 }] }), 'old 1');
+  assert.equal(old.palette.inverseButton, undefined);
+  assert.equal(old.palette.surfaceButton, undefined);
+});
+
+test('a per-ground button that vanishes into its own ground is repaired against that ground', () => {
+  const palette = { inverse: '#03050a', inverseButton: '#05070c', inverseButtonText: '#ffffff' };
+  const notes = [];
+  guardPaletteReadability(palette, notes);
+  assert.ok(contrastRatio(palette.inverseButton, palette.inverse) >= 2, `button ${palette.inverseButton} on ${palette.inverse}`);
+  assert.ok(contrastRatio(palette.inverseButtonText, palette.inverseButton) >= 4.5);
+  assert.ok(notes.some((n) => n.startsWith('a button on a dark section')));
 });
 
 test('the guard repairs a composed pair to the AA line, but leaves a site-painted brand pair alone', () => {
