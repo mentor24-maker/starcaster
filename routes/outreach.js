@@ -10,6 +10,10 @@
  *                                                re-run its sign-in check
  *   POST /api/outreach/accounts/reddit/pace      { maxCommentsPerDay,
  *                                                minMinutesBetween }
+ *   GET  /api/outreach/feedback/reasons          the chips a Reject offers: five
+ *                                                defaults plus every reason Dane
+ *                                                has used before (Outreach wizard
+ *                                                12/19, lib/outreachFeedbackStore.js)
  *
  * The three POSTs are Outreach wizard 2/19 (task 86bcrmba0), over
  * lib/outreachAccounts.js. Nothing on the internet can reach the Mini, so
@@ -30,6 +34,7 @@
 const { sendOk, sendErr, parseJsonBody } = require('./http');
 const { buildOverview } = require('../lib/outreachOverview');
 const outreachAccounts = require('../lib/outreachAccounts');
+const outreachFeedback = require('../lib/outreachFeedbackStore');
 
 const PREFIX = '/api/outreach';
 
@@ -55,7 +60,7 @@ async function readBody(req, res) {
   }
 }
 
-async function handle(req, res, pathname, method, { build = buildOverview, accounts = outreachAccounts } = {}) {
+async function handle(req, res, pathname, method, { build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback } = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
 
   if (pathname === `${PREFIX}/overview`) {
@@ -65,6 +70,11 @@ async function handle(req, res, pathname, method, { build = buildOverview, accou
       return sendErr(res, 400, 'No project is selected, so there is no outreach to report on. Pick a project in the project menu.', { code: 'VALIDATION_ERROR' }), true;
     }
     return sendOk(res, 200, await build(scope)), true;
+  }
+
+  if (pathname === `${PREFIX}/feedback/reasons`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await feedback.listReasons(requestScope(req))), true;
   }
 
   const action = pathname.match(/^\/api\/outreach\/accounts\/([a-z]+)\/(choose|check|pace)$/);

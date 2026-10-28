@@ -9,7 +9,7 @@
  *   GET    /api/engage/reddit-comments/items/:id
  *   POST   /api/engage/reddit-comments/items/:id/draft    write three options (AI, 9/19); "Three more" too
  *   POST   /api/engage/reddit-comments/items/:id/approve  { text?, option? }  (his wording, and which option he picked)
- *   POST   /api/engage/reddit-comments/items/:id/reject
+ *   POST   /api/engage/reddit-comments/items/:id/reject  { reasons?, note? } — why (12/19)
  *   POST   /api/engage/reddit-comments/items/:id/paste       { postTitle, postBody, parentCommentText? }
  *   POST   /api/engage/reddit-comments/items/:id/read-again  ask the Mini to read it again
  *   GET    /api/engage/reddit-comments/status             the Mini's Reddit sign-in, and the pace
@@ -141,7 +141,11 @@ async function handle(req, res, pathname, method) {
       if (!body) return true;
       return reply(res, await store.approveItem(id, body, scope));
     }
-    if (decision[2] === 'reject') return reply(res, await store.rejectItem(id, scope));
+    if (decision[2] === 'reject') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.rejectItem(id, scope, body));
+    }
     if (checkEndpointLimit(req, res, 'redditComments.drafts.create')) return true;
     return reply(res, await store.writeDraftForItem(id, scope));
   }

@@ -167,7 +167,7 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     }
     if (decision[2] === "reject") {
       Object.assign(c, { status: "rejected", rejectedAt: "2026-10-07T12:30:00Z" });
-      return { ok: true, data: { ...c } };
+      return { ok: true, data: { ...c, feedback: { recorded: true, error: "" } } };
     }
     const t = store.targets.find((x) => x.id === c.targetId)!;
     const made = makeComment(t, `${nextDraft} (again)`);
@@ -566,7 +566,23 @@ describe("drafts and approval", () => {
     stores.proj_doe.targets = [target("abc", "First video")];
     await mount();
     await writeDraftFor("abc");
+
+    // Reject asks why (12/19). Cancel rejects nothing at all.
     await click(button("Reject", draftCard("c1")));
+    await click(button("Cancel", document.querySelector(".reason-picker")!));
+    expect(document.querySelector(".reason-picker")).toBeNull();
+    expect(requests.some((r) => r.path.endsWith("/reject"))).toBe(false);
+    expect(draftCard("c1")).toBeTruthy();
+
+    // The saved reasons could not be read here, so the five standard ones are
+    // offered and the window says why his own are missing. Skip is allowed.
+    await click(button("Reject", draftCard("c1")));
+    expect(document.querySelector(".reason-picker")!.textContent).toContain("only the five standard ones are shown");
+    expect(document.querySelectorAll(".reason-picker-chip")).toHaveLength(5);
+    await click(button("Skip — reject without a reason", document.querySelector(".reason-picker")!));
+    expect(requests.filter((r) => r.path.endsWith("/reject")).map((r) => r.body)).toEqual([{ reasons: [], note: "" }]);
+    expect(text()).toContain("Rejected. It stays in the history");
+    expect(text()).not.toContain("NOT saved");
 
     expect(container!.querySelector('article[data-comment-id="c1"]')).toBeNull();
     expect(text()).toContain("Nothing waiting for approval");

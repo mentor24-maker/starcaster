@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
+import ReasonPicker, { rejectNotice, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › Comments — Reddit comments written in Dane's voice. Reddit
@@ -477,6 +478,8 @@ export default function RedditCommentsPanel(): React.ReactElement {
   const [addError, setAddError] = useState('');
   const [rowBusy, setRowBusy] = useState<{ id: string; what: string }>({ id: '', what: '' });
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
+  /** The row whose Reject is asking why (Outreach wizard 12/19); null when no picker is open. */
+  const [rejecting, setRejecting] = useState<RedditItem | null>(null);
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -607,9 +610,9 @@ export default function RedditCommentsPanel(): React.ReactElement {
   };
 
   /** One row action; the server's refusal is shown on that row, word for word. */
-  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject' | 'paste' | 'read-again', body?: Record<string, unknown>) => {
+  const runAction = async (item: RedditItem, what: 'draft' | 'approve' | 'reject' | 'paste' | 'read-again', body?: Record<string, unknown>): Promise<boolean> => {
     const api = getApi();
-    if (!api) return;
+    if (!api) return false;
     const epoch = projectEpoch.current;
     setRowBusy({ id: item.id, what });
     setRowError({ id: '', message: '' });
@@ -619,7 +622,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
         method: 'POST',
         body: JSON.stringify(body || {}),
       });
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       const next = reply?.data as RedditItem;
       replaceItem(next);
       if (what === 'draft') {
@@ -634,19 +637,26 @@ export default function RedditCommentsPanel(): React.ReactElement {
       } else if (what === 'read-again') {
         setNotice('Asked the Mini to read it again.');
       } else {
-        setNotice('Rejected. It will not be posted.');
+        setNotice(rejectNotice('Rejected. It will not be posted.', (reply?.data as { feedback?: { recorded?: boolean; error?: string } })?.feedback));
       }
+      return true;
     } catch (err) {
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       setRowError({ id: item.id, message: errorText(err, 'That did not work, and the server gave no reason.') });
+      return false;
     } finally {
       if (epoch === projectEpoch.current) setRowBusy({ id: '', what: '' });
     }
   };
 
+  /** Reject asks why first: the picker is the confirmation, and Cancel rejects nothing (12/19). */
   const reject = (item: RedditItem) => {
-    if (!window.confirm('Reject this comment? It will not be posted, and this screen cannot bring it back.')) return;
-    void runAction(item, 'reject');
+    setRowError({ id: '', message: '' });
+    setRejecting(item);
+  };
+  const confirmReject = async (why: RejectReason) => {
+    if (!rejecting) return;
+    if (await runAction(rejecting, 'reject', why)) setRejecting(null);
   };
 
   const all = items || [];
@@ -813,6 +823,17 @@ export default function RedditCommentsPanel(): React.ReactElement {
             </p>
           )}
         </div>
+      ) : null}
+
+      {rejecting ? (
+        <ReasonPicker
+          title="Reject this comment? It will not be posted, and this screen cannot bring it back."
+          api={getApi()}
+          busy={busyFor(rejecting) === 'reject'}
+          error={errorFor(rejecting)}
+          onCancel={() => setRejecting(null)}
+          onConfirm={(why) => void confirmReject(why)}
+        />
       ) : null}
     </div>
   );

@@ -1,0 +1,91 @@
+/* Why Dane rejected a draft — components/outreach-wizard/reason-picker.tsx.
+   Outreach wizard 12/19. Shared by every channel's Reject.
+
+   The frame is the shared c-modal (legacy.css); only the inside is here, in
+   _draft-chooser.css's conventions: every flex box sets min-width: 0
+   (UI_RULES T8), no pixel min-widths (T9), content sizes the window (D7). */
+
+.reason-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.reason-picker-body p {
+  margin: 0;
+}
+
+.reason-picker-label {
+  font-weight: 600;
+}
+
+.reason-picker-help {
+  opacity: 0.8;
+}
+
+/* The chips wrap onto as many lines as they need; one click is the answer. */
+.reason-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 56ch;
+}
+
+.reason-picker-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.reason-picker-chip:hover:not(:disabled),
+.reason-picker-chip:focus-visible {
+  background: var(--danger, #a03c28);
+  border-color: var(--danger, #a03c28);
+  color: var(--btn-text, #fff);
+}
+
+.reason-picker-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.reason-picker-count {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.reason-picker-own {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.reason-picker-own input {
+  width: 30ch;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.reason-picker-body textarea {
+  width: 56ch;
+  max-width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.reason-picker-error {
+  color: var(--status-warn-ink);
+}
