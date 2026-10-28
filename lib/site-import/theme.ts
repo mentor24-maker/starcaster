@@ -16,6 +16,8 @@
 
 import { googleFontKey } from "../builder-client/builder-google-fonts";
 import type { ElementIR, SiteIR, TokenCount } from "./ir";
+import { THEME_PALETTE_ROLE_KEYS } from "../builder-client/builder-template";
+import type { BuilderThemePaletteRole } from "../builder-client/builder-template";
 
 /** The ten built-in Builder fonts by family name → their stored key.
  *  Mirrors BUILDER_HEADING_FONTS in components/builder/builder-utils.ts. */
@@ -221,6 +223,104 @@ export function importSurfaceColor(ir: SiteIR): string {
   return pickSurface(ir).surface;
 }
 
+
+/* ---------- the readability guard (task 86bctakh4) ---------- */
+
+/** Every foreground/background pairing a theme palette paints, declared in
+ *  ONE place. Checks used to be written one pair at a time, after each
+ *  incident: black-on-black text (Strands, 10/12) got a surface check, white
+ *  links got a link check — and white BUTTONS on a white page (Alphire,
+ *  10/27) shipped because nobody had written that pair yet. Now a role that
+ *  appears in no pair fails a test (PALETTE_PAIRS_COVER_EVERY_ROLE), so a new
+ *  role cannot ship unchecked.
+ *
+ *  `min` is the contrast ratio: 4.5 (WCAG AA) for text, 2 for a button against the
+ *  page (see that pair). `repair` names which side gets replaced.
+ *
+ *  A pair the SITE ITSELF painted together (its own button with its own
+ *  label) is the site's design: Divi's white-on-#2ea3f2 is 2.6:1 and nobody
+ *  wants the import to "fix" a brand. Those are held only to
+ *  INVISIBLE_BELOW. A pair the IMPORT composed — two colours measured
+ *  separately, a converted outline button, a copied or hardcoded text
+ *  colour — is held to `min`, because no designer ever saw it. */
+export type PalettePair = {
+  fg: BuilderThemePaletteRole;
+  bg: BuilderThemePaletteRole;
+  min: number;
+  repair: "fg";
+  why: string;
+};
+
+export const PALETTE_PAIRS: PalettePair[] = [
+  { fg: "surfaceText", bg: "surface", min: READABLE_CONTRAST, repair: "fg", why: "body text on the page" },
+  { fg: "bandText", bg: "band", min: READABLE_CONTRAST, repair: "fg", why: "text on a light band" },
+  { fg: "inverseText", bg: "inverse", min: READABLE_CONTRAST, repair: "fg", why: "text on a dark band" },
+  { fg: "headerText", bg: "header", min: READABLE_CONTRAST, repair: "fg", why: "menu text in the header" },
+  // The button must stand out from the page before its label matters, so
+  // this pair runs first and the label is re-checked against the result.
+  // 2:1, not WCAG's 3:1 for boundaries: the colour IS the site's brand
+  // (Divi blue is 2.6:1 on white and plainly visible), and the defect this
+  // exists for is a button that is not there at all — Alphire's white
+  // outline buttons, filled white on a white page at 1.0:1.
+  { fg: "button", bg: "surface", min: 2, repair: "fg", why: "a button against the page" },
+  { fg: "buttonText", bg: "button", min: READABLE_CONTRAST, repair: "fg", why: "a button's label" },
+];
+
+/** Below this a pairing is not a style choice, it is invisible. */
+export const INVISIBLE_BELOW = 1.5;
+
+export const pairKey = (pair: Pick<PalettePair, "fg" | "bg">) => `${pair.fg}/${pair.bg}`;
+
+/** Which roles the pairs above cover — the test compares this with
+ *  THEME_PALETTE_ROLE_KEYS. */
+export function uncoveredPaletteRoles(): BuilderThemePaletteRole[] {
+  const covered = new Set(PALETTE_PAIRS.flatMap((p) => [p.fg, p.bg]));
+  return THEME_PALETTE_ROLE_KEYS.filter((role) => !covered.has(role));
+}
+
+/** Checks every declared pair present in `palette` and repairs the ones that
+ *  do not read, in place, naming each repair in `notes`. A pair with either
+ *  side absent inherits the platform default and is not checked here.
+ *
+ *  Repair rules: a TEXT colour becomes white or near-black, whichever reads
+ *  (pure black if neither does). A BUTTON that vanishes into the page takes
+ *  the first of the site's own dark/brand colours (inverse, header, heading,
+ *  body text) that stands out — the site's colour, not an invented one — and
+ *  only then a neutral.
+ *
+ *  A site-painted pair stops being the site's design the moment the guard
+ *  replaces either of its colours: a white button with a dark label, turned
+ *  near-black because it vanished into a white page, now carries a label the
+ *  site never put on it, so that label is held to the full `min`. */
+export function guardPaletteReadability(
+  palette: Record<string, string>,
+  notes: string[],
+  brandCandidates: string[] = [],
+  sitePainted: Set<string> = new Set(),
+): void {
+  const repaired = new Set<string>();
+  for (const pair of PALETTE_PAIRS) {
+    const fg = palette[pair.fg];
+    const bg = palette[pair.bg];
+    if (!fg || !bg) continue;
+    const ratio = contrastRatio(fg, bg);
+    const asPainted = sitePainted.has(pairKey(pair)) && !repaired.has(pair.fg) && !repaired.has(pair.bg);
+    const floor = asPainted ? INVISIBLE_BELOW : pair.min;
+    if (ratio >= floor) continue;
+    let next: string;
+    if (pair.fg === "button") {
+      const candidates = [palette.inverse, palette.header, ...brandCandidates, contrastText(bg), "#000000"];
+      next = candidates.find((c) => c && contrastRatio(c, bg) >= pair.min) || "#000000";
+    } else {
+      const neutral = contrastText(bg);
+      next = contrastRatio(neutral, bg) >= pair.min ? neutral : luminance(bg) > 0.18 ? "#000000" : "#ffffff";
+    }
+    palette[pair.fg] = next;
+    repaired.add(pair.fg);
+    notes.push(`${pair.why}: rejected ${pair.fg} ${fg} on ${pair.bg} ${bg} (${ratio.toFixed(1)}:1, under ${floor}:1) — using ${next}`);
+  }
+}
+
 /* ---------- the derivation ---------- */
 
 export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
@@ -359,6 +459,11 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   }
   if (top(sum?.buttons)) borderRadius = Math.max(0, Math.min(60, Number(radius) || 0));
   if (borderRadius) treatments.buttonRadius = borderRadius;
+  // The site painted its button and label together only when it had a real
+  // fill and a real label colour; an outline conversion is the import's.
+  const sitePainted = new Set<string>();
+  if (fill && !outlined && toHex(buttonText)) sitePainted.add(pairKey({ fg: "buttonText", bg: "button" }));
+  guardPaletteReadability(palette, notes, [colors.heading, colors.text].filter(Boolean), sitePainted);
   notes.push(`palette: ${Object.entries(palette).map(([k, v]) => `${k} ${v}`).join(", ") || "no backgrounds measured (capture predates it)"}`);
 
   const widthValue = Number(top(sum?.contentWidths));
@@ -368,10 +473,10 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
 
   return {
     name,
-    primaryColor: fill || readableLink || "",
+    primaryColor: palette.button || fill || readableLink || "",
     secondaryColor: band || "",
     backgroundColor: surface || "",
-    accentColor: readableLink || fill || "",
+    accentColor: readableLink || palette.button || fill || "",
     ...(borderRadius !== undefined ? { borderRadius } : {}),
     ...(contentWidth ? { contentWidth } : {}),
     palette,

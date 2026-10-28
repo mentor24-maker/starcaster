@@ -12,6 +12,31 @@ Existing sites look exactly the same: a theme that sets neither option changes
 nothing, and a button with its own colours keeps them. A real-browser check now
 measures the outline button and its square, filled counterpart.
 
+## 2026-10-27 — Imported themes can no longer ship invisible buttons or unreadable text (#876)
+
+When Site Import builds a theme from a site, it now checks every colour that
+gets painted on top of another one: text on the page, text on light and dark
+bands, menu text in the header, a button against the page, and a button's
+label. Before, only some of those were checked, which is how Alphire's import
+produced white buttons on a white page. Anything that does not read is
+swapped for a readable colour, preferring the site's own dark or brand
+colours, and the theme's notes say what was changed. A site's own button and
+label are left alone unless they are truly invisible, so brand colours are
+not "corrected". If the check has to recolour a button, its label is checked
+again against the new colour. Adding a new theme colour without saying what
+it sits on now fails a test.
+## 2026-10-27 — A Connect button opens the Mini's browser inside the Outreach screen (#880)
+
+Fourth piece of the sign-in window. On Engage › Outreach, the Connect stage
+now has a "Connect Reddit" (or YouTube, or Substack) button. It opens a live
+picture of the Mini's browser right inside Starcaster, already on the site's
+sign-in page, with a countdown and a Close button. Clicking and typing in the
+picture happens on the Mini, and the password goes straight to the Mini, never
+through Starcaster's server. When the window closes it always says why, saves
+that on the window's log, then asks the Mini who is signed in and offers
+"Signed in as X. Post as this account?". It was rehearsed end to end on the
+Mini against a throwaway test login page: typed in, signed in, closed. Real
+sign-ins to Reddit, YouTube and Substack are the next pieces.
 ## 2026-10-27 — Substack drafts now come as three choices, like Reddit and YouTube (#879)
 
 When Dane asks for a Substack Note or a reply, he now gets three different
