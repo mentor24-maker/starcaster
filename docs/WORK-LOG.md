@@ -1,3 +1,16 @@
+## 2026-10-28 — Section backgrounds can stack glows and gradients, and imports keep them (#893)
+
+A Builder gradient used to be just two colours and an angle, so when Site
+Import met anything richer it threw the whole thing away. Alphire's hero —
+two soft glows, cyan and violet, laid over a three-colour dark wash — came
+out as a plain section. Section and column backgrounds can now hold a stack
+of gradient layers, both straight and round, with see-through colours, and
+there is a "Gradient Layers" editor in the background panel to build or
+change them. The importer keeps every layer it captures. Backgrounds that
+don't use layers look exactly as they did before (the before/after
+screenshots matched pixel for pixel), and saving a page no longer quietly
+resets a gradient's angle.
+
 ## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
 
 A theme used to have a single button colour, so on a site like Alphire's,
