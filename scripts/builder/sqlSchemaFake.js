@@ -1156,7 +1156,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       );
     }
     const prefer = names.length ? String(headers[names[0]] || '') : '';
-    const result = { representation: false, mergeDuplicates: false };
+    const result = { representation: false, mergeDuplicates: false, countExact: false };
     if (!prefer.trim()) return result;
 
     for (const token of prefer.split(',').map((part) => part.trim().toLowerCase())) {
@@ -1165,6 +1165,9 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
       else if (token === 'return=minimal') result.representation = false;
       // The other half of an upsert (CLAUDE.md landmine 15) — see the POST path.
       else if (token === 'resolution=merge-duplicates') result.mergeDuplicates = true;
+      // A GET's matching total, before `limit` — lib/supabase.js reads it off
+      // Content-Range and returns it as `count`.
+      else if (token === 'count=exact') result.countExact = true;
       else {
         throw new Error(`sqlSchemaFake: Prefer token "${token}" is not implemented`);
       }
@@ -1176,7 +1179,7 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
     method = 'GET', table: tableName = '', query = '', body = undefined, headers = {},
   } = {}) {
     calls.push({ method, table: tableName, query, body, headers });
-    const { representation, mergeDuplicates } = preferences(headers);
+    const { representation, mergeDuplicates, countExact } = preferences(headers);
     const table = schema.tables.get(tableName);
     if (!table) {
       return { ok: false, status: 404, error: `relation "public.${tableName}" does not exist` };
@@ -1200,7 +1203,10 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         const probe = selectColumns(tableName, {}, params.get('select'));
         if (probe.error) return { ok: false, status: 400, error: probe.error };
       }
-      return { ok: true, status: 200, data: projected };
+      if (!countExact) return { ok: true, status: 200, data: projected };
+      const unlimited = new Map(params);
+      unlimited.delete('limit');
+      return { ok: true, status: 200, data: projected, count: filterRows(tableName, unlimited).length };
     }
 
     if (method === 'POST') {
