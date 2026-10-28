@@ -1,3 +1,14 @@
+## 2026-10-28 — The sign-in window says why when the Mini never answers, and the outside check tests Dane's MacBook's route (#895)
+
+Clicking Connect on the MacBook left the window on "Opening the Mini's browser…"
+forever. The cause was the new Tailscale access rule: it lets Dane's own devices
+reach the Mini only on three ports, and the window's picture feed uses a fourth
+(443), so the MacBook's connection was silently dropped. The fix there is one
+more port in the rule, a change in the Tailscale console. This change makes the
+window give up after 30 seconds and say, in plain words, that Tailscale is the
+likely cause; and the Mini's outside check now tries the window's route the way
+a computer with Tailscale on does, so this cannot hide again.
+
 ## 2026-10-28 — YouTube gets a list of creators to approve or reject (#888)
 
 The Outreach screen's YouTube "Find creators" step used to say there was no

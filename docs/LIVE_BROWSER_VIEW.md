@@ -186,6 +186,21 @@ also turns Funnel off, so Dane chose not to use it (2026-10-27, option B on
 and 8091 as FAIL, and that FAIL is expected. The SSH route between the
 machines uses the home network (`mac-mini.local`), not the tailnet.
 
+**Found 2026-10-28 (task 86bcu7d6h): the access rule must allow port 443, or
+the window cannot open from a computer that is on the tailnet.** On a tailnet
+device, Tailscale's own name lookup turns the Funnel address into the Mini's
+tailnet address, so the Connect window's picture feed travels over the tailnet,
+not the internet. Port 443 there IS served — by Tailscale itself, with the same
+`/` and `/live` routes Funnel publishes — but the first access rule (86bctcm39)
+allowed only 22, 5900 and 8080, and the Mini's log shows every one of the
+MacBook's connections dropped (`Drop: TCP{100.127.85.12 > 100.108.7.116:443}
+no rules matched`). The window sat on "Opening…" while Starcaster's server,
+which is not on the tailnet, opened the pass without trouble. The fix is one
+more port in the Mini's grant, `tcp:443`. It opens nothing new: 443 reaches
+only the two routes already public through Funnel, and 8091, 18789 and 18800
+stay closed. The outside check now reads this path ("from a tailnet device"),
+and the window gives up after 30 seconds with no picture and says why.
+
 **Found while checking (since fixed by `scripts/install_tailscale.sh`): Tailscale has not been running on the Mini since about
 Oct 5, 9:35pm.** Its last log line is from then, `tailscaled` is not running,
 and `tailscale funnel status` cannot reach it. So the `youtube-media` worker

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SignInWindow, {
   CLOSE_WORDS,
+  FIRST_PICTURE_MS,
   IDLE_CLOSE_MS,
   MAX_WINDOW_MS,
   clockFor,
@@ -220,6 +221,46 @@ describe("the window always says why it closed", () => {
     expect(shown).toBe(CLOSE_WORDS[reasonFromDoor(doorReason)]);
     expect(shown).toBeTruthy();
     expect(closeLogs()[0].body).toEqual({ reason: logged });
+  });
+
+  it("a feed that never sends a picture is closed after the wait and says why, instead of 'Opening…' forever (86bcu7d6h)", async () => {
+    vi.useFakeTimers();
+    try {
+      await mount();
+      await act(async () => button("Connect Reddit").click());
+      const ws = FakeSocket.last!; // never accepts: the 2026-10-28 Tailscale drop
+      expect(container!.querySelector('[role="timer"]')!.textContent).toMatch(/^Opening the Mini's browser on Reddit/);
+      await act(async () => { vi.advanceTimersByTime(FIRST_PICTURE_MS - 1); });
+      expect(container!.querySelector("[data-close-reason]")).toBeNull();
+      await act(async () => { vi.advanceTimersByTime(1); });
+      expect(container!.querySelector("[data-close-reason]")!.textContent).toBe(CLOSE_WORDS["no-answer"]);
+      expect(CLOSE_WORDS["no-answer"]).toMatch(/Tailscale/);
+      expect(ws.readyState).toBe(3);
+      expect(closeLogs()).toEqual([{ path: "/api/browser-view/bvs_1/close", body: { reason: "error" } }]);
+      expect(onClosed).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("once the first picture arrives, the wait is called off", async () => {
+    vi.useFakeTimers();
+    try {
+      await mount();
+      await openWindow();
+      await act(async () => { vi.advanceTimersByTime(FIRST_PICTURE_MS * 2); });
+      expect(container!.querySelector("[data-close-reason]")).toBeNull();
+      expect(container!.querySelector(".sign-in-window-picture")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a socket that closes before it ever opened never reached the Mini, and says that", async () => {
+    await mount();
+    await act(async () => button("Connect Reddit").click());
+    await act(async () => FakeSocket.last!.drop());
+    expect(container!.querySelector("[data-close-reason]")!.getAttribute("data-close-reason")).toBe("no-answer");
   });
 
   it("a dropped connection with no word from the Mini says so, rather than nothing", async () => {
