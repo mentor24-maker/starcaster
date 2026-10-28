@@ -185,6 +185,20 @@ describe("OutreachWizardPanel", () => {
     expect(setActivePage).toHaveBeenCalledWith("engageYoutubeOutreachPage");
   });
 
+  it("every stage but the open one has a pencil back to its screen — done stages included (86bcuar8y)", async () => {
+    await mount();
+    await act(async () => tab("Substack").click());
+    const rows = stages();
+    const pencil = (row: HTMLLIElement) => row.querySelector<HTMLAnchorElement>(".outreach-wizard-stage-edit");
+    // The open stage (conversations) has its button and no pencil; every other row has one.
+    expect(rows.map((r) => !!pencil(r))).toEqual([true, true, false, true, true]);
+    const done = pencil(rows[1])!;
+    expect(done.getAttribute("href")).toBe("#page=acquireSubstackPage");
+    expect(done.getAttribute("aria-label")).toBe("Go to creators");
+    await act(async () => done.click());
+    expect(setActivePage).toHaveBeenCalledWith("acquireSubstackPage");
+  });
+
   it("remembers the last channel per viewer, and survives storage that throws", async () => {
     await mount();
     await act(async () => tab("Reddit").click());

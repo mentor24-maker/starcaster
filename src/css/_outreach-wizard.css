@@ -140,6 +140,19 @@
   text-decoration: none;
 }
 
+/* The pencil on every stage but the open one: the way back to its screen. */
+.outreach-wizard-stage .outreach-wizard-stage-edit {
+  flex: 0 0 auto;
+  margin-left: auto;
+  /* Scoped so it outranks .btn and .icon-btn, which load later at the same strength. */
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  text-decoration: none;
+}
+
 .outreach-wizard-stage-actions {
   display: flex;
   flex-wrap: wrap;
