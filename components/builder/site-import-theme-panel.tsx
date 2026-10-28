@@ -44,7 +44,37 @@ type Preview = {
   notes: string[];
   palette: Record<string, string>;
   previousDefaultName: string;
+  /** Published pages the default box would restyle; null = could not count. */
+  pagesRestyledByDefault: number | null;
 };
+
+/*
+ * The default box tells the truth (review round 1, task 86bctakkk). Making a
+ * theme the default edits no page row, but every published page with no
+ * theme of its own renders with the default (`pickThemeForPage`), so the
+ * live site changes the moment it is saved. "No page is changed" is only
+ * said while the box is unticked, and the box starts unticked.
+ */
+export function defaultBoxWarning(count: number | null): string {
+  if (count === null) {
+    return "Making it the default changes how every published page without a theme of its own looks on the live site right away. (The pages could not be counted just now.)";
+  }
+  if (count === 0) return "No published page uses the default theme, so making it the default changes nothing on the live site.";
+  return `Making it the default changes how ${count} published page${count === 1 ? "" : "s"} look${count === 1 ? "s" : ""} on the live site right away.`;
+}
+
+export function introLine(makeDefault: boolean): string {
+  return makeDefault
+    ? "Makes a new theme from the colours, fonts and sizes this import captured, and makes it the default."
+    : "Makes a new theme from the colours, fonts and sizes this import captured. No page is changed.";
+}
+
+export function createdMessage(name: string, madeDefault: boolean, undo: string): string {
+  const effect = madeDefault
+    ? "No page's content was edited; the live site now uses this theme's colours and fonts."
+    : "No page was changed.";
+  return `Theme “${name}” created. ${effect} ${undo}`.trim();
+}
 
 export function readThemePreview(body: unknown): Preview | null {
   const data = unwrapEnvelope<Record<string, unknown> | null>((body ?? {}) as StarcasterEnvelope);
@@ -56,6 +86,7 @@ export function readThemePreview(body: unknown): Preview | null {
     notes: Array.isArray(data.notes) ? (data.notes as string[]) : [],
     palette: theme.palette && typeof theme.palette === "object" ? theme.palette : {},
     previousDefaultName: previous?.name ?? "",
+    pagesRestyledByDefault: typeof data.pagesRestyledByDefault === "number" ? data.pagesRestyledByDefault : null,
   };
 }
 
@@ -69,7 +100,7 @@ export function SiteImportThemePanel({
   onCreated: () => void;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [makeDefault, setMakeDefault] = useState(true);
+  const [makeDefault, setMakeDefault] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
   const base = `/api/site-import/jobs/${encodeURIComponent(jobId)}/theme`;
@@ -98,7 +129,7 @@ export function SiteImportThemePanel({
       const theme = (data?.theme ?? {}) as { name?: string };
       const warning = typeof data?.warning === "string" ? ` ${data.warning}` : "";
       setMessage({
-        text: `Theme “${theme.name ?? preview.name}” created. No page was changed. ${String(data?.undo ?? "")}${warning}`,
+        text: `${createdMessage(theme.name ?? preview.name, makeDefault, String(data?.undo ?? ""))}${warning}`,
         isError: Boolean(warning),
       });
       setPreview(null);
@@ -124,9 +155,7 @@ export function SiteImportThemePanel({
           Creating another makes a new theme beside it; it never changes that one.
         </p>
       ) : (
-        <p className="meta">
-          Makes a new theme from the colours, fonts and sizes this import captured. No page is changed.
-        </p>
+        <p className="meta">{introLine(makeDefault)}</p>
       )}
       {!preview ? (
         <button type="button" className="btn" disabled={busy} onClick={() => void handlePreview()}>
@@ -159,6 +188,9 @@ export function SiteImportThemePanel({
             Make it this project&apos;s default theme
             {preview.previousDefaultName ? ` (instead of “${preview.previousDefaultName}”)` : ""}
           </label>
+          <p className={`site-import-theme-default-note${makeDefault ? " is-warning" : ""}`}>
+            {defaultBoxWarning(preview.pagesRestyledByDefault)}
+          </p>
           <div className="site-import-theme-actions">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void handleCreate()}>
               {busy ? "Creating…" : `Create “${preview.name}”`}

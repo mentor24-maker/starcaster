@@ -125,18 +125,29 @@ async function handle(req, res, pathname, method) {
 
   // GET  /api/site-import/jobs/:id/theme — the theme this import WOULD make
   // POST /api/site-import/jobs/:id/theme — make it, touching no page
-  // (task 86bctakkk). Body { makeDefault?: boolean } (default true, the
-  // same as the mapper's --apply). Always a NEW theme: the name is the next
-  // free "<site> N", so a theme somebody adjusted is never overwritten.
+  // (task 86bctakkk). Body { makeDefault?: boolean } — only an explicit true
+  // makes it the default, because that restyles every published page with no
+  // theme of its own on the live site at once; GET returns that count as
+  // `pagesRestyledByDefault` (null when it could not be read — never 0).
+  // Always a NEW theme: the name is the next free "<site> N", so a theme
+  // somebody adjusted is never overwritten.
   if (tail === '/theme' && (method === 'GET' || method === 'POST')) {
     try {
       if (method === 'GET') {
         const plan = await importTheme.planImportTheme(job, scope);
-        return sendOk(res, 200, { theme: plan.theme, name: plan.name, notes: plan.notes, previousDefault: plan.previousDefault }), true;
+        let pagesRestyledByDefault = null;
+        try {
+          pagesRestyledByDefault = await importTheme.pagesRestyledByDefault(scope);
+        } catch {
+          // The preview still answers; the screen says it could not count.
+        }
+        return sendOk(res, 200, {
+          theme: plan.theme, name: plan.name, notes: plan.notes, previousDefault: plan.previousDefault, pagesRestyledByDefault,
+        }), true;
       }
       if (checkEndpointLimit(req, res, 'siteImport.theme')) return true;
       const body = await parseJsonBody(req);
-      const makeDefault = body.makeDefault !== false;
+      const makeDefault = body.makeDefault === true;
       const plan = await importTheme.planImportTheme(job, scope);
       const checkpoint = await importTheme.saveImportTheme(plan, scope, { makeDefault });
       const updated = await store.updateJob(job.id, {

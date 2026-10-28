@@ -145,6 +145,7 @@ function boundTheme(store) {
   return {
     planImportTheme: (job, scope) => planImportTheme(job, scope, { deps: deps(store) }),
     saveImportTheme: (plan, scope, opts) => saveImportTheme(plan, scope, { ...opts, deps: deps(store) }),
+    pagesRestyledByDefault: async () => 17,
     undoLine,
   };
 }
@@ -174,6 +175,7 @@ test('GET /jobs/:id/theme previews the theme and creates nothing', async () => {
   assert.ok(data.theme.palette, 'the palette is in the preview');
   assert.ok(data.notes.length > 0, 'the readability notes are in the preview');
   assert.equal(data.previousDefault.name, 'alphire 1');
+  assert.equal(data.pagesRestyledByDefault, 17, 'the screen states how many live pages the default box restyles');
   assert.equal(store.calls.some(([n]) => n !== 'listThemes'), false);
   assert.equal(calls.some(([n]) => n === 'updateJob'), false);
   assert.deepEqual(calls.find(([n]) => n === 'getJob'), ['getJob', 'simp_alphire', 'proj_1']);
@@ -187,11 +189,30 @@ test('POST /jobs/:id/theme creates the theme, records it on the job, and keeps t
   assert.equal(res.statusCode, 201);
   assert.equal(res.json().data.theme.name, 'alphire 1');
   assert.equal(store.themes.length, 1);
-  assert.equal(store.themes[0].isDefault, true, 'default unless asked otherwise — the same as the mapper');
+  assert.equal(store.themes[0].isDefault, false, 'never the default unless asked: that restyles the live site');
   const update = calls.find(([n]) => n === 'updateJob');
   assert.equal(update[2].checkpoints.theme.name, 'alphire 1');
   assert.deepEqual(update[2].checkpoints.capture, { at: 'then' });
   assert.ok(update[2].checkpoints.normalize.blobPath);
+});
+
+test('GET still previews when the pages cannot be counted, and says null rather than 0', async () => {
+  const store = fakeStore();
+  const { route } = loadRoute({ ...boundTheme(store), pagesRestyledByDefault: async () => { throw new Error('db down'); } });
+  const res = makeRes();
+  await route.handle(makeReq(), res, '/api/site-import/jobs/simp_alphire/theme', 'GET');
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.json().data.pagesRestyledByDefault, null);
+});
+
+test('POST with makeDefault:true makes it the default', async () => {
+  const store = fakeStore([{ id: 'a', name: 'Default', isDefault: true }]);
+  const { route } = loadRoute(boundTheme(store));
+  const res = makeRes();
+  await route.handle(makeReq({ makeDefault: true }), res, '/api/site-import/jobs/simp_alphire/theme', 'POST');
+  assert.equal(res.statusCode, 201);
+  assert.equal(store.themes.find((t) => t.id === 'a').isDefault, false);
+  assert.equal(store.themes.find((t) => t.id !== 'a').isDefault, true);
 });
 
 test('POST with makeDefault:false leaves the default alone', async () => {

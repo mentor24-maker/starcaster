@@ -517,7 +517,6 @@ async function main() {
   log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
 }
 
-/** What the menu step will build — the dry run's promise, and --apply's. */
 /**
  * --theme-only: the import theme and nothing else (task 86bctakkk). The
  * pages' updated_at is read before and after, and a change fails the run —
@@ -550,6 +549,7 @@ async function runThemeOnly(job, scope) {
   log(`Pages untouched: all ${after.size} page(s) read back with the same updated_at as before.`);
 }
 
+/** What the menu step will build — the dry run's promise, and --apply's. */
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
     log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);
