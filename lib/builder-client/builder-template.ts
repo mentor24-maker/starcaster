@@ -452,6 +452,13 @@ export type BuilderTheme = {
  *   header   — the site header / navigation chrome
  *   button   — the primary call-to-action fill
  *
+ * Plus two optional button pairs per SURFACE, because one button colour cannot
+ * suit every ground: a light button that reads on the dark band vanishes on a
+ * white section (Alphire, 2026-10-27). `surfaceButton` is the button on a light
+ * section (surface or band), `inverseButton` the button on a dark one (the
+ * inverse band, a hero tint, a dark section colour). Absent = the plain
+ * `button` pair everywhere, which is what every theme before them renders.
+ *
  * Stored inside the theme's `typography` JSONB as `typography.palette` (the
  * same no-migration home `pageLayout` margins use) and surfaced as a top-level
  * `palette` field on the theme summary. Values are hex strings; absent role =
@@ -467,7 +474,11 @@ export type BuilderThemePaletteRole =
   | "header"
   | "headerText"
   | "button"
-  | "buttonText";
+  | "buttonText"
+  | "surfaceButton"
+  | "surfaceButtonText"
+  | "inverseButton"
+  | "inverseButtonText";
 
 export type BuilderThemePalette = Partial<Record<BuilderThemePaletteRole, string>>;
 
@@ -477,6 +488,8 @@ export const THEME_PALETTE_ROLE_KEYS: BuilderThemePaletteRole[] = [
   "inverse", "inverseText",
   "header", "headerText",
   "button", "buttonText",
+  "surfaceButton", "surfaceButtonText",
+  "inverseButton", "inverseButtonText",
 ];
 
 /**
