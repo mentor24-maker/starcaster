@@ -1,3 +1,19 @@
+## 2026-10-28 — Reddit finds conversations on its own (#898)
+
+Until now every Reddit post Dane answered had to be found by hand and pasted
+in as a link. Now he picks subreddits once, on Engage › Outreach › Reddit: a
+"Find subreddits for my topics" button asks the AI to suggest communities from
+his canon and keywords, and he approves or rejects each one. Every four hours
+the Mini opens two of those subreddits in its signed-in browser, reads the new
+and rising posts and the subreddit's rules, and keeps the posts that match his
+subjects. They appear under Find conversations, best first, each saying why it
+ranked, showing the strongest comments and who wrote them, and quoting the
+subreddit's self-promotion rule when it has one. One click writes three reply
+options (to the post or to a comment); Skip asks why; anyone in the thread can
+be saved as a contact. If the Mini is signed out of Reddit, the screen says so
+instead of showing "0 found". It needs two new database tables (SQL hand-off
+on the pull request) and its schedule installed on the Mini after merge.
+
 ## 2026-10-28 — Projects can now share sections, templates and themes with each other, behind the scenes (#894)
 
 Dane wants one project to be able to offer its saved sections, page templates
