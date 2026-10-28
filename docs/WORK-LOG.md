@@ -1,3 +1,12 @@
+## 2026-10-28 — A single heading can use a library font or any Google font (#890)
+
+The Font setting on a Heading module only listed the eleven fonts Starcaster
+started with, so a font from the Font Library (Orbitron, say) or a Google font
+could go on a whole theme but never on one heading. The setting now opens the
+same font window the theme uses: the built-ins, your favourites, the whole
+library, and "Use a Google font by name…". The page already knew how to load
+and draw a font chosen this way; only the setting was missing it. Headings
+already on a built-in font are unchanged.
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
 Rejecting a draft comment or Note used to throw it away with no record of
