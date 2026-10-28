@@ -290,6 +290,21 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
   );
 }
 
+function EditIcon(): React.ReactElement {
+  // App.ACTION_ICONS.edit (public/js/core.js).
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Every stage but the open one: a pencil at the right edge that opens the same
+ * screen its button would. Without it a stage that is already done — approved
+ * and rejected replies included — had no way back from here (task 86bcuar8y).
+ */
 function StageRow({ stage, index, open, children }: {
   stage: OutreachStage;
   index: number;
@@ -319,6 +334,18 @@ function StageRow({ stage, index, open, children }: {
           </div>
         ) : null}
       </div>
+      {!open && stage.next ? (
+        <a
+          className="btn tiny-btn icon-btn outreach-wizard-stage-edit"
+          href={`#page=${stage.next.page}`}
+          title={stage.next.label}
+          aria-label={stage.next.label}
+          data-stage-edit={stage.key}
+          onClick={(e) => openPage(e, stage.next!.page)}
+        >
+          <span className="icon-btn-glyph"><EditIcon /></span>
+        </a>
+      ) : null}
     </li>
   );
 }
