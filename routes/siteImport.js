@@ -20,6 +20,7 @@ const { parseJsonBody, sendOk, sendErr } = require('./http');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/siteImportStore');
+const importTheme = require('../lib/siteImportTheme');
 
 const PREFIX = '/api/site-import';
 
@@ -85,7 +86,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { jobs: listed.data }), true;
   }
 
-  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel)?$`));
+  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel|/theme)?$`));
   if (!jobMatch) return sendErr(res, 404, 'Unknown Site Import endpoint', { code: 'NOT_FOUND' }), true;
   const jobId = decodeURIComponent(jobMatch[1]);
   const tail = jobMatch[2] || '';
@@ -120,6 +121,39 @@ async function handle(req, res, pathname, method) {
     });
     if (!updated.ok) return sendErr(res, updated.status || 500, updated.error), true;
     return sendOk(res, 200, { job: updated.data }), true;
+  }
+
+  // GET  /api/site-import/jobs/:id/theme — the theme this import WOULD make
+  // POST /api/site-import/jobs/:id/theme — make it, touching no page
+  // (task 86bctakkk). Body { makeDefault?: boolean } (default true, the
+  // same as the mapper's --apply). Always a NEW theme: the name is the next
+  // free "<site> N", so a theme somebody adjusted is never overwritten.
+  if (tail === '/theme' && (method === 'GET' || method === 'POST')) {
+    try {
+      if (method === 'GET') {
+        const plan = await importTheme.planImportTheme(job, scope);
+        return sendOk(res, 200, { theme: plan.theme, name: plan.name, notes: plan.notes, previousDefault: plan.previousDefault }), true;
+      }
+      if (checkEndpointLimit(req, res, 'siteImport.theme')) return true;
+      const body = await parseJsonBody(req);
+      const makeDefault = body.makeDefault !== false;
+      const plan = await importTheme.planImportTheme(job, scope);
+      const checkpoint = await importTheme.saveImportTheme(plan, scope, { makeDefault });
+      const updated = await store.updateJob(job.id, {
+        checkpoints: { ...job.checkpoints, theme: { ...checkpoint, at: new Date().toISOString() } },
+      });
+      // The theme exists either way; say so rather than reporting a failure
+      // the operator would answer by clicking again and making "<site> 2".
+      return sendOk(res, 201, {
+        theme: checkpoint,
+        undo: importTheme.undoLine(checkpoint),
+        job: updated.ok ? updated.data : job,
+        ...(updated.ok ? {} : { warning: `The theme was created, but recording it on the import failed: ${updated.error}` }),
+      }), true;
+    } catch (err) {
+      const status = err.code === 'NOT_CAPTURED' ? 409 : 500;
+      return sendErr(res, status, err.message, { code: err.code || 'THEME_FAILED' }), true;
+    }
   }
 
   return sendErr(res, 405, 'Method not allowed', { code: 'METHOD_NOT_ALLOWED' }), true;
