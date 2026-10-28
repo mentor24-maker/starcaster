@@ -653,7 +653,11 @@ cost anything.**
   and full of fanciful turns of phrases that it is difficult for me to
   understand which ones are really important and which ones aren't."*
 
-**Client-facing bugs are unaffected** — file those on sight. The full rule,
+**Client-facing bugs are unaffected** — file those on sight. **And a missing
+product feature that blocked a job is filed as that feature, not patched
+around** (Dane, 2026-10-27: *"We do not want to paper over infrastructure"*).
+Unblock the job, then ticket the capability whose absence caused it, and prefer
+the fix that removes the whole class. `docs/DOCTRINE.md` §6.25. The full rule,
 the numbers and the six that stayed: `docs/DOCTRINE.md` §6.24.
 
 ## The fast-track lane — "Let's fast track <ticket-id>"
