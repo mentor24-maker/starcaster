@@ -261,6 +261,83 @@ test('every fifth decision on a channel refreshes its lessons, and only then', a
   }
 });
 
+test('a channel refresh sees the all-channel lessons: one switched off there is not re-suggested, one on is not duplicated, and neither is replaced', async () => {
+  const { db, lessons, restore } = withDb();
+  try {
+    await seed(db, DECISIONS);
+    const everywhere = suggester([
+      { text: 'Never open with a compliment.', from: ['F2'] },
+      { text: 'No exclamation marks.', from: ['F3'] },
+    ]);
+    assert.equal((await lessons.refreshLessons('all', SCOPE_A, { generate: everywhere.generate })).ok, true);
+    const all = Object.fromEntries((await lessons.listLessons('all', SCOPE_A)).data.map((l) => [l.text, l]));
+    assert.equal((await lessons.updateLesson(all['Never open with a compliment.'].id, { enabled: false }, SCOPE_A)).ok, true);
+
+    const reddit = suggester([
+      { text: 'never open with a compliment', from: ['F1'] },
+      { text: 'No exclamation marks', from: ['F4'] },
+      { text: 'Two sentences at most.', from: ['F5'] },
+    ]);
+    const res = await lessons.refreshLessons('reddit', SCOPE_A, { generate: reddit.generate });
+    assert.equal(res.ok, true, res.error);
+    // BREAK TEST: reading only channel=eq.reddit lets both back in, the first switched ON.
+    assert.match(reddit.asked[0].prompt, /switched OFF[^\n]*\n- Never open with a compliment\./);
+    assert.match(reddit.asked[0].prompt, /already in place[^\n]*\n- No exclamation marks\./);
+    assert.deepEqual(res.data.dropped.map((d) => d.text), ['never open with a compliment', 'No exclamation marks']);
+    assert.equal(res.data.added, 1);
+    assert.equal(res.data.replaced, 0);
+
+    const after = (await lessons.listLessons('reddit', SCOPE_A)).data;
+    assert.deepEqual(after.map((l) => [l.channel, l.text, l.enabled]), [
+      ['all', 'Never open with a compliment.', false],
+      ['all', 'No exclamation marks.', true],
+      ['reddit', 'Two sentences at most.', true],
+    ]);
+
+    // And an all-channel refresh sees the Reddit lesson, without replacing it.
+    const again = suggester([{ text: 'Two sentences at most', from: ['F1'] }]);
+    const allAgain = await lessons.refreshLessons('all', SCOPE_A, { generate: again.generate });
+    assert.equal(allAgain.ok, true, allAgain.error);
+    assert.deepEqual(allAgain.data.dropped.map((d) => d.text), ['Two sentences at most']);
+    assert.ok((await lessons.listLessons('reddit', SCOPE_A)).data.some((l) => l.channel === 'reddit' && l.text === 'Two sentences at most.'));
+  } finally {
+    restore();
+  }
+});
+
+test('the decisions are counted by the database, so past 1000 a refresh is still every fifth decision, not every one', async () => {
+  const { db, lessons, restore } = withDb();
+  try {
+    const many = Array.from({ length: 1000 }, (_, i) => ({
+      project_id: SCOPE_A.projectId,
+      owner_user_id: SCOPE_A.userId,
+      channel: 'reddit',
+      item_id: `bulk-${i}`,
+      item_kind: '',
+      action: 'approved-as-is',
+      reason_tags: [],
+      note: '',
+      draft_text: `Draft ${i}`,
+      final_text: '',
+      chosen_option: null,
+      created_at: new Date(START + i * 1000).toISOString(),
+    }));
+    const put = await db.sbQuery({ method: 'POST', table: 'outreach_feedback', query: 'select=id', headers: { Prefer: 'return=representation' }, body: many });
+    assert.equal(put.ok, true, put.error);
+    const model = suggester([{ text: 'Shorter.', from: ['F1'] }]);
+    assert.equal((await lessons.refreshIfDue('reddit', SCOPE_A, { generate: model.generate })).refreshed, true);
+    await seed(db, [{ action: 'approved-as-is' }]);
+    // BREAK TEST: counting fetched rows (limit 1000) reads 1000 again here and refreshes.
+    assert.equal(await lessons.refreshIfDue('reddit', SCOPE_A, { generate: model.generate }), null);
+    assert.equal(model.asked.length, 1);
+    // The count is asked for, not the rows.
+    const asked = db.calls.filter((c) => c.table === 'outreach_feedback' && c.method === 'GET' && /select=id&limit=1$/.test(c.query));
+    assert.ok(asked.length >= 2 && asked.every((c) => c.headers.Prefer === 'count=exact'));
+  } finally {
+    restore();
+  }
+});
+
 test('a decision recorded through attachFeedback still stands when the lessons refresh it triggers fails', async () => {
   const { db, feedback, restore } = withDb();
   const aiPath = require.resolve('../../lib/aiClient.js');

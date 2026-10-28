@@ -9,7 +9,10 @@ Outreach wizard's Learn stage lists them: each can be switched off, edited,
 deleted, or asked "Why", which shows the exact decisions it came from. Dane can
 add his own, for one channel or all of them. Lessons are suggested again after
 every five decisions, or with the Refresh Lessons button, and a refresh never
-brings back one he switched off or overwrites one he edited. The stage also
+brings back one he switched off (including one switched off for all channels)
+or overwrites one he edited. If an automatic refresh fails — no AI credit, say —
+the message after Approve or Reject now says so, rather than the lessons quietly
+going stale. The stage also
 shows a score — how many of the last 20 drafts he approved without changing a
 word — so he can see whether it is improving. One SQL file must be run before
 release; until then, writing a draft is refused with a message naming it.
