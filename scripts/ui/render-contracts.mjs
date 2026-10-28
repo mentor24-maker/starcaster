@@ -101,6 +101,11 @@ const PARALLAX_IMAGE_SECTION = {
  * Red at three-quarter strength is not a design choice — it is the loudest
  * value available, so a failure here is unmistakable in a screenshot.
  */
+/** Clears the fixed colours createEmptyModule gives a new Button, so it follows the theme. */
+const THEME_FOLLOWING_BUTTON = {
+  buttonColor: '', buttonHoverColor: '', textColor: '', textHoverColor: '', borderColor: '',
+};
+
 const PARALLAX_THEMED_SECTION = {
   ...PARALLAX_IMAGE_SECTION,
   themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
@@ -817,7 +822,11 @@ export const RENDER_CONTRACTS = [
     section: {
       layout: 'single',
       themeTreatments: { buttonStyle: 'outline', buttonRadius: 24 },
-      modules: [{ type: 'button', text: 'Outline from the theme', settings: {} }],
+      // A button with no colours of its own, as Site Import writes one. A
+      // Button added from the Builder's palette starts with fixed colours
+      // (createEmptyModule), so it does not follow the theme at all — the
+      // first run of this contract measured exactly that, #214c71.
+      modules: [{ type: 'button', text: 'Outline from the theme', settings: THEME_FOLLOWING_BUTTON }],
     },
     selector: '.builder-preview-button-styled',
     read: ['backgroundColor', 'borderTopColor', 'borderTopWidth', 'borderTopStyle', 'borderTopLeftRadius', 'color'],
@@ -845,7 +854,7 @@ export const RENDER_CONTRACTS = [
       'a page whose theme sets no button style keeps the filled, square button every existing site has.',
     section: {
       layout: 'single',
-      modules: [{ type: 'button', text: 'Filled as before', settings: {} }],
+      modules: [{ type: 'button', text: 'Filled as before', settings: THEME_FOLLOWING_BUTTON }],
     },
     selector: '.builder-preview-button-styled',
     read: ['backgroundColor', 'borderTopLeftRadius'],
