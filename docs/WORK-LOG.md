@@ -1,3 +1,19 @@
+## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
+
+A theme used to have a single button colour, so on a site like Alphire's,
+with light buttons on dark sections, any one choice disappeared somewhere.
+Themes now have two optional extra button colours, "Button on light" and
+"Button on dark", on the Themes screen. Each section works out whether it is
+light or dark (its theme band, its own colour, or a darkened photo), and the
+buttons in it that follow the theme use the matching colours automatically.
+Site Import fills both in from where the original site's buttons actually
+sat, and checks each one is readable against its own background. Themes
+that don't set the new colours look exactly as they did before.
+Caught up with the outlined-buttons change (#881) on the way in: the two features
+overlapped, and a section's light/dark button colour would have painted solid
+buttons back over an outline theme. The section's colour now draws the outline
+instead, and a render check holds it.
+
 ## 2026-10-28 — Outreach drafts now learn from Dane's choices, as lessons he can read and change (#886)
 
 Every time Dane approved, edited or rejected an outreach draft, the reason was
