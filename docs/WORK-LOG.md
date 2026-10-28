@@ -14,6 +14,20 @@ be saved as a contact. If the Mini is signed out of Reddit, the screen says so
 instead of showing "0 found". It needs two new database tables (SQL hand-off
 on the pull request) and its schedule installed on the Mini after merge.
 
+## 2026-10-28 — YouTube finds the comments worth replying to (#897)
+
+To reply to one particular YouTube comment, Dane used to need its comment id,
+a long code he had to dig out and type in by hand. Now, every three hours,
+Starcaster reads the newest videos (last two weeks) of every channel he
+approved, plus their comments, and ranks the comments. A question nobody has
+answered, a comment touching his canon, and fresh, liked comments rank
+highest, and each one says why in a sentence. On the Outreach screen's
+YouTube "Find conversations" step, they appear grouped by video, with the
+commenter's name and channel link. **Write replies** fills in the comment id
+by itself and writes three replies to choose from. There is also
+**Comment on the video**, **Skip** (asks why) and **Save as contact**. It
+needs two SQL files run on the live database before it shows anything there.
+One is the creator list from #888, which was never run.
 ## 2026-10-28 — Projects can now share sections, templates and themes with each other, behind the scenes (#894)
 
 Dane wants one project to be able to offer its saved sections, page templates
