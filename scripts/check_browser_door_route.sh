@@ -27,6 +27,11 @@
 #      A refusal or a timeout both count as not reachable; the line says which,
 #      and each private address is only read after a CONTROL port on it (8080)
 #      answered from the same vantage — otherwise a timeout proves nothing.
+#   5. From a tailnet device: the viewer socket on port 443 of the Mini's
+#      TAILNET address -> the same "refused", so the Connect window opens on a
+#      computer with Tailscale on. On a tailnet device the Funnel name resolves
+#      to that address, so if the Tailscale access rule does not allow tcp:443
+#      to the Mini, the window sits on "Opening…" (2026-10-28, task 86bcu7d6h).
 #
 # EXIT: 0 every check passed · 1 something is reachable that must not be, or
 # the route answers wrongly · 2 a reading could not be taken (the door keeper
@@ -232,6 +237,32 @@ else
   blind "tailnet      $TAILNET — the control (port 8080) is not reachable over the tailnet from here, so a refusal here would prove nothing"
 fi
 
+# 5. FROM A TAILNET DEVICE. Dane's MacBook is on the tailnet, and there MagicDNS
+# resolves the Funnel name to the Mini's tailnet address, so the Connect window's
+# feed goes over the tailnet, not the internet. Port 443 there is served by
+# Tailscale itself (the same /live route), but only if the access rule lets it
+# through: on 2026-10-28 a rule allowing 22, 5900 and 8080 dropped every one of
+# the MacBook's connections ("Drop: ... :443 no rules matched" in the Mini's
+# tailscaled log) and the window never opened. Pinned to the tailnet address so
+# the reading is that path whatever this machine's DNS says.
+if [ -n "$TAILNET" ] && { control_ok "$TAILNET" || [ -n "$SHIELDED" ]; }; then
+  out="$(curl -sS -i --http1.1 --connect-timeout 6 -m 12 --resolve "$HOST:443:$TAILNET" -o - \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H 'Sec-WebSocket-Key: b3V0c2lkZS1jaGVjay0xMjM0NQ==' "$BASE/live" 2>&1 | LC_ALL=C tr -d '\000' | head -c 4000; exit "${PIPESTATUS[0]}")"; rc=$?
+  first="$(printf '%s\n' "$out" | head -1 | tr -d '\r')"
+  if printf '%s' "$out" | grep -q '"type":"frame"'; then
+    fail "tailnet      wss://$HOST/live/live via $TAILNET with no pass -> a PICTURE was sent"
+  elif printf '%s' "$first" | grep -q ' 101' && printf '%s' "$out" | grep -q '"reason":"refused"'; then
+    pass "tailnet      wss://$HOST/live/live via $TAILNET -> the door keeper answers: the Connect window opens from a tailnet device"
+  elif printf '%s' "$first" | grep -q ' 502'; then
+    blind "tailnet      wss://$HOST/live/live via $TAILNET -> 502: nothing answers behind the route"
+  elif [ "$rc" = 7 ] || [ "$rc" = 28 ]; then
+    fail "tailnet      wss://$HOST/live/live via $TAILNET -> not reachable (curl exit $rc): the Connect window cannot open from a computer with Tailscale on. The Tailscale access rule must allow tcp:443 to the Mini$([ -n "$SHIELDED" ] && echo ', and shields up blocks it outright')"
+  else
+    fail "tailnet      wss://$HOST/live/live via $TAILNET -> \"$first\" (curl exit $rc), not the door keeper's refusal"
+  fi
+fi
+
 echo
 if [ "$FAILS" -gt 0 ]; then
   echo "VERDICT: FAIL — $FAILS check(s) found something reachable or answering that must not be ($BLIND could not be taken)."
@@ -240,5 +271,5 @@ elif [ "$BLIND" -gt 0 ]; then
   echo "VERDICT: CANNOT TELL — nothing wrong found, but $BLIND reading(s) could not be taken."
   exit 2
 fi
-echo "VERDICT: PASS — the door keeper answers on /live and shows nothing without a pass; 18789, 18800 and 8091 are unreachable from the internet, the home network and the tailnet."
+echo "VERDICT: PASS — the door keeper answers on /live and shows nothing without a pass, from the internet and from a tailnet device; 18789, 18800 and 8091 are unreachable from the internet, the home network and the tailnet."
 exit 0

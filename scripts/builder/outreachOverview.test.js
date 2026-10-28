@@ -48,6 +48,9 @@ function fakeDeps(overrides = {}) {
     substackMinerStore: {
       listCandidates: async () => ok([...rows('approved', 17), ...rows('candidate', 70), ...rows('rejected', 8)]),
     },
+    youtubeCreatorsStore: {
+      listCreators: async () => ok([...rows('approved', 3), ...rows('candidate', 4), ...rows('candidate', 2, { suggestion: { action: 'approved' } }), ...rows('rejected', 1)]),
+    },
     redditCommentsStore: {
       getBrowserCheck: async () => ok(signedIn('someone', 4)),
       listItems: async () => ok([]),
@@ -90,8 +93,9 @@ test('every channel has the five stages, in order, each with a known state and o
     for (const st of ch.stages) {
       assert.ok(overview.STATES.includes(st.state), `${ch.key}/${st.key} state ${st.state}`);
       assert.ok(st.sentence && st.sentence.length > 10, `${ch.key}/${st.key} has no sentence`);
-      // Learn's controls are on the wizard itself (13/19), so it opens no other screen.
-      if (st.key === 'learn') assert.equal(st.next, null, `${ch.key}/learn next ${JSON.stringify(st.next)}`);
+      // A stage worked on this screen says so (Learn's controls are on the wizard
+      // itself, 13/19); every other one names the screen to open.
+      if (st.inline || st.key === 'learn') assert.equal(st.next, null, `${ch.key}/${st.key} is worked here but names a screen ${JSON.stringify(st.next)}`);
       else assert.ok(st.next && st.next.label && Object.values(overview.PAGES).includes(st.next.page), `${ch.key}/${st.key} next ${JSON.stringify(st.next)}`);
     }
   }
@@ -281,6 +285,27 @@ test('the account routes: choose, check now and Reddit pace reach the store with
   const r6 = fakeRes();
   await route.handle(req(), r6, '/api/outreach/accounts/reddit/check', 'GET', { accounts: fake });
   assert.equal(r6.statusCode, 405);
+});
+
+test('YouTube Find creators counts the channel list, and is worked on this screen (Outreach wizard 15/19)', async () => {
+  const result = await overview.buildOverview(scope, { deps: fakeDeps(), now: NOW });
+  const creators = find(result, 'youtube', 'creators');
+  assert.equal(creators.state, 'needs_you');
+  assert.equal(creators.inline, true);
+  assert.equal(creators.next, null);
+  assert.match(creators.sentence, /6 channels waiting for your decision \(2 with a suggestion\); 3 approved, 1 rejected\./);
+
+  assert.equal(overview.youtubeCreatorsStage([]).state, 'not_started');
+  assert.equal(overview.youtubeCreatorsStage(rows('approved', 2)).state, 'done');
+  assert.equal(overview.youtubeCreatorsStage(rows('rejected', 2)).state, 'needs_you', 'all rejected is not done');
+
+  const broken = await overview.buildOverview(scope, {
+    deps: fakeDeps({ youtubeCreatorsStore: { listCreators: async () => ({ ok: false, status: 503, error: 'The youtube_creators table is not available' }) } }),
+    now: NOW,
+  });
+  const unknown = find(broken, 'youtube', 'creators');
+  assert.equal(unknown.state, 'cannot_tell', 'a failed read is never drawn as not started');
+  assert.match(unknown.sentence, /Cannot tell\. The YouTube creator list could not be read: The youtube_creators table is not available\./);
 });
 
 // ── Outreach wizard 13/19 (86bcrmbpm): the Learn stage ─────────────────────

@@ -131,6 +131,15 @@ if (!process.env.BLOB_READ_WRITE_TOKEN && !flag('--theme-only')) {
   process.exit(1);
 }
 
+// Compiled code older than its source once crashed an import with no word as
+// to why (86bctakmc). Rebuild it — or stop, naming the command — first.
+try {
+  require('./scripts/lib/build_inputs.cjs').ensureBuildCurrent(ROOT, ['site-import', 'builder-template']);
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+
 const store = require('./lib/siteImportStore.js');
 const pagesStore = require('./lib/builderPagesStore.js');
 const snapshotsStore = require('./lib/builderPageSnapshotsStore.js');

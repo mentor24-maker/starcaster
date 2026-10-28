@@ -32,6 +32,19 @@
  *                                                up the reply and write its options
  *   POST /api/outreach/substack/conversations/skip   { url, reasons, note } — Skip,
  *                                                with the reason picker's reason
+ *   GET  /api/outreach/youtube/creators          the YouTube channels found, and
+ *                                                the wizard's keyword list
+ *   PUT  /api/outreach/keywords                  { keywords: [] } — the wizard's
+ *                                                shared keyword list
+ *   POST /api/outreach/youtube/creators/find     search YouTube for channels on
+ *                                                those keywords (spends API quota)
+ *   POST /api/outreach/youtube/creators/suggest  { redo?: true } — suggest Approve
+ *                                                or Reject for each undecided one
+ *   POST /api/outreach/youtube/creators/:id/decide  { status, decisionReasons?, note? }
+ *
+ * The YouTube creator routes are Outreach wizard 15/19 (task 86bcrmbrf), over
+ * lib/youtubeCreatorsStore.js, lib/acquire/YoutubeCreatorsFindRun.js and
+ * lib/acquire/SubstackSuggestRun.js runYoutubeSuggestions.
  *
  * The three account POSTs are Outreach wizard 2/19 (task 86bcrmba0), over
  * lib/outreachAccounts.js. Nothing on the internet can reach the Mini, so
@@ -57,6 +70,13 @@ const substackConversations = require('../lib/substackConversations');
 const outreachLessons = require('../lib/outreachLessons');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
+/** The YouTube creator list's moving parts, required on first use so the overview test loads none of them. */
+const defaultCreators = {
+  store: () => require('../lib/youtubeCreatorsStore'),
+  find: (scope, options) => require('../lib/acquire/YoutubeCreatorsFindRun').findYoutubeCreators(scope, options),
+  suggest: (scope, options) => require('../lib/acquire/SubstackSuggestRun').runYoutubeSuggestions(scope, options),
+};
+
 const PREFIX = '/api/outreach';
 
 function requestScope(req) {
@@ -81,9 +101,54 @@ async function readBody(req, res) {
   }
 }
 
+/** The YouTube creator routes; false when `pathname` is not one of them. */
+async function handleCreators(req, res, pathname, method, creators) {
+  const base = `${PREFIX}/youtube/creators`;
+  if (pathname === `${PREFIX}/keywords`) {
+    if (method !== 'PUT') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await creators.store().saveKeywords(body.keywords, requestScope(req))), true;
+  }
+  if (pathname !== base && !pathname.startsWith(`${base}/`)) return false;
+  const scope = requestScope(req);
+
+  if (pathname === base) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    const store = creators.store();
+    const keywords = await store.getKeywords(scope);
+    if (!keywords.ok) return reply(res, keywords), true;
+    const listed = await store.listCreators(500, scope);
+    if (!listed.ok) return reply(res, listed), true;
+    return sendOk(res, 200, { creators: listed.data, keywords: keywords.data }), true;
+  }
+  if (pathname === `${base}/find`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'outreach.youtubeCreators.find')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await creators.find(scope, { perKeyword: body.perKeyword })), true;
+  }
+  if (pathname === `${base}/suggest`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'outreach.youtubeCreators.suggest')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await creators.suggest(scope, { redo: body.redo === true })), true;
+  }
+  const decide = pathname.match(/^\/api\/outreach\/youtube\/creators\/([^/]+)\/decide$/);
+  if (decide) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await creators.store().decideCreator(decodeURIComponent(decide[1]), body, scope)), true;
+  }
+  return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
+}
+
 async function handle(req, res, pathname, method, {
   build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback,
-  conversations = substackConversations, lessons = outreachLessons,
+  conversations = substackConversations, lessons = outreachLessons, creators = defaultCreators,
 } = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
 
@@ -100,6 +165,8 @@ async function handle(req, res, pathname, method, {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
     return reply(res, await feedback.listReasons(requestScope(req))), true;
   }
+
+  if (await handleCreators(req, res, pathname, method, creators)) return true;
 
   if (pathname === `${PREFIX}/substack/conversations`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
