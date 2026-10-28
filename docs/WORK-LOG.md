@@ -1,3 +1,15 @@
+## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
+
+Rejecting a draft comment or Note used to throw it away with no record of
+why. Now Reject on YouTube, Substack and Reddit opens a small window of
+reasons — "too salesy", "not my voice", "misses the point", "too long",
+"too generic", plus any reason Dane has used before. One click rejects with
+that reason; a sentence is optional, and Skip rejects with "no reason given".
+Approving also records what he did: kept the draft, edited it (both versions
+are saved), or picked one of the three options as written. All of it goes in
+one new table, which a later slice turns into lessons the AI writer learns
+from. The table needs one SQL file run before release; until then every
+decision still works and the screen says plainly that the reason was not saved.
 ## 2026-10-27 — A Connect button opens the Mini's browser inside the Outreach screen (#880)
 
 Fourth piece of the sign-in window. On Engage › Outreach, the Connect stage
