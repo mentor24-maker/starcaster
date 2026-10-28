@@ -185,6 +185,20 @@ describe("OutreachWizardPanel", () => {
     expect(setActivePage).toHaveBeenCalledWith("engageYoutubeOutreachPage");
   });
 
+  it("every stage but the open one has a pencil back to its screen — done stages included (86bcuar8y)", async () => {
+    await mount();
+    await act(async () => tab("Substack").click());
+    const rows = stages();
+    const pencil = (row: HTMLLIElement) => row.querySelector<HTMLAnchorElement>(".outreach-wizard-stage-edit");
+    // The open stage (conversations) has its button and no pencil; every other row has one.
+    expect(rows.map((r) => !!pencil(r))).toEqual([true, true, false, true, true]);
+    const done = pencil(rows[1])!;
+    expect(done.getAttribute("href")).toBe("#page=acquireSubstackPage");
+    expect(done.getAttribute("aria-label")).toBe("Go to creators");
+    await act(async () => done.click());
+    expect(setActivePage).toHaveBeenCalledWith("acquireSubstackPage");
+  });
+
   it("remembers the last channel per viewer, and survives storage that throws", async () => {
     await mount();
     await act(async () => tab("Reddit").click());
@@ -316,5 +330,33 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     const after = container!.querySelector("[data-after-window]");
     expect(after?.textContent).toContain("Signed in as Exotic-Break-7850. Post as this account?");
     delete (window as any).WebSocket;
+  });
+});
+
+describe("YouTube's Find creators (Outreach wizard 15/19)", () => {
+  it("works the creator list on this screen when the stage is inline, and nowhere else", async () => {
+    await mount();
+    expect(container!.querySelector("[data-yt-creators]")).toBeNull();
+
+    const original = overviewFor;
+    const inlineOverview = (project: string): OutreachOverview => {
+      const o = original(project);
+      const yt = o.channels[0];
+      yt.stages[1] = { ...yt.stages[1], next: null, inline: true };
+      return o;
+    };
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") return { ok: true, data: inlineOverview(activeProject) };
+      if (path === "/api/outreach/youtube/creators") return { ok: true, data: { creators: [], keywords: { keywords: [], source: "none" } } };
+      return api(path, options);
+    };
+    act(() => root!.unmount());
+    container!.remove();
+    await mount();
+    const stage = container!.querySelector('[data-stage="creators"]')!;
+    expect(stage.querySelector("[data-yt-creators]")).not.toBeNull();
+    expect(stage.textContent).toContain("No channels found yet.");
+    expect(stage.querySelector("a.btn")).toBeNull();
   });
 });

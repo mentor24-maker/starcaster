@@ -9,6 +9,49 @@ window give up after 30 seconds and say, in plain words, that Tailscale is the
 likely cause; and the Mini's outside check now tries the window's route the way
 a computer with Tailscale on does, so this cannot hide again.
 
+## 2026-10-28 — YouTube gets a list of creators to approve or reject (#888)
+
+The Outreach screen's YouTube "Find creators" step used to say there was no
+list of creators — videos could only be added one link at a time. Now a
+**Find channels** button searches YouTube for Dane's subjects (starting from
+the Substack Miner's keywords), and shows each channel as a card with its
+picture, subscribers and three newest videos. Starcaster suggests Approve or
+Reject for each one, with a reason, from his past YouTube decisions and his
+canon; until he has decided a handful himself, every suggestion is marked low
+confidence. **Agree** takes the suggestion in one click, and Approve or Reject
+asks why, the same way the Substack Miner does. If YouTube's daily allowance
+runs out, the screen says so and when it comes back, rather than "nothing
+found". It needs one SQL file run before release. It also fixes a crash in
+Acquire's YouTube video list.
+## 2026-10-28 — Site Imports are picked up on their own, and a stuck one is named (#885)
+
+When Dane queued an import of alphire.agency, it sat waiting for 14 days.
+Nothing ever ran the program that does the importing. It only ran when somebody
+typed a command, and nothing on the screen or the bus said nobody had. A second
+import, wavecenter.com, turned out to have been waiting 15 days the same way.
+The Mac Mini can now run that program every 5 minutes. It picks up whatever is
+queued and rebuilds the import engine from the latest code first. That second
+step matters: the Mini's copy had no built engine at all. If an import still
+waits more than an hour, the Mini says so once on the bus, naming the site.
+The Site Import screen now shows how long a queued job has waited. After an
+hour, it says plainly that the worker is not running. The schedule is switched
+on with one command on the Mini once this is merged.
+
+## 2026-10-28 — A report that lists what a site import lost, section by section (#892)
+
+Until now the only way to know what a site import got wrong was to put the
+original page and the imported one side by side and look. A new report does it
+for you: for every imported page it shows each section of the original next to
+a photo of the same section as imported, and lists underneath everything the
+import did not carry over, sorted into seven plain categories — background,
+decorative layers, shadows and glow, shapes, column layout, text styling, and
+files that were downloaded but never put on the page. Run against the Alphire
+import, it named the hero's glowing dark background as dropped, the hero
+picture as downloaded but never placed, the two-column hero as squashed into
+one, and the thin 300-weight heading as shown at the theme's 700. Where it
+cannot look — decorative layers the capture never records, or a page it could
+not photograph — it says CANNOT TELL instead of pretending nothing was lost.
+Every other fix in the site-import fidelity work will be measured with it.
 ## 2026-10-28 — Site Import notices when its compiled code is out of date (#889)
 
 The Site Import tools run from a compiled copy of the import engine. On
