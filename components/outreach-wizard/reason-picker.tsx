@@ -54,9 +54,35 @@ export function chipsFor(reasons: SavedReasons | null): ReasonCount[] {
 /** What a Reject posts: `{ reasons, note }`. No reasons is Skip. */
 export type RejectReason = { reasons: string[]; note: string };
 
+/**
+ * What an Approve or Reject answers with beside the decision: whether WHY was
+ * saved, and — every fifth decision — whether the lessons refreshed
+ * (lib/outreachFeedbackStore.js attachFeedback).
+ */
+export type DecisionFeedback = {
+  recorded?: boolean;
+  error?: string;
+  lessons?: { refreshed?: boolean; error?: string } | null;
+} | null | undefined;
+
+/** `text` as one sentence: its own closing full stop, or one added. */
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * The line the screen shows after an Approve: `lead`, plus the lessons'
+ * failure when the automatic refresh this decision triggered did not work —
+ * otherwise the lessons stop learning and nothing says so.
+ */
+export function decisionNotice(lead: string, feedback: DecisionFeedback): string {
+  const failed = feedback?.lessons?.error;
+  return failed ? `${lead} ${sentence(failed)}` : lead;
+}
+
 /** The line the screen shows after a Reject, from the server's answer. */
-export function rejectNotice(lead: string, feedback: { recorded?: boolean; error?: string } | null | undefined): string {
-  if (!feedback || feedback.recorded) return lead;
+export function rejectNotice(lead: string, feedback: DecisionFeedback): string {
+  if (!feedback || feedback.recorded) return decisionNotice(lead, feedback);
   return `${lead} The reason was NOT saved: ${feedback.error || 'the server gave no reason'}.`;
 }
 

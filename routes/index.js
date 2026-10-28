@@ -182,6 +182,7 @@ const CRON_PATHS = new Set([
   '/api/youtube-outreach/run-due',
   '/api/engage/substack-notes/run-due',
   '/api/engage/substack-notes/watch-content',
+  '/api/acquire/substack-miner/read-notes-due',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

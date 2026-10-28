@@ -17,6 +17,7 @@ const path = require('path');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const FEEDBACK_SQL = 'outreach_feedback_setup.sql';
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const CHANNEL_SQL = [
   'reddit_comments_setup.sql', 'reddit_comments_posting.sql', 'reddit_comments_browser_read.sql', 'reddit_comments_draft_options.sql',
   'youtube_outreach_setup.sql', 'youtube_outreach_comments_setup.sql', 'youtube_outreach_draft_options.sql',
@@ -25,6 +26,7 @@ const CHANNEL_SQL = [
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
+const aiPath = require.resolve('../../lib/aiClient.js');
 const STORE_PATHS = [
   '../../lib/outreachFeedbackStore.js',
   '../../lib/redditCommentsStore.js',
@@ -47,7 +49,8 @@ const CANON = [
 function schemaText({ withFeedback = true } = {}) {
   const grant = /\ndo \$\$[\s\S]*?end \$\$;\s*$/i;
   const files = withFeedback ? [...CHANNEL_SQL, FEEDBACK_SQL] : CHANNEL_SQL;
-  return files.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')).join('\n');
+  const lessons = withFeedback ? [lessonsSql(['reddit_comment_items', 'youtube_outreach_comments', 'substack_notes_items'])] : [];
+  return [...files.map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8').replace(grant, '\n')), ...lessons].join('\n');
 }
 
 function withDb({ withFeedback = true } = {}) {
@@ -70,9 +73,15 @@ function withDb({ withFeedback = true } = {}) {
   };
   const realSupabase = require.cache[supabasePath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
+  // Every fifth decision asks the AI to refresh the lessons (13/19); in a test
+  // that must never be a real, paid call.
+  const realAi = require.cache[aiPath];
+  require.cache[aiPath] = { id: aiPath, filename: aiPath, loaded: true, exports: { queryAnthropic: async () => ({ ok: false, error: 'no AI in tests' }) } };
   for (const p of STORE_PATHS) delete require.cache[p];
   const [feedback, reddit, youtube, , substack] = STORE_PATHS.map((p) => require(p));
   function restore() {
+    if (realAi) require.cache[aiPath] = realAi;
+    else delete require.cache[aiPath];
     if (realSupabase) require.cache[supabasePath] = realSupabase;
     else delete require.cache[supabasePath];
     for (const p of STORE_PATHS) delete require.cache[p];
@@ -245,7 +254,10 @@ test('listReasons: the five defaults always, then his own reasons, most used fir
     assert.equal(listed.ok, true, listed.error);
     assert.deepEqual(listed.data.defaults.map((d) => d.reason), ['too salesy', 'not my voice', 'misses the point', 'too long', 'too generic']);
     assert.equal(listed.data.defaults[0].count, 1);
-    assert.deepEqual(listed.data.saved, [{ reason: 'Preachy', count: 2 }, { reason: 'wrong audience', count: 1 }]);
+    // "Preachy" and "preachy " are one reason. Which spelling is shown is the
+    // newest one's, and two saves in the same millisecond tie — so the test
+    // asks for the merge, not for a spelling the clock decides.
+    assert.deepEqual(listed.data.saved.map((r) => [r.reason.toLowerCase(), r.count]), [['preachy', 2], ['wrong audience', 1]]);
     assert.equal((await feedbackRows(db)).length, 4);
   } finally {
     restore();
