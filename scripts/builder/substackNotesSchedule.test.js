@@ -18,6 +18,7 @@ const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
 const SETUP_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_setup.sql'), 'utf8');
 const SWITCH_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_auto_topic_drafts.sql'), 'utf8');
 const OPTIONS_SQL = fs.readFileSync(path.join(SQL_DIR, 'substack_notes_draft_options.sql'), 'utf8');
+const { lessonsSql } = require('./outreachLessonsSql.js');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 const { withCanon } = require('./canonFixture.js');
 const schedule = require('../../lib/substackNotesSchedule.js');
@@ -173,7 +174,7 @@ test('a topic drafted in the last 7 days waits while another has not been', () =
 // ── The pass, against the fake database ────────────────────────────────────
 
 function withDb() {
-  const db = createFakeDb(parseSchemaText(`${SETUP_SQL}\n${SWITCH_SQL}\n${OPTIONS_SQL}`));
+  const db = createFakeDb(parseSchemaText(`${SETUP_SQL}\n${SWITCH_SQL}\n${OPTIONS_SQL}\n${lessonsSql(['substack_notes_items'])}`));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),
@@ -232,7 +233,7 @@ test('the switch saves, reads back, and defaults off', async () => {
 });
 
 test('before the 5/7 SQL runs, every other setting still saves and the switch says which file is missing', async () => {
-  const db = createFakeDb(parseSchemaText(SETUP_SQL));
+  const db = createFakeDb(parseSchemaText(`${SETUP_SQL}\n${lessonsSql(['substack_notes_items'])}`));
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({ substackNotesItems: 'substack_notes_items', substackNotesSettings: 'substack_notes_settings' }),

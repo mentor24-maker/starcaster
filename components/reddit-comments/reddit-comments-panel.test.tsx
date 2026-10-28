@@ -43,7 +43,7 @@ const PACE = { maxCommentsPerDay: 3, minMinutesBetween: 20, jitterMinutes: 10 };
 const POST_LINK = "https://www.reddit.com/r/astronomy/comments/abc123/why_stars_twinkle/";
 
 /** `readable`: the Mini is signed in, so Add queues a read instead of refusing. */
-type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable"; dropOne?: boolean };
+type Store = { items: RedditItem[]; readable: boolean; status?: Record<string, any> | "unreadable"; dropOne?: boolean; lessonsError?: string };
 let stores: Record<string, Store>;
 let activeProject = "proj_doe";
 let requests: Array<{ method: string; path: string; body: any }>;
@@ -109,6 +109,9 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       return { ok: true, data: { ...made } };
     }
   }
+  if (path === "/api/outreach/feedback/reasons") {
+    return { ok: true, data: { defaults: [{ reason: "too salesy", count: 2 }, { reason: "not my voice", count: 0 }, { reason: "misses the point", count: 0 }, { reason: "too long", count: 0 }, { reason: "too generic", count: 0 }], saved: [{ reason: "wrong subreddit", count: 1 }] } };
+  }
   if (path === "/api/engage/reddit-comments/status") {
     if (store.status === "unreadable") fail("status endpoint down", 502);
     return { ok: true, data: store.status || { account: "", pace: PACE, browserCheck: { state: "", message: "", checkedAt: null, signedInAt: null }, browserCheckError: "" } };
@@ -145,6 +148,11 @@ async function fakeApi(path: string, options: RequestInit = {}): Promise<Record<
       Object.assign(found, { status: "approved", finalText: text, chosenOption: body.option ?? null });
     } else {
       found.status = "rejected";
+    }
+    // 13/19: a decision that was the fifth refreshes the lessons; `lessonsError`
+    // is that refresh failing, the way attachFeedback reports it.
+    if (store.lessonsError && (decision[2] === "approve" || decision[2] === "reject")) {
+      return { ok: true, data: { ...found, feedback: { recorded: true, error: "", lessons: { refreshed: false, added: 0, error: store.lessonsError } } } };
     }
     return { ok: true, data: { ...found } };
   }
@@ -439,11 +447,31 @@ describe("Reddit comments screen", () => {
     expect(row(id).querySelectorAll(".draft-chooser-option").length).toBe(3);
   });
 
+  it("says when the automatic lessons refresh a decision triggered did not work — on Approve and on Reject", async () => {
+    const failed = "The lessons were not refreshed: The AI did not suggest any lessons: no credit. Nothing was changed.";
+    stores.proj_doe.items = [item({ status: "draft", draftText: "First words." }), item({ status: "draft", draftText: "Second words." })];
+    stores.proj_doe.lessonsError = failed;
+    const [first, second] = stores.proj_doe.items.map((i) => i.id);
+    await mount();
+    await click(button("Approvals"));
+    await click(button("Approve", row(first)));
+    expect(text()).toContain(`Approved — waiting for the Mini to post it. ${failed}`);
+    await click(button("Reject", row(second)));
+    await click(button("too salesy", document.body));
+    expect(text()).toContain(`Rejected. It will not be posted. ${failed}`);
+  });
+
   it("rejects from the server and says how many rejected rows are hidden", async () => {
     stores.proj_doe.items = [item({})];
     await mount();
     await click(button("Reject", row(stores.proj_doe.items[0].id)));
+    // Reject asks why first (12/19): one click on a chip is the whole answer.
+    expect(stores.proj_doe.items[0].status).not.toBe("rejected");
+    expect(document.body.textContent).toContain("wrong subreddit");
+    await click(button("too salesy", document.body));
     expect(stores.proj_doe.items[0].status).toBe("rejected");
+    expect(requests.filter((r) => r.path.endsWith("/reject")).map((r) => r.body)).toEqual([{ reasons: ["too salesy"], note: "" }]);
+    expect(document.querySelector(".reason-picker")).toBeNull();
     await reload();
     expect(text()).toContain("1 rejected comment is not shown.");
     expect(text()).toContain("Nothing waiting to be written");

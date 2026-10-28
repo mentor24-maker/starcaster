@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
+import ReasonPicker, { decisionNotice, rejectNotice, type DecisionFeedback, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › Substack Notes — where Dane feeds the Substack Notes agent: ideas
@@ -768,6 +769,8 @@ export default function SubstackNotesPanel(): React.ReactElement {
   const [editingField, setEditingField] = useState<'ideaText' | 'targetText'>('ideaText');
   const [editError, setEditError] = useState('');
   const [rowError, setRowError] = useState<{ id: string; message: string }>({ id: '', message: '' });
+  /** The item whose Reject is asking why (Outreach wizard 12/19); null when no picker is open. */
+  const [rejecting, setRejecting] = useState<NoteItem | null>(null);
   const [settingsBusy, setSettingsBusy] = useState(false);
   const [settingsError, setSettingsError] = useState('');
   const [topicPlan, setTopicPlan] = useState<TopicPlan | null>(null);
@@ -971,9 +974,9 @@ export default function SubstackNotesPanel(): React.ReactElement {
   };
 
   /** Approve / Reject on the Approvals tab — each answered by the server, never assumed. */
-  const decide = async (item: NoteItem, action: 'approve' | 'reject', text?: string, option?: number) => {
+  const decide = async (item: NoteItem, action: 'approve' | 'reject', text?: string, option?: number, why?: RejectReason): Promise<boolean> => {
     const api = getApi();
-    if (!api) return;
+    if (!api) return false;
     const epoch = projectEpoch.current;
     setRowBusy(item.id);
     setRowBusyAction(action);
@@ -982,24 +985,33 @@ export default function SubstackNotesPanel(): React.ReactElement {
     try {
       const reply = await api(`${ITEMS_PATH}/${encodeURIComponent(item.id)}/${action}`, {
         method: 'POST',
-        body: JSON.stringify(action !== 'approve' || text === undefined ? {} : option === undefined ? { text } : { text, option }),
+        body: JSON.stringify(action === 'reject' ? why || {} : text === undefined ? {} : option === undefined ? { text } : { text, option }),
       });
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       replaceItem(reply?.data as NoteItem);
       void refreshTopicPlan();
+      const feedback = (reply?.data as { feedback?: DecisionFeedback })?.feedback;
       setNotice(action === 'approve'
-        ? 'Approved. The Mini does it within its limits; the Posted tab shows when it has.'
-        : 'Rejected. It stays on its row, marked rejected.');
+        ? decisionNotice('Approved. The Mini does it within its limits; the Posted tab shows when it has.', feedback)
+        : rejectNotice('Rejected. It stays on its row, marked rejected.', feedback));
+      return true;
     } catch (err) {
-      if (epoch !== projectEpoch.current) return;
+      if (epoch !== projectEpoch.current) return false;
       const said = errorText(err, 'unknown error');
       const lead = action === 'approve' ? 'Not approved' : 'Not rejected';
       // The server's rule refusal already opens "Not approved:" — do not say it twice.
       setRowError({ id: item.id, message: said.startsWith(lead) ? said : `${lead}: ${said}` });
+      return false;
     } finally {
       setRowBusy('');
       setRowBusyAction('');
     }
+  };
+
+  /** Reject asks why first: the picker is the confirmation, and Cancel rejects nothing (12/19). */
+  const confirmReject = async (why: RejectReason) => {
+    if (!rejecting) return;
+    if (await decide(rejecting, 'reject', undefined, undefined, why)) setRejecting(null);
   };
 
   const saveText = async (item: NoteItem, text: string) => {
@@ -1408,7 +1420,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
               busy={rowBusy === item.id ? rowBusyAction || 'approve' : ''}
               error={rowError.id === item.id ? rowError.message : ''}
               onApprove={(text, option) => void decide(item, 'approve', text, option)}
-              onReject={() => void decide(item, 'reject')}
+              onReject={() => { setRowError({ id: '', message: '' }); setRejecting(item); }}
               onRedraft={() => void writeDraft(item)}
             />
           ))}
@@ -1459,6 +1471,17 @@ export default function SubstackNotesPanel(): React.ReactElement {
             </section>
           ) : null}
         </div>
+      ) : null}
+
+      {rejecting ? (
+        <ReasonPicker
+          title={`Reject this ${rejecting.kind}?`}
+          api={getApi()}
+          busy={rowBusy === rejecting.id && rowBusyAction === 'reject'}
+          error={rowError.id === rejecting.id ? rowError.message : ''}
+          onCancel={() => setRejecting(null)}
+          onConfirm={(why) => void confirmReject(why)}
+        />
       ) : null}
     </div>
   );

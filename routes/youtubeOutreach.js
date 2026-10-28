@@ -20,7 +20,7 @@
  *   POST   /api/youtube-outreach/targets/:id/drafts             write a draft (AI)
  *   GET    /api/youtube-outreach/comments    ?status=draft,approved&targetId=
  *   POST   /api/youtube-outreach/comments/:id/approve   { text, option? }  (edited wording, and which of the three he picked — 10/19)
- *   POST   /api/youtube-outreach/comments/:id/reject
+ *   POST   /api/youtube-outreach/comments/:id/reject  { reasons?, note? } — why (12/19)
  *   POST   /api/youtube-outreach/comments/:id/redraft            "Write another"
  *
  * The scheduled pass (6/7, task 86bcda6bg — lib/youtubeOutreachRunDue.js):
@@ -177,7 +177,11 @@ async function handle(req, res, pathname, method) {
       if (!body) return true;
       return reply(res, await commentsStore.approveComment(id, body, scope));
     }
-    if (decision[2] === 'reject') return reply(res, await commentsStore.rejectComment(id, scope));
+    if (decision[2] === 'reject') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await commentsStore.rejectComment(id, scope, body));
+    }
     if (checkEndpointLimit(req, res, 'youtubeOutreach.drafts.create')) return true;
     return reply(res, await commentsStore.redraftComment(id, scope), 201);
   }

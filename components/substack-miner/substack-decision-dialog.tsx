@@ -15,14 +15,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+// One rule for "the same reason" on every screen that asks why (Outreach wizard 12/19).
+import { cleanReason, reasonKey, type ReasonCount } from '../outreach-wizard/reason-picker';
 
 export type Decision = 'approved' | 'rejected';
-export type ReasonCount = { reason: string; count: number };
-
-/** Lowercased, trimmed, inner spaces collapsed — so "Polymath " and "polymath" are one reason. */
-function reasonKey(reason: string): string {
-  return reason.trim().replace(/\s+/g, ' ').toLowerCase();
-}
+export type { ReasonCount };
 
 /**
  * Every reason used for `decision`, most used first, then A–Z. Spelling is the
@@ -42,7 +39,7 @@ export function reasonTally(
       seen.add(key);
       const hit = tally.get(key);
       if (hit) hit.count += 1;
-      else tally.set(key, { reason: raw.trim().replace(/\s+/g, ' '), count: 1 });
+      else tally.set(key, { reason: cleanReason(raw), count: 1 });
     }
   }
   return [...tally.values()].sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
@@ -92,7 +89,7 @@ export function SubstackDecisionDialog({ decision, writerName, initialNote, offe
   ));
 
   const addReason = () => {
-    const reason = draft.trim().replace(/\s+/g, ' ');
+    const reason = cleanReason(draft);
     if (!reason) return;
     if (reason.length > MAX_REASON_LENGTH) {
       setDraftError(`A reason is a few words (${MAX_REASON_LENGTH} characters at most); the sentence goes in the box above.`);
