@@ -30,6 +30,8 @@ import {
   buildBuilderThemeStyles,
   getBuilderThemeStyleVars,
   getThemePaletteRoleVars,
+  getSectionButtonRoleVars,
+  getSectionSurfaceTone,
   getThemeButtonVars,
   getButtonModuleStyle,
   getBuilderThemePageMarginStyle,
@@ -1032,6 +1034,66 @@ describe("getThemePaletteRoleVars", () => {
   it("only opens up band padding once there is a palette to band with", () => {
     expect(getThemePaletteRoleVars({ button: "#d9e62e" })["--lp-band-padding"]).toBeUndefined();
     expect(getThemePaletteRoleVars({ band: "#e1effa" })["--lp-band-padding"]).toBe("40px");
+  });
+});
+
+describe("per-surface button pairs (task 86bctakk0)", () => {
+  const colour = (color: string, opacity = 100) =>
+    ({ mode: "color", color, color2: "", imageUrl: "", styleKey: "", opacity }) as const;
+  const palette = {
+    button: "#214c71",
+    buttonText: "#ffffff",
+    surfaceButton: "#12294d",
+    surfaceButtonText: "#ffffff",
+    inverseButton: "#ffffff",
+    inverseButtonText: "#12294d",
+  };
+
+  it("reads a section's ground from its band role, its own colour, or a hero tint", () => {
+    expect(getSectionSurfaceTone({ bandRole: "surface" })).toBe("light");
+    expect(getSectionSurfaceTone({ bandRole: "band" })).toBe("light");
+    expect(getSectionSurfaceTone({ bandRole: "inverse" })).toBe("dark");
+    expect(getSectionSurfaceTone({ background: colour("#0b1020") })).toBe("dark");
+    expect(getSectionSurfaceTone({ background: colour("#ffffff") })).toBe("light");
+    expect(getSectionSurfaceTone({ background: colour("rgb(5, 8, 20)") })).toBe("dark");
+    expect(getSectionSurfaceTone({ heroTinted: true })).toBe("dark");
+  });
+
+  it("says nothing where it cannot see the ground", () => {
+    // A guess here could swap a button that reads for one that does not.
+    expect(getSectionSurfaceTone({})).toBeUndefined();
+    expect(getSectionSurfaceTone({ background: colour("#000000", 20) })).toBeUndefined();
+    expect(getSectionSurfaceTone({
+      background: { mode: "image", color: "", color2: "", imageUrl: "/a.png", styleKey: "" },
+    })).toBeUndefined();
+  });
+
+  it("gives a dark section the dark-ground pair and a light one the light-ground pair", () => {
+    expect(getSectionButtonRoleVars(palette, "dark")["--lp-button-bg"]).toBe("#ffffff");
+    expect(getSectionButtonRoleVars(palette, "dark")["--lp-button-text"]).toBe("#12294d");
+    expect(getSectionButtonRoleVars(palette, "light")["--lp-button-bg"]).toBe("#12294d");
+    expect(getSectionButtonRoleVars(palette, "light")["--lp-button-hover"]).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it("writes nothing for a theme with one button pair, so it renders unchanged", () => {
+    const single = { button: "#214c71", buttonText: "#ffffff" };
+    expect(getSectionButtonRoleVars(single, "dark")).toEqual({});
+    expect(getSectionButtonRoleVars(single, "light")).toEqual({});
+    expect(getSectionButtonRoleVars(null, "dark")).toEqual({});
+    expect(getSectionButtonRoleVars(palette, undefined)).toEqual({});
+  });
+
+  it("keeps an outline theme outlined on a section with its own pair", () => {
+    // Without this a section's pair painted a solid fill over the root's
+    // transparent outline (#881) on every light or dark section.
+    const dark = getSectionButtonRoleVars(palette, "dark", { buttonStyle: "outline" });
+    expect(dark["--lp-button-bg"]).toBe("transparent");
+    expect(dark["--lp-button-border"]).toBe("#ffffff");
+    expect(dark["--lp-button-text"]).toBe("#ffffff");
+    expect(dark["--lp-button-hover"]).toBe("#ffffff");
+    expect(dark["--lp-button-hover-text"]).toBe("#12294d");
+    const single = { button: "#214c71", buttonText: "#ffffff" };
+    expect(getSectionButtonRoleVars(single, "dark", { buttonStyle: "outline" })).toEqual({});
   });
 });
 

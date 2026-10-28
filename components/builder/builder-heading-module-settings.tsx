@@ -10,8 +10,8 @@ import {
   marginFields,
   type BuilderSettingsSchema
 } from "./builder-settings-schema";
+import { BuilderFontSelect } from "./builder-font-select";
 import {
-  BUILDER_HEADING_FONTS,
   HEADING_VARIANT_PRESETS,
   type HeadingVariantPresetKey
 } from "./builder-utils";
@@ -151,14 +151,24 @@ export function BuilderHeadingModuleSettings({
             // that changes what the heading IS rather than how much of it
             // there is. Still a theme override (A2) — empty follows the
             // theme — it is just not hidden any more (A0).
+            //
+            // The same picker the theme uses (task 86bctarde): the built-ins,
+            // the font library ("lf:<slug>") and any Google font ("gf:<Family>").
+            // It used to be a plain list of the built-ins alone, so a library
+            // font could be put on a theme but never on one heading.
             {
               key: "fontFamily",
               label: "Font",
               width: "auto",
-              control: "select",
-              options: BUILDER_HEADING_FONTS.map((font) => ({ value: font.key, label: font.label })),
-              fallback: "",
-              rendersVia: "getHeadingFontStack"
+              control: "custom",
+              rendersVia: "getHeadingFontStack",
+              render: (ctx) => (
+                <BuilderFontSelect
+                  ariaLabel="Heading font"
+                  value={ctx.settings.fontFamily ?? ""}
+                  onChange={(next) => ctx.set("fontFamily", next)}
+                />
+              )
             }
           ],
           [

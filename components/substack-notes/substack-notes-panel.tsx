@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { agoText, whenText, MINI_STALE_MS, type BrowserCheck } from '../youtube-outreach/youtube-outreach-panel';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
-import ReasonPicker, { rejectNotice, type RejectReason } from '../outreach-wizard/reason-picker';
+import ReasonPicker, { decisionNotice, rejectNotice, type DecisionFeedback, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › Substack Notes — where Dane feeds the Substack Notes agent: ideas
@@ -990,9 +990,10 @@ export default function SubstackNotesPanel(): React.ReactElement {
       if (epoch !== projectEpoch.current) return false;
       replaceItem(reply?.data as NoteItem);
       void refreshTopicPlan();
+      const feedback = (reply?.data as { feedback?: DecisionFeedback })?.feedback;
       setNotice(action === 'approve'
-        ? 'Approved. The Mini does it within its limits; the Posted tab shows when it has.'
-        : rejectNotice('Rejected. It stays on its row, marked rejected.', (reply?.data as { feedback?: { recorded?: boolean; error?: string } })?.feedback));
+        ? decisionNotice('Approved. The Mini does it within its limits; the Posted tab shows when it has.', feedback)
+        : rejectNotice('Rejected. It stays on its row, marked rejected.', feedback));
       return true;
     } catch (err) {
       if (epoch !== projectEpoch.current) return false;

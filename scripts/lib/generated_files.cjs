@@ -35,6 +35,7 @@ const GENERATED = [
   'lib/builder/email-template.js',
   'lib/builder/template-frame.js',
   'lib/builder/email-render.js',
+  'lib/builder/.build-inputs.json',
   'lib/site-import/dist/normalize.js',
   'lib/site-import/dist/crawl.js',
   'lib/site-import/dist/capture-playwright.js',

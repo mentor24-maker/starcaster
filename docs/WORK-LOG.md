@@ -12,6 +12,121 @@ asks why, the same way the Substack Miner does. If YouTube's daily allowance
 runs out, the screen says so and when it comes back, rather than "nothing
 found". It needs one SQL file run before release. It also fixes a crash in
 Acquire's YouTube video list.
+## 2026-10-28 — Site Imports are picked up on their own, and a stuck one is named (#885)
+
+When Dane queued an import of alphire.agency, it sat waiting for 14 days.
+Nothing ever ran the program that does the importing. It only ran when somebody
+typed a command, and nothing on the screen or the bus said nobody had. A second
+import, wavecenter.com, turned out to have been waiting 15 days the same way.
+The Mac Mini can now run that program every 5 minutes. It picks up whatever is
+queued and rebuilds the import engine from the latest code first. That second
+step matters: the Mini's copy had no built engine at all. If an import still
+waits more than an hour, the Mini says so once on the bus, naming the site.
+The Site Import screen now shows how long a queued job has waited. After an
+hour, it says plainly that the worker is not running. The schedule is switched
+on with one command on the Mini once this is merged.
+
+## 2026-10-28 — A report that lists what a site import lost, section by section (#892)
+
+Until now the only way to know what a site import got wrong was to put the
+original page and the imported one side by side and look. A new report does it
+for you: for every imported page it shows each section of the original next to
+a photo of the same section as imported, and lists underneath everything the
+import did not carry over, sorted into seven plain categories — background,
+decorative layers, shadows and glow, shapes, column layout, text styling, and
+files that were downloaded but never put on the page. Run against the Alphire
+import, it named the hero's glowing dark background as dropped, the hero
+picture as downloaded but never placed, the two-column hero as squashed into
+one, and the thin 300-weight heading as shown at the theme's 700. Where it
+cannot look — decorative layers the capture never records, or a page it could
+not photograph — it says CANNOT TELL instead of pretending nothing was lost.
+Every other fix in the site-import fidelity work will be measured with it.
+## 2026-10-28 — Site Import notices when its compiled code is out of date (#889)
+
+The Site Import tools run from a compiled copy of the import engine. On
+Oct 27 that copy was two weeks older than the code calling it, and the Alphire
+import crashed with a meaningless error until somebody thought to rebuild. Now
+every build writes down a fingerprint of each source file it used, and the
+import worker, page mapper, reconciler and the two page-migration scripts
+compare those fingerprints with the files on disk before they start. If
+anything changed, they rebuild on their own and print one line saying so; if
+the rebuild fails, they stop and name the command to run instead of crashing.
+## 2026-10-28 — A single heading can use a library font or any Google font (#890)
+
+The Font setting on a Heading module only listed the eleven fonts Starcaster
+started with, so a font from the Font Library (Orbitron, say) or a Google font
+could go on a whole theme but never on one heading. The setting now opens the
+same font window the theme uses: the built-ins, your favourites, the whole
+library, and "Use a Google font by name…". The page already knew how to load
+and draw a font chosen this way; only the setting was missing it. Headings
+already on a built-in font are unchanged.
+## 2026-10-28 — Substack now finds Notes to reply to on its own, ranked with a reason each (#887)
+
+Substack's two readers, one for approved writers' own Notes and one for Notes
+matching Dane's keywords, only ever ran when an agent session typed a
+command, so 17 approved writers had no Notes read. Now the first runs every
+two hours on Vercel, and the second runs every six hours on the Mac Mini
+(which has the signed-in browser it needs), followed by the Miner's
+Approve-or-Reject suggestions for any new writers it found. On Engage ›
+Outreach › Substack, **Find conversations** now lists what they found, best
+first, each with its writer, a link to their profile, and one sentence on
+why it ranked there: an approved writer or a keyword, how recent, which
+canon words it uses, and how many replies it already has. Each Note has
+**Write replies** (three options, ready on the Notes screen), **Skip** (asks
+why) and, for a writer a keyword found, **Add writer**. If a writer could
+not be read, the stage says "Cannot tell" and names them, rather than
+showing an empty list as "0 found". After merge, the Mini's schedule is
+installed with one script from its main folder. The six-hourly search takes
+one keyword per pass and moves to the next only after a pass that actually
+searched, so a keyword can no longer get stuck on the overnight slot and never
+be searched; and a pass that searched nothing records no "all is well" beat,
+so a schedule that never searches shows up as stale instead of healthy.
+## 2026-10-28 — An imported site's theme can be made on its own (#884)
+
+The theme a Site Import captures (the original site's colours, fonts and
+button style) could only be made by re-running the whole page import. That
+rebuilt every page just to get a theme, which is what happened to Alphire's
+17 pages on 2026-10-27. The Site Import screen now has a **Create theme from
+this import** button. It first shows the colours it found and any it replaced
+for readability, then saves them as a new theme without touching a single
+page. A tick box decides whether it also becomes the site's default theme. It
+never overwrites an existing theme: a second one is named "alphire 2" and
+leaves "alphire 1" alone. The same thing is available from the terminal as
+`--theme-only`, which also checks that no page changed.
+## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
+
+A theme used to have a single button colour, so on a site like Alphire's,
+with light buttons on dark sections, any one choice disappeared somewhere.
+Themes now have two optional extra button colours, "Button on light" and
+"Button on dark", on the Themes screen. Each section works out whether it is
+light or dark (its theme band, its own colour, or a darkened photo), and the
+buttons in it that follow the theme use the matching colours automatically.
+Site Import fills both in from where the original site's buttons actually
+sat, and checks each one is readable against its own background. Themes
+that don't set the new colours look exactly as they did before.
+Caught up with the outlined-buttons change (#881) on the way in: the two features
+overlapped, and a section's light/dark button colour would have painted solid
+buttons back over an outline theme. The section's colour now draws the outline
+instead, and a render check holds it.
+
+## 2026-10-28 — Outreach drafts now learn from Dane's choices, as lessons he can read and change (#886)
+
+Every time Dane approved, edited or rejected an outreach draft, the reason was
+recorded — but the AI writer never looked at it, so it kept making the same
+mistakes. Now Starcaster turns those decisions into short, plain lessons such as
+"Never sound like you are selling something", and every new YouTube comment,
+Substack Note and Reddit comment is written following the ones that are on. The
+Outreach wizard's Learn stage lists them: each can be switched off, edited,
+deleted, or asked "Why", which shows the exact decisions it came from. Dane can
+add his own, for one channel or all of them. Lessons are suggested again after
+every five decisions, or with the Refresh Lessons button, and a refresh never
+brings back one he switched off (including one switched off for all channels)
+or overwrites one he edited. If an automatic refresh fails — no AI credit, say —
+the message after Approve or Reject now says so, rather than the lessons quietly
+going stale. The stage also
+shows a score — how many of the last 20 drafts he approved without changing a
+word — so he can see whether it is improving. One SQL file must be run before
+release; until then, writing a draft is refused with a message naming it.
 
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
