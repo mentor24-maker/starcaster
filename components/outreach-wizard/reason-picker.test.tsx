@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chipsFor, DEFAULT_REASONS, reasonKey, rejectNotice } from "./reason-picker";
+import { chipsFor, decisionNotice, DEFAULT_REASONS, reasonKey, rejectNotice } from "./reason-picker";
 
 /** Outreach wizard 12/19 (86bcrmbnw) — the pure half of the shared reason picker. */
 describe("reason picker helpers", () => {
@@ -22,5 +22,15 @@ describe("reason picker helpers", () => {
     expect(rejectNotice("Rejected.", undefined)).toBe("Rejected.");
     expect(rejectNotice("Rejected.", { recorded: false, error: "run docs/SQL/outreach_feedback_setup.sql" }))
       .toBe("Rejected. The reason was NOT saved: run docs/SQL/outreach_feedback_setup.sql.");
+  });
+
+  it("an Approve or Reject says when the lessons refresh it triggered failed, and says nothing when it worked", () => {
+    const lessons = { refreshed: false, error: "The lessons were not refreshed: run docs/SQL/outreach_lessons_setup.sql" };
+    expect(decisionNotice("Approved.", { recorded: true, lessons }))
+      .toBe("Approved. The lessons were not refreshed: run docs/SQL/outreach_lessons_setup.sql.");
+    expect(rejectNotice("Rejected.", { recorded: true, lessons: { ...lessons, error: "The lessons were not refreshed: down." } }))
+      .toBe("Rejected. The lessons were not refreshed: down.");
+    expect(decisionNotice("Approved.", { recorded: true, lessons: { refreshed: true, error: "" } })).toBe("Approved.");
+    expect(decisionNotice("Approved.", undefined)).toBe("Approved.");
   });
 });

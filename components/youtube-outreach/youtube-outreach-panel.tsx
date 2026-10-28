@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DraftChooser, { keptOptions, type DraftOption } from '../outreach-wizard/draft-chooser';
-import ReasonPicker, { rejectNotice, type RejectReason } from '../outreach-wizard/reason-picker';
+import ReasonPicker, { decisionNotice, rejectNotice, type DecisionFeedback, type RejectReason } from '../outreach-wizard/reason-picker';
 
 /**
  * Engage › YouTube Outreach — the list of videos the outreach agent should
@@ -1169,10 +1169,10 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       const next = body?.data as OutreachComment;
       if (action === 'approve') {
         setComments((list) => (list || []).map((c) => (c.id === comment.id ? next : c)));
-        setNotice('Approved. The Mini posts it from Dane of Earth\'s browser once the account\'s limits allow — if it is waiting, the card says why.');
+        setNotice(decisionNotice('Approved. The Mini posts it from Dane of Earth\'s browser once the account\'s limits allow — if it is waiting, the card says why.', (body?.data as { feedback?: DecisionFeedback })?.feedback));
       } else if (action === 'reject') {
         setComments((list) => (list || []).filter((c) => c.id !== comment.id));
-        setNotice(rejectNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`, (body?.data as { feedback?: { recorded?: boolean; error?: string } })?.feedback));
+        setNotice(rejectNotice(`Rejected. It stays in the history for "${comment.videoTitle || comment.videoId}".`, (body?.data as { feedback?: DecisionFeedback })?.feedback));
       } else {
         setComments((list) => [next, ...(list || []).filter((c) => c.id !== comment.id)]);
         const choices = optionsNotice(next);
