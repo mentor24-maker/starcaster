@@ -58,9 +58,12 @@ function createHandler(deps = {}) {
     const choices = projects
       .filter((p) => safeText(p?.id) && safeText(p.id) !== projectId)
       .map((p) => ({ id: safeText(p.id), name: safeText(p.name) }));
+    // Sent with every answer so the settings panel can lock itself for a
+    // member and say why, from the same rule the PUT enforces below.
+    const canEdit = safeText(project?.membership?.role) === 'owner';
 
     if (method === 'PUT') {
-      if (safeText(project?.membership?.role) !== 'owner') {
+      if (!canEdit) {
         return sendErr(res, 403, 'Only project owners can change what this project shares', { code: 'FORBIDDEN' }), true;
       }
       const body = await parseJsonBody(req);
@@ -85,13 +88,13 @@ function createHandler(deps = {}) {
         createdByUserId: userId,
       });
       if (!saved.ok) return sendErr(res, saved.status || 500, saved.error || 'Could not save shares'), true;
-      const summary = { ...store.summarizeShares(saved.data), projects: choices };
+      const summary = { ...store.summarizeShares(saved.data), projects: choices, canEdit };
       return sendOk(res, 200, summary, summary), true;
     }
 
     const current = await store.listSharesFrom(5000, projectId);
     if (!current.ok) return sendErr(res, current.status || 500, current.error || 'Could not read shares'), true;
-    const summary = { ...store.summarizeShares(current.data), projects: choices };
+    const summary = { ...store.summarizeShares(current.data), projects: choices, canEdit };
     return sendOk(res, 200, summary, summary), true;
   }
 
