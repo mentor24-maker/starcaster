@@ -1,3 +1,13 @@
+## 2026-10-28 — Site Import notices when its compiled code is out of date (#889)
+
+The Site Import tools run from a compiled copy of the import engine. On
+Oct 27 that copy was two weeks older than the code calling it, and the Alphire
+import crashed with a meaningless error until somebody thought to rebuild. Now
+every build writes down a fingerprint of each source file it used, and the
+import worker, page mapper, reconciler and the two page-migration scripts
+compare those fingerprints with the files on disk before they start. If
+anything changed, they rebuild on their own and print one line saying so; if
+the rebuild fails, they stop and name the command to run instead of crashing.
 ## 2026-10-28 — A single heading can use a library font or any Google font (#890)
 
 The Font setting on a Heading module only listed the eleven fonts Starcaster
