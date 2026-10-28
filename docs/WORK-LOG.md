@@ -1,3 +1,15 @@
+## 2026-10-27 — A Connect button opens the Mini's browser inside the Outreach screen (#880)
+
+Fourth piece of the sign-in window. On Engage › Outreach, the Connect stage
+now has a "Connect Reddit" (or YouTube, or Substack) button. It opens a live
+picture of the Mini's browser right inside Starcaster, already on the site's
+sign-in page, with a countdown and a Close button. Clicking and typing in the
+picture happens on the Mini, and the password goes straight to the Mini, never
+through Starcaster's server. When the window closes it always says why, saves
+that on the window's log, then asks the Mini who is signed in and offers
+"Signed in as X. Post as this account?". It was rehearsed end to end on the
+Mini against a throwaway test login page: typed in, signed in, closed. Real
+sign-ins to Reddit, YouTube and Substack are the next pieces.
 ## 2026-10-27 — Substack drafts now come as three choices, like Reddit and YouTube (#879)
 
 When Dane asks for a Substack Note or a reply, he now gets three different

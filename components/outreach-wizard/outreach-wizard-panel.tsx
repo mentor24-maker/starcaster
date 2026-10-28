@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT } from '../reddit-comments/reddit-comments-panel';
+import SignInWindow from './sign-in-window';
 
 export { PROJECT_SWITCH_EVENT };
 
@@ -17,7 +18,9 @@ export { PROJECT_SWITCH_EVENT };
  * chooses the account each channel posts as, asks the Mini to check its
  * sign-in now, and (Reddit) sets the pace — Outreach wizard 2/19, task
  * 86bcrmba0, over POST /api/outreach/accounts/:site/*. Nothing posts on a
- * channel until its account is chosen. Every other stage's one button opens
+ * channel until its account is chosen. Its Connect button opens the Mini's
+ * browser inside this screen so Dane can sign in there (Outreach wizard 6/19,
+ * task 86bcrmbfb, ./sign-in-window.tsx). Every other stage's one button opens
  * the existing screen for that step (slice 19 brings the work inside). The
  * first stage that is not done is open and highlighted.
  *
@@ -120,6 +123,22 @@ function clockText(iso: string): string {
 }
 
 /**
+ * After the sign-in window closes, what the Mini's check found — or that it is
+ * still checking. A reading from before the window closed is not an answer to
+ * "who did I just sign in as", so it is not used.
+ */
+export function afterWindowSentence(account: OutreachAccount, label: string, closedAt: number): { text: string; offer: boolean } {
+  const checked = account.browserCheckedAt ? new Date(account.browserCheckedAt).getTime() : NaN;
+  if (!Number.isFinite(checked) || checked < closedAt) {
+    return { text: `Checking which account the Mini is signed in to ${label} as…`, offer: false };
+  }
+  const seen = account.observedAccount;
+  if (!seen) return { text: `The Mini's browser is not signed in to ${label}. Click Connect ${label} to try again.`, offer: false };
+  if (seen === account.expectedAccount) return { text: `Signed in as ${seen}, the account ${label} posts as.`, offer: false };
+  return { text: `Signed in as ${seen}. Post as this account?`, offer: true };
+}
+
+/**
  * The Connect stage's controls: who the Mini is signed in as, which account
  * this channel posts as, Check now, and Reddit's pace. `onChanged` re-reads
  * the overview; `onCheckAsked` starts the re-reads that pick up the answer.
@@ -137,6 +156,7 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
   const [notice, setNotice] = useState('');
   const [perDay, setPerDay] = useState(String(account?.pace?.maxCommentsPerDay ?? ''));
   const [gap, setGap] = useState(String(account?.pace?.minMinutesBetween ?? ''));
+  const [windowClosedAt, setWindowClosedAt] = useState(0);
 
   useEffect(() => {
     setPerDay(String(account?.pace?.maxCommentsPerDay ?? ''));
@@ -173,7 +193,7 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
       setName('');
       setNotice(chosen === observedAccount
         ? `${label} now posts as ${chosen}. The sentence above is the Mini's last reading — click Check now to have it confirm.`
-        : `${label} will post as ${chosen}. Sign the Mini's browser in as ${chosen} (Screen Sharing to the Mini, for now), then click Check now.`);
+        : `${label} will post as ${chosen}. Click Connect ${label}, sign the Mini's browser in as ${chosen}, then close the window — it checks on its own.`);
       onChanged();
     }
   };
@@ -184,6 +204,14 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
       onCheckAsked();
     }
   };
+
+  // The sign-in window has closed: ask the Mini who is signed in, straight away.
+  const afterWindow = async () => {
+    setWindowClosedAt(Date.now());
+    setNotice('');
+    if (await send('check', null, 'The sign-in check')) onCheckAsked();
+  };
+  const after = windowClosedAt ? afterWindowSentence(account, label, windowClosedAt) : null;
 
   const savePace = async () => {
     if (await send('pace', { maxCommentsPerDay: Number(perDay), minMinutesBetween: Number(gap) }, 'The pace')) {
@@ -205,8 +233,17 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
             : null}
         </p>
       ) : null}
+      <SignInWindow site={site} label={label} onClosed={() => void afterWindow()} />
+      {after ? (
+        <div className="outreach-wizard-stage-actions" data-after-window>
+          <p className="outreach-wizard-notice" role="status">{after.text}</p>
+          {after.offer ? (
+            <button type="button" className="btn" disabled={!!busy} onClick={() => void choose(observedAccount)}>Post as this account</button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="outreach-wizard-stage-actions">
-        {observedAccount && observedAccount !== expectedAccount ? (
+        {observedAccount && observedAccount !== expectedAccount && !after?.offer ? (
           <button type="button" className="btn" disabled={!!busy} onClick={() => void choose(observedAccount)}>Post as this account</button>
         ) : null}
         <button type="button" className="btn" disabled={!!busy} aria-expanded={other} onClick={() => setOther((v) => !v)}>
