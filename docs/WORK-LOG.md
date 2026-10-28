@@ -9,6 +9,25 @@ buttons in it that follow the theme use the matching colours automatically.
 Site Import fills both in from where the original site's buttons actually
 sat, and checks each one is readable against its own background. Themes
 that don't set the new colours look exactly as they did before.
+Caught up with the outlined-buttons change (#881) on the way in: the two features
+overlapped, and a section's light/dark button colour would have painted solid
+buttons back over an outline theme. The section's colour now draws the outline
+instead, and a render check holds it.
+
+## 2026-10-27 — Themes can have outline buttons and rounded button corners (#881)
+
+A theme could only describe a solid, filled button. When the Site Import copied
+alphire.agency, whose buttons are white outlines on dark sections, they came out
+as solid white blocks that vanished on white sections. The rounded corners it
+measured never reached a button either. Themes now have two new settings under
+**Hero & Treatments**. **Button style** is Filled or Outline. An outline button
+has a see-through middle with a border and label in the theme's button colour,
+and fills in on hover. **Button corners** sets how rounded the buttons are. The
+Site Import now uses both, so an imported outline button stays an outline.
+Existing sites look exactly the same: a theme that sets neither option changes
+nothing, and a button with its own colours keeps them. A real-browser check now
+measures the outline button and its square, filled counterpart.
+
 ## 2026-10-27 — Imported themes can no longer ship invisible buttons or unreadable text (#876)
 
 When Site Import builds a theme from a site, it now checks every colour that

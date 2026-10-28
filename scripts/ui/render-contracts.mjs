@@ -824,6 +824,33 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'button-on-an-outline-theme-stays-outlined-in-the-dark-section-pair',
+    why:
+      'A section hands its buttons the pair for its ground (86bctakk0) and a theme can draw its buttons ' +
+      'as outlines (86bctakhj). When both landed, the section\'s pair wrote a solid fill over the ' +
+      'theme\'s transparent one, so every outline button on a light or dark section became a block ' +
+      'again. On a dark row it must be transparent with the dark-ground colour (#ffffff) as border and label.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#0b1020' },
+      themeRolePalette: SURFACE_BUTTON_PALETTE,
+      themeTreatments: { buttonStyle: 'outline' },
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopColor', 'borderTopStyle', 'borderTopWidth', 'color'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent') {
+        return `an outline-theme button on a dark row is filled with ${s.backgroundColor} — the section's button pair painted over the theme's outline style.`;
+      }
+      if (s.borderTopColor !== 'rgb(255, 255, 255)' || s.borderTopStyle === 'none' || !(parseFloat(s.borderTopWidth) > 0)) {
+        return `its border is ${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}, not the dark-ground colour #ffffff.`;
+      }
+      return s.color === 'rgb(255, 255, 255)' ? null : `its label is ${s.color}, not #ffffff — unreadable on a transparent button over a dark row.`;
+    },
+  },
+  {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:
       'A Button set to Centered sat at the left edge of every page (task 86bcg6j0z, operator ' +
@@ -891,6 +918,64 @@ export const RENDER_CONTRACTS = [
       return Math.abs(gap) <= 2
         ? null
         : `a button set to Right sits ${Math.round(gap)}px short of the right edge of its column (button ${Math.round(sb.left)}-${Math.round(sb.right)}, column ${Math.round(ab.left)}-${Math.round(ab.right)}) — its Alignment is not reaching the wrapper.`;
+    },
+  },
+  {
+    id: 'button-follows-an-outline-theme',
+    why:
+      'A theme could only describe a FILLED button, so alphire.agency\'s white outline buttons imported ' +
+      'as solid white blocks, invisible on white (task 86bctakhj). A theme with Button style Outline ' +
+      'must draw every Button that has no colour of its own with a transparent fill, a visible border ' +
+      'in the button colour, and the theme\'s button corners. The harness theme has no palette, so the ' +
+      'border falls back to its primary colour, #1f4d8f.',
+    section: {
+      layout: 'single',
+      themeTreatments: { buttonStyle: 'outline', buttonRadius: 24 },
+      // A button with no colours of its own, as Site Import writes one. A
+      // Button added from the Builder's palette starts with fixed colours
+      // (createEmptyModule), so it does not follow the theme at all — the
+      // first run of this contract measured exactly that, #214c71.
+      modules: [{ type: 'button', text: 'Outline from the theme', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopColor', 'borderTopWidth', 'borderTopStyle', 'borderTopLeftRadius', 'color'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent') {
+        return `an outline-theme button is filled with ${s.backgroundColor} — the theme's button style is not reaching it.`;
+      }
+      if (s.borderTopColor !== 'rgb(31, 77, 143)' || s.borderTopStyle === 'none' || !(parseFloat(s.borderTopWidth) > 0)) {
+        return `an outline-theme button has no visible border in the button colour: ${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}.`;
+      }
+      if (s.color !== 'rgb(31, 77, 143)') {
+        return `an outline-theme button's label is ${s.color}, not the button colour — on a transparent fill it may be unreadable.`;
+      }
+      if (s.borderTopLeftRadius !== '24px') {
+        return `the theme's 24px button corners did not reach the button: border-radius is ${s.borderTopLeftRadius}.`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'button-without-a-theme-style-stays-filled-and-square',
+    why:
+      'The pair to the contract above, so it cannot pass on a build where every button went see-through: ' +
+      'a page whose theme sets no button style keeps the filled, square button every existing site has.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Filled as before', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopLeftRadius'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor === 'rgba(0, 0, 0, 0)' || s.backgroundColor === 'transparent') {
+        return 'a button on an unstyled theme rendered with no fill — the outline style is leaking onto every button.';
+      }
+      if (s.borderTopLeftRadius !== '0px') {
+        return `a button on an unstyled theme has ${s.borderTopLeftRadius} corners — existing buttons must stay square.`;
+      }
+      return null;
     },
   },
   {

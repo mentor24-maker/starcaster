@@ -806,6 +806,30 @@ export function BuilderThemesPage() {
                   updateDraft({ treatments: { ...(draft.treatments || {}), footerInverse: e.target.checked } })}
               />
             </BuilderSettingRow>
+            {/* Every Button that has no colour of its own follows these. */}
+            <BuilderSettingRow label="Button style">
+              <select
+                aria-label="Button style"
+                value={draft.treatments?.buttonStyle === "outline" ? "outline" : "fill"}
+                onChange={(e) =>
+                  updateDraft({
+                    treatments: {
+                      ...(draft.treatments || {}),
+                      buttonStyle: e.target.value === "outline" ? "outline" : "fill",
+                    },
+                  })}
+              >
+                <option value="fill">Filled</option>
+                <option value="outline">Outline</option>
+              </select>
+            </BuilderSettingRow>
+            <SliderRow
+              label="Button corners px"
+              value={draft.treatments?.buttonRadius ?? 0}
+              min={0}
+              max={60}
+              onChange={(v) => updateDraft({ treatments: { ...(draft.treatments || {}), buttonRadius: v } })}
+            />
           </div>
         </div>
       </div>

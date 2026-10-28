@@ -1589,6 +1589,7 @@ export function BuilderTemplatePreview({
     <BuilderSectionPreview
       bandRole={joined ? undefined : sectionBandRoles.get(section.id)}
       buttonPalette={themeStyles?.palette}
+      buttonTreatments={themeTreatments}
       emailPreview={emailPreview}
       heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
       heroOverlay={themeTreatments?.heroOverlay}
@@ -1634,7 +1635,11 @@ export function BuilderTemplatePreview({
           ...getBuilderBackgroundStyle(lead.background),
           // The members drop their background for this wrapper's, so the
           // wrapper is what decides which button pair they sit on.
-          ...getSectionButtonRoleVars(themeStyles?.palette, getSectionSurfaceTone({ background: lead.background }))
+          ...getSectionButtonRoleVars(
+            themeStyles?.palette,
+            getSectionSurfaceTone({ background: lead.background }),
+            themeTreatments
+          )
         }}
       >
         {group.map((section) => renderMainSection(section, true))}
@@ -1702,6 +1707,7 @@ function BuilderSectionPreview({
   themePalette,
   bandRole,
   buttonPalette,
+  buttonTreatments,
   heroBannerUrl,
   heroOverlay,
   heroOverlayOpacity,
@@ -1719,6 +1725,8 @@ function BuilderSectionPreview({
   bandRole?: "surface" | "band" | "inverse";
   /** The theme palette, for its per-surface button pairs (task 86bctakk0). */
   buttonPalette?: import("@/lib/builder-template").BuilderThemePalette | null;
+  /** The theme's button style, so a section's pair keeps an outline theme outlined. */
+  buttonTreatments?: import("@/lib/builder-template").BuilderThemeTreatments | null;
   /** The theme's hero banner image, when this is the section that wears it. */
   heroBannerUrl?: string;
   /** Treatment: tint laid over an image-background section (hex + opacity). */
@@ -1794,7 +1802,8 @@ function BuilderSectionPreview({
   // with one button colour renders exactly as it always did.
   const buttonRoleStyle = getSectionButtonRoleVars(
     buttonPalette,
-    getSectionSurfaceTone({ background: section.background, bandRole, heroTinted: Boolean(heroTintColor) })
+    getSectionSurfaceTone({ background: section.background, bandRole, heroTinted: Boolean(heroTintColor) }),
+    buttonTreatments
   ) as CSSProperties;
   const heroStyle: CSSProperties | undefined = heroTintColor
     ? {

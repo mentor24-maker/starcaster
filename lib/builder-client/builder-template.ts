@@ -499,7 +499,25 @@ export type BuilderThemeTreatments = {
   heroOverlayOpacity?: number;
   cardOverlap?: boolean;
   footerInverse?: boolean;
+  /**
+   * How a Button that follows the theme is drawn. "fill" (the default when
+   * absent) paints the button role as the background; "outline" leaves the
+   * background transparent and draws the button role as the border and the
+   * text, filling on hover. Until 2026-10-27 a theme could only describe a
+   * filled button, so an imported site's outline buttons became solid blocks
+   * (task 86bctakhj).
+   */
+  buttonStyle?: "fill" | "outline";
+  /**
+   * Corner radius in px for every Button that follows the theme. Absent means
+   * square, exactly as before. Deliberately NOT the theme's `borderRadius`:
+   * that one defaults to 12 on every theme and rounds containers, so reading
+   * it would have rounded every existing button on every site.
+   */
+  buttonRadius?: number;
 };
+
+export const THEME_BUTTON_RADIUS_MAX = 200;
 
 /** Hero banner: the image the site's top band wears. Operator-chosen URL. */
 export type BuilderThemeHeroBanner = {
@@ -536,6 +554,12 @@ export function normalizeThemeTreatments(raw: unknown): BuilderThemeTreatments |
   }
   if (typeof source.cardOverlap === "boolean") treatments.cardOverlap = source.cardOverlap;
   if (typeof source.footerInverse === "boolean") treatments.footerInverse = source.footerInverse;
+  if (source.buttonStyle === "fill" || source.buttonStyle === "outline") treatments.buttonStyle = source.buttonStyle;
+  // An empty field means "no theme corners", not 0 — Number("") is 0.
+  const radius = source.buttonRadius === "" || source.buttonRadius === null ? NaN : Number(source.buttonRadius);
+  if (Number.isFinite(radius)) {
+    treatments.buttonRadius = Math.round(Math.min(THEME_BUTTON_RADIUS_MAX, Math.max(0, radius)));
+  }
   return Object.keys(treatments).length ? treatments : null;
 }
 
