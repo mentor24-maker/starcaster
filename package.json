@@ -40,7 +40,7 @@
     "build:assets": "node scripts/build_pinned_assets.mjs",
     "typecheck": "tsc --noEmit",
     "test:builder-ui": "vitest run",
-    "build": "npm run build:stamp && npm run build:richtext && npm run build:builder-template && npm run build:builder-email-render && npm run build:html && npm run build:app && npm run build:styles && npm run build:builder && npm run pin:assets && npm run check:assets",
+    "build": "npm run build:stamp && npm run build:richtext && npm run build:builder-template && npm run build:builder-email-render && npm run build:site-import && npm run build:html && npm run build:app && npm run build:styles && npm run build:builder && npm run pin:assets && npm run check:assets",
     "build:stamp": "node scripts/write_build_stamp.mjs",
     "dev": "node scripts/dev.mjs",
     "start": "npm run build:html && npm run build:builder && node server.js",

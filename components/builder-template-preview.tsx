@@ -156,6 +156,8 @@ import {
   getSectionColumnGapStyle,
   getSectionColumnPercent,
   getSectionBandPaddingStyle,
+  getSectionButtonRoleVars,
+  getSectionSurfaceTone,
   getSectionGridTemplate,
   getSectionHorizontalMarginStyle,
   getSectionMinHeightStyle,
@@ -1586,6 +1588,8 @@ export function BuilderTemplatePreview({
   const renderMainSection = (section: BuilderTemplateSection, joined: boolean) => (
     <BuilderSectionPreview
       bandRole={joined ? undefined : sectionBandRoles.get(section.id)}
+      buttonPalette={themeStyles?.palette}
+      buttonTreatments={themeTreatments}
       emailPreview={emailPreview}
       heroBannerUrl={section.id === heroBannerSectionId ? themeHeroBannerUrl : undefined}
       heroOverlay={themeTreatments?.heroOverlay}
@@ -1627,7 +1631,16 @@ export function BuilderTemplatePreview({
           lead.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
         }`}
         key={`joined-${lead.id}`}
-        style={getBuilderBackgroundStyle(lead.background)}
+        style={{
+          ...getBuilderBackgroundStyle(lead.background),
+          // The members drop their background for this wrapper's, so the
+          // wrapper is what decides which button pair they sit on.
+          ...getSectionButtonRoleVars(
+            themeStyles?.palette,
+            getSectionSurfaceTone({ background: lead.background }),
+            themeTreatments
+          )
+        }}
       >
         {group.map((section) => renderMainSection(section, true))}
       </div>
@@ -1693,6 +1706,8 @@ function BuilderSectionPreview({
   theme,
   themePalette,
   bandRole,
+  buttonPalette,
+  buttonTreatments,
   heroBannerUrl,
   heroOverlay,
   heroOverlayOpacity,
@@ -1708,6 +1723,10 @@ function BuilderSectionPreview({
   themePalette?: import("@/components/builder/builder-utils").CrmThemePalette;
   /** Theme palette role this backgroundless section takes its band from. */
   bandRole?: "surface" | "band" | "inverse";
+  /** The theme palette, for its per-surface button pairs (task 86bctakk0). */
+  buttonPalette?: import("@/lib/builder-template").BuilderThemePalette | null;
+  /** The theme's button style, so a section's pair keeps an outline theme outlined. */
+  buttonTreatments?: import("@/lib/builder-template").BuilderThemeTreatments | null;
   /** The theme's hero banner image, when this is the section that wears it. */
   heroBannerUrl?: string;
   /** Treatment: tint laid over an image-background section (hex + opacity). */
@@ -1778,6 +1797,14 @@ function BuilderSectionPreview({
           return `rgba(${r}, ${g}, ${b}, ${opacity})`;
         })()
       : undefined;
+  // Which of the theme's button pairs this row's buttons take: the light-ground
+  // one or the dark-ground one. Empty when the theme has neither, so a theme
+  // with one button colour renders exactly as it always did.
+  const buttonRoleStyle = getSectionButtonRoleVars(
+    buttonPalette,
+    getSectionSurfaceTone({ background: section.background, bandRole, heroTinted: Boolean(heroTintColor) }),
+    buttonTreatments
+  ) as CSSProperties;
   const heroStyle: CSSProperties | undefined = heroTintColor
     ? {
         backgroundImage: `linear-gradient(${heroTintColor}, ${heroTintColor}), ${heroImageSource}`,
@@ -1899,6 +1926,7 @@ function BuilderSectionPreview({
       // Hero tint and overlap layer on top of the section's own background.
       ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : heroStyle),
       ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : overlapStyle),
+      ...(isNavigationSection || isOverlayLayoutCollapsed ? {} : buttonRoleStyle),
       ...(isOverlayLayoutCollapsed ? {} : getSectionMarginStyle(s)),
       ...(isOverlayLayoutCollapsed ? {} : getSectionHorizontalMarginStyle(s)),
       // Navigation-only rows already render flush by design; overlay slots are

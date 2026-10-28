@@ -17,7 +17,7 @@
  *
  *   POST   /api/engage/substack-notes/items/:id/draft     write a draft (AI); "Write another" too
  *   POST   /api/engage/substack-notes/items/:id/approve   { text?, option? }  (edited wording, and which of the three he picked — 11/19)
- *   POST   /api/engage/substack-notes/items/:id/reject
+ *   POST   /api/engage/substack-notes/items/:id/reject  { reasons?, note? } — why (12/19)
  *
  * Topic drafts on a timer (5/7, task 86bcet77n — lib/substackNotesRunDue.js):
  *
@@ -188,7 +188,11 @@ async function handle(req, res, pathname, method) {
       if (!body) return true;
       return reply(res, await store.approveItem(id, body, scope));
     }
-    if (decision[2] === 'reject') return reply(res, await store.rejectItem(id, scope));
+    if (decision[2] === 'reject') {
+      const body = await readBody(req, res);
+      if (!body) return true;
+      return reply(res, await store.rejectItem(id, scope, body));
+    }
     if (checkEndpointLimit(req, res, 'substackNotes.drafts.create')) return true;
     return reply(res, await store.writeDraftForItem(id, scope));
   }
