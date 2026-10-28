@@ -42,6 +42,23 @@
  *                                                or Reject for each undecided one
  *   POST /api/outreach/youtube/creators/:id/decide  { status, decisionReasons?, note? }
  *
+ *   GET  /api/outreach/youtube/conversations     Find conversations: comments on the
+ *                                                approved channels' newest videos,
+ *                                                grouped by video, ranked, each with
+ *                                                why (Outreach wizard 16/19,
+ *                                                lib/youtubeConversationFinder.js)
+ *   POST /api/outreach/youtube/conversations/reply    { commentId } — Write replies:
+ *                                                line up the video with this comment's
+ *                                                id and write three options
+ *   POST /api/outreach/youtube/conversations/video    { videoId } — Comment on the video
+ *   POST /api/outreach/youtube/conversations/skip     { commentId, reasons, note }
+ *   POST /api/outreach/youtube/conversations/contact  { commentId } — save the
+ *                                                commenter as a contact
+ *   GET  /api/outreach/youtube/conversations/read-due  Vercel Cron only, every 3
+ *                                                hours: read every project's approved
+ *                                                channels' comments
+ *                                                (lib/acquire/YoutubeCommentsReadDue.js)
+ *
  * The YouTube creator routes are Outreach wizard 15/19 (task 86bcrmbrf), over
  * lib/youtubeCreatorsStore.js, lib/acquire/YoutubeCreatorsFindRun.js and
  * lib/acquire/SubstackSuggestRun.js runYoutubeSuggestions.
@@ -75,6 +92,12 @@ const defaultCreators = {
   store: () => require('../lib/youtubeCreatorsStore'),
   find: (scope, options) => require('../lib/acquire/YoutubeCreatorsFindRun').findYoutubeCreators(scope, options),
   suggest: (scope, options) => require('../lib/acquire/SubstackSuggestRun').runYoutubeSuggestions(scope, options),
+};
+
+/** The YouTube comment finder's moving parts (Outreach wizard 16/19), required on first use like the creators'. */
+const defaultYoutubeConversations = {
+  finder: () => require('../lib/youtubeConversationFinder'),
+  readDue: () => require('../lib/acquire/YoutubeCommentsReadDue'),
 };
 
 const PREFIX = '/api/outreach';
@@ -146,9 +169,59 @@ async function handleCreators(req, res, pathname, method, creators) {
   return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
 }
 
+/** The YouTube conversation routes; false when `pathname` is not one of them. */
+async function handleYoutubeConversations(req, res, pathname, method, yt) {
+  const base = `${PREFIX}/youtube/conversations`;
+  if (pathname !== base && !pathname.startsWith(`${base}/`)) return false;
+
+  // CRON ONLY: it reads every project's approved channels at once, so a
+  // session is deliberately not enough. `req.cronPublish` is set in
+  // routes/index.js only for a CRON_PATHS path carrying Vercel's cron header or
+  // the CRON_SECRET bearer token. Vercel's scheduler sends GET.
+  if (pathname === `${base}/read-due`) {
+    if (method !== 'GET' && method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'The scheduled YouTube comments read runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const due = yt.readDue();
+    const result = await due.runCommentsReadDue();
+    if (!result.ok) {
+      console.error(`[youtube-conversations] read-due REFUSED: ${result.error}`);
+      return reply(res, result), true;
+    }
+    // Logged on every run, the quiet ones too: "nothing was due" and "never
+    // ran" must not look the same in the log.
+    for (const line of due.formatCommentsReadLog(result.data)) {
+      if (/ (FAILED|NOT REACHED|QUOTA) /.test(line)) console.error(line);
+      else console.log(line);
+    }
+    return reply(res, result), true;
+  }
+
+  const scope = requestScope(req);
+  if (pathname === base) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await yt.finder().listYoutubeConversations(scope)), true;
+  }
+  const verb = pathname.match(/^\/api\/outreach\/youtube\/conversations\/(reply|video|skip|contact)$/);
+  if (!verb) return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
+  if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+  // Write replies and Comment on the video are AI calls (three options), so
+  // they share the YouTube drafting limit.
+  if ((verb[1] === 'reply' || verb[1] === 'video') && checkEndpointLimit(req, res, 'youtubeOutreach.drafts.create')) return true;
+  const body = await readBody(req, res);
+  if (!body) return true;
+  const finder = yt.finder();
+  if (verb[1] === 'reply') return reply(res, await finder.writeRepliesFor(body, scope)), true;
+  if (verb[1] === 'video') return reply(res, await finder.commentOnVideo(body, scope)), true;
+  if (verb[1] === 'skip') return reply(res, await finder.skipConversation(body, scope)), true;
+  return reply(res, await finder.saveCommenterAsContact(body, scope)), true;
+}
+
 async function handle(req, res, pathname, method, {
   build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback,
   conversations = substackConversations, lessons = outreachLessons, creators = defaultCreators,
+  youtubeConversations = defaultYoutubeConversations,
 } = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
 
@@ -167,6 +240,7 @@ async function handle(req, res, pathname, method, {
   }
 
   if (await handleCreators(req, res, pathname, method, creators)) return true;
+  if (await handleYoutubeConversations(req, res, pathname, method, youtubeConversations)) return true;
 
   if (pathname === `${PREFIX}/substack/conversations`) {
     if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;

@@ -64,6 +64,10 @@
       "schedule": "7 */2 * * *"
     },
     {
+      "path": "/api/outreach/youtube/conversations/read-due",
+      "schedule": "23 */3 * * *"
+    },
+    {
       "path": "/api/support/bug-reports/sweep-orphans",
       "schedule": "17 4 * * *"
     }

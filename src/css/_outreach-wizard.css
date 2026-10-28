@@ -299,6 +299,24 @@
   white-space: pre-line;
 }
 
+/* ── YouTube: Find conversations (Outreach wizard 16/19) ─────────────
+   components/outreach-wizard/youtube-conversations.tsx. One box per video,
+   its comments inside it, reusing the Substack list's comment cards. */
+
+.yt-conversation-video {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+}
+
+.yt-conversation-video .outreach-conversation {
+  border-style: dashed;
+}
+
 /* ── Learn: lessons drafts are written with (Outreach wizard 13/19) ─────
    components/outreach-wizard/learn-controls.tsx. Each lesson is one line;
    its controls wrap under it on a narrow screen rather than squeezing it. */
