@@ -30,6 +30,7 @@ import {
   buildBuilderThemeStyles,
   getBuilderThemeStyleVars,
   getThemePaletteRoleVars,
+  getThemeButtonVars,
   getButtonModuleStyle,
   getBuilderThemePageMarginStyle,
   getThemeRootVars,
@@ -47,7 +48,7 @@ import {
   isSectionScopedOverlayDecor,
   resolveSectionScopedOverlaySectionZIndex
 } from "@/components/builder/builder-utils";
-import { createDefaultTheme, normalizeTheme } from "@/lib/builder-template";
+import { createDefaultTheme, normalizeTheme, normalizeThemeTreatments } from "@/lib/builder-template";
 
 describe("overlay flow collapse helpers", () => {
   it("detects floating image modules", () => {
@@ -1049,6 +1050,56 @@ describe("getButtonModuleStyle palette defaults", () => {
     ) as Record<string, string>;
     expect(style.background).toBe("#a64e2c");
     expect(style["--btn-color"]).toBe("#ffffff");
+  });
+});
+
+describe("theme button style (task 86bctakhj)", () => {
+  it("writes nothing for a theme that sets no button style, so existing buttons are untouched", () => {
+    expect(getThemeButtonVars({ button: "#d9e62e" }, null)).toEqual({});
+    expect(getThemeButtonVars({ button: "#d9e62e" }, { buttonStyle: "fill" })).toEqual({});
+  });
+
+  it("outline: transparent fill, the button colour as border and text, filled on hover", () => {
+    const vars = getThemeButtonVars({ button: "#ffffff", buttonText: "#111111" }, { buttonStyle: "outline" });
+    expect(vars["--lp-button-bg"]).toBe("transparent");
+    expect(vars["--lp-button-border"]).toBe("#ffffff");
+    expect(vars["--lp-button-text"]).toBe("#ffffff");
+    expect(vars["--lp-button-hover"]).toBe("#ffffff");
+    expect(vars["--lp-button-hover-text"]).toBe("#111111");
+  });
+
+  it("outline wins over the palette's fill vars when the theme publishes both", () => {
+    const vars = getBuilderThemeStyleVars({
+      palette: { button: "#1f4d8f", buttonText: "#ffffff" },
+      treatments: { buttonStyle: "outline", buttonRadius: 60 },
+    } as never) as Record<string, string>;
+    expect(vars["--lp-button-bg"]).toBe("transparent");
+    expect(vars["--lp-button-border"]).toBe("#1f4d8f");
+    expect(vars["--lp-button-radius"]).toBe("60px");
+  });
+
+  it("an outline theme with no palette still has a visible border colour", () => {
+    const vars = getThemeButtonVars(null, { buttonStyle: "outline" }, "#1f4d8f");
+    expect(vars["--lp-button-border"]).toBe("#1f4d8f");
+    expect(vars["--lp-button-hover-text"]).toBe("#ffffff");
+  });
+
+  it("a themed button reads the theme's corners and border, unless it set its own", () => {
+    const themed = getButtonModuleStyle({}, { followThemePalette: true }) as Record<string, string>;
+    expect(themed.borderRadius).toBe("var(--lp-button-radius, 0px)");
+    expect(themed.borderColor).toBe("var(--lp-button-border, var(--lp-button-bg, #214c71))");
+    expect(themed["--btn-color-hover"]).toBe("var(--lp-button-hover-text, var(--lp-button-text, #ffffff))");
+    const own = getButtonModuleStyle({ borderRadius: "0", borderColor: "#ff0000" }, { followThemePalette: true }) as Record<string, string>;
+    expect(own.borderRadius).toBe("0px");
+    expect(own.borderColor).toBe("#ff0000");
+  });
+
+  it("keeps the style and clamps the corners when a theme is normalised", () => {
+    expect(normalizeThemeTreatments({ buttonStyle: "outline", buttonRadius: "999" })).toEqual({
+      buttonStyle: "outline",
+      buttonRadius: 200,
+    });
+    expect(normalizeThemeTreatments({ buttonStyle: "ghost", buttonRadius: "" })).toBeNull();
   });
 });
 

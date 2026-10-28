@@ -1291,10 +1291,14 @@ export function getButtonModuleStyle(
     : "solid";
   const borderWidth = Number.parseInt(settings.borderWidth ?? "2", 10);
   const borderRadius = Number.parseInt(settings.borderRadius ?? "0", 10);
+  const hasChosenRadius = String(settings.borderRadius ?? "").trim() !== "";
   const resolvedBorderWidth = borderStyle === "none" ? 0 : Math.max(Number.isFinite(borderWidth) ? borderWidth : 2, 0);
   const resolvedBorderColor = borderStyle === "none" || settings.borderColor === "transparent"
     ? "transparent"
-    : settings.borderColor || roleOr("--lp-button-bg", "#214c71");
+    : settings.borderColor
+      // An outline theme publishes --lp-button-border while its fill is
+      // transparent, so the border cannot just borrow the fill's colour.
+      || (themed ? "var(--lp-button-border, var(--lp-button-bg, #214c71))" : "#214c71");
 
   // The fill normally arrives as a background object, which would paint a
   // concrete hex and leave --btn-bg unread. When the operator picked nothing
@@ -1312,7 +1316,8 @@ export function getButtonModuleStyle(
     "--btn-bg-hover": settings.buttonHoverColor
       || (themed ? "var(--lp-button-hover, var(--lp-button-bg, #0f4f8f))" : "#0f4f8f"),
     "--btn-color": textColor,
-    "--btn-color-hover": settings.textHoverColor || roleOr("--lp-button-text", "#ffffff"),
+    "--btn-color-hover": settings.textHoverColor
+      || (themed ? "var(--lp-button-hover-text, var(--lp-button-text, #ffffff))" : "#ffffff"),
     "--btn-text-shadow": textShadow,
     "--btn-border": resolvedBorderColor,
     color: textColor,
@@ -1331,7 +1336,11 @@ export function getButtonModuleStyle(
     borderStyle,
     borderColor: resolvedBorderColor,
     borderWidth: `${resolvedBorderWidth}px`,
-    borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 0, 0)}px`,
+    // A radius the operator set wins; otherwise a themed button takes the
+    // theme's button corners (none set = square, as it always was).
+    borderRadius: themed && !hasChosenRadius
+      ? "var(--lp-button-radius, 0px)"
+      : `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 0, 0)}px`,
     ...(Number.isFinite(fontSize) && fontSize >= 10 ? { fontSize: `${fontSize}px` } : {}),
     fontWeight: settings.bold === "false" ? 500 : 700,
     fontStyle: settings.italic === "true" ? "italic" : "normal",
@@ -1826,8 +1835,57 @@ export function getBuilderThemeStyleVars(styles: BuilderThemeStyles | undefined)
   vars["--bx-theme-padding-inline"] = `${sideMargins}px`;
 
   Object.assign(vars, getThemePaletteRoleVars(styles.palette));
+  Object.assign(vars, getThemeButtonVars(styles.palette, styles.treatments, primary));
 
   return vars as CSSProperties;
+}
+
+/**
+ * The theme's button STYLE (task 86bctakhj) → CSS vars, layered on top of the
+ * palette's button colours. Every Button that follows the theme reads these
+ * through `getButtonModuleStyle`, so no button needs editing to pick them up.
+ *
+ * Outline keeps both palette roles meaningful: the button colour draws the
+ * border and the text at rest and becomes the fill on hover, and the button
+ * text colour is the text on that hover fill. So switching a filled theme to
+ * outline can never leave white text on a transparent button.
+ *
+ * Nothing is written for a theme that sets neither, so every existing site
+ * keeps its exact buttons.
+ */
+export function getThemeButtonVars(
+  palette: BuilderThemePalette | null | undefined,
+  treatments: BuilderThemeTreatments | null | undefined,
+  fallbackColor = ""
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const radius = Number(treatments?.buttonRadius);
+  if (treatments?.buttonRadius !== undefined && Number.isFinite(radius)) {
+    vars["--lp-button-radius"] = `${Math.max(0, radius)}px`;
+  }
+  if (treatments?.buttonStyle === "outline") {
+    const color = String(palette?.button || fallbackColor || "").trim() || "#214c71";
+    const hoverText = String(palette?.buttonText || "").trim() || readableTextOn(color);
+    vars["--lp-button-bg"] = "transparent";
+    vars["--lp-button-border"] = color;
+    vars["--lp-button-text"] = color;
+    vars["--lp-button-hover"] = color;
+    vars["--lp-button-hover-text"] = hoverText;
+  }
+  return vars;
+}
+
+/** White or near-black, whichever reads better on a '#rrggbb' fill. */
+function readableTextOn(fill: string): string {
+  const hex = normalizeBuilderHexColor(fill, "");
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return "#ffffff";
+  const [r, g, b] = [1, 3, 5].map((at) => {
+    const c = Number.parseInt(hex.slice(at, at + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Contrast against white vs against #111111 (luminance ~0.0056).
+  return (1.05 / (lum + 0.05)) >= ((lum + 0.05) / 0.0556) ? "#ffffff" : "#111111";
 }
 
 /**

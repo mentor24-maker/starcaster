@@ -52,6 +52,8 @@ export type ImportTheme = {
   borderRadius?: number;
   contentWidth?: number;
   palette: Record<string, string>;
+  /** The theme's button style and corners (typography.treatments). */
+  treatments?: { buttonStyle?: "outline"; buttonRadius?: number };
   typography: {
     fonts: { heading: string; body: string; mono: string };
     scale: Record<string, number>;
@@ -374,9 +376,11 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   const sum = ir.styleSummary;
   const palette: Record<string, string> = {};
   const [buttonFill = "", buttonText = "", radius = ""] = top(sum?.buttons).split("|");
-  // An OUTLINED button (no fill, coloured text + border) has no Builder
-  // equivalent — the theme's button is a fill — so its colour becomes the
-  // fill and the text is whichever of white/near-black reads better on it.
+  // An OUTLINED button (no fill, coloured text + border) becomes an outline
+  // theme: its colour is the button role (border + text at rest, fill on
+  // hover) and the button text is whichever of white/near-black reads on
+  // that hover fill. Until 2026-10-27 a theme could only describe a fill, so
+  // these became solid blocks (task 86bctakhj).
   const outlined = !toHex(buttonFill) && Boolean(toHex(buttonText));
   const fill = toHex(buttonFill) || toHex(buttonText);
   let readableLink = link;
@@ -441,13 +445,20 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
     palette.header = header;
     palette.headerText = contrastText(header) === "#ffffff" ? "#ffffff" : text || "#111111";
   }
+  // The theme's general borderRadius rounds containers and never reached a
+  // button, so the measured corners also go to the button radius.
   let borderRadius: number | undefined;
+  const treatments: NonNullable<ImportTheme["treatments"]> = {};
   if (fill) {
     palette.button = fill;
     palette.buttonText = outlined ? contrastText(fill) : toHex(buttonText) || contrastText(fill);
-    if (outlined) notes.push(`buttons: outlined in ${fill} on the original — Builder's button is filled, so it becomes ${fill} filled`);
+    if (outlined) {
+      treatments.buttonStyle = "outline";
+      notes.push(`buttons: outlined in ${fill} on the original — the theme's buttons are outlines in ${fill}`);
+    }
   }
   if (top(sum?.buttons)) borderRadius = Math.max(0, Math.min(60, Number(radius) || 0));
+  if (borderRadius) treatments.buttonRadius = borderRadius;
   // The site painted its button and label together only when it had a real
   // fill and a real label colour; an outline conversion is the import's.
   const sitePainted = new Set<string>();
@@ -469,6 +480,7 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
     ...(borderRadius !== undefined ? { borderRadius } : {}),
     ...(contentWidth ? { contentWidth } : {}),
     palette,
+    ...(Object.keys(treatments).length ? { treatments } : {}),
     typography: { fonts, scale, colors, elements: readableLink ? { a: { color: readableLink } } : {} },
     notes,
   };
