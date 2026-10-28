@@ -1,3 +1,15 @@
+## 2026-10-28 — The rule that closes the Mini's private doors to other Tailscale devices is written down (#891)
+
+Any device signed in to Dane's Tailscale could open the Mini's private
+OpenClaw control page, and its password-less Chrome control and the browser
+door keeper whenever those run — measured again this morning from the
+MacBook. The fix is a Tailscale access rule that lets other devices reach only
+ssh and the already-public YouTube helper on the Mini. This change writes that
+rule down exactly, with Tailscale's own built-in tests (so the admin console
+refuses to save a rule that does the wrong thing), an undo, and the check that
+proves it worked. It is not switched on yet: changing it is a sign-in to the
+Tailscale admin page, which is Dane's step.
+
 ## 2026-10-27 — Reject now asks why, with one-click reasons, on every outreach channel (#882)
 
 Rejecting a draft comment or Note used to throw it away with no record of
