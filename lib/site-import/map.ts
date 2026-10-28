@@ -41,7 +41,7 @@ import {
   type SurfaceLook,
 } from "./surfaces";
 export { mergeMappedSections } from "./columns";
-export { deriveImportTheme, nextThemeName, siteNameFromUrl } from "./theme";
+export { deriveImportTheme, nextThemeName, siteNameFromUrl, guardPaletteReadability, uncoveredPaletteRoles, PALETTE_PAIRS } from "./theme";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
 export const TEXT_MODULE_CHAR_BUDGET = 9500;

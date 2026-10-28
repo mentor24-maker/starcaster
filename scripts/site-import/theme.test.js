@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { deriveImportTheme, nextThemeName, siteNameFromUrl } = require('../../lib/site-import/dist/map.js');
+const { deriveImportTheme, nextThemeName, siteNameFromUrl, guardPaletteReadability, uncoveredPaletteRoles } = require('../../lib/site-import/dist/map.js');
 
 /** WCAG contrast, written out here rather than imported, so the test does
  *  not grade the guard with the guard's own arithmetic. */
@@ -130,12 +130,21 @@ test('system fonts and built-ins are not requested from Google', () => {
   assert.equal(t.typography.fonts.heading, 'playfair');
 });
 
-test('an outlined button becomes a filled one in its colour, and says so', () => {
-  const t = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(46, 163, 242)|3', count: 7 }] }), 'x 1');
+test('an outlined button becomes an outline theme in its colour, and says so', () => {
+  // alphire.agency, 2026-10-27: white outlines became solid white blocks
+  // because a theme could only describe a fill (task 86bctakhj).
+  const t = deriveImportTheme(siteIr({ ...SUMMARY, buttons: [{ value: '|rgb(46, 163, 242)|60', count: 7 }] }), 'x 1');
   assert.equal(t.palette.button, '#2ea3f2');
-  assert.equal(t.palette.buttonText, '#111111');
-  assert.equal(t.borderRadius, 3);
-  assert.ok(t.notes.some((n) => n.includes('outlined')));
+  assert.equal(t.palette.buttonText, '#111111', 'the text on the hover fill');
+  assert.equal(t.treatments.buttonStyle, 'outline');
+  assert.equal(t.treatments.buttonRadius, 60, 'the measured corners reach the buttons');
+  assert.ok(t.notes.some((n) => n.includes('outlines')));
+});
+
+test('a filled button stays a filled theme and its corners still reach the buttons', () => {
+  const t = deriveImportTheme(siteIr(SUMMARY), 'x 1');
+  assert.equal(t.treatments.buttonStyle, undefined);
+  assert.equal(t.treatments.buttonRadius, 3);
 });
 
 /** Every text element in the fixture painted one colour. */
@@ -325,4 +334,62 @@ test('normalize records the style evidence by role from the capture', () => {
 
   const { ir: old } = normalizeSite({ jobId: 'j', sourceUrl: 'https://x.test/', capturedAt: '', pages: [{ desktop: { ...desktop, rects: undefined } }], assets: [] });
   assert.equal(old.styleSummary, undefined, 'no positions → no summary, rather than a misleading one');
+});
+
+/* ---------- the readability guard (task 86bctakh4) ---------- */
+
+
+test('every palette role is covered by a declared readability pair', () => {
+  assert.deepEqual(uncoveredPaletteRoles(), [],
+    'a palette role with no declared pair would ship unchecked — add it to PALETTE_PAIRS in lib/site-import/theme.ts');
+});
+
+test('Alphire: white outline buttons on a white page become visible, and every pair reads', () => {
+  // alphire.agency 2026-10-27, job simp_1791930973248_9arcy2: white OUTLINE
+  // buttons on dark bands, a white page — the import shipped them invisible.
+  const t = deriveImportTheme(siteIr({
+    ...SUMMARY,
+    pageBackgrounds: [{ value: 'rgb(255, 255, 255)', count: 40 }],
+    backgroundsByArea: [{ value: 'rgb(229, 228, 226)', count: 9 }, { value: 'rgb(3, 5, 10)', count: 8 }],
+    headerBackgrounds: [{ value: 'rgb(0, 0, 0)', count: 17 }],
+    buttons: [{ value: '|rgb(255, 255, 255)|60', count: 17 }],
+  }), 'alphire 1');
+  const p = t.palette;
+  assert.equal(p.surface, '#ffffff');
+  assert.notEqual(p.button, '#ffffff', 'the button must not be white on a white page');
+  assert.ok(contrastRatio(p.button, p.surface) >= 2, `button ${p.button} on ${p.surface}`);
+  assert.ok(contrastRatio(p.buttonText, p.button) >= 4.5, `label ${p.buttonText} on ${p.button}`);
+  assert.ok(contrastRatio(p.inverseText, p.inverse) >= 4.5);
+  assert.ok(contrastRatio(p.headerText, p.header) >= 4.5);
+  assert.ok(contrastRatio(p.bandText, p.band) >= 4.5);
+  assert.ok(t.notes.some((n) => n.includes('a button against the page') && n.includes('#ffffff')), 'the repair is named');
+  assert.equal(t.primaryColor, p.button, 'the theme colour follows the repaired button');
+});
+
+test('the guard repairs a composed pair to the AA line, but leaves a site-painted brand pair alone', () => {
+  const notes = [];
+  const composed = { surface: '#ffffff', band: '#e5e4e2', bandText: '#cccccc' };
+  guardPaletteReadability(composed, notes);
+  assert.ok(contrastRatio(composed.bandText, composed.band) >= 4.5);
+  assert.equal(notes.length, 1);
+
+  const brand = { button: '#2ea3f2', buttonText: '#ffffff' }; // 2.6:1 — Divi's own button
+  guardPaletteReadability(brand, [], [], new Set(['buttonText/button']));
+  assert.equal(brand.buttonText, '#ffffff', 'the site painted this pair itself');
+
+  const invisible = { button: '#ffffff', buttonText: '#fefefe' };
+  guardPaletteReadability(invisible, [], [], new Set(['buttonText/button']));
+  assert.notEqual(invisible.buttonText, '#fefefe', 'even a site-painted pair is fixed when it is invisible');
+});
+
+test('a button the guard recoloured no longer counts as site-painted, so its label is held to the AA line', () => {
+  // Round-1 review of 86bctakh4: a white filled button with a dark grey label
+  // on a white page. The button is turned near-black, and the label the site
+  // put on a WHITE button (#333333) is 1.6:1 on the new one.
+  const notes = [];
+  const p = { surface: '#ffffff', inverse: '#03050a', button: '#ffffff', buttonText: '#333333' };
+  guardPaletteReadability(p, notes, [], new Set(['buttonText/button']));
+  assert.equal(p.button, '#03050a', 'the button takes the site\'s dark colour');
+  assert.ok(contrastRatio(p.buttonText, p.button) >= 4.5, `label ${p.buttonText} on ${p.button} must read`);
+  assert.ok(notes.some((n) => n.includes("a button's label") && n.includes('#333333')), 'the label repair is named');
 });

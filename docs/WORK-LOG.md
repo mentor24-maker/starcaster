@@ -10,6 +10,33 @@ are saved), or picked one of the three options as written. All of it goes in
 one new table, which a later slice turns into lessons the AI writer learns
 from. The table needs one SQL file run before release; until then every
 decision still works and the screen says plainly that the reason was not saved.
+## 2026-10-27 — Themes can have outline buttons and rounded button corners (#881)
+
+A theme could only describe a solid, filled button. When the Site Import copied
+alphire.agency, whose buttons are white outlines on dark sections, they came out
+as solid white blocks that vanished on white sections. The rounded corners it
+measured never reached a button either. Themes now have two new settings under
+**Hero & Treatments**. **Button style** is Filled or Outline. An outline button
+has a see-through middle with a border and label in the theme's button colour,
+and fills in on hover. **Button corners** sets how rounded the buttons are. The
+Site Import now uses both, so an imported outline button stays an outline.
+Existing sites look exactly the same: a theme that sets neither option changes
+nothing, and a button with its own colours keeps them. A real-browser check now
+measures the outline button and its square, filled counterpart.
+
+## 2026-10-27 — Imported themes can no longer ship invisible buttons or unreadable text (#876)
+
+When Site Import builds a theme from a site, it now checks every colour that
+gets painted on top of another one: text on the page, text on light and dark
+bands, menu text in the header, a button against the page, and a button's
+label. Before, only some of those were checked, which is how Alphire's import
+produced white buttons on a white page. Anything that does not read is
+swapped for a readable colour, preferring the site's own dark or brand
+colours, and the theme's notes say what was changed. A site's own button and
+label are left alone unless they are truly invisible, so brand colours are
+not "corrected". If the check has to recolour a button, its label is checked
+again against the new colour. Adding a new theme colour without saying what
+it sits on now fails a test.
 ## 2026-10-27 — A Connect button opens the Mini's browser inside the Outreach screen (#880)
 
 Fourth piece of the sign-in window. On Engage › Outreach, the Connect stage
