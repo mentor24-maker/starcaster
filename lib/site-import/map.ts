@@ -138,6 +138,83 @@ export type AssetPromotion = {
 };
 export type SourceOverflow = { sourceId: string; moduleId: string; html: string };
 
+/* ---------------------------------------------------------------------------
+ * Downloaded but never placed (task 86bctde7n)
+ *
+ * The import downloads every picture and document it sees, but only the ones
+ * a page actually uses were promoted into the project's Assets. The rest sat
+ * in SiteImport/<jobId>/, where no screen shows them: Alphire downloaded 48
+ * files and Assets showed 10 (2026-10-27), hero_banner.png among the missing.
+ *
+ * This picks which leftovers deserve a library row. Fonts are not among them
+ * (the font library owns those), nor are failed downloads. WordPress-style
+ * size variants ("photo-480x360.jpg" beside "photo.jpg") collapse to ONE row,
+ * the largest — and a family any member of which is already promoted gets no
+ * row at all, because it is already in Assets once.
+ * ------------------------------------------------------------------------- */
+
+const SIZE_SUFFIX = /-(\d+)x(\d+)(?=\.[a-z0-9]+$)/i;
+
+function assetFileUrl(asset: AssetRef): string {
+  return String(asset.originalUrl || "").replace(/[#?].*$/, "");
+}
+
+function isFontAsset(asset: AssetRef): boolean {
+  return /font/i.test(asset.mimeType || "") || /\.(woff2?|ttf|otf|eot)$/i.test(assetFileUrl(asset));
+}
+
+function isLibraryKind(asset: AssetRef): boolean {
+  const mime = String(asset.mimeType || "").toLowerCase();
+  if (mime.startsWith("image/") || mime === "application/pdf") return true;
+  return !mime && /\.(png|jpe?g|gif|webp|avif|svg|pdf)$/i.test(assetFileUrl(asset));
+}
+
+/** "…/photo-480x360.jpg" and "…/photo.jpg" share one family key. */
+export function sizeVariantFamily(originalUrl: string): string {
+  return String(originalUrl || "").replace(/[#?].*$/, "").replace(SIZE_SUFFIX, "").toLowerCase();
+}
+
+/** Pixel area, from the capture's measurement or the "-WxH" in the name.
+ *  The unsuffixed original counts as the largest: it is what the variants
+ *  were cut from. */
+function variantArea(asset: AssetRef): number {
+  if (!SIZE_SUFFIX.test(assetFileUrl(asset))) return Number.POSITIVE_INFINITY;
+  if (asset.width && asset.height) return asset.width * asset.height;
+  const m = assetFileUrl(asset).match(SIZE_SUFFIX);
+  return m ? Number(m[1]) * Number(m[2]) : 0;
+}
+
+export function planUnplacedAssets(assets: AssetRef[], promoted: Iterable<AssetPromotion>): AssetPromotion[] {
+  const promotedIds = new Set<string>();
+  const promotedFamilies = new Set<string>();
+  for (const p of promoted) {
+    promotedIds.add(p.assetId);
+    promotedFamilies.add(sizeVariantFamily(p.originalUrl));
+  }
+  const families = new Map<string, AssetRef[]>();
+  for (const asset of assets || []) {
+    if (asset.status !== "downloaded" || !asset.storageUrl) continue;
+    if (isFontAsset(asset) || !isLibraryKind(asset)) continue;
+    const family = sizeVariantFamily(asset.originalUrl);
+    if (promotedIds.has(asset.id) || promotedFamilies.has(family)) continue;
+    const members = families.get(family) || [];
+    members.push(asset);
+    families.set(family, members);
+  }
+  return Array.from(families.keys()).sort().map((family) => {
+    const best = families.get(family)!.slice().sort((a, b) =>
+      variantArea(b) - variantArea(a) || (b.byteSize || 0) - (a.byteSize || 0) || a.id.localeCompare(b.id)
+    )[0];
+    return {
+      assetId: best.id,
+      fromUrl: best.storageUrl,
+      originalUrl: best.originalUrl,
+      altText: best.altText || "",
+      mimeType: best.mimeType || "",
+    };
+  });
+}
+
 export type MapReport = {
   elements: {
     total: number;
@@ -162,7 +239,10 @@ export type MapReport = {
     /** The page's own background colour, when it wears one (86bctde6u). */
     background?: string;
   }[];
-  assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
+  /** unplaced: downloaded files no page uses, given a library row anyway
+   *  (task 86bctde7n). leftInNamespace is what is still only in the job's
+   *  namespace after both — fonts, failed downloads, smaller size variants. */
+  assets: { promoted: number; unplaced: number; cropsCopied: number; leftInNamespace: number };
   /**
    * Captures of a path already captured with the SAME content. Mapped once;
    * their elements are counted in elements.deduped so the report still
@@ -263,6 +343,8 @@ export type MapOutput = {
   copyPlan: {
     crops: CropCopy[];
     assets: AssetPromotion[];
+    /** Downloaded, placed on no page, still owed an Assets row. */
+    unplaced: AssetPromotion[];
     sourceOverflows: SourceOverflow[];
   };
   report: MapReport;
@@ -668,6 +750,83 @@ function importedImageCap(shownPx: number, columnPx: number, asset: AssetRef | n
 
 function cappedAt(px: string): { maxWidthPx?: string } {
   return px ? { maxWidthPx: px } : {};
+}
+
+/* ---------------------------------------------------------------------------
+ * Picture shape (task 86bctde2b)
+ * ------------------------------------------------------------------------ */
+
+type ImageShapeSettings = { borderRadius?: string; imageShape?: string; imageShapeRadii?: string };
+
+/** One computed corner length, tidied for the Image module's Custom shape:
+ *  whole pixels, percentages to two places. null = not a px/% length. */
+function shapeLength(token: string): string | null {
+  const m = /^(\d+(?:\.\d+)?)(px|%)$/.exec(token);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (m[2] === "px") return `${Math.min(Math.round(n), 9999)}px`;
+  return `${Math.min(Math.round(n * 100) / 100, 100)}%`;
+}
+
+/**
+ * The Image module settings that reproduce a picture's computed
+ * `border-radius` (the browser's own value, so `50% 45% 52% 48% / 48% 52%
+ * 48% 52%` arrives exactly as alphire.agency wrote its hero blob).
+ *
+ * - no radius            → Radius 0. Without it the module's 18px default
+ *                          rounded every square picture an import brought in.
+ * - one small px value   → Rounded, Radius in px (what the panel already had)
+ * - fully rounded square → Circle
+ * - anything else        → Custom, with the radii carried as written —
+ *                          elliptical, per-corner, percentage, pill
+ * - unreadable           → nothing (the module's default stands)
+ *
+ * Exported for the tests, and for whatever places a picture the source
+ * painted onto a box (that box's radius is the picture's shape too).
+ */
+export function importedImageShape(radius: string | undefined, box?: { w: number; h: number } | null): ImageShapeSettings {
+  const text = String(radius || "").trim();
+  if (!text) return { borderRadius: "0" };
+  const halves = text.split("/").map((half) => half.trim().split(/\s+/).filter(Boolean));
+  if (halves.length > 2 || halves.some((h) => h.length < 1 || h.length > 4)) return {};
+  const tidy = halves.map((h) => h.map(shapeLength));
+  if (tidy.some((h) => h.some((t) => t === null))) return {};
+  const tokens = tidy.flat() as string[];
+  if (tokens.every((t) => parseFloat(t) === 0)) return { borderRadius: "0" };
+
+  const square = Boolean(box && box.w > 0 && Math.abs(box.w - box.h) <= 0.05 * Math.max(box.w, box.h));
+  if (tokens.length === 1) {
+    const only = tokens[0];
+    const n = parseFloat(only);
+    const full = only.endsWith("%") ? n >= 50 : Boolean(box && n * 2 >= Math.min(box.w, box.h) - 1);
+    if (full && square) return { imageShape: "circle" };
+    if (only.endsWith("px") && !full && n <= 80) return { borderRadius: String(n) };
+  }
+  return { imageShape: "custom", imageShapeRadii: (tidy as string[][]).map((h) => h.join(" ")).join(" / ") };
+}
+
+/**
+ * Where a picture's shape comes from: the <img> itself, or failing that the
+ * box it sits in when that box IS its frame (the same size, give or take a
+ * border) — the common `.frame { border-radius; overflow: hidden }` wrapper.
+ * A card the picture merely sits inside is a different size and is skipped;
+ * its corners are the cell's, not the picture's.
+ */
+function imageShapeFor(el: ElementIR, section: SectionIR): ImageShapeSettings {
+  const own = el.computedStyles?.["border-radius"];
+  if (own) return importedImageShape(own, el.box);
+  const box = el.box;
+  if (box && el.containers?.length) {
+    for (const key of [...el.containers].reverse()) {
+      const frame = section.containerBoxes?.[key];
+      const radius = section.containers?.[key]?.["border-radius"];
+      if (!frame || !radius) continue;
+      const slack = Math.max(6, 0.03 * Math.max(frame.w, frame.h));
+      const fits = Math.abs(frame.w - box.w) <= slack && Math.abs(frame.h - box.h) <= slack;
+      if (fits) return importedImageShape(radius, frame);
+    }
+  }
+  return importedImageShape("", box);
 }
 
 function normalizeHref(href: string): string {
@@ -1117,7 +1276,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
     skipped: [],
     pages: [],
-    assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
+    assets: { promoted: 0, unplaced: 0, cropsCopied: 0, leftInNamespace: 0 },
     repeatCaptures,
     placeholderPatterns: [],
     menus: { top: null, footer: null, notes: [] },
@@ -1767,6 +1926,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               size: "100",
               ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
+              ...imageShapeFor(el, section),
               importSourceIds: el.sourceId,
             },
           });
@@ -2096,9 +2256,11 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   report.placeholderPatterns = Array.from(patternTally.entries())
     .map(([signature, v]) => ({ signature, count: v.count, sampleSourceId: v.sampleSourceId }))
     .sort((a, b) => b.count - a.count);
+  const unplaced = planUnplacedAssets(ir.assets || [], promotions.values());
   report.assets.promoted = promotions.size;
+  report.assets.unplaced = unplaced.length;
   report.assets.cropsCopied = crops.length;
-  report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size);
+  report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size - unplaced.length);
 
   return {
     pages,
@@ -2106,7 +2268,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     cardGrids: cardGridPlans,
     navItems,
     menus,
-    copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
+    copyPlan: { crops, assets: Array.from(promotions.values()), unplaced, sourceOverflows },
     report,
   };
 }
