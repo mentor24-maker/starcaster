@@ -15,7 +15,7 @@
  */
 
 import { googleFontKey } from "../builder-client/builder-google-fonts";
-import type { ElementIR, SiteIR, TokenCount } from "./ir";
+import type { ElementIR, PageIR, SiteIR, TokenCount } from "./ir";
 import { THEME_PALETTE_ROLE_KEYS } from "../builder-client/builder-template";
 import type { BuilderThemePaletteRole } from "../builder-client/builder-template";
 
@@ -286,6 +286,43 @@ export function uncoveredPaletteRoles(): BuilderThemePaletteRole[] {
   return THEME_PALETTE_ROLE_KEYS.filter((role) => !covered.has(role));
 }
 
+/** The guard's rule for a TEXT colour that does not read: white or
+ *  near-black, whichever does; pure black or white if neither reaches `min`. */
+export function readableTextOn(bg: string, min: number = READABLE_CONTRAST): string {
+  const neutral = contrastText(bg);
+  return contrastRatio(neutral, bg) >= min ? neutral : luminance(bg) > 0.18 ? "#000000" : "#ffffff";
+}
+
+/**
+ * Text colours for a page that wears its OWN background (task 86bctde6u):
+ * for each role, the page's own colours ranked by how many characters wear
+ * them, and the first that reads on the background — else the role before it
+ * (headings fall back to the text), else the guard's text rule. Each is held
+ * to the full READABLE_CONTRAST, because the import composed the pairing.
+ * Ranked by characters, not by element count: Alphire's home has more small
+ * cyan labels than paragraphs, and by count its body text came out cyan.
+ */
+export function pageTextColors(
+  page: PageIR,
+  ground: string
+): { text: string; heading: string; link: string } {
+  const elements = (page.sections || []).flatMap((s) => s.elements || []);
+  const reads = (hex: string) => Boolean(hex) && contrastRatio(hex, ground) >= READABLE_CONTRAST;
+  const ranked = (cls: string): string[] => {
+    const weight = new Map<string, number>();
+    for (const e of elements) {
+      if (e.class !== cls) continue;
+      const hex = toHex((e.computedStyles || {}).color);
+      if (hex) weight.set(hex, (weight.get(hex) || 0) + Math.max(1, (e.textContent || "").length));
+    }
+    return [...weight.entries()].sort((a, b) => b[1] - a[1]).map(([hex]) => hex);
+  };
+  const text = ranked("text").find(reads) || readableTextOn(ground);
+  const heading = ranked("heading").find(reads) || text;
+  const link = ranked("link").find(reads) || text;
+  return { text, heading, link };
+}
+
 /** Checks every declared pair present in `palette` and repairs the ones that
  *  do not read, in place, naming each repair in `notes`. A pair with either
  *  side absent inherits the platform default and is not checked here.
@@ -320,8 +357,7 @@ export function guardPaletteReadability(
       const candidates = [palette.inverse, palette.header, ...brandCandidates, contrastText(bg), "#000000"];
       next = candidates.find((c) => c && contrastRatio(c, bg) >= pair.min) || "#000000";
     } else {
-      const neutral = contrastText(bg);
-      next = contrastRatio(neutral, bg) >= pair.min ? neutral : luminance(bg) > 0.18 ? "#000000" : "#ffffff";
+      next = readableTextOn(bg, pair.min);
     }
     palette[pair.fg] = next;
     repaired.add(pair.fg);

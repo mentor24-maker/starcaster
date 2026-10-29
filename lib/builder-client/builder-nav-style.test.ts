@@ -147,7 +147,10 @@ describe("clearing a colour actually clears it", () => {
   it("emits transparent for an unset bar background, not nothing", () => {
     // Nothing emitted meant the stylesheet's hardcoded white pill showed
     // through, so the Background control only ever worked one way.
-    expect(style()["--site-nav-bg"]).toBe("transparent");
+    expect(style({ navColor: "#ffffff" })["--site-nav-bg"]).toBe("transparent");
+    // With the text left to the theme, the fill follows the theme's header
+    // colour — and is still transparent, never the white pill, without one.
+    expect(style()["--site-nav-bg"]).toBe("var(--lp-header-bg, transparent)");
   });
 
   it("emits transparent for an unset label fill", () => {
@@ -663,5 +666,23 @@ describe("where no panel is drawn, sub-links keep the menu's colour (86bcgddcy, 
       color: NAV_STYLE_DEFAULTS.menuTextColor,
       source: "default"
     });
+  });
+});
+
+describe("a menu whose text follows the theme sits on the theme's header colour", () => {
+  /*
+   * Alphire's imported Top Menu, 2026-10-27 (task 86bctde8c): no Text Color
+   * and no Background, on a theme with header #000000 / header text #ffffff.
+   * The links took the white header text; the bar stayed transparent over the
+   * white page. Text and fill have to follow the theme as a pair.
+   */
+  it("fills the bar from the theme's header colour when Text Color is empty", () => {
+    expect(style({ navColor: "" })["--site-nav-bg"]).toBe("var(--lp-header-bg, transparent)");
+  });
+
+  it("keeps the transparent bar for a menu that chose its own Text Color", () => {
+    // Dane of Earth's menus set #ffffff over a navy row and over a hero photo;
+    // painting the header colour in there would cover the photo.
+    expect(style({ navColor: "#ffffff" })["--site-nav-bg"]).toBe("transparent");
   });
 });
