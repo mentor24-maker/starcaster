@@ -12,6 +12,39 @@ with a copy of itself. The audit of that day's sweep found four old files
 that are retired or unused (now listed with their reasons, and one of them
 should never be run), one that would fail if run, which was rewritten, and
 ten that still need running, three of them merged today.
+## 2026-10-28 — Reddit finds conversations on its own (#898)
+
+Until now every Reddit post Dane answered had to be found by hand and pasted
+in as a link. Now he picks subreddits once, on Engage › Outreach › Reddit: a
+"Find subreddits for my topics" button asks the AI to suggest communities from
+his canon and keywords, and he approves or rejects each one. Every four hours
+the Mini opens two of those subreddits in its signed-in browser, reads the new
+and rising posts and the subreddit's rules, and keeps the posts that match his
+subjects. They appear under Find conversations, best first, each saying why it
+ranked, showing the strongest comments and who wrote them, and quoting the
+subreddit's self-promotion rule when it has one. One click writes three reply
+options (to the post or to a comment); Skip asks why; anyone in the thread can
+be saved as a contact. If the Mini is signed out of Reddit, the screen says so
+instead of showing "0 found". It needs two new database tables (SQL hand-off
+on the pull request) and its schedule installed on the Mini after merge.
+Review caught three slips before it shipped, now fixed: a reply to one comment
+used to block replying to the post itself, clicking "Reply to this comment"
+twice paid for two drafts, and the "signed out" warning stayed up for hours
+after the Mini was signed back in.
+## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
+
+When one of Dane's projects shares its saved sections with another, the
+receiving project now sees them in **Builder › Modules** under a new group,
+**Shared with this project**. Each one says which project it came from and has
+one button, **Import**. Import makes this project its own copy, which appears in
+its Saved Sections at once and can then be used and edited like any other.
+Changes in either project never reach the other, the source project is never
+written to, and pictures keep pointing where they already did. If the name is
+already taken, the copy is called "Header (2)" rather than replacing anything.
+If the other project has stopped sharing in the meantime, Import says so in a
+sentence and copies nothing. Like #894, it needs that ticket's sharing table
+created in the live database before it shows anything there. On 2026-10-28 it
+was not there yet.
 ## 2026-10-28 — A project can choose which other projects see its sections, templates and themes (#899)
 
 Each project's settings now has a **Share with** row just above Import /
