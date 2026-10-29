@@ -9,6 +9,52 @@ Alphire's stored capture: once the import is re-run, the hero comes out with
 text on the left and the picture on the right, with the logo inside the hero
 above the brand name. Putting the logo *beside* the name needs a new Builder
 ability, filed as its own ticket.
+## 2026-10-28 — Section backgrounds can stack glows and gradients, and imports keep them (#893)
+
+A Builder gradient used to be just two colours and an angle, so when Site
+Import met anything richer it threw the whole thing away. Alphire's hero —
+two soft glows, cyan and violet, laid over a three-colour dark wash — came
+out as a plain section. Section and column backgrounds can now hold a stack
+of gradient layers, both straight and round, with see-through colours, and
+there is a "Gradient Layers" editor in the background panel to build or
+change them. The importer keeps every layer it captures. Backgrounds that
+don't use layers look exactly as they did before (the before/after
+screenshots matched pixel for pixel), and saving a page no longer quietly
+resets a gradient's angle.
+
+## 2026-10-29 — Site Import now sees the decorations a stylesheet draws around a box (#906)
+
+Many sites draw decorations with a stylesheet trick instead of with real page
+elements: an invisible extra layer in front of or behind a box. Alphire's
+home page draws its starfield, its glowing ring and its thin cyan line that
+way, and Site Import never looked at those layers, so they were invisible to
+it and the fidelity report could only say "cannot tell". The capture now
+reads those layers on every visible element and keeps the ones that actually
+paint something (a gradient, a picture, a fill, a border, a shadow), with
+where each one sits; empty helper layers are skipped, and any picture they
+paint is downloaded like other images. The fidelity report lists each one in
+plain words, such as "a ring in #00d9ff with a glow". On Alphire it found
+nine, four of them in the hero, and capturing the page took no measurably
+longer (7.8 s against 8.0 s). Imports made before this still say "cannot
+tell", because they really never looked. Rebuilding these decorations in the
+Builder is the next step, not this one.
+## 2026-10-29 — Imported headings keep their thin lettering, spacing and coloured words (#907)
+
+On the Alphire import, the thin home heading came out heavy and black, and
+every cyan accent word ("Human Energy", "to Impact") came out black. Two
+reasons, both measured on the real import before anything was changed. The
+import's theme uses the most common heading weight on the whole site, and
+most of Alphire's headings are bold, so the thin ones were made bold too. And
+the cyan was recorded when the site was captured, then dropped at the next
+step, which kept only the heading's own styling and not the words inside it.
+Now a heading or paragraph keeps its own weight and letter spacing wherever
+they differ from the theme, and a word inside it keeps its own colour, weight
+or italic wherever it differs from the words around it. Text that already
+looks like the theme is written exactly as before, so on the Delray site only
+2 of 185 text blocks change. One limit is on purpose: a heading's own colour
+is still left to the theme, because many of Alphire's headings are white on
+dark bands the import doesn't reproduce yet, and copying white would make
+them invisible. Until the dark-page fix lands, the cyan words sit on white.
 ## 2026-10-29 — Every picture and PDF a site import downloads now shows up in Assets (#909)
 
 A site import downloads every picture and document it sees on the original

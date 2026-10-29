@@ -6162,6 +6162,11 @@ App.builder = (function () {
       mode: normalizeBackgroundMode(background.mode),
       color: safeText(background.color) || '#ffffff',
       color2: safeText(background.color2) || '#eaf4ff',
+      // Carried through untouched: the server's normalizer clamps and
+      // sanitizes both. Rebuilding the background without them silently reset
+      // every angle to 135 and stripped every layered gradient on Save Page.
+      gradientAngle: typeof background.gradientAngle === 'number' ? background.gradientAngle : undefined,
+      gradientLayers: Array.isArray(background.gradientLayers) ? background.gradientLayers : undefined,
       imageUrl: safeText(background.imageUrl, 2000),
       imageAssetId: safeText(background.imageAssetId, 120),
       styleKey: safeText(background.styleKey, 80) === 'blue-yellow-circles' ? 'blue-yellow-circles' : '',

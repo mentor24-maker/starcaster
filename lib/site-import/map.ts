@@ -29,7 +29,7 @@ import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind } from "./columns";
-import { importSurfaceColor, pageTextColors, toHex } from "./theme";
+import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
   hasPaint,
@@ -905,6 +905,101 @@ function imagesFromLayoutTable(
   return out.length ? out : null;
 }
 
+/** What the import theme already says about text — the yardstick for which
+ *  text styling the original applied by hand (task 86bctde5z). */
+export type ProseThemeLook = {
+  /** Heading weight per level, as the theme will paint it. */
+  headingWeights: Record<number, number>;
+  /** The theme's link colour (hex), or "" when it sets none. */
+  linkColor: string;
+};
+
+/** A heading level the theme names no weight for paints at the browser's
+ *  own heading weight. */
+const DEFAULT_HEADING_WEIGHT = 700;
+
+export function proseThemeLook(theme: { typography?: { scale?: Record<string, number>; colors?: Record<string, string> } }): ProseThemeLook {
+  const scale = theme.typography?.scale || {};
+  const headingWeights: Record<number, number> = {};
+  for (let level = 1; level <= 6; level++) headingWeights[level] = Number(scale[`h${level}Fw`]) || DEFAULT_HEADING_WEIGHT;
+  return { headingWeights, linkColor: toHex(theme.typography?.colors?.link) };
+}
+
+function weightOf(value: string | undefined): number {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "bold") return 700;
+  const n = Number(v);
+  return v && v !== "normal" && Number.isFinite(n) ? n : 400;
+}
+
+/** "-3.3696px" → "-3.37px"; "" for normal or a value it cannot read. */
+function spacingOf(value: string | undefined): string {
+  const m = String(value || "").trim().match(/^(-?[\d.]+)px$/);
+  if (!m) return "";
+  const n = Math.round(parseFloat(m[1]) * 100) / 100;
+  return n ? `${n}px` : "";
+}
+
+function withStyle(existing: string | undefined, decls: string[]): string {
+  const base = String(existing || "").trim().replace(/;\s*$/, "");
+  return [base, ...decls].filter(Boolean).join(";");
+}
+
+/**
+ * A heading or paragraph's html with the text styling the original applied by
+ * hand written inline — so a thin heading on a site whose headings are mostly
+ * bold stays thin, and a cyan word stays cyan (task 86bctde5z). The theme
+ * carries what is typical; this carries what differs from it.
+ *
+ * - The element's OWN weight and letter spacing, where they differ from what
+ *   the theme paints for that element. Its own colour is deliberately left to
+ *   the theme: the theme rejects colours that cannot be read on the page's
+ *   surface, and a white heading from a dark band the import did not
+ *   reproduce would otherwise arrive invisible.
+ * - Each word's recorded difference from its parent (`inlineStyles`), except
+ *   a link's colour where it is the theme's own link colour.
+ *
+ * Returns the html unchanged, byte for byte, when nothing differs.
+ */
+export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
+  const own = el.computedStyles || {};
+  const level = Number((String(el.html || "").match(/^\s*<h([1-6])\b/i) || [])[1]) || 0;
+  const rootDecls: string[] = [];
+  const weight = weightOf(own["font-weight"]);
+  const themeWeight = level ? look.headingWeights[level] || DEFAULT_HEADING_WEIGHT : 400;
+  if (weight !== themeWeight) rootDecls.push(`font-weight:${weight}`);
+  const spacing = spacingOf(own["letter-spacing"]);
+  if (spacing) rootDecls.push(`letter-spacing:${spacing}`);
+  const runs = el.inlineStyles || [];
+  if (!rootDecls.length && !runs.length) return el.html;
+
+  const $ = cheerio.load(el.html, null, false); // fragment mode
+  const root = $.root().children().first();
+  if (!root.length) return el.html;
+  let changed = false;
+  if (rootDecls.length) {
+    root.attr("style", withStyle(root.attr("style"), rootDecls));
+    changed = true;
+  }
+  const descendants = root.find("*").toArray();
+  for (const run of runs) {
+    const node = descendants[run.index];
+    // Re-parsing the fragment can shift the list (a <div> inside a <p>);
+    // a word that is not where the record says is left alone.
+    if (!node || ((node as { name?: string }).name || "").toLowerCase() !== run.tag) continue;
+    const decls: string[] = [];
+    const color = toHex(run.styles.color);
+    if (color && !(run.tag === "a" && color === look.linkColor)) decls.push(`color:${color}`);
+    if (run.styles["font-weight"]) decls.push(`font-weight:${weightOf(run.styles["font-weight"])}`);
+    if (run.styles["font-style"]) decls.push(`font-style:${run.styles["font-style"]}`);
+    if (run.styles["letter-spacing"]) decls.push(`letter-spacing:${spacingOf(run.styles["letter-spacing"]) || "normal"}`);
+    if (!decls.length) continue;
+    $(node).attr("style", withStyle($(node).attr("style"), decls));
+    changed = true;
+  }
+  return changed ? $.html() : el.html;
+}
+
 const PLACEHOLDER_CLASSES = new Set(["form", "table", "embed", "other"]);
 const PROSE_CLASSES = new Set(["heading", "text", "link"]);
 
@@ -1169,6 +1264,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
 
   const surfaceColor = importSurfaceColor(ir);
+  // The same theme --apply creates from this capture: text that matches it
+  // needs nothing inline, text that does not keeps its own look.
+  const proseLook = proseThemeLook(deriveImportTheme(sourceIr, ""));
   const assetByUrl = new Map<string, AssetRef>();
   for (const a of ir.assets || []) if (a.originalUrl && !assetByUrl.has(a.originalUrl)) assetByUrl.set(a.originalUrl, a);
   /** A background picture → the promoted asset's URL (copied on --apply),
@@ -1787,10 +1885,11 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               continue;
             }
           }
+          const html = styleProseHtml(el, proseLook);
           // Oversize ladder before merging.
-          if (el.html.length > TEXT_MODULE_CHAR_BUDGET) {
+          if (html.length > TEXT_MODULE_CHAR_BUDGET) {
             flushProse();
-            const split = splitOversizeHtml(el.html, TEXT_MODULE_CHAR_BUDGET);
+            const split = splitOversizeHtml(html, TEXT_MODULE_CHAR_BUDGET);
             if (split === null) {
               pushPlaceholder(el, `Imported ${el.class} too large to split — rebuild manually.`);
               continue;
@@ -1809,8 +1908,8 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
             dispositions.mapped += 1;
             continue;
           }
-          if (prose.html.length + el.html.length > TEXT_MODULE_CHAR_BUDGET) flushProse();
-          prose.html += el.html;
+          if (prose.html.length + html.length > TEXT_MODULE_CHAR_BUDGET) flushProse();
+          prose.html += html;
           prose.sourceIds.push(el.sourceId);
           report.elements.mapped += 1;
           dispositions.mapped += 1;

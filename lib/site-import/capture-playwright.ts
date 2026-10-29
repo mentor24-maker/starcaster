@@ -18,8 +18,8 @@
  */
 
 import { chromium, type Browser } from "playwright";
-import type { AssetUrlRef, CaptureOptions, CaptureProvider, RawCapture } from "./ir";
-import { CAPTURE_STYLE_PROPS } from "./normalize";
+import type { AssetUrlRef, CaptureOptions, CaptureProvider, CapturedDecoration, RawCapture } from "./ir";
+import { CAPTURE_STYLE_PROPS, DECORATION_STYLE_PROPS } from "./normalize";
 
 export const DEFAULT_USER_AGENT =
   "StarCaster-SiteImport/1.0 (+https://starcaster.pro)";
@@ -47,6 +47,7 @@ type PageScanResult = {
   styles: Record<string, Record<string, string>>;
   rects: Record<string, [number, number, number, number]>;
   pageBackground: string;
+  decorations: CapturedDecoration[];
   /** Crop targets by their data-scim stamp — the provider screenshots them
    *  via locator('[data-scim=…]'), which scrolls each into view. A clip
    *  rect would NOT work: page.screenshot({clip}) only sees the current
@@ -67,6 +68,7 @@ type PageScanResult = {
 
 type PageScanArgs = {
   styleProps: string[];
+  decorationProps: string[];
   fullCapture: boolean;
   croppedTags: string[];
   maxSectionCrops: number;
@@ -98,6 +100,7 @@ function pageScan(args: PageScanArgs): PageScanResult {
   const fontTally: Record<string, number> = {};
   const assetUrls: AssetUrlRef[] = [];
   const seenAssets: Record<string, boolean> = {};
+  const decorations: CapturedDecoration[] = [];
 
   function absolutize(raw: string): string | null {
     try {
@@ -184,6 +187,158 @@ function pageScan(args: PageScanArgs): PageScanResult {
     return "body/" + segments.join("/");
   }
 
+  // --- ::before / ::after layers (task 86bctde48) -------------------------
+  // SYNC POINT: what "paints" means here must agree with decorationStyles()
+  // in normalize.ts — a layer recorded here that normalizes to nothing would
+  // be listed in the fidelity report as a decoration with no look at all.
+  function clearColour(v: string): boolean {
+    const t = (v || "").trim();
+    return !t || t === "transparent" || /^rgba\([^)]*,\s*0(\.0+)?\)$/.test(t);
+  }
+
+  function layerPaints(cs: CSSStyleDeclaration): boolean {
+    const content = cs.getPropertyValue("content");
+    // No content, no box: the layer is not generated at all.
+    if (!content || content === "none" || content === "normal") return false;
+    if (cs.getPropertyValue("display") === "none") return false;
+    if (cs.getPropertyValue("visibility") === "hidden" || cs.getPropertyValue("opacity") === "0") return false;
+    if (/url\(/i.test(content)) return true;
+    if (cs.getPropertyValue("background-image") !== "none") return true;
+    if (!clearColour(cs.getPropertyValue("background-color"))) return true;
+    if (cs.getPropertyValue("box-shadow") !== "none") return true;
+    const sides = ["top", "right", "bottom", "left"];
+    for (let i = 0; i < sides.length; i++) {
+      const side = sides[i];
+      if (
+        parseFloat(cs.getPropertyValue("border-" + side + "-width")) > 0 &&
+        !/^(none|hidden)$/.test(cs.getPropertyValue("border-" + side + "-style")) &&
+        !clearColour(cs.getPropertyValue("border-" + side + "-color"))
+      ) return true;
+    }
+    return false;
+  }
+
+  /** The padding box a positioned layer is placed against, in page pixels:
+   *  the nearest ancestor that is positioned (or transformed), else the
+   *  initial containing block. The owner itself counts — for a pseudo-element
+   *  the owner IS the first ancestor. */
+  function containingBlock(el: Element, fixed: boolean): { x: number; y: number; w: number; h: number } {
+    if (fixed) return { x: window.scrollX, y: window.scrollY, w: window.innerWidth, h: window.innerHeight };
+    let cur: Element | null = el;
+    while (cur && cur !== document.documentElement) {
+      const cs = getComputedStyle(cur);
+      if (cs.position !== "static" || cs.transform !== "none") {
+        const r = cur.getBoundingClientRect();
+        return {
+          x: r.left + window.scrollX + cur.clientLeft,
+          y: r.top + window.scrollY + cur.clientTop,
+          w: cur.clientWidth,
+          h: cur.clientHeight,
+        };
+      }
+      cur = cur.parentElement;
+    }
+    return { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight };
+  }
+
+  /** Browsers give a pseudo-element no getBoundingClientRect, so its box is
+   *  rebuilt from its computed offsets, size and 2D transform. */
+  function layerBox(
+    el: Element,
+    cs: CSSStyleDeclaration,
+    owner: [number, number, number, number]
+  ): { box: [number, number, number, number]; size: [number, number]; boxFrom: "offsets" | "owner" } {
+    const px = (v: string) => (/^-?[\d.]+px$/.test(v) ? parseFloat(v) : NaN);
+    let w = px(cs.getPropertyValue("width"));
+    let h = px(cs.getPropertyValue("height"));
+    // Computed width/height are the content box; the painted box includes
+    // padding and border unless box-sizing already does.
+    if (cs.getPropertyValue("box-sizing") !== "border-box") {
+      const extra = (a: string, b: string) => (px(cs.getPropertyValue(a)) || 0) + (px(cs.getPropertyValue(b)) || 0);
+      if (!isNaN(w)) w += extra("padding-left", "padding-right") + extra("border-left-width", "border-right-width");
+      if (!isNaN(h)) h += extra("padding-top", "padding-bottom") + extra("border-top-width", "border-bottom-width");
+    }
+    const position = cs.getPropertyValue("position");
+    let x = owner[0];
+    let y = owner[1];
+    let boxFrom: "offsets" | "owner" = "owner";
+    if (position === "absolute" || position === "fixed") {
+      const cb = containingBlock(el, position === "fixed");
+      if (isNaN(w)) w = cb.w;
+      if (isNaN(h)) h = cb.h;
+      const left = px(cs.getPropertyValue("left"));
+      const right = px(cs.getPropertyValue("right"));
+      const top = px(cs.getPropertyValue("top"));
+      const bottom = px(cs.getPropertyValue("bottom"));
+      x = !isNaN(left) ? cb.x + left : !isNaN(right) ? cb.x + cb.w - right - w : cb.x;
+      y = !isNaN(top) ? cb.y + top : !isNaN(bottom) ? cb.y + cb.h - bottom - h : cb.y;
+      boxFrom = "offsets";
+    }
+    if (isNaN(w)) w = owner[2];
+    if (isNaN(h)) h = owner[3];
+    const size: [number, number] = [Math.round(w), Math.round(h)];
+    // A 2D transform (translate(-50%,-50%) centring, a scale) moves the
+    // painted box: map its corners through the matrix about the origin.
+    const m = /^matrix\(([^)]+)\)$/.exec(cs.getPropertyValue("transform"));
+    if (m) {
+      const [a, b, c, d, e, f] = m[1].split(",").map((n) => parseFloat(n));
+      const origin = cs.getPropertyValue("transform-origin").split(" ").map((n) => parseFloat(n) || 0);
+      const ox = x + origin[0];
+      const oy = y + (origin[1] || 0);
+      const xs: number[] = [];
+      const ys: number[] = [];
+      const corners = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]];
+      for (let i = 0; i < corners.length; i++) {
+        const dx = corners[i][0] - ox;
+        const dy = corners[i][1] - oy;
+        xs.push(ox + a * dx + c * dy + e);
+        ys.push(oy + b * dx + d * dy + f);
+      }
+      x = Math.min.apply(null, xs);
+      y = Math.min.apply(null, ys);
+      w = Math.max.apply(null, xs) - x;
+      h = Math.max.apply(null, ys) - y;
+    }
+    return { box: [Math.round(x), Math.round(y), Math.round(w), Math.round(h)], size, boxFrom };
+  }
+
+  function labelOf(el: Element): string {
+    const tag = el.tagName.toLowerCase();
+    if (el.id) return tag + "#" + el.id;
+    const classes = (el.getAttribute("class") || "").trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    return classes.length ? tag + "." + classes.join(".") : tag;
+  }
+
+  function recordDecorations(el: Element, key: string, owner: [number, number, number, number]): void {
+    const pseudos: ("before" | "after")[] = ["before", "after"];
+    for (let i = 0; i < pseudos.length; i++) {
+      const pseudo = pseudos[i];
+      const cs = window.getComputedStyle(el, "::" + pseudo);
+      if (!layerPaints(cs)) continue;
+      const picked: Record<string, string> = {};
+      for (let p = 0; p < args.decorationProps.length; p++) {
+        const value = cs.getPropertyValue(args.decorationProps[p]);
+        if (value) picked[args.decorationProps[p]] = value;
+      }
+      const placed = layerBox(el, cs, owner);
+      decorations.push({
+        owner: key,
+        pseudo,
+        label: labelOf(el),
+        box: placed.box,
+        size: placed.size,
+        boxFrom: placed.boxFrom,
+        zIndex: cs.getPropertyValue("z-index") || "auto",
+        styles: picked,
+      });
+      // A picture painted by the layer is a file the import must download.
+      const re = /url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
+      const painted = (picked["background-image"] || "") + " " + (picked.content || "");
+      let u: RegExpExecArray | null;
+      while ((u = re.exec(painted))) pushAsset(u[1], "css-pseudo");
+    }
+  }
+
   // --- Drop screen-reader-only text ---------------------------------------
   // Before anything is stamped, pathed, or serialized, so data-scim keys,
   // domPaths and the emitted HTML all agree. Removing it cannot change a
@@ -229,6 +384,7 @@ function pageScan(args: PageScanArgs): PageScanResult {
         Math.round(r.width),
         Math.round(r.height),
       ];
+      recordDecorations(el, key, rects[key]);
       const family = computed.getPropertyValue("font-family");
       if (family) fontTally[family] = (fontTally[family] || 0) + 1;
       const bg = computed.getPropertyValue("background-image");
@@ -389,6 +545,7 @@ function pageScan(args: PageScanArgs): PageScanResult {
       const htmlBg = getComputedStyle(document.documentElement).backgroundColor;
       return clear(htmlBg) ? "" : htmlBg;
     })(),
+    decorations,
     sectionTargets,
     elementCropTargets,
     assetUrls,
@@ -443,6 +600,7 @@ export class PlaywrightCaptureProvider implements CaptureProvider {
 
       const scan = (await page.evaluate(pageScan, {
         styleProps: CAPTURE_STYLE_PROPS,
+        decorationProps: DECORATION_STYLE_PROPS,
         fullCapture: opts.viewport.label === "desktop",
         croppedTags: CROPPED_TAGS,
         maxSectionCrops: MAX_SECTION_CROPS,
@@ -486,6 +644,7 @@ export class PlaywrightCaptureProvider implements CaptureProvider {
         styles: scan.styles,
         rects: scan.rects,
         pageBackground: scan.pageBackground,
+        ...(opts.viewport.label === "desktop" ? { decorations: scan.decorations } : {}),
         assetUrls: scan.assetUrls,
         fontFamilies: scan.fontFamilies,
         meta: scan.meta,

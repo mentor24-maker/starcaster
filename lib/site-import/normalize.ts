@@ -25,11 +25,13 @@ import {
   type AssetRef,
   type CaptureResult,
   type CapturedStyles,
+  type DecorationIR,
   type CapturedStylesById,
   type Coverage,
   type CoverageCounts,
   type ElementClass,
   type ElementIR,
+  type InlineStyleRun,
   type NavItem,
   type NavTree,
   type SiteLogo,
@@ -498,6 +500,84 @@ function compactStyles(raw: CapturedStyles | undefined): CapturedStyles {
 }
 
 /* ---------------------------------------------------------------------------
+ * Word-level text styling (task 86bctde5z)
+ * ------------------------------------------------------------------------ */
+
+/** Tags a browser draws bold or italic on their own — what such a word would
+ *  look like in the Builder with no style at all, which is what "differs" is
+ *  measured against. */
+const UA_BOLD_TAGS = new Set(["strong", "b", "th"]);
+const UA_ITALIC_TAGS = new Set(["em", "i", "cite", "var", "dfn"]);
+
+function numericWeight(value: string | undefined): number {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "bold") return 700;
+  if (v === "normal" || v === "") return 400;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 400;
+}
+
+/** CSS `font-weight: bolder` against a parent weight. */
+function bolder(parent: number): number {
+  if (parent < 350) return 400;
+  if (parent < 550) return 700;
+  return 900;
+}
+
+/**
+ * The descendants of a text element whose colour, weight, italic or letter
+ * spacing differ from what they would get by inheriting from their parent
+ * (or, for <strong>/<em>, from the browser's own bold/italic). Read from the
+ * marked-up desktop tree, so each word joins to its own captured styles; the
+ * colour on Alphire's accent words lives only there.
+ */
+function inlineStyleRuns(
+  $: CheerioApi,
+  root: DomNode,
+  styles: Record<string, CapturedStyles>
+): InlineStyleRun[] {
+  const out: InlineStyleRun[] = [];
+  const rootKey = (root.attribs || {})["data-scim"] || "";
+  if (!rootKey || !styles[rootKey]) return out;
+  const all = $(root as never).find("*").toArray() as unknown as DomNode[];
+  all.forEach((node, index) => {
+    const key = (node.attribs || {})["data-scim"] || "";
+    const own = key ? styles[key] : undefined;
+    if (!own) return; // not visible, so never measured
+    // A picture or a line break has no lettering to colour.
+    if (!collapseWhitespace(getText(node))) return;
+    let parent = node.parent || null;
+    let parentStyles: CapturedStyles | undefined;
+    while (parent) {
+      const pk = (parent.attribs || {})["data-scim"] || "";
+      if (pk && styles[pk]) {
+        parentStyles = styles[pk];
+        break;
+      }
+      if (parent === root) break;
+      parent = parent.parent || null;
+    }
+    if (!parentStyles) return;
+    const tag = (node.name || "").toLowerCase();
+    const diff: CapturedStyles = {};
+    if (own.color && parentStyles.color && own.color !== parentStyles.color) diff.color = own.color;
+    const weight = numericWeight(own["font-weight"]);
+    const inherited = numericWeight(parentStyles["font-weight"]);
+    const expected = UA_BOLD_TAGS.has(tag) ? bolder(inherited) : inherited;
+    if (own["font-weight"] && weight !== expected) diff["font-weight"] = String(weight);
+    const italic = (own["font-style"] || "normal") !== "normal";
+    const expectItalic = UA_ITALIC_TAGS.has(tag) || (parentStyles["font-style"] || "normal") !== "normal";
+    if (own["font-style"] && italic !== expectItalic) diff["font-style"] = own["font-style"];
+    const spacing = own["letter-spacing"] || "normal";
+    if (own["letter-spacing"] && spacing !== (parentStyles["letter-spacing"] || "normal")) {
+      diff["letter-spacing"] = spacing;
+    }
+    if (Object.keys(diff).length) out.push({ index, tag, styles: diff });
+  });
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
  * Container surfaces (task 86bce9wx3)
  * ------------------------------------------------------------------------ */
 
@@ -561,6 +641,56 @@ export function paintsSurface(st: CapturedStyles): boolean {
       !/^(none|hidden)$/.test(st[`border-${side}-style`] || "none") &&
       !clearColor(st[`border-${side}-color`])
   );
+}
+
+/**
+ * What the capture reads off a ::before / ::after layer (task 86bctde48): the
+ * properties that make it paint, and the ones that change how it looks once
+ * painted. SYNC POINT: the in-page `layerPaints` test in capture-playwright.ts
+ * reads the painting half of these and must agree with `decorationStyles`.
+ */
+export const DECORATION_STYLE_PROPS: string[] = [
+  "content",
+  "background-color", "background-image", "background-size", "background-position", "background-repeat",
+  "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "border-radius", "box-shadow", "opacity", "filter", "mix-blend-mode", "transform",
+];
+
+/** A decoration's styles with the browser defaults dropped. `content` stays
+ *  only when it paints a picture — icon text is a non-goal of 86bctde48. */
+export function decorationStyles(raw: CapturedStyles | undefined): CapturedStyles {
+  const st = raw || {};
+  const out: CapturedStyles = {};
+  const keep = (prop: string) => {
+    if (st[prop]) out[prop] = st[prop];
+  };
+  if (/url\(/i.test(st.content || "")) keep("content");
+  if (!clearColor(st["background-color"])) keep("background-color");
+  if (st["background-image"] && st["background-image"] !== "none") {
+    keep("background-image");
+    if (st["background-size"] && st["background-size"] !== "auto") keep("background-size");
+    if (st["background-position"] && st["background-position"] !== "0% 0%") keep("background-position");
+    if (st["background-repeat"] && st["background-repeat"] !== "repeat") keep("background-repeat");
+  }
+  for (const side of ["top", "right", "bottom", "left"]) {
+    const width = st[`border-${side}-width`];
+    const style = st[`border-${side}-style`];
+    const colour = st[`border-${side}-color`];
+    if (parseFloat(width || "0") > 0 && !/^(none|hidden)$/.test(style || "none") && !clearColor(colour)) {
+      out[`border-${side}-width`] = width;
+      out[`border-${side}-style`] = style;
+      out[`border-${side}-color`] = colour;
+    }
+  }
+  if (st["border-radius"] && !/^0(px)?$/.test(st["border-radius"])) keep("border-radius");
+  if (st["box-shadow"] && st["box-shadow"] !== "none") keep("box-shadow");
+  if (st.opacity && st.opacity !== "1") keep("opacity");
+  if (st.filter && st.filter !== "none") keep("filter");
+  if (st["mix-blend-mode"] && st["mix-blend-mode"] !== "normal") keep("mix-blend-mode");
+  if (st.transform && st.transform !== "none") keep("transform");
+  return out;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1521,6 +1651,10 @@ function normalizePage(
       };
       const elBox = boxOf(scimKey);
       if (elBox) el.box = elBox;
+      if (v.cls === "heading" || v.cls === "text" || v.cls === "link") {
+        const runs = inlineStyleRuns($, v.node, styles);
+        if (runs.length) el.inlineStyles = runs;
+      }
       if (v.backgroundOnly) {
         el.backgroundImage = {
           size: computedStyles["background-size"] || "auto",
@@ -1599,6 +1733,50 @@ function normalizePage(
     });
   }
 
+  // ::before/::after layers (task 86bctde48), each filed under the section
+  // whose root holds its owner. A capture that recorded them gives every
+  // section a list — empty means "looked, found none" — while an older one
+  // leaves the field absent, which the fidelity report reads as CANNOT TELL.
+  let pageDecorations: DecorationIR[] | undefined;
+  if (Array.isArray(desktop.decorations)) {
+    const byCandidate = new Map<number, SectionIR>();
+    candidates.forEach((_, i) => {
+      const sid = computeSourceId(pageIdx, `section[${i}]`);
+      const section = sections.find((s) => s.sourceId === sid);
+      if (section) byCandidate.set(i, section);
+    });
+    for (const section of sections) section.decorations = [];
+    const nodeByKey = new Map<string, DomNode>();
+    $("[data-scim]").each((_, node) => {
+      const key = ((node as DomNode).attribs || {})["data-scim"];
+      if (key) nodeByKey.set(key, node as DomNode);
+    });
+    for (const d of desktop.decorations) {
+      if (!d || !Array.isArray(d.box)) continue;
+      const styles = decorationStyles(d.styles);
+      const pictures = [styles["background-image"], styles.content].filter(Boolean).join(" ");
+      const node = nodeByKey.get(d.owner);
+      const target = node ? candidateFor(node, candidateIndex) : null;
+      const section = target === null ? undefined : byCandidate.get(target);
+      const deco: DecorationIR = {
+        id: computeSourceId(pageIdx, `decoration/${d.owner}::${d.pseudo}`),
+        pseudo: d.pseudo,
+        owner: d.label || "an element",
+        onSectionRoot: Boolean(node && target !== null && candidates[target] === node),
+        box: { x: d.box[0], y: d.box[1], w: d.box[2], h: d.box[3] },
+        size: Array.isArray(d.size) ? { w: d.size[0], h: d.size[1] } : { w: d.box[2], h: d.box[3] },
+        boxFrom: d.boxFrom === "offsets" ? "offsets" : "owner",
+        zIndex: d.zIndex || "auto",
+        styles,
+        // Not added to an asset's referencedBy: the picture belongs to no
+        // element, and the fidelity report says so in those words.
+        assetRefs: pictures ? matchAssetRefs("", { "background-image": pictures }, url, assetLookup) : [],
+      };
+      if (section) section.decorations!.push(deco);
+      else (pageDecorations = pageDecorations || []).push(deco);
+    }
+  }
+
   // Raw design tokens from this page's captured styles.
   for (const styleMap of Object.values(styles)) {
     for (const [prop, value] of Object.entries(styleMap || {})) {
@@ -1631,6 +1809,7 @@ function normalizePage(
       canonicalUrl: meta.canonicalUrl || "",
       lang: meta.lang || "",
       sections,
+      ...(pageDecorations ? { decorations: pageDecorations } : {}),
       ...(pageBackground ? { background: pageBackground } : {}),
       screenshots: {
         desktop: desktop.fullPageScreenshot || "",
