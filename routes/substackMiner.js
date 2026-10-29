@@ -25,6 +25,11 @@
  *   GET|POST /api/acquire/substack-miner/read-notes-due     Vercel Cron only, every 2 hours: the read above for every
  *                                                          project with approved writers (Outreach wizard 14/19,
  *                                                          lib/acquire/SubstackNotesReadDue.js)
+ *   POST   /api/acquire/substack-miner/read-posts          read the newest posts, photo and logo of every writer not
+ *                                                          rejected and not read in 7 days (Substack Miner upgrade
+ *                                                          1/4, lib/acquire/SubstackPostsReadRun.js)
+ *   GET|POST /api/acquire/substack-miner/read-posts-due     Vercel Cron only, once a day: the read above for every project
+ *   POST   /api/acquire/substack-miner/candidates/:id/read-posts  re-read one writer's posts now
  *   POST   /api/acquire/substack-miner/notes-search        { keyword, notes: [{ authorHandle, authorName, url, text }] }
  *                                                          — what the Mini's Notes search found for one keyword: each
  *                                                          author's publication added (or merged) as a candidate, the
@@ -65,6 +70,7 @@ const { runNotesReadDue, formatReadDueLog } = require('../lib/acquire/SubstackNo
 const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 const { importSeedList } = require('../lib/acquire/SubstackSeedImport');
 const { runSubstackSuggestions } = require('../lib/acquire/SubstackSuggestRun');
+const { runSubstackPostsRead, runPostsReadDue, formatPostsReadDueLog } = require('../lib/acquire/SubstackPostsReadRun');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -156,6 +162,13 @@ async function handle(req, res, pathname, method) {
     return reply(res, await captureCandidateNotes(decodeURIComponent(notes[1]), list, scope));
   }
 
+  const readOne = pathname.match(/^\/api\/acquire\/substack-miner\/candidates\/([^/]+)\/read-posts$/);
+  if (readOne) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.readPostsOne')) return true;
+    return reply(res, await runSubstackPostsRead({ candidateId: decodeURIComponent(readOne[1]) }, scope));
+  }
+
   const one = pathname.match(/^\/api\/acquire\/substack-miner\/candidates\/([^/]+)$/);
   if (one) {
     const id = decodeURIComponent(one[1]);
@@ -204,6 +217,31 @@ async function handle(req, res, pathname, method) {
     // Logged on every run, the quiet ones too: "nothing was due" and "never
     // ran" must not look the same in the log.
     for (const line of formatReadDueLog(result.data)) {
+      if (/ (FAILED|NOT READ|NOT REACHED) /.test(line)) console.error(line);
+      else console.log(line);
+    }
+    return reply(res, result);
+  }
+
+  if (pathname === `${PREFIX}/read-posts`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.readPosts')) return true;
+    return reply(res, await runSubstackPostsRead({}, scope));
+  }
+
+  // CRON ONLY, like read-notes-due above: every project's writers at once.
+  // Substack Miner upgrade 1/4 (task 86bcuxwhy).
+  if (pathname === `${PREFIX}/read-posts-due`) {
+    if (method !== 'GET' && method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'The scheduled posts read runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const result = await runPostsReadDue();
+    if (!result.ok) {
+      console.error(`[substack-miner] read-posts-due REFUSED: ${result.error}`);
+      return reply(res, result);
+    }
+    for (const line of formatPostsReadDueLog(result.data)) {
       if (/ (FAILED|NOT READ|NOT REACHED) /.test(line)) console.error(line);
       else console.log(line);
     }
