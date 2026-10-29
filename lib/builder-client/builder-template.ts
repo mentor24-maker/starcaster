@@ -2086,6 +2086,44 @@ export function normalizeTheme(value: unknown): BuilderTheme {
  */
 export function resolveRenderTheme(
   storedTheme: unknown,
+  liveTheme: { typography?: unknown } | null | undefined,
+  pageBackground?: { mode?: string } | null
+): BuilderTheme {
+  const resolved = resolveLinkedTheme(storedTheme, liveTheme);
+  return keepOwnGroundTextColors(resolved, storedTheme, liveTheme, pageBackground);
+}
+
+/**
+ * The one exception to "the live theme's type wins" (task 86bctde6u): a page
+ * that paints its OWN background keeps its OWN text colours. The theme's text
+ * was chosen for the theme's surface; on a page painted another colour it can
+ * vanish — Alphire's home is near-black on a site whose theme is white with
+ * black text, and followed the theme, so its words were black on black.
+ *
+ * Only text, heading and link colours, only ones the page actually stores,
+ * and only when the background paints something. Fonts, sizes and everything
+ * else still follow the theme. Measured 2026-10-29: of 136 production pages
+ * that follow a theme, 1 paints its own background and 0 of those store a
+ * text colour, so no page rendered before this changes.
+ */
+function keepOwnGroundTextColors(
+  resolved: BuilderTheme,
+  storedTheme: unknown,
+  liveTheme: { typography?: unknown } | null | undefined,
+  pageBackground: { mode?: string } | null | undefined
+): BuilderTheme {
+  const mode = String(pageBackground?.mode || "none");
+  if (mode === "none" || !liveTheme) return resolved;
+  const own = normalizeTheme(storedTheme).typography.colors;
+  const keys = ["text", "heading", "link", "linkHover"] as const;
+  if (!keys.some((key) => own[key])) return resolved;
+  const colors = { ...resolved.typography.colors };
+  for (const key of keys) if (own[key]) colors[key] = own[key];
+  return { ...resolved, typography: { ...resolved.typography, colors } };
+}
+
+function resolveLinkedTheme(
+  storedTheme: unknown,
   liveTheme: { typography?: unknown } | null | undefined
 ): BuilderTheme {
   const liveTypography =

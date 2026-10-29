@@ -334,6 +334,14 @@ export type SectionIR = {
   /** The section root's own surface styles, painted or not — where its
    *  padding comes from when no container paints. Absent when empty. */
   rootStyles?: CapturedStyles;
+  /**
+   * The colour this section showed through to, as captured ("rgb(…)"), when
+   * its root paints nothing AND that colour differs from its page's
+   * `background` — a transparent section sitting on a painted wrapper the
+   * page as a whole does not wear. Absent otherwise, and on IRs normalized
+   * before 2026-10-29 (task 86bctde6u).
+   */
+  ground?: string;
 };
 
 export type PageIR = {
@@ -346,6 +354,16 @@ export type PageIR = {
   canonicalUrl: string;
   lang: string;
   sections: SectionIR[];
+  /**
+   * What this page's content sits on, as captured ("rgb(3, 5, 10)"): the
+   * ground under the most content that sits in no painted box of its own —
+   * the nearest painted box above its section, else <body>/<html>. Content
+   * on a band or card does not vote. The site theme picks ONE surface for every page, so a dark
+   * page on a mostly white site (Alphire's home, 2026-10-27) needs its own.
+   * Absent when nothing was painted, and on IRs normalized before 2026-10-29
+   * (task 86bctde6u).
+   */
+  background?: string;
   /** Blob paths of the full-page screenshots per viewport ("" if missing). */
   screenshots: { desktop: string; tablet: string; mobile: string };
 };

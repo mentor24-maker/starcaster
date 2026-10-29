@@ -25,6 +25,7 @@ import {
   type AssetRef,
   type CaptureResult,
   type CapturedStyles,
+  type CapturedStylesById,
   type Coverage,
   type CoverageCounts,
   type ElementClass,
@@ -560,6 +561,59 @@ export function paintsSurface(st: CapturedStyles): boolean {
       !/^(none|hidden)$/.test(st[`border-${side}-style`] || "none") &&
       !clearColor(st[`border-${side}-color`])
   );
+}
+
+/* ---------------------------------------------------------------------------
+ * Page and section grounds (task 86bctde6u)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The colour a section's content sits on: its root's own fill, else the
+ * nearest painted box above it, else the page's <body>/<html> colour. "" when
+ * nothing anywhere paints. Alphire's home sections are transparent inside a
+ * `<main>` painted #03050a; nothing carried that onto the import, so on a
+ * site whose other 15 pages are white the home page came out white.
+ */
+function sectionGround(
+  root: DomNode,
+  styles: CapturedStylesById,
+  pageBackground: string | undefined
+): { color: string; ownFill: boolean } {
+  const fillOf = (node: DomNode): string => {
+    const key = (node.attribs || {})["data-scim"] || "";
+    const fill = key ? (styles[key] || {})["background-color"] : "";
+    return clearColor(fill) ? "" : String(fill).trim();
+  };
+  const own = fillOf(root);
+  if (own) return { color: own, ownFill: true };
+  for (let cur = root.parent as DomNode | null | undefined; cur; cur = cur.parent as DomNode | null | undefined) {
+    const fill = fillOf(cur);
+    if (fill) return { color: fill, ownFill: false };
+  }
+  return { color: clearColor(pageBackground) ? "" : String(pageBackground).trim(), ownFill: false };
+}
+
+/** The ground under the most content area — each vote weighted by its
+ *  element's desktop box, or 1 when the capture recorded none. "" when
+ *  nothing sat on a painted ground. */
+export function pickPageBackground(
+  votes: { ground: string; box?: { w: number; h: number } }[]
+): string {
+  const weight = new Map<string, number>();
+  for (const { ground, box } of votes) {
+    if (!ground) continue;
+    const area = box && box.w > 0 && box.h > 0 ? box.w * box.h : 1;
+    weight.set(ground, (weight.get(ground) || 0) + area);
+  }
+  let best = "";
+  let most = 0;
+  for (const [ground, w] of weight) {
+    if (w > most) {
+      best = ground;
+      most = w;
+    }
+  }
+  return best;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1499,14 +1553,32 @@ function normalizePage(
   // over tidiness.
   const sectionShots = desktop.sectionScreenshots || {};
   const sections: SectionIR[] = [];
-  candidates.forEach((node, i) => {
-    const elements = perCandidate.get(i);
-    if (!elements || elements.length === 0) return;
+  const kept = candidates
+    .map((node, i) => ({ node, i, elements: perCandidate.get(i) || [] }))
+    .filter((c) => c.elements.length > 0);
+  // What each section's content sits on, and so what the page as a whole
+  // wears (PageIR.background, task 86bctde6u).
+  const grounds = kept.map((c) => sectionGround(c.node, styles, desktop.pageBackground));
+  // Only content sitting straight on the ground votes — an element inside a
+  // painted box (a band, a card, a painted section root) is on THAT box. A
+  // site whose content all sits on white bands over a black <body> (Strands,
+  // 2026-10-12) must not read as a black page with light text on the bands.
+  const pageBackground = pickPageBackground(
+    kept.flatMap((c, k) =>
+      c.elements
+        .filter((el) => !el.containers || el.containers.length === 0)
+        .map((el) => ({ ground: grounds[k].color, box: el.box }))
+    )
+  );
+  kept.forEach(({ node, i, elements }, k) => {
     let sectionPath = `section[${i}]`;
     const containers = perCandidateContainers.get(i);
     const containerBoxes = perCandidateBoxes.get(i);
     const rootKey = (node.attribs || {})["data-scim"] || "";
     const rootStyles = containerStyles(styles[rootKey], rects[rootKey]);
+    // Only a ground the root does not paint itself: a painted root is
+    // already the section's band (containers), and the mapper reads it there.
+    const ground = !grounds[k].ownFill && grounds[k].color !== pageBackground ? grounds[k].color : "";
     sections.push({
       sourceId: computeSourceId(pageIdx, sectionPath),
       type: "unknown",
@@ -1515,6 +1587,7 @@ function normalizePage(
       ...(containers ? { containers } : {}),
       ...(containerBoxes ? { containerBoxes } : {}),
       ...(Object.keys(rootStyles).length ? { rootStyles } : {}),
+      ...(ground ? { ground } : {}),
     });
   });
   if (loose.length) {
@@ -1558,6 +1631,7 @@ function normalizePage(
       canonicalUrl: meta.canonicalUrl || "",
       lang: meta.lang || "",
       sections,
+      ...(pageBackground ? { background: pageBackground } : {}),
       screenshots: {
         desktop: desktop.fullPageScreenshot || "",
         tablet: captures.tablet?.fullPageScreenshot || "",
