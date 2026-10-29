@@ -446,6 +446,18 @@ export const RENDER_DIFFERENTIALS = [
     why: 'Max Width rides on `width` as a min() beside the natural-size cap on `max-width` (task 86bcebvg9). Site Import fills it so a 1600px wordmark shown at 150px stays 150px; if the renderer stops reading it, every imported icon fills its column again and the panel still shows the number.',
   },
   {
+    id: 'button-glow',
+    module: { type: 'button', settings: { buttonColor: '#12294d' } },
+    setting: 'buttonGlow', from: 'false', to: 'true',
+    why: 'The Button glow behind one checkbox (task 86bctde3a). A conditional emit is where a control goes dead — if getButtonModuleStyle stops reading it, the box still ticks and saves and no glow appears.',
+  },
+  {
+    id: 'button-glow-size',
+    module: { type: 'button', settings: { buttonColor: '#12294d', buttonGlow: 'true' } },
+    setting: 'buttonGlowSize', from: '4', to: '60',
+    why: 'Proves Glow Size reaches the shadow rather than decorating a hardcoded one; the checkbox differential passes even if every number is ignored.',
+  },
+  {
     id: 'image-drop-shadow',
     module: { type: 'image', settings: { ...PICTURE } },
     setting: 'imageShadow', from: 'false', to: 'true',
@@ -850,6 +862,65 @@ export const RENDER_CONTRACTS = [
       return s.color === 'rgb(255, 255, 255)' ? null : `its label is ${s.color}, not #ffffff — unreadable on a transparent button over a dark row.`;
     },
   },
+  /*
+   * THE BUTTON'S GLOW (task 86bctde3a). Alphire's buttons wear a cyan haze
+   * round the pill — `0 0 22px rgba(0, 217, 255, .18)` — and the Button had
+   * only a text-shadow on its letters. A box-shadow lives in no element's box
+   * and an ancestor's `overflow: hidden` clips it while getComputedStyle still
+   * reports it whole, so these read the PIXELS just outside the button
+   * (`pixels`, check_render.mjs) against the same band 120px away.
+   * The pair is the point: with the glow off, the bands must read as the
+   * ground, or the "glow on" reading proves nothing about the glow.
+   */
+  ...[
+    { glow: true, id: 'button-glow-paints-cyan-outside-the-button' },
+    { glow: false, id: 'button-without-glow-paints-nothing-outside-the-button' },
+  ].map(({ glow, id }) => ({
+    id,
+    why: glow
+      ? 'A Glow on a Button must reach the screen round all four sides of the pill, on a dark section like ' +
+        'Alphire\'s — a glow clipped by its column, or never emitted, leaves the setting ticked and nothing there.'
+      : 'Control for the glow contract, and the "existing buttons unchanged" half of 86bctde3a: a Button with ' +
+        'no glow paints only the ground just outside its box.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#0b1020' },
+      modules: [{
+        type: 'button',
+        text: 'Let\'s Build Something Great',
+        settings: {
+          buttonColor: '#12294d', borderStyle: 'none', alignment: 'center',
+          ...(glow ? { buttonGlow: 'true', buttonGlowColor: '#00d9ff', buttonGlowSize: '22', buttonGlowStrength: '60' } : {}),
+        },
+      }],
+    },
+    selector: '.builder-preview-button',
+    read: ['boxShadow'],
+    pixels: { gap: 2, band: 6, far: 160 },
+    expect(sample) {
+      const px = sample.pixels;
+      if (!px || !px.far || !px.above || !px.below || !px.left || !px.right) {
+        return 'the pixels round the button could not be read (off-screen, or the screenshot failed) — nothing was measured.';
+      }
+      const ground = px.far;
+      if (ground.r + ground.g + ground.b > 120) {
+        return `the ground 160px away reads rgb(${ground.r}, ${ground.g}, ${ground.b}), not the dark section — fix the scene.`;
+      }
+      const sides = ['above', 'below', 'left', 'right'];
+      const lift = (c) => Math.min(c.g - ground.g, c.b - ground.b);
+      if (glow) {
+        const dull = sides.filter((side) => lift(px[side]) < 20 || px[side].g - px[side].r < 20);
+        return dull.length
+          ? `no cyan glow ${dull.map((side) => `${side} (rgb(${px[side].r}, ${px[side].g}, ${px[side].b}))`).join(', ')} the button ` +
+            `against the ground rgb(${ground.r}, ${ground.g}, ${ground.b}); its box-shadow reads "${sample.styles.boxShadow}".`
+          : null;
+      }
+      const lit = sides.filter((side) => Math.abs(lift(px[side])) > 6);
+      return lit.length
+        ? `a button with no glow painted something ${lit.join(', ')} its box (box-shadow "${sample.styles.boxShadow}").`
+        : null;
+    },
+  })),
   {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:

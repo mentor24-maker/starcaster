@@ -23,6 +23,7 @@
 
 import type { CapturedStyles, ElementIR } from "./ir";
 import { toHex } from "./theme";
+import { hexOf, isGlow, parseShadows, rgba } from "./fidelity";
 import {
   BUILDER_GRADIENT_LAYER_LIMIT,
   BUILDER_GRADIENT_STOP_LIMIT,
@@ -117,6 +118,60 @@ export function shadowPreset(value: string | undefined): string {
   if (strongest <= 12) return "light";
   if (strongest <= 28) return "medium";
   return "heavy";
+}
+
+/** A coloured glow: the colour, how far it reaches (px) and how strong it is
+ *  (the colour's opacity, 1–100). */
+export type GlowLook = { color: string; size: number; strength: number };
+
+/**
+ * A computed box-shadow → the glow it draws, or null (task 86bctde3a).
+ * A glow is a tinted shadow with no offset (fidelity.ts isGlow); a grey or
+ * offset shadow is a drop shadow and stays with shadowPreset. Inner glows are
+ * skipped — nothing in Builder draws one yet. Of several glows, the one that
+ * reaches furthest wins: Alphire's buttons wear a 22px outer glow over a
+ * faint 18px inner one, and the outer is the haze a visitor sees.
+ */
+export function readGlow(value: string | undefined): GlowLook | null {
+  let best: GlowLook | null = null;
+  for (const s of parseShadows(value)) {
+    if (s.inset || !isGlow(s)) continue;
+    const c = rgba(s.color);
+    const color = hexOf(s.color);
+    if (!c || !color) continue;
+    const look = { color, size: Math.round(s.blur), strength: clamp(c[3] * 100, 1, 100) };
+    if (!best || look.size > best.size) best = look;
+  }
+  return best;
+}
+
+/** A glow → the Button's Glow settings (lib/builder-client/builder-button-glow.ts). */
+export function buttonGlowSettings(st: CapturedStyles | undefined): Record<string, string> {
+  const glow = readGlow(st?.["box-shadow"]);
+  if (!glow) return {};
+  return {
+    buttonGlow: "true",
+    buttonGlowColor: glow.color,
+    buttonGlowSize: String(clamp(glow.size, 1, 80)),
+    buttonGlowStrength: String(glow.strength),
+  };
+}
+
+/** A glow → a picture's own coloured shadow, centred (the image module's
+ *  imageShadow* keys, builder-carousel-image-frame.ts), which already draws
+ *  any colour at any opacity — a picture needed no new setting. */
+export function imageGlowSettings(st: CapturedStyles | undefined): Record<string, string> {
+  const glow = readGlow(st?.["box-shadow"]);
+  if (!glow) return {};
+  return {
+    imageShadow: "true",
+    imageShadowColor: glow.color,
+    imageShadowX: "0",
+    imageShadowY: "0",
+    imageShadowBlur: String(clamp(glow.size, 0, 80)),
+    imageShadowSpread: "0",
+    imageShadowOpacity: String(glow.strength),
+  };
 }
 
 function firstUrl(value: string | undefined): string {

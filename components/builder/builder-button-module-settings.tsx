@@ -1,6 +1,11 @@
 "use client";
 
 import type { BackgroundSettings, BuilderTemplateModule } from "@/lib/builder-template";
+import {
+  BUTTON_GLOW_DEFAULTS,
+  BUTTON_GLOW_LIMITS,
+  buttonGlowIsOn
+} from "@/lib/builder-button-glow";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderButtonBackgroundPicker } from "./builder-button-background-picker";
 import {
@@ -481,6 +486,59 @@ export function BuilderButtonModuleSettings({
               step: 5,
               fallback: "0",
               rendersVia: "getButtonModuleStyle"
+            }
+          ],
+          // The glow round the pill (task 86bctde3a) — a box-shadow, so A7
+          // files it on Frame, and the last 2% of the axis (D9). Colour, size
+          // and strength only: a glow has no offset, and an X/Y pair that must
+          // stay at zero is two controls that can only break it.
+          [
+            {
+              key: "buttonGlow",
+              label: "Glow",
+              width: "check",
+              control: "checkbox",
+              fallback: String(BUTTON_GLOW_DEFAULTS.on),
+              rendersVia: "getButtonModuleStyle",
+              visibleWhen: () => !compact
+            }
+          ],
+          [
+            {
+              key: "buttonGlowColor",
+              label: "Glow Color",
+              width: "color",
+              control: "color",
+              dialogLabel: "Button glow color",
+              fallback: BUTTON_GLOW_DEFAULTS.color,
+              rendersVia: "getButtonModuleStyle",
+              visibleWhen: (settings) => !compact && buttonGlowIsOn(settings)
+            }
+          ],
+          [
+            {
+              key: "buttonGlowSize",
+              label: "Glow Size",
+              width: "num",
+              control: "number",
+              min: BUTTON_GLOW_LIMITS.size.min,
+              max: BUTTON_GLOW_LIMITS.size.max,
+              fallback: String(BUTTON_GLOW_DEFAULTS.size),
+              rendersVia: "getButtonModuleStyle",
+              visibleWhen: (settings) => !compact && buttonGlowIsOn(settings)
+            }
+          ],
+          [
+            {
+              key: "buttonGlowStrength",
+              label: "Glow Strength",
+              width: "num",
+              control: "number",
+              min: BUTTON_GLOW_LIMITS.strength.min,
+              max: BUTTON_GLOW_LIMITS.strength.max,
+              fallback: String(BUTTON_GLOW_DEFAULTS.strength),
+              rendersVia: "getButtonModuleStyle",
+              visibleWhen: (settings) => !compact && buttonGlowIsOn(settings)
             }
           ]
         ]

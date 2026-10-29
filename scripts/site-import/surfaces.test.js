@@ -619,3 +619,43 @@ test('rows whose columns hold different cards do not merge; the same rows withou
   assert.equal(carded.bands.length, 2);
   assert.deepEqual([carded.cells.get('c').band, carded.cells.get('c').col], [1, 0]);
 });
+
+/* ---------- glows (task 86bctde3a) ---------- */
+
+const { readGlow, buttonGlowSettings, imageGlowSettings } = require('../../lib/site-import/dist/surfaces.js');
+
+// Alphire's buttons, verbatim from job simp_1791930973248_9arcy2's capture.
+const ALPHIRE_BUTTON_GLOW = 'rgba(0, 217, 255, 0.18) 0px 0px 22px 0px, rgba(0, 217, 255, 0.04) 0px 0px 18px 0px inset';
+
+test('a zero-offset coloured shadow reads as a glow — colour, reach and strength kept', () => {
+  assert.deepEqual(readGlow(ALPHIRE_BUTTON_GLOW), { color: '#00d9ff', size: 22, strength: 18 });
+  assert.deepEqual(readGlow('rgb(255, 41, 215) 0px 0px 24px 0px'), { color: '#ff29d7', size: 24, strength: 100 });
+});
+
+test('grey, offset, inner-only and absent shadows are not glows — they stay with the presets', () => {
+  assert.equal(readGlow('rgba(0, 0, 0, 0.3) 0px 0px 18px 0px'), null); // grey
+  assert.equal(readGlow('rgba(0, 217, 255, 0.5) 6px 6px 18px 0px'), null); // offset: a drop shadow
+  assert.equal(readGlow('rgba(0, 217, 255, 0.5) 0px 0px 18px 0px inset'), null); // inner only
+  assert.equal(readGlow('none'), null);
+  assert.equal(readGlow(undefined), null);
+  // The existing preset path is untouched by any of this.
+  assert.equal(shadowPreset('rgba(0, 0, 0, 0.1) 0px 4px 16px 0px'), 'medium');
+});
+
+test('of several glows the furthest-reaching wins', () => {
+  const two = 'rgba(0, 217, 255, 0.5) 0px 0px 8px 0px, rgba(255, 41, 215, 0.3) 0px 0px 40px 0px';
+  assert.deepEqual(readGlow(two), { color: '#ff29d7', size: 40, strength: 30 });
+});
+
+test('a glow becomes Button Glow settings, and a picture\'s centred coloured shadow', () => {
+  assert.deepEqual(buttonGlowSettings({ 'box-shadow': ALPHIRE_BUTTON_GLOW }), {
+    buttonGlow: 'true', buttonGlowColor: '#00d9ff', buttonGlowSize: '22', buttonGlowStrength: '18',
+  });
+  // Alphire's hero haze is 100px; the picture's blur control stops at 80.
+  assert.deepEqual(imageGlowSettings({ 'box-shadow': 'rgba(0, 217, 255, 0.15) 0px 0px 100px 0px' }), {
+    imageShadow: 'true', imageShadowColor: '#00d9ff', imageShadowX: '0', imageShadowY: '0',
+    imageShadowBlur: '80', imageShadowSpread: '0', imageShadowOpacity: '15',
+  });
+  assert.deepEqual(buttonGlowSettings({ 'box-shadow': 'rgba(0, 0, 0, 0.2) 0px 2px 4px 0px' }), {});
+  assert.deepEqual(imageGlowSettings(undefined), {});
+});
