@@ -11908,3 +11908,12 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-main.builder-workspace:not(.has-resolved-shell-background) {
   padding: 0 !important;
 }
+
+/* "Shared with this project" in Builder › Modules (task 86bcu6tzk). */
+.builder-shared-sections-notice {
+  margin: 0 0 8px;
+}
+
+.builder-shared-sections-notice.is-error {
+  color: var(--danger-color, #b91c1c);
+}

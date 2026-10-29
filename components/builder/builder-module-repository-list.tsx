@@ -18,6 +18,7 @@ import { BuilderGalleryModal } from "./builder-gallery-modal";
 import { BuilderModuleCard } from "./builder-module-card";
 import { BuilderModulePaletteModal, type ModulePaletteAnchor } from "./builder-module-palette-modal";
 import { BuilderSectionCard } from "./builder-section-card";
+import { BuilderSharedSavedSections } from "./builder-shared-saved-sections";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import { appendRichTextImageToHtml } from "@/lib/rich-text-image";
 import { formatTemplateTimestamp } from "./builder-utils";
@@ -55,6 +56,8 @@ type BuilderModuleRepositoryListProps = {
   onDeleteSavedModule: (cellModuleId: string, currentName: string) => void;
   onSaveSavedSection: (sectionId: string, name: string, section: BuilderTemplateSection, isPrivate: boolean) => void;
   onDeleteSavedSection: (sectionId: string, currentName: string) => void;
+  /** A section another project shared was imported; add it to this project's list. */
+  onImportedSavedSection?: (record: BuilderSavedSectionRecord) => void;
   onModuleEditorFocusChange: (focus: BuilderModuleEditorFocus | null, syncOnly?: boolean) => void;
   onRepositoryEditingActiveChange: (active: boolean) => void;
 };
@@ -1626,6 +1629,7 @@ export function BuilderModuleRepositoryList({
   onDeleteSavedModule,
   onSaveSavedSection,
   onDeleteSavedSection,
+  onImportedSavedSection,
   onModuleEditorFocusChange,
   onRepositoryEditingActiveChange
 }: BuilderModuleRepositoryListProps) {
@@ -2558,6 +2562,7 @@ export function BuilderModuleRepositoryList({
         onUpdateEditingSectionModule={updateEditingSectionModule}
         onUpdateEditingSectionModuleBackground={updateEditingSectionModuleBackground}
       />
+      <BuilderSharedSavedSections onImported={onImportedSavedSection} />
       </div>
       {editingGalleryTarget ? (
         <BuilderGalleryModal
