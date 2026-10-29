@@ -1,3 +1,17 @@
+## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
+
+When one of Dane's projects shares its saved sections with another, the
+receiving project now sees them in **Builder › Modules** under a new group,
+**Shared with this project**. Each one says which project it came from and has
+one button, **Import**. Import makes this project its own copy, which appears in
+its Saved Sections at once and can then be used and edited like any other.
+Changes in either project never reach the other, the source project is never
+written to, and pictures keep pointing where they already did. If the name is
+already taken, the copy is called "Header (2)" rather than replacing anything.
+If the other project has stopped sharing in the meantime, Import says so in a
+sentence and copies nothing. Like #894, it needs that ticket's sharing table
+created in the live database before it shows anything there. On 2026-10-28 it
+was not there yet.
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 
 To reply to one particular YouTube comment, Dane used to need its comment id,
