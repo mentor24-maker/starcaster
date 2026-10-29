@@ -11909,6 +11909,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   padding: 0 !important;
 }
 
+/* "Shared with this project" in Builder › Modules (task 86bcu6tzk). */
+.builder-shared-sections-notice {
+  margin: 0 0 8px;
+}
+
+.builder-shared-sections-notice.is-error {
+  color: var(--danger-color, #b91c1c);
+}
+
 /* "Shared with this project" on the Themes page (task 86bcu6uav). */
 .builder-react-root .builder-shared-themes-swatches {
   display: inline-flex;

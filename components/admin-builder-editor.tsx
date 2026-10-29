@@ -3186,6 +3186,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           onDeleteCreatedModule={(source, name) => void deleteCreatedModule(source, name)}
           onDeleteSavedModule={(id, name) => void deleteSavedModule(id, name)}
           onDeleteSavedSection={(id, name) => void deleteSavedSection(id, name)}
+          onImportedSavedSection={(record) =>
+            setSavedSections((current) => [record, ...current.filter((section) => section.id !== record.id)])
+          }
           onCloneCreatedModule={(module, moduleLabel) => void cloneCreatedModule(module, moduleLabel)}
           onCloneSavedModule={(id) => void cloneSavedModule(id)}
           onCreateSavedModule={(name, moduleClass, modules) => void createSavedModule(name, moduleClass, modules)}
