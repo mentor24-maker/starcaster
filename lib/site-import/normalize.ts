@@ -25,6 +25,7 @@ import {
   type AssetRef,
   type CaptureResult,
   type CapturedStyles,
+  type DecorationIR,
   type Coverage,
   type CoverageCounts,
   type ElementClass,
@@ -496,6 +497,56 @@ export function paintsSurface(st: CapturedStyles): boolean {
       !/^(none|hidden)$/.test(st[`border-${side}-style`] || "none") &&
       !clearColor(st[`border-${side}-color`])
   );
+}
+
+/**
+ * What the capture reads off a ::before / ::after layer (task 86bctde48): the
+ * properties that make it paint, and the ones that change how it looks once
+ * painted. SYNC POINT: the in-page `layerPaints` test in capture-playwright.ts
+ * reads the painting half of these and must agree with `decorationStyles`.
+ */
+export const DECORATION_STYLE_PROPS: string[] = [
+  "content",
+  "background-color", "background-image", "background-size", "background-position", "background-repeat",
+  "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "border-radius", "box-shadow", "opacity", "filter", "mix-blend-mode", "transform",
+];
+
+/** A decoration's styles with the browser defaults dropped. `content` stays
+ *  only when it paints a picture — icon text is a non-goal of 86bctde48. */
+export function decorationStyles(raw: CapturedStyles | undefined): CapturedStyles {
+  const st = raw || {};
+  const out: CapturedStyles = {};
+  const keep = (prop: string) => {
+    if (st[prop]) out[prop] = st[prop];
+  };
+  if (/url\(/i.test(st.content || "")) keep("content");
+  if (!clearColor(st["background-color"])) keep("background-color");
+  if (st["background-image"] && st["background-image"] !== "none") {
+    keep("background-image");
+    if (st["background-size"] && st["background-size"] !== "auto") keep("background-size");
+    if (st["background-position"] && st["background-position"] !== "0% 0%") keep("background-position");
+    if (st["background-repeat"] && st["background-repeat"] !== "repeat") keep("background-repeat");
+  }
+  for (const side of ["top", "right", "bottom", "left"]) {
+    const width = st[`border-${side}-width`];
+    const style = st[`border-${side}-style`];
+    const colour = st[`border-${side}-color`];
+    if (parseFloat(width || "0") > 0 && !/^(none|hidden)$/.test(style || "none") && !clearColor(colour)) {
+      out[`border-${side}-width`] = width;
+      out[`border-${side}-style`] = style;
+      out[`border-${side}-color`] = colour;
+    }
+  }
+  if (st["border-radius"] && !/^0(px)?$/.test(st["border-radius"])) keep("border-radius");
+  if (st["box-shadow"] && st["box-shadow"] !== "none") keep("box-shadow");
+  if (st.opacity && st.opacity !== "1") keep("opacity");
+  if (st.filter && st.filter !== "none") keep("filter");
+  if (st["mix-blend-mode"] && st["mix-blend-mode"] !== "normal") keep("mix-blend-mode");
+  if (st.transform && st.transform !== "none") keep("transform");
+  return out;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1455,6 +1506,50 @@ function normalizePage(
     });
   }
 
+  // ::before/::after layers (task 86bctde48), each filed under the section
+  // whose root holds its owner. A capture that recorded them gives every
+  // section a list — empty means "looked, found none" — while an older one
+  // leaves the field absent, which the fidelity report reads as CANNOT TELL.
+  let pageDecorations: DecorationIR[] | undefined;
+  if (Array.isArray(desktop.decorations)) {
+    const byCandidate = new Map<number, SectionIR>();
+    candidates.forEach((_, i) => {
+      const sid = computeSourceId(pageIdx, `section[${i}]`);
+      const section = sections.find((s) => s.sourceId === sid);
+      if (section) byCandidate.set(i, section);
+    });
+    for (const section of sections) section.decorations = [];
+    const nodeByKey = new Map<string, DomNode>();
+    $("[data-scim]").each((_, node) => {
+      const key = ((node as DomNode).attribs || {})["data-scim"];
+      if (key) nodeByKey.set(key, node as DomNode);
+    });
+    for (const d of desktop.decorations) {
+      if (!d || !Array.isArray(d.box)) continue;
+      const styles = decorationStyles(d.styles);
+      const pictures = [styles["background-image"], styles.content].filter(Boolean).join(" ");
+      const node = nodeByKey.get(d.owner);
+      const target = node ? candidateFor(node, candidateIndex) : null;
+      const section = target === null ? undefined : byCandidate.get(target);
+      const deco: DecorationIR = {
+        id: computeSourceId(pageIdx, `decoration/${d.owner}::${d.pseudo}`),
+        pseudo: d.pseudo,
+        owner: d.label || "an element",
+        onSectionRoot: Boolean(node && target !== null && candidates[target] === node),
+        box: { x: d.box[0], y: d.box[1], w: d.box[2], h: d.box[3] },
+        size: Array.isArray(d.size) ? { w: d.size[0], h: d.size[1] } : { w: d.box[2], h: d.box[3] },
+        boxFrom: d.boxFrom === "offsets" ? "offsets" : "owner",
+        zIndex: d.zIndex || "auto",
+        styles,
+        // Not added to an asset's referencedBy: the picture belongs to no
+        // element, and the fidelity report says so in those words.
+        assetRefs: pictures ? matchAssetRefs("", { "background-image": pictures }, url, assetLookup) : [],
+      };
+      if (section) section.decorations!.push(deco);
+      else (pageDecorations = pageDecorations || []).push(deco);
+    }
+  }
+
   // Raw design tokens from this page's captured styles.
   for (const styleMap of Object.values(styles)) {
     for (const [prop, value] of Object.entries(styleMap || {})) {
@@ -1487,6 +1582,7 @@ function normalizePage(
       canonicalUrl: meta.canonicalUrl || "",
       lang: meta.lang || "",
       sections,
+      ...(pageDecorations ? { decorations: pageDecorations } : {}),
       screenshots: {
         desktop: desktop.fullPageScreenshot || "",
         tablet: captures.tablet?.fullPageScreenshot || "",
