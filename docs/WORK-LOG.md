@@ -1,3 +1,15 @@
+## 2026-10-29 — Every picture and PDF a site import downloads now shows up in Assets (#909)
+
+A site import downloads every picture and document it sees on the original
+site, but only the ones a page actually used were being added to the
+project's Assets. The rest sat in a back-room folder no screen shows: Alphire's
+import downloaded 48 files and Assets showed 10, with the hero banner and both
+headshots missing. Applying an import now also lists every other downloaded
+picture and PDF in Assets, marked "Not placed on any page", so it can be found
+and used. Fonts stay out (the font library owns them), several sizes of one
+picture become one entry (the largest), running the import again adds nothing
+twice, and each new entry is checked to belong to the right project. For
+Alphire that means 7 new entries once the import is re-applied.
 ## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
 
 On the Acquire screen, every X or Reddit search is supposed to leave a run in
