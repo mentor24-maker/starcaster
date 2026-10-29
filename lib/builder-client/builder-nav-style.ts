@@ -463,8 +463,18 @@ export function getNavModuleStyle(settings: NavSettings): CSSProperties {
      * outranks a stylesheet rule reading a variable. So this only ever
      * decides what "cleared" looks like — and it has to be transparent, or
      * clearing the control does nothing at all, which is what it did.
+     *
+     * Unless the links are following the theme too. An empty Text Color
+     * paints the links in the theme's header text, which is chosen to sit on
+     * the theme's header colour — so a bar left transparent over a white page
+     * drew white links on white. Alphire's imported Top Menu, 2026-10-27: an
+     * "empty white bar" (task 86bctde8c). The theme publishes the header
+     * colour as `--lp-header-bg`; when the text follows the theme, the fill
+     * follows it with it, and the pair stays readable. A menu given its own
+     * Text Color keeps the transparent bar it was designed over, and with no
+     * theme palette the fallback is the same transparent as before.
      */
-    "--site-nav-bg": "transparent",
+    "--site-nav-bg": linkColor ? "transparent" : "var(--lp-header-bg, transparent)",
     "--site-nav-radius": `${num(settings.navBarRadius, NAV_STYLE_DEFAULTS.barRadius, 0, 80)}px`,
     // Three parts rather than one shorthand: the generated
     // `_builder-react.css` already uses `--site-nav-border` for a colour

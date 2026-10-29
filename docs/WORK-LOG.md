@@ -1,3 +1,16 @@
+## 2026-10-29 — Menus that follow the theme's colours no longer vanish into a white bar (#910)
+
+Alphire's imported Top Menu showed as an empty white bar. The links were there,
+painted white: a menu with no Text Color of its own uses the theme's "header
+text" colour, which Alphire's theme set to white because its header is black.
+But the bar behind the links was always see-through, so the black header colour
+was never painted anywhere and the white links sat on the white page. Now, when
+a menu leaves its text colour to the theme, it leaves its bar colour to the
+theme too, so the two always arrive together: Alphire gets a black bar with
+white links. A menu that picked its own text colour (every Dane of Earth menu
+does) is untouched, and so is any site whose theme has no header colour. Two
+checks in a real browser now measure both halves, and each was broken on
+purpose to prove it fails.
 ## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
 
 The Mini's sign-in window has an outside check that, among other things, makes
