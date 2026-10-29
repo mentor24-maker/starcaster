@@ -1,3 +1,15 @@
+## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
+
+A picture in the Builder could only have rounded corners, measured in pixels.
+So when Site Import copied alphire.agency, whose hero picture is a soft,
+slightly lopsided oval, it had nowhere to put that shape and the picture came
+out a plain rectangle. The Image module's Frame settings now start with
+**Shape**: Rounded (the old corners, unchanged for every existing picture),
+Square, Circle (the picture is cropped to fill a perfect circle), or Custom
+(any corner curve, including the lopsided oval kind). Site Import now reads
+each picture's shape from the original site and fills this in. It also stops
+giving square pictures the Builder's default 18px rounded corners, which
+every import had been adding without anyone asking.
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 
 To reply to one particular YouTube comment, Dane used to need its comment id,
