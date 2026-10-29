@@ -17,13 +17,13 @@
  *  - Fix anything. It measures.
  *  - Score. Each loss is named under its category; a "73% similar" would hide
  *    exactly which of the seven things went missing.
- *  - Say "no differences" about something it could not see. The capture
- *    records no ::before/::after layers, so decorative layers are always
- *    reported as not measurable (`notMeasured`) until it does (86bctde48);
- *    a section with no imported row is CANNOT TELL, never clean.
+ *  - Say "no differences" about something it could not see. A capture made
+ *    before task 86bctde48 recorded no ::before/::after layers, so on those
+ *    decorative layers are reported as not measurable (`notMeasured`) rather
+ *    than as none; a section with no imported row is CANNOT TELL, never clean.
  */
 
-import type { CapturedStyles, SectionIR, AssetRef } from "./ir";
+import type { CapturedStyles, DecorationIR, SectionIR, AssetRef } from "./ir";
 import { LAYOUT_RATIOS } from "./columns";
 
 export type FidelityCategory =
@@ -98,8 +98,12 @@ export type SectionComparison = {
  *  text or pattern; a flat fill or a smooth gradient sits well under 1. */
 export const BUSY_EDGE_THRESHOLD = 2.5;
 
-const DECORATIVE_NOT_CAPTURED =
-  "the capture does not record ::before/::after layers, so a starfield, ring or line drawn by the stylesheet cannot be listed (task 86bctde48)";
+export const DECORATIVE_NOT_CAPTURED =
+  "this import was captured before the capture recorded ::before/::after layers, so a starfield, ring or line drawn by the stylesheet cannot be listed — re-import the site to list them (task 86bctde48)";
+
+/** What the import shows for every decoration: the Builder has no way to
+ *  draw one yet (rendering them is the follow-up to task 86bctde48). */
+const DECORATION_NOT_REBUILT = "nothing — the import does not rebuild stylesheet layers yet";
 
 /* ---------------------------------------------------------------------------
  * Small readers
@@ -377,6 +381,87 @@ function checkShadowsAndShapes(section: SectionIR, rows: BuilderRow[]): Fidelity
   return out;
 }
 
+/** The most colourful colour in some CSS, else the first opaque one. */
+function tintOf(css: string): string {
+  const colours = (String(css || "").match(/rgba?\([^)]*\)|#[0-9a-f]{6}\b/gi) || []).filter((c) => (rgba(c)?.[3] ?? 0) > 0);
+  const tinted = colours.find(isTinted);
+  return hexOf(tinted || colours[0] || "");
+}
+
+function clearOrNone(value: string | undefined): boolean {
+  const c = rgba(String(value || ""));
+  return !value || value === "transparent" || (c !== null && c[3] <= 0);
+}
+
+/**
+ * A decoration in the words a person would use: "a pattern of 9 dots",
+ * "a ring in #00e5ff with a #00e5ff glow", "a gradient line in #00d9ff".
+ * Built from what it paints, not from its class name.
+ */
+export function describeDecoration(d: DecorationIR): string {
+  const st = d.styles || {};
+  const parts: string[] = [];
+  const layers = backgroundLayers(st["background-image"]);
+  const radials = layers.filter((l) => l.kind === "radial");
+  const linears = layers.filter((l) => l.kind === "linear" || l.kind === "repeating");
+  const pictures = layers.filter((l) => l.kind === "image").length + (/url\(/i.test(st.content || "") ? 1 : 0);
+  // Thin by its OWN size: a 1px line rotated 17° covers a 664×204 box.
+  const own = d.size || d.box;
+  const thin = Math.min(own.w, own.h) <= 4;
+  // A tile size with repeat on: three dots tiled every 400px is a whole starfield.
+  const tile = st["background-size"] && !/no-repeat/.test(st["background-repeat"] || "") ? ` tiled every ${st["background-size"].split(",")[0].trim()}` : "";
+  if (radials.length >= 3) parts.push(`a pattern of ${radials.length} dots (radial gradients)${tile}`);
+  else if (radials.length) {
+    const tint = tintOf(radials.map((l) => l.css).join(" "));
+    parts.push(`a radial glow${tint ? ` in ${tint}` : ""}`);
+  }
+  if (linears.length) {
+    const tint = tintOf(linears.map((l) => l.css).join(" "));
+    const noun = linears.length > 1 ? `${linears.length} linear gradients` : thin ? "a gradient line" : "a linear gradient";
+    parts.push(`${noun}${tint ? ` in ${tint}` : ""}`);
+  }
+  if (pictures) parts.push(pictures > 1 ? `${pictures} pictures` : "a picture");
+  if (!clearOrNone(st["background-color"])) parts.push(`a ${thin ? "line" : "fill"} of ${hexOf(st["background-color"]) || st["background-color"]}`);
+  const border = ["top", "right", "bottom", "left"].find((side) => parseFloat(st[`border-${side}-width`] || "0") > 0);
+  if (border) {
+    const r = String(st["border-radius"] || "");
+    const round = r.endsWith("%") ? parseFloat(r) >= 50 : parseFloat(r) * 2 >= Math.min(own.w, own.h) - 1;
+    const colour = hexOf(st[`border-${border}-color`] || "");
+    parts.push(`${round ? "a ring" : "an outline"}${colour ? ` in ${colour}` : ""}`);
+  }
+  const shadows = parseShadows(st["box-shadow"]).filter((sh) => !sh.inset);
+  if (shadows.length) {
+    const glow = shadows.find(isGlow);
+    parts.push(glow ? `a ${hexOf(glow.color)} glow` : "a shadow");
+  }
+  return parts.length ? parts.join(" with ") : "a painted layer";
+}
+
+/**
+ * Every decoration is a loss today — the Builder draws none of them — so the
+ * finding is the list itself, grouped so four identical card fades read as
+ * one line. `undefined` (an older capture) is not "none": compareSection
+ * reports it as not measured instead.
+ */
+export function decorationFindings(decorations: DecorationIR[] | undefined): FidelityFinding[] {
+  const groups = new Map<string, { words: string; on: string; where: string[] }>();
+  for (const d of decorations || []) {
+    const words = describeDecoration(d);
+    const on = `${d.owner}::${d.pseudo}`;
+    const key = `${words}|${on}`;
+    const g = groups.get(key) || { words, on, where: [] };
+    g.where.push(`${Math.round(d.box.w)}×${Math.round(d.box.h)} at (${Math.round(d.box.x)}, ${Math.round(d.box.y)})`);
+    groups.set(key, g);
+  }
+  return Array.from(groups.values()).map((g) => ({
+    category: "decorative" as const,
+    what:
+      `${g.words}, drawn by the stylesheet on ${g.on}` +
+      (g.where.length > 1 ? ` — ${g.where.length} copies: ${listOf(g.where)}` : `, ${g.where[0]}`),
+    imported: DECORATION_NOT_REBUILT,
+  }));
+}
+
 function checkColumns(
   section: SectionIR,
   rows: BuilderRow[],
@@ -499,7 +584,7 @@ export function compareSection(section: SectionIR, opts: CompareOptions): Sectio
     reason: "",
     builderRowIds: rows.map((r) => r.id),
     findings: [],
-    notMeasured: [{ category: "decorative", why: DECORATIVE_NOT_CAPTURED }],
+    notMeasured: section.decorations ? [] : [{ category: "decorative", why: DECORATIVE_NOT_CAPTURED }],
   };
   if (!rows.length) {
     // Not "no differences": nothing was there to compare against. A nav-only
@@ -519,6 +604,7 @@ export function compareSection(section: SectionIR, opts: CompareOptions): Sectio
   if (columns.notMeasured) base.notMeasured.push({ category: "columns", why: columns.notMeasured });
   base.findings = [
     ...checkBackgrounds(section, rows, surfaces),
+    ...decorationFindings(section.decorations),
     ...checkShadowsAndShapes(section, rows),
     ...columns.findings,
     ...checkText(section, rows, opts.theme),

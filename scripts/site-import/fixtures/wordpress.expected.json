@@ -2968,6 +2968,15 @@
                 "assetRefs": [
                   "f255"
                 ],
+                "inlineStyles": [
+                  {
+                    "index": 0,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -3187,6 +3196,15 @@
                 "assetRefs": [
                   "f255"
                 ],
+                "inlineStyles": [
+                  {
+                    "index": 0,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -3262,6 +3280,15 @@
                 "documentPosition": 132,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 1,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -3903,6 +3930,15 @@
                 "documentPosition": 158,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 0,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -3928,6 +3964,15 @@
                 "documentPosition": 159,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 1,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -3953,6 +3998,22 @@
                 "documentPosition": 160,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 1,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  },
+                  {
+                    "index": 3,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -4030,6 +4091,15 @@
                 "assetRefs": [
                   "f231"
                 ],
+                "inlineStyles": [
+                  {
+                    "index": 3,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -4105,6 +4175,15 @@
                 "documentPosition": 166,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 1,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -4157,6 +4236,15 @@
                 "assetRefs": [
                   "f232"
                 ],
+                "inlineStyles": [
+                  {
+                    "index": 3,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
@@ -4207,6 +4295,15 @@
                 "documentPosition": 170,
                 "depth": 11,
                 "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 1,
+                    "tag": "a",
+                    "styles": {
+                      "color": "rgb(106, 180, 70)"
+                    }
+                  }
+                ],
                 "containers": [
                   "109"
                 ]
