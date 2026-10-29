@@ -186,6 +186,50 @@
   overflow-wrap: break-word;
 }
 
+/* Latest posts (upgrade 3/4): the newest date, then up to three titles,
+   each cut to two lines with "…" — the full title is on hover. The column
+   takes the room the dropped Recommended by / Found via columns gave up. */
+.substack-miner-posts-cell {
+  width: 22%;
+}
+
+/* The writer's name and description need a share too, or the posts column
+   squeezes the description to one word a line. */
+.substack-miner-name-cell {
+  width: 18%;
+}
+
+.substack-miner-posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.substack-miner-post-date {
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.substack-miner-posts ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  min-width: 0;
+}
+
+.substack-miner-post-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
+.substack-miner-muted {
+  opacity: 0.75;
+}
+
 .substack-miner-recommended summary {
   cursor: pointer;
 }
