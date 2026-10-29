@@ -1,3 +1,19 @@
+## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
+
+Alphire's home page is near-black, but 15 of its 17 pages are white, so the
+theme an import builds for the site is white, and the home page came across
+white with its black theme text. The importer now notes what each page's
+words actually sit on. When that differs from the theme, the imported page
+gets its own background colour plus text, heading and link colours that are
+readable on it, taken from the site's own colours where they read. Only words
+sitting straight on the page count. A site with a black edge behind a white
+content column (Strands Movie) therefore stays a white page. A page that
+paints its own background now keeps its own text colours even when it follows
+a named theme. No existing page changes because of that: in production, the
+one themed page with its own background stores no text colours. Checked
+against the real Alphire capture: the home page goes dark, the other 16 stay
+white.
+
 ## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
 
 When one of Dane's projects shares its page templates with another, the
