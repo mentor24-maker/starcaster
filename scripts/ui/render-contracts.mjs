@@ -75,6 +75,22 @@ const NAV_SUBMENU_ITEMS = JSON.stringify([
   { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
 ]);
 
+/** A theme with a button pair per ground (86bctakk0). The plain pair is navy,
+ *  which vanishes on a dark row — so only the per-ground pair can pass there. */
+const SURFACE_BUTTON_PALETTE = {
+  surface: '#ffffff', surfaceText: '#12294d',
+  inverse: '#0b1020', inverseText: '#ffffff',
+  button: '#12294d', buttonText: '#ffffff',
+  surfaceButton: '#12294d', surfaceButtonText: '#ffffff',
+  inverseButton: '#ffffff', inverseButtonText: '#12294d',
+};
+
+/** A Button that follows the theme: every colour left empty ("theme", A2). A
+ *  new Button arrives with #214c71 filled in, which never reads the theme. */
+const THEME_FOLLOWING_BUTTON = {
+  buttonColor: '', buttonHoverColor: '', textColor: '', textHoverColor: '', borderColor: '',
+};
+
 const PARALLAX_IMAGE_SECTION = {
   layout: 'single',
   spacers: 2,
@@ -101,11 +117,6 @@ const PARALLAX_IMAGE_SECTION = {
  * Red at three-quarter strength is not a design choice — it is the loudest
  * value available, so a failure here is unmistakable in a screenshot.
  */
-/** Clears the fixed colours createEmptyModule gives a new Button, so it follows the theme. */
-const THEME_FOLLOWING_BUTTON = {
-  buttonColor: '', buttonHoverColor: '', textColor: '', textHoverColor: '', borderColor: '',
-};
-
 const PARALLAX_THEMED_SECTION = {
   ...PARALLAX_IMAGE_SECTION,
   themeTreatments: { heroOverlay: '#ff0000', heroOverlayOpacity: 0.75 },
@@ -739,6 +750,104 @@ export const RENDER_CONTRACTS = [
       return sample.styles.marginTop === '40px'
         ? null
         : `a module with Phone margin-top 40 rendered margin-top ${sample.styles.marginTop} at 420px — the phone rule is not reaching the module.`;
+    },
+  },
+  /*
+   * A BUTTON PER GROUND — task 86bctakk0.
+   *
+   * Alphire (2026-10-27) puts light buttons on dark sections and dark ones on
+   * white. A theme had one button pair, so whichever it chose vanished on the
+   * other ground. The theme now carries a pair per ground and each section
+   * hands its own to the buttons in it. The same theme, the same Button with
+   * no colour of its own, on a dark row and on a white one: it must read on
+   * both. The plain pair here is the navy that vanishes on the dark row, so
+   * a renderer that ignores the per-ground pairs fails the first contract.
+   */
+  ...[
+    { ground: 'dark', fill: '#0b1020', expectBg: 'rgb(255, 255, 255)' },
+    { ground: 'white', fill: '#ffffff', expectBg: 'rgb(18, 41, 77)' },
+  ].map(({ ground, fill, expectBg }) => ({
+    id: `button-follows-the-theme-pair-for-a-${ground}-section`,
+    why:
+      'One theme button colour cannot suit both a dark band and a white section: Alphire\'s light ' +
+      'buttons vanished on its white sections and any single choice was wrong somewhere (86bctakk0). ' +
+      'A Button following the theme must take the pair for the ground it actually sits on.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: fill },
+      themeRolePalette: SURFACE_BUTTON_PALETTE,
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button',
+    read: ['backgroundColor', 'color'],
+    series: { count: 1, everyMs: 0, read: ['backgroundColor'], selectors: { row: '.builder-preview-section' } },
+    expect(sample) {
+      const row = sample.series?.[0]?.row;
+      if (!row) return 'the row was not found, so there is no ground to measure the button against.';
+      const button = parseRgb(sample.styles.backgroundColor);
+      const label = parseRgb(sample.styles.color);
+      const behind = parseRgb(row.backgroundColor);
+      if (!button || !label || !behind) {
+        return `could not read the colours (button ${sample.styles.backgroundColor}, label ${sample.styles.color}, row ${row.backgroundColor}).`;
+      }
+      if (behind.a < 0.5) return `the row reads as ${row.backgroundColor}, see-through, so the scene is not the ${ground} ground it claims. Fix the scene.`;
+      const against = contrastRatio(button, behind);
+      if (against < 2) {
+        return `on a ${ground} row (${row.backgroundColor}) the theme button is ${sample.styles.backgroundColor} — ` +
+          `${against.toFixed(2)}:1, a button that is not there. The section is not handing its buttons the ${ground}-ground pair.`;
+      }
+      if (sample.styles.backgroundColor !== expectBg) {
+        return `the button is ${sample.styles.backgroundColor}, not the theme's ${ground}-ground button ${expectBg}.`;
+      }
+      const readable = contrastRatio(label, button);
+      return readable >= 4.5 ? null : `the label ${sample.styles.color} on ${sample.styles.backgroundColor} is ${readable.toFixed(2)}:1.`;
+    },
+  })),
+  {
+    id: 'button-on-a-theme-with-one-pair-is-unchanged',
+    why:
+      'Existing themes carry one button pair and must render exactly as before (86bctakk0): with no ' +
+      'per-ground pair, a dark row\'s button is still the plain theme button.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#0b1020' },
+      themeRolePalette: { button: '#d9e62e', buttonText: '#12294d' },
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button',
+    read: ['backgroundColor', 'color'],
+    expect(sample) {
+      if (sample.styles.backgroundColor !== 'rgb(217, 230, 46)') {
+        return `a theme with one button pair painted its button ${sample.styles.backgroundColor}, not its own #d9e62e — an existing theme changed.`;
+      }
+      return sample.styles.color === 'rgb(18, 41, 77)' ? null : `its label is ${sample.styles.color}, not the theme's #12294d.`;
+    },
+  },
+  {
+    id: 'button-on-an-outline-theme-stays-outlined-in-the-dark-section-pair',
+    why:
+      'A section hands its buttons the pair for its ground (86bctakk0) and a theme can draw its buttons ' +
+      'as outlines (86bctakhj). When both landed, the section\'s pair wrote a solid fill over the ' +
+      'theme\'s transparent one, so every outline button on a light or dark section became a block ' +
+      'again. On a dark row it must be transparent with the dark-ground colour (#ffffff) as border and label.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#0b1020' },
+      themeRolePalette: SURFACE_BUTTON_PALETTE,
+      themeTreatments: { buttonStyle: 'outline' },
+      modules: [{ type: 'button', text: 'Book a call', settings: THEME_FOLLOWING_BUTTON }],
+    },
+    selector: '.builder-preview-button-styled',
+    read: ['backgroundColor', 'borderTopColor', 'borderTopStyle', 'borderTopWidth', 'color'],
+    expect(sample) {
+      const s = sample.styles;
+      if (s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent') {
+        return `an outline-theme button on a dark row is filled with ${s.backgroundColor} — the section's button pair painted over the theme's outline style.`;
+      }
+      if (s.borderTopColor !== 'rgb(255, 255, 255)' || s.borderTopStyle === 'none' || !(parseFloat(s.borderTopWidth) > 0)) {
+        return `its border is ${s.borderTopWidth} ${s.borderTopStyle} ${s.borderTopColor}, not the dark-ground colour #ffffff.`;
+      }
+      return s.color === 'rgb(255, 255, 255)' ? null : `its label is ${s.color}, not #ffffff — unreadable on a transparent button over a dark row.`;
     },
   },
   {

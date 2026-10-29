@@ -42,6 +42,8 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/acquire-runs(\/|$)/, '/api/builder/acquire-runs$1', 'acquire-runs'],
   [/^\/api\/admin\/cell-modules(\/|$)/, '/api/builder/modules$1', 'cell-modules'],
   [/^\/api\/admin\/saved-sections(\/|$)/, '/api/builder/saved-sections$1', 'saved-sections'],
+  // Read-only: items other projects share with the active one (task 86bcu6t1c).
+  [/^\/api\/admin\/shared(\/|$)/, '/api/builder/shared$1', 'shared'],
   [/^\/api\/admin\/products(\/|$)/, '/api/builder/products$1', 'products'],
   [/^\/api\/admin\/themes(\/|$)/, '/api/builder/themes$1', 'themes'],
   [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls']

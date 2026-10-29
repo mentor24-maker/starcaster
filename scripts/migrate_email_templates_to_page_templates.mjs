@@ -1,8 +1,19 @@
 #!/usr/bin/env node
 import process from 'node:process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+
+// Compiled code older than its source once crashed an import with no word as
+// to why (86bctakmc). Rebuild it — or stop, naming the command — first.
+try {
+  require('./lib/build_inputs.cjs').ensureBuildCurrent(fileURLToPath(new URL('..', import.meta.url)), ['builder-template']);
+} catch (err) {
+  console.error(err.message);
+  process.exit(1);
+}
+
 const { sbQuery, tableConfig, isConfigured } = require('../lib/supabase.js');
 const { migrateLegacyEmailBlocksToDocument } = require('../lib/builder/migrate-from-legacy.js');
 const { serializeBuilderDocument } = require('../lib/builder/document.js');

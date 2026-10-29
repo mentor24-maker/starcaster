@@ -146,7 +146,10 @@ if (mode === 'check') {
 
   if (recordedBody === liveBody) {
     const tables = (liveBody.match(/^CREATE TABLE /gm) || []).length;
-    process.stdout.write(`\n  ${green('Production matches the record.')} ${dim(`(${tables} tables)`)}\n\n`);
+    process.stdout.write(`\n  ${green('Production matches the record.')} ${dim(`(${tables} tables)`)}\n`);
+    // Not "every docs/SQL file is applied": a file nobody ran changes neither
+    // production nor this record, so it matches perfectly (ticket 86bcu8ftx).
+    process.stdout.write(`  ${dim('This does not say every docs/SQL file was applied — `npm run sql:unapplied` answers that.')}\n\n`);
     process.exit(0);
   }
 

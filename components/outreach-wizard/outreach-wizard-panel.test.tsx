@@ -71,6 +71,7 @@ let posts: Array<{ path: string; body: any }> = [];
 let activeProject = "proj_doe";
 let failNext = "";
 let calls = 0;
+let lessonReads: string[] = [];
 let setActivePage: ReturnType<typeof vi.fn>;
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -79,6 +80,7 @@ beforeEach(() => {
   activeProject = "proj_doe";
   failNext = "";
   calls = 0;
+  lessonReads = [];
   posts = [];
   redditAccount = { ...redditAccount!, expectedAccount: "" };
   window.localStorage.clear();
@@ -94,6 +96,12 @@ beforeEach(() => {
           return { ok: true, data: { session: { id: "bvs_9" }, pass: "P", viewerUrl: "wss://mini.example/live/live" } };
         }
         return { ok: true, data: {} };
+      }
+      // Outreach wizard 13/19: the Learn stage reads its own lessons. `calls`
+      // counts overview reads only.
+      if (path.startsWith("/api/outreach/lessons?")) {
+        lessonReads.push(path);
+        return { ok: true, data: { channel: "x", lessons: [], score: null, scoreError: "" } };
       }
       calls += 1;
       if (path !== "/api/outreach/overview") throw new Error(`unexpected ${path}`);
@@ -177,6 +185,20 @@ describe("OutreachWizardPanel", () => {
     expect(setActivePage).toHaveBeenCalledWith("engageYoutubeOutreachPage");
   });
 
+  it("every stage but the open one has a pencil back to its screen — done stages included (86bcuar8y)", async () => {
+    await mount();
+    await act(async () => tab("Substack").click());
+    const rows = stages();
+    const pencil = (row: HTMLLIElement) => row.querySelector<HTMLAnchorElement>(".outreach-wizard-stage-edit");
+    // The open stage (conversations) has its button and no pencil; every other row has one.
+    expect(rows.map((r) => !!pencil(r))).toEqual([true, true, false, true, true]);
+    const done = pencil(rows[1])!;
+    expect(done.getAttribute("href")).toBe("#page=acquireSubstackPage");
+    expect(done.getAttribute("aria-label")).toBe("Go to creators");
+    await act(async () => done.click());
+    expect(setActivePage).toHaveBeenCalledWith("acquireSubstackPage");
+  });
+
   it("remembers the last channel per viewer, and survives storage that throws", async () => {
     await mount();
     await act(async () => tab("Reddit").click());
@@ -208,6 +230,14 @@ describe("OutreachWizardPanel", () => {
     await act(async () => {});
     expect(calls).toBe(2);
     expect(stages()[0].textContent).toContain("proj_other:");
+  });
+
+  it("the Learn stage shows its lessons on the wizard itself, for the channel picked (13/19)", async () => {
+    await mount();
+    const learn = container!.querySelector('[data-stage="learn"]')!;
+    expect(learn.querySelector("[data-learn]")?.getAttribute("data-learn")).toBe("youtube");
+    expect(lessonReads).toEqual(["/api/outreach/lessons?channel=youtube"]);
+    expect(learn.textContent).toContain("No lessons for YouTube yet.");
   });
 });
 
@@ -300,5 +330,33 @@ describe("Connect: the account each channel posts as (Outreach wizard 2/19)", ()
     const after = container!.querySelector("[data-after-window]");
     expect(after?.textContent).toContain("Signed in as Exotic-Break-7850. Post as this account?");
     delete (window as any).WebSocket;
+  });
+});
+
+describe("YouTube's Find creators (Outreach wizard 15/19)", () => {
+  it("works the creator list on this screen when the stage is inline, and nowhere else", async () => {
+    await mount();
+    expect(container!.querySelector("[data-yt-creators]")).toBeNull();
+
+    const original = overviewFor;
+    const inlineOverview = (project: string): OutreachOverview => {
+      const o = original(project);
+      const yt = o.channels[0];
+      yt.stages[1] = { ...yt.stages[1], next: null, inline: true };
+      return o;
+    };
+    const api = (window as any).App.api;
+    (window as any).App.api = async (path: string, options?: RequestInit) => {
+      if (path === "/api/outreach/overview") return { ok: true, data: inlineOverview(activeProject) };
+      if (path === "/api/outreach/youtube/creators") return { ok: true, data: { creators: [], keywords: { keywords: [], source: "none" } } };
+      return api(path, options);
+    };
+    act(() => root!.unmount());
+    container!.remove();
+    await mount();
+    const stage = container!.querySelector('[data-stage="creators"]')!;
+    expect(stage.querySelector("[data-yt-creators]")).not.toBeNull();
+    expect(stage.textContent).toContain("No channels found yet.");
+    expect(stage.querySelector("a.btn")).toBeNull();
   });
 });

@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT } from '../reddit-comments/reddit-comments-panel';
 import SignInWindow from './sign-in-window';
+import YoutubeCreators from './youtube-creators';
+import SubstackConversations from './substack-conversations';
+import RedditSubreddits from './reddit-subreddits';
+import RedditConversations from './reddit-conversations';
+import YoutubeConversations from './youtube-conversations';
+import LearnControls from './learn-controls';
 
 export { PROJECT_SWITCH_EVENT };
 
@@ -21,8 +27,19 @@ export { PROJECT_SWITCH_EVENT };
  * channel until its account is chosen. Its Connect button opens the Mini's
  * browser inside this screen so Dane can sign in there (Outreach wizard 6/19,
  * task 86bcrmbfb, ./sign-in-window.tsx). Every other stage's one button opens
- * the existing screen for that step (slice 19 brings the work inside). The
- * first stage that is not done is open and highlighted.
+ * the existing screen for that step (slice 19 brings the work inside), except
+ * Substack's Find conversations, which lists the ranked Notes right here
+ * (Outreach wizard 14/19, ./substack-conversations.tsx), Learn, whose
+ * lessons are read and changed right here (Outreach wizard 13/19, task
+ * 86bcrmbpm, ./learn-controls.tsx), and YouTube's Find creators, whose
+ * channel list is worked right here (Outreach wizard 15/19, task 86bcrmbrf,
+ * ./youtube-creators.tsx), YouTube's Find conversations, whose ranked
+ * comments are worked right here (Outreach wizard 16/19, task 86bcrmbtn,
+ * ./youtube-conversations.tsx), and Reddit's Find creators (the subreddits the
+ * Mini watches) and Find conversations (the ranked posts it found) —
+ * Outreach wizard 18/19, task 86bcrmbwm, ./reddit-subreddits.tsx and
+ * ./reddit-conversations.tsx. The first stage that is not done is open and
+ * highlighted.
  *
  * The shape is the Engage panels' on purpose: it (re)loads when its page is
  * SHOWN and when the project is SWITCHED, and drops a reply that lands after a
@@ -43,6 +60,8 @@ export type OutreachStage = {
   state: StageState;
   sentence: string;
   next: { label: string; page: string } | null;
+  /** The stage is worked on this screen, so it names no other screen (Outreach wizard 15/19). */
+  inline?: boolean;
 };
 
 /** The Connect stage's account question (lib/outreachOverview.js accountView). */
@@ -284,6 +303,21 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
   );
 }
 
+function EditIcon(): React.ReactElement {
+  // App.ACTION_ICONS.edit (public/js/core.js).
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 20h9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Every stage but the open one: a pencil at the right edge that opens the same
+ * screen its button would. Without it a stage that is already done — approved
+ * and rejected replies included — had no way back from here (task 86bcuar8y).
+ */
 function StageRow({ stage, index, open, children }: {
   stage: OutreachStage;
   index: number;
@@ -313,6 +347,18 @@ function StageRow({ stage, index, open, children }: {
           </div>
         ) : null}
       </div>
+      {!open && stage.next ? (
+        <a
+          className="btn tiny-btn icon-btn outreach-wizard-stage-edit"
+          href={`#page=${stage.next.page}`}
+          title={stage.next.label}
+          aria-label={stage.next.label}
+          data-stage-edit={stage.key}
+          onClick={(e) => openPage(e, stage.next!.page)}
+        >
+          <span className="icon-btn-glyph"><EditIcon /></span>
+        </a>
+      ) : null}
     </li>
   );
 }
@@ -433,6 +479,27 @@ export default function OutreachWizardPanel(): React.ReactElement {
               <StageRow key={s.key} stage={s} index={i} open={i === openIndex}>
                 {s.key === 'connect' ? (
                   <ConnectControls key={current.key} channel={current} onChanged={() => void load()} onCheckAsked={startCheckPoll} />
+                ) : null}
+                {s.key === 'creators' && current.key === 'youtube' && s.inline ? (
+                  <YoutubeCreators onChanged={() => void load()} />
+                ) : null}
+                {/* Outreach wizard 14/19: Substack's Notes worth replying to, ranked. */}
+                {s.key === 'conversations' && current.key === 'substack' && s.state !== 'not_started' ? (
+                  <SubstackConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                ) : null}
+                {/* Outreach wizard 18/19: Reddit's watched subreddits and the posts found in them. */}
+                {s.key === 'creators' && current.key === 'reddit' && s.inline ? (
+                  <RedditSubreddits onChanged={() => void load()} />
+                ) : null}
+                {s.key === 'conversations' && current.key === 'reddit' && s.inline && s.state !== 'not_started' ? (
+                  <RedditConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                ) : null}
+                {/* Outreach wizard 16/19: comments on approved channels' newest videos, ranked. */}
+                {s.key === 'conversations' && current.key === 'youtube' && s.inline && s.state !== 'not_started' ? (
+                  <YoutubeConversations version={overview?.generatedAt} onChanged={() => void load()} />
+                ) : null}
+                {s.key === 'learn' && s.state !== 'cannot_tell' ? (
+                  <LearnControls key={current.key} channel={current.key} label={current.label} onChanged={() => void load()} />
                 ) : null}
               </StageRow>
             ))}

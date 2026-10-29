@@ -23,12 +23,15 @@
  * USAGE (always through Doppler so the cloud credentials come along):
  *   doppler run --config prd -- node scripts/site_import_worker.mjs --job <id>
  *   doppler run --config prd -- node scripts/site_import_worker.mjs --watch
+ *   doppler run --config prd -- node scripts/site_import_worker.mjs --drain
  *   doppler run --config prd -- node scripts/site_import_worker.mjs --stage capture --job <id>
  *   doppler run --config prd -- node scripts/site_import_worker.mjs --reclaim-stale 30
  *
  * FLAGS
  *   --job <id>                run one specific job
  *   --watch                   claim queued jobs in a loop (Ctrl+C to stop)
+ *   --drain                   claim queued jobs until none is left, then exit —
+ *                             the SCHEDULED shape (see "THE SCHEDULE" below)
  *   --stage <name>            re-run one stage (capture | assets | normalize); needs --job
  *   --reclaim-stale <min>     free claims of jobs untouched for <min> minutes, then exit
  *   --client-authorized <ref> proceed past robots.txt; <ref> (client name or
@@ -41,6 +44,19 @@
  *                             budget cut short: queue a fresh job, run with
  *                             bigger caps.
  *   --allow-local             permit a localhost database (local testing only)
+ *
+ * THE SCHEDULE (ticket 86bctakm0)
+ * Until 2026-10-27 this ran only when somebody started it, and nothing said
+ * nobody had: alphire.agency sat queued for 14 days. Now launchd runs
+ * `--drain` every five minutes on the machine that owns the
+ * `site-import-worker` role (scripts/install_site_import_worker.sh).
+ * Drain rather than --watch because each pass starts from the code on disk —
+ * a --watch process left running for weeks keeps importing with whatever code
+ * it started with. launchd never starts a second copy while one is running,
+ * so a long import simply delays the next pass. Each time a drain has read the
+ * queue it records a heartbeat (lib/nodeHeartbeat.js), so a schedule that
+ * stops firing shows up on the roll call; a job left queued over an hour is
+ * named on the bus by `npm run site-import-watch`.
  *
  * SAFETY
  * - Writes ONLY app_site_import_* tables and the job's own Blob namespace;
@@ -130,6 +146,15 @@ if (/localhost|127\.0\.0\.1/.test(process.env.SUPABASE_URL) && !flag('--allow-lo
 if (!process.env.BLOB_READ_WRITE_TOKEN) {
   console.error('BLOB_READ_WRITE_TOKEN is missing — captures upload to Vercel Blob.');
   console.error('Run through Doppler: doppler run --config prd -- node scripts/site_import_worker.mjs ...');
+  process.exit(1);
+}
+
+// Compiled code older than its source once crashed an import with no word as
+// to why (86bctakmc). Rebuild it — or stop, naming the command — first.
+try {
+  require('./scripts/lib/build_inputs.cjs').ensureBuildCurrent(ROOT, ['site-import', 'builder-template']);
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 
@@ -656,6 +681,48 @@ async function runJob(jobId, opts) {
   }
 }
 
+const ROLE = 'site-import-worker';
+
+/**
+ * One scheduled pass: claim and run queued jobs until there are none, then
+ * exit. Only the machine that owns the role may drain — a by-hand --job or
+ * --watch run is deliberately not gated, exactly as before.
+ *
+ * Returns the exit code. A job that FAILS is recorded on its own row (the
+ * screen shows it) and does not fail the pass; a pass that cannot read the
+ * queue throws, exits 1 and records no beat, which is what makes the beat mean
+ * something.
+ */
+async function drainQueue(opts) {
+  const { checkRole } = require('./lib/nodeRoles.js');
+  const { recordBeat } = require('./lib/nodeHeartbeat.js');
+  const verdict = checkRole(ROLE);
+  if (verdict.verdict === 'other-node') {
+    log(verdict.message.split('\n')[0]);
+    return 0;
+  }
+  if (!verdict.owned) {
+    // 'unidentified' must be loud: skipping quietly is how a queue waits two weeks.
+    console.error(verdict.message);
+    return 1;
+  }
+  const beat = () => {
+    const res = recordBeat({ role: ROLE, node: verdict.node.name });
+    if (!res.ok) log(`could not record the heartbeat (${res.why}) — the import itself is unaffected`);
+  };
+  let ran = 0;
+  for (;;) {
+    const claimed = must(await store.claimNextQueued(CLAIMED_BY), 'claim next');
+    beat();
+    if (!claimed) break;
+    log(`drain: claimed ${claimed.id} (${claimed.sourceUrl})`);
+    await runJob(claimed.id, { ...opts, alreadyClaimed: true, stageOnly: null });
+    ran += 1;
+  }
+  log(`drain: queue empty — ${ran} job(s) run this pass`);
+  return 0;
+}
+
 async function main() {
   log(`site-import worker starting (claimed_by ${CLAIMED_BY}, env: ${envSource})`);
 
@@ -698,6 +765,10 @@ async function main() {
     process.exit(ok ? 0 : 1);
   }
 
+  if (flag('--drain')) {
+    process.exit(await drainQueue(opts));
+  }
+
   if (flag('--watch')) {
     log(`watching for queued jobs (poll every ${WATCH_IDLE_MS / 1000}s, Ctrl+C to stop)`);
     for (;;) {
@@ -710,7 +781,7 @@ async function main() {
     }
   }
 
-  console.error('Nothing to do. Pass --job <id>, --watch, or --reclaim-stale <minutes>.');
+  console.error('Nothing to do. Pass --job <id>, --watch, --drain, or --reclaim-stale <minutes>.');
   process.exit(1);
 }
 
