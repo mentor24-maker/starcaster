@@ -1,3 +1,20 @@
+## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
+
+When one of Dane's projects shares its page templates with another, the
+receiving project's **Builder › Templates** page now shows them under
+**Shared with this project**, each saying which project it came from and how
+many shared sections (header, menu, footer) it uses, with an **Import** button.
+A template only *points at* its header and footer, so copying the template
+alone would have left those pointing at the other project and they would have
+vanished from every page made from it. Import therefore copies those sections
+into this project too and points the copy at them — it works even if the other
+project does not share its sections separately. A clashing name becomes
+"(2)", nothing is overwritten, the other project is only read, and if anything
+fails part-way the import is undone rather than left half-made. The ticket
+pointed at a template list that only appears inside the editor; the group is on
+the page Dane actually opens, under the existing table, which reloads after an
+import.
+
 ## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
 
 When one of Dane's projects shares its saved sections with another, the
