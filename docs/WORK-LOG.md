@@ -11,6 +11,345 @@ don't use layers look exactly as they did before (the before/after
 screenshots matched pixel for pixel), and saving a page no longer quietly
 resets a gradient's angle.
 
+## 2026-10-29 — Site Import now sees the decorations a stylesheet draws around a box (#906)
+
+Many sites draw decorations with a stylesheet trick instead of with real page
+elements: an invisible extra layer in front of or behind a box. Alphire's
+home page draws its starfield, its glowing ring and its thin cyan line that
+way, and Site Import never looked at those layers, so they were invisible to
+it and the fidelity report could only say "cannot tell". The capture now
+reads those layers on every visible element and keeps the ones that actually
+paint something (a gradient, a picture, a fill, a border, a shadow), with
+where each one sits; empty helper layers are skipped, and any picture they
+paint is downloaded like other images. The fidelity report lists each one in
+plain words, such as "a ring in #00d9ff with a glow". On Alphire it found
+nine, four of them in the hero, and capturing the page took no measurably
+longer (7.8 s against 8.0 s). Imports made before this still say "cannot
+tell", because they really never looked. Rebuilding these decorations in the
+Builder is the next step, not this one.
+## 2026-10-29 — Imported headings keep their thin lettering, spacing and coloured words (#907)
+
+On the Alphire import, the thin home heading came out heavy and black, and
+every cyan accent word ("Human Energy", "to Impact") came out black. Two
+reasons, both measured on the real import before anything was changed. The
+import's theme uses the most common heading weight on the whole site, and
+most of Alphire's headings are bold, so the thin ones were made bold too. And
+the cyan was recorded when the site was captured, then dropped at the next
+step, which kept only the heading's own styling and not the words inside it.
+Now a heading or paragraph keeps its own weight and letter spacing wherever
+they differ from the theme, and a word inside it keeps its own colour, weight
+or italic wherever it differs from the words around it. Text that already
+looks like the theme is written exactly as before, so on the Delray site only
+2 of 185 text blocks change. One limit is on purpose: a heading's own colour
+is still left to the theme, because many of Alphire's headings are white on
+dark bands the import doesn't reproduce yet, and copying white would make
+them invisible. Until the dark-page fix lands, the cyan words sit on white.
+## 2026-10-29 — Every picture and PDF a site import downloads now shows up in Assets (#909)
+
+A site import downloads every picture and document it sees on the original
+site, but only the ones a page actually used were being added to the
+project's Assets. The rest sat in a back-room folder no screen shows: Alphire's
+import downloaded 48 files and Assets showed 10, with the hero banner and both
+headshots missing. Applying an import now also lists every other downloaded
+picture and PDF in Assets, marked "Not placed on any page", so it can be found
+and used. Fonts stay out (the font library owns them), several sizes of one
+picture become one entry (the largest), running the import again adds nothing
+twice, and each new entry is checked to belong to the right project. For
+Alphire that means 7 new entries once the import is re-applied.
+## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
+
+On the Acquire screen, every X or Reddit search is supposed to leave a run in
+the history list, so you can reopen it later. Those runs were saved to files on
+the server, and the live site cannot write files, so it skipped the save without
+saying so. Every search reported "saved", nothing was kept, and the history on
+the live site was always empty. The runs now go into two database tables, the
+same place the YouTube history already lives, kept separate per project. If the
+database cannot save a run, the screen now says so instead of pretending it
+worked. The tables need one SQL file run in Supabase
+(`acquire_x_reddit_runs_setup.sql`); until then the history shows an error
+naming the missing table, and the daily unapplied-SQL check keeps reminding.
+## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
+
+A picture in the Builder could only have rounded corners, measured in pixels.
+So when Site Import copied alphire.agency, whose hero picture is a soft,
+slightly lopsided oval, it had nowhere to put that shape and the picture came
+out a plain rectangle. The Image module's Frame settings now start with
+**Shape**: Rounded (the old corners, unchanged for every existing picture),
+Square, Circle (the picture is cropped to fill a perfect circle), or Custom
+(any corner curve, including the lopsided oval kind). Site Import now reads
+each picture's shape from the original site and fills this in. It also stops
+giving square pictures the Builder's default 18px rounded corners, which
+every import had been adding without anyone asking.
+## 2026-10-29 — Site Import places pictures a site paints onto an empty box (#905)
+
+Some websites show a picture by painting it as the background of an empty
+box, rather than as an ordinary picture. Site Import downloaded those
+pictures but never put them anywhere, because it only turned real content
+into page pieces, and an empty box looked like packaging. That is why
+Alphire's hero picture went missing. Now an empty box with a background
+picture (at least 40 by 40 pixels) is imported as an Image in its place, and
+the picture is copied into the project's Assets. Empty boxes with no picture
+still produce nothing, so no blank blocks appear.
+## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
+
+Alphire's home page is near-black, but 15 of its 17 pages are white, so the
+theme an import builds for the site is white, and the home page came across
+white with its black theme text. The importer now notes what each page's
+words actually sit on. When that differs from the theme, the imported page
+gets its own background colour plus text, heading and link colours that are
+readable on it, taken from the site's own colours where they read. Only words
+sitting straight on the page count. A site with a black edge behind a white
+content column (Strands Movie) therefore stays a white page. A page that
+paints its own background now keeps its own text colours even when it follows
+a named theme. No existing page changes because of that: in production, the
+one themed page with its own background stores no text colours. Checked
+against the real Alphire capture: the home page goes dark, the other 16 stay
+white.
+## 2026-10-29 — Menus that follow the theme's colours no longer vanish into a white bar (#910)
+
+Alphire's imported Top Menu showed as an empty white bar. The links were there,
+painted white: a menu with no Text Color of its own uses the theme's "header
+text" colour, which Alphire's theme set to white because its header is black.
+But the bar behind the links was always see-through, so the black header colour
+was never painted anywhere and the white links sat on the white page. Now, when
+a menu leaves its text colour to the theme, it leaves its bar colour to the
+theme too, so the two always arrive together: Alphire gets a black bar with
+white links. A menu that picked its own text colour (every Dane of Earth menu
+does) is untouched, and so is any site whose theme has no header colour. Two
+checks in a real browser now measure both halves, and each was broken on
+purpose to prove it fails.
+## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
+
+The Mini's sign-in window has an outside check that, among other things, makes
+sure the live-picture feed refuses a stranger. That line always said FAIL, even
+on a perfectly working door, so a correct install could never pass and the one
+line that would catch pictures leaking to a stranger meant nothing. Two causes,
+one hiding the other: the test key it sent was the wrong length, so the door
+rejected the request before checking anything; and once that was fixed, the
+check read curl's "timed out" message as the door's answer, because that
+message arrives first. Both are fixed, the tests now behave like the real door
+so either mistake would fail them, and run from the MacBook the line reads PASS.
+
+## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
+
+When one of Dane's projects shares its page templates with another, the
+receiving project's **Builder › Templates** page now shows them under
+**Shared with this project**, each saying which project it came from and how
+many shared sections (header, menu, footer) it uses, with an **Import** button.
+A template only *points at* its header and footer, so copying the template
+alone would have left those pointing at the other project and they would have
+vanished from every page made from it. Import therefore copies those sections
+into this project too and points the copy at them — it works even if the other
+project does not share its sections separately. A clashing name becomes
+"(2)", nothing is overwritten, the other project is only read, and if anything
+fails part-way the import is undone rather than left half-made. The ticket
+pointed at a template list that only appears inside the editor; the group is on
+the page Dane actually opens, under the existing table, which reloads after an
+import.
+
+## 2026-10-28 — A database change that ships with code but is never run now raises the alarm (#902)
+
+When code merges it goes live by itself, but its database change waits for
+Dane to run it in Supabase by hand, and nothing ever checked that he had been
+asked. That is how Outreach and the sign-in window broke on the live site on
+28 October: sixteen files had merged and never been run, some for two weeks.
+A new check, `npm run sql:unapplied`, compares every file in `docs/SQL` with
+what production actually has. It runs every ten minutes on the Mini and posts
+each missing file to the bus once a day, with its link, until it has been run.
+The old `schema:check` could not catch this, because it compares production
+with a copy of itself. The audit of that day's sweep found four old files
+that are retired or unused (now listed with their reasons, and one of them
+should never be run), one that would fail if run, which was rewritten, and
+ten that still need running, three of them merged today.
+## 2026-10-28 — Reddit finds conversations on its own (#898)
+
+Until now every Reddit post Dane answered had to be found by hand and pasted
+in as a link. Now he picks subreddits once, on Engage › Outreach › Reddit: a
+"Find subreddits for my topics" button asks the AI to suggest communities from
+his canon and keywords, and he approves or rejects each one. Every four hours
+the Mini opens two of those subreddits in its signed-in browser, reads the new
+and rising posts and the subreddit's rules, and keeps the posts that match his
+subjects. They appear under Find conversations, best first, each saying why it
+ranked, showing the strongest comments and who wrote them, and quoting the
+subreddit's self-promotion rule when it has one. One click writes three reply
+options (to the post or to a comment); Skip asks why; anyone in the thread can
+be saved as a contact. If the Mini is signed out of Reddit, the screen says so
+instead of showing "0 found". It needs two new database tables (SQL hand-off
+on the pull request) and its schedule installed on the Mini after merge.
+Review caught three slips before it shipped, now fixed: a reply to one comment
+used to block replying to the post itself, clicking "Reply to this comment"
+twice paid for two drafts, and the "signed out" warning stayed up for hours
+after the Mini was signed back in.
+## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
+
+When one of Dane's projects shares its saved sections with another, the
+receiving project now sees them in **Builder › Modules** under a new group,
+**Shared with this project**. Each one says which project it came from and has
+one button, **Import**. Import makes this project its own copy, which appears in
+its Saved Sections at once and can then be used and edited like any other.
+Changes in either project never reach the other, the source project is never
+written to, and pictures keep pointing where they already did. If the name is
+already taken, the copy is called "Header (2)" rather than replacing anything.
+If the other project has stopped sharing in the meantime, Import says so in a
+sentence and copies nothing. Like #894, it needs that ticket's sharing table
+created in the live database before it shows anything there. On 2026-10-28 it
+was not there yet.
+## 2026-10-28 — A project can choose which other projects see its sections, templates and themes (#899)
+
+Each project's settings now has a **Share with** row just above Import /
+Export. Open it and you get two lists of tick boxes: on the left, *what* to
+share (saved sections, page templates, themes); on the right, *which* of your
+other projects may see them. Tick, press Save, and every ticked kind is shared
+with every ticked project. The row's summary line says what is shared at a
+glance ("Saved sections → 1 project", or "Not shared with any project").
+Nothing is copied — the other project only sees the items and imports its own
+copy later, which comes in the next tickets. Only a project's owner can change
+it; anyone else sees the lists greyed out with that reason.
+## 2026-10-28 — Import a theme another project shares with you (#901)
+
+When one of Dane's projects shares its themes with another, the receiving
+project's Themes page now has a **Shared with this project** list at the
+bottom. It shows each theme's name, which project it came from, its colours
+and its fonts, with an **Import** button. Import makes this project its own
+copy. The copy is never made the default theme, so importing can't change
+how the live site looks, and the project it came from is never touched. If a
+theme with that name already exists here, the copy is called "(2)" instead of
+replacing it. If the other project stops sharing, the list empties and any
+copies already made stay.
+
+## 2026-10-28 — YouTube finds the comments worth replying to (#897)
+
+To reply to one particular YouTube comment, Dane used to need its comment id,
+a long code he had to dig out and type in by hand. Now, every three hours,
+Starcaster reads the newest videos (last two weeks) of every channel he
+approved, plus their comments, and ranks the comments. A question nobody has
+answered, a comment touching his canon, and fresh, liked comments rank
+highest, and each one says why in a sentence. On the Outreach screen's
+YouTube "Find conversations" step, they appear grouped by video, with the
+commenter's name and channel link. **Write replies** fills in the comment id
+by itself and writes three replies to choose from. There is also
+**Comment on the video**, **Skip** (asks why) and **Save as contact**. It
+needs two SQL files run on the live database before it shows anything there.
+One is the creator list from #888, which was never run.
+## 2026-10-28 — Projects can now share sections, templates and themes with each other, behind the scenes (#894)
+
+Dane wants one project to be able to offer its saved sections, page templates
+and themes to his other projects, without copying anything until somebody
+presses Import. This is the foundation: a new database table that records
+"Project A shares themes with Project B", and the server side that reads and
+writes it. Only an owner of a project can change what it shares, and only
+with projects that person already belongs to, so no client can ever see
+another client's site names. A project nothing is shared with sees nothing,
+and taking a tick away makes the items vanish from the other project at once.
+Sections marked Private are never shared. There is no screen yet; the "Share
+with" panel and the Import buttons are the next tickets. The table has to be
+created in the live database once before any of it works there.
+## 2026-10-28 — The sign-in window says why when the Mini never answers, and the outside check tests Dane's MacBook's route (#895)
+
+Clicking Connect on the MacBook left the window on "Opening the Mini's browser…"
+forever. The cause was the new Tailscale access rule: it lets Dane's own devices
+reach the Mini only on three ports, and the window's picture feed uses a fourth
+(443), so the MacBook's connection was silently dropped. The fix there is one
+more port in the rule, a change in the Tailscale console. This change makes the
+window give up after 30 seconds and say, in plain words, that Tailscale is the
+likely cause; and the Mini's outside check now tries the window's route the way
+a computer with Tailscale on does, so this cannot hide again.
+
+## 2026-10-28 — YouTube gets a list of creators to approve or reject (#888)
+
+The Outreach screen's YouTube "Find creators" step used to say there was no
+list of creators — videos could only be added one link at a time. Now a
+**Find channels** button searches YouTube for Dane's subjects (starting from
+the Substack Miner's keywords), and shows each channel as a card with its
+picture, subscribers and three newest videos. Starcaster suggests Approve or
+Reject for each one, with a reason, from his past YouTube decisions and his
+canon; until he has decided a handful himself, every suggestion is marked low
+confidence. **Agree** takes the suggestion in one click, and Approve or Reject
+asks why, the same way the Substack Miner does. If YouTube's daily allowance
+runs out, the screen says so and when it comes back, rather than "nothing
+found". It needs one SQL file run before release. It also fixes a crash in
+Acquire's YouTube video list.
+## 2026-10-28 — Site Imports are picked up on their own, and a stuck one is named (#885)
+
+When Dane queued an import of alphire.agency, it sat waiting for 14 days.
+Nothing ever ran the program that does the importing. It only ran when somebody
+typed a command, and nothing on the screen or the bus said nobody had. A second
+import, wavecenter.com, turned out to have been waiting 15 days the same way.
+The Mac Mini can now run that program every 5 minutes. It picks up whatever is
+queued and rebuilds the import engine from the latest code first. That second
+step matters: the Mini's copy had no built engine at all. If an import still
+waits more than an hour, the Mini says so once on the bus, naming the site.
+The Site Import screen now shows how long a queued job has waited. After an
+hour, it says plainly that the worker is not running. The schedule is switched
+on with one command on the Mini once this is merged.
+
+## 2026-10-28 — A report that lists what a site import lost, section by section (#892)
+
+Until now the only way to know what a site import got wrong was to put the
+original page and the imported one side by side and look. A new report does it
+for you: for every imported page it shows each section of the original next to
+a photo of the same section as imported, and lists underneath everything the
+import did not carry over, sorted into seven plain categories — background,
+decorative layers, shadows and glow, shapes, column layout, text styling, and
+files that were downloaded but never put on the page. Run against the Alphire
+import, it named the hero's glowing dark background as dropped, the hero
+picture as downloaded but never placed, the two-column hero as squashed into
+one, and the thin 300-weight heading as shown at the theme's 700. Where it
+cannot look — decorative layers the capture never records, or a page it could
+not photograph — it says CANNOT TELL instead of pretending nothing was lost.
+Every other fix in the site-import fidelity work will be measured with it.
+## 2026-10-28 — Site Import notices when its compiled code is out of date (#889)
+
+The Site Import tools run from a compiled copy of the import engine. On
+Oct 27 that copy was two weeks older than the code calling it, and the Alphire
+import crashed with a meaningless error until somebody thought to rebuild. Now
+every build writes down a fingerprint of each source file it used, and the
+import worker, page mapper, reconciler and the two page-migration scripts
+compare those fingerprints with the files on disk before they start. If
+anything changed, they rebuild on their own and print one line saying so; if
+the rebuild fails, they stop and name the command to run instead of crashing.
+## 2026-10-28 — A single heading can use a library font or any Google font (#890)
+
+The Font setting on a Heading module only listed the eleven fonts Starcaster
+started with, so a font from the Font Library (Orbitron, say) or a Google font
+could go on a whole theme but never on one heading. The setting now opens the
+same font window the theme uses: the built-ins, your favourites, the whole
+library, and "Use a Google font by name…". The page already knew how to load
+and draw a font chosen this way; only the setting was missing it. Headings
+already on a built-in font are unchanged.
+## 2026-10-28 — Substack now finds Notes to reply to on its own, ranked with a reason each (#887)
+
+Substack's two readers, one for approved writers' own Notes and one for Notes
+matching Dane's keywords, only ever ran when an agent session typed a
+command, so 17 approved writers had no Notes read. Now the first runs every
+two hours on Vercel, and the second runs every six hours on the Mac Mini
+(which has the signed-in browser it needs), followed by the Miner's
+Approve-or-Reject suggestions for any new writers it found. On Engage ›
+Outreach › Substack, **Find conversations** now lists what they found, best
+first, each with its writer, a link to their profile, and one sentence on
+why it ranked there: an approved writer or a keyword, how recent, which
+canon words it uses, and how many replies it already has. Each Note has
+**Write replies** (three options, ready on the Notes screen), **Skip** (asks
+why) and, for a writer a keyword found, **Add writer**. If a writer could
+not be read, the stage says "Cannot tell" and names them, rather than
+showing an empty list as "0 found". After merge, the Mini's schedule is
+installed with one script from its main folder. The six-hourly search takes
+one keyword per pass and moves to the next only after a pass that actually
+searched, so a keyword can no longer get stuck on the overnight slot and never
+be searched; and a pass that searched nothing records no "all is well" beat,
+so a schedule that never searches shows up as stale instead of healthy.
+## 2026-10-28 — An imported site's theme can be made on its own (#884)
+
+The theme a Site Import captures (the original site's colours, fonts and
+button style) could only be made by re-running the whole page import. That
+rebuilt every page just to get a theme, which is what happened to Alphire's
+17 pages on 2026-10-27. The Site Import screen now has a **Create theme from
+this import** button. It first shows the colours it found and any it replaced
+for readability, then saves them as a new theme without touching a single
+page. A tick box decides whether it also becomes the site's default theme. It
+never overwrites an existing theme: a second one is named "alphire 2" and
+leaves "alphire 1" alone. The same thing is available from the terminal as
+`--theme-only`, which also checks that no page changed.
 ## 2026-10-27 — Buttons can have one colour on light sections and another on dark ones (#883)
 
 A theme used to have a single button colour, so on a site like Alphire's,

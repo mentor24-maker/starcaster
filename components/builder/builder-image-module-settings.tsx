@@ -1,5 +1,6 @@
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
+import { IMAGE_SHAPE_KEY, IMAGE_SHAPE_OPTIONS, IMAGE_SHAPE_RADII_KEY, normalizeImageShape } from "@/lib/image-shape";
 import {
   DEFAULT_IMAGE_EFFECT_BOUNCE_HEIGHT,
   DEFAULT_IMAGE_EFFECT_DELAY,
@@ -367,6 +368,37 @@ export function BuilderImageModuleSettings({
       {
         title: "Frame",
         strips: [
+          /*
+           * SHAPE (task 86bctde2b). Rounded is the Radius below, exactly as
+           * every image already had it; Circle squares the frame and crops
+           * the picture to fill it; Custom takes any CSS border-radius of
+           * px/% lengths — elliptical ones too, which is what Site Import
+           * writes for a picture the original site drew as an organic blob.
+           * Arbitrary clip-path polygons are out of scope. First on Frame by D9:
+           * the shape decides what every other frame setting is drawn around.
+           */
+          [
+            {
+              key: IMAGE_SHAPE_KEY,
+              label: "Shape",
+              width: "select-sm",
+              control: "select",
+              fallback: "",
+              options: IMAGE_SHAPE_OPTIONS,
+              rendersVia: "getImageModuleStyle"
+            }
+          ],
+          [
+            {
+              key: IMAGE_SHAPE_RADII_KEY,
+              label: "Corner Radii",
+              width: "text-md",
+              control: "text",
+              placeholder: "50% 45% 52% 48% / 48% 52%",
+              visibleWhen: (settings) => normalizeImageShape(settings[IMAGE_SHAPE_KEY]) === "custom",
+              rendersVia: "getImageModuleStyle"
+            }
+          ],
           [
             {
               key: "borderThickness",
@@ -396,6 +428,8 @@ export function BuilderImageModuleSettings({
               max: 80,
               step: 5,
               fallback: "18",
+              // Only Rounded reads it; the other shapes set their own corners.
+              visibleWhen: (settings) => !normalizeImageShape(settings[IMAGE_SHAPE_KEY]),
               rendersVia: "getImageModuleStyle"
             }
           ],

@@ -304,6 +304,7 @@ App.settings = (function () {
     if (!ok) return notify('Could not open project', true);
     setProjectsCreateVisible(false);
     renderProjectDetails();
+    document.dispatchEvent(new CustomEvent('starcaster:project-editor-opened', { detail: { projectId: id } }));
     App.setActivePage('settingsProjectDetailPage');
     window.setTimeout(() => {
       const panel = els.settingsProjectDetailsPanel;

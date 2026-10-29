@@ -41,6 +41,18 @@ describe('builderAdminFetch', () => {
     );
   });
 
+  it('rewrites the shared-items read to the builder endpoint', async () => {
+    const fetchMock = vi.fn(async () => envelopeResponse({ ok: true, data: [], items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await builderAdminFetch('/api/admin/shared/saved_sections');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/builder/shared/saved_sections',
+      expect.objectContaining({ credentials: 'include' })
+    );
+  });
+
   it('re-keys single records for cell modules', async () => {
     const fetchMock = vi.fn(async () =>
       envelopeResponse({ ok: true, data: {}, module: { id: 'm1', name: 'Saved' } }, 201)

@@ -25,10 +25,13 @@ import {
   type AssetRef,
   type CaptureResult,
   type CapturedStyles,
+  type DecorationIR,
+  type CapturedStylesById,
   type Coverage,
   type CoverageCounts,
   type ElementClass,
   type ElementIR,
+  type InlineStyleRun,
   type NavItem,
   type NavTree,
   type SiteLogo,
@@ -207,6 +210,8 @@ export type CountableVisit =
       depth: number;
       /** Nearest ancestor element, for section assignment. */
       parentNode: DomNode;
+      /** An empty box whose only content is a background picture. */
+      backgroundOnly?: boolean;
     }
   | {
       kind: "textRun";
@@ -216,12 +221,61 @@ export type CountableVisit =
       parentNode: DomNode;
     };
 
+/** What the walk needs from the desktop capture to recognise a picture drawn
+ *  as a background. Absent (raw HTML only), no box qualifies. */
+export type CaptureFacts = {
+  styles?: Record<string, CapturedStyles>;
+  rects?: Record<string, [number, number, number, number]>;
+};
+
+/** Below this either way a background picture is a bullet, an icon or a
+ *  sprite, not content. */
+const MIN_BACKGROUND_PICTURE_PX = 40;
+
+/** True when nothing under this node would be counted: no visible text and
+ *  no tag the methodology table classifies. Iterative, like the walk. */
+function hasNoCountableContent(node: DomNode): boolean {
+  const stack: DomNode[] = [...(node.children || [])];
+  while (stack.length) {
+    const n = stack.pop() as DomNode;
+    if (n.type === "text") {
+      if ((n.data || "").trim()) return false;
+      continue;
+    }
+    if (n.type !== "tag") continue;
+    if (SKIP_TAGS.has((n.name || "").toLowerCase())) continue;
+    if (classifyTag(n)) return false;
+    for (const child of n.children || []) stack.push(child);
+  }
+  return true;
+}
+
+/**
+ * An empty box whose only content is a background picture (task 86bctde3p):
+ * a url() background, a box at least 40x40px, nothing countable inside. It
+ * used to be walked as a wrapper and yield nothing, so its picture — Alphire's
+ * hero banner — was downloaded, matched no element, and was never placed.
+ */
+function isBackgroundPictureBox(node: DomNode, facts: CaptureFacts | undefined): boolean {
+  const key = (node.attribs || {})["data-scim"];
+  if (!key || !facts) return false;
+  if (!/url\(/i.test((facts.styles?.[key] || {})["background-image"] || "")) return false;
+  const rect = facts.rects?.[key];
+  if (!rect || rect[2] < MIN_BACKGROUND_PICTURE_PX || rect[3] < MIN_BACKGROUND_PICTURE_PX) return false;
+  return hasNoCountableContent(node);
+}
+
 /**
  * THE walk — see the COUNTING METHODOLOGY block in ir.ts. Iterative
  * (explicit frame stack) so pathological nesting depth cannot throw.
- * Visits arrive in document order.
+ * Visits arrive in document order. `facts` is the one rule that reads
+ * styles (a background-picture box); both counters must pass the same facts.
  */
-function walkCountables(body: DomNode, visit: (v: CountableVisit) => void): void {
+function walkCountables(
+  body: DomNode,
+  visit: (v: CountableVisit) => void,
+  facts?: CaptureFacts
+): void {
   type Frame = {
     node: DomNode;
     path: string;
@@ -273,6 +327,16 @@ function walkCountables(body: DomNode, visit: (v: CountableVisit) => void): void
         depth: f.depth + 1,
         parentNode: f.node,
       });
+    } else if (isBackgroundPictureBox(child, facts)) {
+      visit({
+        kind: "element",
+        node: child,
+        cls: "image",
+        domPath: childPath,
+        depth: f.depth + 1,
+        parentNode: f.node,
+        backgroundOnly: true,
+      });
     } else {
       frames.push({
         node: child,
@@ -311,14 +375,14 @@ function mergeCounts(into: CoverageCounts, from: CoverageCounts): void {
  * whose HTML defeats even parse5 counts as one "other" (mirroring the
  * degraded page the normalizer would emit for it).
  */
-export function countCapturedByClass(html: string): CoverageCounts {
+export function countCapturedByClass(html: string, facts?: CaptureFacts): CoverageCounts {
   const counts: CoverageCounts = {};
   try {
     const { body } = parseBody(html);
     if (!body) return counts;
     walkCountables(body, (v) => {
       addCount(counts, v.kind === "textRun" ? "text" : v.cls);
-    });
+    }, facts);
   } catch {
     addCount(counts, "other");
   }
@@ -374,7 +438,8 @@ export const CAPTURE_STYLE_PROPS: string[] = [
   "line-height", "letter-spacing", "text-align", "text-transform",
   "text-decoration-line",
   // surfaces
-  "background-color", "background-image", "box-shadow", "opacity",
+  "background-color", "background-image", "background-size",
+  "background-position", "box-shadow", "opacity",
   "border-radius",
   "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
   "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
@@ -401,6 +466,8 @@ const STYLE_DEFAULTS: Record<string, string[]> = {
   "text-decoration-line": ["none"],
   "background-color": ["rgba(0, 0, 0, 0)", "transparent"],
   "background-image": ["none"],
+  "background-size": ["auto", "auto auto"],
+  "background-position": ["0% 0%"],
   "box-shadow": ["none"],
   opacity: ["1"],
   "border-radius": ["0px"],
@@ -429,6 +496,84 @@ function compactStyles(raw: CapturedStyles | undefined): CapturedStyles {
     if (defaults && defaults.includes(value)) continue;
     out[prop] = value;
   }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Word-level text styling (task 86bctde5z)
+ * ------------------------------------------------------------------------ */
+
+/** Tags a browser draws bold or italic on their own — what such a word would
+ *  look like in the Builder with no style at all, which is what "differs" is
+ *  measured against. */
+const UA_BOLD_TAGS = new Set(["strong", "b", "th"]);
+const UA_ITALIC_TAGS = new Set(["em", "i", "cite", "var", "dfn"]);
+
+function numericWeight(value: string | undefined): number {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "bold") return 700;
+  if (v === "normal" || v === "") return 400;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 400;
+}
+
+/** CSS `font-weight: bolder` against a parent weight. */
+function bolder(parent: number): number {
+  if (parent < 350) return 400;
+  if (parent < 550) return 700;
+  return 900;
+}
+
+/**
+ * The descendants of a text element whose colour, weight, italic or letter
+ * spacing differ from what they would get by inheriting from their parent
+ * (or, for <strong>/<em>, from the browser's own bold/italic). Read from the
+ * marked-up desktop tree, so each word joins to its own captured styles; the
+ * colour on Alphire's accent words lives only there.
+ */
+function inlineStyleRuns(
+  $: CheerioApi,
+  root: DomNode,
+  styles: Record<string, CapturedStyles>
+): InlineStyleRun[] {
+  const out: InlineStyleRun[] = [];
+  const rootKey = (root.attribs || {})["data-scim"] || "";
+  if (!rootKey || !styles[rootKey]) return out;
+  const all = $(root as never).find("*").toArray() as unknown as DomNode[];
+  all.forEach((node, index) => {
+    const key = (node.attribs || {})["data-scim"] || "";
+    const own = key ? styles[key] : undefined;
+    if (!own) return; // not visible, so never measured
+    // A picture or a line break has no lettering to colour.
+    if (!collapseWhitespace(getText(node))) return;
+    let parent = node.parent || null;
+    let parentStyles: CapturedStyles | undefined;
+    while (parent) {
+      const pk = (parent.attribs || {})["data-scim"] || "";
+      if (pk && styles[pk]) {
+        parentStyles = styles[pk];
+        break;
+      }
+      if (parent === root) break;
+      parent = parent.parent || null;
+    }
+    if (!parentStyles) return;
+    const tag = (node.name || "").toLowerCase();
+    const diff: CapturedStyles = {};
+    if (own.color && parentStyles.color && own.color !== parentStyles.color) diff.color = own.color;
+    const weight = numericWeight(own["font-weight"]);
+    const inherited = numericWeight(parentStyles["font-weight"]);
+    const expected = UA_BOLD_TAGS.has(tag) ? bolder(inherited) : inherited;
+    if (own["font-weight"] && weight !== expected) diff["font-weight"] = String(weight);
+    const italic = (own["font-style"] || "normal") !== "normal";
+    const expectItalic = UA_ITALIC_TAGS.has(tag) || (parentStyles["font-style"] || "normal") !== "normal";
+    if (own["font-style"] && italic !== expectItalic) diff["font-style"] = own["font-style"];
+    const spacing = own["letter-spacing"] || "normal";
+    if (own["letter-spacing"] && spacing !== (parentStyles["letter-spacing"] || "normal")) {
+      diff["letter-spacing"] = spacing;
+    }
+    if (Object.keys(diff).length) out.push({ index, tag, styles: diff });
+  });
   return out;
 }
 
@@ -496,6 +641,109 @@ export function paintsSurface(st: CapturedStyles): boolean {
       !/^(none|hidden)$/.test(st[`border-${side}-style`] || "none") &&
       !clearColor(st[`border-${side}-color`])
   );
+}
+
+/**
+ * What the capture reads off a ::before / ::after layer (task 86bctde48): the
+ * properties that make it paint, and the ones that change how it looks once
+ * painted. SYNC POINT: the in-page `layerPaints` test in capture-playwright.ts
+ * reads the painting half of these and must agree with `decorationStyles`.
+ */
+export const DECORATION_STYLE_PROPS: string[] = [
+  "content",
+  "background-color", "background-image", "background-size", "background-position", "background-repeat",
+  "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+  "border-top-style", "border-right-style", "border-bottom-style", "border-left-style",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "border-radius", "box-shadow", "opacity", "filter", "mix-blend-mode", "transform",
+];
+
+/** A decoration's styles with the browser defaults dropped. `content` stays
+ *  only when it paints a picture — icon text is a non-goal of 86bctde48. */
+export function decorationStyles(raw: CapturedStyles | undefined): CapturedStyles {
+  const st = raw || {};
+  const out: CapturedStyles = {};
+  const keep = (prop: string) => {
+    if (st[prop]) out[prop] = st[prop];
+  };
+  if (/url\(/i.test(st.content || "")) keep("content");
+  if (!clearColor(st["background-color"])) keep("background-color");
+  if (st["background-image"] && st["background-image"] !== "none") {
+    keep("background-image");
+    if (st["background-size"] && st["background-size"] !== "auto") keep("background-size");
+    if (st["background-position"] && st["background-position"] !== "0% 0%") keep("background-position");
+    if (st["background-repeat"] && st["background-repeat"] !== "repeat") keep("background-repeat");
+  }
+  for (const side of ["top", "right", "bottom", "left"]) {
+    const width = st[`border-${side}-width`];
+    const style = st[`border-${side}-style`];
+    const colour = st[`border-${side}-color`];
+    if (parseFloat(width || "0") > 0 && !/^(none|hidden)$/.test(style || "none") && !clearColor(colour)) {
+      out[`border-${side}-width`] = width;
+      out[`border-${side}-style`] = style;
+      out[`border-${side}-color`] = colour;
+    }
+  }
+  if (st["border-radius"] && !/^0(px)?$/.test(st["border-radius"])) keep("border-radius");
+  if (st["box-shadow"] && st["box-shadow"] !== "none") keep("box-shadow");
+  if (st.opacity && st.opacity !== "1") keep("opacity");
+  if (st.filter && st.filter !== "none") keep("filter");
+  if (st["mix-blend-mode"] && st["mix-blend-mode"] !== "normal") keep("mix-blend-mode");
+  if (st.transform && st.transform !== "none") keep("transform");
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Page and section grounds (task 86bctde6u)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The colour a section's content sits on: its root's own fill, else the
+ * nearest painted box above it, else the page's <body>/<html> colour. "" when
+ * nothing anywhere paints. Alphire's home sections are transparent inside a
+ * `<main>` painted #03050a; nothing carried that onto the import, so on a
+ * site whose other 15 pages are white the home page came out white.
+ */
+function sectionGround(
+  root: DomNode,
+  styles: CapturedStylesById,
+  pageBackground: string | undefined
+): { color: string; ownFill: boolean } {
+  const fillOf = (node: DomNode): string => {
+    const key = (node.attribs || {})["data-scim"] || "";
+    const fill = key ? (styles[key] || {})["background-color"] : "";
+    return clearColor(fill) ? "" : String(fill).trim();
+  };
+  const own = fillOf(root);
+  if (own) return { color: own, ownFill: true };
+  for (let cur = root.parent as DomNode | null | undefined; cur; cur = cur.parent as DomNode | null | undefined) {
+    const fill = fillOf(cur);
+    if (fill) return { color: fill, ownFill: false };
+  }
+  return { color: clearColor(pageBackground) ? "" : String(pageBackground).trim(), ownFill: false };
+}
+
+/** The ground under the most content area — each vote weighted by its
+ *  element's desktop box, or 1 when the capture recorded none. "" when
+ *  nothing sat on a painted ground. */
+export function pickPageBackground(
+  votes: { ground: string; box?: { w: number; h: number } }[]
+): string {
+  const weight = new Map<string, number>();
+  for (const { ground, box } of votes) {
+    if (!ground) continue;
+    const area = box && box.w > 0 && box.h > 0 ? box.w * box.h : 1;
+    weight.set(ground, (weight.get(ground) || 0) + area);
+  }
+  let best = "";
+  let most = 0;
+  for (const [ground, w] of weight) {
+    if (w > most) {
+      best = ground;
+      most = w;
+    }
+  }
+  return best;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1306,7 +1554,8 @@ function normalizePage(
 
   // Raw-side count: independent invocation over the same HTML ("counted
   // twice" per spec §1c — this one never sees the IR).
-  const captured = countCapturedByClass(desktop.html);
+  const facts: CaptureFacts = { styles, rects };
+  const captured = countCapturedByClass(desktop.html, facts);
 
   // Section candidates + index for ancestor lookup.
   const candidates = computeSectionCandidates(body);
@@ -1402,6 +1651,16 @@ function normalizePage(
       };
       const elBox = boxOf(scimKey);
       if (elBox) el.box = elBox;
+      if (v.cls === "heading" || v.cls === "text" || v.cls === "link") {
+        const runs = inlineStyleRuns($, v.node, styles);
+        if (runs.length) el.inlineStyles = runs;
+      }
+      if (v.backgroundOnly) {
+        el.backgroundImage = {
+          size: computedStyles["background-size"] || "auto",
+          position: computedStyles["background-position"] || "0% 0%",
+        };
+      }
       if (assetRefs.length) assetUses.push({ sourceId, assetIds: assetRefs });
     }
 
@@ -1420,7 +1679,7 @@ function normalizePage(
       list.push(el);
       perCandidate.set(target, list);
     }
-  });
+  }, facts);
 
   // Sections in candidate document order; only candidates that actually
   // received content become sections. Loose content (rare: text sitting
@@ -1428,14 +1687,32 @@ function normalizePage(
   // over tidiness.
   const sectionShots = desktop.sectionScreenshots || {};
   const sections: SectionIR[] = [];
-  candidates.forEach((node, i) => {
-    const elements = perCandidate.get(i);
-    if (!elements || elements.length === 0) return;
+  const kept = candidates
+    .map((node, i) => ({ node, i, elements: perCandidate.get(i) || [] }))
+    .filter((c) => c.elements.length > 0);
+  // What each section's content sits on, and so what the page as a whole
+  // wears (PageIR.background, task 86bctde6u).
+  const grounds = kept.map((c) => sectionGround(c.node, styles, desktop.pageBackground));
+  // Only content sitting straight on the ground votes — an element inside a
+  // painted box (a band, a card, a painted section root) is on THAT box. A
+  // site whose content all sits on white bands over a black <body> (Strands,
+  // 2026-10-12) must not read as a black page with light text on the bands.
+  const pageBackground = pickPageBackground(
+    kept.flatMap((c, k) =>
+      c.elements
+        .filter((el) => !el.containers || el.containers.length === 0)
+        .map((el) => ({ ground: grounds[k].color, box: el.box }))
+    )
+  );
+  kept.forEach(({ node, i, elements }, k) => {
     let sectionPath = `section[${i}]`;
     const containers = perCandidateContainers.get(i);
     const containerBoxes = perCandidateBoxes.get(i);
     const rootKey = (node.attribs || {})["data-scim"] || "";
     const rootStyles = containerStyles(styles[rootKey], rects[rootKey]);
+    // Only a ground the root does not paint itself: a painted root is
+    // already the section's band (containers), and the mapper reads it there.
+    const ground = !grounds[k].ownFill && grounds[k].color !== pageBackground ? grounds[k].color : "";
     sections.push({
       sourceId: computeSourceId(pageIdx, sectionPath),
       type: "unknown",
@@ -1444,6 +1721,7 @@ function normalizePage(
       ...(containers ? { containers } : {}),
       ...(containerBoxes ? { containerBoxes } : {}),
       ...(Object.keys(rootStyles).length ? { rootStyles } : {}),
+      ...(ground ? { ground } : {}),
     });
   });
   if (loose.length) {
@@ -1453,6 +1731,50 @@ function normalizePage(
       screenshot: "",
       elements: loose,
     });
+  }
+
+  // ::before/::after layers (task 86bctde48), each filed under the section
+  // whose root holds its owner. A capture that recorded them gives every
+  // section a list — empty means "looked, found none" — while an older one
+  // leaves the field absent, which the fidelity report reads as CANNOT TELL.
+  let pageDecorations: DecorationIR[] | undefined;
+  if (Array.isArray(desktop.decorations)) {
+    const byCandidate = new Map<number, SectionIR>();
+    candidates.forEach((_, i) => {
+      const sid = computeSourceId(pageIdx, `section[${i}]`);
+      const section = sections.find((s) => s.sourceId === sid);
+      if (section) byCandidate.set(i, section);
+    });
+    for (const section of sections) section.decorations = [];
+    const nodeByKey = new Map<string, DomNode>();
+    $("[data-scim]").each((_, node) => {
+      const key = ((node as DomNode).attribs || {})["data-scim"];
+      if (key) nodeByKey.set(key, node as DomNode);
+    });
+    for (const d of desktop.decorations) {
+      if (!d || !Array.isArray(d.box)) continue;
+      const styles = decorationStyles(d.styles);
+      const pictures = [styles["background-image"], styles.content].filter(Boolean).join(" ");
+      const node = nodeByKey.get(d.owner);
+      const target = node ? candidateFor(node, candidateIndex) : null;
+      const section = target === null ? undefined : byCandidate.get(target);
+      const deco: DecorationIR = {
+        id: computeSourceId(pageIdx, `decoration/${d.owner}::${d.pseudo}`),
+        pseudo: d.pseudo,
+        owner: d.label || "an element",
+        onSectionRoot: Boolean(node && target !== null && candidates[target] === node),
+        box: { x: d.box[0], y: d.box[1], w: d.box[2], h: d.box[3] },
+        size: Array.isArray(d.size) ? { w: d.size[0], h: d.size[1] } : { w: d.box[2], h: d.box[3] },
+        boxFrom: d.boxFrom === "offsets" ? "offsets" : "owner",
+        zIndex: d.zIndex || "auto",
+        styles,
+        // Not added to an asset's referencedBy: the picture belongs to no
+        // element, and the fidelity report says so in those words.
+        assetRefs: pictures ? matchAssetRefs("", { "background-image": pictures }, url, assetLookup) : [],
+      };
+      if (section) section.decorations!.push(deco);
+      else (pageDecorations = pageDecorations || []).push(deco);
+    }
   }
 
   // Raw design tokens from this page's captured styles.
@@ -1487,6 +1809,8 @@ function normalizePage(
       canonicalUrl: meta.canonicalUrl || "",
       lang: meta.lang || "",
       sections,
+      ...(pageDecorations ? { decorations: pageDecorations } : {}),
+      ...(pageBackground ? { background: pageBackground } : {}),
       screenshots: {
         desktop: desktop.fullPageScreenshot || "",
         tablet: captures.tablet?.fullPageScreenshot || "",

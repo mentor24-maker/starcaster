@@ -27,6 +27,14 @@ const OPEN_PATH = '/api/browser-view/open';
 export const MAX_WINDOW_MS = 15 * 60 * 1000;
 export const IDLE_CLOSE_MS = 3 * 60 * 1000;
 
+/**
+ * How long the window waits for the Mini's first picture before it gives up and
+ * says so. Without it, a feed that never connects — on 2026-10-28 a Tailscale
+ * access rule silently dropped the MacBook's connection — sat on "Opening the
+ * Mini's browser…" until somebody closed it (task 86bcu7d6h).
+ */
+export const FIRST_PICTURE_MS = 30 * 1000;
+
 /** Mouse moves are sent at most this often; a click is always sent at once. */
 const MOVE_EVERY_MS = 50;
 
@@ -40,6 +48,7 @@ export type CloseReason =
   | 'refused'
   | 'already-open'
   | 'error'
+  | 'no-answer'
   | 'dropped';
 
 /** The reasons the log accepts from a viewer (lib/browserViewStore.js VIEWER_CLOSE_REASONS). */
@@ -54,13 +63,15 @@ export const CLOSE_WORDS: Record<CloseReason, string> = {
   refused: 'The Mini did not accept the pass (it is single-use and lasts 60 seconds). Click Connect to get a new one.',
   'already-open': "This project's browser is already open in another window. Close that one first.",
   error: 'The window could not be opened on the Mini.',
+  'no-answer':
+    "The Mini's browser never answered, so the window was closed. If this computer is on Tailscale, the Mini's Tailscale access rule may be blocking it: turn Tailscale off and click Connect again.",
   dropped: 'The connection to the Mini dropped. Click Connect to open the window again.',
 };
 
 /** The door keeper's `closed` reason, as this window names it. Unknown → error, never silence. */
 export function reasonFromDoor(reason: unknown): CloseReason {
   const r = String(reason || '');
-  return r in CLOSE_WORDS && r !== 'you-closed' && r !== 'dropped' ? (r as CloseReason) : 'error';
+  return r in CLOSE_WORDS && r !== 'you-closed' && r !== 'dropped' && r !== 'no-answer' ? (r as CloseReason) : 'error';
 }
 
 /** What the log row records for each ending. */
@@ -179,6 +190,7 @@ export default function SignInWindow({ site, label, onClosed, makeSocket }: Sign
   const [now, setNow] = useState(() => Date.now());
 
   const socket = useRef<WebSocket | null>(null);
+  const firstPicture = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionId = useRef('');
   const ended = useRef(false);
   const meta = useRef<FrameMetadata | null>(null);
@@ -198,6 +210,8 @@ export default function SignInWindow({ site, label, onClosed, makeSocket }: Sign
   const finish = useCallback((reason: CloseReason, quiet = false) => {
     if (ended.current) return;
     ended.current = true;
+    if (firstPicture.current) clearTimeout(firstPicture.current);
+    firstPicture.current = null;
     const ws = socket.current;
     socket.current = null;
     if (ws && ws.readyState <= 1) {
@@ -284,19 +298,27 @@ export default function SignInWindow({ site, label, onClosed, makeSocket }: Sign
     lastInputAt.current = openedAt.current;
     setNow(openedAt.current);
     setPhase('connecting');
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', pass }));
+    let answered = false;
+    firstPicture.current = setTimeout(() => finish('no-answer'), FIRST_PICTURE_MS);
+    ws.onopen = () => {
+      answered = true;
+      ws.send(JSON.stringify({ type: 'hello', pass }));
+    };
     ws.onmessage = (event) => {
       let msg: any;
       try { msg = JSON.parse(String(event.data)); } catch { return; }
       if (msg?.type === 'frame' && typeof msg.data === 'string') {
         meta.current = msg.metadata || meta.current;
+        if (firstPicture.current) clearTimeout(firstPicture.current);
+        firstPicture.current = null;
         setFrame(`data:image/jpeg;base64,${msg.data}`);
         setPhase((p) => (p === 'connecting' ? 'open' : p));
       } else if (msg?.type === 'closed') {
         finish(reasonFromDoor(msg.reason));
       }
     };
-    ws.onclose = () => finish('dropped');
+    // A socket that closes before it ever opened never reached the Mini at all.
+    ws.onclose = () => finish(answered ? 'dropped' : 'no-answer');
     ws.onerror = () => { /* the close that always follows says why */ };
   };
 

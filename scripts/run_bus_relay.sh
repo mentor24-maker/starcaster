@@ -216,6 +216,29 @@ npm run --silent stale-answer -- --check || true
 # one vantage point that survives the Mini being off. Never allowed to fail the
 # relay: 1 is UNREACHABLE and 2 is CANNOT TELL, both readings, not failures.
 npm run --silent worker-watch -- --check || true
+# THE SEVENTH — is a Site Import waiting with nothing to run it? (ticket 86bctakm0)
+#
+# alphire.agency sat queued 14 days and wavecenter.com 15, because nothing ran
+# the import worker and nothing said so. The worker now runs on a schedule;
+# this names any job queued over an hour without a claim, ONCE per job, and one
+# all-clear when it is picked up. Unlike its neighbours it posts only from the
+# machine that owns `site-import-worker` (it decides that itself), because
+# "once per job" is only true with one poster; the owning machine being off is
+# the heartbeat's to catch. Never allowed to fail the relay: 1 is WAITING and 2
+# is CANNOT TELL, both readings, not failures.
+npm run --silent site-import-watch -- --check || true
+# THE EIGHTH — did a merged database change ever reach production? (ticket 86bcu8ftx)
+#
+# Code deploys itself on merge; its docs/SQL file waits for somebody to run it
+# by hand, and nothing checked that anybody did. On 2026-10-28 the Outreach
+# screen and the sign-in window failed on the live site over sixteen merged,
+# never-run files, some two weeks old. `schema:check` could not see it: it
+# compares production with a snapshot of production, and an unapplied file
+# changes neither. This compares production with what docs/SQL declares.
+# Posts only from the relay's owner, once a day per file until production has
+# it, one all-clear when it does. Never allowed to fail the relay: 1 is
+# UNAPPLIED and 2 is CANNOT TELL, both readings, not failures.
+npm run --silent sql:unapplied -- --check || true
 
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the

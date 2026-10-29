@@ -11908,3 +11908,26 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-main.builder-workspace:not(.has-resolved-shell-background) {
   padding: 0 !important;
 }
+
+/* "Shared with this project" in Builder › Modules (task 86bcu6tzk). */
+.builder-shared-sections-notice {
+  margin: 0 0 8px;
+}
+
+.builder-shared-sections-notice.is-error {
+  color: var(--danger-color, #b91c1c);
+}
+
+/* "Shared with this project" on the Themes page (task 86bcu6uav). */
+.builder-react-root .builder-shared-themes-swatches {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.builder-react-root .builder-shared-themes-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid rgba(9, 16, 24, 0.18);
+}

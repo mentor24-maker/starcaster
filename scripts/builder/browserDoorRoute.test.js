@@ -89,18 +89,38 @@ test('uninstall takes the route away too — a route left behind points the inte
 
 // --- the outside check, against a fake network ----------------------------------
 
+test('the handshake key decodes to exactly 16 bytes — ws refuses any other length with a 400 (86bcu100p)', () => {
+  const source = fs.readFileSync(CHECK, 'utf8');
+  const key = (source.match(/^WS_KEY="([^"]+)"$/m) || [])[1];
+  assert.ok(key, 'WS_KEY is not set in the outside check');
+  assert.equal(Buffer.from(key, 'base64').length, 16);
+  const headers = source.match(/Sec-WebSocket-Key: [^'"\s]+/g) || [];
+  assert.ok(headers.length > 0, 'the outside check sends no handshake key at all');
+  assert.deepEqual([...new Set(headers)], ['Sec-WebSocket-Key: $WS_KEY'], 'every handshake must send WS_KEY, not a key of its own');
+});
+
 /**
  * A fake curl: it reads the URL and answers from a table. `$FAKE_NET` is a list
- * of `<host:port>=<exit>` (for bare probes) and the HTTPS answers come from
+ * of `<host:port>=<exit>` (for bare probes, and for an HTTPS request pinned to
+ * `<ip>:443` with --resolve) and the HTTPS answers come from
  * FAKE_LIVE: `door` (the real door keeper's replies), `502`, or `other`.
  */
 const FAKE_CURL = `#!/bin/bash
-url="" ; ws=""
+url="" ; ws="" ; pinned="" ; key=""
 for a in "$@"; do
-  case "$a" in http://*|https://*) url="$a" ;; "Upgrade: websocket") ws=1 ;; esac
+  case "$a" in http://*|https://*) url="$a" ;; "Upgrade: websocket") ws=1 ;; *:443:*) pinned="\${a##*:}" ;; "Sec-WebSocket-Key: "*) key="\${a#Sec-WebSocket-Key: }" ;; esac
 done
+# Like the real ws library: a handshake key that does not decode to 16 bytes is
+# refused with 400 before anything behind the route sees it (86bcu100p).
+if [ -n "$ws" ] && [ "$(printf '%s' "$key" | base64 -d 2>/dev/null | wc -c | tr -d ' ')" != 16 ]; then
+  printf 'HTTP/1.1 400 Bad Request\\r\\n\\r\\n'; exit 0
+fi
 case "$url" in
   https://*)
+    # A request pinned to an address answers only if that address's :443 has no rule saying otherwise.
+    for rule in $FAKE_NET; do
+      [ "\${rule%%=*}" = "$pinned:443" ] && exit "\${rule#*=}"
+    done
     case "$FAKE_LIVE" in
       502) [ -n "$ws" ] && { printf 'HTTP/1.1 502 Bad Gateway\\r\\n\\r\\n'; exit 0; }; printf 'Bad gateway\\n502'; exit 0 ;;
       other) [ -n "$ws" ] && { printf 'HTTP/1.1 401 Unauthorized\\r\\n\\r\\n'; exit 0; }; printf '{"error":"Unauthorized"}\\n401'; exit 0 ;;
@@ -109,7 +129,11 @@ case "$url" in
     case "$url" in
       */live/) printf 'Not found\\n404' ;;
       */live/open) printf 'Refused\\n401' ;;
-      */live/live) printf 'HTTP/1.1 101 Switching Protocols\\r\\n\\r\\n{"type":"closed","reason":"refused","message":"x"}' ;;
+      # As measured through Funnel 2026-10-29: the refusal arrives, then the door
+      # keeper waits for the client's close, so curl times out — and its stderr
+      # line reaches the merged output ahead of the 101 (86bcu100p).
+      */live/live) echo 'curl: (28) Operation timed out after 12003 milliseconds with 108 bytes received' >&2
+        printf 'HTTP/1.1 101 Switching Protocols\\r\\n\\r\\n{"type":"closed","reason":"refused","message":"x"}'; exit 28 ;;
     esac
     exit 0 ;;
 esac
@@ -179,10 +203,28 @@ test('a tailnet this machine cannot reach at all is CANNOT TELL, never "closed"'
   assert.match(r.out, /CANNOT TELL\s+tailnet .*control \(port 8080\) is not reachable/);
 });
 
-test('shields up: a tailnet that refuses even the control passes, because 8080 answers on the home network', () => {
-  const r = runCheck({ net: '192.0.2.5:8080=0', args: ['--tailnet-shielded'] });
-  assert.equal(r.code, 0, r.out);
-  assert.match(r.out, /shields up: not even 8080/);
+test('shields up: the private ports read as closed, but the Connect window cannot open from a tailnet device -> FAIL', () => {
+  const r = runCheck({ net: '192.0.2.5:8080=0 100.64.0.5:443=28', args: ['--tailnet-shielded'] });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /PASS\s+tailnet\s+100\.64\.0\.5 -> shields up: not even 8080/);
+  assert.match(r.out, /FAIL\s+tailnet\s+wss:.*cannot open from a computer with Tailscale on.*shields up blocks it/);
+});
+
+test('from a tailnet device: the viewer socket answers on the tailnet address -> PASS line', () => {
+  const r = runCheck({ net: CONTROLS });
+  assert.match(r.out, /PASS\s+tailnet\s+wss:\/\/mini\.example\.ts\.net\/live\/live via 100\.64\.0\.5 -> the door keeper answers/);
+});
+
+test('an access rule that drops tailnet 443 fails it — the MacBook, 2026-10-28 (86bcu7d6h)', () => {
+  const r = runCheck({ net: `${CONTROLS} 100.64.0.5:443=28` });
+  assert.equal(r.code, 1, r.out);
+  assert.match(r.out, /FAIL\s+tailnet\s+wss:.*not reachable \(curl exit 28\).*must allow tcp:443 to the Mini/);
+  assert.match(r.out, /PASS\s+GET https:\/\/mini\.example\.ts\.net\/live\//, 'the internet route still reads as working');
+});
+
+test('a tailnet this machine cannot reach takes no tailnet-device reading at all', () => {
+  const r = runCheck({ net: '192.0.2.5:8080=0' });
+  assert.doesNotMatch(r.out, /wss:.* via 100\.64\.0\.5/);
 });
 
 test('shields reported up but the tailnet control connects -> FAIL', () => {

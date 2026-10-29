@@ -9,7 +9,8 @@
  *   reconciliation report, writes NOTHING to Builder.
  *   --apply: takes a whole-site snapshot, backs up every page it will
  *   touch to docs/SQL/backups/, copies placeholder crops + referenced
- *   assets into the durable SiteImportApplied/<projectId>/ namespace,
+ *   assets — and every other downloaded picture and PDF, as a "not placed"
+ *   Assets row (task 86bctde7n) — into the durable SiteImportApplied/<projectId>/ namespace,
  *   then creates/updates the draft pages. Never publishes anything.
  *   MENUS (task 86bchydp6, Dane 2026-10-13): --apply also builds two saved
  *   sections, LAST, after every page write — "Top Menu" (the site's logo
@@ -42,6 +43,12 @@
  *   (lib/site-import/theme.ts) and makes it the project's DEFAULT. The
  *   previous default's id is printed and recorded on the job; making that
  *   theme the default again undoes it. --no-theme skips it.
+ * - THEME ONLY (task 86bctakkk, 2026-10-27): --theme-only makes that same
+ *   theme from a completed job and does NOTHING else — no page, snapshot,
+ *   asset, menu or Blob write. Dry run unless --apply. For a project whose
+ *   pages were built without a theme (Alphire), which used to mean
+ *   re-running the whole import. The Site Import screen's "Create theme
+ *   from this import" does the same (lib/siteImportTheme.js, shared).
  * - Rollback: restore the snapshot id printed at apply time
  *   (POST /api/builder/page-snapshots/:id/restore) and/or the JSON backup.
  *
@@ -51,6 +58,7 @@
  *   doppler run --config prd -- node scripts/site_import_map.mjs --job <id> --nav [--nav-replace]
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
  *   ... --no-theme   skip the import theme (see below)
+ *   ... --theme-only [--apply]   ONLY the import theme; touches no page
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
@@ -119,8 +127,17 @@ if (/localhost|127\.0\.0\.1/.test(process.env.SUPABASE_URL) && !flag('--allow-lo
   console.error('Refusing a localhost database (--allow-local overrides for local testing).');
   process.exit(1);
 }
-if (!process.env.BLOB_READ_WRITE_TOKEN) {
+if (!process.env.BLOB_READ_WRITE_TOKEN && !flag('--theme-only')) {
   console.error('BLOB_READ_WRITE_TOKEN is missing — crops/assets copy to Vercel Blob on apply.');
+  process.exit(1);
+}
+
+// Compiled code older than its source once crashed an import with no word as
+// to why (86bctakmc). Rebuild it — or stop, naming the command — first.
+try {
+  require('./scripts/lib/build_inputs.cjs').ensureBuildCurrent(ROOT, ['site-import', 'builder-template']);
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
 
@@ -131,17 +148,17 @@ const savedSectionsStore = require('./lib/builderSavedSectionsStore.js');
 const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
-  mapSite, reportReconciles, mergeMappedSections, deriveImportTheme, nextThemeName, siteNameFromUrl,
+  mapSite, reportReconciles, mergeMappedSections,
   writeMappedPages, summarizePageWrites,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
-const themesStore = require('./lib/builderThemesStore.js');
-const { normalizeTheme } = require('./lib/builder/template.js');
+const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const NO_THEME = flag('--no-theme');
+const THEME_ONLY = flag('--theme-only');
 // --nav writes the project's own header master instead; doing both would
 // put two menus on every imported page.
 const NO_MENUS = flag('--no-menus') || NAV;
@@ -180,6 +197,33 @@ async function copyBlob(fromUrl, toPathname, mimeType) {
   return must(up, `Blob copy to ${toPathname}`).location;
 }
 
+/**
+ * A page's own background and the text colours that read on it (task
+ * 86bctde6u), as a patch for a page write. On a re-import it is applied only
+ * where the page has no background of its own yet — one somebody set in the
+ * Builder is theirs. Text colours go into the page's stored theme, which the
+ * renderer lets win over a named theme exactly when the page paints its own
+ * background (resolveRenderTheme). Empty when the page follows the theme.
+ */
+function pageGroundPatch(page, current) {
+  if (!page.pageBackground || !page.textColors) return {};
+  const existing = current?.pageBackground;
+  if (existing && existing.mode && existing.mode !== 'none') return {};
+  const theme = current?.theme && typeof current.theme === 'object' ? current.theme : {};
+  const typography = theme.typography && typeof theme.typography === 'object' ? theme.typography : {};
+  const { text, heading, link } = page.textColors;
+  return {
+    pageBackground: { ...(existing || {}), ...page.pageBackground },
+    theme: {
+      ...theme,
+      typography: {
+        ...typography,
+        colors: { ...(typography.colors || {}), text, heading, link, linkHover: link },
+      },
+    },
+  };
+}
+
 /** Deep string replace of job-namespace URLs with applied-namespace URLs. */
 function rewriteUrls(value, urlMap) {
   let json = JSON.stringify(value);
@@ -194,9 +238,10 @@ async function main() {
   }
   let job = must(await store.getJob(JOB_ID), 'load job');
   const scope = { projectId: job.projectId, userId: job.ownerUserId || '' };
-  log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}${NO_MENUS ? ' (no menus)' : ''}`);
+  if (!THEME_ONLY) log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}${NO_MENUS ? ' (no menus)' : ''}`);
   log(`Job:     ${job.id} (${job.sourceUrl})`);
   log(`Project: ${job.projectId}`);
+  if (THEME_ONLY) return runThemeOnly(job, scope);
   const irUrl = job.checkpoints?.normalize?.blobPath;
   if (!irUrl) throw new Error('Job has no normalize checkpoint — run the import worker first.');
   const ir = await fetchJson(irUrl);
@@ -245,7 +290,7 @@ async function main() {
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
-    log(`  ${p.path}  →  /${p.slug}   ${p.modules} modules (${p.placeholders} placeholders)`);
+    log(`  ${p.path}  →  /${p.slug}   ${p.modules} modules (${p.placeholders} placeholders)${p.background ? `   own background ${p.background}` : ""}`);
   }
   if (out.report.repeatCaptures.length) {
     // Capture reached one page by more than one URL. Mapped once — the
@@ -300,7 +345,7 @@ async function main() {
     }
     log('');
   }
-  log(`Assets: promote ${out.report.assets.promoted}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
+  log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
 
   if (!reportReconciles(out.report)) {
@@ -322,12 +367,10 @@ async function main() {
 
   // The import theme: derived now so the dry run shows exactly what --apply
   // would save. Named against the project's CURRENT themes.
-  const existingThemes = NO_THEME ? [] : must(await themesStore.listThemes(1000, scope), 'list themes');
-  const themeName = nextThemeName(siteNameFromUrl(job.sourceUrl), existingThemes.map((t) => t.name));
-  const importTheme = NO_THEME ? null : deriveImportTheme(ir, themeName);
-  if (importTheme) {
-    log(`\nImport theme "${themeName}" (becomes the project default on --apply):`);
-    for (const note of importTheme.notes) log(`  ${note}`);
+  const themePlan = NO_THEME ? null : await planImportTheme(job, scope, { ir });
+  if (themePlan) {
+    log(`\nImport theme "${themePlan.name}" (becomes the project default on --apply):`);
+    for (const note of themePlan.notes) log(`  ${note}`);
   } else {
     log('\nImport theme: skipped (--no-theme).');
   }
@@ -357,7 +400,12 @@ async function main() {
     if (urlMap.has(crop.fromUrl)) continue;
     urlMap.set(crop.fromUrl, await copyBlob(crop.fromUrl, `${applied}/crops/${crop.sourceId}.png`, 'image/png'));
   }
-  const uncopyable = await copyPromotedAssets(out.copyPlan.assets, copyBlob, applied, urlMap);
+  const uncopyable = [
+    ...await copyPromotedAssets(out.copyPlan.assets, copyBlob, applied, urlMap),
+    // Downloaded files no page uses (task 86bctde7n): same deterministic
+    // paths, so a re-run copies onto itself rather than beside itself.
+    ...await copyPromotedAssets(out.copyPlan.unplaced, copyBlob, applied, urlMap),
+  ];
   if (uncopyable.length) {
     log(`${uncopyable.length} image(s) could not be copied — the original site refused them; they keep their original address:`);
     for (const s of uncopyable) log(`  ${s.fromUrl}  (${s.reason})`);
@@ -399,6 +447,46 @@ async function main() {
   }
   log(`Assets promoted: ${promoted} new, ${out.copyPlan.assets.length - promoted} already in the library.`);
 
+  // 3b. Every other downloaded picture and PDF gets a row too, marked as not
+  //     placed (task 86bctde7n) — Alphire downloaded 48 files and Assets
+  //     showed 10. Same location key, so a re-apply adds nothing twice; and
+  //     a file the origin refused stays out rather than pointing elsewhere.
+  const createdLocations = [];
+  for (const asset of out.copyPlan.unplaced) {
+    const location = urlMap.get(asset.fromUrl);
+    if (!location || knownLocations.has(location)) continue;
+    knownLocations.add(location);
+    const file = asset.originalUrl.replace(/[#?].*$/, '').split('/').pop() || asset.assetId;
+    must(await assetsStore.createAsset({
+      assetName: file,
+      assetType: (asset.mimeType || '').startsWith('image/') ? 'Image' : 'File',
+      category: 'Site Import',
+      location,
+      caption: asset.altText,
+      comments: `Not placed on any page. Downloaded from ${asset.originalUrl} (job ${JOB_ID})`,
+    }, scope), `add unplaced asset ${asset.assetId}`);
+    createdLocations.push(location);
+  }
+  log(`Assets not placed on any page: ${createdLocations.length} new, ${out.copyPlan.unplaced.length - createdLocations.length} already in the library.`);
+
+  // Read the rows back (landmine 12): an insert that "succeeds" can land
+  // with no tenant, and then the row is in nobody's Assets.
+  if (createdLocations.length) {
+    const after = must(await assetsStore.listAssets(scope), 'read back project assets');
+    const byLocation = new Map(after.map((row) => [row.location, row]));
+    const untenanted = createdLocations.filter((loc) => {
+      const row = byLocation.get(loc);
+      return !row || !row.project_id || !row.owner_user_id;
+    });
+    if (untenanted.length) {
+      console.error(`\nERROR: ${untenanted.length} new Assets row(s) did not read back with both project_id and owner_user_id:`);
+      for (const loc of untenanted) console.error(`  ${loc}`);
+      process.exitCode = 1;
+    } else {
+      log(`  read back: all ${createdLocations.length} carry project_id and owner_user_id.`);
+    }
+  }
+
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
   const sectionHashes = { ...priorHashes };
@@ -427,9 +515,10 @@ async function main() {
       templateKind: 'modular',
       isPublished: false,
       layoutSections: sections,
+      ...pageGroundPatch(page, null),
     }, scope), `create ${page.slug}`),
     updatePage: async (page, current, merged) =>
-      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`),
+      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged, ...pageGroundPatch(page, current) }, scope), `update ${page.slug}`),
     mergeSections: (existing, incoming) => mergeMappedSections(existing, incoming, protectedIds),
     onWrite: (page, pageId, sections, action) => {
       ownedSectionIds.set(pageId, sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));
@@ -451,28 +540,10 @@ async function main() {
   // 4b. The import theme: create, make default, READ BACK (landmine 12 —
   //     an insert that "succeeds" can still land without its tenant).
   let themeCheckpoint = null;
-  if (importTheme) {
-    const previousDefault = existingThemes.find((t) => t.isDefault) || null;
-    const { notes, typography, ...top } = importTheme;
-    const created = must(await themesStore.createTheme({
-      ...top,
-      typography: normalizeTheme({ typography }).typography,
-    }, scope), `create theme "${themeName}"`);
-    must(await themesStore.setDefaultTheme(created.id, scope), `make "${themeName}" the default`);
-    const after = must(await themesStore.listThemes(1000, scope), 're-read themes');
-    const mine = after.find((t) => t.id === created.id);
-    if (!mine) throw new Error(`theme "${themeName}" (${created.id}) was created but is not in this project's theme list — check its project_id.`);
-    if (!mine.isDefault) throw new Error(`theme "${themeName}" was created but is not the project default.`);
-    themeCheckpoint = {
-      id: created.id,
-      name: themeName,
-      previousDefaultId: previousDefault?.id || '',
-      previousDefaultName: previousDefault?.name || '',
-    };
-    log(`Theme "${themeName}" created (${created.id}) and is now the project default.`);
-    log(previousDefault
-      ? `  To undo: make "${previousDefault.name}" (${previousDefault.id}) the default again in Builder > Themes.`
-      : '  There was no default theme before this one.');
+  if (themePlan) {
+    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: true });
+    log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
+    log(`  ${undoLine(themeCheckpoint)}`);
   }
 
   // 5. Checkpoint + final report (now carrying page ids).
@@ -527,6 +598,38 @@ async function main() {
     checkpoints: { ...checkpoints, map: { ...checkpoints.map, sectionHashes: settledHashes } },
   }), 'record settled section hashes');
   log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
+}
+
+/**
+ * --theme-only: the import theme and nothing else (task 86bctakkk). The
+ * pages' updated_at is read before and after, and a change fails the run —
+ * "touches no page" is checked, not assumed.
+ */
+async function runThemeOnly(job, scope) {
+  log(`Mode:    THEME ONLY — ${APPLY ? 'creates the import theme' : 'dry run, writes nothing'}; no page is touched`);
+  const stampsOf = async () => new Map(must(await pagesStore.listPages(5000, scope), 'list pages').map((p) => [String(p.id), p.updatedAt]));
+  const before = await stampsOf();
+  const plan = await planImportTheme(job, scope);
+  log(`\nImport theme "${plan.name}" (becomes the project default on --apply):`);
+  for (const note of plan.notes) log(`  ${note}`);
+  if (!APPLY) {
+    log('\nDry run complete. Re-run with --theme-only --apply to create it.');
+    return;
+  }
+  const checkpoint = await saveImportTheme(plan, scope, { makeDefault: true });
+  log(`Theme "${checkpoint.name}" created (${checkpoint.id}) and is now the project default.`);
+  log(`  ${undoLine(checkpoint)}`);
+  must(await store.updateJob(job.id, {
+    checkpoints: { ...(job.checkpoints || {}), theme: { ...checkpoint, at: new Date().toISOString() } },
+  }), 'record theme checkpoint');
+  const after = await stampsOf();
+  const changed = [...after].filter(([id, at]) => before.get(id) !== at).map(([id]) => id);
+  if (changed.length) {
+    console.error(`ERROR: ${changed.length} page(s) changed while the theme was made: ${changed.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  log(`Pages untouched: all ${after.size} page(s) read back with the same updated_at as before.`);
 }
 
 /** What the menu step will build — the dry run's promise, and --apply's. */

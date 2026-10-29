@@ -95,6 +95,7 @@ export type AssetUrlSource =
   | "font"         // @font-face / computed font URL
   | "pdf"          // <a href="*.pdf">
   | "favicon"
+  | "css-pseudo"   // url() painted by a ::before/::after layer
   | "other";
 
 export type AssetUrlRef = {
@@ -142,6 +143,13 @@ export type CaptureResult = {
    *  transparent. Desktop only; absent before 2026-10-07. */
   pageBackground?: string;
 
+  /**
+   * The ::before / ::after layers that paint something, in stamp order.
+   * Desktop only; absent on captures made before task 86bctde48 — a reader
+   * must treat that as "not recorded", never as "there were none".
+   */
+  decorations?: CapturedDecoration[];
+
   /** Blob path of the full-page screenshot. */
   fullPageScreenshot: string;
   /**
@@ -174,6 +182,62 @@ export type CaptureResult = {
     canonicalUrl: string;
     lang: string;
   };
+};
+
+/**
+ * One ::before / ::after layer that visibly paints (task 86bctde48). These
+ * are how a stylesheet draws a starfield, a glow ring or a thin line around
+ * an element with no element of its own — Alphire's hero is three of them —
+ * so the DOM walk never sees them. A pseudo-element that paints nothing (the
+ * clearfix `content:""`) is never recorded.
+ */
+export type CapturedDecoration = {
+  /** data-scim key of the element it belongs to. */
+  owner: string;
+  pseudo: "before" | "after";
+  /** The owner as a reader would name it: "section.alphire-hero". */
+  label: string;
+  /** [x, y, width, height] in page pixels, after any 2D transform — the
+   *  area it paints over. */
+  box: [number, number, number, number];
+  /** [width, height] of the layer itself, before any transform. Differs from
+   *  the box only when transformed: Alphire's cyan line is 1px tall, rotated
+   *  17°, and its box is 664×204. */
+  size: [number, number];
+  /**
+   * How the box was found. "offsets": a positioned layer, placed from its
+   * own top/left/width/height against its containing block — exact for the
+   * usual absolute/fixed decoration. "owner": an in-flow layer, which the
+   * browser gives no position for, so the box starts at the owner's corner
+   * and borrows the owner's size where its own is auto — an approximation.
+   */
+  boxFrom: "offsets" | "owner";
+  /** Computed z-index ("auto" or an integer). With `pseudo` this says
+   *  whether it paints under the owner's content (before) or over it. */
+  zIndex: string;
+  /** The painting properties (DECORATION_STYLE_PROPS), as computed. */
+  styles: CapturedStyles;
+};
+
+/** A captured decoration, normalized: defaults dropped, pictures joined to
+ *  the asset manifest. */
+export type DecorationIR = {
+  /** Stable within the job, like an element's sourceId. */
+  id: string;
+  pseudo: "before" | "after";
+  /** "section.alphire-hero" — the owner, for a person reading a report. */
+  owner: string;
+  /** True when the owner is the section's own root box. */
+  onSectionRoot: boolean;
+  box: { x: number; y: number; w: number; h: number };
+  /** The layer's own size before any transform (see CapturedDecoration). */
+  size: { w: number; h: number };
+  boxFrom: "offsets" | "owner";
+  zIndex: string;
+  /** Painting properties with browser defaults dropped. */
+  styles: CapturedStyles;
+  /** AssetRef ids of url() pictures it paints. */
+  assetRefs: string[];
 };
 
 /* ---------------------------------------------------------------------------
@@ -213,6 +277,14 @@ export type CaptureResult = {
  *            li, span, …)                            do not count, DESCEND —
  *            and each direct non-whitespace TEXT RUN of the descended
  *            element counts as one "text" countable
+ *
+ * One exception to "(else) … do not count, DESCEND", and the only rule that
+ * needs the captured styles: a container whose subtree holds no text and
+ * nothing countable, but which paints a background url() over a box of at
+ * least 40x40px, counts as one "image" and is not descended. Without it the
+ * picture had no element to belong to — Alphire's hero banner was
+ * downloaded and never placed (task 86bctde3p). Both counters apply it by
+ * passing the desktop styles and rects to the walk.
  *
  * Three consequences worth spelling out:
  *   - A link inside a paragraph is NOT a separate countable — it is part of
@@ -296,6 +368,33 @@ export type ElementIR = {
    * are none, and on IRs normalized before 2026-10-07 (task 86bce9wx3).
    */
   containers?: string[];
+  /**
+   * Set on an "image" that was an EMPTY box painting a background picture
+   * (no text, nothing countable inside, at least 40x40px) — how the source
+   * site drew its picture, kept for a later fit setting. Its html is the
+   * box, not an <img>; the picture is its first assetRef. Absent on real
+   * pictures and on IRs normalized before 2026-10-29 (task 86bctde3p).
+   */
+  backgroundImage?: { size: string; position: string };
+  /**
+   * Words inside a heading or paragraph that the original styled differently
+   * from the text around them — Alphire's cyan `<span class="accent">`, a
+   * `<strong>` the site kept at normal weight. The colour came from the site's
+   * stylesheet, which does not come along, so without this the word arrives
+   * looking like its neighbours (task 86bctde5z). Each entry names a
+   * descendant by its position in the element's own `html` (document order of
+   * every descendant element, the way cheerio's `find("*")` lists them) and
+   * its tag, so a reader that re-parses `html` differently can tell and skip.
+   * Only the properties that differ from what the word would inherit are
+   * listed. Absent when there are none, and on IRs normalized before it.
+   */
+  inlineStyles?: InlineStyleRun[];
+};
+
+export type InlineStyleRun = {
+  index: number;
+  tag: string;
+  styles: CapturedStyles;
 };
 
 export type SectionIR = {
@@ -318,6 +417,20 @@ export type SectionIR = {
   /** The section root's own surface styles, painted or not — where its
    *  padding comes from when no container paints. Absent when empty. */
   rootStyles?: CapturedStyles;
+  /**
+   * The ::before/::after layers painted by this section's root or anything
+   * inside it. An empty array means the capture looked and found none;
+   * ABSENT means it never looked (a capture made before task 86bctde48).
+   */
+  decorations?: DecorationIR[];
+  /**
+   * The colour this section showed through to, as captured ("rgb(…)"), when
+   * its root paints nothing AND that colour differs from its page's
+   * `background` — a transparent section sitting on a painted wrapper the
+   * page as a whole does not wear. Absent otherwise, and on IRs normalized
+   * before 2026-10-29 (task 86bctde6u).
+   */
+  ground?: string;
 };
 
 export type PageIR = {
@@ -330,6 +443,20 @@ export type PageIR = {
   canonicalUrl: string;
   lang: string;
   sections: SectionIR[];
+  /** Decorations whose owner sits outside every emitted section (a page
+   *  wrapper, or a box holding nothing countable). Absent when there are
+   *  none, or the capture predates task 86bctde48. */
+  decorations?: DecorationIR[];
+  /**
+   * What this page's content sits on, as captured ("rgb(3, 5, 10)"): the
+   * ground under the most content that sits in no painted box of its own —
+   * the nearest painted box above its section, else <body>/<html>. Content
+   * on a band or card does not vote. The site theme picks ONE surface for every page, so a dark
+   * page on a mostly white site (Alphire's home, 2026-10-27) needs its own.
+   * Absent when nothing was painted, and on IRs normalized before 2026-10-29
+   * (task 86bctde6u).
+   */
+  background?: string;
   /** Blob paths of the full-page screenshots per viewport ("" if missing). */
   screenshots: { desktop: string; tablet: string; mobile: string };
 };
