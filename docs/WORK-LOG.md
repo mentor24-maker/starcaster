@@ -12,6 +12,17 @@ with a copy of itself. The audit of that day's sweep found four old files
 that are retired or unused (now listed with their reasons, and one of them
 should never be run), one that would fail if run, which was rewritten, and
 ten that still need running, three of them merged today.
+## 2026-10-28 — Import a theme another project shares with you (#901)
+
+When one of Dane's projects shares its themes with another, the receiving
+project's Themes page now has a **Shared with this project** list at the
+bottom. It shows each theme's name, which project it came from, its colours
+and its fonts, with an **Import** button. Import makes this project its own
+copy. The copy is never made the default theme, so importing can't change
+how the live site looks, and the project it came from is never touched. If a
+theme with that name already exists here, the copy is called "(2)" instead of
+replacing it. If the other project stops sharing, the list empties and any
+copies already made stay.
 
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 
