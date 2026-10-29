@@ -13,7 +13,9 @@ const assert = require('node:assert/strict');
 const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
 const { mapSite, reportReconciles } = require('../../lib/site-import/dist/map.js');
 const { planSectionGrid } = require('../../lib/site-import/dist/columns.js');
-const { readSurface, readGradient, shadowPreset, keepCellFill } = require('../../lib/site-import/dist/surfaces.js');
+const {
+  readSurface, readGradient, readGradientLayers, readGradientBackground, shadowPreset, keepCellFill,
+} = require('../../lib/site-import/dist/surfaces.js');
 const template = require('../../lib/builder/template.js');
 
 /* ---------- a synthetic capture: band + 2x2 cards, a lone card, a photo band ---------- */
@@ -522,6 +524,84 @@ test('gradients read their first and last stops and their direction', () => {
     'a see-through stop shows the fill under it');
   assert.equal(readGradient('radial-gradient(rgb(0, 0, 0), rgb(255, 255, 255))', '#ffffff'), null);
   assert.equal(readGradient('none', '#ffffff'), null);
+});
+
+/* ---------- layered gradients (task 86bctde1m) ---------- */
+
+// Alphire's hero, as Chrome reported its computed background-image on 2026-10-27.
+const ALPHIRE_HERO =
+  'radial-gradient(circle at 80% 18%, rgba(0, 229, 255, 0.16) 0%, rgba(0, 0, 0, 0) 42%), ' +
+  'radial-gradient(60% 50% at 50% 100%, rgba(124, 77, 255, 0.12), rgba(0, 0, 0, 0) 60%), ' +
+  'linear-gradient(110deg, rgb(2, 3, 7) 0%, rgb(3, 10, 19) 46%, rgb(3, 17, 30) 100%)';
+
+test('every gradient layer is kept, top first, with its stops and see-through colours', () => {
+  const layers = readGradientLayers(ALPHIRE_HERO, '#ffffff');
+  assert.equal(layers.length, 3);
+  assert.deepEqual(layers.map((l) => l.kind), ['radial', 'radial', 'linear']);
+  assert.deepEqual([layers[0].shape, layers[0].x, layers[0].y], ['circle', 80, 18]);
+  assert.deepEqual(layers[0].stops, [
+    { color: '#00e5ff', alpha: 16, position: 0 },
+    { color: '#000000', alpha: 0, position: 42 },
+  ]);
+  assert.deepEqual([layers[1].shape, layers[1].size, layers[1].x, layers[1].y], ['ellipse', '60% 50%', 50, 100]);
+  assert.equal(layers[1].stops[1].position, 60, 'a stop with no position is placed the way CSS places it');
+  assert.equal(layers[2].angle, 110);
+  assert.deepEqual(layers[2].stops.map((s) => [s.color, s.position]), [['#020307', 0], ['#030a13', 46], ['#03111e', 100]]);
+});
+
+test('only the BOTTOM layer is flattened onto the fill; the glows above keep their transparency', () => {
+  const layers = readGradientLayers(
+    'radial-gradient(rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0)), linear-gradient(rgba(0, 0, 0, 0.5), rgb(0, 0, 0))',
+    '#ffffff'
+  );
+  assert.deepEqual(layers[0].stops.map((s) => s.alpha), [50, 0]);
+  assert.deepEqual(layers[1].stops[0], { color: '#808080', alpha: 100, position: 0 });
+});
+
+test('layers the Builder cannot paint are left out, and the rest kept', () => {
+  const layers = readGradientLayers('repeating-linear-gradient(rgb(255, 0, 0) 0%, rgb(0, 0, 255) 10%), url("x.png"), radial-gradient(rgb(255, 0, 0), rgb(0, 0, 255))', '#ffffff');
+  assert.deepEqual(layers.map((l) => l.kind), ['radial']);
+  assert.equal(readGradientLayers('none', '#ffffff'), null);
+  assert.equal(readGradientLayers('repeating-radial-gradient(rgb(255, 0, 0), rgb(0, 0, 255))', '#ffffff'), null);
+});
+
+// Colours are rgb() throughout: a computed style never reports a colour by name.
+test('positions and sizes in words read as the same box', () => {
+  const [layer] = readGradientLayers('radial-gradient(closest-side at right top, rgb(255, 0, 0), rgb(0, 0, 255))', '#ffffff');
+  assert.deepEqual([layer.size, layer.x, layer.y], ['closest-side', 100, 0]);
+  const [circle] = readGradientLayers('radial-gradient(300px at 20% 30%, rgb(255, 0, 0), rgb(0, 0, 255))', '#ffffff');
+  assert.deepEqual([circle.shape, circle.size], ['circle', '300px']);
+});
+
+test('a plain two-colour gradient imports exactly as it always did, with no layers', () => {
+  const value = 'linear-gradient(rgb(154, 210, 249) 0%, rgb(255, 255, 255) 100%)';
+  assert.deepEqual(readGradientBackground(value, '#ffffff'), readGradient(value, '#ffffff'));
+  const seeThrough = 'linear-gradient(rgb(255, 255, 255), rgba(0, 0, 0, 0.5))';
+  assert.deepEqual(readGradientBackground(seeThrough, '#000000'), readGradient(seeThrough, '#000000'));
+});
+
+test('a richer gradient carries its layers, with the two colours mirroring the bottom one', () => {
+  const bg = readGradientBackground(ALPHIRE_HERO, '#020307');
+  assert.deepEqual([bg.color, bg.color2, bg.gradientAngle], ['#020307', '#03111e', 110]);
+  assert.equal(bg.gradientLayers.length, 3);
+  const radialOnly = readGradientBackground('radial-gradient(rgb(0, 0, 0), rgb(255, 255, 255))', '#ffffff');
+  assert.deepEqual([radialOnly.color, radialOnly.color2, radialOnly.gradientLayers.length], ['#000000', '#ffffff', 1]);
+});
+
+test("Alphire's hero band imports with all three layers, and Builder keeps them on save", () => {
+  const desktop = capture();
+  const bandKey = Object.keys(desktop.styles).find((k) => desktop.styles[k]['background-color'] === 'rgb(238, 238, 238)');
+  desktop.styles[bandKey] = { ...desktop.styles[bandKey], 'background-color': 'rgb(2, 3, 7)', 'background-image': ALPHIRE_HERO };
+  const { sections } = importIt(desktop);
+  const [hero] = byTitle(sections, 'Our work');
+  assert.equal(hero.background.mode, 'gradient');
+  assert.equal(hero.background.gradientLayers.length, 3);
+  const saved = template.normalizeLayoutSections(sections.map(({ sourceElementIds, dispositions, ...s }) => s));
+  const kept = saved.find((s) => s.id === hero.id);
+  assert.deepEqual(kept.background.gradientLayers, hero.background.gradientLayers);
+  const css = template.getBuilderBackgroundStyle(kept.background).backgroundImage;
+  assert.equal((css.match(/radial-gradient\(/g) || []).length, 2);
+  assert.match(css, /linear-gradient\(110deg, rgba\(2, 3, 7, 1\) 0%, rgba\(3, 10, 19, 1\) 46%/);
 });
 
 /* ---------- columns ---------- */

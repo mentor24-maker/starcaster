@@ -64,6 +64,10 @@
       "schedule": "7 */2 * * *"
     },
     {
+      "path": "/api/acquire/substack-miner/read-posts-due",
+      "schedule": "41 6 * * *"
+    },
+    {
       "path": "/api/outreach/youtube/conversations/read-due",
       "schedule": "23 */3 * * *"
     },

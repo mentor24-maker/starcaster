@@ -9,6 +9,7 @@ import SubstackMinerPanel, {
   headerCounts,
   notesReadText,
   parseSeedLines,
+  postsReadSummaryText,
   searchSummaryText,
   seedSummaryText,
   snowballSummaryText,
@@ -59,7 +60,7 @@ function writer(overrides: Partial<Candidate>): Candidate {
 }
 
 type FakeContact = { id: string; substack: string; firstName: string; email?: string; subscribedAt?: string };
-type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean };
+type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean; postsReads?: number };
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -106,6 +107,12 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   }
   if (path === "/api/acquire/substack-miner/run" && method === "POST") {
     return { ok: true, data: { engine: "Google", keywordsSearched: store.keywords, keywordsNotSearched: [], resultsSeen: 4, droppedNotSubstack: 1, handlesFound: 3, added: 2, merged: 1, unreadablePages: [], searchErrors: [], refused: [] } };
+  }
+  if (path === "/api/acquire/substack-miner/read-posts" && method === "POST") {
+    // The first click reads; the second finds every writer read this week.
+    store.postsReads = (store.postsReads || 0) + 1;
+    if (store.postsReads > 1) return { ok: true, data: { writers: 3, due: 0, recent: 3, read: [], failed: [], notReached: 0 } };
+    return { ok: true, data: { writers: 3, due: 3, recent: 0, read: [{ handle: "a", name: "A", posts: 8 }, { handle: "b", name: "B", posts: 0 }], failed: [{ handle: "c", name: "Cee", reason: "its newest posts answered HTTP 404" }], notReached: 0 } };
   }
   if (path === "/api/acquire/substack-miner/snowball" && method === "POST") {
     return { ok: true, data: { sourcesRequested: 1, sourcesRead: 1, sources: [], notRead: [], linksFound: 5, added: 5, merged: 0, skippedNotSubstack: 0, refused: [] } };
@@ -312,16 +319,16 @@ describe("Substack Miner screen", () => {
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
     expect(tabs).toEqual(["Candidates", "Run"]);
     expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("0 found · 0 approved · 0 rejected · 0 in Contacts · 0 engaged · 0 subscribed");
-    expect(text()).toContain("No candidates yet. Add keywords on the Run tab and click Search the web.");
+    expect(text()).toContain("No candidates yet. Paste a link above, or add keywords on the Run tab and click Search the web.");
     await show("approved");
     expect(text()).toContain("Nothing approved yet.");
   });
 
-  it("pasting two seed lines adds two candidates found via seed", async () => {
+  it("pasting two lines on the Candidates tab adds two candidates, without leaving the tab", async () => {
     await mount();
-    await click(button("Run"));
+    expect(el('[role="tab"][aria-selected="true"]').textContent).toBe("Candidates");
     type(el<HTMLTextAreaElement>("#sm-seeds"), "kindoftsetsy, writes about how the Substack algorithm works\n\nanother-one, good on Notes");
-    await submit(el<HTMLFormElement>('form[aria-label="Paste a seed list"]'));
+    await submit(el<HTMLFormElement>('form[aria-label="Add writers by link"]'));
     const sent = requests.find((r) => r.path.endsWith("/candidates/import"));
     expect(sent?.body).toEqual({ candidates: [
       { handle: "kindoftsetsy", whyFit: "writes about how the Substack algorithm works" },
@@ -329,16 +336,14 @@ describe("Substack Miner screen", () => {
     ] });
     expect(text()).toContain("2 added.");
     expect(stores.proj_doe.writers.map((w) => w.foundVia)).toEqual(["seed", "seed"]);
-    await click(button("Candidates"));
-    expect(rowFor("kindoftsetsy")?.textContent).toContain("Seed list");
+    expect(rowFor("kindoftsetsy")?.textContent).toContain("Pasted link");
     expect(rowFor("another-one")).not.toBeNull();
   });
 
-  it("a refused seed line is named by the line Dane typed, and the box keeps his text", async () => {
+  it("a refused line is named by the line Dane typed, and the box keeps his text", async () => {
     await mount();
-    await click(button("Run"));
     type(el<HTMLTextAreaElement>("#sm-seeds"), "good\n\nNot A Handle!, why");
-    await submit(el<HTMLFormElement>('form[aria-label="Paste a seed list"]'));
+    await submit(el<HTMLFormElement>('form[aria-label="Add writers by link"]'));
     expect(text()).toContain("1 added.");
     expect(text()).toContain('Line 3 (Not A Handle!) was not added');
     expect(el<HTMLTextAreaElement>("#sm-seeds").value).toContain("Not A Handle!");
@@ -554,6 +559,16 @@ describe("Substack Miner screen", () => {
     expect(text()).toContain("Searched 2 keywords with Google: 4 results, 3 writers found — 2 new, 1 already here.");
   });
 
+  it("Read writers' posts says how many were read, names each one not read, and says nothing was due the second time (86bcuxwhy)", async () => {
+    await mount();
+    await click(button("Run"));
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Read posts for 2 writers; 1 could not be read; 1 has no posts yet.");
+    expect(text()).toContain("Cee: not read — its newest posts answered HTTP 404.");
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Nothing to read: every writer was read in the last 7 days (3 writers).");
+  });
+
   it("the recommendations button waits for an approved writer, and names the reason", async () => {
     await mount();
     await click(button("Run"));
@@ -644,7 +659,7 @@ describe("Substack Miner helpers", () => {
     const rows = [writer({ status: "approved" })];
     expect(emptyText([], "candidate", "")).toContain("No candidates yet");
     expect(emptyText(rows, "candidate", "")).toContain("every writer found has been approved or rejected");
-    expect(emptyText(rows, "rejected", "seed")).toBe("Nothing rejected found via seed list.");
+    expect(emptyText(rows, "rejected", "seed")).toBe("Nothing rejected found via pasted link.");
   });
 
   it("parses seed lines, keeping commas inside the reason", () => {
@@ -665,6 +680,16 @@ describe("Substack Miner helpers", () => {
     expect(lines.at(-1)).toBe("7 not reached in this run — click Suggest decisions again for the rest.");
   });
 
+  it("the posts summary names the writers left for next time", () => {
+    expect(postsReadSummaryText({ writers: 5, due: 5, read: [{ name: "A", posts: 3 }], failed: [], notReached: 4 })).toEqual([
+      "Read posts for 1 writer.",
+      "4 writers not reached — the run ran out of time. Click Read writers' posts again for the rest.",
+    ]);
+    expect(postsReadSummaryText({ writers: 3, due: 1, recent: 2, read: [], failed: [{ name: "Gone", reason: "its newest posts answered HTTP 404" }], notReached: 0 })[0])
+      .toBe("Read posts for 0 writers; 1 could not be read. 2 other writers were read in the last 7 days and skipped.");
+    expect(postsReadSummaryText({ writers: 0, due: 0, read: [], failed: [], notReached: 0 })).toEqual(["Nothing to read: there are no writers yet, other than rejected ones."]);
+  });
+
   it("run summaries account for everything the server reported", () => {
     const search = searchSummaryText({ keywordsSearched: ["k"], keywordsNotSearched: ["late"], resultsSeen: 1, handlesFound: 1, added: 1, merged: 0, droppedNotSubstack: 0, unreadablePages: [{ handle: "h", reason: "HTTP 500" }], searchErrors: [{ keyword: "k2", error: "quota" }], refused: [] });
     expect(search.join(" ")).toContain("late");
@@ -677,6 +702,8 @@ describe("Substack Miner helpers", () => {
     const fromProfile = seedSummaryText({ added: 1, merged: 0, refusals: [{ index: 1, handle: "@reader", error: "they have no Substack publication of their own" }], resolved: [{ index: 0, profile: "@ankairos", handle: "magickalchemyandai", name: "Philosophy & AI" }] }, [2, 4]);
     expect(fromProfile).toContain('Line 2: @ankairos writes "Philosophy & AI" at magickalchemyandai.substack.com, so they were added under that publication.');
     expect(fromProfile.join(" ")).toContain("Line 4 (@reader) was not added");
+    const fromLink = seedSummaryText({ added: 1, merged: 0, refusals: [], resolved: [{ index: 0, link: "https://www.lennysnewsletter.com/p/x", handle: "lenny", name: "Lenny's Newsletter" }] }, [1]);
+    expect(fromLink).toContain(`Line 1: that link is from "Lenny's Newsletter" at lenny.substack.com, so the writer was added under that publication.`);
     const subs = subscriberSummaryText({ rowsRead: 3, matched: 1, newlyMarked: 1, alreadyMarked: 0, unmatched: 1, unreadable: 1, emailColumn: "Email", dateColumn: "", approvedWriterMatches: 1, problems: [{ line: 4, reason: "the email is blank" }], unmatchedEmails: ["x@y.co"], contactsTruncated: true, contactsSearched: 5000 }).join(" ");
     expect(subs).toContain("1 could not be read");
     expect(subs).toContain("no subscription-date column, so contacts newly marked carry today's date");

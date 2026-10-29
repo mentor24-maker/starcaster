@@ -256,6 +256,10 @@ function describeBackground(value: Record<string, unknown>): string {
   if (mode === "none") return "none";
   if (mode === "color") return `colour ${String(value.color ?? "").trim() || "unset"}`;
   if (mode === "gradient") {
+    // Two layered backgrounds with the same bottom colours would otherwise
+    // read as identical in a diff while painting differently.
+    const layers = Array.isArray(value.gradientLayers) ? value.gradientLayers.length : 0;
+    if (layers) return `gradient, ${layers} layer${layers === 1 ? "" : "s"}`;
     return `gradient ${String(value.color ?? "").trim()} → ${String(value.color2 ?? "").trim()}`;
   }
   if (mode === "image") {

@@ -329,6 +329,7 @@ export function BuilderCellStyleSettings({
               than the same one on a smaller surface. */}
           <BuilderBackgroundControls
             allowVideo
+            allowGradientLayers
             label="Background"
             surfaceNoun="column"
             background={section.cellBackgrounds[column] ?? createDefaultBackgroundSettings()}

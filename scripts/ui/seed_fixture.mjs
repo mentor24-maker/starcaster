@@ -1102,6 +1102,24 @@ const buildPanelCheckSection = (ids) => {
         settings: { ...base.settings, ...(tuned.settings || {}) },
       };
     }),
+    // A SECOND picture, on a CUSTOM shape. Corner Radii is `visibleWhen`
+    // Shape is Custom, so the plain image above hides it and the check would
+    // pass over a field it never measured (task 86bctde2b). The value is the
+    // Alphire hero blob, the longest radii string Site Import writes.
+    (() => {
+      const base = createEmptyModule('image', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-image-custom-shape',
+        name: 'Image (Custom Shape)',
+        settings: {
+          ...base.settings,
+          ...(TUNED.image?.settings || {}),
+          imageShape: 'custom',
+          imageShapeRadii: '50% 45% 52% 48% / 48% 52% 48% 52%',
+        },
+      };
+    })(),
     // A SECOND calendar, in MONTH layout. `weekStartsOn` is `visibleWhen` the
     // month grid, so the cards-layout module above hides it — the same hole
     // the mega menu below covers, one module along. One per type is the
@@ -1330,6 +1348,46 @@ const UNLINKED_SECTION = {
  * unbroken word, because a cell's controls running off the row card only
  * shows when something in the cell is wider than the cell (task 86bcgjy02).
  */
+/*
+ * A LAYERED GRADIENT on the row and on its cell (task 86bctde1m), so the
+ * Gradient Layers group renders in both editors and gets measured. Its rows —
+ * a layer's type, a radial's shape, size and centre, every stop's colour and
+ * position — exist only while the background is a gradient that HAS layers;
+ * on the two-colour gradients above the group is one "Use Layers" button,
+ * which always agrees with itself. Two layers, one radial and one linear, so
+ * both kinds of row are on the page at once.
+ */
+const PANEL_CHECK_GRADIENT_LAYERS = [
+  {
+    kind: 'radial', shape: 'circle', x: 80, y: 18,
+    stops: [{ color: '#00e5ff', alpha: 16, position: 0 }, { color: '#000000', alpha: 0, position: 42 }],
+  },
+  {
+    kind: 'linear', angle: 110,
+    stops: [
+      { color: '#020307', alpha: 100, position: 0 },
+      { color: '#030a13', alpha: 100, position: 46 },
+      { color: '#03111e', alpha: 100, position: 100 },
+    ],
+  },
+];
+
+const PANEL_CHECK_GRADIENT_LAYERS_SECTION = {
+  id: 'section-panel-lattice-check-gradient-layers',
+  title: 'Panel Lattice Check — gradient layers',
+  layout: 'single',
+  locked: false,
+  alignment: 'left',
+  widthMode: 'contained',
+  background: { mode: 'gradient', color: '#020307', color2: '#03111e', gradientAngle: 110, gradientLayers: PANEL_CHECK_GRADIENT_LAYERS },
+  cellBackgrounds: {
+    main: { mode: 'gradient', color: '#020307', color2: '#03111e', gradientAngle: 110, gradientLayers: PANEL_CHECK_GRADIENT_LAYERS },
+  },
+  modules: [
+    { id: 'panel-gradient-layers-text', type: 'text', text: '<p>Over a layered gradient</p>', column: 'main', settings: {} },
+  ],
+};
+
 const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   id: 'section-panel-lattice-check-columns',
   title: 'Panel Lattice Check — two columns',
@@ -1382,7 +1440,13 @@ const buildPages = (ids) => [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
-  ['Panel Lattice Check', 'panel-lattice-check', [buildPanelCheckSection(ids), PANEL_CHECK_MULTI_COLUMN_SECTION]],
+  ['Panel Lattice Check', 'panel-lattice-check', [
+    buildPanelCheckSection(ids),
+    // Before the two-column row, never after it: check_panels switches the
+    // LAST row to its Phone panel and relies on that row having two columns.
+    PANEL_CHECK_GRADIENT_LAYERS_SECTION,
+    PANEL_CHECK_MULTI_COLUMN_SECTION,
+  ]],
   // Two pages follow the same master, so the lineage line reads "2 pages" and
   // exercises the plural path rather than the "1 page" special case.
   ['Block States', 'block-states', [

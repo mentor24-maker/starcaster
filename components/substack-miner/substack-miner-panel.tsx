@@ -28,8 +28,13 @@ import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './sub
  * and the Run tab's Import subscribers box sends Substack's subscriber export
  * to lib/acquire/SubstackSubscriberImport.js, which marks matching contacts.
  *
- * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Add
- * keywords on the Run tab…", "Nothing approved yet.", and a filter that hides
+ * ADD BY LINK (task 86bcux874): the Candidates tab — where Outreach's Find
+ * creators lands — opens with a box for pasting article, publication or
+ * profile links; lib/acquire/SubstackSeedImport.js works out the writer behind
+ * each. It was the Run tab's "Paste a seed list", which Dane never found there.
+ *
+ * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Paste
+ * a link above…", "Nothing approved yet.", and a filter that hides
  * every row says which filter.
  */
 
@@ -63,8 +68,23 @@ export type Candidate = {
   /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
   recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
   lastNotesReadAt?: string | null;
+  /** Substack Miner upgrade 1/4: the newest posts as last read (newest first, at most 8), when, and the pictures. */
+  recentPosts?: RecentPost[];
+  postsReadAt?: string | null;
+  photoUrl?: string;
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RecentPost = {
+  title: string;
+  url: string;
+  postedAt: string;
+  subtitle: string;
+  excerpt: string;
+  coverImage: string;
+  paid: boolean;
 };
 
 export type MinerSettings = {
@@ -116,7 +136,7 @@ export const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 const STATUS_WORDS: Record<string, string> = { candidate: 'a candidate', approved: 'approved', rejected: 'rejected' };
 
 export const FOUND_VIA_LABELS: Record<string, string> = {
-  seed: 'Seed list',
+  seed: 'Pasted link',
   web_search: 'Web search',
   recommendations: 'Recommendations',
   notes_search: 'Notes search',
@@ -264,16 +284,16 @@ export function visibleCandidates(candidates: Candidate[], status: string, found
 export function emptyText(candidates: Candidate[], status: string, foundVia: string, negate = false): string {
   const via = foundVia ? ` found via ${(FOUND_VIA_LABELS[foundVia] || foundVia).toLowerCase()}` : '';
   if (status === 'all' || negate) {
-    if (!candidates.length) return 'No writers yet. Add keywords on the Run tab and click Search the web.';
+    if (!candidates.length) return 'No writers yet. Paste a link above, or add keywords on the Run tab and click Search the web.';
     if (status === 'all') return `No writers${via}. Try another "Found via" choice.`;
     return `Every writer${via || ' found'} is ${STATUS_WORDS[status] || status}, so nothing is left once those are taken out. Untick Not to see them.`;
   }
   if (status === 'approved') return foundVia ? `Nothing approved${via}.` : 'Nothing approved yet.';
   if (status === 'rejected') return foundVia ? `Nothing rejected${via}.` : 'Nothing rejected yet.';
-  if (!candidates.length) return 'No candidates yet. Add keywords on the Run tab and click Search the web.';
+  if (!candidates.length) return 'No candidates yet. Paste a link above, or add keywords on the Run tab and click Search the web.';
   return foundVia
     ? `No candidates waiting${via}. Try another "Found via" choice.`
-    : 'No candidates waiting — every writer found has been approved or rejected. Run a search or read recommendations on the Run tab for more.';
+    : 'No candidates waiting — every writer found has been approved or rejected. Paste a link above, or run a search or read recommendations on the Run tab for more.';
 }
 
 /**
@@ -333,9 +353,10 @@ export type SeedRow = { handle: string; whyFit?: string };
 
 /**
  * One writer per line, `handle, why it fits`. The handle may be a bare name,
- * an @name, the publication's address or a person's substack.com/@name
- * profile link (looked up and filed under their publication); the server
- * decides which are real.
+ * an @name, the publication's address, an article's link (on Substack or the
+ * publication's own domain) or a person's substack.com/@name profile link
+ * (each looked up and filed under its publication); the server decides which
+ * are real.
  * Blank lines are dropped, and `lines` maps each row back to the line it came
  * from so a refusal can name the line Dane typed.
  */
@@ -358,9 +379,12 @@ export function seedSummaryText(data: Record<string, any> | null | undefined, li
   const added = Number(data?.added) || 0;
   const merged = Number(data?.merged) || 0;
   const out = [`${added} added${merged ? `, ${merged} already here (their details were brought up to date)` : ''}.`];
-  for (const r of (data?.resolved || []) as Array<{ index: number; profile: string; handle: string; name?: string }>) {
+  for (const r of (data?.resolved || []) as Array<{ index: number; profile?: string; link?: string; handle: string; name?: string }>) {
     const line = lines[r.index] ?? r.index + 1;
-    out.push(`Line ${line}: ${r.profile} writes ${r.name ? `"${r.name}" at ` : ''}${r.handle}.substack.com, so they were added under that publication.`);
+    const where = `${r.name ? `"${r.name}" at ` : ''}${r.handle}.substack.com`;
+    out.push(r.profile
+      ? `Line ${line}: ${r.profile} writes ${where}, so they were added under that publication.`
+      : `Line ${line}: that link is from ${where}, so the writer was added under that publication.`);
   }
   for (const r of (data?.refusals || []) as Array<{ index: number; handle?: string; error: string }>) {
     const line = lines[r.index] ?? r.index + 1;
@@ -398,6 +422,31 @@ export function snowballSummaryText(s: Record<string, any> | null | undefined): 
   for (const n of (s.notRead || []) as Array<{ handle: string; reason: string }>) out.push(`${n.handle}: ${n.reason}.`);
   if (Number(s.skippedNotSubstack)) out.push(`${plural(Number(s.skippedNotSubstack), 'recommendation')} on a publication's own domain ${Number(s.skippedNotSubstack) === 1 ? 'was' : 'were'} skipped — the address does not say which Substack it is.`);
   for (const r of (s.refused || []) as Array<{ handle: string; error: string }>) out.push(`${r.handle} was not saved: ${plainError(r.error)}`);
+  return out;
+}
+
+/** What "Read writers' posts" did (lib/acquire/SubstackPostsReadRun.js). */
+export function postsReadSummaryText(s: Record<string, any> | null | undefined): string[] {
+  if (!s) return [];
+  const writers = Number(s.writers) || 0;
+  const read = (s.read || []) as Array<{ name: string; posts: number }>;
+  const failed = (s.failed || []) as Array<{ name: string; reason: string }>;
+  if (!Number(s.due)) {
+    return [writers
+      ? `Nothing to read: every writer was read in the last 7 days (${plural(writers, 'writer')}).`
+      : 'Nothing to read: there are no writers yet, other than rejected ones.'];
+  }
+  const noPosts = read.filter((r) => !r.posts).length;
+  const out = [
+    `Read posts for ${plural(read.length, 'writer')}`
+    + (failed.length ? `; ${failed.length} could not be read` : '')
+    + (noPosts ? `; ${noPosts} ${noPosts === 1 ? 'has' : 'have'} no posts yet` : '')
+    + '.'
+    + (Number(s.recent) ? ` ${plural(Number(s.recent), 'other writer')} ${Number(s.recent) === 1 ? 'was' : 'were'} read in the last 7 days and skipped.` : ''),
+  ];
+  for (const f of failed) out.push(`${f.name}: not read — ${f.reason}.`);
+  const left = Number(s.notReached) || 0;
+  if (left) out.push(`${plural(left, 'writer')} not reached — the run ran out of time. Click Read writers' posts again for the rest.`);
   return out;
 }
 
@@ -454,6 +503,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [searchLines, setSearchLines] = useState<string[]>([]);
   const [snowballBusy, setSnowballBusy] = useState(false);
   const [snowballLines, setSnowballLines] = useState<string[]>([]);
+  const [postsBusy, setPostsBusy] = useState(false);
+  const [postsLines, setPostsLines] = useState<string[]>([]);
   const [seedText, setSeedText] = useState('');
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedLines, setSeedLines] = useState<string[]>([]);
@@ -553,6 +604,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setKeywordsMessage('');
       setSearchLines([]);
       setSnowballLines([]);
+      setPostsLines([]);
       // A half-pasted seed list belongs to the old project; Add must not file it here.
       setSeedText('');
       setSeedLines([]);
@@ -785,6 +837,28 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
       {tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
+          <form className="substack-miner-card" aria-label="Add writers by link" onSubmit={addSeeds}>
+            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add writers by link</label>
+            <p className="substack-miner-card-note">
+              Paste one link per line — an article, a publication's address, or a person's profile (substack.com/@name) — and the
+              writer behind it is added as a candidate. Links on a publication's own domain work too. To say why a writer fits,
+              add a comma and a few words after the link.
+            </p>
+            <textarea
+              id="sm-seeds"
+              rows={3}
+              value={seedText}
+              onChange={(e) => setSeedText(e.target.value)}
+              placeholder={'https://www.example.com/p/an-article, writes about tennis coaching\nhttps://substack.com/@name'}
+            />
+            <div className="substack-miner-actions">
+              <button type="submit" className="btn btn-primary" disabled={seedBusy || !parseSeedLines(seedText).rows.length}>
+                {seedBusy ? 'Adding…' : 'Add writers'}
+              </button>
+            </div>
+            <RunResult lines={seedLines} label="What adding the writers did" />
+          </form>
+
           <div className="substack-miner-filters">
             <div className="substack-miner-filter" role="group" aria-label="Show filter">
               <span>Show</span>
@@ -1006,6 +1080,25 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <RunResult lines={suggestLines} label="What suggesting did" />
           </section>
 
+          <section className="substack-miner-card" aria-label="Read writers' posts">
+            <h3 className="substack-miner-card-title">Read writers' posts</h3>
+            <p className="substack-miner-card-note">
+              Keeps each writer's newest posts, their photo and their publication's logo, for every writer you have not rejected.
+              A writer read in the last 7 days is skipped. It reads Substack gently, so it can take a few minutes; it also runs by itself once a day.
+            </p>
+            <div className="substack-miner-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={postsBusy}
+                onClick={() => void runPass(`${BASE}/read-posts`, setPostsBusy, setPostsLines, postsReadSummaryText, "Reading writers' posts")}
+              >
+                {postsBusy ? 'Reading…' : "Read writers' posts"}
+              </button>
+            </div>
+            <RunResult lines={postsLines} label="What reading posts did" />
+          </section>
+
           <section className="substack-miner-card" aria-label="Read recommendations">
             <h3 className="substack-miner-card-title">Read recommendations of approved writers</h3>
             <p className="substack-miner-card-note">
@@ -1025,18 +1118,6 @@ export default function SubstackMinerPanel(): React.ReactElement {
             </div>
             <RunResult lines={snowballLines} label="What reading recommendations did" />
           </section>
-
-          <form className="substack-miner-card" aria-label="Paste a seed list" onSubmit={addSeeds}>
-            <label className="substack-miner-card-title" htmlFor="sm-seeds">Paste a seed list</label>
-            <p className="substack-miner-card-note">One writer per line: <code>handle, why it fits</code>. The handle is the part before .substack.com, or paste the publication's address or the person's profile link (substack.com/@name).</p>
-            <textarea id="sm-seeds" rows={5} value={seedText} onChange={(e) => setSeedText(e.target.value)} />
-            <div className="substack-miner-actions">
-              <button type="submit" className="btn btn-primary" disabled={seedBusy || !parseSeedLines(seedText).rows.length}>
-                {seedBusy ? 'Adding…' : 'Add seeds'}
-              </button>
-            </div>
-            <RunResult lines={seedLines} label="What adding the seeds did" />
-          </form>
 
           <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
             <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import subscribers</label>
