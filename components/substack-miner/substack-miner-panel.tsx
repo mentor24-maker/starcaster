@@ -68,8 +68,23 @@ export type Candidate = {
   /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
   recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
   lastNotesReadAt?: string | null;
+  /** Substack Miner upgrade 1/4: the newest posts as last read (newest first, at most 8), when, and the pictures. */
+  recentPosts?: RecentPost[];
+  postsReadAt?: string | null;
+  photoUrl?: string;
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type RecentPost = {
+  title: string;
+  url: string;
+  postedAt: string;
+  subtitle: string;
+  excerpt: string;
+  coverImage: string;
+  paid: boolean;
 };
 
 export type MinerSettings = {
@@ -410,6 +425,31 @@ export function snowballSummaryText(s: Record<string, any> | null | undefined): 
   return out;
 }
 
+/** What "Read writers' posts" did (lib/acquire/SubstackPostsReadRun.js). */
+export function postsReadSummaryText(s: Record<string, any> | null | undefined): string[] {
+  if (!s) return [];
+  const writers = Number(s.writers) || 0;
+  const read = (s.read || []) as Array<{ name: string; posts: number }>;
+  const failed = (s.failed || []) as Array<{ name: string; reason: string }>;
+  if (!Number(s.due)) {
+    return [writers
+      ? `Nothing to read: every writer was read in the last 7 days (${plural(writers, 'writer')}).`
+      : 'Nothing to read: there are no writers yet, other than rejected ones.'];
+  }
+  const noPosts = read.filter((r) => !r.posts).length;
+  const out = [
+    `Read posts for ${plural(read.length, 'writer')}`
+    + (failed.length ? `; ${failed.length} could not be read` : '')
+    + (noPosts ? `; ${noPosts} ${noPosts === 1 ? 'has' : 'have'} no posts yet` : '')
+    + '.'
+    + (Number(s.recent) ? ` ${plural(Number(s.recent), 'other writer')} ${Number(s.recent) === 1 ? 'was' : 'were'} read in the last 7 days and skipped.` : ''),
+  ];
+  for (const f of failed) out.push(`${f.name}: not read — ${f.reason}.`);
+  const left = Number(s.notReached) || 0;
+  if (left) out.push(`${plural(left, 'writer')} not reached — the run ran out of time. Click Read writers' posts again for the rest.`);
+  return out;
+}
+
 // ── One row ────────────────────────────────────────────────────────────────
 
 function RecommendedBy({ handles }: { handles: string[] }): React.ReactElement {
@@ -463,6 +503,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [searchLines, setSearchLines] = useState<string[]>([]);
   const [snowballBusy, setSnowballBusy] = useState(false);
   const [snowballLines, setSnowballLines] = useState<string[]>([]);
+  const [postsBusy, setPostsBusy] = useState(false);
+  const [postsLines, setPostsLines] = useState<string[]>([]);
   const [seedText, setSeedText] = useState('');
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedLines, setSeedLines] = useState<string[]>([]);
@@ -562,6 +604,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setKeywordsMessage('');
       setSearchLines([]);
       setSnowballLines([]);
+      setPostsLines([]);
       // A half-pasted seed list belongs to the old project; Add must not file it here.
       setSeedText('');
       setSeedLines([]);
@@ -1035,6 +1078,25 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </button>
             </div>
             <RunResult lines={suggestLines} label="What suggesting did" />
+          </section>
+
+          <section className="substack-miner-card" aria-label="Read writers' posts">
+            <h3 className="substack-miner-card-title">Read writers' posts</h3>
+            <p className="substack-miner-card-note">
+              Keeps each writer's newest posts, their photo and their publication's logo, for every writer you have not rejected.
+              A writer read in the last 7 days is skipped. It reads Substack gently, so it can take a few minutes; it also runs by itself once a day.
+            </p>
+            <div className="substack-miner-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={postsBusy}
+                onClick={() => void runPass(`${BASE}/read-posts`, setPostsBusy, setPostsLines, postsReadSummaryText, "Reading writers' posts")}
+              >
+                {postsBusy ? 'Reading…' : "Read writers' posts"}
+              </button>
+            </div>
+            <RunResult lines={postsLines} label="What reading posts did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read recommendations">

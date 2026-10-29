@@ -9,6 +9,7 @@ import SubstackMinerPanel, {
   headerCounts,
   notesReadText,
   parseSeedLines,
+  postsReadSummaryText,
   searchSummaryText,
   seedSummaryText,
   snowballSummaryText,
@@ -59,7 +60,7 @@ function writer(overrides: Partial<Candidate>): Candidate {
 }
 
 type FakeContact = { id: string; substack: string; firstName: string; email?: string; subscribedAt?: string };
-type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean };
+type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean; postsReads?: number };
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -106,6 +107,12 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   }
   if (path === "/api/acquire/substack-miner/run" && method === "POST") {
     return { ok: true, data: { engine: "Google", keywordsSearched: store.keywords, keywordsNotSearched: [], resultsSeen: 4, droppedNotSubstack: 1, handlesFound: 3, added: 2, merged: 1, unreadablePages: [], searchErrors: [], refused: [] } };
+  }
+  if (path === "/api/acquire/substack-miner/read-posts" && method === "POST") {
+    // The first click reads; the second finds every writer read this week.
+    store.postsReads = (store.postsReads || 0) + 1;
+    if (store.postsReads > 1) return { ok: true, data: { writers: 3, due: 0, recent: 3, read: [], failed: [], notReached: 0 } };
+    return { ok: true, data: { writers: 3, due: 3, recent: 0, read: [{ handle: "a", name: "A", posts: 8 }, { handle: "b", name: "B", posts: 0 }], failed: [{ handle: "c", name: "Cee", reason: "its newest posts answered HTTP 404" }], notReached: 0 } };
   }
   if (path === "/api/acquire/substack-miner/snowball" && method === "POST") {
     return { ok: true, data: { sourcesRequested: 1, sourcesRead: 1, sources: [], notRead: [], linksFound: 5, added: 5, merged: 0, skippedNotSubstack: 0, refused: [] } };
@@ -552,6 +559,16 @@ describe("Substack Miner screen", () => {
     expect(text()).toContain("Searched 2 keywords with Google: 4 results, 3 writers found — 2 new, 1 already here.");
   });
 
+  it("Read writers' posts says how many were read, names each one not read, and says nothing was due the second time (86bcuxwhy)", async () => {
+    await mount();
+    await click(button("Run"));
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Read posts for 2 writers; 1 could not be read; 1 has no posts yet.");
+    expect(text()).toContain("Cee: not read — its newest posts answered HTTP 404.");
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Nothing to read: every writer was read in the last 7 days (3 writers).");
+  });
+
   it("the recommendations button waits for an approved writer, and names the reason", async () => {
     await mount();
     await click(button("Run"));
@@ -661,6 +678,16 @@ describe("Substack Miner helpers", () => {
     expect(lines).toContain("C was not suggested: the AI did not answer: timeout.");
     expect(lines).toContain("D was judged from its description only — its newest posts answered HTTP 404.");
     expect(lines.at(-1)).toBe("7 not reached in this run — click Suggest decisions again for the rest.");
+  });
+
+  it("the posts summary names the writers left for next time", () => {
+    expect(postsReadSummaryText({ writers: 5, due: 5, read: [{ name: "A", posts: 3 }], failed: [], notReached: 4 })).toEqual([
+      "Read posts for 1 writer.",
+      "4 writers not reached — the run ran out of time. Click Read writers' posts again for the rest.",
+    ]);
+    expect(postsReadSummaryText({ writers: 3, due: 1, recent: 2, read: [], failed: [{ name: "Gone", reason: "its newest posts answered HTTP 404" }], notReached: 0 })[0])
+      .toBe("Read posts for 0 writers; 1 could not be read. 2 other writers were read in the last 7 days and skipped.");
+    expect(postsReadSummaryText({ writers: 0, due: 0, read: [], failed: [], notReached: 0 })).toEqual(["Nothing to read: there are no writers yet, other than rejected ones."]);
   });
 
   it("run summaries account for everything the server reported", () => {
