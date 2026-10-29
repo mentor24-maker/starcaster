@@ -11,6 +11,18 @@ be read is named with the reason. The guessing step now reads posts through the
 same piece of code, so the two can never read a post differently. Nothing new
 shows in the list yet: the next three tickets use this data to show articles
 and pictures for each writer.
+## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
+
+On the Acquire screen, every X or Reddit search is supposed to leave a run in
+the history list, so you can reopen it later. Those runs were saved to files on
+the server, and the live site cannot write files, so it skipped the save without
+saying so. Every search reported "saved", nothing was kept, and the history on
+the live site was always empty. The runs now go into two database tables, the
+same place the YouTube history already lives, kept separate per project. If the
+database cannot save a run, the screen now says so instead of pretending it
+worked. The tables need one SQL file run in Supabase
+(`acquire_x_reddit_runs_setup.sql`); until then the history shows an error
+naming the missing table, and the daily unapplied-SQL check keeps reminding.
 ## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
 
 A picture in the Builder could only have rounded corners, measured in pixels.
