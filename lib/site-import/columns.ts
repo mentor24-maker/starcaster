@@ -15,7 +15,8 @@
  *   2. Columns: inside a band, sort by left edge and sweep the same way
  *      horizontally. Two or more columns = a side-by-side row.
  *   3. Tidy: a row with a sliver column (an icon beside a line of text) is
- *      treated as stacked; a row wider than six columns wraps; consecutive
+ *      treated as stacked, and so is a logo lockup inside a taller stack
+ *      (see LOCKUP_MAX_PX); a row wider than six columns wraps; consecutive
  *      stacked bands merge; consecutive rows whose columns line up merge
  *      (that is what makes a 2x2 grid ONE two-column section).
  *
@@ -28,7 +29,11 @@ export type Box = { x: number; y: number; w: number; h: number };
 /** `group` names the styled box (a card) the item sits in, if any: rows only
  *  merge when each column holds the same cards, so two cards are never
  *  poured into one Builder cell that can wear only one card's look. */
-export type GridItem = { id: string; box?: Box | null; group?: string };
+export type GridItem = { id: string; box?: Box | null; group?: string; kind?: GridKind };
+
+/** What an item is, as far as the lockup rule cares: a picture, words, or
+ *  anything else (a button, a placeholder). Absent = "other". */
+export type GridKind = "image" | "prose" | "other";
 
 export type Cell = { band: number; col: number };
 
@@ -89,6 +94,12 @@ const MIN_COLUMN_SHARE = 0.1;
 /** Two rows' columns "line up" when each pair overlaps by this share of the
  *  narrower one. */
 const ALIGN_SHARE = 0.5;
+/** A "lockup" is a logo-sized picture with one to three lines of text right
+ *  beside it — Alphire's star logo next to "Alphire / AI Agency" (task
+ *  86bctde55). Wider or taller than this either way, the picture is content,
+ *  and picture-beside-text is a real two-column row. */
+const LOCKUP_MAX_PX = 160;
+const LOCKUP_MAX_TEXTS = 3;
 
 function validBox(box: Box | null | undefined): box is Box {
   return (
@@ -99,8 +110,8 @@ function validBox(box: Box | null | undefined): box is Box {
   );
 }
 
-type Positioned = { id: string; box: Box; group: string };
-type RawColumn = { x0: number; x1: number; ids: string[]; groups: string[] };
+type Positioned = { id: string; box: Box; group: string; kind: GridKind };
+type RawColumn = { x0: number; x1: number; ids: string[]; groups: string[]; items: Positioned[] };
 type RawBand = { columns: RawColumn[] };
 
 function sweep<T>(
@@ -129,7 +140,27 @@ function columnsOf(group: Positioned[]): RawColumn[] {
     x1: Math.max(...col.map((p) => p.box.x + p.box.w)),
     ids: col.map((p) => p.id),
     groups: Array.from(new Set(col.map((p) => p.group))).sort(),
+    items: col,
   }));
+}
+
+/**
+ * A logo lockup: two columns, the left one a single logo-sized picture, the
+ * right one a few lines of text that start beside it and overlap it
+ * vertically. Builder has no rows inside a column, so read as a row it can
+ * only become a Builder section of its own — which is how Alphire's logo and
+ * brand name came out as a separate band above the rest of the hero.
+ */
+function isLockup(band: RawBand): boolean {
+  if (band.columns.length !== 2) return false;
+  const [pic, words] = band.columns;
+  if (pic.items.length !== 1 || pic.items[0].kind !== "image") return false;
+  const img = pic.items[0].box;
+  if (img.w > LOCKUP_MAX_PX || img.h > LOCKUP_MAX_PX) return false;
+  if (!words.items.length || words.items.length > LOCKUP_MAX_TEXTS) return false;
+  return words.items.every(
+    (t) => t.kind === "prose" && t.box.y < img.y + img.h && t.box.y + t.box.h > img.y
+  );
 }
 
 /** Same cards, column for column — the condition for two rows to merge. */
@@ -150,6 +181,7 @@ function stacked(band: RawBand): RawBand {
         x1: Math.max(...all.map((c) => c.x1)),
         ids: all.flatMap((c) => c.ids),
         groups: all.reduce<string[]>((acc, c) => unionGroups(acc, c.groups), []),
+        items: all.flatMap((c) => c.items),
       },
     ],
   };
@@ -168,7 +200,7 @@ function aligned(a: RawBand, b: RawBand): boolean {
 export function planSectionGrid(items: GridItem[]): SectionGrid {
   const positioned: Positioned[] = items
     .filter((it) => validBox(it.box))
-    .map((it) => ({ id: it.id, box: it.box as Box, group: it.group || "" }));
+    .map((it) => ({ id: it.id, box: it.box as Box, group: it.group || "", kind: it.kind || "other" }));
 
   const cells = new Map<string, Cell>();
   if (positioned.length < 2) {
@@ -192,6 +224,11 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
       ? stacked(band)
       : band
   );
+
+  // 3a'. A logo lockup with other rows around it is part of their stack, not
+  // a row of its own. On its own (a header that is only logo + name) it keeps
+  // its two columns — there is no section to split.
+  if (bands.length > 1) bands = bands.map((band) => (isLockup(band) ? stacked(band) : band));
 
   // 3b. Wider than Builder allows: wrap into even rows (8 → 4 + 4).
   bands = bands.flatMap((band) => {
@@ -220,6 +257,7 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
           x1: Math.max(c.x1, band.columns[i].x1),
           ids: [...c.ids, ...band.columns[i].ids],
           groups: unionGroups(c.groups, band.columns[i].groups),
+          items: [...c.items, ...band.columns[i].items],
         })),
       };
     } else {
