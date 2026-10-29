@@ -159,7 +159,10 @@ function isLockup(band: RawBand): boolean {
   if (img.w > LOCKUP_MAX_PX || img.h > LOCKUP_MAX_PX) return false;
   if (!words.items.length || words.items.length > LOCKUP_MAX_TEXTS) return false;
   return words.items.every(
-    (t) => t.kind === "prose" && t.box.y < img.y + img.h && t.box.y + t.box.h > img.y
+    (t) =>
+      t.kind === "prose" &&
+      t.box.y < img.y + img.h + OVERLAP_TOLERANCE_PX &&
+      t.box.y + t.box.h > img.y - OVERLAP_TOLERANCE_PX
   );
 }
 
@@ -227,8 +230,17 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
 
   // 3a'. A logo lockup with other rows around it is part of their stack, not
   // a row of its own. On its own (a header that is only logo + name) it keeps
-  // its two columns — there is no section to split.
-  if (bands.length > 1) bands = bands.map((band) => (isLockup(band) ? stacked(band) : band));
+  // its two columns — there is no section to split. And only when it is the
+  // odd one out: a row whose neighbour lines up with it is one of a list —
+  // a team or testimonial list of photo-beside-words rows, which 3c merges
+  // into one two-column section and must not flatten (task 86bctde55 round 2).
+  const inList = (i: number) =>
+    [bands[i - 1], bands[i + 1]].some(
+      (nb) => nb && aligned(nb, bands[i]) && sameGroups(nb, bands[i])
+    );
+  if (bands.length > 1) {
+    bands = bands.map((band, i) => (isLockup(band) && !inList(i) ? stacked(band) : band));
+  }
 
   // 3b. Wider than Builder allows: wrap into even rows (8 → 4 + 4).
   bands = bands.flatMap((band) => {

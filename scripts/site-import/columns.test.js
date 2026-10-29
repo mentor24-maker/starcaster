@@ -92,6 +92,29 @@ test('a logo lockup on its own keeps its two columns — there is nothing to spl
   assert.equal(grid.bands[0].columns.length, 2);
 });
 
+test('three photo-beside-words rows (a team or testimonial list) stay one two-column band', () => {
+  // Round-2 review of 86bctde55: every row is lockup-shaped, so stacking each
+  // one flattened the whole list into a single column.
+  const rows = [0, 1, 2].flatMap((r) => [
+    { id: `photo${r}`, box: box(0, r * 160, 120, 120), kind: 'image' },
+    { id: `bio${r}`, box: box(150, r * 160, 500, 100), kind: 'prose' },
+  ]);
+  const grid = planSectionGrid(rows);
+  assert.equal(grid.bands.length, 1);
+  assert.equal(grid.bands[0].columns.length, 2, 'photos left, words right');
+});
+
+test('a tagline that only touches the logo edge still counts as beside it', () => {
+  const grid = planSectionGrid([
+    { id: 'logo', box: box(110, 227, 86, 116), kind: 'image' },
+    { id: 'name', box: box(220, 227, 257, 120), kind: 'prose' },
+    { id: 'tag', box: box(220, 344, 216, 30), kind: 'prose' }, // 1px below the logo
+    ...UNDER_IT,
+  ]);
+  assert.equal(grid.bands.length, 1);
+  assert.equal(grid.bands[0].columns.length, 1);
+});
+
 test('a content-sized picture beside text is still a real two-column row', () => {
   const grid = planSectionGrid([
     { id: 'pic', box: box(0, 0, 330, 300), kind: 'image' },
@@ -102,7 +125,7 @@ test('a content-sized picture beside text is still a real two-column row', () =>
   assert.equal(grid.bands[0].columns.length, 2);
 });
 
-test('the lockup and the hero picture beside it: two columns, logo stacked in the left one', () => {
+test('regression for #905 (does not guard step 3a\'): the hero picture puts lockup + text in its left column', () => {
   const grid = planSectionGrid([...LOCKUP, ...UNDER_IT, { id: 'hero', box: box(699, 170, 631, 560), kind: 'image' }]);
   assert.equal(grid.bands.length, 1);
   assert.equal(grid.bands[0].columns.length, 2);
