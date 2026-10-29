@@ -115,6 +115,26 @@ blind() { echo "CANNOT TELL  $*"; BLIND=$((BLIND + 1)); }
 
 echo "From $(hostname -s), $(date '+%Y-%m-%d %H:%M %Z')"
 BASE="https://$HOST/live"
+# The WebSocket handshake key. It MUST decode to exactly 16 bytes: the door
+# keeper's ws library answers anything else with "400 Missing or invalid
+# Sec-WebSocket-Key header" before the door keeper's own code ever runs, so a
+# wrong-length key made check 3 FAIL on a perfectly working door (2026-10-28,
+# task 86bcu100p). This one is "outside-check-12"; browserDoorRoute.test.js
+# guards the length.
+WS_KEY="b3V0c2lkZS1jaGVjay0xMg=="
+
+# The first line of a socket reading: the HTTP status line if one came back,
+# else whatever curl said. NOT simply line 1. The door keeper answers 101 and
+# "refused", then waits for the client to close, so curl runs out its -m and
+# exits 28 — and its "curl: (28)" goes to stderr, which is unbuffered and so
+# lands AHEAD of the 101 in the merged output. Reading line 1 failed a working
+# door the moment the handshake key was fixed (86bcu100p).
+status_line() {
+  local line
+  line="$(printf '%s\n' "$1" | tr -d '\r' | grep -m1 '^HTTP/')"
+  [ -n "$line" ] || line="$(printf '%s\n' "$1" | head -1 | tr -d '\r')"
+  printf '%s' "$line"
+}
 
 # THE PUBLIC ROUTE, NOT THE TAILNET ONE. On a machine that is itself on the
 # tailnet, the Funnel name resolves to the Mini's PRIVATE tailnet address, so
@@ -163,8 +183,8 @@ fi
 # the JSON it sends is readable in the raw bytes curl prints.
 out="$(curl -sS -i --http1.1 -m 12 "${PIN[@]}" -o - \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
-  -H 'Sec-WebSocket-Key: b3V0c2lkZS1jaGVjay0xMjM0NQ==' "$BASE/live" 2>&1 | LC_ALL=C tr -d '\000' | head -c 4000)"
-first="$(printf '%s\n' "$out" | head -1 | tr -d '\r')"
+  -H "Sec-WebSocket-Key: $WS_KEY" "$BASE/live" 2>&1 | LC_ALL=C tr -d '\000' | head -c 4000)"
+first="$(status_line "$out")"
 if printf '%s' "$out" | grep -q '"type":"frame"'; then
   fail "wss://$HOST/live/live with no pass -> a PICTURE was sent ($first)"
 elif printf '%s' "$first" | grep -q ' 101' && printf '%s' "$out" | grep -q '"reason":"refused"'; then
@@ -248,8 +268,8 @@ fi
 if [ -n "$TAILNET" ] && { control_ok "$TAILNET" || [ -n "$SHIELDED" ]; }; then
   out="$(curl -sS -i --http1.1 --connect-timeout 6 -m 12 --resolve "$HOST:443:$TAILNET" -o - \
     -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
-    -H 'Sec-WebSocket-Key: b3V0c2lkZS1jaGVjay0xMjM0NQ==' "$BASE/live" 2>&1 | LC_ALL=C tr -d '\000' | head -c 4000; exit "${PIPESTATUS[0]}")"; rc=$?
-  first="$(printf '%s\n' "$out" | head -1 | tr -d '\r')"
+    -H "Sec-WebSocket-Key: $WS_KEY" "$BASE/live" 2>&1 | LC_ALL=C tr -d '\000' | head -c 4000; exit "${PIPESTATUS[0]}")"; rc=$?
+  first="$(status_line "$out")"
   if printf '%s' "$out" | grep -q '"type":"frame"'; then
     fail "tailnet      wss://$HOST/live/live via $TAILNET with no pass -> a PICTURE was sent"
   elif printf '%s' "$first" | grep -q ' 101' && printf '%s' "$out" | grep -q '"reason":"refused"'; then

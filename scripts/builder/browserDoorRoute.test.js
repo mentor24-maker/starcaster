@@ -89,6 +89,16 @@ test('uninstall takes the route away too — a route left behind points the inte
 
 // --- the outside check, against a fake network ----------------------------------
 
+test('the handshake key decodes to exactly 16 bytes — ws refuses any other length with a 400 (86bcu100p)', () => {
+  const source = fs.readFileSync(CHECK, 'utf8');
+  const key = (source.match(/^WS_KEY="([^"]+)"$/m) || [])[1];
+  assert.ok(key, 'WS_KEY is not set in the outside check');
+  assert.equal(Buffer.from(key, 'base64').length, 16);
+  const headers = source.match(/Sec-WebSocket-Key: [^'"\s]+/g) || [];
+  assert.ok(headers.length > 0, 'the outside check sends no handshake key at all');
+  assert.deepEqual([...new Set(headers)], ['Sec-WebSocket-Key: $WS_KEY'], 'every handshake must send WS_KEY, not a key of its own');
+});
+
 /**
  * A fake curl: it reads the URL and answers from a table. `$FAKE_NET` is a list
  * of `<host:port>=<exit>` (for bare probes, and for an HTTPS request pinned to
@@ -96,10 +106,15 @@ test('uninstall takes the route away too — a route left behind points the inte
  * FAKE_LIVE: `door` (the real door keeper's replies), `502`, or `other`.
  */
 const FAKE_CURL = `#!/bin/bash
-url="" ; ws="" ; pinned=""
+url="" ; ws="" ; pinned="" ; key=""
 for a in "$@"; do
-  case "$a" in http://*|https://*) url="$a" ;; "Upgrade: websocket") ws=1 ;; *:443:*) pinned="\${a##*:}" ;; esac
+  case "$a" in http://*|https://*) url="$a" ;; "Upgrade: websocket") ws=1 ;; *:443:*) pinned="\${a##*:}" ;; "Sec-WebSocket-Key: "*) key="\${a#Sec-WebSocket-Key: }" ;; esac
 done
+# Like the real ws library: a handshake key that does not decode to 16 bytes is
+# refused with 400 before anything behind the route sees it (86bcu100p).
+if [ -n "$ws" ] && [ "$(printf '%s' "$key" | base64 -d 2>/dev/null | wc -c | tr -d ' ')" != 16 ]; then
+  printf 'HTTP/1.1 400 Bad Request\\r\\n\\r\\n'; exit 0
+fi
 case "$url" in
   https://*)
     # A request pinned to an address answers only if that address's :443 has no rule saying otherwise.
@@ -114,7 +129,11 @@ case "$url" in
     case "$url" in
       */live/) printf 'Not found\\n404' ;;
       */live/open) printf 'Refused\\n401' ;;
-      */live/live) printf 'HTTP/1.1 101 Switching Protocols\\r\\n\\r\\n{"type":"closed","reason":"refused","message":"x"}' ;;
+      # As measured through Funnel 2026-10-29: the refusal arrives, then the door
+      # keeper waits for the client's close, so curl times out — and its stderr
+      # line reaches the merged output ahead of the 101 (86bcu100p).
+      */live/live) echo 'curl: (28) Operation timed out after 12003 milliseconds with 108 bytes received' >&2
+        printf 'HTTP/1.1 101 Switching Protocols\\r\\n\\r\\n{"type":"closed","reason":"refused","message":"x"}'; exit 28 ;;
     esac
     exit 0 ;;
 esac
