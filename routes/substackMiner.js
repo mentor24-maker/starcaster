@@ -30,6 +30,9 @@
  *                                                          1/4, lib/acquire/SubstackPostsReadRun.js)
  *   GET|POST /api/acquire/substack-miner/read-posts-due     Vercel Cron only, once a day: the read above for every project
  *   POST   /api/acquire/substack-miner/candidates/:id/read-posts  re-read one writer's posts now
+ *   POST   /api/acquire/substack-miner/keywords/grow       grow the wider keyword list from approved writers now
+ *                                                          (Substack Miner upgrade 2/4, lib/acquire/SubstackKeywordsGrow.js)
+ *   POST   /api/acquire/substack-miner/keywords/remove     { keyword } — drop a wider keyword for good
  *   POST   /api/acquire/substack-miner/notes-search        { keyword, notes: [{ authorHandle, authorName, url, text }] }
  *                                                          — what the Mini's Notes search found for one keyword: each
  *                                                          author's publication added (or merged) as a candidate, the
@@ -71,6 +74,7 @@ const { captureNotesSearch } = require('../lib/acquire/SubstackNotesSearch');
 const { importSeedList } = require('../lib/acquire/SubstackSeedImport');
 const { runSubstackSuggestions } = require('../lib/acquire/SubstackSuggestRun');
 const { runSubstackPostsRead, runPostsReadDue, formatPostsReadDueLog } = require('../lib/acquire/SubstackPostsReadRun');
+const { runKeywordsGrow } = require('../lib/acquire/SubstackKeywordsGrow');
 
 const PREFIX = '/api/acquire/substack-miner';
 
@@ -242,10 +246,24 @@ async function handle(req, res, pathname, method) {
       return reply(res, result);
     }
     for (const line of formatPostsReadDueLog(result.data)) {
-      if (/ (FAILED|NOT READ|NOT REACHED) /.test(line)) console.error(line);
+      if (/ (FAILED|NOT READ|NOT REACHED|KEYWORDS PARTIAL|KEYWORDS NOT GROWN) /.test(line)) console.error(line);
       else console.log(line);
     }
     return reply(res, result);
+  }
+
+  // Substack Miner upgrade 2/4 (task 86bcuxwkr): the wider keyword list.
+  if (pathname === `${PREFIX}/keywords/grow`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'substackMiner.keywordsGrow')) return true;
+    return reply(res, await runKeywordsGrow(scope));
+  }
+
+  if (pathname === `${PREFIX}/keywords/remove`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await store.removeWiderKeyword(body.keyword, scope));
   }
 
   if (pathname === `${PREFIX}/notes-search`) {
