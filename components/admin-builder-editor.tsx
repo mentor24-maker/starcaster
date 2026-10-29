@@ -394,8 +394,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   // into the draft, so editing a theme changed the canvas background and not
   // its text. Same resolver the public site uses, so the two cannot disagree.
   const canvasTheme = useMemo(
-    () => resolveRenderTheme(draft.theme, linkedTheme),
-    [draft.theme, linkedTheme]
+    () => resolveRenderTheme(draft.theme, linkedTheme, draft.pageBackground),
+    [draft.theme, linkedTheme, draft.pageBackground]
   );
   // The editing canvas draws modules itself, so it loads the page's Google
   // Fonts (gf:<Family>) here as well as in the shared renderer.

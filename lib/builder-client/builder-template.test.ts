@@ -686,6 +686,44 @@ describe("resolveRenderTheme", () => {
     expect(resolveRenderTheme(null, null)).toEqual(createDefaultTheme());
     expect(resolveRenderTheme("nope", "nope" as unknown as null)).toEqual(createDefaultTheme());
   });
+
+  describe("a page that paints its own background (task 86bctde6u)", () => {
+    // Alphire's home: near-black page, following a theme whose text is black.
+    const THEMED = {
+      typography: {
+        scale: { baseSize: 16, ratio: 0, baseLineHeight: 1.3 },
+        colors: { text: "#000000", heading: "#000000", link: "#0055aa", linkHover: "#0055aa" }
+      }
+    };
+    const OWN_TEXT = {
+      typography: { colors: { text: "#f5fbff", heading: "#ffffff", link: "#00d9ff", linkHover: "#00d9ff" } }
+    };
+    const DARK = { mode: "color", color: "#03050a" };
+
+    it("keeps its own text colours over the theme's, and only those", () => {
+      const theme = resolveRenderTheme(OWN_TEXT, THEMED, DARK);
+      expect(theme.typography.colors).toMatchObject({
+        text: "#f5fbff", heading: "#ffffff", link: "#00d9ff", linkHover: "#00d9ff"
+      });
+      expect(theme.typography.scale.baseLineHeight).toBe(1.3);
+    });
+
+    it("follows the theme's colours when the page paints nothing of its own", () => {
+      expect(resolveRenderTheme(OWN_TEXT, THEMED, { mode: "none" }).typography.colors.text).toBe("#000000");
+      expect(resolveRenderTheme(OWN_TEXT, THEMED).typography.colors.text).toBe("#000000");
+    });
+
+    it("follows the theme's colours when the page stores none of its own", () => {
+      expect(resolveRenderTheme({}, THEMED, DARK).typography.colors.text).toBe("#000000");
+    });
+
+    it("keeps a colour the page leaves blank from the theme", () => {
+      const partial = { typography: { colors: { text: "#ffffff" } } };
+      const colors = resolveRenderTheme(partial, THEMED, DARK).typography.colors;
+      expect(colors.text).toBe("#ffffff");
+      expect(colors.link).toBe("#0055aa");
+    });
+  });
 });
 
 describe("normalizeTheme", () => {
