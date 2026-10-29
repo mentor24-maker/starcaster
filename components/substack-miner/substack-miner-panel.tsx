@@ -28,8 +28,13 @@ import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './sub
  * and the Run tab's Import subscribers box sends Substack's subscriber export
  * to lib/acquire/SubstackSubscriberImport.js, which marks matching contacts.
  *
- * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Add
- * keywords on the Run tab…", "Nothing approved yet.", and a filter that hides
+ * ADD BY LINK (task 86bcux874): the Candidates tab — where Outreach's Find
+ * creators lands — opens with a box for pasting article, publication or
+ * profile links; lib/acquire/SubstackSeedImport.js works out the writer behind
+ * each. It was the Run tab's "Paste a seed list", which Dane never found there.
+ *
+ * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Paste
+ * a link above…", "Nothing approved yet.", and a filter that hides
  * every row says which filter.
  */
 
@@ -116,7 +121,7 @@ export const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 const STATUS_WORDS: Record<string, string> = { candidate: 'a candidate', approved: 'approved', rejected: 'rejected' };
 
 export const FOUND_VIA_LABELS: Record<string, string> = {
-  seed: 'Seed list',
+  seed: 'Pasted link',
   web_search: 'Web search',
   recommendations: 'Recommendations',
   notes_search: 'Notes search',
@@ -264,16 +269,16 @@ export function visibleCandidates(candidates: Candidate[], status: string, found
 export function emptyText(candidates: Candidate[], status: string, foundVia: string, negate = false): string {
   const via = foundVia ? ` found via ${(FOUND_VIA_LABELS[foundVia] || foundVia).toLowerCase()}` : '';
   if (status === 'all' || negate) {
-    if (!candidates.length) return 'No writers yet. Add keywords on the Run tab and click Search the web.';
+    if (!candidates.length) return 'No writers yet. Paste a link above, or add keywords on the Run tab and click Search the web.';
     if (status === 'all') return `No writers${via}. Try another "Found via" choice.`;
     return `Every writer${via || ' found'} is ${STATUS_WORDS[status] || status}, so nothing is left once those are taken out. Untick Not to see them.`;
   }
   if (status === 'approved') return foundVia ? `Nothing approved${via}.` : 'Nothing approved yet.';
   if (status === 'rejected') return foundVia ? `Nothing rejected${via}.` : 'Nothing rejected yet.';
-  if (!candidates.length) return 'No candidates yet. Add keywords on the Run tab and click Search the web.';
+  if (!candidates.length) return 'No candidates yet. Paste a link above, or add keywords on the Run tab and click Search the web.';
   return foundVia
     ? `No candidates waiting${via}. Try another "Found via" choice.`
-    : 'No candidates waiting — every writer found has been approved or rejected. Run a search or read recommendations on the Run tab for more.';
+    : 'No candidates waiting — every writer found has been approved or rejected. Paste a link above, or run a search or read recommendations on the Run tab for more.';
 }
 
 /**
@@ -333,9 +338,10 @@ export type SeedRow = { handle: string; whyFit?: string };
 
 /**
  * One writer per line, `handle, why it fits`. The handle may be a bare name,
- * an @name, the publication's address or a person's substack.com/@name
- * profile link (looked up and filed under their publication); the server
- * decides which are real.
+ * an @name, the publication's address, an article's link (on Substack or the
+ * publication's own domain) or a person's substack.com/@name profile link
+ * (each looked up and filed under its publication); the server decides which
+ * are real.
  * Blank lines are dropped, and `lines` maps each row back to the line it came
  * from so a refusal can name the line Dane typed.
  */
@@ -358,9 +364,12 @@ export function seedSummaryText(data: Record<string, any> | null | undefined, li
   const added = Number(data?.added) || 0;
   const merged = Number(data?.merged) || 0;
   const out = [`${added} added${merged ? `, ${merged} already here (their details were brought up to date)` : ''}.`];
-  for (const r of (data?.resolved || []) as Array<{ index: number; profile: string; handle: string; name?: string }>) {
+  for (const r of (data?.resolved || []) as Array<{ index: number; profile?: string; link?: string; handle: string; name?: string }>) {
     const line = lines[r.index] ?? r.index + 1;
-    out.push(`Line ${line}: ${r.profile} writes ${r.name ? `"${r.name}" at ` : ''}${r.handle}.substack.com, so they were added under that publication.`);
+    const where = `${r.name ? `"${r.name}" at ` : ''}${r.handle}.substack.com`;
+    out.push(r.profile
+      ? `Line ${line}: ${r.profile} writes ${where}, so they were added under that publication.`
+      : `Line ${line}: that link is from ${where}, so the writer was added under that publication.`);
   }
   for (const r of (data?.refusals || []) as Array<{ index: number; handle?: string; error: string }>) {
     const line = lines[r.index] ?? r.index + 1;
@@ -785,6 +794,28 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
       {tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
+          <form className="substack-miner-card" aria-label="Add writers by link" onSubmit={addSeeds}>
+            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add writers by link</label>
+            <p className="substack-miner-card-note">
+              Paste one link per line — an article, a publication's address, or a person's profile (substack.com/@name) — and the
+              writer behind it is added as a candidate. Links on a publication's own domain work too. To say why a writer fits,
+              add a comma and a few words after the link.
+            </p>
+            <textarea
+              id="sm-seeds"
+              rows={3}
+              value={seedText}
+              onChange={(e) => setSeedText(e.target.value)}
+              placeholder={'https://www.example.com/p/an-article, writes about tennis coaching\nhttps://substack.com/@name'}
+            />
+            <div className="substack-miner-actions">
+              <button type="submit" className="btn btn-primary" disabled={seedBusy || !parseSeedLines(seedText).rows.length}>
+                {seedBusy ? 'Adding…' : 'Add writers'}
+              </button>
+            </div>
+            <RunResult lines={seedLines} label="What adding the writers did" />
+          </form>
+
           <div className="substack-miner-filters">
             <div className="substack-miner-filter" role="group" aria-label="Show filter">
               <span>Show</span>
@@ -1025,18 +1056,6 @@ export default function SubstackMinerPanel(): React.ReactElement {
             </div>
             <RunResult lines={snowballLines} label="What reading recommendations did" />
           </section>
-
-          <form className="substack-miner-card" aria-label="Paste a seed list" onSubmit={addSeeds}>
-            <label className="substack-miner-card-title" htmlFor="sm-seeds">Paste a seed list</label>
-            <p className="substack-miner-card-note">One writer per line: <code>handle, why it fits</code>. The handle is the part before .substack.com, or paste the publication's address or the person's profile link (substack.com/@name).</p>
-            <textarea id="sm-seeds" rows={5} value={seedText} onChange={(e) => setSeedText(e.target.value)} />
-            <div className="substack-miner-actions">
-              <button type="submit" className="btn btn-primary" disabled={seedBusy || !parseSeedLines(seedText).rows.length}>
-                {seedBusy ? 'Adding…' : 'Add seeds'}
-              </button>
-            </div>
-            <RunResult lines={seedLines} label="What adding the seeds did" />
-          </form>
 
           <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
             <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import subscribers</label>
