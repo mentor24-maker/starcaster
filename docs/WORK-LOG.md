@@ -15,6 +15,20 @@ pointed at a template list that only appears inside the editor; the group is on
 the page Dane actually opens, under the existing table, which reloads after an
 import.
 
+## 2026-10-28 — A database change that ships with code but is never run now raises the alarm (#902)
+
+When code merges it goes live by itself, but its database change waits for
+Dane to run it in Supabase by hand, and nothing ever checked that he had been
+asked. That is how Outreach and the sign-in window broke on the live site on
+28 October: sixteen files had merged and never been run, some for two weeks.
+A new check, `npm run sql:unapplied`, compares every file in `docs/SQL` with
+what production actually has. It runs every ten minutes on the Mini and posts
+each missing file to the bus once a day, with its link, until it has been run.
+The old `schema:check` could not catch this, because it compares production
+with a copy of itself. The audit of that day's sweep found four old files
+that are retired or unused (now listed with their reasons, and one of them
+should never be run), one that would fail if run, which was rewritten, and
+ten that still need running, three of them merged today.
 ## 2026-10-28 — Reddit finds conversations on its own (#898)
 
 Until now every Reddit post Dane answered had to be found by hand and pasted
