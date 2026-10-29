@@ -6,8 +6,11 @@
  *   GET  /api/projects/:id/shares     what project :id shares, and with whom it MAY
  *   PUT  /api/projects/:id/shares     replace that set — owners of :id only
  *   GET  /api/builder/shared/:type    what other projects share with the ACTIVE one
- *   POST /api/builder/shared/saved_sections/:id/import
- *                                     copy one shared section INTO the active project
+ *
+ * And two writes, into the ACTIVE project only:
+ *
+ *   POST /api/builder/shared/saved_sections/:id/import   copy one shared section in (86bcu6tzk)
+ *   POST /api/builder/shared/themes/:id/import           copy one shared theme in (86bcu6uav)
  *
  * Its own module rather than more lines in projects.js and builder.js
  * (routes/CLAUDE.md: do not grow the monoliths). Registered AHEAD of
@@ -26,6 +29,7 @@ const projectsStore = require('../lib/projectsStore');
 const sharesStore = require('../lib/builderProjectSharesStore');
 const sharedImport = require('../lib/builderSharedImport');
 const { requestProjectScope } = require('../lib/requestProjectScope');
+const { copySharedTheme: defaultCopySharedTheme } = require('../lib/builderSharedThemeImport');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -40,6 +44,7 @@ function createHandler(deps = {}) {
   const getProjectById = deps.getProjectById || projectsStore.getPublicProjectById;
   const store = deps.sharesStore || sharesStore;
   const copySharedSavedSection = deps.copySharedSavedSection || sharedImport.copySharedSavedSection;
+  const copySharedTheme = deps.copySharedTheme || defaultCopySharedTheme;
 
   async function callerProjects(res, userId) {
     const result = await listProjectsForUser(userId);
@@ -62,9 +67,12 @@ function createHandler(deps = {}) {
     const choices = projects
       .filter((p) => safeText(p?.id) && safeText(p.id) !== projectId)
       .map((p) => ({ id: safeText(p.id), name: safeText(p.name) }));
+    // Sent with every answer so the settings panel can lock itself for a
+    // member and say why, from the same rule the PUT enforces below.
+    const canEdit = safeText(project?.membership?.role) === 'owner';
 
     if (method === 'PUT') {
-      if (safeText(project?.membership?.role) !== 'owner') {
+      if (!canEdit) {
         return sendErr(res, 403, 'Only project owners can change what this project shares', { code: 'FORBIDDEN' }), true;
       }
       const body = await parseJsonBody(req);
@@ -89,13 +97,13 @@ function createHandler(deps = {}) {
         createdByUserId: userId,
       });
       if (!saved.ok) return sendErr(res, saved.status || 500, saved.error || 'Could not save shares'), true;
-      const summary = { ...store.summarizeShares(saved.data), projects: choices };
+      const summary = { ...store.summarizeShares(saved.data), projects: choices, canEdit };
       return sendOk(res, 200, summary, summary), true;
     }
 
     const current = await store.listSharesFrom(5000, projectId);
     if (!current.ok) return sendErr(res, current.status || 500, current.error || 'Could not read shares'), true;
-    const summary = { ...store.summarizeShares(current.data), projects: choices };
+    const summary = { ...store.summarizeShares(current.data), projects: choices, canEdit };
     return sendOk(res, 200, summary, summary), true;
   }
 
@@ -136,6 +144,21 @@ function createHandler(deps = {}) {
     return sendOk(res, 201, result.data, { savedSection: result.data }), true;
   }
 
+  // Writes ONE new theme into the active project and nothing anywhere else.
+  // The helper re-checks the share and never marks the copy as the default,
+  // so importing cannot change how the live site looks.
+  async function handleThemeImport(req, res, themeId) {
+    const { projectId, userId } = requestProjectScope(req);
+    if (!userId) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    if (!projectId) return sendErr(res, 400, 'An active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await copySharedTheme({ targetProjectId: projectId, ownerUserId: userId, themeId });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_SHARED' : undefined;
+      return sendErr(res, result.status || 500, result.error || 'Could not import the theme', code ? { code } : undefined), true;
+    }
+    return sendOk(res, 201, result.data, { theme: result.data }), true;
+  }
+
   return async function handle(req, res, pathname, method) {
     const requestMethod = String(method || '').toUpperCase();
     const path = normalizeApiPathname(pathname);
@@ -157,6 +180,11 @@ function createHandler(deps = {}) {
     const sharedMatch = path.match(/^\/api\/builder\/shared\/([^/]+)\/?$/);
     if (sharedMatch && requestMethod === 'GET') {
       return handleSharedRead(req, res, decodeURIComponent(sharedMatch[1] || '').trim());
+    }
+
+    const themeImportMatch = path.match(/^\/api\/builder\/shared\/themes\/([^/]+)\/import\/?$/);
+    if (themeImportMatch && requestMethod === 'POST') {
+      return handleThemeImport(req, res, decodeURIComponent(themeImportMatch[1] || '').trim());
     }
 
     return false;
