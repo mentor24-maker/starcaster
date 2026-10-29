@@ -1,3 +1,20 @@
+## 2026-10-29 — Imported headings keep their thin lettering, spacing and coloured words (#907)
+
+On the Alphire import, the thin home heading came out heavy and black, and
+every cyan accent word ("Human Energy", "to Impact") came out black. Two
+reasons, both measured on the real import before anything was changed. The
+import's theme uses the most common heading weight on the whole site, and
+most of Alphire's headings are bold, so the thin ones were made bold too. And
+the cyan was recorded when the site was captured, then dropped at the next
+step, which kept only the heading's own styling and not the words inside it.
+Now a heading or paragraph keeps its own weight and letter spacing wherever
+they differ from the theme, and a word inside it keeps its own colour, weight
+or italic wherever it differs from the words around it. Text that already
+looks like the theme is written exactly as before, so on the Delray site only
+2 of 185 text blocks change. One limit is on purpose: a heading's own colour
+is still left to the theme, because many of Alphire's headings are white on
+dark bands the import doesn't reproduce yet, and copying white would make
+them invisible. Until the dark-page fix lands, the cyan words sit on white.
 ## 2026-10-29 — Every picture and PDF a site import downloads now shows up in Assets (#909)
 
 A site import downloads every picture and document it sees on the original

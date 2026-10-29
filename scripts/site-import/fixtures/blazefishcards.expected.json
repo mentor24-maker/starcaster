@@ -4298,7 +4298,16 @@
                 },
                 "documentPosition": 148,
                 "depth": 4,
-                "assetRefs": []
+                "assetRefs": [],
+                "inlineStyles": [
+                  {
+                    "index": 0,
+                    "tag": "span",
+                    "styles": {
+                      "color": "rgb(118, 184, 42)"
+                    }
+                  }
+                ]
               },
               {
                 "sourceId": "0-df20072a",
