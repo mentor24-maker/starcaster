@@ -13,6 +13,10 @@ options (to the post or to a comment); Skip asks why; anyone in the thread can
 be saved as a contact. If the Mini is signed out of Reddit, the screen says so
 instead of showing "0 found". It needs two new database tables (SQL hand-off
 on the pull request) and its schedule installed on the Mini after merge.
+Review caught three slips before it shipped, now fixed: a reply to one comment
+used to block replying to the post itself, clicking "Reply to this comment"
+twice paid for two drafts, and the "signed out" warning stayed up for hours
+after the Mini was signed back in.
 
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 

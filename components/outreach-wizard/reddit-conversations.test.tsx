@@ -2,7 +2,7 @@
 import { act } from 'react-dom/test-utils';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import RedditConversations, { commentsNote, type RedditConversation } from './reddit-conversations';
+import RedditConversations, { commentReplyLabel, commentsNote, type RedditConversation } from './reddit-conversations';
 
 /**
  * Outreach wizard 18/19 (86bcrmbwm). The headline — how many, or "the Mini is
@@ -105,6 +105,13 @@ describe('RedditConversations', () => {
     await flush();
     expect(posts[0]).toEqual({ path: '/api/outreach/reddit/conversations/contact', body: { postId: 'abc1', author: 'dave' } });
     expect(container!.textContent).toContain('u/dave saved as a contact.');
+  });
+
+  it('a comment button follows the reply to that comment, not the post reply', () => {
+    const c = { id: 'c1', author: 'dave', body: 'x', score: 1 };
+    expect(commentReplyLabel(c)).toBe('Reply to this comment');
+    expect(commentReplyLabel({ ...c, replyStatus: 'draft' })).toBe('Open the replies');
+    expect(commentReplyLabel({ ...c, replyStatus: 'posted' })).toBe('Replied');
   });
 
   it('says when comments were not read yet rather than implying there are none', () => {

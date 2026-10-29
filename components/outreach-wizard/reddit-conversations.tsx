@@ -21,7 +21,15 @@ import ReasonPicker, { type RejectReason } from './reason-picker';
 export const REDDIT_CONVERSATIONS_PATH = '/api/outreach/reddit/conversations';
 const COMMENTS_PAGE = 'engageCommentResponsesPage';
 
-export type RedditComment = { id: string; author: string; body: string; score: number };
+/** `replyItemId` / `replyStatus`: the reply to THIS comment, kept apart from the post's own. */
+export type RedditComment = { id: string; author: string; body: string; score: number; replyItemId?: string; replyStatus?: string };
+
+/** The comment's reply button: a draft is reopened, a reply already sent is not written again. */
+export function commentReplyLabel(m: RedditComment): string {
+  if (m.replyStatus === 'draft') return 'Open the replies';
+  if (m.replyStatus && m.replyStatus !== 'idea') return 'Replied';
+  return 'Reply to this comment';
+}
 
 export type RedditConversation = {
   postId: string;
@@ -198,8 +206,8 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
                         </p>
                         <p className="outreach-conversation-text">{excerpt(m.body, 220)}</p>
                         <div className="outreach-wizard-stage-actions">
-                          <button type="button" className="btn tiny-btn" disabled={Boolean(busy)} onClick={() => void writeReplies(c, m)}>
-                            {isBusy && busy?.action === `reply:${m.id}` ? 'Writing…' : 'Reply to this comment'}
+                          <button type="button" className="btn tiny-btn" disabled={Boolean(busy) || commentReplyLabel(m) === 'Replied'} onClick={() => void writeReplies(c, m)}>
+                            {isBusy && busy?.action === `reply:${m.id}` ? 'Writing…' : commentReplyLabel(m)}
                           </button>
                           <button type="button" className="btn tiny-btn" disabled={Boolean(busy)} onClick={() => void saveContact(c, m.author)}>
                             {isBusy && busy?.action === `contact:${m.author}` ? 'Saving…' : 'Save as contact'}

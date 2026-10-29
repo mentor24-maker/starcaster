@@ -346,6 +346,120 @@ test('Write replies lines up the comment from what was read, to the post or to a
   } finally { restore(); }
 });
 
+test('a reply to a comment does not block replying to the post, and repeat clicks reuse the open reply (one item, one draft)', async () => {
+  const { store, conv, restore } = withDb();
+  try {
+    const [poly] = await approve(store, ['polymath']);
+    await store.recordRead(poly.id, { state: 'read' }, SCOPE);
+    await store.savePosts([{ postId: 'aaa1', subreddit: 'polymath', title: 'Being a generalist', body: 'polymath', author: 'alice', postedAt: new Date(NOW).toISOString() }], SCOPE);
+    await store.saveComments('aaa1', [{ id: 'c1', author: 'dave', body: 'Great question', score: 4 }], SCOPE);
+
+    // A comments store that remembers what was lined up, the way the real one does.
+    const items = [];
+    const generated = [];
+    const commentsStore = {
+      listItems: async () => ({ ok: true, data: items.map((i) => ({ ...i })) }),
+      addItem: async (input) => {
+        const m = input.url.match(/\/comments\/([a-z0-9]+)\/(?:comment\/([a-z0-9]+)\/)?/);
+        const item = { id: `item${items.length + 1}`, postId: m[1], parentCommentId: m[2] || '', status: 'idea' };
+        items.push(item);
+        return { ok: true, data: item };
+      },
+      writeDraftForItem: async (id) => { generated.push(id); items.find((i) => i.id === id).status = 'draft'; return { ok: true, data: { status: 'draft' } }; },
+    };
+    const deps = { commentsStore, feedbackStore: stubFeedback([]), canonDocs: CANON, now: () => NOW };
+
+    const toComment = await conv.writeRepliesFor({ postId: 'aaa1', commentId: 'c1' }, SCOPE, deps);
+    assert.equal(toComment.ok, true, toComment.error);
+    const again = await conv.writeRepliesFor({ postId: 'aaa1', commentId: 'c1' }, SCOPE, deps);
+    assert.equal(again.ok, true, again.error);
+    assert.equal(again.data.itemId, toComment.data.itemId, 'the second click reuses the first reply');
+    assert.equal(again.data.drafted, false, 'an existing draft is left alone');
+    assert.equal(items.length, 1, 'one item for one comment, however many clicks');
+    assert.equal(generated.length, 1, 'one paid draft, however many clicks');
+
+    const listed = await conv.listRedditConversations(SCOPE, deps);
+    const post = listed.data.items[0];
+    assert.equal(post.replyStatus, '', 'a reply to a comment is not a reply to the post');
+    assert.equal(post.topComments[0].replyStatus, 'draft', 'the comment carries its own reply');
+
+    const toPost = await conv.writeRepliesFor({ postId: 'aaa1' }, SCOPE, deps);
+    assert.equal(toPost.ok, true, toPost.error);
+    assert.equal(toPost.data.created, true, 'the post gets a reply of its own');
+    assert.notEqual(toPost.data.itemId, toComment.data.itemId);
+    assert.equal(items.length, 2);
+    assert.equal(items[1].parentCommentId, '');
+
+    items[0].status = 'posted';
+    const sent = await conv.writeRepliesFor({ postId: 'aaa1', commentId: 'c1' }, SCOPE, deps);
+    assert.equal(sent.status, 409, 'a comment already answered is not written again');
+    const stillListed = await conv.listRedditConversations(SCOPE, deps);
+    assert.deepEqual(stillListed.data.items.map((i) => i.postId), ['aaa1'], 'a sent reply to a comment does not hide the post');
+  } finally { restore(); }
+});
+
+test('reading verdict: a successful read AFTER the newest signed-out try means not signed out now', () => {
+  const { conv, restore } = withDb();
+  try {
+    const at = (h) => new Date(NOW - h * HOUR).toISOString();
+    // Signed out 10h ago on two subreddits; Dane signed back in and two others were read 2h ago.
+    const later = conv.readingVerdict([
+      { name: 'polymath', lastReadState: 'signed_out', lastReadAt: at(10) },
+      { name: 'philosophy', lastReadState: 'signed_out', lastReadAt: at(10) },
+      { name: 'generalist', lastReadState: 'read', lastReadAt: at(2) },
+      { name: 'curiosity', lastReadState: 'read', lastReadAt: at(2) },
+    ], NOW);
+    assert.notEqual(later.state, 'signed_out');
+    assert.doesNotMatch(later.sentence, /signed out of Reddit when/);
+    assert.equal(later.state, 'cannot_tell', 'the two tried while signed out have not been read since');
+    assert.match(later.sentence, /not been read since the Mini was signed back in/);
+    // The other order: read first, signed out after — that IS signed out now.
+    const now = conv.readingVerdict([
+      { name: 'polymath', lastReadState: 'read', lastReadAt: at(10) },
+      { name: 'philosophy', lastReadState: 'signed_out', lastReadAt: at(2) },
+    ], NOW);
+    assert.equal(now.state, 'signed_out');
+  } finally { restore(); }
+});
+
+test('the watch says when the canon could not be read, and a failed save is recorded on the subreddit', async () => {
+  const { store, due, restore } = withDb();
+  try {
+    const canonPath = require.resolve('../../lib/canonStore.js');
+    const realCanon = require.cache[canonPath];
+    require.cache[canonPath] = { id: canonPath, filename: canonPath, loaded: true, exports: { listCanon: async () => ({ ok: false, status: 502, error: 'canon table unreachable' }) } };
+    try {
+      await approve(store, ['polymath']);
+      const noKeywords = await due.runRedditWatchDue({
+        callOpenClaw: async () => { throw new Error('must not read with nothing to match'); },
+        extractJson: () => null,
+        readKeywords: async () => ({ ok: true, data: [] }), now: () => NOW,
+      });
+      assert.match(noKeywords.data.projects[0].error, /canon could not be read/);
+      assert.doesNotMatch(noKeywords.data.projects[0].error, /Save keywords/);
+
+      const browser = fakeBrowser({ listing: () => ({ signedIn: true, found: true, promotionRule: '', new: [{ id: 'aaa1', title: 'Being a generalist', body: '', author: 'a', postedAt: new Date(NOW).toISOString(), score: 1, comments: 0 }], rising: [] }) });
+      const realSave = store.savePosts;
+      store.savePosts = async () => ({ ok: false, status: 500, error: 'disk full' });
+      let run;
+      try {
+        run = await due.runRedditWatchDue({
+          callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+          readKeywords: async () => ({ ok: true, data: ['generalist'] }), now: () => NOW,
+        });
+      } finally { store.savePosts = realSave; }
+      const log = due.formatWatchLog(run.data);
+      assert.match(log, /NOTE: Matched on keywords only: the canon could not be read/);
+      assert.equal(run.data.failed, 1);
+      const [sub] = (await store.listSubreddits(100, SCOPE)).data;
+      assert.equal(sub.lastReadState, 'failed', 'the wizard shows the save failure, not the previous good read');
+      assert.match(sub.lastReadError, /disk full/);
+    } finally {
+      if (realCanon) require.cache[canonPath] = realCanon; else delete require.cache[canonPath];
+    }
+  } finally { restore(); }
+});
+
 test('Find subreddits for my topics: proposals land as candidates, known ones are not re-proposed, nothing to go on is refused', async () => {
   const { store, suggest, restore } = withDb();
   try {
