@@ -312,16 +312,16 @@ describe("Substack Miner screen", () => {
     const tabs = [...container!.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
     expect(tabs).toEqual(["Candidates", "Run"]);
     expect(el('[data-testid="substack-miner-counts"]').textContent).toBe("0 found · 0 approved · 0 rejected · 0 in Contacts · 0 engaged · 0 subscribed");
-    expect(text()).toContain("No candidates yet. Add keywords on the Run tab and click Search the web.");
+    expect(text()).toContain("No candidates yet. Paste a link above, or add keywords on the Run tab and click Search the web.");
     await show("approved");
     expect(text()).toContain("Nothing approved yet.");
   });
 
-  it("pasting two seed lines adds two candidates found via seed", async () => {
+  it("pasting two lines on the Candidates tab adds two candidates, without leaving the tab", async () => {
     await mount();
-    await click(button("Run"));
+    expect(el('[role="tab"][aria-selected="true"]').textContent).toBe("Candidates");
     type(el<HTMLTextAreaElement>("#sm-seeds"), "kindoftsetsy, writes about how the Substack algorithm works\n\nanother-one, good on Notes");
-    await submit(el<HTMLFormElement>('form[aria-label="Paste a seed list"]'));
+    await submit(el<HTMLFormElement>('form[aria-label="Add writers by link"]'));
     const sent = requests.find((r) => r.path.endsWith("/candidates/import"));
     expect(sent?.body).toEqual({ candidates: [
       { handle: "kindoftsetsy", whyFit: "writes about how the Substack algorithm works" },
@@ -329,16 +329,14 @@ describe("Substack Miner screen", () => {
     ] });
     expect(text()).toContain("2 added.");
     expect(stores.proj_doe.writers.map((w) => w.foundVia)).toEqual(["seed", "seed"]);
-    await click(button("Candidates"));
-    expect(rowFor("kindoftsetsy")?.textContent).toContain("Seed list");
+    expect(rowFor("kindoftsetsy")?.textContent).toContain("Pasted link");
     expect(rowFor("another-one")).not.toBeNull();
   });
 
-  it("a refused seed line is named by the line Dane typed, and the box keeps his text", async () => {
+  it("a refused line is named by the line Dane typed, and the box keeps his text", async () => {
     await mount();
-    await click(button("Run"));
     type(el<HTMLTextAreaElement>("#sm-seeds"), "good\n\nNot A Handle!, why");
-    await submit(el<HTMLFormElement>('form[aria-label="Paste a seed list"]'));
+    await submit(el<HTMLFormElement>('form[aria-label="Add writers by link"]'));
     expect(text()).toContain("1 added.");
     expect(text()).toContain('Line 3 (Not A Handle!) was not added');
     expect(el<HTMLTextAreaElement>("#sm-seeds").value).toContain("Not A Handle!");
@@ -644,7 +642,7 @@ describe("Substack Miner helpers", () => {
     const rows = [writer({ status: "approved" })];
     expect(emptyText([], "candidate", "")).toContain("No candidates yet");
     expect(emptyText(rows, "candidate", "")).toContain("every writer found has been approved or rejected");
-    expect(emptyText(rows, "rejected", "seed")).toBe("Nothing rejected found via seed list.");
+    expect(emptyText(rows, "rejected", "seed")).toBe("Nothing rejected found via pasted link.");
   });
 
   it("parses seed lines, keeping commas inside the reason", () => {
@@ -677,6 +675,8 @@ describe("Substack Miner helpers", () => {
     const fromProfile = seedSummaryText({ added: 1, merged: 0, refusals: [{ index: 1, handle: "@reader", error: "they have no Substack publication of their own" }], resolved: [{ index: 0, profile: "@ankairos", handle: "magickalchemyandai", name: "Philosophy & AI" }] }, [2, 4]);
     expect(fromProfile).toContain('Line 2: @ankairos writes "Philosophy & AI" at magickalchemyandai.substack.com, so they were added under that publication.');
     expect(fromProfile.join(" ")).toContain("Line 4 (@reader) was not added");
+    const fromLink = seedSummaryText({ added: 1, merged: 0, refusals: [], resolved: [{ index: 0, link: "https://www.lennysnewsletter.com/p/x", handle: "lenny", name: "Lenny's Newsletter" }] }, [1]);
+    expect(fromLink).toContain(`Line 1: that link is from "Lenny's Newsletter" at lenny.substack.com, so the writer was added under that publication.`);
     const subs = subscriberSummaryText({ rowsRead: 3, matched: 1, newlyMarked: 1, alreadyMarked: 0, unmatched: 1, unreadable: 1, emailColumn: "Email", dateColumn: "", approvedWriterMatches: 1, problems: [{ line: 4, reason: "the email is blank" }], unmatchedEmails: ["x@y.co"], contactsTruncated: true, contactsSearched: 5000 }).join(" ");
     expect(subs).toContain("1 could not be read");
     expect(subs).toContain("no subscription-date column, so contacts newly marked carry today's date");
