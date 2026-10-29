@@ -214,6 +214,14 @@ export type CaptureResult = {
  *            and each direct non-whitespace TEXT RUN of the descended
  *            element counts as one "text" countable
  *
+ * One exception to "(else) … do not count, DESCEND", and the only rule that
+ * needs the captured styles: a container whose subtree holds no text and
+ * nothing countable, but which paints a background url() over a box of at
+ * least 40x40px, counts as one "image" and is not descended. Without it the
+ * picture had no element to belong to — Alphire's hero banner was
+ * downloaded and never placed (task 86bctde3p). Both counters apply it by
+ * passing the desktop styles and rects to the walk.
+ *
  * Three consequences worth spelling out:
  *   - A link inside a paragraph is NOT a separate countable — it is part of
  *     that text element's verbatim HTML, so it is preserved, just not
@@ -296,6 +304,14 @@ export type ElementIR = {
    * are none, and on IRs normalized before 2026-10-07 (task 86bce9wx3).
    */
   containers?: string[];
+  /**
+   * Set on an "image" that was an EMPTY box painting a background picture
+   * (no text, nothing countable inside, at least 40x40px) — how the source
+   * site drew its picture, kept for a later fit setting. Its html is the
+   * box, not an <img>; the picture is its first assetRef. Absent on real
+   * pictures and on IRs normalized before 2026-10-29 (task 86bctde3p).
+   */
+  backgroundImage?: { size: string; position: string };
 };
 
 export type SectionIR = {
@@ -318,6 +334,14 @@ export type SectionIR = {
   /** The section root's own surface styles, painted or not — where its
    *  padding comes from when no container paints. Absent when empty. */
   rootStyles?: CapturedStyles;
+  /**
+   * The colour this section showed through to, as captured ("rgb(…)"), when
+   * its root paints nothing AND that colour differs from its page's
+   * `background` — a transparent section sitting on a painted wrapper the
+   * page as a whole does not wear. Absent otherwise, and on IRs normalized
+   * before 2026-10-29 (task 86bctde6u).
+   */
+  ground?: string;
 };
 
 export type PageIR = {
@@ -330,6 +354,16 @@ export type PageIR = {
   canonicalUrl: string;
   lang: string;
   sections: SectionIR[];
+  /**
+   * What this page's content sits on, as captured ("rgb(3, 5, 10)"): the
+   * ground under the most content that sits in no painted box of its own —
+   * the nearest painted box above its section, else <body>/<html>. Content
+   * on a band or card does not vote. The site theme picks ONE surface for every page, so a dark
+   * page on a mostly white site (Alphire's home, 2026-10-27) needs its own.
+   * Absent when nothing was painted, and on IRs normalized before 2026-10-29
+   * (task 86bctde6u).
+   */
+  background?: string;
   /** Blob paths of the full-page screenshots per viewport ("" if missing). */
   screenshots: { desktop: string; tablet: string; mobile: string };
 };

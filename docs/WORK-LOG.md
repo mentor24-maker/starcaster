@@ -10,6 +10,143 @@ Square, Circle (the picture is cropped to fill a perfect circle), or Custom
 each picture's shape from the original site and fills this in. It also stops
 giving square pictures the Builder's default 18px rounded corners, which
 every import had been adding without anyone asking.
+## 2026-10-29 — Site Import places pictures a site paints onto an empty box (#905)
+
+Some websites show a picture by painting it as the background of an empty
+box, rather than as an ordinary picture. Site Import downloaded those
+pictures but never put them anywhere, because it only turned real content
+into page pieces, and an empty box looked like packaging. That is why
+Alphire's hero picture went missing. Now an empty box with a background
+picture (at least 40 by 40 pixels) is imported as an Image in its place, and
+the picture is copied into the project's Assets. Empty boxes with no picture
+still produce nothing, so no blank blocks appear.
+## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
+
+Alphire's home page is near-black, but 15 of its 17 pages are white, so the
+theme an import builds for the site is white, and the home page came across
+white with its black theme text. The importer now notes what each page's
+words actually sit on. When that differs from the theme, the imported page
+gets its own background colour plus text, heading and link colours that are
+readable on it, taken from the site's own colours where they read. Only words
+sitting straight on the page count. A site with a black edge behind a white
+content column (Strands Movie) therefore stays a white page. A page that
+paints its own background now keeps its own text colours even when it follows
+a named theme. No existing page changes because of that: in production, the
+one themed page with its own background stores no text colours. Checked
+against the real Alphire capture: the home page goes dark, the other 16 stay
+white.
+## 2026-10-29 — Menus that follow the theme's colours no longer vanish into a white bar (#910)
+
+Alphire's imported Top Menu showed as an empty white bar. The links were there,
+painted white: a menu with no Text Color of its own uses the theme's "header
+text" colour, which Alphire's theme set to white because its header is black.
+But the bar behind the links was always see-through, so the black header colour
+was never painted anywhere and the white links sat on the white page. Now, when
+a menu leaves its text colour to the theme, it leaves its bar colour to the
+theme too, so the two always arrive together: Alphire gets a black bar with
+white links. A menu that picked its own text colour (every Dane of Earth menu
+does) is untouched, and so is any site whose theme has no header colour. Two
+checks in a real browser now measure both halves, and each was broken on
+purpose to prove it fails.
+## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
+
+The Mini's sign-in window has an outside check that, among other things, makes
+sure the live-picture feed refuses a stranger. That line always said FAIL, even
+on a perfectly working door, so a correct install could never pass and the one
+line that would catch pictures leaking to a stranger meant nothing. Two causes,
+one hiding the other: the test key it sent was the wrong length, so the door
+rejected the request before checking anything; and once that was fixed, the
+check read curl's "timed out" message as the door's answer, because that
+message arrives first. Both are fixed, the tests now behave like the real door
+so either mistake would fail them, and run from the MacBook the line reads PASS.
+
+## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
+
+When one of Dane's projects shares its page templates with another, the
+receiving project's **Builder › Templates** page now shows them under
+**Shared with this project**, each saying which project it came from and how
+many shared sections (header, menu, footer) it uses, with an **Import** button.
+A template only *points at* its header and footer, so copying the template
+alone would have left those pointing at the other project and they would have
+vanished from every page made from it. Import therefore copies those sections
+into this project too and points the copy at them — it works even if the other
+project does not share its sections separately. A clashing name becomes
+"(2)", nothing is overwritten, the other project is only read, and if anything
+fails part-way the import is undone rather than left half-made. The ticket
+pointed at a template list that only appears inside the editor; the group is on
+the page Dane actually opens, under the existing table, which reloads after an
+import.
+
+## 2026-10-28 — A database change that ships with code but is never run now raises the alarm (#902)
+
+When code merges it goes live by itself, but its database change waits for
+Dane to run it in Supabase by hand, and nothing ever checked that he had been
+asked. That is how Outreach and the sign-in window broke on the live site on
+28 October: sixteen files had merged and never been run, some for two weeks.
+A new check, `npm run sql:unapplied`, compares every file in `docs/SQL` with
+what production actually has. It runs every ten minutes on the Mini and posts
+each missing file to the bus once a day, with its link, until it has been run.
+The old `schema:check` could not catch this, because it compares production
+with a copy of itself. The audit of that day's sweep found four old files
+that are retired or unused (now listed with their reasons, and one of them
+should never be run), one that would fail if run, which was rewritten, and
+ten that still need running, three of them merged today.
+## 2026-10-28 — Reddit finds conversations on its own (#898)
+
+Until now every Reddit post Dane answered had to be found by hand and pasted
+in as a link. Now he picks subreddits once, on Engage › Outreach › Reddit: a
+"Find subreddits for my topics" button asks the AI to suggest communities from
+his canon and keywords, and he approves or rejects each one. Every four hours
+the Mini opens two of those subreddits in its signed-in browser, reads the new
+and rising posts and the subreddit's rules, and keeps the posts that match his
+subjects. They appear under Find conversations, best first, each saying why it
+ranked, showing the strongest comments and who wrote them, and quoting the
+subreddit's self-promotion rule when it has one. One click writes three reply
+options (to the post or to a comment); Skip asks why; anyone in the thread can
+be saved as a contact. If the Mini is signed out of Reddit, the screen says so
+instead of showing "0 found". It needs two new database tables (SQL hand-off
+on the pull request) and its schedule installed on the Mini after merge.
+Review caught three slips before it shipped, now fixed: a reply to one comment
+used to block replying to the post itself, clicking "Reply to this comment"
+twice paid for two drafts, and the "signed out" warning stayed up for hours
+after the Mini was signed back in.
+## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
+
+When one of Dane's projects shares its saved sections with another, the
+receiving project now sees them in **Builder › Modules** under a new group,
+**Shared with this project**. Each one says which project it came from and has
+one button, **Import**. Import makes this project its own copy, which appears in
+its Saved Sections at once and can then be used and edited like any other.
+Changes in either project never reach the other, the source project is never
+written to, and pictures keep pointing where they already did. If the name is
+already taken, the copy is called "Header (2)" rather than replacing anything.
+If the other project has stopped sharing in the meantime, Import says so in a
+sentence and copies nothing. Like #894, it needs that ticket's sharing table
+created in the live database before it shows anything there. On 2026-10-28 it
+was not there yet.
+## 2026-10-28 — A project can choose which other projects see its sections, templates and themes (#899)
+
+Each project's settings now has a **Share with** row just above Import /
+Export. Open it and you get two lists of tick boxes: on the left, *what* to
+share (saved sections, page templates, themes); on the right, *which* of your
+other projects may see them. Tick, press Save, and every ticked kind is shared
+with every ticked project. The row's summary line says what is shared at a
+glance ("Saved sections → 1 project", or "Not shared with any project").
+Nothing is copied — the other project only sees the items and imports its own
+copy later, which comes in the next tickets. Only a project's owner can change
+it; anyone else sees the lists greyed out with that reason.
+## 2026-10-28 — Import a theme another project shares with you (#901)
+
+When one of Dane's projects shares its themes with another, the receiving
+project's Themes page now has a **Shared with this project** list at the
+bottom. It shows each theme's name, which project it came from, its colours
+and its fonts, with an **Import** button. Import makes this project its own
+copy. The copy is never made the default theme, so importing can't change
+how the live site looks, and the project it came from is never touched. If a
+theme with that name already exists here, the copy is called "(2)" instead of
+replacing it. If the other project stops sharing, the list empties and any
+copies already made stay.
+
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 
 To reply to one particular YouTube comment, Dane used to need its comment id,

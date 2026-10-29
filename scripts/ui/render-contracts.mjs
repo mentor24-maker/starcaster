@@ -4294,6 +4294,92 @@ export const RENDER_CONTRACTS = [
   },
 
   /*
+   * AN IMPORTED MENU ON ITS OWN THEME — 86bctde8c.
+   *
+   * Alphire's import, 2026-10-27: the Top Menu came out as an empty white bar.
+   * Its theme says header #000000 with header text #ffffff; the menu set
+   * neither colour, so the links took the white header text while the bar
+   * stayed transparent over the white page. Nothing measured the link against
+   * what was actually behind it.
+   */
+  {
+    id: 'theme-following-menu-paints-its-bar-in-the-theme-header-colour',
+    why:
+      'A menu with no Text Color takes the theme\'s header text, which is chosen for the theme\'s ' +
+      'header colour. If the bar is not painted in that colour, a dark-header theme draws white ' +
+      'links on the white page and the menu reads as an empty bar (Alphire, 86bctde8c). This reads ' +
+      'the bar\'s fill and a link\'s colour out of a real browser.',
+    section: {
+      layout: 'single',
+      themeRolePalette: {
+        surface: '#ffffff', surfaceText: '#000000',
+        header: '#000000', headerText: '#ffffff',
+      },
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '#home' },
+            { id: 'services', label: 'Services', href: '#services' },
+          ]),
+          navDirection: 'horizontal',
+          menuLocation: 'primary',
+          navAlignment: 'center',
+        },
+      }],
+    },
+    selector: '.site-nav',
+    read: ['backgroundColor'],
+    series: { count: 1, everyMs: 0, read: ['color'], selectors: { link: '.site-nav .site-nav-link' } },
+    expect(sample) {
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no menu link was found, so there was no text to measure. Fix the scene.';
+      const text = parseRgb(link.color);
+      const fill = parseRgb(sample.styles.backgroundColor);
+      if (!text || !fill) return `could not read the colours (link ${link.color}, bar ${sample.styles.backgroundColor}).`;
+      if (link.color !== 'rgb(255, 255, 255)') {
+        return `the link is ${link.color}, not the theme's header text #ffffff — the scene is not the one ` +
+          'that broke. Fix the scene, never the assertion.';
+      }
+      if (sample.styles.backgroundColor !== 'rgb(0, 0, 0)') {
+        return `the bar is ${sample.styles.backgroundColor}, not the theme's header colour #000000, so the ` +
+          'white header-text links sit on whatever is behind them — on a white page, an empty white bar (86bctde8c).';
+      }
+      const ratio = contrastRatio(text, fill);
+      return ratio >= 4.5 ? null : `the link ${link.color} on the bar ${sample.styles.backgroundColor} is ${ratio.toFixed(2)}:1.`;
+    },
+  },
+  {
+    id: 'menu-with-its-own-text-colour-keeps-a-clear-bar-on-a-themed-page',
+    why:
+      'The other half of 86bctde8c. A menu that chose its own Text Color was designed over whatever ' +
+      'is behind it — Dane of Earth\'s white links over a navy row and over a hero photo. Painting the ' +
+      'theme\'s header colour into that bar would cover the photo, so it must stay transparent.',
+    section: {
+      layout: 'single',
+      themeRolePalette: {
+        surface: '#ffffff', surfaceText: '#000000',
+        header: '#021b49', headerText: '#ffffff',
+      },
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([{ id: 'home', label: 'Home', href: '#home' }]),
+          navColor: '#ffffff',
+        },
+      }],
+    },
+    selector: '.site-nav',
+    read: ['backgroundColor'],
+    expect(sample) {
+      const fill = parseRgb(sample.styles.backgroundColor);
+      if (!fill) return `could not read the bar's fill (${sample.styles.backgroundColor}).`;
+      return fill.a === 0 ? null : `a menu with its own Text Color has a bar of ${sample.styles.backgroundColor}; it ` +
+        'should stay transparent so the row (or photo) it was designed over shows through.';
+    },
+  },
+
+  /*
    * DROP-DOWN LINKS THAT VANISH — 86bcgddcy.
    *
    * daneofearth.starcaster.pro, 2026-10-10: hovering "Projects" opened a blank

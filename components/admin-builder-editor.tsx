@@ -394,8 +394,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   // into the draft, so editing a theme changed the canvas background and not
   // its text. Same resolver the public site uses, so the two cannot disagree.
   const canvasTheme = useMemo(
-    () => resolveRenderTheme(draft.theme, linkedTheme),
-    [draft.theme, linkedTheme]
+    () => resolveRenderTheme(draft.theme, linkedTheme, draft.pageBackground),
+    [draft.theme, linkedTheme, draft.pageBackground]
   );
   // The editing canvas draws modules itself, so it loads the page's Google
   // Fonts (gf:<Family>) here as well as in the shared renderer.
@@ -3186,6 +3186,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           onDeleteCreatedModule={(source, name) => void deleteCreatedModule(source, name)}
           onDeleteSavedModule={(id, name) => void deleteSavedModule(id, name)}
           onDeleteSavedSection={(id, name) => void deleteSavedSection(id, name)}
+          onImportedSavedSection={(record) =>
+            setSavedSections((current) => [record, ...current.filter((section) => section.id !== record.id)])
+          }
           onCloneCreatedModule={(module, moduleLabel) => void cloneCreatedModule(module, moduleLabel)}
           onCloneSavedModule={(id) => void cloneSavedModule(id)}
           onCreateSavedModule={(name, moduleClass, modules) => void createSavedModule(name, moduleClass, modules)}
