@@ -17,6 +17,42 @@ Review caught three slips before it shipped, now fixed: a reply to one comment
 used to block replying to the post itself, clicking "Reply to this comment"
 twice paid for two drafts, and the "signed out" warning stayed up for hours
 after the Mini was signed back in.
+## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
+
+When one of Dane's projects shares its saved sections with another, the
+receiving project now sees them in **Builder › Modules** under a new group,
+**Shared with this project**. Each one says which project it came from and has
+one button, **Import**. Import makes this project its own copy, which appears in
+its Saved Sections at once and can then be used and edited like any other.
+Changes in either project never reach the other, the source project is never
+written to, and pictures keep pointing where they already did. If the name is
+already taken, the copy is called "Header (2)" rather than replacing anything.
+If the other project has stopped sharing in the meantime, Import says so in a
+sentence and copies nothing. Like #894, it needs that ticket's sharing table
+created in the live database before it shows anything there. On 2026-10-28 it
+was not there yet.
+## 2026-10-28 — A project can choose which other projects see its sections, templates and themes (#899)
+
+Each project's settings now has a **Share with** row just above Import /
+Export. Open it and you get two lists of tick boxes: on the left, *what* to
+share (saved sections, page templates, themes); on the right, *which* of your
+other projects may see them. Tick, press Save, and every ticked kind is shared
+with every ticked project. The row's summary line says what is shared at a
+glance ("Saved sections → 1 project", or "Not shared with any project").
+Nothing is copied — the other project only sees the items and imports its own
+copy later, which comes in the next tickets. Only a project's owner can change
+it; anyone else sees the lists greyed out with that reason.
+## 2026-10-28 — Import a theme another project shares with you (#901)
+
+When one of Dane's projects shares its themes with another, the receiving
+project's Themes page now has a **Shared with this project** list at the
+bottom. It shows each theme's name, which project it came from, its colours
+and its fonts, with an **Import** button. Import makes this project its own
+copy. The copy is never made the default theme, so importing can't change
+how the live site looks, and the project it came from is never touched. If a
+theme with that name already exists here, the copy is called "(2)" instead of
+replacing it. If the other project stops sharing, the list empties and any
+copies already made stay.
 
 ## 2026-10-28 — YouTube finds the comments worth replying to (#897)
 

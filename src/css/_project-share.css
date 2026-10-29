@@ -1,0 +1,83 @@
+/* Share with card (React island) —
+   components/settings/project-share-panel.tsx, on Settings › Projects ›
+   (a project), directly above Import / Export. */
+
+.project-share-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-share-heading {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.project-share-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-share-body {
+  margin-top: var(--space-4);
+}
+
+.project-share-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.project-share-list {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.project-share-list legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.project-share-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  overflow-wrap: anywhere;
+}
+
+.project-share-option input {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+.project-share-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.project-share-error {
+  color: var(--status-warn-ink);
+}
+
+@media (max-width: 640px) {
+  .project-share-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

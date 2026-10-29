@@ -180,6 +180,7 @@ test('an owner saves shares, and every row carries BOTH tenant columns', async (
   assert.deepEqual(res.body.data.targets, ['proj-b']);
   // The picker lists the caller's other projects and nothing else.
   assert.deepEqual(res.body.data.projects.map((p) => p.id), ['proj-b', 'proj-m']);
+  assert.equal(res.body.data.canEdit, true);
 
   const rows = db.builder_project_shares;
   assert.equal(rows.length, 2);
@@ -201,6 +202,10 @@ test('a member who is not an owner cannot change shares (403, nothing written)',
   });
   assert.equal(res.status, 403);
   assert.equal(db.builder_project_shares.length, 0);
+  // And the read tells the settings panel to lock itself, by the same rule.
+  const read = await call(handle, { method: 'GET', path: '/api/projects/proj-m/shares' });
+  assert.equal(read.status, 200);
+  assert.equal(read.body.data.canEdit, false);
 });
 
 test('naming a project the caller is not in is refused (403), and nothing is written', async () => {

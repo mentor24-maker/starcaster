@@ -33,6 +33,7 @@ import {
 import type { CanonicalOverwriteImpact } from "@/lib/shared-block-usage";
 import { BuilderSharedBlockSaveModal, type SharedBlockSaveChoice } from "./builder-shared-block-save-modal";
 import { BuilderThemeWizard } from "@/components/builder/builder-theme-wizard";
+import { BuilderSharedThemes } from "./builder-shared-themes";
 
 type DevelopThemeRecord = {
   id: string;
@@ -833,6 +834,10 @@ export function BuilderThemesPage() {
           </div>
         </div>
       </div>
+
+      {/* Other projects' themes, importable as copies. Importing only adds to
+          the list above; it never selects or applies the new theme. */}
+      <BuilderSharedThemes onImported={() => void loadThemes()} />
 
       {isBackgroundGalleryOpen ? (
         <BuilderGalleryModal
