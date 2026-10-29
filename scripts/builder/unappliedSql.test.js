@@ -116,6 +116,23 @@ test('an unapplied file is named again after a day, not every wake, and cleared 
   assert.deepEqual(applied.next.alarmed, {});
 });
 
+test('a named file that is now EXPLAINED is never reported as on production', () => {
+  const state = { alarmed: { 'a.sql': new Date(NOW).toISOString(), 'b.sql': new Date(NOW).toISOString() } };
+  const judged = {
+    verdict: unapplied.VERDICT.OK,
+    files: [],
+    excused: [{ file: 'a.sql', missing: [{ kind: 'table', table: 'a' }], reason: 'retired with the old builder' }],
+  };
+  const decided = unapplied.plan({ judged, state, now: NOW + HOUR });
+  assert.deepEqual(decided.cleared, ['b.sql']);
+  assert.deepEqual(decided.explained.map((f) => f.file), ['a.sql']);
+  assert.deepEqual(decided.next.alarmed, {});
+  assert.ok(!unapplied.renderClear({ files: decided.cleared, node: 'n', at: 't' }).includes('a.sql'));
+  const text = unapplied.renderExplained({ files: decided.explained, node: 'n', at: 't' });
+  assert.match(text, /NOT on production/);
+  assert.match(text, /a\.sql — retired with the old builder/);
+});
+
 test('CANNOT TELL keeps the memory of what was named, and repeats at most every 6h', () => {
   const state = { alarmed: { 'a.sql': new Date(NOW).toISOString() } };
   const judged = { verdict: unapplied.VERDICT.CANNOT_TELL, files: [], reason: 'x' };

@@ -125,6 +125,7 @@ if (CHECK) {
     const posts = [];
     if (decided.alarm.length) posts.push(unapplied.renderAlarm({ files: decided.alarm, node, at }));
     if (decided.cleared.length) posts.push(unapplied.renderClear({ files: decided.cleared, node, at }));
+    if (decided.explained.length) posts.push(unapplied.renderExplained({ files: decided.explained, node, at }));
     if (decided.cannotTell) posts.push(unapplied.renderCannotTell({ judged, node, at }));
     if (!posts.length) console.log('sql:unapplied: nothing new to say on the bus.');
 
