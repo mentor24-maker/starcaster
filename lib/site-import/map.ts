@@ -29,7 +29,7 @@ import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
-import { deriveImportTheme, importSurfaceColor, toHex } from "./theme";
+import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
   hasPaint,
@@ -118,6 +118,14 @@ export type MappedPage = {
   name: string;
   slug: string;
   sections: MappedSection[];
+  /**
+   * The page's own background, when it differs from the import theme's
+   * surface — Alphire's near-black home on a site whose theme is white
+   * (task 86bctde6u). Absent = the page follows the theme, as before.
+   */
+  pageBackground?: MappedBackground;
+  /** Text colours that read on `pageBackground`; present exactly when it is. */
+  textColors?: { text: string; heading: string; link: string };
 };
 
 export type CropCopy = { sourceId: string; fromUrl: string; moduleId: string };
@@ -151,6 +159,8 @@ export type MapReport = {
     modules: number;
     placeholders: number;
     builderPageId: string | null;
+    /** The page's own background colour, when it wears one (86bctde6u). */
+    background?: string;
   }[];
   assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
   /**
@@ -931,6 +941,10 @@ function splitIntoRows(args: {
   bandLookOf: (key: string) => SurfaceLook | null;
   /** The section root's spacing, for a section with no band anywhere. */
   rootLook: SurfaceLook | null;
+  /** What a transparent section showed through to, when that is not the
+   *  page's own background (SectionIR.ground) — painted on every row no
+   *  band paints. */
+  ground: MappedBackground | null;
   /** Element sourceId → the look of the card it sits in; `onBand` when the
    *  row is painted, so a card the page's colour still shows against it. */
   cardLookOf: (sourceId: string, onBand: boolean) => { key: string; look: SurfaceLook } | null;
@@ -997,6 +1011,7 @@ function splitIntoRows(args: {
     } else {
       applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
     }
+    if (row.background.mode === "none" && args.ground) row.background = { ...args.ground };
     const onBand = Boolean(row.background.mode !== "none");
     // A column wears a card only when everything in it sat in that one card.
     const byColumn = new Map<string, Set<string>>();
@@ -1413,6 +1428,13 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     const mappedSections: MappedSection[] = [];
     let pageModules = 0;
     let pagePlaceholders = 0;
+    // A page whose content sits on a colour other than the theme's surface
+    // wears that colour itself, with text that reads on it (task 86bctde6u).
+    // Bands and cards on it are then judged against IT: a band painted the
+    // page's colour is redundant, a white one on a dark page is not.
+    const pageGround = toHex(page.background);
+    const ownGround = Boolean(pageGround && surfaceColor && pageGround !== surfaceColor);
+    const pageSurface = ownGround ? pageGround : surfaceColor;
 
     for (const section of page.sections || []) {
       const modules: MappedModule[] = [];
@@ -1429,7 +1451,12 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // (columns.ts, GridItem.group).
       const sectionEls = section.elements || [];
       const containerStyles = section.containers || {};
-      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const rowCtx = { surface: pageSurface, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const sectionGround = toHex(section.ground);
+      const ground: MappedBackground | null =
+        sectionGround && sectionGround !== pageSurface
+          ? { mode: "color", color: sectionGround, color2: "", imageUrl: "", styleKey: "" }
+          : null;
       const bandLooks = new Map<string, SurfaceLook>();
       const bandLookOf = (key: string): SurfaceLook | null => {
         if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
@@ -1480,7 +1507,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           cardLooks.set(
             memo,
             readSurface(containerStyles[key], {
-              surface: onBand ? "" : surfaceColor,
+              surface: onBand ? "" : pageSurface,
               resolveImage: resolveBackgroundImage,
               maxPadding: 50,
             })
@@ -1856,6 +1883,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         bandOf: (id) => bandOf.get(id) || "",
         bandLookOf,
         rootLook,
+        ground,
         cardLookOf,
       });
       mappedSections.push(...built);
@@ -1869,6 +1897,12 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       name: collapse(page.title) || slug,
       slug,
       sections: mappedSections,
+      ...(ownGround
+        ? {
+            pageBackground: { mode: "color" as const, color: pageGround, color2: "", imageUrl: "", styleKey: "" as const },
+            textColors: pageTextColors(page, pageGround),
+          }
+        : {}),
     });
     report.pages.push({
       path: page.path,
@@ -1877,6 +1911,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       modules: pageModules,
       placeholders: pagePlaceholders,
       builderPageId: null,
+      ...(ownGround ? { background: pageGround } : {}),
     });
   }
 
