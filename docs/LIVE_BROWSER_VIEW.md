@@ -181,10 +181,13 @@ OpenClaw's Chrome control port 18800 whenever that Chrome is running, which
 needs no password. Tailscale's "shields up" setting would close it, but it
 also turns Funnel off, so Dane chose not to use it (2026-10-27, option B on
 86bcrmbdw): the gap is closed instead by a Tailscale access rule, ticket
-86bctcm39, whose rule text and undo steps are `docs/TAILSCALE_POLICY.md`. Until
-that lands, the outside check
-(`scripts/check_browser_door_route.sh`) reports the tailnet lines for 18789
-and 8091 as FAIL, and that FAIL is expected. The SSH route between the
+86bctcm39, whose rule text and undo steps are `docs/TAILSCALE_POLICY.md`. Dane
+applied it on 2026-10-28, and the outside check
+(`scripts/check_browser_door_route.sh`) now reports the tailnet lines for
+18789, 18800 and 8091 as PASS. The one line of that check still failing — the
+`wss://…/live/live` viewer socket answering `400 Bad Request` on the public
+address — is the door-keeper route, not this rule (Funnel traffic does not pass
+through tailnet access rules). The SSH route between the
 machines uses the home network (`mac-mini.local`), not the tailnet.
 
 **Found 2026-10-28 (task 86bcu7d6h): the access rule must allow port 443, or

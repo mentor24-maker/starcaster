@@ -1,9 +1,29 @@
 # The tailnet access rule — what Dane's Tailscale devices may open on the Mini
 
-Ticket 86bctcm39. Status: **written, not yet applied** (2026-10-28). This file
-is the record of the rule; the copy that counts is the one in the Tailscale
-admin console (Access controls), and only Dane can edit that, because it is a
-browser login.
+Ticket 86bctcm39. Status: **applied by Dane on 2026-10-28**, with Screen
+Sharing (`tcp:5900`) added to the Mini's ports when he saved it; Tailscale's
+built-in tests passed on save. **One line is not in the console yet: `tcp:443`**
+(below) — found missing after the rule went live, and waiting on Dane to add it.
+
+This file is the record of the rule; the copy that counts is the one in the
+Tailscale admin console (Access controls), and only Dane can edit that, because
+it is a browser login. When the two disagree, the console is right and this
+file is out of date — fix the file.
+
+Outside check after the rule was saved, 2026-10-28 1:01pm MDT, measured from
+the MacBook (`./scripts/check_browser_door_route.sh --from macbook-pro`):
+
+```
+PASS  tailnet 100.108.7.116:18789 -> no answer (filtered)
+PASS  tailnet 100.108.7.116:18800 -> no answer (filtered)
+PASS  tailnet 100.108.7.116:8091 -> no answer (filtered)
+```
+
+All three ports this ticket was filed to close are closed, and Funnel still
+works (Funnel traffic does not pass through tailnet access rules). The one line
+of that check still failing — the `wss://…/live/live` viewer socket answering
+`400 Bad Request` — is the door-keeper route on the public address, not this
+rule.
 
 ## Why it exists
 
@@ -35,11 +55,21 @@ machines by address — "your own devices" cannot tell them apart.
 ## What the rule allows
 
 * **Into the MacBook:** everything, from any of Dane's devices — unchanged.
-* **Into the Mini:** only port **22** (ssh, a fallback; the machines normally
-  use the home network) and port **8080** (the YouTube helper, which is already
-  public through Funnel, and which the outside check uses as its "is this
-  address reachable at all?" control). Nothing else — so 18789, 18800 and 8091
-  are closed to the tailnet.
+* **Into the Mini:** only these ports, and nothing else — so 18789, 18800 and
+  8091 are closed to the tailnet:
+  * **22** — ssh, a fallback; the machines normally use the home network.
+  * **443** — the Mini's public address, as seen from a tailnet device. On a
+    tailnet device the Funnel name resolves to the Mini's tailnet address, and
+    Tailscale itself answers 443 there with the same `/` and `/live` routes
+    Funnel publishes — so it reaches only what is already public. Without it the
+    sign-in window will not open from the MacBook: its picture feed is refused
+    (Mini log, 2026-10-28 1:11pm, 26 drops of
+    `TCP{100.127.85.12 > 100.108.7.116:443} no rules matched`; found on
+    86bcu7d6h / PR #895). **Not in the console yet.**
+  * **5900** — Screen Sharing, added by Dane when he saved the rule.
+  * **8080** — the YouTube helper, which is already public through Funnel, and
+    which the outside check uses as its "is this address reachable at all?"
+    control.
 * **Funnel and Tailscale SSH settings are not touched.** The `nodeAttrs` block
   (which carries the `funnel` permission) and the `ssh` block stay exactly as
   they are.
@@ -49,7 +79,11 @@ That is the safe direction to be wrong in.
 
 ## The edit
 
-In the policy file, find the one block that lets everything reach everything.
+**Adding 443 to the rule already saved** is two small changes in the console:
+add `"tcp:443"` to the Mini's `ip` list, and `"mac-mini:443"` to the test's
+`accept` list. The full block below is what the file should then contain.
+
+**The first time** (already done, 2026-10-28): in the policy file, find the one block that lets everything reach everything.
 It is one of these two shapes:
 
 ```
@@ -76,9 +110,10 @@ file alone:
 "grants": [
   // The MacBook: open to Dane's devices, as before.
   {"src": ["autogroup:member"], "dst": ["macbook-pro"], "ip": ["*"]},
-  // The Mini: ssh, and the YouTube helper that is already public via Funnel.
+  // The Mini: ssh, its public address (443, which serves only what Funnel
+  // already publishes), Screen Sharing, and the YouTube helper.
   // Nothing else — OpenClaw (18789, 18800) and the door keeper (8091) stay closed.
-  {"src": ["autogroup:member"], "dst": ["mac-mini"], "ip": ["tcp:22", "tcp:8080"]},
+  {"src": ["autogroup:member"], "dst": ["mac-mini"], "ip": ["tcp:22", "tcp:443", "tcp:5900", "tcp:8080"]},
 ],
 
 // The console runs these before it saves. If the rule above does not do what
@@ -86,7 +121,7 @@ file alone:
 "tests": [
   {
     "src":    "mentor24@gmail.com",
-    "accept": ["mac-mini:22", "mac-mini:8080", "macbook-pro:22"],
+    "accept": ["mac-mini:22", "mac-mini:443", "mac-mini:5900", "mac-mini:8080", "macbook-pro:22"],
     "deny":   ["mac-mini:18789", "mac-mini:18800", "mac-mini:8091"],
   },
 ],

@@ -1,4 +1,4 @@
-## 2026-10-28 — The rule that closes the Mini's private doors to other Tailscale devices is written down (#891)
+## 2026-10-28 — The Mini's private doors are closed to other Tailscale devices (#891)
 
 Any device signed in to Dane's Tailscale could open the Mini's private
 OpenClaw control page, and its password-less Chrome control and the browser
@@ -7,8 +7,12 @@ MacBook. The fix is a Tailscale access rule that lets other devices reach only
 ssh and the already-public YouTube helper on the Mini. This change writes that
 rule down exactly, with Tailscale's own built-in tests (so the admin console
 refuses to save a rule that does the wrong thing), an undo, and the check that
-proves it worked. It is not switched on yet: changing it is a sign-in to the
-Tailscale admin page, which is Dane's step.
+proves it worked. Dane switched it on the same day, adding Screen Sharing, and
+the outside check then showed all three private ports closed. One port turned
+out to be missing — 443, which the sign-in window needs from the MacBook and
+which reaches only what is already public — so the record now carries it and
+it waits on Dane to add it in the Tailscale admin page.
+
 ## 2026-10-28 — A database change that ships with code but is never run now raises the alarm (#902)
 
 When code merges it goes live by itself, but its database change waits for
