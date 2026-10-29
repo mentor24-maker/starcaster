@@ -727,6 +727,7 @@ export function BuilderSectionControls({
         hideModeRow
         allowVideo
         allowParallax
+        allowGradientLayers
         label="Row Background"
         background={section.background}
         horizontal
