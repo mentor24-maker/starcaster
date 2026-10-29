@@ -1,3 +1,16 @@
+## 2026-10-29 — The Substack Miner keeps each writer's newest posts and pictures (#915)
+
+The Miner used to look at a writer's newest post titles once, to guess whether
+Dane would approve them, and then forget them. Now it keeps them. For every
+writer that is not rejected, it stores the eight newest posts (title, link,
+date, a short excerpt, the cover picture, and whether the post is paid-only),
+plus the writer's photo and the publication's logo. The Run tab has a new
+**Read writers' posts** button, and the same read runs by itself once a day.
+A writer read in the last week is skipped, and a writer whose posts could not
+be read is named with the reason. The guessing step now reads posts through the
+same piece of code, so the two can never read a post differently. Nothing new
+shows in the list yet: the next three tickets use this data to show articles
+and pictures for each writer.
 ## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
 
 A picture in the Builder could only have rounded corners, measured in pixels.
