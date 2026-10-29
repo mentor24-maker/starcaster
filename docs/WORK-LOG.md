@@ -12,6 +12,17 @@ with a copy of itself. The audit of that day's sweep found four old files
 that are retired or unused (now listed with their reasons, and one of them
 should never be run), one that would fail if run, which was rewritten, and
 ten that still need running, three of them merged today.
+## 2026-10-28 — A project can choose which other projects see its sections, templates and themes (#899)
+
+Each project's settings now has a **Share with** row just above Import /
+Export. Open it and you get two lists of tick boxes: on the left, *what* to
+share (saved sections, page templates, themes); on the right, *which* of your
+other projects may see them. Tick, press Save, and every ticked kind is shared
+with every ticked project. The row's summary line says what is shared at a
+glance ("Saved sections → 1 project", or "Not shared with any project").
+Nothing is copied — the other project only sees the items and imports its own
+copy later, which comes in the next tickets. Only a project's owner can change
+it; anyone else sees the lists greyed out with that reason.
 ## 2026-10-28 — Import a theme another project shares with you (#901)
 
 When one of Dane's projects shares its themes with another, the receiving
