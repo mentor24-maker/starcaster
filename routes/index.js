@@ -188,6 +188,7 @@ const CRON_PATHS = new Set([
   '/api/engage/substack-notes/run-due',
   '/api/engage/substack-notes/watch-content',
   '/api/acquire/substack-miner/read-notes-due',
+  '/api/acquire/substack-miner/read-posts-due',
   '/api/outreach/youtube/conversations/read-due',
 ]);
 
