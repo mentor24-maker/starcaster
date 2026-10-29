@@ -1834,7 +1834,11 @@ async function handle(req, res, pathname, method) {
       }), true;
     }
     const scope = requestProjectScope(req);
-    const saved = createXAcquireRun(inputPayload, acquireResult.data || {}, scope);
+    const saved = await createXAcquireRun(inputPayload, acquireResult.data || {}, scope);
+    if (!saved.ok) {
+      console.log('[acquire.x] save-failed', { status: Number(saved.status || 0) || 0, error: safeText(saved.error) });
+      return sendErr(res, saved.status || 500, saved.error || 'Failed to save X acquire run'), true;
+    }
     const run = saved.data || null;
     logActivity({
       action: 'acquire.x',
@@ -1855,7 +1859,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/acquire/x-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
     const scope = requestProjectScope(req);
-    const result = listXAcquireRuns(limit, scope);
+    const result = await listXAcquireRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1866,7 +1870,7 @@ async function handle(req, res, pathname, method) {
   if (xRunMatch && method === 'GET') {
     const id = decodeURIComponent(xRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = getXAcquireRun(id, scope);
+    const result = await getXAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1875,7 +1879,7 @@ async function handle(req, res, pathname, method) {
   if (xRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(xRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = deleteXAcquireRun(id, scope);
+    const result = await deleteXAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.x_deleted',
@@ -1938,7 +1942,7 @@ async function handle(req, res, pathname, method) {
     }
     const scope = requestProjectScope(req);
     const saved = await Promise.race([
-      Promise.resolve(createRedditAcquireRun(inputPayload, acquireResult.data || {}, scope)),
+      createRedditAcquireRun(inputPayload, acquireResult.data || {}, scope),
       (async () => {
         await waitFor(10000);
         return { ok: false, status: 504, error: 'Reddit acquire save timed out after 10000ms' };
@@ -1978,7 +1982,7 @@ async function handle(req, res, pathname, method) {
   if (pathname === '/api/acquire/reddit-runs' && method === 'GET') {
     const limit = Number(urlObj.searchParams.get('limit') || 20);
     const scope = requestProjectScope(req);
-    const result = listRedditAcquireRuns(limit, scope);
+    const result = await listRedditAcquireRuns(limit, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const runs = Array.isArray(result.data) ? result.data : [];
     return sendOk(res, 200, runs, { runs }, { total: runs.length }), true;
@@ -1989,7 +1993,7 @@ async function handle(req, res, pathname, method) {
   if (redditRunMatch && method === 'GET') {
     const id = decodeURIComponent(redditRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = getRedditAcquireRun(id, scope);
+    const result = await getRedditAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     return sendOk(res, 200, result.data, { run: result.data }), true;
   }
@@ -1998,7 +2002,7 @@ async function handle(req, res, pathname, method) {
   if (redditRunMatch && method === 'DELETE') {
     const id = decodeURIComponent(redditRunMatch[1]);
     const scope = requestProjectScope(req);
-    const result = deleteRedditAcquireRun(id, scope);
+    const result = await deleteRedditAcquireRun(id, scope);
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     logActivity({
       action: 'acquire.reddit_deleted',

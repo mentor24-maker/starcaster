@@ -376,6 +376,25 @@ export type ElementIR = {
    * pictures and on IRs normalized before 2026-10-29 (task 86bctde3p).
    */
   backgroundImage?: { size: string; position: string };
+  /**
+   * Words inside a heading or paragraph that the original styled differently
+   * from the text around them — Alphire's cyan `<span class="accent">`, a
+   * `<strong>` the site kept at normal weight. The colour came from the site's
+   * stylesheet, which does not come along, so without this the word arrives
+   * looking like its neighbours (task 86bctde5z). Each entry names a
+   * descendant by its position in the element's own `html` (document order of
+   * every descendant element, the way cheerio's `find("*")` lists them) and
+   * its tag, so a reader that re-parses `html` differently can tell and skip.
+   * Only the properties that differ from what the word would inherit are
+   * listed. Absent when there are none, and on IRs normalized before it.
+   */
+  inlineStyles?: InlineStyleRun[];
+};
+
+export type InlineStyleRun = {
+  index: number;
+  tag: string;
+  styles: CapturedStyles;
 };
 
 export type SectionIR = {

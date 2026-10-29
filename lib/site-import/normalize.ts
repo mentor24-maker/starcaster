@@ -31,6 +31,7 @@ import {
   type CoverageCounts,
   type ElementClass,
   type ElementIR,
+  type InlineStyleRun,
   type NavItem,
   type NavTree,
   type SiteLogo,
@@ -495,6 +496,84 @@ function compactStyles(raw: CapturedStyles | undefined): CapturedStyles {
     if (defaults && defaults.includes(value)) continue;
     out[prop] = value;
   }
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Word-level text styling (task 86bctde5z)
+ * ------------------------------------------------------------------------ */
+
+/** Tags a browser draws bold or italic on their own — what such a word would
+ *  look like in the Builder with no style at all, which is what "differs" is
+ *  measured against. */
+const UA_BOLD_TAGS = new Set(["strong", "b", "th"]);
+const UA_ITALIC_TAGS = new Set(["em", "i", "cite", "var", "dfn"]);
+
+function numericWeight(value: string | undefined): number {
+  const v = String(value || "").trim().toLowerCase();
+  if (v === "bold") return 700;
+  if (v === "normal" || v === "") return 400;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 400;
+}
+
+/** CSS `font-weight: bolder` against a parent weight. */
+function bolder(parent: number): number {
+  if (parent < 350) return 400;
+  if (parent < 550) return 700;
+  return 900;
+}
+
+/**
+ * The descendants of a text element whose colour, weight, italic or letter
+ * spacing differ from what they would get by inheriting from their parent
+ * (or, for <strong>/<em>, from the browser's own bold/italic). Read from the
+ * marked-up desktop tree, so each word joins to its own captured styles; the
+ * colour on Alphire's accent words lives only there.
+ */
+function inlineStyleRuns(
+  $: CheerioApi,
+  root: DomNode,
+  styles: Record<string, CapturedStyles>
+): InlineStyleRun[] {
+  const out: InlineStyleRun[] = [];
+  const rootKey = (root.attribs || {})["data-scim"] || "";
+  if (!rootKey || !styles[rootKey]) return out;
+  const all = $(root as never).find("*").toArray() as unknown as DomNode[];
+  all.forEach((node, index) => {
+    const key = (node.attribs || {})["data-scim"] || "";
+    const own = key ? styles[key] : undefined;
+    if (!own) return; // not visible, so never measured
+    // A picture or a line break has no lettering to colour.
+    if (!collapseWhitespace(getText(node))) return;
+    let parent = node.parent || null;
+    let parentStyles: CapturedStyles | undefined;
+    while (parent) {
+      const pk = (parent.attribs || {})["data-scim"] || "";
+      if (pk && styles[pk]) {
+        parentStyles = styles[pk];
+        break;
+      }
+      if (parent === root) break;
+      parent = parent.parent || null;
+    }
+    if (!parentStyles) return;
+    const tag = (node.name || "").toLowerCase();
+    const diff: CapturedStyles = {};
+    if (own.color && parentStyles.color && own.color !== parentStyles.color) diff.color = own.color;
+    const weight = numericWeight(own["font-weight"]);
+    const inherited = numericWeight(parentStyles["font-weight"]);
+    const expected = UA_BOLD_TAGS.has(tag) ? bolder(inherited) : inherited;
+    if (own["font-weight"] && weight !== expected) diff["font-weight"] = String(weight);
+    const italic = (own["font-style"] || "normal") !== "normal";
+    const expectItalic = UA_ITALIC_TAGS.has(tag) || (parentStyles["font-style"] || "normal") !== "normal";
+    if (own["font-style"] && italic !== expectItalic) diff["font-style"] = own["font-style"];
+    const spacing = own["letter-spacing"] || "normal";
+    if (own["letter-spacing"] && spacing !== (parentStyles["letter-spacing"] || "normal")) {
+      diff["letter-spacing"] = spacing;
+    }
+    if (Object.keys(diff).length) out.push({ index, tag, styles: diff });
+  });
   return out;
 }
 
@@ -1572,6 +1651,10 @@ function normalizePage(
       };
       const elBox = boxOf(scimKey);
       if (elBox) el.box = elBox;
+      if (v.cls === "heading" || v.cls === "text" || v.cls === "link") {
+        const runs = inlineStyleRuns($, v.node, styles);
+        if (runs.length) el.inlineStyles = runs;
+      }
       if (v.backgroundOnly) {
         el.backgroundImage = {
           size: computedStyles["background-size"] || "auto",
