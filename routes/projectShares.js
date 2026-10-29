@@ -7,6 +7,10 @@
  *   PUT  /api/projects/:id/shares     replace that set — owners of :id only
  *   GET  /api/builder/shared/:type    what other projects share with the ACTIVE one
  *
+ * And one write, into the ACTIVE project only:
+ *
+ *   POST /api/builder/shared/themes/:id/import   copy one shared theme in (86bcu6uav)
+ *
  * Its own module rather than more lines in projects.js and builder.js
  * (routes/CLAUDE.md: do not grow the monoliths). Registered AHEAD of
  * `projects` in routes/index.js, because projects.js answers 404 to any
@@ -23,6 +27,7 @@ const { sendOk, sendErr, parseJsonBody, normalizeApiPathname } = require('./http
 const projectsStore = require('../lib/projectsStore');
 const sharesStore = require('../lib/builderProjectSharesStore');
 const { requestProjectScope } = require('../lib/requestProjectScope');
+const { copySharedTheme: defaultCopySharedTheme } = require('../lib/builderSharedThemeImport');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -36,6 +41,7 @@ function createHandler(deps = {}) {
   const listProjectsForUser = deps.listProjectsForUser || projectsStore.listProjectsForUser;
   const getProjectById = deps.getProjectById || projectsStore.getPublicProjectById;
   const store = deps.sharesStore || sharesStore;
+  const copySharedTheme = deps.copySharedTheme || defaultCopySharedTheme;
 
   async function callerProjects(res, userId) {
     const result = await listProjectsForUser(userId);
@@ -120,6 +126,21 @@ function createHandler(deps = {}) {
     return sendOk(res, 200, items, { items, type: objectType }, { total: items.length }), true;
   }
 
+  // Writes ONE new theme into the active project and nothing anywhere else.
+  // The helper re-checks the share and never marks the copy as the default,
+  // so importing cannot change how the live site looks.
+  async function handleThemeImport(req, res, themeId) {
+    const { projectId, userId } = requestProjectScope(req);
+    if (!userId) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    if (!projectId) return sendErr(res, 400, 'An active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await copySharedTheme({ targetProjectId: projectId, ownerUserId: userId, themeId });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_SHARED' : undefined;
+      return sendErr(res, result.status || 500, result.error || 'Could not import the theme', code ? { code } : undefined), true;
+    }
+    return sendOk(res, 201, result.data, { theme: result.data }), true;
+  }
+
   return async function handle(req, res, pathname, method) {
     const requestMethod = String(method || '').toUpperCase();
     const path = normalizeApiPathname(pathname);
@@ -136,6 +157,11 @@ function createHandler(deps = {}) {
     const sharedMatch = path.match(/^\/api\/builder\/shared\/([^/]+)\/?$/);
     if (sharedMatch && requestMethod === 'GET') {
       return handleSharedRead(req, res, decodeURIComponent(sharedMatch[1] || '').trim());
+    }
+
+    const themeImportMatch = path.match(/^\/api\/builder\/shared\/themes\/([^/]+)\/import\/?$/);
+    if (themeImportMatch && requestMethod === 'POST') {
+      return handleThemeImport(req, res, decodeURIComponent(themeImportMatch[1] || '').trim());
     }
 
     return false;
