@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { normalizeEmailFunction, type BuilderEmailFunction } from "@/lib/builder-email-template";
 import { isGoogleFontKey } from "./builder-google-fonts";
 import { isLibraryFontKey } from "./builder-library-fonts";
+import { normalizeImageShapeSettings } from "./image-shape";
 import { CONFETTI_EFFECT_DEFAULTS, normalizeConfettiModuleSettings } from "@/lib/confetti-effect";
 import { normalizeCurrentPollModuleWidth } from "@/lib/current-poll-module";
 import {
@@ -3108,6 +3109,9 @@ export function normalizeBuilderModuleSettingsForType(
     normalizeFlowModuleZIndex(settings);
     migrateSpacingPairToSides(settings, "padding", "verticalPadding", "horizontalPadding");
     normalizeImageEffectSettings(settings);
+    // Shape (task 86bctde2b): its radii string is written straight into a
+    // style, so only px/% lengths survive a save or a load.
+    normalizeImageShapeSettings(settings);
   }
 
   if (type === "floating-image") {
