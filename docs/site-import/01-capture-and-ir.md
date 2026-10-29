@@ -492,6 +492,29 @@ Recorded now so the mapping phase inherits them verbatim:
   for its padding). A box painted only by a gradient counts as painted. A background picture
   on a box smaller than 200x80 is an icon or sprite and is not recorded.
   IRs normalized earlier simply lack the fields and map as before.
+- **Decorative layers** (2026-10-29, task 86bctde48; additive, IR_VERSION
+  unchanged): a stylesheet can paint with an element's `::before` and
+  `::after` — Alphire draws its hero's starfield, glow ring and cyan line
+  that way — and the DOM walk never sees them. The desktop capture now reads
+  both layers of every stamped element and records the ones that PAINT (a
+  background picture or gradient, a non-transparent fill, a visible border, a
+  shadow, or a `content: url()` picture) as `CaptureResult.decorations`: owner
+  key, which pseudo, a readable owner label (`section.alphire-hero`), its box,
+  its z-index and its painting properties. A clearfix or spacer
+  (`content:""` and nothing else) is not recorded. Browsers give a
+  pseudo-element no rect, so the box is rebuilt: a positioned layer from its
+  own offsets and size against its containing block, through any 2D
+  transform (`boxFrom: "offsets"` — exact for the usual absolute decoration);
+  an in-flow layer starts at its owner's corner (`boxFrom: "owner"`, an
+  approximation). Pictures it paints join the asset manifest
+  (`via: "css-pseudo"`). The normalizer files each one under the section
+  holding its owner (`SectionIR.decorations`, defaults dropped, `assetRefs`
+  joined), or on `PageIR.decorations` when the owner is outside every
+  section. **Absent means "not recorded"** — a capture made before this has
+  no field, and the fidelity report says CANNOT TELL there; an empty list
+  means it looked and found none. Measured on alphire.agency: 9 layers on the
+  home page, desktop capture median 7.8 s against 8.0–8.1 s before (5 runs
+  each — no measurable cost). Rebuilding them in the Builder is a follow-up.
 
 ## Phase 1 DoD run — 2026-08-06 (COMPLETE)
 

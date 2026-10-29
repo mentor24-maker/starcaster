@@ -344,6 +344,8 @@ async function runCaptureStage(job, opts) {
             styles: raw.styles,
             rects: raw.rects || {},
             pageBackground: raw.pageBackground || '',
+            // Absent on tablet/mobile, and absent means "not recorded".
+            ...(raw.decorations ? { decorations: raw.decorations } : {}),
             assetUrls: raw.assetUrls,
             fontFamilies: raw.fontFamilies,
             meta: raw.meta,

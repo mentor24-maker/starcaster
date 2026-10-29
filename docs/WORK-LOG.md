@@ -1,3 +1,19 @@
+## 2026-10-29 — Site Import now sees the decorations a stylesheet draws around a box (#906)
+
+Many sites draw decorations with a stylesheet trick instead of with real page
+elements: an invisible extra layer in front of or behind a box. Alphire's
+home page draws its starfield, its glowing ring and its thin cyan line that
+way, and Site Import never looked at those layers, so they were invisible to
+it and the fidelity report could only say "cannot tell". The capture now
+reads those layers on every visible element and keeps the ones that actually
+paint something (a gradient, a picture, a fill, a border, a shadow), with
+where each one sits; empty helper layers are skipped, and any picture they
+paint is downloaded like other images. The fidelity report lists each one in
+plain words, such as "a ring in #00d9ff with a glow". On Alphire it found
+nine, four of them in the hero, and capturing the page took no measurably
+longer (7.8 s against 8.0 s). Imports made before this still say "cannot
+tell", because they really never looked. Rebuilding these decorations in the
+Builder is the next step, not this one.
 ## 2026-10-29 — Imported headings keep their thin lettering, spacing and coloured words (#907)
 
 On the Alphire import, the thin home heading came out heavy and black, and

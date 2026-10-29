@@ -36,6 +36,24 @@ const PAGE = `<!DOCTYPE html>
   /* A dropdown submenu, hidden until hover. Must SURVIVE capture — this is
      the imported site's menu. */
   .submenu { display: none; }
+  /* Decorative layers the DOM walk never sees (task 86bctde48), drawn the
+     way alphire.agency draws its hero: a starfield of radial-gradient dots
+     on ::before, a glowing ring on ::after, a thin line on another box. */
+  .hero { position: relative; height: 400px; }
+  .hero::before { content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(2px 2px at 20px 30px, rgb(255, 255, 255), transparent),
+      radial-gradient(1px 1px at 90px 120px, rgb(200, 230, 255), transparent);
+    background-size: 200px 200px; }
+  .hero::after { content: ""; position: absolute; top: 50%; left: 70%;
+    width: 300px; height: 300px; transform: translate(-50%, -50%);
+    border: 2px solid rgb(0, 229, 255); border-radius: 50%;
+    box-shadow: rgba(0, 229, 255, 0.5) 0px 0px 40px 0px; }
+  .content { position: relative; }
+  .content::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+    background-image: linear-gradient(90deg, transparent, rgb(0, 229, 255), transparent); }
+  /* Paints nothing: a clearfix and an empty spacer. Must NOT be recorded. */
+  .clearfix::after { content: ""; display: table; clear: both; }
+  .spacer::before { content: ""; display: block; height: 20px; }
 </style></head>
 <body>
 <div id="page">
@@ -53,7 +71,7 @@ const PAGE = `<!DOCTYPE html>
       <p>A paragraph with an <a href="/inline">inline link</a> inside it.</p>
     </section>
     <section class="content">
-      <h2>Second Section</h2>
+      <div class="clearfix spacer"><h2>Second Section</h2></div>
       <div>Bare text run in a div.</div>
       <img src="/pixel.png" alt="One pixel">
       <form action="/submit"><input type="email" name="e"><input type="submit" value="Go"></form>
@@ -103,6 +121,8 @@ try {
     viewport: raw.viewport,
     html: raw.html,
     styles: raw.styles,
+    rects: raw.rects,
+    ...(raw.decorations ? { decorations: raw.decorations } : {}),
     assetUrls: raw.assetUrls,
     fontFamilies: raw.fontFamilies,
     meta: raw.meta,
@@ -165,6 +185,30 @@ try {
     check(!allText.includes(hidden), `screen-reader-only text dropped: "${hidden}"`);
   }
   check(allText.includes('Smoke Test Headline'), 'visible text still captured');
+
+  // Decorative layers (task 86bctde48): the three that paint are recorded,
+  // with boxes; the clearfix and the spacer paint nothing and are not.
+  const decos = desktopRaw.decorations || [];
+  console.log('decorations:', JSON.stringify(decos.map((d) => ({ label: d.label, pseudo: d.pseudo, box: d.box, boxFrom: d.boxFrom }))));
+  check(decos.length === 3, `exactly 3 painting layers recorded (got ${decos.length})`);
+  const heroRect = Object.entries(desktopRaw.styles).find(([, st]) => st['background-color'] === 'rgb(13, 148, 136)');
+  const hero = heroRect ? desktopRaw.rects[heroRect[0]] : null;
+  const star = decos.find((d) => d.label === 'section.hero' && d.pseudo === 'before');
+  check(Boolean(star && /radial-gradient/.test(star.styles['background-image'] || '')), 'starfield ::before recorded with its gradients');
+  check(Boolean(star && hero && star.box.join() === hero.join()), `starfield box fills the hero (${star && star.box} vs ${hero})`);
+  const ring = decos.find((d) => d.label === 'section.hero' && d.pseudo === 'after');
+  // left 70% of the hero, centred on itself by translate(-50%, -50%); 300px + 2px borders.
+  const wantRing = hero && [Math.round(hero[0] + hero[2] * 0.7 - 152), Math.round(hero[1] + hero[3] / 2 - 152), 304, 304];
+  check(Boolean(ring && wantRing && ring.box.every((v, i) => Math.abs(v - wantRing[i]) <= 1)), `ring ::after box (${ring && ring.box} vs ${wantRing})`);
+  check(Boolean(ring && ring.size.join() === '304,304'), `ring keeps its own size (${ring && ring.size})`);
+  check(Boolean(ring && ring.styles['border-radius'] === '50%' && /0, 229, 255/.test(ring.styles['box-shadow'] || '')), 'ring keeps its radius and glow');
+  const line = decos.find((d) => d.label === 'section.content');
+  check(Boolean(line && line.box[3] === 1 && line.boxFrom === 'offsets'), `thin line recorded 1px tall (${line && line.box})`);
+  check(!decos.some((d) => /clearfix|spacer/.test(d.label)), 'clearfix and empty spacer NOT recorded');
+  check(!mobileRaw.decorations, 'mobile capture records no decorations (desktop only)');
+  const sectionDecos = ir.pages[0].sections.flatMap((s) => s.decorations || []);
+  check(sectionDecos.length === 3 && sectionDecos.filter((d) => d.onSectionRoot).length === 3,
+    `normalizer files all three under their sections (got ${sectionDecos.length})`);
   // display:none is how submenus wait for a hover — dropping it would
   // delete the imported site's menu, so it must survive.
   const navItems = ir.taxonomy.navs[0]?.items || [];
