@@ -13,6 +13,30 @@ a named theme. No existing page changes because of that: in production, the
 one themed page with its own background stores no text colours. Checked
 against the real Alphire capture: the home page goes dark, the other 16 stay
 white.
+## 2026-10-29 — Menus that follow the theme's colours no longer vanish into a white bar (#910)
+
+Alphire's imported Top Menu showed as an empty white bar. The links were there,
+painted white: a menu with no Text Color of its own uses the theme's "header
+text" colour, which Alphire's theme set to white because its header is black.
+But the bar behind the links was always see-through, so the black header colour
+was never painted anywhere and the white links sat on the white page. Now, when
+a menu leaves its text colour to the theme, it leaves its bar colour to the
+theme too, so the two always arrive together: Alphire gets a black bar with
+white links. A menu that picked its own text colour (every Dane of Earth menu
+does) is untouched, and so is any site whose theme has no header colour. Two
+checks in a real browser now measure both halves, and each was broken on
+purpose to prove it fails.
+## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
+
+The Mini's sign-in window has an outside check that, among other things, makes
+sure the live-picture feed refuses a stranger. That line always said FAIL, even
+on a perfectly working door, so a correct install could never pass and the one
+line that would catch pictures leaking to a stranger meant nothing. Two causes,
+one hiding the other: the test key it sent was the wrong length, so the door
+rejected the request before checking anything; and once that was fixed, the
+check read curl's "timed out" message as the door's answer, because that
+message arrives first. Both are fixed, the tests now behave like the real door
+so either mistake would fail them, and run from the MacBook the line reads PASS.
 
 ## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
 
