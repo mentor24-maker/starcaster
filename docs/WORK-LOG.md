@@ -10,8 +10,9 @@ refuses to save a rule that does the wrong thing), an undo, and the check that
 proves it worked. Dane switched it on the same day, adding Screen Sharing, and
 the outside check then showed all three private ports closed. One port turned
 out to be missing — 443, which the sign-in window needs from the MacBook and
-which reaches only what is already public — so the record now carries it and
-it waits on Dane to add it in the Tailscale admin page.
+which reaches only what is already public — so the record now carries it, and
+Dane added it in the Tailscale admin page on 2026-10-29.
+
 ## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
 
 Alphire's home page is near-black, but 15 of its 17 pages are white, so the

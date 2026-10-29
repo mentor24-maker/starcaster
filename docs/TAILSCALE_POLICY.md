@@ -2,8 +2,9 @@
 
 Ticket 86bctcm39. Status: **applied by Dane on 2026-10-28**, with Screen
 Sharing (`tcp:5900`) added to the Mini's ports when he saved it; Tailscale's
-built-in tests passed on save. **One line is not in the console yet: `tcp:443`**
-(below) — found missing after the rule went live, and waiting on Dane to add it.
+built-in tests passed on save. **`tcp:443` was added by Dane on 2026-10-29**
+(he replied "Done" on the ticket at 9:30am MDT) — it was found missing after the
+rule went live, and the sign-in window needs it from the MacBook (below).
 
 This file is the record of the rule; the copy that counts is the one in the
 Tailscale admin console (Access controls), and only Dane can edit that, because
@@ -24,6 +25,13 @@ works (Funnel traffic does not pass through tailnet access rules). The one line
 of that check still failing — the `wss://…/live/live` viewer socket answering
 `400 Bad Request` — is the door-keeper route on the public address, not this
 rule.
+
+Re-run after 443 was added, 2026-10-29 10:34am MDT, same command: the internet
+and home-network lines and all three public `/live` lines PASS (the viewer
+socket now answers "refused" as it should). The tailnet lines read CANNOT TELL,
+not PASS — Tailscale was switched off on the MacBook at the time (`tailscale
+status` there: "Tailscale is stopped"), so nothing could be measured over the
+tailnet. Re-run with Tailscale on to confirm 443 from a tailnet device.
 
 ## Why it exists
 
@@ -79,9 +87,10 @@ That is the safe direction to be wrong in.
 
 ## The edit
 
-**Adding 443 to the rule already saved** is two small changes in the console:
-add `"tcp:443"` to the Mini's `ip` list, and `"mac-mini:443"` to the test's
-`accept` list. The full block below is what the file should then contain.
+**Adding 443 to the rule already saved** (done by Dane, 2026-10-29) was two
+small changes in the console: `"tcp:443"` in the Mini's `ip` list, and
+`"mac-mini:443"` in the test's `accept` list. The full block below is what the
+file now contains.
 
 **The first time** (already done, 2026-10-28): in the policy file, find the one block that lets everything reach everything.
 It is one of these two shapes:

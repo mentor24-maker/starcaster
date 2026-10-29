@@ -200,7 +200,8 @@ allowed only 22, 5900 and 8080, and the Mini's log shows every one of the
 MacBook's connections dropped (`Drop: TCP{100.127.85.12 > 100.108.7.116:443}
 no rules matched`). The window sat on "Opening…" while Starcaster's server,
 which is not on the tailnet, opened the pass without trouble. The fix is one
-more port in the Mini's grant, `tcp:443`. It opens nothing new: 443 reaches
+more port in the Mini's grant, `tcp:443` — Dane added it in the console on
+2026-10-29. It opens nothing new: 443 reaches
 only the two routes already public through Funnel, and 8091, 18789 and 18800
 stay closed. The outside check now reads this path ("from a tailnet device"),
 and the window gives up after 30 seconds with no picture and says why.
