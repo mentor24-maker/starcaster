@@ -56,6 +56,12 @@ const SCHEDULED_LAUNCHERS = {
       + 'never touches ClickUp; its failure post and its beat do, through '
       + 'report:failure and heartbeat.',
   },
+  'run_reddit_watch.sh': {
+    job: 'reddit-watch',
+    why: 'Every four hours on the Mini (Outreach wizard 18/19). The watch itself '
+      + 'never touches ClickUp; its failure post and its beat do, through '
+      + 'report:failure and heartbeat.',
+  },
   'loop_runner.sh': {
     job: 'loop-build / loop-review',
     why: 'Both loop lanes. A headless Claude session on a timer is still a '
