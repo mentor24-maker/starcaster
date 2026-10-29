@@ -4020,7 +4020,7 @@
               },
               {
                 "sourceId": "0-50ed494d",
-                "class": "link",
+                "class": "button",
                 "html": "<a class=\"btn btn-outline\" href=\"#book\">Book a Court</a>",
                 "textContent": "Book a Court",
                 "textLength": 12,
@@ -4059,7 +4059,7 @@
               },
               {
                 "sourceId": "0-4cef8198",
-                "class": "link",
+                "class": "button",
                 "html": "<a class=\"btn btn-primary\" href=\"#register\">Register</a>",
                 "textContent": "Register",
                 "textLength": 8,
@@ -4334,7 +4334,7 @@
               },
               {
                 "sourceId": "0-210204f0",
-                "class": "link",
+                "class": "button",
                 "html": "<a class=\"btn btn-primary\" id=\"book\" href=\"#\">Book a Court</a>",
                 "textContent": "Book a Court",
                 "textLength": 12,
@@ -4371,7 +4371,7 @@
               },
               {
                 "sourceId": "0-64fe9e65",
-                "class": "link",
+                "class": "button",
                 "html": "<a class=\"btn btn-outline\" href=\"#programs\">Find Your Program</a>",
                 "textContent": "Find Your Program",
                 "textLength": 17,
@@ -5685,7 +5685,7 @@
               },
               {
                 "sourceId": "0-b9a5f1fe",
-                "class": "link",
+                "class": "button",
                 "html": "<a class=\"btn btn-outline\" style=\"border-color:var(--navy);color:var(--navy)\" href=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/weekly-program-guide.png\">View Full Guide</a>",
                 "textContent": "View Full Guide",
                 "textLength": 15,
@@ -9923,16 +9923,16 @@
   "coverage": {
     "captured": {
       "text": 78,
-      "link": 140,
+      "link": 135,
       "image": 18,
-      "button": 1,
+      "button": 6,
       "heading": 60
     },
     "emitted": {
       "text": 78,
-      "link": 140,
+      "link": 135,
       "image": 18,
-      "button": 1,
+      "button": 6,
       "heading": 60
     },
     "dropped": {},
