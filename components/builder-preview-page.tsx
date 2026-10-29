@@ -315,7 +315,7 @@ export function BuilderPreviewPage() {
       <BuilderTemplatePreview
         layoutSections={sections}
         pageBackground={draft.pageBackground}
-        theme={resolveRenderTheme(draft.theme, draft.themeRecord)}
+        theme={resolveRenderTheme(draft.theme, draft.themeRecord, draft.pageBackground)}
         themePalette={themePalette ?? draft.themePalette}
         themeStyles={effectiveThemeStyles}
         themeShellBackground={themeShellBackground ?? draft.themeShellBackground}
