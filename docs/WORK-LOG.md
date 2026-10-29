@@ -1,3 +1,16 @@
+## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
+
+On the Acquire screen, every X or Reddit search is supposed to leave a run in
+the history list, so you can reopen it later. Those runs were saved to files on
+the server, and the live site cannot write files, so it skipped the save without
+saying so. Every search reported "saved", nothing was kept, and the history on
+the live site was always empty. The runs now go into two database tables, the
+same place the YouTube history already lives, kept separate per project. If the
+database cannot save a run, the screen now says so instead of pretending it
+worked. The tables need one SQL file run in Supabase
+(`acquire_x_reddit_runs_setup.sql`); until then the history shows an error
+naming the missing table, and the daily unapplied-SQL check keeps reminding.
+
 ## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
 
 When one of Dane's projects shares its page templates with another, the
