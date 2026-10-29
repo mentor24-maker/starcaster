@@ -13,6 +13,16 @@ out to be missing — 443, which the sign-in window needs from the MacBook and
 which reaches only what is already public — so the record now carries it, and
 Dane added it in the Tailscale admin page on 2026-10-29.
 
+## 2026-10-29 — Site Import places pictures a site paints onto an empty box (#905)
+
+Some websites show a picture by painting it as the background of an empty
+box, rather than as an ordinary picture. Site Import downloaded those
+pictures but never put them anywhere, because it only turned real content
+into page pieces, and an empty box looked like packaging. That is why
+Alphire's hero picture went missing. Now an empty box with a background
+picture (at least 40 by 40 pixels) is imported as an Image in its place, and
+the picture is copied into the project's Assets. Empty boxes with no picture
+still produce nothing, so no blank blocks appear.
 ## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
 
 Alphire's home page is near-black, but 15 of its 17 pages are white, so the
