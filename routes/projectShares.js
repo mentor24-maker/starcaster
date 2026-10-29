@@ -11,6 +11,8 @@
  *
  *   POST /api/builder/shared/saved_sections/:id/import   copy one shared section in (86bcu6tzk)
  *   POST /api/builder/shared/themes/:id/import           copy one shared theme in (86bcu6uav)
+ *   POST /api/builder/shared/page_templates/:id/import   copy one shared page template in,
+ *                                                        with the sections its frame uses (86bcu6ubh)
  *
  * Its own module rather than more lines in projects.js and builder.js
  * (routes/CLAUDE.md: do not grow the monoliths). Registered AHEAD of
@@ -30,6 +32,7 @@ const sharesStore = require('../lib/builderProjectSharesStore');
 const sharedImport = require('../lib/builderSharedImport');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { copySharedTheme: defaultCopySharedTheme } = require('../lib/builderSharedThemeImport');
+const { copySharedPageTemplate: defaultCopySharedPageTemplate } = require('../lib/builderSharedTemplateImport');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -45,6 +48,7 @@ function createHandler(deps = {}) {
   const store = deps.sharesStore || sharesStore;
   const copySharedSavedSection = deps.copySharedSavedSection || sharedImport.copySharedSavedSection;
   const copySharedTheme = deps.copySharedTheme || defaultCopySharedTheme;
+  const copySharedPageTemplate = deps.copySharedPageTemplate || defaultCopySharedPageTemplate;
 
   async function callerProjects(res, userId) {
     const result = await listProjectsForUser(userId);
@@ -159,6 +163,22 @@ function createHandler(deps = {}) {
     return sendOk(res, 201, result.data, { theme: result.data }), true;
   }
 
+  // Writes the template AND the saved sections its header, menu and footer
+  // point at — all into the active project, nothing anywhere else. The helper
+  // writes the sections first, so a failure never leaves a template pointing
+  // at sections that do not exist.
+  async function handleTemplateImport(req, res, templateId) {
+    const { projectId, userId } = requestProjectScope(req);
+    if (!userId) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    if (!projectId) return sendErr(res, 400, 'An active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await copySharedPageTemplate({ targetProjectId: projectId, ownerUserId: userId, templateId });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_SHARED' : undefined;
+      return sendErr(res, result.status || 500, result.error || 'Could not import the template', code ? { code } : undefined), true;
+    }
+    return sendOk(res, 201, result.data, result.data), true;
+  }
+
   return async function handle(req, res, pathname, method) {
     const requestMethod = String(method || '').toUpperCase();
     const path = normalizeApiPathname(pathname);
@@ -185,6 +205,11 @@ function createHandler(deps = {}) {
     const themeImportMatch = path.match(/^\/api\/builder\/shared\/themes\/([^/]+)\/import\/?$/);
     if (themeImportMatch && requestMethod === 'POST') {
       return handleThemeImport(req, res, decodeURIComponent(themeImportMatch[1] || '').trim());
+    }
+
+    const templateImportMatch = path.match(/^\/api\/builder\/shared\/page_templates\/([^/]+)\/import\/?$/);
+    if (templateImportMatch && requestMethod === 'POST') {
+      return handleTemplateImport(req, res, decodeURIComponent(templateImportMatch[1] || '').trim());
     }
 
     return false;

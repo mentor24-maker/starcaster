@@ -12,6 +12,7 @@ import { BuilderAgentsPage } from './components/builder/builder-agents-page';
 import SiteImportPage, { SiteImportErrorBoundary } from './components/builder/site-import-page';
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 import { BuilderThemeColorField } from './components/builder/builder-theme-color-field';
+import { BuilderSharedPageTemplatesIsland } from './components/builder/builder-shared-page-templates';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -445,3 +446,22 @@ window.SiteImportReact = {
   mount: mountSiteImportReact,
   unmount: unmountSiteImportReact,
 };
+
+/**
+ * "Shared with this project" on the Templates page (task 86bcu6ubh). Its host
+ * sits in the page markup permanently (src/pages/builder.html), so it mounts
+ * once when the bundle loads rather than waiting for public/js — which is
+ * frozen — to learn a new mount call. The group fetches nothing until opened.
+ */
+function mountSharedPageTemplatesOnLoad() {
+  const host = document.getElementById('builderReactRootSharedPageTemplates');
+  if (!host || host.dataset.mounted === '1') return;
+  host.dataset.mounted = '1';
+  createRoot(host).render(<BuilderSharedPageTemplatesIsland />);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountSharedPageTemplatesOnLoad, { once: true });
+} else {
+  mountSharedPageTemplatesOnLoad();
+}
