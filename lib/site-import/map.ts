@@ -32,7 +32,9 @@ import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns"
 import { importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
+  buttonGlowSettings,
   hasPaint,
+  imageGlowSettings,
   keepCellFill,
   planBands,
   planCards,
@@ -1668,6 +1670,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               size: "100",
               ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
+              ...imageGlowSettings(el.computedStyles),
               importSourceIds: el.sourceId,
             },
           });
@@ -1686,6 +1689,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
             text: collapse(el.textContent) || "Imported button",
             settings: {
               href: attrFromHtml(el.html, "href"),
+              ...buttonGlowSettings(el.computedStyles),
               importSourceIds: el.sourceId,
             },
           });

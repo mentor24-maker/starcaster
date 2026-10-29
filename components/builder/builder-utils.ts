@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { getButtonGlowShadow } from "@/lib/builder-button-glow";
 import { getCarouselImageShadow } from "@/lib/builder-carousel-image-frame";
 import { googleFontStack } from "@/lib/builder-google-fonts";
 import { libraryFontStack } from "@/lib/builder-library-fonts";
@@ -1286,6 +1287,7 @@ export function getButtonModuleStyle(
   const fontSize = Number.parseInt(settings.fontSize ?? "", 10);
   const textColor = settings.textColor || roleOr("--lp-button-text", "#ffffff");
   const textShadow = getModuleDropShadowStyle(settings);
+  const glow = getButtonGlowShadow(settings);
   const borderStyle = settings.borderStyle === "none" || settings.borderStyle === "dashed" || settings.borderStyle === "dotted"
     ? settings.borderStyle
     : "solid";
@@ -1322,6 +1324,10 @@ export function getButtonModuleStyle(
     "--btn-border": resolvedBorderColor,
     color: textColor,
     textShadow,
+    // The glow round the pill (task 86bctde3a) — a zero-offset box-shadow,
+    // so it paints outside the box and follows the corners. Absent when off,
+    // so no existing button gains a box-shadow declaration.
+    ...(glow ? { boxShadow: glow } : {}),
     // Four sides (W7). `paddingY`/`paddingX` are the pre-2026-08-11 pair and
     // are still read here so a page that has not been re-saved keeps its
     // button shape exactly.

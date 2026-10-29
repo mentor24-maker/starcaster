@@ -1357,7 +1357,12 @@ const PANEL_CHECK_MULTI_COLUMN_SECTION = {
     {
       id: 'panel-columns-left-button', type: 'button', column: 'left', name: 'Outside Link',
       text: 'Reserve a court',
-      settings: { href: 'https://www.example.com/reservations', alignment: 'left' },
+      // Glow ticked so check:panels measures its Colour / Size / Strength
+      // fields, which only show while it is on (task 86bctde3a).
+      settings: {
+        href: 'https://www.example.com/reservations', alignment: 'left',
+        buttonGlow: 'true', buttonGlowColor: '#00d9ff', buttonGlowSize: '22', buttonGlowStrength: '40',
+      },
     },
     {
       id: 'panel-columns-right', type: 'heading', column: 'right', settings: {},

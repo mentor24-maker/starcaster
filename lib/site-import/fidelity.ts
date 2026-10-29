@@ -164,7 +164,7 @@ function isTinted(value: string): boolean {
   return Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]) > 40;
 }
 
-type Shadow = { color: string; x: number; y: number; blur: number; inset: boolean };
+export type Shadow = { color: string; x: number; y: number; blur: number; inset: boolean };
 
 export function parseShadows(value: string | undefined): Shadow[] {
   const v = String(value || "").trim();
@@ -180,8 +180,11 @@ export function parseShadows(value: string | undefined): Shadow[] {
   return out;
 }
 
-/** A glow: a tinted shadow that spreads evenly round the box. */
-function isGlow(s: Shadow): boolean {
+/** A glow: a tinted shadow that spreads evenly round the box. The importer
+ *  maps these onto a Button's Glow and a picture's coloured shadow
+ *  (surfaces.ts readGlow) — ONE definition, so the report and the mapper
+ *  cannot disagree about what a glow is. */
+export function isGlow(s: Shadow): boolean {
   return isTinted(s.color) && Math.abs(s.x) <= 2 && Math.abs(s.y) <= 2 && s.blur > 0;
 }
 
@@ -354,7 +357,20 @@ function checkShadowsAndShapes(section: SectionIR, rows: BuilderRow[]): Fidelity
   const importedShadowWords = importedShadows.length || moduleShadows.length
     ? `only grey shadow presets (${Array.from(new Set([...importedShadows, ...moduleShadows])).join(", ")})`
     : "no shadow";
+  // A glow the mapper carried — a Button's Glow, or a picture's centred
+  // coloured shadow (task 86bctde3a) — is not lost, so it is not reported.
+  const importedGlowColors = new Set(
+    rows.flatMap((r) => (r.modules || []).flatMap((m) => {
+      const st = (m.settings || {}) as Record<string, string>;
+      if (st.buttonGlow === "true" && st.buttonGlowColor) return [st.buttonGlowColor.toLowerCase()];
+      if (st.imageShadow === "true" && st.imageShadowColor && st.imageShadowX === "0" && st.imageShadowY === "0") {
+        return [st.imageShadowColor.toLowerCase()];
+      }
+      return [];
+    }))
+  );
   for (const [shadow, names] of glows) {
+    if (importedGlowColors.has(shadow.split(" ")[0].toLowerCase())) continue;
     out.push({ category: "shadow", what: `a coloured glow (${shadow}) round ${names.length} item(s): ${listOf(names)}`, imported: importedShadowWords });
   }
   const greyCount = Array.from(shadows.values()).reduce((n, l) => n + l.length, 0);
