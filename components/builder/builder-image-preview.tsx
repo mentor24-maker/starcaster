@@ -12,6 +12,7 @@ import {
   isVideoMedia
 } from "./builder-utils";
 import { imageProps, sizesForWidthPercent } from "@/lib/image-renditions";
+import { getImageShapeMediaStyle } from "@/lib/image-shape";
 import {
   getImageEffectClassName,
   getImageEffectStageStyle,
@@ -90,6 +91,10 @@ export function BuilderImagePreview({
   const responsiveImage = imageProps(mediaUrl, {
     sizes: sizesForWidthPercent(slotWidthPercent)
   });
+  // A Circle frame is square; the picture fills it and crops, and so does
+  // the link around it. Every other shape keeps the picture's proportions.
+  const shapeMediaStyle = floating ? null : getImageShapeMediaStyle(module.settings);
+  const mediaStyle: CSSProperties = { width: "100%", height: "auto", display: "block", ...shapeMediaStyle };
 
   const figure = (
     <figure
@@ -100,12 +105,12 @@ export function BuilderImagePreview({
         isVideoMedia(mediaUrl) ? (
           <video className="builder-preview-video" controls preload="metadata" src={mediaUrl} />
         ) : linkUrl ? (
-          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={{ display: "block" }}>
+          <a href={linkUrl} rel={opensInNewTab ? "noopener noreferrer" : undefined} target={opensInNewTab ? "_blank" : undefined} style={shapeMediaStyle ? { display: "block", height: "100%" } : { display: "block" }}>
             <img
               alt={module.settings.alt || module.text || ""}
               {...responsiveImage}
               suppressHydrationWarning
-              style={{ width: "100%", height: "auto", display: "block" }}
+              style={mediaStyle}
             />
           </a>
         ) : (
@@ -113,7 +118,7 @@ export function BuilderImagePreview({
             alt={module.settings.alt || module.text || ""}
             {...responsiveImage}
             suppressHydrationWarning
-            style={{ width: "100%", height: "auto", display: "block" } as CSSProperties}
+            style={mediaStyle}
           />
         )
       ) : (

@@ -670,6 +670,83 @@ function cappedAt(px: string): { maxWidthPx?: string } {
   return px ? { maxWidthPx: px } : {};
 }
 
+/* ---------------------------------------------------------------------------
+ * Picture shape (task 86bctde2b)
+ * ------------------------------------------------------------------------ */
+
+type ImageShapeSettings = { borderRadius?: string; imageShape?: string; imageShapeRadii?: string };
+
+/** One computed corner length, tidied for the Image module's Custom shape:
+ *  whole pixels, percentages to two places. null = not a px/% length. */
+function shapeLength(token: string): string | null {
+  const m = /^(\d+(?:\.\d+)?)(px|%)$/.exec(token);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (m[2] === "px") return `${Math.min(Math.round(n), 9999)}px`;
+  return `${Math.min(Math.round(n * 100) / 100, 100)}%`;
+}
+
+/**
+ * The Image module settings that reproduce a picture's computed
+ * `border-radius` (the browser's own value, so `50% 45% 52% 48% / 48% 52%
+ * 48% 52%` arrives exactly as alphire.agency wrote its hero blob).
+ *
+ * - no radius            → Radius 0. Without it the module's 18px default
+ *                          rounded every square picture an import brought in.
+ * - one small px value   → Rounded, Radius in px (what the panel already had)
+ * - fully rounded square → Circle
+ * - anything else        → Custom, with the radii carried as written —
+ *                          elliptical, per-corner, percentage, pill
+ * - unreadable           → nothing (the module's default stands)
+ *
+ * Exported for the tests, and for whatever places a picture the source
+ * painted onto a box (that box's radius is the picture's shape too).
+ */
+export function importedImageShape(radius: string | undefined, box?: { w: number; h: number } | null): ImageShapeSettings {
+  const text = String(radius || "").trim();
+  if (!text) return { borderRadius: "0" };
+  const halves = text.split("/").map((half) => half.trim().split(/\s+/).filter(Boolean));
+  if (halves.length > 2 || halves.some((h) => h.length < 1 || h.length > 4)) return {};
+  const tidy = halves.map((h) => h.map(shapeLength));
+  if (tidy.some((h) => h.some((t) => t === null))) return {};
+  const tokens = tidy.flat() as string[];
+  if (tokens.every((t) => parseFloat(t) === 0)) return { borderRadius: "0" };
+
+  const square = Boolean(box && box.w > 0 && Math.abs(box.w - box.h) <= 0.05 * Math.max(box.w, box.h));
+  if (tokens.length === 1) {
+    const only = tokens[0];
+    const n = parseFloat(only);
+    const full = only.endsWith("%") ? n >= 50 : Boolean(box && n * 2 >= Math.min(box.w, box.h) - 1);
+    if (full && square) return { imageShape: "circle" };
+    if (only.endsWith("px") && !full && n <= 80) return { borderRadius: String(n) };
+  }
+  return { imageShape: "custom", imageShapeRadii: (tidy as string[][]).map((h) => h.join(" ")).join(" / ") };
+}
+
+/**
+ * Where a picture's shape comes from: the <img> itself, or failing that the
+ * box it sits in when that box IS its frame (the same size, give or take a
+ * border) — the common `.frame { border-radius; overflow: hidden }` wrapper.
+ * A card the picture merely sits inside is a different size and is skipped;
+ * its corners are the cell's, not the picture's.
+ */
+function imageShapeFor(el: ElementIR, section: SectionIR): ImageShapeSettings {
+  const own = el.computedStyles?.["border-radius"];
+  if (own) return importedImageShape(own, el.box);
+  const box = el.box;
+  if (box && el.containers?.length) {
+    for (const key of [...el.containers].reverse()) {
+      const frame = section.containerBoxes?.[key];
+      const radius = section.containers?.[key]?.["border-radius"];
+      if (!frame || !radius) continue;
+      const slack = Math.max(6, 0.03 * Math.max(frame.w, frame.h));
+      const fits = Math.abs(frame.w - box.w) <= slack && Math.abs(frame.h - box.h) <= slack;
+      if (fits) return importedImageShape(radius, frame);
+    }
+  }
+  return importedImageShape("", box);
+}
+
 function normalizeHref(href: string): string {
   return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -1668,6 +1745,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               size: "100",
               ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
+              ...imageShapeFor(el, section),
               importSourceIds: el.sourceId,
             },
           });
