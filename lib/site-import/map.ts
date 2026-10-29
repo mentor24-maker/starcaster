@@ -130,6 +130,83 @@ export type AssetPromotion = {
 };
 export type SourceOverflow = { sourceId: string; moduleId: string; html: string };
 
+/* ---------------------------------------------------------------------------
+ * Downloaded but never placed (task 86bctde7n)
+ *
+ * The import downloads every picture and document it sees, but only the ones
+ * a page actually uses were promoted into the project's Assets. The rest sat
+ * in SiteImport/<jobId>/, where no screen shows them: Alphire downloaded 48
+ * files and Assets showed 10 (2026-10-27), hero_banner.png among the missing.
+ *
+ * This picks which leftovers deserve a library row. Fonts are not among them
+ * (the font library owns those), nor are failed downloads. WordPress-style
+ * size variants ("photo-480x360.jpg" beside "photo.jpg") collapse to ONE row,
+ * the largest — and a family any member of which is already promoted gets no
+ * row at all, because it is already in Assets once.
+ * ------------------------------------------------------------------------- */
+
+const SIZE_SUFFIX = /-(\d+)x(\d+)(?=\.[a-z0-9]+$)/i;
+
+function assetFileUrl(asset: AssetRef): string {
+  return String(asset.originalUrl || "").replace(/[#?].*$/, "");
+}
+
+function isFontAsset(asset: AssetRef): boolean {
+  return /font/i.test(asset.mimeType || "") || /\.(woff2?|ttf|otf|eot)$/i.test(assetFileUrl(asset));
+}
+
+function isLibraryKind(asset: AssetRef): boolean {
+  const mime = String(asset.mimeType || "").toLowerCase();
+  if (mime.startsWith("image/") || mime === "application/pdf") return true;
+  return !mime && /\.(png|jpe?g|gif|webp|avif|svg|pdf)$/i.test(assetFileUrl(asset));
+}
+
+/** "…/photo-480x360.jpg" and "…/photo.jpg" share one family key. */
+export function sizeVariantFamily(originalUrl: string): string {
+  return String(originalUrl || "").replace(/[#?].*$/, "").replace(SIZE_SUFFIX, "").toLowerCase();
+}
+
+/** Pixel area, from the capture's measurement or the "-WxH" in the name.
+ *  The unsuffixed original counts as the largest: it is what the variants
+ *  were cut from. */
+function variantArea(asset: AssetRef): number {
+  if (!SIZE_SUFFIX.test(assetFileUrl(asset))) return Number.POSITIVE_INFINITY;
+  if (asset.width && asset.height) return asset.width * asset.height;
+  const m = assetFileUrl(asset).match(SIZE_SUFFIX);
+  return m ? Number(m[1]) * Number(m[2]) : 0;
+}
+
+export function planUnplacedAssets(assets: AssetRef[], promoted: Iterable<AssetPromotion>): AssetPromotion[] {
+  const promotedIds = new Set<string>();
+  const promotedFamilies = new Set<string>();
+  for (const p of promoted) {
+    promotedIds.add(p.assetId);
+    promotedFamilies.add(sizeVariantFamily(p.originalUrl));
+  }
+  const families = new Map<string, AssetRef[]>();
+  for (const asset of assets || []) {
+    if (asset.status !== "downloaded" || !asset.storageUrl) continue;
+    if (isFontAsset(asset) || !isLibraryKind(asset)) continue;
+    const family = sizeVariantFamily(asset.originalUrl);
+    if (promotedIds.has(asset.id) || promotedFamilies.has(family)) continue;
+    const members = families.get(family) || [];
+    members.push(asset);
+    families.set(family, members);
+  }
+  return Array.from(families.keys()).sort().map((family) => {
+    const best = families.get(family)!.slice().sort((a, b) =>
+      variantArea(b) - variantArea(a) || (b.byteSize || 0) - (a.byteSize || 0) || a.id.localeCompare(b.id)
+    )[0];
+    return {
+      assetId: best.id,
+      fromUrl: best.storageUrl,
+      originalUrl: best.originalUrl,
+      altText: best.altText || "",
+      mimeType: best.mimeType || "",
+    };
+  });
+}
+
 export type MapReport = {
   elements: {
     total: number;
@@ -152,7 +229,10 @@ export type MapReport = {
     placeholders: number;
     builderPageId: string | null;
   }[];
-  assets: { promoted: number; cropsCopied: number; leftInNamespace: number };
+  /** unplaced: downloaded files no page uses, given a library row anyway
+   *  (task 86bctde7n). leftInNamespace is what is still only in the job's
+   *  namespace after both — fonts, failed downloads, smaller size variants. */
+  assets: { promoted: number; unplaced: number; cropsCopied: number; leftInNamespace: number };
   /**
    * Captures of a path already captured with the SAME content. Mapped once;
    * their elements are counted in elements.deduped so the report still
@@ -253,6 +333,8 @@ export type MapOutput = {
   copyPlan: {
     crops: CropCopy[];
     assets: AssetPromotion[];
+    /** Downloaded, placed on no page, still owed an Assets row. */
+    unplaced: AssetPromotion[];
     sourceOverflows: SourceOverflow[];
   };
   report: MapReport;
@@ -1004,7 +1086,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
     skipped: [],
     pages: [],
-    assets: { promoted: 0, cropsCopied: 0, leftInNamespace: 0 },
+    assets: { promoted: 0, unplaced: 0, cropsCopied: 0, leftInNamespace: 0 },
     repeatCaptures,
     placeholderPatterns: [],
     menus: { top: null, footer: null, notes: [] },
@@ -1962,9 +2044,11 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   report.placeholderPatterns = Array.from(patternTally.entries())
     .map(([signature, v]) => ({ signature, count: v.count, sampleSourceId: v.sampleSourceId }))
     .sort((a, b) => b.count - a.count);
+  const unplaced = planUnplacedAssets(ir.assets || [], promotions.values());
   report.assets.promoted = promotions.size;
+  report.assets.unplaced = unplaced.length;
   report.assets.cropsCopied = crops.length;
-  report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size);
+  report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size - unplaced.length);
 
   return {
     pages,
@@ -1972,7 +2056,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     cardGrids: cardGridPlans,
     navItems,
     menus,
-    copyPlan: { crops, assets: Array.from(promotions.values()), sourceOverflows },
+    copyPlan: { crops, assets: Array.from(promotions.values()), unplaced, sourceOverflows },
     report,
   };
 }

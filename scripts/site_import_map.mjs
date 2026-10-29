@@ -9,7 +9,8 @@
  *   reconciliation report, writes NOTHING to Builder.
  *   --apply: takes a whole-site snapshot, backs up every page it will
  *   touch to docs/SQL/backups/, copies placeholder crops + referenced
- *   assets into the durable SiteImportApplied/<projectId>/ namespace,
+ *   assets — and every other downloaded picture and PDF, as a "not placed"
+ *   Assets row (task 86bctde7n) — into the durable SiteImportApplied/<projectId>/ namespace,
  *   then creates/updates the draft pages. Never publishes anything.
  *   MENUS (task 86bchydp6, Dane 2026-10-13): --apply also builds two saved
  *   sections, LAST, after every page write — "Top Menu" (the site's logo
@@ -317,7 +318,7 @@ async function main() {
     }
     log('');
   }
-  log(`Assets: promote ${out.report.assets.promoted}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
+  log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
 
   if (!reportReconciles(out.report)) {
@@ -372,7 +373,12 @@ async function main() {
     if (urlMap.has(crop.fromUrl)) continue;
     urlMap.set(crop.fromUrl, await copyBlob(crop.fromUrl, `${applied}/crops/${crop.sourceId}.png`, 'image/png'));
   }
-  const uncopyable = await copyPromotedAssets(out.copyPlan.assets, copyBlob, applied, urlMap);
+  const uncopyable = [
+    ...await copyPromotedAssets(out.copyPlan.assets, copyBlob, applied, urlMap),
+    // Downloaded files no page uses (task 86bctde7n): same deterministic
+    // paths, so a re-run copies onto itself rather than beside itself.
+    ...await copyPromotedAssets(out.copyPlan.unplaced, copyBlob, applied, urlMap),
+  ];
   if (uncopyable.length) {
     log(`${uncopyable.length} image(s) could not be copied — the original site refused them; they keep their original address:`);
     for (const s of uncopyable) log(`  ${s.fromUrl}  (${s.reason})`);
@@ -413,6 +419,46 @@ async function main() {
     promoted += 1;
   }
   log(`Assets promoted: ${promoted} new, ${out.copyPlan.assets.length - promoted} already in the library.`);
+
+  // 3b. Every other downloaded picture and PDF gets a row too, marked as not
+  //     placed (task 86bctde7n) — Alphire downloaded 48 files and Assets
+  //     showed 10. Same location key, so a re-apply adds nothing twice; and
+  //     a file the origin refused stays out rather than pointing elsewhere.
+  const createdLocations = [];
+  for (const asset of out.copyPlan.unplaced) {
+    const location = urlMap.get(asset.fromUrl);
+    if (!location || knownLocations.has(location)) continue;
+    knownLocations.add(location);
+    const file = asset.originalUrl.replace(/[#?].*$/, '').split('/').pop() || asset.assetId;
+    must(await assetsStore.createAsset({
+      assetName: file,
+      assetType: (asset.mimeType || '').startsWith('image/') ? 'Image' : 'File',
+      category: 'Site Import',
+      location,
+      caption: asset.altText,
+      comments: `Not placed on any page. Downloaded from ${asset.originalUrl} (job ${JOB_ID})`,
+    }, scope), `add unplaced asset ${asset.assetId}`);
+    createdLocations.push(location);
+  }
+  log(`Assets not placed on any page: ${createdLocations.length} new, ${out.copyPlan.unplaced.length - createdLocations.length} already in the library.`);
+
+  // Read the rows back (landmine 12): an insert that "succeeds" can land
+  // with no tenant, and then the row is in nobody's Assets.
+  if (createdLocations.length) {
+    const after = must(await assetsStore.listAssets(scope), 'read back project assets');
+    const byLocation = new Map(after.map((row) => [row.location, row]));
+    const untenanted = createdLocations.filter((loc) => {
+      const row = byLocation.get(loc);
+      return !row || !row.project_id || !row.owner_user_id;
+    });
+    if (untenanted.length) {
+      console.error(`\nERROR: ${untenanted.length} new Assets row(s) did not read back with both project_id and owner_user_id:`);
+      for (const loc of untenanted) console.error(`  ${loc}`);
+      process.exitCode = 1;
+    } else {
+      log(`  read back: all ${createdLocations.length} carry project_id and owner_user_id.`);
+    }
+  }
 
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
