@@ -22,8 +22,9 @@
  *
  * NEVER "NO DIFFERENCES" FOR SOMETHING IT COULD NOT SEE. A page with no
  * Builder page, or one the browser could not photograph, is CANNOT TELL; so is
- * a section no imported row carries; and decorative layers are always named
- * as not measurable, because the capture does not record them.
+ * a section no imported row carries; and on an import captured before the
+ * capture recorded ::before/::after layers (task 86bctde48), decorative
+ * layers are named as not measurable rather than counted as none.
  *
  * USAGE
  *   PORT=3061 node server.js                       # any local server of THIS checkout
@@ -292,9 +293,16 @@ function pair(originalUrl, importedUrl, importedNote) {
   </div>`;
 }
 
+/** Sections this report could not judge for decorations — an import captured
+ *  before task 86bctde48. Zero there is "not looked at", never "none". */
+function decorativeBlind(pages) {
+  return pages.flatMap((p) => p.sections || []).filter((s) => (s.notMeasured || []).some((n) => n.category === 'decorative')).length;
+}
+
 function renderReport({ job, pages, totals, generatedAt }) {
+  const blindDecor = decorativeBlind(pages);
   const summary = fidelity.FIDELITY_CATEGORIES.map((c) =>
-    `<tr><td>${esc(c.label)}</td><td>${c.key === 'decorative' && !totals[c.key] ? 'CANNOT TELL — not captured' : totals[c.key]}</td></tr>`).join('');
+    `<tr><td>${esc(c.label)}</td><td>${c.key === 'decorative' && blindDecor ? `${totals[c.key]} — and CANNOT TELL on ${blindDecor} section(s) captured before layers were recorded` : totals[c.key]}</td></tr>`).join('');
   const body = pages.map((p) => `
   <section class="page">
     <h2>${esc(p.path)} <small>${p.status === 'cannot-tell' ? `<span class="blind">CANNOT TELL — ${esc(p.reason)}</span>` : `Builder page ${esc(p.builderPageId)}`}</small></h2>
@@ -458,6 +466,11 @@ async function main() {
       entry.sections.push({ ...s, ...comparison });
       allFindings.push(...comparison.findings);
     }
+    // Layers whose owner sits outside every section (a page wrapper).
+    for (const finding of fidelity.decorationFindings(irPage.decorations)) {
+      entry.pageFindings.push(finding);
+      allFindings.push(finding);
+    }
     for (const { finding } of fidelity.unplacedAssets(ir.assets || [], irPage.url, JSON.stringify(builderPage))) {
       entry.pageFindings.push(finding);
       allFindings.push(finding);
@@ -489,7 +502,8 @@ async function main() {
   console.log('\nThings lost, all pages:');
   for (const c of fidelity.FIDELITY_CATEGORIES) {
     const n = totals[c.key];
-    console.log(`  ${labelOf[c.key].padEnd(40)} ${c.key === 'decorative' && !n ? 'CANNOT TELL — the capture does not record them' : n}`);
+    const blindDecor = c.key === 'decorative' ? decorativeBlind(reportPages) : 0;
+    console.log(`  ${labelOf[c.key].padEnd(40)} ${n}${blindDecor ? ` — and CANNOT TELL on ${blindDecor} section(s): captured before ::before/::after layers were recorded` : ''}`);
   }
   if (blindPages) console.log(`\n${blindPages} page(s) CANNOT TELL — see the report; that is not "no differences".`);
   console.log(`\nReport: ${link}${uploadNote ? `  (${uploadNote}; local copy)` : ''}`);

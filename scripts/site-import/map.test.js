@@ -35,6 +35,8 @@ const {
   attachMenuInstances,
   menuSiteLabel,
   topMenuLogoWidthPx,
+  planUnplacedAssets,
+  sizeVariantFamily,
 } = require('../../lib/site-import/dist/map.js');
 const { serializeBuilderDocument } = require('../../lib/builder/document.js');
 
@@ -238,6 +240,9 @@ test('completeness fixture: every disposition, reconciled', () => {
   const img = allModules.find((m) => m.type === 'image');
   assert.equal(img.settings.url, 'https://map.test/solo.jpg');
   assert.deepEqual(out.copyPlan.assets.map((a) => a.assetId), ['a1']);
+  // a2 failed to download, so it is owed no Assets row either.
+  assert.deepEqual(out.copyPlan.unplaced, []);
+  assert.equal(out.report.assets.unplaced, 0);
   assert.equal(out.report.assets.leftInNamespace, 1);
 
   // Every text module respects the budget; nothing can truncate at 10k.
@@ -924,4 +929,67 @@ test('attaching menus: Top Menu first, Footer Menu last, and a second attach cha
   // No footer this time → only the top menu is attached.
   const topOnly = attachMenuInstances(body, '1500', { top: menus.top, footer: null });
   assert.deepEqual(topOnly.sections.map((s) => s.savedSectionId || s.id), ['top1', 'a', 'b']);
+});
+
+/* ---------------------------------------------------------------------------
+ * Downloaded but never placed (task 86bctde7n): Alphire downloaded 48 files
+ * and Assets showed 10. Every image and PDF gets one row; fonts none.
+ * ------------------------------------------------------------------------- */
+
+function dl(id, originalUrl, mimeType, extra = {}) {
+  return {
+    id, originalUrl, storageUrl: `https://blob.test/SiteImport/job/assets/${id}`,
+    contentHash: id, mimeType, byteSize: 100, altText: '', referencedBy: [],
+    status: 'downloaded', error: '', ...extra,
+  };
+}
+
+const WP = 'https://alphire.agency/wp-content/uploads';
+const alphireLeftovers = () => [
+  dl('hero', `${WP}/2026/10/hero_banner.png`, 'image/png'),
+  dl('circ', `${WP}/2021/09/background_blue_circles_1920x1080.png`, 'image/png'),
+  dl('dane-s', `${WP}/2023/01/headshot_dane_christensen-150x150.jpeg`, 'image/jpeg'),
+  dl('dane', `${WP}/2023/01/headshot_dane_christensen.jpeg`, 'image/jpeg'),
+  dl('fav32', `${WP}/2021/09/cropped-favicon_512x512-32x32.png`, 'image/png'),
+  dl('fav192', `${WP}/2021/09/cropped-favicon_512x512-192x192.png`, 'image/png'),
+  dl('fav180', `${WP}/2021/09/cropped-favicon_512x512-180x180.png`, 'image/png'),
+  dl('pdf', `${WP}/2024/03/10-Reasons.pdf`, 'application/pdf'),
+  dl('font1', 'https://alphire.agency/fonts/inter.woff2', 'font/woff2'),
+  dl('font2', 'https://alphire.agency/fonts/x.ttf', 'application/x-font-ttf'),
+  dl('sub-s', `${WP}/2024/02/Substack-Logo-300x300.png`, 'image/png'),
+  dl('sub', `${WP}/2024/02/Substack-Logo.png`, 'image/png'),
+  { ...dl('gone', 'https://no-cache.hubspot.com/cta/x.png', 'image/png'), status: 'failed', storageUrl: '' },
+];
+
+test('unplaced assets: every downloaded image and PDF once, largest size variant, no fonts', () => {
+  const promoted = [{ assetId: 'sub-s', fromUrl: 'x', originalUrl: `${WP}/2024/02/Substack-Logo-300x300.png`, altText: '', mimeType: 'image/png' }];
+  const plan = planUnplacedAssets(alphireLeftovers(), promoted);
+  const ids = plan.map((a) => a.assetId).sort();
+  // hero + circles + ONE headshot (the original) + ONE favicon (192, the
+  // largest) + the PDF. Not the fonts, not the failed download, and not the
+  // Substack original, whose family is already in Assets via its variant.
+  assert.deepEqual(ids, ['circ', 'dane', 'fav192', 'hero', 'pdf']);
+  assert.ok(plan.every((a) => a.fromUrl.startsWith('https://blob.test/SiteImport/job/assets/')));
+});
+
+test('unplaced assets: the measured size wins over the name when the capture has one', () => {
+  const plan = planUnplacedAssets([
+    dl('small', `${WP}/a-300x200.jpg`, 'image/jpeg', { width: 300, height: 200 }),
+    dl('big', `${WP}/a-100x100.jpg`, 'image/jpeg', { width: 1200, height: 800 }),
+  ], []);
+  assert.deepEqual(plan.map((a) => a.assetId), ['big']);
+});
+
+test('unplaced assets: a size suffix only folds when it is the whole tail', () => {
+  assert.equal(sizeVariantFamily(`${WP}/b-450x300-1-300x200.jpg`), sizeVariantFamily(`${WP}/b-450x300-1.jpg`));
+  assert.notEqual(sizeVariantFamily(`${WP}/circles_1920x1080.png`), sizeVariantFamily(`${WP}/circles.png`));
+});
+
+test('mapSite reports unplaced files and leaves only the rest in the namespace', () => {
+  const ir = completenessIr();
+  ir.assets = [...ir.assets, ...alphireLeftovers()];
+  const out = mapSite(ir, { existingSlugs: [] });
+  assert.deepEqual(out.copyPlan.unplaced.map((a) => a.assetId).sort(), ['circ', 'dane', 'fav192', 'hero', 'pdf', 'sub']);
+  assert.equal(out.report.assets.unplaced, 6);
+  assert.equal(out.report.assets.leftInNamespace, ir.assets.length - out.report.assets.promoted - 6);
 });

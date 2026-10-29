@@ -2140,6 +2140,95 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * IMAGE SHAPE (task 86bctde2b). An Image could only round its corners in
+   * pixels, so the Alphire import's organic hero blob arrived a rectangle.
+   * Shape is a CSS-only setting, so the only proof it works is a browser:
+   * hit-test a corner of the frame and see whether the picture is still there.
+   */
+  {
+    id: 'image-circle-is-clipped-to-a-circle',
+    why:
+      'Circle is two things at once — a square frame and 50% corners — and either alone is wrong: ' +
+      '50% of the landscape contract picture is an oval, and a square frame with square corners is ' +
+      'a crop. This measures both: the frame is square, the picture fills its middle, and a point ' +
+      'near the corner hits nothing of the picture.',
+    module: { type: 'image', settings: { ...PICTURE, imageShape: 'circle' } },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'overflow'],
+    probes: {
+      middle: { subject: 'figure.builder-preview-image img', against: 'figure.builder-preview-image' },
+      corner: {
+        subject: 'figure.builder-preview-image img',
+        against: 'figure.builder-preview-image',
+        at: { x: 0.06, y: 0.06 },
+      },
+    },
+    expect(sample) {
+      const { middle, corner } = sample.probes || {};
+      if (!middle || !corner) return 'no probe was taken — the contract measured nothing.';
+      if (middle.missing) return `the probe could not find \`${middle.missing}\` — the circle picture did not render.`;
+      if (middle.overlap <= 0) return 'the picture and its frame do not overlap, so no point inside both could be tested.';
+      // Without this the corner test is unfalsifiable: a picture that is not
+      // there at all is also "not at the corner".
+      if (!middle.onSubject) return `the middle of the frame hit \`${middle.hit}\`, not the picture — the picture is not filling a Circle frame.`;
+      const { width, height } = sample.box;
+      if (width < 40) return `the frame is ${width}px wide — too small for a corner to be told from the middle.`;
+      if (Math.abs(width - height) > 2) return `a Circle frame is ${width}x${height}px — not square, so its 50% corners draw an oval.`;
+      if (corner.onSubject) return `a point ${corner.point.x},${corner.point.y} near the frame's corner still hits the picture (\`${corner.hit}\`) — it is not clipped to a circle.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-default-shape-keeps-its-corners',
+    why:
+      'The control for the contract above, at the same point: Radius 0 with no Shape (every image ' +
+      'saved before shapes existed) must still show the picture in its corner. If this one failed ' +
+      'too, the probe would be hitting something other than the picture and the circle contract ' +
+      'would be proving nothing.',
+    module: { type: 'image', settings: { ...PICTURE, borderRadius: '0' } },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'aspect-ratio'],
+    probes: {
+      corner: {
+        subject: 'figure.builder-preview-image img',
+        against: 'figure.builder-preview-image',
+        at: { x: 0.06, y: 0.06 },
+      },
+    },
+    expect(sample) {
+      const corner = sample.probes?.corner;
+      if (!corner) return 'no probe was taken — the contract measured nothing.';
+      if (corner.missing) return `the probe could not find \`${corner.missing}\` — the picture did not render.`;
+      if (corner.overlap <= 0) return 'the picture and its frame do not overlap, so the corner could not be tested.';
+      if (!corner.onSubject) return `the corner of a square-cornered picture hit \`${corner.hit}\`, not the picture — something is clipping images that have no Shape.`;
+      const ratio = sample.styles['aspect-ratio'];
+      if (ratio && ratio !== 'auto') return `an image with no Shape has aspect-ratio \`${ratio}\` — existing pictures must keep their proportions.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-custom-shape-carries-elliptical-radii',
+    why:
+      'Custom is what Site Import writes for alphire.agency\'s hero blob ' +
+      '(50% 45% 52% 48% / 48% 52% 48% 52%). The radii string is sanitized on its way into a ' +
+      'style; a sanitizer that ate the slash or the percentages would quietly draw ordinary corners.',
+    module: {
+      type: 'image',
+      settings: { ...PICTURE, imageShape: 'custom', imageShapeRadii: '50% 45% 52% 48% / 48% 52% 48% 52%' },
+    },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'border-bottom-right-radius'],
+    expect(sample) {
+      const tl = sample.styles['border-top-left-radius'];
+      const br = sample.styles['border-bottom-right-radius'];
+      if (tl !== '50% 48%' || br !== '52% 48%') {
+        return `the blob's corners computed to top-left \`${tl}\`, bottom-right \`${br}\` — expected \`50% 48%\` and \`52% 48%\`.`;
+      }
+      return null;
+    },
+  },
+
   {
     id: 'still-image-runs-nothing',
     why:

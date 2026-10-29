@@ -1102,6 +1102,24 @@ const buildPanelCheckSection = (ids) => {
         settings: { ...base.settings, ...(tuned.settings || {}) },
       };
     }),
+    // A SECOND picture, on a CUSTOM shape. Corner Radii is `visibleWhen`
+    // Shape is Custom, so the plain image above hides it and the check would
+    // pass over a field it never measured (task 86bctde2b). The value is the
+    // Alphire hero blob, the longest radii string Site Import writes.
+    (() => {
+      const base = createEmptyModule('image', 'main');
+      return {
+        ...base,
+        id: 'module-panel-check-image-custom-shape',
+        name: 'Image (Custom Shape)',
+        settings: {
+          ...base.settings,
+          ...(TUNED.image?.settings || {}),
+          imageShape: 'custom',
+          imageShapeRadii: '50% 45% 52% 48% / 48% 52% 48% 52%',
+        },
+      };
+    })(),
     // A SECOND calendar, in MONTH layout. `weekStartsOn` is `visibleWhen` the
     // month grid, so the cards-layout module above hides it — the same hole
     // the mega menu below covers, one module along. One per type is the

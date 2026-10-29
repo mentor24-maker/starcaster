@@ -154,3 +154,107 @@ test('no project selected: refused before any lookup', async () => {
     assert.equal(calls.length, 0);
   } finally { restore(); }
 });
+
+// ── Article and publication links (task 86bcux874) ─────────────────────────
+// The page shapes Substack served on 2026-10-29: a custom-domain page carries
+// its publication in the preloads-json block; substack.com/home/post/p-N
+// redirects to the publication's own address.
+
+const LENNY_HTML = '<html><head><script id="preloads-json" type="application/json">'
+  + JSON.stringify({ isEU: false, pub: { subdomain: 'lenny', name: "Lenny's Newsletter", custom_domain: 'www.lennysnewsletter.com' } })
+  + '</script></head><body></body></html>';
+
+function fakePages(calls = []) {
+  return async (url) => {
+    calls.push(url);
+    if (url.startsWith('https://www.lennysnewsletter.com/')) return { ok: true, html: LENNY_HTML };
+    if (url === 'https://lennysnewsletter.com/') return { ok: true, location: 'https://www.lennysnewsletter.com/' };
+    if (url === 'https://substack.com/home/post/p-171478447') return { ok: true, location: 'https://clairdeloony.substack.com/publish/post/171478447' };
+    if (url === 'https://example.com/') return { ok: true, html: '<html><body>Not a newsletter</body></html>' };
+    if (url === 'https://loop.example/') return { ok: true, location: 'https://loop.example/' };
+    return { ok: false, reason: 'answered HTTP 404' };
+  };
+}
+
+test('linkKind: only links that do not name their publication need a lookup', () => {
+  const { linkKind } = require('../../lib/acquire/SubstackLinkResolve.js');
+  assert.deepEqual(linkKind('https://open.substack.com/pub/Lenny/p/a-post?r=x'), { kind: 'share', handle: 'lenny' });
+  assert.deepEqual(linkKind('www.lennysnewsletter.com/p/a-post'), { kind: 'page', url: 'https://www.lennysnewsletter.com/p/a-post' });
+  assert.deepEqual(linkKind('http://substack.com/home/post/p-1'), { kind: 'page', url: 'https://substack.com/home/post/p-1' });
+  assert.equal(linkKind('lenny'), null, 'a bare handle is the store\'s, as before');
+  assert.equal(linkKind('@lenny'), null);
+  assert.equal(linkKind('https://lenny.substack.com/p/a-post'), null, 'name.substack.com is the store\'s, as before');
+  assert.equal(linkKind('https://substack.com/@lenny'), null, 'a profile is looked up as a person');
+  assert.equal(linkKind('not a handle!'), null);
+});
+
+test('publicationForLink: never reads a private address', async () => {
+  const { publicationForLink } = require('../../lib/acquire/SubstackLinkResolve.js');
+  const calls = [];
+  for (const href of ['https://127.0.0.1/x', 'https://localhost/x', 'https://metadata.internal/', 'https://intranet/']) {
+    const res = await publicationForLink(href, { fetchPage: fakePages(calls) });
+    assert.equal(res.ok, false, href);
+    assert.match(res.reason, /not a public web address/);
+  }
+  const hop = await publicationForLink('https://evil.example/', {
+    fetchPage: async (url) => { calls.push(url); return { ok: true, location: 'https://169.254.169.254/latest' }; },
+  });
+  assert.equal(hop.ok, false, 'a redirect to a private address is not followed');
+  assert.deepEqual(calls, ['https://evil.example/']);
+});
+
+test('article and publication links are filed under the publication that wrote them', async () => {
+  const { miner, seeds, restore } = withDb();
+  try {
+    const pages = [];
+    const res = await seeds.importSeedList([
+      { handle: 'https://www.lennysnewsletter.com/p/how-to-tell-if-a-startup-has-a-moat', whyFit: 'product writing' },
+      { handle: 'https://open.substack.com/pub/plainpub/p/a-post?r=2x' },
+      { handle: 'https://substack.com/home/post/p-171478447' },
+      { handle: 'lennysnewsletter.com' },
+      { handle: 'https://example.com/' },
+      { handle: 'https://www.lennysnewsletter.com/p/how-to-tell-if-a-startup-has-a-moat' },
+    ], SCOPE, { fetchPage: fakePages(pages), sleep: async () => {} });
+    assert.equal(res.ok, true, res.error);
+    assert.equal(res.data.added, 3, 'lenny, plainpub, clairdeloony');
+    assert.equal(res.data.merged, 2, 'the bare domain and the repeated article are the same writer');
+    assert.equal(pages.filter((u) => u.includes('how-to-tell')).length, 1, 'one lookup per link, however often pasted');
+    assert.equal(pages.some((u) => u.includes('open.substack.com')), false, 'a share link names its publication — nothing is fetched');
+    assert.deepEqual(res.data.resolved.map((r) => [r.index, r.handle]), [[0, 'lenny'], [1, 'plainpub'], [2, 'clairdeloony'], [3, 'lenny'], [5, 'lenny']]);
+    assert.equal(res.data.resolved[0].link, 'https://www.lennysnewsletter.com/p/how-to-tell-if-a-startup-has-a-moat');
+    assert.equal(res.data.resolved[0].profile, undefined, 'a link is not reported as a profile');
+    assert.deepEqual(res.data.refusals, [{ index: 4, handle: 'https://example.com/', error: 'that page is not on Substack, so there is no Substack writer to add' }]);
+
+    const list = await miner.listCandidates(50, SCOPE);
+    const byHandle = Object.fromEntries(list.data.map((c) => [c.handle, c]));
+    assert.equal(byHandle.lenny.name, "Lenny's Newsletter");
+    assert.equal(byHandle.lenny.description, 'product writing');
+    assert.equal(byHandle.lenny.foundVia, 'seed');
+    assert.ok(byHandle.plainpub);
+    assert.ok(byHandle.clairdeloony);
+    assert.equal(byHandle.open, undefined, 'a share link never saves a writer called "open"');
+  } finally { restore(); }
+});
+
+test('a link that redirects forever is refused, not followed forever', async () => {
+  const { seeds, restore } = withDb();
+  try {
+    const res = await seeds.importSeedList([{ handle: 'https://loop.example/' }], SCOPE, { fetchPage: fakePages(), sleep: async () => {} });
+    assert.equal(res.ok, true);
+    assert.equal(res.data.added, 0);
+    assert.match(res.data.refusals[0].error, /redirected more than 5 times/);
+  } finally { restore(); }
+});
+
+test('past the lookup cap, the remaining lines are refused by name, never dropped', async () => {
+  const { seeds, restore } = withDb();
+  try {
+    const rows = Array.from({ length: seeds.MAX_LOOKUPS + 2 }, (_, i) => ({ handle: `https://www.lennysnewsletter.com/p/post-${i}` }));
+    const pages = [];
+    const res = await seeds.importSeedList(rows, SCOPE, { fetchPage: fakePages(pages), sleep: async () => {} });
+    assert.equal(res.ok, true);
+    assert.equal(pages.length, seeds.MAX_LOOKUPS);
+    assert.deepEqual(res.data.refusals.map((r) => r.index), [seeds.MAX_LOOKUPS, seeds.MAX_LOOKUPS + 1]);
+    assert.match(res.data.refusals[0].error, /second batch/);
+  } finally { restore(); }
+});

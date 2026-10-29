@@ -13,6 +13,75 @@ out to be missing — 443, which the sign-in window needs from the MacBook and
 which reaches only what is already public — so the record now carries it, and
 Dane added it in the Tailscale admin page on 2026-10-29.
 
+## 2026-10-29 — Site Import now sees the decorations a stylesheet draws around a box (#906)
+
+Many sites draw decorations with a stylesheet trick instead of with real page
+elements: an invisible extra layer in front of or behind a box. Alphire's
+home page draws its starfield, its glowing ring and its thin cyan line that
+way, and Site Import never looked at those layers, so they were invisible to
+it and the fidelity report could only say "cannot tell". The capture now
+reads those layers on every visible element and keeps the ones that actually
+paint something (a gradient, a picture, a fill, a border, a shadow), with
+where each one sits; empty helper layers are skipped, and any picture they
+paint is downloaded like other images. The fidelity report lists each one in
+plain words, such as "a ring in #00d9ff with a glow". On Alphire it found
+nine, four of them in the hero, and capturing the page took no measurably
+longer (7.8 s against 8.0 s). Imports made before this still say "cannot
+tell", because they really never looked. Rebuilding these decorations in the
+Builder is the next step, not this one.
+## 2026-10-29 — Imported headings keep their thin lettering, spacing and coloured words (#907)
+
+On the Alphire import, the thin home heading came out heavy and black, and
+every cyan accent word ("Human Energy", "to Impact") came out black. Two
+reasons, both measured on the real import before anything was changed. The
+import's theme uses the most common heading weight on the whole site, and
+most of Alphire's headings are bold, so the thin ones were made bold too. And
+the cyan was recorded when the site was captured, then dropped at the next
+step, which kept only the heading's own styling and not the words inside it.
+Now a heading or paragraph keeps its own weight and letter spacing wherever
+they differ from the theme, and a word inside it keeps its own colour, weight
+or italic wherever it differs from the words around it. Text that already
+looks like the theme is written exactly as before, so on the Delray site only
+2 of 185 text blocks change. One limit is on purpose: a heading's own colour
+is still left to the theme, because many of Alphire's headings are white on
+dark bands the import doesn't reproduce yet, and copying white would make
+them invisible. Until the dark-page fix lands, the cyan words sit on white.
+## 2026-10-29 — Every picture and PDF a site import downloads now shows up in Assets (#909)
+
+A site import downloads every picture and document it sees on the original
+site, but only the ones a page actually used were being added to the
+project's Assets. The rest sat in a back-room folder no screen shows: Alphire's
+import downloaded 48 files and Assets showed 10, with the hero banner and both
+headshots missing. Applying an import now also lists every other downloaded
+picture and PDF in Assets, marked "Not placed on any page", so it can be found
+and used. Fonts stay out (the font library owns them), several sizes of one
+picture become one entry (the largest), running the import again adds nothing
+twice, and each new entry is checked to belong to the right project. For
+Alphire that means 7 new entries once the import is re-applied.
+## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
+
+On the Acquire screen, every X or Reddit search is supposed to leave a run in
+the history list, so you can reopen it later. Those runs were saved to files on
+the server, and the live site cannot write files, so it skipped the save without
+saying so. Every search reported "saved", nothing was kept, and the history on
+the live site was always empty. The runs now go into two database tables, the
+same place the YouTube history already lives, kept separate per project. If the
+database cannot save a run, the screen now says so instead of pretending it
+worked. The tables need one SQL file run in Supabase
+(`acquire_x_reddit_runs_setup.sql`); until then the history shows an error
+naming the missing table, and the daily unapplied-SQL check keeps reminding.
+## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
+
+A picture in the Builder could only have rounded corners, measured in pixels.
+So when Site Import copied alphire.agency, whose hero picture is a soft,
+slightly lopsided oval, it had nowhere to put that shape and the picture came
+out a plain rectangle. The Image module's Frame settings now start with
+**Shape**: Rounded (the old corners, unchanged for every existing picture),
+Square, Circle (the picture is cropped to fill a perfect circle), or Custom
+(any corner curve, including the lopsided oval kind). Site Import now reads
+each picture's shape from the original site and fills this in. It also stops
+giving square pictures the Builder's default 18px rounded corners, which
+every import had been adding without anyone asking.
 ## 2026-10-29 — Site Import places pictures a site paints onto an empty box (#905)
 
 Some websites show a picture by painting it as the background of an empty
