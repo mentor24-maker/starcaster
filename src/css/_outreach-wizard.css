@@ -490,3 +490,59 @@
 .yt-creator-suggestion {
   overflow-wrap: anywhere;
 }
+
+/* ── Reddit watch (Outreach wizard 18/19, task 86bcrmbwm) ─────────────────── */
+
+.reddit-subs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.reddit-sub-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.reddit-sub-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+}
+
+.reddit-sub-head,
+.reddit-sub-why,
+.reddit-sub-rule {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reddit-sub-rule {
+  font-size: 0.9em;
+}
+
+.reddit-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.reddit-comment p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

@@ -42,6 +42,19 @@
  *                                                or Reject for each undecided one
  *   POST /api/outreach/youtube/creators/:id/decide  { status, decisionReasons?, note? }
  *
+ *   GET  /api/outreach/reddit/subreddits         the subreddits the Mini watches
+ *   POST /api/outreach/reddit/subreddits         { names: [] } — add some by hand
+ *   POST /api/outreach/reddit/subreddits/suggest "Find subreddits for my topics" (AI)
+ *   POST /api/outreach/reddit/subreddits/:id/decide  { status }
+ *   GET  /api/outreach/reddit/conversations      Find conversations: the posts the
+ *                                                Mini's watch kept, ranked, each with why
+ *   POST /api/outreach/reddit/conversations/reply    { postId, commentId? } — Write replies
+ *   POST /api/outreach/reddit/conversations/skip     { postId, reasons, note }
+ *   POST /api/outreach/reddit/conversations/contact  { postId, author } — save as a contact
+ *
+ * The Reddit routes are Outreach wizard 18/19 (task 86bcrmbwm), over
+ * lib/redditWatchStore.js, lib/acquire/RedditSubredditSuggest.js and
+ * lib/redditConversations.js.
  *   GET  /api/outreach/youtube/conversations     Find conversations: comments on the
  *                                                approved channels' newest videos,
  *                                                grouped by video, ranked, each with
@@ -92,6 +105,13 @@ const defaultCreators = {
   store: () => require('../lib/youtubeCreatorsStore'),
   find: (scope, options) => require('../lib/acquire/YoutubeCreatorsFindRun').findYoutubeCreators(scope, options),
   suggest: (scope, options) => require('../lib/acquire/SubstackSuggestRun').runYoutubeSuggestions(scope, options),
+};
+
+/** The Reddit watch's moving parts, required on first use for the same reason. */
+const defaultReddit = {
+  store: () => require('../lib/redditWatchStore'),
+  conversations: () => require('../lib/redditConversations'),
+  suggest: (scope) => require('../lib/acquire/RedditSubredditSuggest').suggestSubreddits(scope),
 };
 
 /** The YouTube comment finder's moving parts (Outreach wizard 16/19), required on first use like the creators'. */
@@ -169,6 +189,50 @@ async function handleCreators(req, res, pathname, method, creators) {
   return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
 }
 
+/** The Reddit watch routes; false when `pathname` is not one of them. */
+async function handleReddit(req, res, pathname, method, reddit) {
+  const base = `${PREFIX}/reddit`;
+  if (!pathname.startsWith(`${base}/`)) return false;
+  const scope = requestScope(req);
+
+  if (pathname === `${base}/subreddits`) {
+    if (method === 'GET') return reply(res, await reddit.store().listSubreddits(500, scope)), true;
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await reddit.store().addSubreddits(body.names, scope, { suggestedBy: 'hand' })), true;
+  }
+  if (pathname === `${base}/subreddits/suggest`) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    if (checkEndpointLimit(req, res, 'outreach.redditSubreddits.suggest')) return true;
+    return reply(res, await reddit.suggest(scope)), true;
+  }
+  const decide = pathname.match(/^\/api\/outreach\/reddit\/subreddits\/([^/]+)\/decide$/);
+  if (decide) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    return reply(res, await reddit.store().decideSubreddit(decodeURIComponent(decide[1]), body.status, scope)), true;
+  }
+  if (pathname === `${base}/conversations`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    return reply(res, await reddit.conversations().listRedditConversations(scope)), true;
+  }
+  const verb = pathname.match(/^\/api\/outreach\/reddit\/conversations\/(reply|skip|contact)$/);
+  if (verb) {
+    if (method !== 'POST') return sendErr(res, 405, 'Method not allowed'), true;
+    // Write replies is an AI call (three options), so it shares the Reddit drafting limit.
+    if (verb[1] === 'reply' && checkEndpointLimit(req, res, 'redditComments.drafts.create')) return true;
+    const body = await readBody(req, res);
+    if (!body) return true;
+    const conversations = reddit.conversations();
+    if (verb[1] === 'reply') return reply(res, await conversations.writeRepliesFor(body, scope)), true;
+    if (verb[1] === 'skip') return reply(res, await conversations.skipConversation(body, scope)), true;
+    return reply(res, await conversations.saveContact(body, scope)), true;
+  }
+  return sendErr(res, 404, 'Unknown outreach endpoint', { code: 'NOT_FOUND' }), true;
+}
+
 /** The YouTube conversation routes; false when `pathname` is not one of them. */
 async function handleYoutubeConversations(req, res, pathname, method, yt) {
   const base = `${PREFIX}/youtube/conversations`;
@@ -221,6 +285,7 @@ async function handleYoutubeConversations(req, res, pathname, method, yt) {
 async function handle(req, res, pathname, method, {
   build = buildOverview, accounts = outreachAccounts, feedback = outreachFeedback,
   conversations = substackConversations, lessons = outreachLessons, creators = defaultCreators,
+  reddit = defaultReddit,
   youtubeConversations = defaultYoutubeConversations,
 } = {}) {
   if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
@@ -240,6 +305,7 @@ async function handle(req, res, pathname, method, {
   }
 
   if (await handleCreators(req, res, pathname, method, creators)) return true;
+  if (await handleReddit(req, res, pathname, method, reddit)) return true;
   if (await handleYoutubeConversations(req, res, pathname, method, youtubeConversations)) return true;
 
   if (pathname === `${PREFIX}/substack/conversations`) {

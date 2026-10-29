@@ -15,6 +15,25 @@ pointed at a template list that only appears inside the editor; the group is on
 the page Dane actually opens, under the existing table, which reloads after an
 import.
 
+## 2026-10-28 — Reddit finds conversations on its own (#898)
+
+Until now every Reddit post Dane answered had to be found by hand and pasted
+in as a link. Now he picks subreddits once, on Engage › Outreach › Reddit: a
+"Find subreddits for my topics" button asks the AI to suggest communities from
+his canon and keywords, and he approves or rejects each one. Every four hours
+the Mini opens two of those subreddits in its signed-in browser, reads the new
+and rising posts and the subreddit's rules, and keeps the posts that match his
+subjects. They appear under Find conversations, best first, each saying why it
+ranked, showing the strongest comments and who wrote them, and quoting the
+subreddit's self-promotion rule when it has one. One click writes three reply
+options (to the post or to a comment); Skip asks why; anyone in the thread can
+be saved as a contact. If the Mini is signed out of Reddit, the screen says so
+instead of showing "0 found". It needs two new database tables (SQL hand-off
+on the pull request) and its schedule installed on the Mini after merge.
+Review caught three slips before it shipped, now fixed: a reply to one comment
+used to block replying to the post itself, clicking "Reply to this comment"
+twice paid for two drafts, and the "signed out" warning stayed up for hours
+after the Mini was signed back in.
 ## 2026-10-28 — Sections another project shares can be imported from Builder › Modules (#900)
 
 When one of Dane's projects shares its saved sections with another, the
