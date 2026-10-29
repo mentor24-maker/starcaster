@@ -29,7 +29,7 @@ import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
-import { importSurfaceColor } from "./theme";
+import { importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
   hasPaint,
@@ -118,6 +118,14 @@ export type MappedPage = {
   name: string;
   slug: string;
   sections: MappedSection[];
+  /**
+   * The page's own background, when it differs from the import theme's
+   * surface — Alphire's near-black home on a site whose theme is white
+   * (task 86bctde6u). Absent = the page follows the theme, as before.
+   */
+  pageBackground?: MappedBackground;
+  /** Text colours that read on `pageBackground`; present exactly when it is. */
+  textColors?: { text: string; heading: string; link: string };
 };
 
 export type CropCopy = { sourceId: string; fromUrl: string; moduleId: string };
@@ -228,6 +236,8 @@ export type MapReport = {
     modules: number;
     placeholders: number;
     builderPageId: string | null;
+    /** The page's own background colour, when it wears one (86bctde6u). */
+    background?: string;
   }[];
   /** unplaced: downloaded files no page uses, given a library row anyway
    *  (task 86bctde7n). leftInNamespace is what is still only in the job's
@@ -742,6 +752,83 @@ function cappedAt(px: string): { maxWidthPx?: string } {
   return px ? { maxWidthPx: px } : {};
 }
 
+/* ---------------------------------------------------------------------------
+ * Picture shape (task 86bctde2b)
+ * ------------------------------------------------------------------------ */
+
+type ImageShapeSettings = { borderRadius?: string; imageShape?: string; imageShapeRadii?: string };
+
+/** One computed corner length, tidied for the Image module's Custom shape:
+ *  whole pixels, percentages to two places. null = not a px/% length. */
+function shapeLength(token: string): string | null {
+  const m = /^(\d+(?:\.\d+)?)(px|%)$/.exec(token);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (m[2] === "px") return `${Math.min(Math.round(n), 9999)}px`;
+  return `${Math.min(Math.round(n * 100) / 100, 100)}%`;
+}
+
+/**
+ * The Image module settings that reproduce a picture's computed
+ * `border-radius` (the browser's own value, so `50% 45% 52% 48% / 48% 52%
+ * 48% 52%` arrives exactly as alphire.agency wrote its hero blob).
+ *
+ * - no radius            → Radius 0. Without it the module's 18px default
+ *                          rounded every square picture an import brought in.
+ * - one small px value   → Rounded, Radius in px (what the panel already had)
+ * - fully rounded square → Circle
+ * - anything else        → Custom, with the radii carried as written —
+ *                          elliptical, per-corner, percentage, pill
+ * - unreadable           → nothing (the module's default stands)
+ *
+ * Exported for the tests, and for whatever places a picture the source
+ * painted onto a box (that box's radius is the picture's shape too).
+ */
+export function importedImageShape(radius: string | undefined, box?: { w: number; h: number } | null): ImageShapeSettings {
+  const text = String(radius || "").trim();
+  if (!text) return { borderRadius: "0" };
+  const halves = text.split("/").map((half) => half.trim().split(/\s+/).filter(Boolean));
+  if (halves.length > 2 || halves.some((h) => h.length < 1 || h.length > 4)) return {};
+  const tidy = halves.map((h) => h.map(shapeLength));
+  if (tidy.some((h) => h.some((t) => t === null))) return {};
+  const tokens = tidy.flat() as string[];
+  if (tokens.every((t) => parseFloat(t) === 0)) return { borderRadius: "0" };
+
+  const square = Boolean(box && box.w > 0 && Math.abs(box.w - box.h) <= 0.05 * Math.max(box.w, box.h));
+  if (tokens.length === 1) {
+    const only = tokens[0];
+    const n = parseFloat(only);
+    const full = only.endsWith("%") ? n >= 50 : Boolean(box && n * 2 >= Math.min(box.w, box.h) - 1);
+    if (full && square) return { imageShape: "circle" };
+    if (only.endsWith("px") && !full && n <= 80) return { borderRadius: String(n) };
+  }
+  return { imageShape: "custom", imageShapeRadii: (tidy as string[][]).map((h) => h.join(" ")).join(" / ") };
+}
+
+/**
+ * Where a picture's shape comes from: the <img> itself, or failing that the
+ * box it sits in when that box IS its frame (the same size, give or take a
+ * border) — the common `.frame { border-radius; overflow: hidden }` wrapper.
+ * A card the picture merely sits inside is a different size and is skipped;
+ * its corners are the cell's, not the picture's.
+ */
+function imageShapeFor(el: ElementIR, section: SectionIR): ImageShapeSettings {
+  const own = el.computedStyles?.["border-radius"];
+  if (own) return importedImageShape(own, el.box);
+  const box = el.box;
+  if (box && el.containers?.length) {
+    for (const key of [...el.containers].reverse()) {
+      const frame = section.containerBoxes?.[key];
+      const radius = section.containers?.[key]?.["border-radius"];
+      if (!frame || !radius) continue;
+      const slack = Math.max(6, 0.03 * Math.max(frame.w, frame.h));
+      const fits = Math.abs(frame.w - box.w) <= slack && Math.abs(frame.h - box.h) <= slack;
+      if (fits) return importedImageShape(radius, frame);
+    }
+  }
+  return importedImageShape("", box);
+}
+
 function normalizeHref(href: string): string {
   return String(href || "").trim().replace(/\/+$/, "").toLowerCase();
 }
@@ -918,6 +1005,10 @@ function splitIntoRows(args: {
   bandLookOf: (key: string) => SurfaceLook | null;
   /** The section root's spacing, for a section with no band anywhere. */
   rootLook: SurfaceLook | null;
+  /** What a transparent section showed through to, when that is not the
+   *  page's own background (SectionIR.ground) — painted on every row no
+   *  band paints. */
+  ground: MappedBackground | null;
   /** Element sourceId → the look of the card it sits in; `onBand` when the
    *  row is painted, so a card the page's colour still shows against it. */
   cardLookOf: (sourceId: string, onBand: boolean) => { key: string; look: SurfaceLook } | null;
@@ -984,6 +1075,7 @@ function splitIntoRows(args: {
     } else {
       applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
     }
+    if (row.background.mode === "none" && args.ground) row.background = { ...args.ground };
     const onBand = Boolean(row.background.mode !== "none");
     // A column wears a card only when everything in it sat in that one card.
     const byColumn = new Map<string, Set<string>>();
@@ -1397,6 +1489,13 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     const mappedSections: MappedSection[] = [];
     let pageModules = 0;
     let pagePlaceholders = 0;
+    // A page whose content sits on a colour other than the theme's surface
+    // wears that colour itself, with text that reads on it (task 86bctde6u).
+    // Bands and cards on it are then judged against IT: a band painted the
+    // page's colour is redundant, a white one on a dark page is not.
+    const pageGround = toHex(page.background);
+    const ownGround = Boolean(pageGround && surfaceColor && pageGround !== surfaceColor);
+    const pageSurface = ownGround ? pageGround : surfaceColor;
 
     for (const section of page.sections || []) {
       const modules: MappedModule[] = [];
@@ -1413,7 +1512,12 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // (columns.ts, GridItem.group).
       const sectionEls = section.elements || [];
       const containerStyles = section.containers || {};
-      const rowCtx = { surface: surfaceColor, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const rowCtx = { surface: pageSurface, resolveImage: resolveBackgroundImage, maxPadding: 160 };
+      const sectionGround = toHex(section.ground);
+      const ground: MappedBackground | null =
+        sectionGround && sectionGround !== pageSurface
+          ? { mode: "color", color: sectionGround, color2: "", imageUrl: "", styleKey: "" }
+          : null;
       const bandLooks = new Map<string, SurfaceLook>();
       const bandLookOf = (key: string): SurfaceLook | null => {
         if (!bandLooks.has(key)) bandLooks.set(key, readSurface(containerStyles[key], rowCtx));
@@ -1464,7 +1568,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           cardLooks.set(
             memo,
             readSurface(containerStyles[key], {
-              surface: onBand ? "" : surfaceColor,
+              surface: onBand ? "" : pageSurface,
               resolveImage: resolveBackgroundImage,
               maxPadding: 50,
             })
@@ -1723,6 +1827,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               size: "100",
               ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
+              ...imageShapeFor(el, section),
               importSourceIds: el.sourceId,
             },
           });
@@ -1839,6 +1944,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         bandOf: (id) => bandOf.get(id) || "",
         bandLookOf,
         rootLook,
+        ground,
         cardLookOf,
       });
       mappedSections.push(...built);
@@ -1852,6 +1958,12 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       name: collapse(page.title) || slug,
       slug,
       sections: mappedSections,
+      ...(ownGround
+        ? {
+            pageBackground: { mode: "color" as const, color: pageGround, color2: "", imageUrl: "", styleKey: "" as const },
+            textColors: pageTextColors(page, pageGround),
+          }
+        : {}),
     });
     report.pages.push({
       path: page.path,
@@ -1860,6 +1972,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       modules: pageModules,
       placeholders: pagePlaceholders,
       builderPageId: null,
+      ...(ownGround ? { background: pageGround } : {}),
     });
   }
 

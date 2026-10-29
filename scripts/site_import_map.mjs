@@ -197,6 +197,33 @@ async function copyBlob(fromUrl, toPathname, mimeType) {
   return must(up, `Blob copy to ${toPathname}`).location;
 }
 
+/**
+ * A page's own background and the text colours that read on it (task
+ * 86bctde6u), as a patch for a page write. On a re-import it is applied only
+ * where the page has no background of its own yet — one somebody set in the
+ * Builder is theirs. Text colours go into the page's stored theme, which the
+ * renderer lets win over a named theme exactly when the page paints its own
+ * background (resolveRenderTheme). Empty when the page follows the theme.
+ */
+function pageGroundPatch(page, current) {
+  if (!page.pageBackground || !page.textColors) return {};
+  const existing = current?.pageBackground;
+  if (existing && existing.mode && existing.mode !== 'none') return {};
+  const theme = current?.theme && typeof current.theme === 'object' ? current.theme : {};
+  const typography = theme.typography && typeof theme.typography === 'object' ? theme.typography : {};
+  const { text, heading, link } = page.textColors;
+  return {
+    pageBackground: { ...(existing || {}), ...page.pageBackground },
+    theme: {
+      ...theme,
+      typography: {
+        ...typography,
+        colors: { ...(typography.colors || {}), text, heading, link, linkHover: link },
+      },
+    },
+  };
+}
+
 /** Deep string replace of job-namespace URLs with applied-namespace URLs. */
 function rewriteUrls(value, urlMap) {
   let json = JSON.stringify(value);
@@ -263,7 +290,7 @@ async function main() {
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
-    log(`  ${p.path}  →  /${p.slug}   ${p.modules} modules (${p.placeholders} placeholders)`);
+    log(`  ${p.path}  →  /${p.slug}   ${p.modules} modules (${p.placeholders} placeholders)${p.background ? `   own background ${p.background}` : ""}`);
   }
   if (out.report.repeatCaptures.length) {
     // Capture reached one page by more than one URL. Mapped once — the
@@ -488,9 +515,10 @@ async function main() {
       templateKind: 'modular',
       isPublished: false,
       layoutSections: sections,
+      ...pageGroundPatch(page, null),
     }, scope), `create ${page.slug}`),
     updatePage: async (page, current, merged) =>
-      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged }, scope), `update ${page.slug}`),
+      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged, ...pageGroundPatch(page, current) }, scope), `update ${page.slug}`),
     mergeSections: (existing, incoming) => mergeMappedSections(existing, incoming, protectedIds),
     onWrite: (page, pageId, sections, action) => {
       ownedSectionIds.set(pageId, sections.map((s) => s.id).filter((id) => !protectedIds.has(id)));

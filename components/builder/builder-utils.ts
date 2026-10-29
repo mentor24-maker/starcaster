@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { getCarouselImageShadow } from "@/lib/builder-carousel-image-frame";
+import { getImageShapeFrameStyle } from "@/lib/image-shape";
 import { googleFontStack } from "@/lib/builder-google-fonts";
 import { libraryFontStack } from "@/lib/builder-library-fonts";
 import { getModuleTrigger } from "@/lib/module-trigger";
@@ -719,7 +720,9 @@ export function getImageModuleStyle(settings: Record<string, string>): CSSProper
     border: `${Math.max(Number.isFinite(borderThickness) ? borderThickness : 0, 0)}px solid ${
       settings.borderColor || "#0f4f8f"
     }`,
-    borderRadius: `${Math.max(Number.isFinite(borderRadius) ? borderRadius : 18, 0)}px`,
+    // Shape (task 86bctde2b): Rounded is Radius in px exactly as before;
+    // Square, Circle and Custom replace it. Circle also squares the frame.
+    ...getImageShapeFrameStyle(settings, Math.max(Number.isFinite(borderRadius) ? borderRadius : 18, 0)),
     // The drop shadow (operator, 2026-08-25). Built by the same pure function
     // the Carousel's pictures use, so one picture and a row of pictures
     // cannot end up with two different shadows from the same six numbers.

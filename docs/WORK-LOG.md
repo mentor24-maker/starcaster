@@ -10,6 +10,79 @@ and used. Fonts stay out (the font library owns them), several sizes of one
 picture become one entry (the largest), running the import again adds nothing
 twice, and each new entry is checked to belong to the right project. For
 Alphire that means 7 new entries once the import is re-applied.
+## 2026-10-29 — Acquire's X and Reddit search history is kept on the live site (#912)
+
+On the Acquire screen, every X or Reddit search is supposed to leave a run in
+the history list, so you can reopen it later. Those runs were saved to files on
+the server, and the live site cannot write files, so it skipped the save without
+saying so. Every search reported "saved", nothing was kept, and the history on
+the live site was always empty. The runs now go into two database tables, the
+same place the YouTube history already lives, kept separate per project. If the
+database cannot save a run, the screen now says so instead of pretending it
+worked. The tables need one SQL file run in Supabase
+(`acquire_x_reddit_runs_setup.sql`); until then the history shows an error
+naming the missing table, and the daily unapplied-SQL check keeps reminding.
+## 2026-10-28 — Pictures can be circles and organic shapes, and imports keep them (#903)
+
+A picture in the Builder could only have rounded corners, measured in pixels.
+So when Site Import copied alphire.agency, whose hero picture is a soft,
+slightly lopsided oval, it had nowhere to put that shape and the picture came
+out a plain rectangle. The Image module's Frame settings now start with
+**Shape**: Rounded (the old corners, unchanged for every existing picture),
+Square, Circle (the picture is cropped to fill a perfect circle), or Custom
+(any corner curve, including the lopsided oval kind). Site Import now reads
+each picture's shape from the original site and fills this in. It also stops
+giving square pictures the Builder's default 18px rounded corners, which
+every import had been adding without anyone asking.
+## 2026-10-29 — Site Import places pictures a site paints onto an empty box (#905)
+
+Some websites show a picture by painting it as the background of an empty
+box, rather than as an ordinary picture. Site Import downloaded those
+pictures but never put them anywhere, because it only turned real content
+into page pieces, and an empty box looked like packaging. That is why
+Alphire's hero picture went missing. Now an empty box with a background
+picture (at least 40 by 40 pixels) is imported as an Image in its place, and
+the picture is copied into the project's Assets. Empty boxes with no picture
+still produce nothing, so no blank blocks appear.
+## 2026-10-29 — An imported page that was dark on the original stays dark (#908)
+
+Alphire's home page is near-black, but 15 of its 17 pages are white, so the
+theme an import builds for the site is white, and the home page came across
+white with its black theme text. The importer now notes what each page's
+words actually sit on. When that differs from the theme, the imported page
+gets its own background colour plus text, heading and link colours that are
+readable on it, taken from the site's own colours where they read. Only words
+sitting straight on the page count. A site with a black edge behind a white
+content column (Strands Movie) therefore stays a white page. A page that
+paints its own background now keeps its own text colours even when it follows
+a named theme. No existing page changes because of that: in production, the
+one themed page with its own background stores no text colours. Checked
+against the real Alphire capture: the home page goes dark, the other 16 stay
+white.
+## 2026-10-29 — Menus that follow the theme's colours no longer vanish into a white bar (#910)
+
+Alphire's imported Top Menu showed as an empty white bar. The links were there,
+painted white: a menu with no Text Color of its own uses the theme's "header
+text" colour, which Alphire's theme set to white because its header is black.
+But the bar behind the links was always see-through, so the black header colour
+was never painted anywhere and the white links sat on the white page. Now, when
+a menu leaves its text colour to the theme, it leaves its bar colour to the
+theme too, so the two always arrive together: Alphire gets a black bar with
+white links. A menu that picked its own text colour (every Dane of Earth menu
+does) is untouched, and so is any site whose theme has no header colour. Two
+checks in a real browser now measure both halves, and each was broken on
+purpose to prove it fails.
+## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
+
+The Mini's sign-in window has an outside check that, among other things, makes
+sure the live-picture feed refuses a stranger. That line always said FAIL, even
+on a perfectly working door, so a correct install could never pass and the one
+line that would catch pictures leaking to a stranger meant nothing. Two causes,
+one hiding the other: the test key it sent was the wrong length, so the door
+rejected the request before checking anything; and once that was fixed, the
+check read curl's "timed out" message as the door's answer, because that
+message arrives first. Both are fixed, the tests now behave like the real door
+so either mistake would fail them, and run from the MacBook the line reads PASS.
 
 ## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
 

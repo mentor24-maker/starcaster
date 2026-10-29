@@ -2140,6 +2140,95 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * IMAGE SHAPE (task 86bctde2b). An Image could only round its corners in
+   * pixels, so the Alphire import's organic hero blob arrived a rectangle.
+   * Shape is a CSS-only setting, so the only proof it works is a browser:
+   * hit-test a corner of the frame and see whether the picture is still there.
+   */
+  {
+    id: 'image-circle-is-clipped-to-a-circle',
+    why:
+      'Circle is two things at once — a square frame and 50% corners — and either alone is wrong: ' +
+      '50% of the landscape contract picture is an oval, and a square frame with square corners is ' +
+      'a crop. This measures both: the frame is square, the picture fills its middle, and a point ' +
+      'near the corner hits nothing of the picture.',
+    module: { type: 'image', settings: { ...PICTURE, imageShape: 'circle' } },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'overflow'],
+    probes: {
+      middle: { subject: 'figure.builder-preview-image img', against: 'figure.builder-preview-image' },
+      corner: {
+        subject: 'figure.builder-preview-image img',
+        against: 'figure.builder-preview-image',
+        at: { x: 0.06, y: 0.06 },
+      },
+    },
+    expect(sample) {
+      const { middle, corner } = sample.probes || {};
+      if (!middle || !corner) return 'no probe was taken — the contract measured nothing.';
+      if (middle.missing) return `the probe could not find \`${middle.missing}\` — the circle picture did not render.`;
+      if (middle.overlap <= 0) return 'the picture and its frame do not overlap, so no point inside both could be tested.';
+      // Without this the corner test is unfalsifiable: a picture that is not
+      // there at all is also "not at the corner".
+      if (!middle.onSubject) return `the middle of the frame hit \`${middle.hit}\`, not the picture — the picture is not filling a Circle frame.`;
+      const { width, height } = sample.box;
+      if (width < 40) return `the frame is ${width}px wide — too small for a corner to be told from the middle.`;
+      if (Math.abs(width - height) > 2) return `a Circle frame is ${width}x${height}px — not square, so its 50% corners draw an oval.`;
+      if (corner.onSubject) return `a point ${corner.point.x},${corner.point.y} near the frame's corner still hits the picture (\`${corner.hit}\`) — it is not clipped to a circle.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-default-shape-keeps-its-corners',
+    why:
+      'The control for the contract above, at the same point: Radius 0 with no Shape (every image ' +
+      'saved before shapes existed) must still show the picture in its corner. If this one failed ' +
+      'too, the probe would be hitting something other than the picture and the circle contract ' +
+      'would be proving nothing.',
+    module: { type: 'image', settings: { ...PICTURE, borderRadius: '0' } },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'aspect-ratio'],
+    probes: {
+      corner: {
+        subject: 'figure.builder-preview-image img',
+        against: 'figure.builder-preview-image',
+        at: { x: 0.06, y: 0.06 },
+      },
+    },
+    expect(sample) {
+      const corner = sample.probes?.corner;
+      if (!corner) return 'no probe was taken — the contract measured nothing.';
+      if (corner.missing) return `the probe could not find \`${corner.missing}\` — the picture did not render.`;
+      if (corner.overlap <= 0) return 'the picture and its frame do not overlap, so the corner could not be tested.';
+      if (!corner.onSubject) return `the corner of a square-cornered picture hit \`${corner.hit}\`, not the picture — something is clipping images that have no Shape.`;
+      const ratio = sample.styles['aspect-ratio'];
+      if (ratio && ratio !== 'auto') return `an image with no Shape has aspect-ratio \`${ratio}\` — existing pictures must keep their proportions.`;
+      return null;
+    },
+  },
+  {
+    id: 'image-custom-shape-carries-elliptical-radii',
+    why:
+      'Custom is what Site Import writes for alphire.agency\'s hero blob ' +
+      '(50% 45% 52% 48% / 48% 52% 48% 52%). The radii string is sanitized on its way into a ' +
+      'style; a sanitizer that ate the slash or the percentages would quietly draw ordinary corners.',
+    module: {
+      type: 'image',
+      settings: { ...PICTURE, imageShape: 'custom', imageShapeRadii: '50% 45% 52% 48% / 48% 52% 48% 52%' },
+    },
+    selector: 'figure.builder-preview-image',
+    read: ['border-top-left-radius', 'border-bottom-right-radius'],
+    expect(sample) {
+      const tl = sample.styles['border-top-left-radius'];
+      const br = sample.styles['border-bottom-right-radius'];
+      if (tl !== '50% 48%' || br !== '52% 48%') {
+        return `the blob's corners computed to top-left \`${tl}\`, bottom-right \`${br}\` — expected \`50% 48%\` and \`52% 48%\`.`;
+      }
+      return null;
+    },
+  },
+
   {
     id: 'still-image-runs-nothing',
     why:
@@ -4201,6 +4290,92 @@ export const RENDER_CONTRACTS = [
           'still visible.';
       }
       return null;
+    },
+  },
+
+  /*
+   * AN IMPORTED MENU ON ITS OWN THEME — 86bctde8c.
+   *
+   * Alphire's import, 2026-10-27: the Top Menu came out as an empty white bar.
+   * Its theme says header #000000 with header text #ffffff; the menu set
+   * neither colour, so the links took the white header text while the bar
+   * stayed transparent over the white page. Nothing measured the link against
+   * what was actually behind it.
+   */
+  {
+    id: 'theme-following-menu-paints-its-bar-in-the-theme-header-colour',
+    why:
+      'A menu with no Text Color takes the theme\'s header text, which is chosen for the theme\'s ' +
+      'header colour. If the bar is not painted in that colour, a dark-header theme draws white ' +
+      'links on the white page and the menu reads as an empty bar (Alphire, 86bctde8c). This reads ' +
+      'the bar\'s fill and a link\'s colour out of a real browser.',
+    section: {
+      layout: 'single',
+      themeRolePalette: {
+        surface: '#ffffff', surfaceText: '#000000',
+        header: '#000000', headerText: '#ffffff',
+      },
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([
+            { id: 'home', label: 'Home', href: '#home' },
+            { id: 'services', label: 'Services', href: '#services' },
+          ]),
+          navDirection: 'horizontal',
+          menuLocation: 'primary',
+          navAlignment: 'center',
+        },
+      }],
+    },
+    selector: '.site-nav',
+    read: ['backgroundColor'],
+    series: { count: 1, everyMs: 0, read: ['color'], selectors: { link: '.site-nav .site-nav-link' } },
+    expect(sample) {
+      const link = sample.series?.[0]?.link;
+      if (!link) return 'no menu link was found, so there was no text to measure. Fix the scene.';
+      const text = parseRgb(link.color);
+      const fill = parseRgb(sample.styles.backgroundColor);
+      if (!text || !fill) return `could not read the colours (link ${link.color}, bar ${sample.styles.backgroundColor}).`;
+      if (link.color !== 'rgb(255, 255, 255)') {
+        return `the link is ${link.color}, not the theme's header text #ffffff — the scene is not the one ` +
+          'that broke. Fix the scene, never the assertion.';
+      }
+      if (sample.styles.backgroundColor !== 'rgb(0, 0, 0)') {
+        return `the bar is ${sample.styles.backgroundColor}, not the theme's header colour #000000, so the ` +
+          'white header-text links sit on whatever is behind them — on a white page, an empty white bar (86bctde8c).';
+      }
+      const ratio = contrastRatio(text, fill);
+      return ratio >= 4.5 ? null : `the link ${link.color} on the bar ${sample.styles.backgroundColor} is ${ratio.toFixed(2)}:1.`;
+    },
+  },
+  {
+    id: 'menu-with-its-own-text-colour-keeps-a-clear-bar-on-a-themed-page',
+    why:
+      'The other half of 86bctde8c. A menu that chose its own Text Color was designed over whatever ' +
+      'is behind it — Dane of Earth\'s white links over a navy row and over a hero photo. Painting the ' +
+      'theme\'s header colour into that bar would cover the photo, so it must stay transparent.',
+    section: {
+      layout: 'single',
+      themeRolePalette: {
+        surface: '#ffffff', surfaceText: '#000000',
+        header: '#021b49', headerText: '#ffffff',
+      },
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([{ id: 'home', label: 'Home', href: '#home' }]),
+          navColor: '#ffffff',
+        },
+      }],
+    },
+    selector: '.site-nav',
+    read: ['backgroundColor'],
+    expect(sample) {
+      const fill = parseRgb(sample.styles.backgroundColor);
+      if (!fill) return `could not read the bar's fill (${sample.styles.backgroundColor}).`;
+      return fill.a === 0 ? null : `a menu with its own Text Color has a bar of ${sample.styles.backgroundColor}; it ` +
+        'should stay transparent so the row (or photo) it was designed over shows through.';
     },
   },
 

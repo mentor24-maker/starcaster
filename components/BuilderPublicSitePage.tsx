@@ -98,10 +98,12 @@ export function pickPageRenderTheme(page: {
   theme: SitePage["theme"];
   themeId?: string;
   themeShell?: SiteThemeShell | null;
+  pageBackground?: { mode?: string } | null;
 }) {
   return resolveRenderTheme(
     page.theme,
-    String(page.themeId || "").trim() ? page.themeShell : null
+    String(page.themeId || "").trim() ? page.themeShell : null,
+    page.pageBackground
   );
 }
 
