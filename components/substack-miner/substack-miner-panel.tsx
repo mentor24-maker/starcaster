@@ -1002,7 +1002,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         </td>
                         <td className="substack-miner-posts-cell"><LatestPosts c={c} /></td>
                         <td><AlsoMentions c={c} settings={settings} /></td>
-                        <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
+                        <td className="substack-miner-date-cell" title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
                         <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
                         <td className="substack-miner-suggested-cell">
                           {c.status === 'candidate' && c.suggestion ? (
