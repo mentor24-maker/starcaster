@@ -1,3 +1,15 @@
+## 2026-10-29 — The browser door's safety check no longer fails a working door (#911)
+
+The Mini's sign-in window has an outside check that, among other things, makes
+sure the live-picture feed refuses a stranger. That line always said FAIL, even
+on a perfectly working door, so a correct install could never pass and the one
+line that would catch pictures leaking to a stranger meant nothing. Two causes,
+one hiding the other: the test key it sent was the wrong length, so the door
+rejected the request before checking anything; and once that was fixed, the
+check read curl's "timed out" message as the door's answer, because that
+message arrives first. Both are fixed, the tests now behave like the real door
+so either mistake would fail them, and run from the MacBook the line reads PASS.
+
 ## 2026-10-28 — Page templates another project shares can be imported, header and footer included (#904)
 
 When one of Dane's projects shares its page templates with another, the
