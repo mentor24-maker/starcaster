@@ -304,7 +304,16 @@ npm run env:local     # a NEW worktree: point it at this machine's database
 npm run db:refresh    # make this copy match production (about two minutes)
 npm run db:use        # which database am I on? add local/cloud to switch
 npm run schema:check  # has production's structure moved away from the record?
+npm run sql:unapplied # does production have every table/column docs/SQL declares?
 ```
+
+Those last two answer different questions. `schema:check` compares production
+with a snapshot of production, so a merged docs/SQL file nobody ever ran
+passes it perfectly — on 2026-10-28 sixteen such files broke Outreach and the
+sign-in window on the live site, unnoticed for two weeks. `sql:unapplied`
+runs on the relay's wake and posts each unapplied file to the bus once a day
+until production has it (task 86bcu8ftx). A gap that is deliberate goes in
+`EXPLAINED` in `lib/unappliedSql.js` with its reason.
 
 The admin app carries a strip across the top saying which database it is
 talking to, `npm run dev` refuses to start against the live one without
