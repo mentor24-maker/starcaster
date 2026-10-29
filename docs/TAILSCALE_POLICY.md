@@ -73,7 +73,7 @@ machines by address — "your own devices" cannot tell them apart.
     sign-in window will not open from the MacBook: its picture feed is refused
     (Mini log, 2026-10-28 1:11pm, 26 drops of
     `TCP{100.127.85.12 > 100.108.7.116:443} no rules matched`; found on
-    86bcu7d6h / PR #895). **Not in the console yet.**
+    86bcu7d6h / PR #895). Added by Dane in the console on 2026-10-29.
   * **5900** — Screen Sharing, added by Dane when he saved the rule.
   * **8080** — the YouTube helper, which is already public through Funnel, and
     which the outside check uses as its "is this address reachable at all?"

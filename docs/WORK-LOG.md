@@ -4,7 +4,8 @@ Any device signed in to Dane's Tailscale could open the Mini's private
 OpenClaw control page, and its password-less Chrome control and the browser
 door keeper whenever those run — measured again this morning from the
 MacBook. The fix is a Tailscale access rule that lets other devices reach only
-ssh and the already-public YouTube helper on the Mini. This change writes that
+ssh, Screen Sharing, the public address and the YouTube helper on the Mini —
+the last two serve only what is already public. This change writes that
 rule down exactly, with Tailscale's own built-in tests (so the admin console
 refuses to save a rule that does the wrong thing), an undo, and the check that
 proves it worked. Dane switched it on the same day, adding Screen Sharing, and
