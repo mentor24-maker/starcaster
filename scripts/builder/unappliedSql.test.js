@@ -111,7 +111,7 @@ test('an unapplied file is named again after a day, not every wake, and cleared 
   assert.equal(tenMinutes.alarm.length, 0);
   const nextDay = unapplied.plan({ judged, state: first.next, now: NOW + 25 * HOUR });
   assert.equal(nextDay.alarm.length, 1);
-  const applied = unapplied.plan({ judged: { verdict: unapplied.VERDICT.OK, files: [] }, state: first.next, now: NOW + HOUR });
+  const applied = unapplied.plan({ judged: { verdict: unapplied.VERDICT.OK, files: [], checked: ['a.sql'] }, state: first.next, now: NOW + HOUR });
   assert.deepEqual(applied.cleared, ['a.sql']);
   assert.deepEqual(applied.next.alarmed, {});
 });
@@ -121,6 +121,7 @@ test('a named file that is now EXPLAINED is never reported as on production', ()
   const judged = {
     verdict: unapplied.VERDICT.OK,
     files: [],
+    checked: ['a.sql', 'b.sql'],
     excused: [{ file: 'a.sql', missing: [{ kind: 'table', table: 'a' }], reason: 'retired with the old builder' }],
   };
   const decided = unapplied.plan({ judged, state, now: NOW + HOUR });
@@ -131,6 +132,40 @@ test('a named file that is now EXPLAINED is never reported as on production', ()
   const text = unapplied.renderExplained({ files: decided.explained, node: 'n', at: 't' });
   assert.match(text, /NOT on production/);
   assert.match(text, /a\.sql — retired with the old builder/);
+});
+
+test('a named file DELETED from docs/SQL is never reported as on production', () => {
+  const state = { alarmed: { 'retired_thing.sql': new Date(NOW).toISOString(), 'b.sql': new Date(NOW).toISOString() } };
+  const { expected } = unapplied.expectedObjects([{ file: 'b.sql', sql: 'create table if not exists b (id int);' }]);
+  const judged = unapplied.judge({ expected, live: live('b.id'), explained: {}, present: ['b.sql'] });
+  assert.deepEqual(judged.checked, ['b.sql']);
+  const decided = unapplied.plan({ judged, state, now: NOW + HOUR });
+  assert.deepEqual(decided.cleared, ['b.sql']);
+  assert.deepEqual(decided.dropped, [{ file: 'retired_thing.sql', reason: 'it is no longer in docs/SQL' }]);
+  assert.deepEqual(decided.next.alarmed, {});
+  assert.ok(!unapplied.renderClear({ files: decided.cleared, node: 'n', at: 't' }).includes('retired_thing'));
+  const text = unapplied.renderDropped({ files: decided.dropped, node: 'n', at: 't' });
+  assert.match(text, /never confirmed on production/);
+  assert.match(text, /retired_thing\.sql — it is no longer in docs\/SQL/);
+});
+
+test('a file whose tables a later file drops is not reported as on production either', () => {
+  const state = { alarmed: { 'a.sql': new Date(NOW).toISOString() } };
+  const { expected } = unapplied.expectedObjects([
+    { file: 'a.sql', sql: 'create table if not exists a (id int);' },
+    { file: 'z.sql', sql: 'drop table if exists a;' },
+  ]);
+  const judged = unapplied.judge({ expected, live: live('other.id'), explained: {}, present: ['a.sql', 'z.sql'] });
+  const decided = unapplied.plan({ judged, state, now: NOW + HOUR });
+  assert.deepEqual(decided.cleared, []);
+  assert.deepEqual(decided.dropped.map((f) => f.reason), ['a later docs/SQL file drops everything it declared']);
+});
+
+test('a reading that does not say what it checked clears nothing', () => {
+  const state = { alarmed: { 'a.sql': new Date(NOW).toISOString() } };
+  const decided = unapplied.plan({ judged: { verdict: unapplied.VERDICT.OK, files: [] }, state, now: NOW + HOUR });
+  assert.deepEqual(decided.cleared, []);
+  assert.equal(decided.dropped.length, 1);
 });
 
 test('CANNOT TELL keeps the memory of what was named, and repeats at most every 6h', () => {

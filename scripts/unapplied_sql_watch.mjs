@@ -100,7 +100,7 @@ const files = fs.readdirSync(SQL_DIR)
   .map((file) => ({ file, sql: fs.readFileSync(path.join(SQL_DIR, file), 'utf8') }));
 const { expected, superseded } = unapplied.expectedObjects(files);
 const reading = readProduction();
-const judged = unapplied.judge({ expected, ...reading });
+const judged = unapplied.judge({ expected, ...reading, present: files.map((f) => f.file) });
 
 console.log(`sql:unapplied: ${judged.verdict} — ${judged.reason}`);
 console.log(`  read ${files.length} files in docs/SQL: ${expected.length} tables and columns to look for`
@@ -126,6 +126,7 @@ if (CHECK) {
     if (decided.alarm.length) posts.push(unapplied.renderAlarm({ files: decided.alarm, node, at }));
     if (decided.cleared.length) posts.push(unapplied.renderClear({ files: decided.cleared, node, at }));
     if (decided.explained.length) posts.push(unapplied.renderExplained({ files: decided.explained, node, at }));
+    if (decided.dropped.length) posts.push(unapplied.renderDropped({ files: decided.dropped, node, at }));
     if (decided.cannotTell) posts.push(unapplied.renderCannotTell({ judged, node, at }));
     if (!posts.length) console.log('sql:unapplied: nothing new to say on the bus.');
 
