@@ -9,6 +9,7 @@ import SubstackMinerPanel, {
   headerCounts,
   notesReadText,
   parseSeedLines,
+  postsReadSummaryText,
   searchSummaryText,
   seedSummaryText,
   snowballSummaryText,
@@ -16,7 +17,11 @@ import SubstackMinerPanel, {
   statsNotes,
   subscriberSummaryText,
   visibleCandidates,
+  alsoMentions,
+  latestPosts,
+  postDateText,
   type Candidate,
+  type RecentPost,
 } from "./substack-miner-panel";
 import { PROJECT_SWITCH_EVENT } from "../substack-notes/substack-notes-panel";
 import { reasonTally } from "./substack-decision-dialog";
@@ -59,7 +64,7 @@ function writer(overrides: Partial<Candidate>): Candidate {
 }
 
 type FakeContact = { id: string; substack: string; firstName: string; email?: string; subscribedAt?: string };
-type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean };
+type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean; postsReads?: number; wider?: string[] };
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -82,7 +87,8 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     return { ok: true, data: store.writers.map((w) => ({ ...w })) };
   }
   if (path === "/api/acquire/substack-miner/settings" && method === "GET") {
-    return { ok: true, data: { keywords: [...store.keywords], maxResultsPerKeyword: 20, pauseMsBetweenFetches: 1500, saved: store.saved, updatedAt: "" } };
+    const wider = store.wider ? { widerKeywords: [...store.wider] } : {};
+    return { ok: true, data: { keywords: [...store.keywords], ...wider, maxResultsPerKeyword: 20, pauseMsBetweenFetches: 1500, saved: store.saved, updatedAt: "" } };
   }
   if (path === "/api/acquire/substack-miner/settings" && method === "PUT") {
     store.keywords = body.keywords;
@@ -106,6 +112,12 @@ async function fakeApi(path: string, options: RequestInit = {}) {
   }
   if (path === "/api/acquire/substack-miner/run" && method === "POST") {
     return { ok: true, data: { engine: "Google", keywordsSearched: store.keywords, keywordsNotSearched: [], resultsSeen: 4, droppedNotSubstack: 1, handlesFound: 3, added: 2, merged: 1, unreadablePages: [], searchErrors: [], refused: [] } };
+  }
+  if (path === "/api/acquire/substack-miner/read-posts" && method === "POST") {
+    // The first click reads; the second finds every writer read this week.
+    store.postsReads = (store.postsReads || 0) + 1;
+    if (store.postsReads > 1) return { ok: true, data: { writers: 3, due: 0, recent: 3, read: [], failed: [], notReached: 0 } };
+    return { ok: true, data: { writers: 3, due: 3, recent: 0, read: [{ handle: "a", name: "A", posts: 8 }, { handle: "b", name: "B", posts: 0 }], failed: [{ handle: "c", name: "Cee", reason: "its newest posts answered HTTP 404" }], notReached: 0 } };
   }
   if (path === "/api/acquire/substack-miner/snowball" && method === "POST") {
     return { ok: true, data: { sourcesRequested: 1, sourcesRead: 1, sources: [], notRead: [], linksFound: 5, added: 5, merged: 0, skippedNotSubstack: 0, refused: [] } };
@@ -270,6 +282,86 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function post(title: string, postedAt: string, extra: Partial<RecentPost> = {}): RecentPost {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return { title, url: `https://x.substack.com/p/${slug}`, postedAt, subtitle: "", excerpt: "", coverImage: "", paid: false, ...extra };
+}
+
+describe("Latest posts and Also mentions (upgrade 3/4, 86bcuxwn5)", () => {
+  const posts = [
+    post("Older one", "2026-10-01T09:00:00Z"),
+    post("Newest: junior tennis camps", "2026-10-21T09:00:00Z", { excerpt: "On polymaths and coaching" }),
+    post("Middle", "2026-10-10T09:00:00Z"),
+    post("Oldest, not shown", "2026-09-01T09:00:00Z", { subtitle: "all about chess" }),
+  ];
+
+  it("headers read Writer · Subscribers · Keywords · Latest posts · Also mentions · Last seen · Notes read · Suggested · Actions", async () => {
+    stores.proj_doe.writers.push(writer({ handle: "ada" }));
+    await mount();
+    const headers = [...container!.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(headers).toEqual(["Writer", "Subscribers", "Keywords", "Latest posts", "Also mentions", "Last seen", "Notes read", "Suggested", "Actions"]);
+  });
+
+  it("shows the newest date and three newest titles, newest first, each opening the post in a new tab", async () => {
+    stores.proj_doe.keywords = ["tennis", "coaching", "chess"];
+    stores.proj_doe.writers.push(writer({ handle: "ada", keywordsHit: ["tennis"], recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    const row = rowFor("ada")!;
+    const links = [...row.querySelectorAll<HTMLAnchorElement>(".substack-miner-post-title")];
+    expect(links.map((a) => a.textContent)).toEqual(["Newest: junior tennis camps", "Middle", "Older one"]);
+    expect(links[0].getAttribute("href")).toBe("https://x.substack.com/p/newest-junior-tennis-camps");
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    expect(links[0].getAttribute("title")).toBe("Newest: junior tennis camps");
+    expect(row.querySelector(".substack-miner-post-date")!.textContent).toContain("Oct 21, 2026");
+    // "chess" is only in the fourth post, which is not shown; tennis is already a Keyword.
+    const chips = [...row.querySelectorAll("td:nth-child(5) .substack-miner-chip")].map((c) => c.textContent);
+    expect(chips).toEqual(["coaching"]);
+  });
+
+  it("matches the wider list too when it exists, and the search list alone when it does not", async () => {
+    stores.proj_doe.keywords = ["coaching"];
+    stores.proj_doe.wider = ["polymaths"];
+    stores.proj_doe.writers.push(writer({ handle: "ada", recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    expect([...rowFor("ada")!.querySelectorAll("td:nth-child(5) .substack-miner-chip")].map((c) => c.textContent)).toEqual(["coaching", "polymaths"]);
+    const c = writer({ recentPosts: posts, postsReadAt: "x" });
+    expect(alsoMentions(c, { keywords: ["coaching"] })).toEqual(["coaching"]);
+    expect(alsoMentions(c, null)).toEqual([]);
+  });
+
+  it("empty cells say why: not read yet, no posts, nothing beyond its keywords", async () => {
+    stores.proj_doe.keywords = ["tennis"];
+    stores.proj_doe.writers.push(writer({ handle: "unread", postsReadAt: null }));
+    stores.proj_doe.writers.push(writer({ handle: "empty", recentPosts: [], postsReadAt: "2026-10-22T00:00:00Z" }));
+    stores.proj_doe.writers.push(writer({ handle: "same", keywordsHit: ["tennis"], recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    expect(rowFor("unread")!.querySelector("td:nth-child(4)")!.textContent).toBe("Posts not read yet");
+    expect(rowFor("empty")!.querySelector("td:nth-child(4)")!.textContent).toBe("No posts");
+    expect(rowFor("same")!.querySelector("td:nth-child(5)")!.textContent).toBe("None beyond its keywords");
+  });
+
+  it("the Found via filter still narrows the list, and the most-recommended writer still comes first", async () => {
+    stores.proj_doe.writers.push(writer({ handle: "searched", foundVia: "web_search", recommendedBy: [] }));
+    stores.proj_doe.writers.push(writer({ handle: "rec1", foundVia: "recommendations", recommendedBy: ["a"] }));
+    stores.proj_doe.writers.push(writer({ handle: "rec3", foundVia: "recommendations", recommendedBy: ["a", "b", "c"] }));
+    await mount();
+    const order = () => [...container!.querySelectorAll("tbody tr")].map((tr) => tr.getAttribute("data-handle"));
+    expect(order()).toEqual(["rec3", "rec1", "searched"]);
+    type(el<HTMLSelectElement>('select[aria-label="Found via"]'), "recommendations");
+    await flush();
+    expect(order()).toEqual(["rec3", "rec1"]);
+  });
+
+  it("latestPosts sorts newest first and keeps three; postDateText says how long ago", () => {
+    expect(latestPosts(writer({ recentPosts: posts })).map((p) => p.title)).toEqual(["Newest: junior tennis camps", "Middle", "Older one"]);
+    const now = new Date(2026, 9, 29, 15, 0);
+    expect(postDateText(new Date(2026, 9, 21, 9, 0).toISOString(), now)).toMatch(/Oct 21, 2026 · 8 days ago$/);
+    expect(postDateText(new Date(2026, 9, 29, 1, 0).toISOString(), now)).toMatch(/· today$/);
+    expect(postDateText(new Date(2026, 9, 28, 23, 0).toISOString(), now)).toMatch(/· yesterday$/);
+    expect(postDateText("", now)).toBe("");
+  });
+});
+
 describe("Notes read column (Substack Miner 5/7)", () => {
   it("shows the date an approved writer's Notes were read, Not yet before then, and nothing for a candidate", () => {
     const read = notesReadText(writer({ status: "approved", lastNotesReadAt: "2026-10-09T12:00:00Z" }));
@@ -329,7 +421,8 @@ describe("Substack Miner screen", () => {
     ] });
     expect(text()).toContain("2 added.");
     expect(stores.proj_doe.writers.map((w) => w.foundVia)).toEqual(["seed", "seed"]);
-    expect(rowFor("kindoftsetsy")?.textContent).toContain("Pasted link");
+    // How it was found left the list in upgrade 3/4 (it moves to the details page); the store says seed.
+    expect(rowFor("kindoftsetsy")).not.toBeNull();
     expect(rowFor("another-one")).not.toBeNull();
   });
 
@@ -552,6 +645,16 @@ describe("Substack Miner screen", () => {
     expect(text()).toContain("Searched 2 keywords with Google: 4 results, 3 writers found — 2 new, 1 already here.");
   });
 
+  it("Read writers' posts says how many were read, names each one not read, and says nothing was due the second time (86bcuxwhy)", async () => {
+    await mount();
+    await click(button("Run"));
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Read posts for 2 writers; 1 could not be read; 1 has no posts yet.");
+    expect(text()).toContain("Cee: not read — its newest posts answered HTTP 404.");
+    await click(button("Read writers' posts"));
+    expect(text()).toContain("Nothing to read: every writer was read in the last 7 days (3 writers).");
+  });
+
   it("the recommendations button waits for an approved writer, and names the reason", async () => {
     await mount();
     await click(button("Run"));
@@ -661,6 +764,16 @@ describe("Substack Miner helpers", () => {
     expect(lines).toContain("C was not suggested: the AI did not answer: timeout.");
     expect(lines).toContain("D was judged from its description only — its newest posts answered HTTP 404.");
     expect(lines.at(-1)).toBe("7 not reached in this run — click Suggest decisions again for the rest.");
+  });
+
+  it("the posts summary names the writers left for next time", () => {
+    expect(postsReadSummaryText({ writers: 5, due: 5, read: [{ name: "A", posts: 3 }], failed: [], notReached: 4 })).toEqual([
+      "Read posts for 1 writer.",
+      "4 writers not reached — the run ran out of time. Click Read writers' posts again for the rest.",
+    ]);
+    expect(postsReadSummaryText({ writers: 3, due: 1, recent: 2, read: [], failed: [{ name: "Gone", reason: "its newest posts answered HTTP 404" }], notReached: 0 })[0])
+      .toBe("Read posts for 0 writers; 1 could not be read. 2 other writers were read in the last 7 days and skipped.");
+    expect(postsReadSummaryText({ writers: 0, due: 0, read: [], failed: [], notReached: 0 })).toEqual(["Nothing to read: there are no writers yet, other than rejected ones."]);
   });
 
   it("run summaries account for everything the server reported", () => {

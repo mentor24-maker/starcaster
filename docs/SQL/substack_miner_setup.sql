@@ -142,3 +142,26 @@ alter table public.substack_candidates add column if not exists decision_reasons
 --                 into those.
 
 alter table public.substack_candidates add column if not exists suggestion jsonb;
+
+-- ── Each writer's newest posts and pictures (Substack Miner upgrade 1/4, ─────
+--    task 86bcuxwhy)
+--
+--   recent_posts   the writer's newest posts as last read from their public
+--                  archive, newest first, at most 8:
+--                  [{ "title", "url", "postedAt", "subtitle", "excerpt"
+--                     (≤500 chars), "coverImage", "paid" }]. Written by the
+--                  posts pass (lib/acquire/SubstackPostsReadRun.js), which
+--                  reads through the same function the suggestion pass uses.
+--   posts_read_at  when they were last read. Null: never read. A date with
+--                  recent_posts = [] means "read, has no posts". The pass
+--                  re-reads a writer once this is more than 7 days old.
+--   photo_url      the writer's own photo.
+--   logo_url       the publication's logo.
+--
+-- Added the same way as the 5/7 columns, so running this file again changes
+-- nothing.
+
+alter table public.substack_candidates add column if not exists recent_posts jsonb not null default '[]'::jsonb;
+alter table public.substack_candidates add column if not exists posts_read_at timestamptz;
+alter table public.substack_candidates add column if not exists photo_url text not null default '';
+alter table public.substack_candidates add column if not exists logo_url text not null default '';

@@ -1348,6 +1348,46 @@ const UNLINKED_SECTION = {
  * unbroken word, because a cell's controls running off the row card only
  * shows when something in the cell is wider than the cell (task 86bcgjy02).
  */
+/*
+ * A LAYERED GRADIENT on the row and on its cell (task 86bctde1m), so the
+ * Gradient Layers group renders in both editors and gets measured. Its rows —
+ * a layer's type, a radial's shape, size and centre, every stop's colour and
+ * position — exist only while the background is a gradient that HAS layers;
+ * on the two-colour gradients above the group is one "Use Layers" button,
+ * which always agrees with itself. Two layers, one radial and one linear, so
+ * both kinds of row are on the page at once.
+ */
+const PANEL_CHECK_GRADIENT_LAYERS = [
+  {
+    kind: 'radial', shape: 'circle', x: 80, y: 18,
+    stops: [{ color: '#00e5ff', alpha: 16, position: 0 }, { color: '#000000', alpha: 0, position: 42 }],
+  },
+  {
+    kind: 'linear', angle: 110,
+    stops: [
+      { color: '#020307', alpha: 100, position: 0 },
+      { color: '#030a13', alpha: 100, position: 46 },
+      { color: '#03111e', alpha: 100, position: 100 },
+    ],
+  },
+];
+
+const PANEL_CHECK_GRADIENT_LAYERS_SECTION = {
+  id: 'section-panel-lattice-check-gradient-layers',
+  title: 'Panel Lattice Check — gradient layers',
+  layout: 'single',
+  locked: false,
+  alignment: 'left',
+  widthMode: 'contained',
+  background: { mode: 'gradient', color: '#020307', color2: '#03111e', gradientAngle: 110, gradientLayers: PANEL_CHECK_GRADIENT_LAYERS },
+  cellBackgrounds: {
+    main: { mode: 'gradient', color: '#020307', color2: '#03111e', gradientAngle: 110, gradientLayers: PANEL_CHECK_GRADIENT_LAYERS },
+  },
+  modules: [
+    { id: 'panel-gradient-layers-text', type: 'text', text: '<p>Over a layered gradient</p>', column: 'main', settings: {} },
+  ],
+};
+
 const PANEL_CHECK_MULTI_COLUMN_SECTION = {
   id: 'section-panel-lattice-check-columns',
   title: 'Panel Lattice Check — two columns',
@@ -1375,7 +1415,12 @@ const PANEL_CHECK_MULTI_COLUMN_SECTION = {
     {
       id: 'panel-columns-left-button', type: 'button', column: 'left', name: 'Outside Link',
       text: 'Reserve a court',
-      settings: { href: 'https://www.example.com/reservations', alignment: 'left' },
+      // Glow ticked so check:panels measures its Colour / Size / Strength
+      // fields, which only show while it is on (task 86bctde3a).
+      settings: {
+        href: 'https://www.example.com/reservations', alignment: 'left',
+        buttonGlow: 'true', buttonGlowColor: '#00d9ff', buttonGlowSize: '22', buttonGlowStrength: '40',
+      },
     },
     {
       id: 'panel-columns-right', type: 'heading', column: 'right', settings: {},
@@ -1395,7 +1440,13 @@ const buildPages = (ids) => [
   ['', 'empty-name-row'],
   ['Short', 's'],
   ['Court Fees', 'course-fees'],
-  ['Panel Lattice Check', 'panel-lattice-check', [buildPanelCheckSection(ids), PANEL_CHECK_MULTI_COLUMN_SECTION]],
+  ['Panel Lattice Check', 'panel-lattice-check', [
+    buildPanelCheckSection(ids),
+    // Before the two-column row, never after it: check_panels switches the
+    // LAST row to its Phone panel and relies on that row having two columns.
+    PANEL_CHECK_GRADIENT_LAYERS_SECTION,
+    PANEL_CHECK_MULTI_COLUMN_SECTION,
+  ]],
   // Two pages follow the same master, so the lineage line reads "2 pages" and
   // exercises the plural path rather than the "1 page" special case.
   ['Block States', 'block-states', [
@@ -1911,6 +1962,19 @@ async function seedSubstackMiner(scope) {
   }
   const listed = must(await substackMinerStore.listCandidates(1000, scope), 'list Substack Miner writers');
   const byHandle = new Map(listed.map((c) => [c.handle, c]));
+  // The long row needs posts too, or the Latest posts / Also mentions columns
+  // render empty and the table's 1280px fit is never measured with real
+  // content in them (round-1 review of task 86bcuxwn5).
+  const nightSkies = byHandle.get('fixture-night-skies');
+  if (nightSkies) {
+    must(await substackMinerStore.recordRecentPosts(nightSkies.id, {
+      posts: [
+        { title: `${LONG}: what the winter sky over the marsh taught me about patience, stargazing and slow living`, url: 'https://fixture-night-skies.substack.com/p/winter-sky', postedAt: '2026-10-21T12:00:00Z', subtitle: 'Notes on substack growth and astronomy' },
+        { title: 'A short one', url: 'https://fixture-night-skies.substack.com/p/short', postedAt: '2026-10-14T12:00:00Z' },
+        { title: 'Counting meteors from the porch', url: 'https://fixture-night-skies.substack.com/p/meteors', postedAt: '2026-10-07T12:00:00Z' },
+      ],
+    }, scope), 'save Substack Miner posts');
+  }
   const approved = byHandle.get('fixture-approved');
   if (approved && approved.status === 'candidate') {
     must(await substackContactCapture.approveCandidate(approved.id, { status: 'approved' }, scope), 'approve Substack Miner writer');

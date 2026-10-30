@@ -13,6 +13,65 @@ the outside check then showed all three private ports closed. One port turned
 out to be missing — 443, which the sign-in window needs from the MacBook and
 which reaches only what is already public — so the record now carries it, and
 Dane added it in the Tailscale admin page on 2026-10-29.
+## 2026-10-29 — Imported sites keep their buttons (#919)
+
+When Site Import copies a website, a link that the site dresses up as a
+button (a coloured or outlined pill on its own, like Alphire's "Let's Build
+Something Great →") now arrives as a real Button, with its link, its wording
+and its glow. Before, the importer only looked at the tag, saw a link, and
+poured it into a block of text, so Alphire's six calls to action came out as
+plain text links. A link sitting inside a sentence or paragraph is still a
+link. On Alphire's live home page the import went from no buttons to six,
+each with the cyan glow; Delray's "Book a Court" and "Register" now import as
+buttons too. Pages already imported change only when the import is re-applied.
+
+## 2026-10-29 — The Substack Miner's list shows what each writer actually writes about (#918)
+
+Each row on the Candidates list now has a **Latest posts** column: the date of
+the writer's newest article ("Oct 21, 2026 · 8 days ago") and up to three of
+their newest article titles, each opening the article on Substack. Beside it,
+**Also mentions** lists the keywords those articles talk about that the row's
+Keywords column does not already show — so Dane can judge a writer without
+opening their publication. The **Recommended by** and **Found via** columns
+left the table to make room (they move to the writer's details page next); the
+Found via filter above the list still works. Empty cells say why: "Posts not
+read yet", "No posts", or "None beyond its keywords".
+## 2026-10-29 — Buttons can glow, and an imported glow is kept (#913)
+
+A Button now has a Glow setting on its Frame tab: a colour, a size and a
+strength, drawn as a soft haze round the button on the live site. It is off
+unless ticked, so no existing button changed. When a website being imported
+gives a button a coloured glow, the imported Button gets the same one, and a
+picture's glow lands on the picture's existing Drop Shadow setting, centred.
+Grey shadows import exactly as before. Alphire is not fixed by this yet. Its
+"buttons" are really links, so they import as text, and its hero picture's
+glow was never captured. Both are named on the ticket for follow-up.
+
+## 2026-10-29 — The Substack Miner keeps each writer's newest posts and pictures (#915)
+
+The Miner used to look at a writer's newest post titles once, to guess whether
+Dane would approve them, and then forget them. Now it keeps them. For every
+writer that is not rejected, it stores the eight newest posts (title, link,
+date, a short excerpt, the cover picture, and whether the post is paid-only),
+plus the writer's photo and the publication's logo. The Run tab has a new
+**Read writers' posts** button, and the same read runs by itself once a day.
+A writer read in the last week is skipped, and a writer whose posts could not
+be read is named with the reason. The guessing step now reads posts through the
+same piece of code, so the two can never read a post differently. Nothing new
+shows in the list yet: the next three tickets use this data to show articles
+and pictures for each writer.
+## 2026-10-28 — Section backgrounds can stack glows and gradients, and imports keep them (#893)
+
+A Builder gradient used to be just two colours and an angle, so when Site
+Import met anything richer it threw the whole thing away. Alphire's hero —
+two soft glows, cyan and violet, laid over a three-colour dark wash — came
+out as a plain section. Section and column backgrounds can now hold a stack
+of gradient layers, both straight and round, with see-through colours, and
+there is a "Gradient Layers" editor in the background panel to build or
+change them. The importer keeps every layer it captures. Backgrounds that
+don't use layers look exactly as they did before (the before/after
+screenshots matched pixel for pixel), and saving a page no longer quietly
+resets a gradient's angle.
 
 ## 2026-10-29 — Site Import now sees the decorations a stylesheet draws around a box (#906)
 

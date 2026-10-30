@@ -13,6 +13,12 @@ import { MODULE_GAME_AUDIENCE_SETTING_KEY, normalizeModuleGameAudience } from "@
 import { normalizeModuleTrigger, MODULE_TRIGGER_SETTING_KEY } from "@/lib/module-trigger";
 import { applyBuilderColorOpacity, clampBuilderOpacity, isTransparentBuilderColor, normalizeBuilderHexColor } from "@/lib/builder-hex-color";
 import {
+  builderGradientLayersCss,
+  normalizeBuilderGradientLayers,
+  type BuilderGradientLayer
+} from "./builder-gradient-layers";
+export * from "./builder-gradient-layers";
+import {
   HEADLINE_ROTATOR_DEFAULT_FONT_SIZE,
   HEADLINE_ROTATOR_DEFAULT_MIN_HEIGHT,
   normalizeHeadlineRotatorHeadlinesJson
@@ -186,6 +192,14 @@ export type BackgroundSettings = {
    * background that predates this field renders byte-identically.
    */
   gradientAngle?: number;
+  /**
+   * Mode "gradient" only: stacked linear and radial layers, first on top
+   * (task 86bctde1m). Absent or empty means the two-colour gradient above, so
+   * every background that predates this key paints byte-identically. When
+   * present, `color`/`color2`/`gradientAngle` mirror the bottom layer for the
+   * surfaces that only know two colours. See builder-gradient-layers.ts.
+   */
+  gradientLayers?: BuilderGradientLayer[];
   imageUrl: string;
   /** StarCaster: asset id behind imageUrl so the asset picker can round-trip. */
   imageAssetId?: string;
@@ -1615,12 +1629,16 @@ export function normalizeBackgroundSettings(value: unknown): BackgroundSettings 
   }
 
   const background = value as Record<string, unknown>;
+  const gradientLayers = normalizeBuilderGradientLayers(background.gradientLayers);
 
   return {
     mode: normalizeBackgroundMode(background.mode),
     color: normalizeBuilderHexColor(safeText(background.color, 40), "#ffffff"),
     color2: normalizeBuilderHexColor(safeText(background.color2, 40), "#eaf4ff"),
     gradientAngle: builderGradientAngle(background),
+    // Only written when there is a layer, so a normalized background that has
+    // none carries no new key at all — not even an empty list.
+    ...(gradientLayers.length ? { gradientLayers } : {}),
     imageUrl: normalizeBuilderAssetUrl(background.imageUrl),
     imageAssetId: safeText(background.imageAssetId, 120),
     styleKey: normalizeBackgroundStyleKey(background.styleKey),
@@ -2263,6 +2281,10 @@ export function getBuilderBackgroundStyle(background: BackgroundSettings | undef
   }
 
   if (background.mode === "gradient") {
+    const layered = builderGradientLayersCss(background.gradientLayers, opacity);
+    if (layered) {
+      return { backgroundImage: layered };
+    }
     const color = applyBuilderColorOpacity(background.color, opacity);
     const color2 = applyBuilderColorOpacity(background.color2, opacity);
     return {

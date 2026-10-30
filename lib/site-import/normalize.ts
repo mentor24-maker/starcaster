@@ -135,8 +135,10 @@ const TEXT_ATOMS = new Set([
   "p", "blockquote", "pre", "dt", "dd", "figcaption", "address",
 ]);
 
-/** Tag/role classification per the methodology table. null = container. */
-function classifyTag(node: DomNode): ElementClass | null {
+/** Tag/role classification per the methodology table. null = container.
+ *  `facts` is read by one rule only — a link painted as a button — so a
+ *  caller without captured styles classifies exactly as before. */
+function classifyTag(node: DomNode, facts?: CaptureFacts): ElementClass | null {
   const name = (node.name || "").toLowerCase();
   const attribs = node.attribs || {};
   if (/^h[1-6]$/.test(name)) return "heading";
@@ -158,9 +160,64 @@ function classifyTag(node: DomNode): ElementClass | null {
     // picture, not a text link. As "link" it was poured into a text module
     // as an <a> wrapping an <img>, which renders empty — daneofearth.org's
     // four project tiles and most WordPress sites' logos (task 86bcebrwp).
-    return isSoleImageLink(node) ? "image" : "link";
+    if (isSoleImageLink(node)) return "image";
+    return isButtonShapedLink(node, facts) ? "button" : "link";
   }
   return null;
+}
+
+/** Inline tags that carry running text; a sibling one with words in it means
+ *  the link sits inside a sentence. */
+const INLINE_TEXT_TAGS = new Set([
+  "strong", "em", "b", "i", "u", "code", "mark", "small", "abbr", "cite", "q", "sub", "sup",
+]);
+/** Wrappers a link may sit in and still be on its own, climbed through. */
+const INLINE_WRAPPERS = new Set(["span", "font", "strong", "em", "b", "i", "u", "small", "label"]);
+
+/** True when no words share the anchor's line: no non-blank text node and no
+ *  inline text tag with words beside it, at its own level or in any inline
+ *  wrapper it sits in. */
+function standsOnItsOwn(anchor: DomNode): boolean {
+  let cur: DomNode = anchor;
+  for (;;) {
+    const parent = cur.parent;
+    if (!parent || parent.type !== "tag") return true;
+    for (const sib of parent.children || []) {
+      if (sib === cur) continue;
+      if (sib.type === "text") {
+        if ((sib.data || "").trim()) return false;
+        continue;
+      }
+      if (sib.type === "tag" && INLINE_TEXT_TAGS.has((sib.name || "").toLowerCase()) &&
+          collapseWhitespace(getText(sib))) return false;
+    }
+    if (!INLINE_WRAPPERS.has((parent.name || "").toLowerCase())) return true;
+    cur = parent;
+  }
+}
+
+/**
+ * A link the site styles as a button (task 86bcuvh9d): a button-ish class
+ * (the same BUTTON_HINT the theme's button evidence uses), a painted fill or
+ * a border on all four sides, and no running text beside it. Alphire's six
+ * `<a class="alphire-button">` calls to action used to classify as "link" and
+ * were poured into text modules, so the page had no Button for any of them
+ * while the theme had already learned their look from those same anchors.
+ * Needs the captured styles: with raw HTML alone nothing qualifies.
+ */
+function isButtonShapedLink(anchor: DomNode, facts: CaptureFacts | undefined): boolean {
+  const attribs = anchor.attribs || {};
+  if (!BUTTON_HINT.test(`${attribs.class || ""} ${attribs.id || ""}`)) return false;
+  const key = attribs["data-scim"];
+  const st = key ? facts?.styles?.[key] : undefined;
+  if (!st) return false;
+  const fill = !isClearColor(st["background-color"]) || /gradient\(/i.test(st["background-image"] || "");
+  const fullBorder = ["top", "right", "bottom", "left"].every((side) =>
+    parseFloat(st[`border-${side}-width`] || "0") > 0 &&
+    !/^(none|hidden)$/i.test(st[`border-${side}-style`] || "solid") &&
+    !isClearColor(st[`border-${side}-color`] || "currentcolor"));
+  if (!fill && !fullBorder) return false;
+  return standsOnItsOwn(anchor);
 }
 
 /**
@@ -317,7 +374,7 @@ function walkCountables(
     if (SKIP_TAGS.has(name) || child.type === "script" || child.type === "style") {
       continue;
     }
-    const cls = classifyTag(child);
+    const cls = classifyTag(child, facts);
     if (cls) {
       visit({
         kind: "element",

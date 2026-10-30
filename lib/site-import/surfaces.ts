@@ -23,6 +23,14 @@
 
 import type { CapturedStyles, ElementIR } from "./ir";
 import { toHex } from "./theme";
+import { hexOf, isGlow, parseShadows, rgba } from "./fidelity";
+import {
+  BUILDER_GRADIENT_LAYER_LIMIT,
+  BUILDER_GRADIENT_STOP_LIMIT,
+  normalizeBuilderGradientLayers,
+  normalizeRadialSize,
+} from "../builder-client/builder-gradient-layers";
+import type { BuilderGradientLayer, BuilderGradientStop } from "../builder-client/builder-gradient-layers";
 
 export type MappedBackground = {
   mode: "none" | "color" | "gradient" | "image";
@@ -30,6 +38,9 @@ export type MappedBackground = {
   color2: string;
   /** Mode "gradient" only — CSS degrees, which Builder paints the same way. */
   gradientAngle?: number;
+  /** Mode "gradient" only, and only when two colours cannot say it: stacked,
+   *  radial, see-through or many-stop gradients (task 86bctde1m). */
+  gradientLayers?: BuilderGradientLayer[];
   imageUrl: string;
   styleKey: "";
 };
@@ -109,6 +120,60 @@ export function shadowPreset(value: string | undefined): string {
   return "heavy";
 }
 
+/** A coloured glow: the colour, how far it reaches (px) and how strong it is
+ *  (the colour's opacity, 1–100). */
+export type GlowLook = { color: string; size: number; strength: number };
+
+/**
+ * A computed box-shadow → the glow it draws, or null (task 86bctde3a).
+ * A glow is a tinted shadow with no offset (fidelity.ts isGlow); a grey or
+ * offset shadow is a drop shadow and stays with shadowPreset. Inner glows are
+ * skipped — nothing in Builder draws one yet. Of several glows, the one that
+ * reaches furthest wins: Alphire's buttons wear a 22px outer glow over a
+ * faint 18px inner one, and the outer is the haze a visitor sees.
+ */
+export function readGlow(value: string | undefined): GlowLook | null {
+  let best: GlowLook | null = null;
+  for (const s of parseShadows(value)) {
+    if (s.inset || !isGlow(s)) continue;
+    const c = rgba(s.color);
+    const color = hexOf(s.color);
+    if (!c || !color) continue;
+    const look = { color, size: Math.round(s.blur), strength: clamp(c[3] * 100, 1, 100) };
+    if (!best || look.size > best.size) best = look;
+  }
+  return best;
+}
+
+/** A glow → the Button's Glow settings (lib/builder-client/builder-button-glow.ts). */
+export function buttonGlowSettings(st: CapturedStyles | undefined): Record<string, string> {
+  const glow = readGlow(st?.["box-shadow"]);
+  if (!glow) return {};
+  return {
+    buttonGlow: "true",
+    buttonGlowColor: glow.color,
+    buttonGlowSize: String(clamp(glow.size, 1, 80)),
+    buttonGlowStrength: String(glow.strength),
+  };
+}
+
+/** A glow → a picture's own coloured shadow, centred (the image module's
+ *  imageShadow* keys, builder-carousel-image-frame.ts), which already draws
+ *  any colour at any opacity — a picture needed no new setting. */
+export function imageGlowSettings(st: CapturedStyles | undefined): Record<string, string> {
+  const glow = readGlow(st?.["box-shadow"]);
+  if (!glow) return {};
+  return {
+    imageShadow: "true",
+    imageShadowColor: glow.color,
+    imageShadowX: "0",
+    imageShadowY: "0",
+    imageShadowBlur: String(clamp(glow.size, 0, 80)),
+    imageShadowSpread: "0",
+    imageShadowOpacity: String(glow.strength),
+  };
+}
+
 function firstUrl(value: string | undefined): string {
   const m = /url\(\s*['"]?([^'")]+)['"]?\s*\)/i.exec(String(value || ""));
   return m ? m[1] : "";
@@ -167,6 +232,207 @@ export function readGradient(
   return { color, color2, gradientAngle: angle };
 }
 
+/** Split on the commas at the TOP level only — never inside rgba(...) or a layer. */
+function splitTopLevel(value: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value[i];
+    if (c === "(") depth += 1;
+    else if (c === ")") depth = Math.max(0, depth - 1);
+    else if (c === "," && depth === 0) {
+      parts.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+const COLOR_TOKEN = /^((?:rgba?|hsla?)\([^)]*\)|#[0-9a-f]{3,8}\b|transparent\b|[a-z]+\b)/i;
+
+/** A captured colour → #rrggbb plus its alpha (0–100), or null if it is not one. */
+function readColorAlpha(token: string): { color: string; alpha: number } | null {
+  const v = token.trim().toLowerCase();
+  if (v === "transparent") return { color: "#000000", alpha: 0 };
+  const hex8 = /^#([0-9a-f]{6})([0-9a-f]{2})$/.exec(v);
+  if (hex8) return { color: `#${hex8[1]}`, alpha: Math.round((parseInt(hex8[2], 16) / 255) * 100) };
+  const m = v.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+%?))?\s*\)$/);
+  if (m) {
+    const a = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+    const color = `#${[m[1], m[2], m[3]]
+      .map((c) => Math.max(0, Math.min(255, Math.round(parseFloat(c)))).toString(16).padStart(2, "0"))
+      .join("")}`;
+    return { color, alpha: Math.round(Math.max(0, Math.min(1, a)) * 10000) / 100 };
+  }
+  const color = toHex(v);
+  return color ? { color, alpha: 100 } : null;
+}
+
+/**
+ * The stops of one layer. A stop with no position, or one given in px (which
+ * cannot be turned into a percentage without the box's size), is placed the
+ * way CSS places a missing one: first at 0, last at 100, the rest evenly
+ * between their positioned neighbours.
+ */
+function readStops(parts: string[]): BuilderGradientStop[] | null {
+  const raw: Array<{ color: string; alpha: number; position: number | null }> = [];
+  for (const part of parts) {
+    const token = (part.match(COLOR_TOKEN) || [""])[0];
+    const color = token ? readColorAlpha(token) : null;
+    if (!color) return null;
+    const rest = part.slice(token.length).trim().split(/\s+/).filter(Boolean);
+    // "red 10% 30%" is two stops of one colour.
+    const positions = rest.map((p) => (/^-?[\d.]+%$/.test(p) ? parseFloat(p) : /^0(px)?$/.test(p) ? 0 : null));
+    if (!positions.length) raw.push({ ...color, position: null });
+    for (const position of positions.slice(0, 2)) raw.push({ ...color, position });
+  }
+  if (raw.length < 2) return null;
+  if (raw[0].position === null) raw[0].position = 0;
+  if (raw[raw.length - 1].position === null) raw[raw.length - 1].position = 100;
+  for (let i = 1; i < raw.length - 1; i += 1) {
+    if (raw[i].position !== null) continue;
+    let j = i;
+    while (raw[j].position === null) j += 1;
+    const from = raw[i - 1].position as number;
+    const to = raw[j].position as number;
+    for (let k = i; k < j; k += 1) raw[k].position = from + ((to - from) * (k - i + 1)) / (j - i + 1);
+  }
+  return raw.slice(0, BUILDER_GRADIENT_STOP_LIMIT).map((stop) => ({
+    color: stop.color,
+    alpha: stop.alpha,
+    position: Math.round(Math.max(0, Math.min(100, stop.position as number)) * 100) / 100,
+  }));
+}
+
+const POSITION_WORDS: Record<string, number> = { left: 0, top: 0, center: 50, right: 100, bottom: 100 };
+
+/** "80% 20%", "right top", "center" → percentages; anything else centres. */
+function readPosition(text: string): { x: number; y: number } {
+  const words = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const one = (word: string | undefined): number | null => {
+    if (word === undefined) return 50;
+    if (/^-?[\d.]+%$/.test(word)) return Math.max(0, Math.min(100, parseFloat(word)));
+    return word in POSITION_WORDS ? POSITION_WORDS[word] : null;
+  };
+  if (words.length === 1 && (words[0] === "top" || words[0] === "bottom")) {
+    return { x: 50, y: POSITION_WORDS[words[0]] };
+  }
+  // Keywords may come y-first ("top right"); percentages never do.
+  if (words.length === 2 && (words[0] === "top" || words[0] === "bottom" || words[1] === "left" || words[1] === "right")) {
+    words.reverse();
+  }
+  const x = one(words[0]);
+  const y = one(words[1]);
+  return { x: x ?? 50, y: y ?? 50 };
+}
+
+function readLayer(value: string): BuilderGradientLayer | null {
+  const m = /^(repeating-)?(linear|radial)-gradient\((.*)\)$/i.exec(value.trim());
+  // A repeating gradient tiles; painting it once would be a different picture.
+  if (!m || m[1]) return null;
+  const parts = m[3].split(/,(?![^(]*\))/).map((p) => p.trim());
+  const kind = m[2].toLowerCase() === "radial" ? "radial" : "linear";
+  const layer: BuilderGradientLayer = { kind, angle: 180, shape: "ellipse", size: "", x: 50, y: 50, stops: [] };
+  const first = parts[0] || "";
+  const leadsWithColor = Boolean(readColorAlpha((first.match(COLOR_TOKEN) || [""])[0]));
+  if (kind === "linear" && !leadsWithColor) {
+    const deg = /^(-?[\d.]+)deg$/i.exec(first);
+    const turn = /^(-?[\d.]+)turn$/i.exec(first);
+    if (deg) layer.angle = ((Math.round(parseFloat(deg[1])) % 360) + 360) % 360;
+    else if (turn) layer.angle = ((Math.round(parseFloat(turn[1]) * 360) % 360) + 360) % 360;
+    else if (/^to\s/i.test(first)) {
+      const side = GRADIENT_SIDES[first.toLowerCase().replace(/\s+/g, " ")];
+      if (side === undefined) return null;
+      layer.angle = side;
+    } else return null;
+    parts.shift();
+  } else if (kind === "radial" && !leadsWithColor) {
+    const [shapeSize, at = ""] = first.toLowerCase().split(/\s*\bat\b\s*/);
+    const words = shapeSize.split(/\s+/).filter(Boolean);
+    if (words.includes("circle")) layer.shape = "circle";
+    const sizeWords = words.filter((w) => w !== "circle" && w !== "ellipse");
+    layer.size = normalizeRadialSize(sizeWords.join(" "));
+    // A circle with no size given is still a circle; one with two lengths is not.
+    if (!words.includes("circle") && !words.includes("ellipse") && sizeWords.length === 1 && /px$/.test(sizeWords[0])) {
+      layer.shape = "circle";
+    }
+    Object.assign(layer, readPosition(at));
+    parts.shift();
+  }
+  const stops = readStops(parts);
+  if (!stops) return null;
+  layer.stops = stops;
+  return layer;
+}
+
+/**
+ * EVERY gradient layer of a computed `background-image`, top first — linear
+ * and radial, with their stops, positions and see-through colours. Layers the
+ * Builder cannot paint (repeating gradients, pictures) are left out and the
+ * rest kept; null when none is left.
+ *
+ * The BOTTOM layer paints over the box's own fill, so its see-through stops
+ * are flattened onto that fill the way readGradient does. The layers above
+ * keep their transparency — a glow that fades to nothing is the whole point
+ * of one.
+ */
+export function readGradientLayers(value: string | undefined, under: string): BuilderGradientLayer[] | null {
+  const text = String(value || "").trim();
+  if (!/gradient\(/i.test(text)) return null;
+  const layers = splitTopLevel(text)
+    .map(readLayer)
+    .filter((layer): layer is BuilderGradientLayer => layer !== null)
+    .slice(0, BUILDER_GRADIENT_LAYER_LIMIT);
+  if (!layers.length) return null;
+  const bottom = layers[layers.length - 1];
+  bottom.stops = bottom.stops.map((stop) => {
+    if (stop.alpha >= 100) return stop;
+    const n = parseInt(stop.color.slice(1), 16);
+    const flat = solidOver(`rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${stop.alpha / 100})`, under);
+    return { ...stop, color: flat, alpha: 100 };
+  });
+  const clean = normalizeBuilderGradientLayers(layers);
+  return clean.length ? clean : null;
+}
+
+/** True when two colours and an angle paint exactly what these layers do. */
+function twoColoursSayIt(layers: BuilderGradientLayer[]): boolean {
+  if (layers.length !== 1) return false;
+  const [layer] = layers;
+  return (
+    layer.kind === "linear" &&
+    layer.stops.length === 2 &&
+    layer.stops[0].position === 0 &&
+    layer.stops[1].position === 100 &&
+    layer.stops.every((stop) => stop.alpha >= 100)
+  );
+}
+
+/**
+ * The Builder gradient a computed `background-image` becomes. A plain two-stop
+ * linear gradient comes out exactly as readGradient always gave it, so every
+ * import that already worked is unchanged; anything richer also carries its
+ * layers, with the two colours mirroring the bottom one for the surfaces that
+ * only know two.
+ */
+export function readGradientBackground(
+  value: string | undefined,
+  under: string
+): { color: string; color2: string; gradientAngle: number; gradientLayers?: BuilderGradientLayer[] } | null {
+  const simple = readGradient(value, under);
+  const layers = readGradientLayers(value, under);
+  if (!layers || twoColoursSayIt(layers)) return simple;
+  const bottom = layers[layers.length - 1];
+  return {
+    color: bottom.stops[0].color,
+    color2: bottom.stops[bottom.stops.length - 1].color,
+    gradientAngle: bottom.kind === "linear" ? bottom.angle : 180,
+    gradientLayers: layers,
+  };
+}
+
 export function readSurface(st: CapturedStyles | undefined, ctx: SurfaceContext): SurfaceLook {
   const look: SurfaceLook = { padding: {} };
   if (!st) return look;
@@ -174,7 +440,7 @@ export function readSurface(st: CapturedStyles | undefined, ctx: SurfaceContext)
   const fill = toHex(st["background-color"]);
   const color = fill && fill !== ctx.surface ? fill : "";
   const imageUrl = firstUrl(st["background-image"]) ? ctx.resolveImage(firstUrl(st["background-image"])) : "";
-  const gradient = imageUrl ? null : readGradient(st["background-image"], fill || "#ffffff");
+  const gradient = imageUrl ? null : readGradientBackground(st["background-image"], fill || "#ffffff");
   if (imageUrl) {
     look.background = { mode: "image", color: fill, color2: "", imageUrl, styleKey: "" };
   } else if (gradient) {

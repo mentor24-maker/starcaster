@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-notes-panel';
 import { SubstackDecisionDialog, reasonTally, type Decision } from './substack-decision-dialog';
 import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './substack-suggestion-dialog';
+import { matchPostKeywords } from './match-post-keywords';
 
 /**
  * Acquire › Substack Miner — where Dane sees every Substack writer Starcaster
@@ -68,12 +69,29 @@ export type Candidate = {
   /** Substack Miner 6/7: a Note a Notes search found them by carries keyword + foundBy. */
   recentNotes?: { url: string; text: string; postedAt: string; keyword?: string; foundBy?: string }[];
   lastNotesReadAt?: string | null;
+  /** Substack Miner upgrade 1/4: the newest posts as last read (newest first, at most 8), when, and the pictures. */
+  recentPosts?: RecentPost[];
+  postsReadAt?: string | null;
+  photoUrl?: string;
+  logoUrl?: string;
   createdAt: string;
   updatedAt: string;
 };
 
+export type RecentPost = {
+  title: string;
+  url: string;
+  postedAt: string;
+  subtitle: string;
+  excerpt: string;
+  coverImage: string;
+  paid: boolean;
+};
+
 export type MinerSettings = {
   keywords: string[];
+  /** Substack Miner upgrade 2/4: keywords not searched for, only looked for in posts. Absent until 2/4 is live. */
+  widerKeywords?: string[];
   maxResultsPerKeyword: number | null;
   pauseMsBetweenFetches: number | null;
   saved: boolean;
@@ -410,9 +428,104 @@ export function snowballSummaryText(s: Record<string, any> | null | undefined): 
   return out;
 }
 
+/** What "Read writers' posts" did (lib/acquire/SubstackPostsReadRun.js). */
+export function postsReadSummaryText(s: Record<string, any> | null | undefined): string[] {
+  if (!s) return [];
+  const writers = Number(s.writers) || 0;
+  const read = (s.read || []) as Array<{ name: string; posts: number }>;
+  const failed = (s.failed || []) as Array<{ name: string; reason: string }>;
+  if (!Number(s.due)) {
+    return [writers
+      ? `Nothing to read: every writer was read in the last 7 days (${plural(writers, 'writer')}).`
+      : 'Nothing to read: there are no writers yet, other than rejected ones.'];
+  }
+  const noPosts = read.filter((r) => !r.posts).length;
+  const out = [
+    `Read posts for ${plural(read.length, 'writer')}`
+    + (failed.length ? `; ${failed.length} could not be read` : '')
+    + (noPosts ? `; ${noPosts} ${noPosts === 1 ? 'has' : 'have'} no posts yet` : '')
+    + '.'
+    + (Number(s.recent) ? ` ${plural(Number(s.recent), 'other writer')} ${Number(s.recent) === 1 ? 'was' : 'were'} read in the last 7 days and skipped.` : ''),
+  ];
+  for (const f of failed) out.push(`${f.name}: not read — ${f.reason}.`);
+  const left = Number(s.notReached) || 0;
+  if (left) out.push(`${plural(left, 'writer')} not reached — the run ran out of time. Click Read writers' posts again for the rest.`);
+  return out;
+}
+
+/** How many posts the Latest posts column shows (upgrade 3/4). */
+export const LATEST_POSTS_SHOWN = 3;
+
+/** The newest posts, newest first, whatever order they were stored in. */
+export function latestPosts(c: Candidate, count = LATEST_POSTS_SHOWN): RecentPost[] {
+  return [...(c.recentPosts || [])]
+    .sort((a, b) => (Date.parse(b.postedAt || '') || 0) - (Date.parse(a.postedAt || '') || 0))
+    .slice(0, count);
+}
+
+/** "Oct 21, 2026 · 8 days ago" — the full date always, so a list of them lines up. */
+export function postDateText(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso || '');
+  if (Number.isNaN(date.getTime())) return '';
+  const full = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(date)) / 86400000);
+  let ago: string;
+  if (days <= 0) ago = 'today';
+  else if (days === 1) ago = 'yesterday';
+  else if (days < 60) ago = `${days} days ago`;
+  else if (days < 730) ago = `${Math.round(days / 30.44)} months ago`;
+  else ago = `${Math.floor(days / 365.25)} years ago`;
+  return `${full} · ${ago}`;
+}
+
+/**
+ * The "Also mentions" keywords: the search list plus the wider list (2/4),
+ * found in the newest posts, minus what the Keywords column already says.
+ * Without a wider list it is the search list alone.
+ */
+export function alsoMentions(c: Candidate, settings: Pick<MinerSettings, 'keywords' | 'widerKeywords'> | null): string[] {
+  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || [])];
+  return matchPostKeywords(latestPosts(c), keywords, c.keywordsHit);
+}
+
+function LatestPosts({ c }: { c: Candidate }): React.ReactElement {
+  if (!c.postsReadAt) return <span className="substack-miner-muted" title="Run tab, Read writers' posts">Posts not read yet</span>;
+  const posts = latestPosts(c);
+  if (!posts.length) return <span className="substack-miner-muted" title={`Posts read on ${c.postsReadAt}`}>No posts</span>;
+  return (
+    <div className="substack-miner-posts">
+      <span className="substack-miner-post-date" title={posts[0].postedAt}>{postDateText(posts[0].postedAt) || 'Date unknown'}</span>
+      <ul>
+        {posts.map((p) => (
+          <li key={p.url || p.title}>
+            <a className="substack-miner-link substack-miner-post-title" href={p.url} target="_blank" rel="noopener noreferrer" title={p.title}>
+              {p.title || p.url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AlsoMentions({ c, settings }: { c: Candidate; settings: MinerSettings | null }): React.ReactElement {
+  // The Latest posts cell beside this one already says why there is nothing.
+  if (!c.postsReadAt) return <span className="substack-miner-muted" title="Posts not read yet">—</span>;
+  if (!latestPosts(c).length) return <span className="substack-miner-muted" title="No posts to read keywords from">—</span>;
+  const words = alsoMentions(c, settings);
+  if (!words.length) return <span className="substack-miner-muted">None beyond its keywords</span>;
+  return (
+    <span className="substack-miner-chips">
+      {words.map((k) => <span key={k} className="substack-miner-chip">{k}</span>)}
+    </span>
+  );
+}
+
 // ── One row ────────────────────────────────────────────────────────────────
 
-function RecommendedBy({ handles }: { handles: string[] }): React.ReactElement {
+/** Left the list in upgrade 3/4; kept for the details page (4/4). */
+export function RecommendedBy({ handles }: { handles: string[] }): React.ReactElement {
   if (!handles.length) return <span>0</span>;
   return (
     <details className="substack-miner-recommended">
@@ -463,6 +576,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [searchLines, setSearchLines] = useState<string[]>([]);
   const [snowballBusy, setSnowballBusy] = useState(false);
   const [snowballLines, setSnowballLines] = useState<string[]>([]);
+  const [postsBusy, setPostsBusy] = useState(false);
+  const [postsLines, setPostsLines] = useState<string[]>([]);
   const [seedText, setSeedText] = useState('');
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedLines, setSeedLines] = useState<string[]>([]);
@@ -562,6 +677,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setKeywordsMessage('');
       setSearchLines([]);
       setSnowballLines([]);
+      setPostsLines([]);
       // A half-pasted seed list belongs to the old project; Add must not file it here.
       setSeedText('');
       setSeedLines([]);
@@ -854,8 +970,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Writer</th>
                     <th scope="col">Subscribers</th>
                     <th scope="col">Keywords</th>
-                    <th scope="col">Recommended by</th>
-                    <th scope="col">Found via</th>
+                    <th scope="col">Latest posts</th>
+                    <th scope="col">Also mentions</th>
                     <th scope="col">Last seen</th>
                     <th scope="col">Notes read</th>
                     <th scope="col">Suggested</th>
@@ -884,9 +1000,9 @@ export default function SubstackMinerPanel(): React.ReactElement {
                             </span>
                           ) : '—'}
                         </td>
-                        <td><RecommendedBy handles={c.recommendedBy || []} /></td>
-                        <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
-                        <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
+                        <td className="substack-miner-posts-cell"><LatestPosts c={c} /></td>
+                        <td><AlsoMentions c={c} settings={settings} /></td>
+                        <td className="substack-miner-date-cell" title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
                         <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
                         <td className="substack-miner-suggested-cell">
                           {c.status === 'candidate' && c.suggestion ? (
@@ -1035,6 +1151,25 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </button>
             </div>
             <RunResult lines={suggestLines} label="What suggesting did" />
+          </section>
+
+          <section className="substack-miner-card" aria-label="Read writers' posts">
+            <h3 className="substack-miner-card-title">Read writers' posts</h3>
+            <p className="substack-miner-card-note">
+              Keeps each writer's newest posts, their photo and their publication's logo, for every writer you have not rejected.
+              A writer read in the last 7 days is skipped. It reads Substack gently, so it can take a few minutes; it also runs by itself once a day.
+            </p>
+            <div className="substack-miner-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={postsBusy}
+                onClick={() => void runPass(`${BASE}/read-posts`, setPostsBusy, setPostsLines, postsReadSummaryText, "Reading writers' posts")}
+              >
+                {postsBusy ? 'Reading…' : "Read writers' posts"}
+              </button>
+            </div>
+            <RunResult lines={postsLines} label="What reading posts did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read recommendations">
