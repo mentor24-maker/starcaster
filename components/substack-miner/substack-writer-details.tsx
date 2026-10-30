@@ -124,7 +124,7 @@ export function allPosts(c: Candidate) {
 
 /** "Also mentions" across ALL stored posts, minus the keywords that found them. */
 export function alsoMentionsAll(c: Candidate, settings: Pick<MinerSettings, 'keywords' | 'widerKeywords'> | null): string[] {
-  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || [])];
+  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || []).map((k) => k.keyword)];
   return matchPostKeywords(allPosts(c), keywords, c.keywordsHit);
 }
 

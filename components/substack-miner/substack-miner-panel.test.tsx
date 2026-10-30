@@ -17,11 +17,15 @@ import SubstackMinerPanel, {
   statsNotes,
   subscriberSummaryText,
   visibleCandidates,
+  keywordsGrowSummaryText,
+  widerEmptyText,
+  widerSourceText,
   alsoMentions,
   latestPosts,
   postDateText,
   type Candidate,
   type RecentPost,
+  type WiderKeyword,
 } from "./substack-miner-panel";
 import { PROJECT_SWITCH_EVENT } from "../substack-notes/substack-notes-panel";
 import { reasonTally } from "./substack-decision-dialog";
@@ -65,7 +69,18 @@ function writer(overrides: Partial<Candidate>): Candidate {
 }
 
 type FakeContact = { id: string; substack: string; firstName: string; email?: string; subscribedAt?: string };
-type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean; postsReads?: number; wider?: string[] };
+type Store = { writers: Candidate[]; keywords: string[]; saved: boolean; contacts: FakeContact[]; statsFail?: boolean; postsReads?: number; wider?: WiderKeyword[]; removed?: string[] };
+
+/** The settings as the server answers them: a wider keyword already searched for or removed is left out. */
+function settingsOf(store: Store, updatedAt = "") {
+  const searched = new Set(store.keywords.map((k) => k.toLowerCase()));
+  const removed = new Set((store.removed || []).map((k) => k.toLowerCase()));
+  return {
+    keywords: [...store.keywords], maxResultsPerKeyword: 20, pauseMsBetweenFetches: 1500, saved: store.saved, updatedAt,
+    widerKeywords: (store.wider || []).filter((w) => !searched.has(w.keyword.toLowerCase()) && !removed.has(w.keyword.toLowerCase())).map((w) => ({ ...w })),
+    removedKeywords: [...(store.removed || [])],
+  };
+}
 let stores: Record<string, Store> = {};
 let activeProject = "proj_doe";
 let requests: { method: string; path: string; body: any; project: string }[] = [];
@@ -88,13 +103,27 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     return { ok: true, data: store.writers.map((w) => ({ ...w })) };
   }
   if (path === "/api/acquire/substack-miner/settings" && method === "GET") {
-    const wider = store.wider ? { widerKeywords: [...store.wider] } : {};
-    return { ok: true, data: { keywords: [...store.keywords], ...wider, maxResultsPerKeyword: 20, pauseMsBetweenFetches: 1500, saved: store.saved, updatedAt: "" } };
+    return { ok: true, data: settingsOf(store) };
   }
   if (path === "/api/acquire/substack-miner/settings" && method === "PUT") {
     store.keywords = body.keywords;
     store.saved = true;
-    return { ok: true, data: { keywords: [...store.keywords], maxResultsPerKeyword: 20, pauseMsBetweenFetches: 1500, saved: true, updatedAt: "x" } };
+    return { ok: true, data: settingsOf(store, "x") };
+  }
+  if (path === "/api/acquire/substack-miner/keywords/grow" && method === "POST") {
+    const learned: WiderKeyword[] = [
+      { keyword: "metamodernism", sources: [{ kind: "post", handle: "a" }, { kind: "post", handle: "b" }, { kind: "post", handle: "a" }], firstSeenAt: "x" },
+      { keyword: "polymath", sources: [{ kind: "reason", handle: "a" }], firstSeenAt: "x" },
+    ];
+    const removed = new Set((store.removed || []).map((k) => k.toLowerCase()));
+    const added = learned.filter((l) => !removed.has(l.keyword) && !(store.wider || []).some((w) => w.keyword === l.keyword));
+    store.wider = [...(store.wider || []), ...added];
+    return { ok: true, data: { approved: 2, added: added.map((a) => a.keyword), grew: 0, alreadySearched: 0, removedBefore: learned.length - added.length - 0, overCap: 0, topicsSkipped: "the AI did not answer: credit balance too low" } };
+  }
+  if (path === "/api/acquire/substack-miner/keywords/remove" && method === "POST") {
+    store.removed = [...(store.removed || []), body.keyword];
+    store.wider = (store.wider || []).filter((w) => w.keyword !== body.keyword);
+    return { ok: true, data: settingsOf(store, "x") };
   }
   if (path === "/api/acquire/substack-miner/candidates/import" && method === "POST") {
     const result = { added: 0, merged: 0, refused: 0, refusals: [] as any[] };
@@ -334,7 +363,7 @@ describe("Latest posts and Also mentions (upgrade 3/4, 86bcuxwn5)", () => {
 
   it("matches the wider list too when it exists, and the search list alone when it does not", async () => {
     stores.proj_doe.keywords = ["coaching"];
-    stores.proj_doe.wider = ["polymaths"];
+    stores.proj_doe.wider = [{ keyword: "polymaths", sources: [{ kind: "post", handle: "ada" }], firstSeenAt: "2026-10-22T00:00:00Z" }];
     stores.proj_doe.writers.push(writer({ handle: "ada", recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
     await mount();
     expect([...rowFor("ada")!.querySelectorAll("td:nth-child(5) .substack-miner-chip")].map((c) => c.textContent)).toEqual(["coaching", "polymaths"]);
@@ -990,5 +1019,65 @@ describe("One writer's page (upgrade 4/4, 86bcuxwq2)", () => {
     expect(details()).toBeNull();
     expect(window.location.hash).toBe("#page=acquireSubstackPage");
     expect(rowFor("delrayonly")).not.toBeNull();
+  });
+});
+
+describe("Substack Miner upgrade 2/4: the wider keyword list (86bcuxwkr)", () => {
+  const wider = () => [...container!.querySelectorAll<HTMLLIElement>(".substack-miner-wider-item")].map((li) => li.dataset.keyword);
+
+  it("Grow keywords now fills the card with where each came from; Add to search moves one into the search list and it survives a reload", async () => {
+    stores.proj_doe.keywords = ["notes"];
+    stores.proj_doe.saved = true;
+    stores.proj_doe.writers = [writer({ handle: "a", status: "approved", postsReadAt: "2026-10-29T00:00:00Z" })];
+    await mount();
+    await click(button("Run"));
+    await click(button("Grow keywords now"));
+    expect(wider()).toEqual(["metamodernism", "polymath"]);
+    expect(text()).toContain("from 2 approved writers' posts");
+    expect(text()).toContain("from your reasons");
+    expect(text()).toContain("Topics from posts and notes were skipped: the AI did not answer: credit balance too low. Keywords from your reasons were still added.");
+
+    const item = container!.querySelector<HTMLLIElement>('[data-keyword="metamodernism"]')!;
+    await click(button("Add to search", item));
+    const put = requests.filter((r) => r.method === "PUT" && r.path.endsWith("/settings")).pop();
+    expect(put?.body).toEqual({ keywords: ["notes", "metamodernism"] });
+    expect(wider()).toEqual(["polymath"]);
+    expect(el<HTMLTextAreaElement>("#sm-keywords").value).toBe("notes\nmetamodernism");
+
+    await reload();
+    await click(button("Run"));
+    expect(el<HTMLTextAreaElement>("#sm-keywords").value).toBe("notes\nmetamodernism");
+    expect(wider()).toEqual(["polymath"]);
+  });
+
+  it("Remove drops a keyword, and growing again does not bring it back", async () => {
+    stores.proj_doe.writers = [writer({ handle: "a", status: "approved", postsReadAt: "2026-10-29T00:00:00Z" })];
+    await mount();
+    await click(button("Run"));
+    await click(button("Grow keywords now"));
+    await click(button("Remove", container!.querySelector<HTMLLIElement>('[data-keyword="polymath"]')!));
+    expect(wider()).toEqual(["metamodernism"]);
+    expect(text()).toContain('Removed "polymath". It will not be learned again.');
+    await click(button("Grow keywords now"));
+    expect(wider()).toEqual(["metamodernism"]);
+  });
+
+  it("the empty card names the cause", async () => {
+    await mount();
+    await click(button("Run"));
+    expect(text()).toContain("No wider keywords yet — they are learned from approved writers, and you have 0 approved.");
+    expect(widerEmptyText([writer({ status: "approved" }), writer({ status: "approved" }), writer({ status: "candidate" })]))
+      .toContain("the posts of your 2 approved writers have not been read yet");
+    expect(widerEmptyText([writer({ status: "approved", postsReadAt: "x" })])).toContain("click Grow keywords now");
+  });
+
+  it("widerSourceText counts each writer once per kind; keywordsGrowSummaryText names a skipped AI call", () => {
+    expect(widerSourceText({ keyword: "k", firstSeenAt: "", sources: [{ kind: "post", handle: "a" }, { kind: "post", handle: "a" }, { kind: "note", handle: "b" }] }))
+      .toBe("from 1 approved writer's posts, from why you approved one writer");
+    expect(keywordsGrowSummaryText({ approved: 0 })).toEqual(["Nothing learned: there are no approved writers yet. Approve some writers first."]);
+    expect(keywordsGrowSummaryText({ approved: 3, added: ["x"], grew: 2, alreadySearched: 1, removedBefore: 1, overCap: 4 })).toEqual([
+      "Learned from 3 approved writers: 1 new keyword; 2 keywords already listed found again; 1 already in your search list; 1 you removed before, left out.",
+      "4 keywords not added — the wider list is full (300). Remove some to make room.",
+    ]);
   });
 });

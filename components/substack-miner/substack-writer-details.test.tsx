@@ -74,7 +74,7 @@ function page(c: Candidate | null, extra: Record<string, unknown> = {}) {
       loading={false}
       loadError=""
       all={c ? [c] : []}
-      settings={{ keywords: ["tennis"], widerKeywords: ["chess"], maxResultsPerKeyword: null, pauseMsBetweenFetches: null, saved: true, updatedAt: "" }}
+      settings={{ keywords: ["tennis"], widerKeywords: [{ keyword: "chess", sources: [], firstSeenAt: "" }], maxResultsPerKeyword: null, pauseMsBetweenFetches: null, saved: true, updatedAt: "" }}
       busy={false}
       rowError=""
       rereadBusy={false}
@@ -180,6 +180,6 @@ describe("Also mentions looks in every stored post", () => {
       ],
     });
     expect(allPosts(c)).toHaveLength(4);
-    expect(alsoMentionsAll(c, { keywords: ["tennis"], widerKeywords: ["chess"] })).toEqual(["chess"]);
+    expect(alsoMentionsAll(c, { keywords: ["tennis"], widerKeywords: [{ keyword: "chess", sources: [], firstSeenAt: "" }] })).toEqual(["chess"]);
   });
 });

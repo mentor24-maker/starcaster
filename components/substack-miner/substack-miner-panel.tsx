@@ -101,10 +101,18 @@ export type RecentPost = {
   paid: boolean;
 };
 
+/** Substack Miner upgrade 2/4: a keyword learned from approved writers, and where from. */
+export type WiderKeyword = {
+  keyword: string;
+  sources: Array<{ kind: 'post' | 'note' | 'reason'; handle: string }>;
+  firstSeenAt: string;
+};
+
 export type MinerSettings = {
   keywords: string[];
-  /** Substack Miner upgrade 2/4: keywords not searched for, only looked for in posts. Absent until 2/4 is live. */
-  widerKeywords?: string[];
+  /** Learned from approved writers (upgrade 2/4); never searched until Add to search. 3/4 reads this name. */
+  widerKeywords?: WiderKeyword[];
+  removedKeywords?: string[];
   maxResultsPerKeyword: number | null;
   pauseMsBetweenFetches: number | null;
   saved: boolean;
@@ -441,6 +449,54 @@ export function snowballSummaryText(s: Record<string, any> | null | undefined): 
   return out;
 }
 
+/**
+ * Where a wider keyword came from, in words: "from 3 approved writers' posts,
+ * from your reasons". Each kind counts its writers once.
+ */
+export function widerSourceText(k: WiderKeyword): string {
+  const writers = (kind: string) => new Set(k.sources.filter((s) => s.kind === kind).map((s) => s.handle)).size;
+  const parts: string[] = [];
+  const posts = writers('post');
+  const notes = writers('note');
+  if (posts) parts.push(`from ${plural(posts, "approved writer's posts", "approved writers' posts")}`);
+  if (notes) parts.push(notes === 1 ? 'from why you approved one writer' : `from why you approved ${notes} writers`);
+  if (writers('reason')) parts.push('from your reasons');
+  return parts.join(', ') || 'from approved writers';
+}
+
+/**
+ * Why the Wider keywords card is empty, naming the cause (CLAUDE.md landmine
+ * 17): no approved writers, or approved writers whose posts were never read.
+ */
+export function widerEmptyText(candidates: Candidate[] | null): string {
+  if (!candidates) return 'No wider keywords yet.';
+  const approved = candidates.filter((c) => c.status === 'approved');
+  if (!approved.length) return 'No wider keywords yet — they are learned from approved writers, and you have 0 approved.';
+  const unread = approved.filter((c) => !c.postsReadAt).length;
+  if (unread === approved.length) {
+    return `No wider keywords yet — they are learned from approved writers, and the posts of your ${plural(approved.length, 'approved writer')} have not been read yet. Click Read writers' posts below, or Grow keywords now to learn from your reasons alone.`;
+  }
+  return `No wider keywords yet — click Grow keywords now to learn them from your ${plural(approved.length, 'approved writer')}.`;
+}
+
+/** What "Grow keywords now" did (lib/acquire/SubstackKeywordsGrow.js). */
+export function keywordsGrowSummaryText(s: Record<string, any> | null | undefined): string[] {
+  if (!s) return [];
+  const approved = Number(s.approved) || 0;
+  if (!approved) return ['Nothing learned: there are no approved writers yet. Approve some writers first.'];
+  const added = (s.added || []) as string[];
+  const out = [
+    `Learned from ${plural(approved, 'approved writer')}: ${plural(added.length, 'new keyword')}`
+    + (Number(s.grew) ? `; ${plural(Number(s.grew), 'keyword')} already listed found again` : '')
+    + (Number(s.alreadySearched) ? `; ${Number(s.alreadySearched)} already in your search list` : '')
+    + (Number(s.removedBefore) ? `; ${Number(s.removedBefore)} you removed before, left out` : '')
+    + '.',
+  ];
+  if (s.topicsSkipped) out.push(`Topics from posts and notes were skipped: ${s.topicsSkipped}. Keywords from your reasons were still added.`);
+  if (Number(s.overCap)) out.push(`${plural(Number(s.overCap), 'keyword')} not added — the wider list is full (300). Remove some to make room.`);
+  return out;
+}
+
 /** What "Read writers' posts" did (lib/acquire/SubstackPostsReadRun.js). */
 export function postsReadSummaryText(s: Record<string, any> | null | undefined): string[] {
   if (!s) return [];
@@ -498,7 +554,7 @@ export function postDateText(iso: string, now: Date = new Date()): string {
  * Without a wider list it is the search list alone.
  */
 export function alsoMentions(c: Candidate, settings: Pick<MinerSettings, 'keywords' | 'widerKeywords'> | null): string[] {
-  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || [])];
+  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || []).map((k) => k.keyword)];
   return matchPostKeywords(latestPosts(c), keywords, c.keywordsHit);
 }
 
@@ -591,6 +647,10 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [snowballLines, setSnowballLines] = useState<string[]>([]);
   const [postsBusy, setPostsBusy] = useState(false);
   const [postsLines, setPostsLines] = useState<string[]>([]);
+  const [growBusy, setGrowBusy] = useState(false);
+  const [growLines, setGrowLines] = useState<string[]>([]);
+  const [widerBusy, setWiderBusy] = useState('');
+  const [widerMessage, setWiderMessage] = useState('');
   const [seedText, setSeedText] = useState('');
   const [seedBusy, setSeedBusy] = useState(false);
   const [seedLines, setSeedLines] = useState<string[]>([]);
@@ -766,6 +826,9 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setSearchLines([]);
       setSnowballLines([]);
       setPostsLines([]);
+      setGrowLines([]);
+      setWiderBusy('');
+      setWiderMessage('');
       // A half-pasted seed list belongs to the old project; Add must not file it here.
       setSeedText('');
       setSeedLines([]);
@@ -929,6 +992,54 @@ export default function SubstackMinerPanel(): React.ReactElement {
       setKeywordsMessage(`Not saved: ${errorText(err, 'unknown error')}`);
     } finally {
       if (epoch === projectEpoch.current) setKeywordsBusy(false);
+    }
+  };
+
+  /**
+   * Add to search: the search list plus this keyword, through the ordinary
+   * settings save, so its 200-keyword limit and duplicate check still apply.
+   * The keyword leaves the wider card because the server leaves out any wider
+   * keyword already searched for.
+   */
+  const addToSearch = async (keyword: string) => {
+    const api = getApi();
+    if (!api || !settings) return;
+    const epoch = projectEpoch.current;
+    setWiderBusy(keyword);
+    setWiderMessage('');
+    try {
+      const reply = await api(SETTINGS_PATH, { method: 'PUT', body: JSON.stringify({ keywords: [...(settings.keywords || []), keyword] }) });
+      if (epoch !== projectEpoch.current) return;
+      const next = reply?.data as MinerSettings;
+      setSettings(next);
+      setKeywordsText((next?.keywords || []).join('\n'));
+      setWiderMessage(`Added "${keyword}" to the search keywords.`);
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setWiderMessage(`"${keyword}" was not added: ${errorText(err, 'unknown error')}`);
+    } finally {
+      if (epoch === projectEpoch.current) setWiderBusy('');
+    }
+  };
+
+  /** Remove: gone from the wider list, and never learned again. */
+  const removeWider = async (keyword: string) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setWiderBusy(keyword);
+    setWiderMessage('');
+    try {
+      const reply = await api(`${BASE}/keywords/remove`, { method: 'POST', body: JSON.stringify({ keyword }) });
+      if (epoch !== projectEpoch.current) return;
+      const next = reply?.data as MinerSettings;
+      setSettings((current) => (current ? { ...current, widerKeywords: next?.widerKeywords || [], removedKeywords: next?.removedKeywords || [] } : next));
+      setWiderMessage(`Removed "${keyword}". It will not be learned again.`);
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setWiderMessage(`"${keyword}" was not removed: ${errorText(err, 'unknown error')}`);
+    } finally {
+      if (epoch === projectEpoch.current) setWiderBusy('');
     }
   };
 
@@ -1266,6 +1377,58 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </button>
             </div>
           </form>
+
+          <section className="substack-miner-card" aria-label="Wider keywords">
+            <h3 className="substack-miner-card-title">Wider keywords</h3>
+            <p className="substack-miner-card-note">
+              Learned from the writers you approved: what their posts are about, why you approved them, and the reasons you ticked.
+              They are used to tag and match writers. A keyword is searched for only when you click Add to search — each one searched costs a web search and can bring back up to 20 new writers.
+              {' '}It also runs by itself once a day, after the writers' posts are read.
+            </p>
+            {settings?.widerKeywords?.length ? (
+              <ul className="substack-miner-wider-list">
+                {settings.widerKeywords.map((k) => (
+                  <li key={k.keyword} className="substack-miner-wider-item" data-keyword={k.keyword}>
+                    <span className="substack-miner-wider-word">{k.keyword}</span>
+                    <span className="substack-miner-wider-source">{widerSourceText(k)}</span>
+                    <span className="substack-miner-wider-actions">
+                      <button
+                        type="button"
+                        className="btn tiny-btn"
+                        disabled={Boolean(widerBusy) || keywordsDirty}
+                        title={keywordsDirty ? 'Save the keywords above first' : undefined}
+                        onClick={() => void addToSearch(k.keyword)}
+                      >
+                        Add to search
+                      </button>
+                      <button
+                        type="button"
+                        className="btn tiny-btn"
+                        disabled={Boolean(widerBusy)}
+                        onClick={() => void removeWider(k.keyword)}
+                      >
+                        Remove
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="substack-miner-card-note" data-wider-empty="">{widerEmptyText(candidates)}</p>
+            )}
+            {widerMessage ? <p className="substack-miner-card-note" role="status">{widerMessage}</p> : null}
+            <div className="substack-miner-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={growBusy || !settings}
+                onClick={() => void runPass(`${BASE}/keywords/grow`, setGrowBusy, setGrowLines, keywordsGrowSummaryText, 'Growing keywords')}
+              >
+                {growBusy ? 'Growing…' : 'Grow keywords now'}
+              </button>
+            </div>
+            <RunResult lines={growLines} label="What growing keywords did" />
+          </section>
 
           <section className="substack-miner-card" aria-label="Search the web">
             <h3 className="substack-miner-card-title">Search the web</h3>

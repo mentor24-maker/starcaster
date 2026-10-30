@@ -44,6 +44,37 @@ function normalizeRichTextImagePath(value: string) {
 
 export type RichTextImageSrcMode = "editor" | "display" | "storage";
 
+/**
+ * Starcaster's own Vercel Blob store, and the one folder in it a text module
+ * may show pictures from: the durable copies Site Import makes of a client
+ * site's pictures (`SiteImportApplied/<projectId>/…`). An imported logo lockup
+ * — a logo beside the brand name — arrives as one text module holding the
+ * picture (task 86bcv0fhh), and without this it was stripped on render.
+ *
+ * Decision A1 (Dane, 2026-10-29): any project's text module may show any
+ * project's IMPORTED pictures. They are public addresses already; the only
+ * widening is that a pasted address from another client's import would show.
+ * Every other Blob folder, every other store and every other host is still
+ * stripped. Checking "this project's own" would mean threading the project
+ * through every text render path (option A2, not chosen).
+ */
+const STARCASTER_BLOB_HOST = "astujhe2hvjqd0kf.public.blob.vercel-storage.com";
+const IMPORTED_PICTURE_FOLDER = "/SiteImportApplied/";
+
+export function isImportedPictureSrc(src: string) {
+  try {
+    const url = new URL(src.trim());
+    return (
+      url.protocol === "https:" &&
+      url.hostname === STARCASTER_BLOB_HOST &&
+      // URL() has already resolved any "/../", so this is the real folder.
+      url.pathname.startsWith(IMPORTED_PICTURE_FOLDER)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function isAllowedRichTextImageSrc(src: string) {
   const trimmed = src.trim();
 
@@ -52,6 +83,10 @@ export function isAllowedRichTextImageSrc(src: string) {
   }
 
   if (trimmed.startsWith("/gallery/") || trimmed.startsWith("/api/admin/media-file/")) {
+    return true;
+  }
+
+  if (isImportedPictureSrc(trimmed)) {
     return true;
   }
 
@@ -85,6 +120,10 @@ export function resolveRichTextImageSrc(src: string, mode: RichTextImageSrcMode)
 
   if (!normalized || !isAllowedRichTextImageSrc(normalized)) {
     return "";
+  }
+
+  if (isImportedPictureSrc(normalized)) {
+    return normalized;
   }
 
   const galleryPath = normalized.startsWith("/gallery/")

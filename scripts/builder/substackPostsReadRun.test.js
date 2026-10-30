@@ -277,6 +277,7 @@ test('the scheduled pass reads every project with writers, and logs each writer 
   const { run, restore } = withDb();
   try {
     const seen = [];
+    const grown = [];
     const res = await run.runPostsReadDue({
       discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u1' }, { projectId: 'p2', userId: 'u2' }] }),
       read: async (input, scope) => {
@@ -285,13 +286,41 @@ test('the scheduled pass reads every project with writers, and logs each writer 
           ? { ok: true, data: { read: [{ handle: 'a' }], failed: [{ handle: 'b', reason: 'its newest posts answered HTTP 404' }], notReached: 2 } }
           : { ok: false, status: 500, error: 'database down' };
       },
+      grow: async (scope) => {
+        grown.push(scope.projectId);
+        return { ok: true, data: { approved: 3, added: ['metamodernism'], topicsSkipped: 'the AI did not answer: credit balance too low' } };
+      },
     });
     assert.equal(res.ok, true);
     assert.deepEqual(seen, ['p1', 'p2']);
+    // Upgrade 2/4: the wider keywords grow after a project's read, never after a failed one.
+    assert.deepEqual(grown, ['p1']);
     const log = run.formatPostsReadDueLog(res.data).join('\n');
     assert.match(log, /writers_read=1 writers_not_read=1 writers_left_for_next_time=2 failed=1/);
     assert.match(log, /WRITER NOT READ project=p1 writer=b/);
     assert.match(log, /FAILED project=p2: database down/);
+    assert.match(log, /keywords_grown=1 keywords_not_grown=0/);
+    assert.match(log, /KEYWORDS PARTIAL project=p1 added=1: topics skipped — the AI did not answer/);
+  } finally { restore(); }
+});
+
+test('the scheduled pass names a project whose keywords were not grown, and why', async () => {
+  const { run, restore } = withDb();
+  try {
+    let clock = 0;
+    const res = await run.runPostsReadDue({
+      now: () => clock,
+      budgetMs: 100000,
+      discover: async () => ({ ok: true, data: [{ projectId: 'p1', userId: 'u1' }, { projectId: 'p2', userId: 'u2' }] }),
+      read: async (input, scope) => {
+        if (scope.projectId === 'p2') clock = 80000; // p2's read used most of the clock
+        return { ok: true, data: { read: [], failed: [], notReached: 0 } };
+      },
+      grow: async () => ({ ok: false, status: 503, error: 'table not available' }),
+    });
+    const log = run.formatPostsReadDueLog(res.data).join('\n');
+    assert.match(log, /KEYWORDS NOT GROWN project=p1: table not available/);
+    assert.match(log, /KEYWORDS NOT GROWN project=p2: the run ran out of time/);
   } finally { restore(); }
 });
 

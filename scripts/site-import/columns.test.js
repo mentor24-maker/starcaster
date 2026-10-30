@@ -303,3 +303,98 @@ test('the mapper keeps a logo lockup inside its section instead of a band of its
   assert.equal(page.sections[0].layout, 'single');
   assert.deepEqual(page.sections[0].modules.map((m) => m.type), ['image', 'text']);
 });
+
+// Task 86bcv0fhh: Builder has no rows inside a column, so the planner names
+// each logo lockup that shares a cell, and the mapper pours it into ONE text
+// module that sets the logo beside its words.
+const HERO = { id: 'hero', box: box(699, 170, 631, 560), kind: 'image' };
+
+test('the planner names a logo lockup inside the hero\'s left column', () => {
+  const grid = planSectionGrid([...LOCKUP, ...UNDER_IT, HERO]);
+  assert.deepEqual(grid.lockups, [{ image: 'logo', texts: ['name', 'tag'], gapPx: 24 }]);
+});
+
+test('the planner names a logo lockup kept inside a stacked section', () => {
+  const grid = planSectionGrid([...LOCKUP, ...UNDER_IT]);
+  assert.deepEqual(grid.lockups.map((l) => l.image), ['logo']);
+});
+
+test('no lockup where picture and words already sit in separate columns', () => {
+  assert.deepEqual(planSectionGrid(LOCKUP).lockups, [], 'a header that is only logo + name keeps two columns');
+  const rows = [0, 1, 2].flatMap((r) => [
+    { id: `photo${r}`, box: box(0, r * 160, 120, 120), kind: 'image' },
+    { id: `bio${r}`, box: box(150, r * 160, 500, 100), kind: 'prose' },
+  ]);
+  assert.deepEqual(planSectionGrid(rows).lockups, [], 'a team list stays photos-left, words-right columns');
+});
+
+test('no lockup for a content-sized picture, a button beside the logo, or words on its left', () => {
+  const big = planSectionGrid([
+    { id: 'pic', box: box(0, 0, 330, 300), kind: 'image' },
+    { id: 'words', box: box(360, 40, 600, 120), kind: 'prose' },
+    ...UNDER_IT,
+  ]);
+  assert.deepEqual(big.lockups, []);
+  const withButton = planSectionGrid([...LOCKUP.slice(0, 2), { id: 'btn', box: box(261, 308, 216, 44), kind: 'other' }, ...UNDER_IT, HERO]);
+  assert.deepEqual(withButton.lockups, []);
+  const wordsLeft = planSectionGrid([
+    { id: 'name', box: box(0, 227, 100, 60), kind: 'prose' },
+    { id: 'logo', box: box(110, 227, 86, 116), kind: 'image' },
+    ...UNDER_IT,
+    HERO,
+  ]);
+  assert.deepEqual(wordsLeft.lockups, []);
+});
+
+const IMPORTED_LOGO =
+  'https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImportApplied/proj_x/assets/logo.png';
+
+function lockupIr({ downloaded }) {
+  const ir = gridIr(true);
+  const el = (sourceId, cls, html, b, assetRefs = []) => ({
+    sourceId, class: cls, html, textContent: html.replace(/<[^>]+>/g, ''), textLength: 1,
+    computedStyles: {}, documentPosition: 0, depth: 3, assetRefs, box: b,
+  });
+  ir.assets = [{
+    id: 'a-logo', originalUrl: 'https://grid.test/logo.png', storageUrl: downloaded ? IMPORTED_LOGO : '',
+    contentHash: 'h', mimeType: 'image/png', byteSize: 10, altText: '', referencedBy: [],
+    status: downloaded ? 'downloaded' : 'failed', error: '',
+  }];
+  ir.pages[0].sections[0].elements = [
+    el('0-logo', 'image', '<img src="https://grid.test/logo.png" alt="Alphire logo">', box(110, 227, 86, 116), ['a-logo']),
+    el('0-name', 'text', '<p>Alphire</p>', box(220, 217, 257, 135)),
+    el('0-tag', 'text', '<p>AI Agency</p>', box(261, 308, 216, 44)),
+    el('0-h1', 'heading', '<h1>Technology that amplifies</h1>', box(110, 380, 549, 110)),
+    el('0-p', 'text', '<p>We build intelligent systems.</p>', box(110, 512, 540, 87)),
+    el('0-hero', 'image', '<img src="https://grid.test/hero.png" alt="">', box(699, 170, 631, 560)),
+  ];
+  return ir;
+}
+
+test('the mapper pours a hero\'s logo lockup into one text module, logo beside the name', () => {
+  const out = mapSite(lockupIr({ downloaded: true }), MAP_OPTS);
+  assert.ok(reportReconciles(out.report));
+  const [section] = out.pages[0].sections;
+  assert.equal(section.layout !== 'single', true, 'the hero keeps its two columns');
+  const left = section.modules.filter((m) => m.column === section.modules[0].column);
+  assert.deepEqual(left.map((m) => m.type), ['text', 'text'], 'lockup module, then the headline and copy');
+  const lockup = left[0];
+  assert.equal(lockup.settings.importSourceIds, '0-logo,0-name,0-tag');
+  assert.match(lockup.text, /^<div style="display:flex;align-items:center;gap:24px">/);
+  assert.ok(lockup.text.indexOf('<img') < lockup.text.indexOf('Alphire<'), 'logo comes first, on the left');
+  assert.match(lockup.text, /AI Agency/);
+  assert.ok(out.copyPlan.assets.some((a) => a.assetId === 'a-logo'), 'the logo is still copied into the project');
+
+  // And the live site's own renderer keeps the picture and the flex row.
+  const rendered = template.formatRichTextContent(lockup.text);
+  assert.ok(rendered.includes(`src="${IMPORTED_LOGO}"`), `logo survived the renderer: ${rendered}`);
+  assert.match(rendered, /display:\s*flex/);
+});
+
+test('a lockup whose logo could not be downloaded stays an image module above the words', () => {
+  const out = mapSite(lockupIr({ downloaded: false }), MAP_OPTS);
+  assert.ok(reportReconciles(out.report));
+  const [section] = out.pages[0].sections;
+  const left = section.modules.filter((m) => m.column === section.modules[0].column);
+  assert.deepEqual(left.map((m) => m.type), ['image', 'text'], 'never a logo silently dropped');
+});

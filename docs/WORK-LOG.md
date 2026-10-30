@@ -9,6 +9,50 @@ address, so it can be bookmarked or pasted into another tab, and the
 browser's Back button returns to the list with your filter still set. Each
 empty section says why it is empty, and a picture that will not load
 disappears instead of showing a broken icon.
+## 2026-10-28 — The Mini's private doors are closed to other Tailscale devices (#891)
+
+Any device signed in to Dane's Tailscale could open the Mini's private
+OpenClaw control page, and its password-less Chrome control and the browser
+door keeper whenever those run — measured again this morning from the
+MacBook. The fix is a Tailscale access rule that lets other devices reach only
+ssh, Screen Sharing, the public address and the YouTube helper on the Mini —
+the last two serve only what is already public. This change writes that
+rule down exactly, with Tailscale's own built-in tests (so the admin console
+refuses to save a rule that does the wrong thing), an undo, and the check that
+proves it worked. Dane switched it on the same day, adding Screen Sharing, and
+the outside check then showed all three private ports closed. One port turned
+out to be missing — 443, which the sign-in window needs from the MacBook and
+which reaches only what is already public — so the record now carries it, and
+Dane added it in the Tailscale admin page on 2026-10-29. That evening the
+check, run from a tailnet device, passed on every line: the three private
+ports closed and the sign-in window opening over 443.
+## 2026-10-29 — Imported logos can sit beside their brand name (#921)
+
+On Alphire's website the star logo sits next to the words "Alphire / AI
+Agency". Builder cannot put two things side by side inside one column, so an
+import could only stack the logo on top of the name. The importer now spots
+that shape — a small picture with a line or two of words right beside it — and
+writes the pair as one text box that sets the logo on the left and the words
+on the right. For that to work, a text box had to be allowed to show a picture
+from the import's own storage folder (Dane's choice, option A1); pictures from
+anywhere else are still removed, and that is tested. A browser check now
+measures that the logo really sits left of the words, and it was broken on
+purpose twice to prove it notices. Alphire's home page needs re-importing once
+this is live to pick it up.
+
+## 2026-10-29 — The Substack Miner learns new keywords from the writers Dane approves (#917)
+
+The Miner's search keywords were only ever the ones Dane typed in. Now it also
+keeps a second, wider list that it learns by itself from the writers he has
+approved: the reasons he ticked when approving them, plus the topics their
+newest posts and his "why I approved" notes talk about (one AI call picks out
+short topics like "metamodernism"). Each keyword says where it came from. The
+wider list is not searched on its own, because every searched keyword costs a
+web search and can bring in 20 new writers; it sits on the Run tab with an
+**Add to search** button and a **Remove** button, and a removed keyword never
+comes back. It grows from a **Grow keywords now** button and by itself once a
+day after the posts are read. If the AI step fails, the reason keywords are
+still added and the screen says the topics were skipped and why.
 ## 2026-10-29 — An imported logo beside its name no longer becomes a band of its own (#916)
 
 Alphire's imported hero had its star logo and "Alphire / AI Agency" cut off
