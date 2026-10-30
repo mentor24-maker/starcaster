@@ -165,3 +165,24 @@ alter table public.substack_candidates add column if not exists recent_posts jso
 alter table public.substack_candidates add column if not exists posts_read_at timestamptz;
 alter table public.substack_candidates add column if not exists photo_url text not null default '';
 alter table public.substack_candidates add column if not exists logo_url text not null default '';
+
+-- ── The wider keyword list (Substack Miner upgrade 2/4, task 86bcuxwkr) ──────
+--
+--   wider_keywords    keywords the Miner learned from APPROVED writers — topics
+--                     in their newest posts and in Dane's "Why did you
+--                     Approve?" sentence, and the reasons he ticked — by
+--                     lib/acquire/SubstackKeywordsGrow.js:
+--                     [{ "keyword", "sources": [{ "kind": "post"|"note"|
+--                        "reason", "handle" }], "firstSeenAt" }]. At most 300.
+--                     Used for tagging and matching writers; never searched
+--                     for until Dane clicks "Add to search", which moves the
+--                     keyword into `keywords` through the ordinary settings
+--                     save.
+--   removed_keywords  keywords Dane removed from the wider list, as text. A
+--                     later pass never adds one of these back.
+--
+-- Added the same way as the columns above, so running this file again changes
+-- nothing.
+
+alter table public.substack_miner_settings add column if not exists wider_keywords jsonb not null default '[]'::jsonb;
+alter table public.substack_miner_settings add column if not exists removed_keywords jsonb not null default '[]'::jsonb;

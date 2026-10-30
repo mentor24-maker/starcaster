@@ -13,6 +13,30 @@ the outside check then showed all three private ports closed. One port turned
 out to be missing — 443, which the sign-in window needs from the MacBook and
 which reaches only what is already public — so the record now carries it, and
 Dane added it in the Tailscale admin page on 2026-10-29.
+## 2026-10-29 — The Substack Miner learns new keywords from the writers Dane approves (#917)
+
+The Miner's search keywords were only ever the ones Dane typed in. Now it also
+keeps a second, wider list that it learns by itself from the writers he has
+approved: the reasons he ticked when approving them, plus the topics their
+newest posts and his "why I approved" notes talk about (one AI call picks out
+short topics like "metamodernism"). Each keyword says where it came from. The
+wider list is not searched on its own, because every searched keyword costs a
+web search and can bring in 20 new writers; it sits on the Run tab with an
+**Add to search** button and a **Remove** button, and a removed keyword never
+comes back. It grows from a **Grow keywords now** button and by itself once a
+day after the posts are read. If the AI step fails, the reason keywords are
+still added and the screen says the topics were skipped and why.
+## 2026-10-29 — An imported logo beside its name no longer becomes a band of its own (#916)
+
+Alphire's imported hero had its star logo and "Alphire / AI Agency" cut off
+into a separate band above the rest of the hero. The importer saw "small
+picture beside text" as a row of columns, and Builder can only make a row of
+columns into its own section. Now a logo-sized picture with a few lines of
+text right beside it stays part of the content around it. Measured on
+Alphire's stored capture: once the import is re-run, the hero comes out with
+text on the left and the picture on the right, with the logo inside the hero
+above the brand name. Putting the logo *beside* the name needs a new Builder
+ability, filed as its own ticket.
 ## 2026-10-29 — Imported sites keep their buttons (#919)
 
 When Site Import copies a website, a link that the site dresses up as a
