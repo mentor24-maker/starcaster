@@ -1,3 +1,18 @@
+## 2026-10-30 — Starcaster now says which account each AI key bills, and shouts when one runs dry (#923)
+
+The AI features stopped because the Anthropic account ran out of credit, and
+buying credit did not fix it: the credit went into a different account from
+the one Starcaster's key bills, and nothing said which. A new check now
+looks at every AI key the website and the Mac Mini use, tries each one with
+a one-word request, and reports the account it bills and whether it works —
+OUT OF CREDIT, refused, working, or could not tell. It never shows a key,
+only a short fingerprint so two keys can be told apart. The Mini runs it
+every ten minutes and posts to the bus once when a key stops working (and
+again every six hours while it stays down), then once more when it works
+again. The same check sits at the top of Settings › APIs as an "AI keys"
+panel. Its first reading: the website and the Mini share one Anthropic key
+(account 33d0ab74…), which is out of credit, and the OpenAI key is out of
+credit too.
 ## 2026-10-29 — One page about each Substack writer (#920)
 
 Every writer on the Substack Miner list now has a View button beside
