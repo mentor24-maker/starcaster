@@ -1,3 +1,16 @@
+## 2026-10-30 — AI Quota shows Anthropic's real bill next to Starcaster's guess (#926)
+
+Starcaster's AI spending figures are an estimate: they only count the calls
+the website makes itself, which is how the Mac Mini spent about $35 on
+Oct 28–30 without anything noticing. Settings › AI Quota now also shows what
+Anthropic actually billed — by day for the last month, by model, and by API
+key — read straight from Anthropic's own reports. Beside it is one line,
+"Starcaster's meter saw $X; Anthropic billed $Y", and when the bill is more
+than 20% higher it says plainly how much was spent by something Starcaster
+cannot see. Only the account owner sees this, since the bill covers every
+project. It needs an Anthropic Admin key to work; until Dane creates one it
+says "Not connected" rather than showing $0.
+
 ## 2026-10-30 — AI spending has one home: Settings › AI Quota (#925)
 
 A new page, Settings › AI Quota, shows what AI has cost in the last day,
