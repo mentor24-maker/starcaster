@@ -87,6 +87,21 @@ describe('ShareWithView', () => {
     expect(html).toContain('You have no other projects to share with.');
   });
 
+  it('a failed read says it failed — never "no other projects", "only an owner" or "not shared" (86bcvk7uf)', () => {
+    const empty: ShareState = { types: [], targets: [], projects: [], canEdit: false };
+    const loadError = "Could not read this project's sharing: Sharing is not set up on this database yet";
+    for (const open of [true, false]) {
+      const html = renderToStaticMarkup(
+        <ShareWithView saved={empty} types={[]} targets={[]} open={open} loadError={loadError} />,
+      );
+      expect(html).toContain('Could not read sharing settings');
+      expect(html).not.toContain('You have no other projects to share with.');
+      expect(html).not.toContain('Only a project owner can change sharing.');
+      expect(html).not.toContain('Not shared with any project');
+      if (open) expect(html).toContain('Sharing is not set up on this database yet');
+    }
+  });
+
   it('a saved target that is no longer one of the caller’s projects is not counted', () => {
     const html = view(state({ types: ['themes'], targets: ['proj-gone'] }), false);
     expect(html).toContain('Not shared with any project');
