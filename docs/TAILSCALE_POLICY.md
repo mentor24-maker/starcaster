@@ -28,10 +28,25 @@ rule.
 
 Re-run after 443 was added, 2026-10-29 10:34am MDT, same command: the internet
 and home-network lines and all three public `/live` lines PASS (the viewer
-socket now answers "refused" as it should). The tailnet lines read CANNOT TELL,
-not PASS — Tailscale was switched off on the MacBook at the time (`tailscale
-status` there: "Tailscale is stopped"), so nothing could be measured over the
-tailnet. Re-run with Tailscale on to confirm 443 from a tailnet device.
+socket now answers "refused" as it should). The tailnet lines could not be
+read then, because Tailscale was switched off on the MacBook.
+
+That tailnet reading was taken that evening with Tailscale back on, twice —
+2026-10-29 9:16pm MDT (build pass) and 10:41pm MDT (review pass, run
+independently), same command (`./scripts/check_browser_door_route.sh --from
+macbook-pro`), VERDICT PASS both times:
+
+```
+PASS  tailnet 100.108.7.116:18789 -> no answer (filtered)
+PASS  tailnet 100.108.7.116:18800 -> no answer (filtered)
+PASS  tailnet 100.108.7.116:8091 -> no answer (filtered)
+PASS  tailnet wss /live/live via 100.108.7.116 -> the door keeper answers
+```
+
+The last line is 443 working from a tailnet device: the sign-in window opens
+from the MacBook. Every internet, home-network and public `/live` line also
+passed. Nothing about this rule is waiting on a reading — do not ask Dane to
+switch Tailscale on again to confirm it.
 
 ## Why it exists
 

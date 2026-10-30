@@ -12,7 +12,10 @@ proves it worked. Dane switched it on the same day, adding Screen Sharing, and
 the outside check then showed all three private ports closed. One port turned
 out to be missing — 443, which the sign-in window needs from the MacBook and
 which reaches only what is already public — so the record now carries it, and
-Dane added it in the Tailscale admin page on 2026-10-29.
+Dane added it in the Tailscale admin page on 2026-10-29. That evening the
+check, run from a tailnet device, passed on every line: the three private
+ports closed and the sign-in window opening over 443.
+
 ## 2026-10-29 — The Substack Miner learns new keywords from the writers Dane approves (#917)
 
 The Miner's search keywords were only ever the ones Dane typed in. Now it also
