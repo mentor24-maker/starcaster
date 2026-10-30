@@ -28,7 +28,7 @@
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
-import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind } from "./columns";
+import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind, type Lockup } from "./columns";
 import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
@@ -841,6 +841,41 @@ function collapse(s: string): string {
 
 function escapeHtml(s: string): string {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, "&quot;");
+}
+
+/**
+ * A logo lockup as one text module's HTML: the picture on the left, its words
+ * on the right, centred on each other (task 86bcv0fhh). Builder has no rows
+ * inside a column, so this is the only shape in which a logo can sit beside
+ * its brand name inside a hero's column. The picture must be one the text
+ * module will show — Site Import's own durable copy (rich-text-image.ts,
+ * decision A1) — which is why the caller only builds one for a promoted asset.
+ */
+export function lockupHtml(args: {
+  src: string;
+  alt: string;
+  widthPx: number;
+  gapPx: number;
+  wordsHtml: string;
+  link?: { linkUrl: string; newTab?: "true" } | null;
+}): string {
+  const w = Math.max(8, Math.round(args.widthPx));
+  const gap = Math.min(48, Math.max(4, Math.round(args.gapPx)));
+  let img = `<img src="${escapeAttr(args.src)}" alt="${escapeAttr(args.alt)}" width="${w}" style="width:${w}px;max-width:${w}px;height:auto;flex:none;display:block">`;
+  if (args.link?.linkUrl) {
+    const target = args.link.newTab ? ` target="_blank"` : "";
+    img = `<a href="${escapeAttr(args.link.linkUrl)}"${target} style="flex:none;display:block">${img}</a>`;
+  }
+  return (
+    `<div style="display:flex;align-items:center;gap:${gap}px">` +
+    img +
+    `<div style="min-width:0">${args.wordsHtml}</div>` +
+    `</div>`
+  );
 }
 
 /** Compact structural description of an element, for grouping the things
@@ -1659,6 +1694,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           kind: gridKind(el),
         }))
       );
+      // Logo lockups inside a cell (task 86bcv0fhh): every member → its lockup.
+      const lockupOf = new Map<string, Lockup>();
+      for (const lockup of grid.lockups) {
+        for (const id of [lockup.image, ...lockup.texts]) lockupOf.set(id, lockup);
+      }
+      /** Lockups already poured into a module, and ones that could not be. */
+      const lockupsPoured = new Set<Lockup>();
+      const lockupsRefused = new Set<Lockup>();
+      const elementById = new Map((section.elements || []).map((el) => [el.sourceId, el]));
       // No painted band anywhere: the section root may still carry the spacing.
       const rootLook = (() => {
         const root = readSurface(section.rootStyles, rowCtx);
@@ -1868,6 +1912,54 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           report.elements.mapped += 1;
           dispositions.mapped += 1;
           continue;
+        }
+
+        const lockup = lockupOf.get(el.sourceId);
+        if (lockup && lockupsPoured.has(lockup)) {
+          // Represented by the lockup module its first member became.
+          report.elements.mapped += 1;
+          dispositions.mapped += 1;
+          continue;
+        }
+        if (lockup && !lockupsRefused.has(lockup)) {
+          const members = [lockup.image, ...lockup.texts].map((id) => elementById.get(id));
+          const pic = members[0];
+          const words = members.slice(1);
+          const special = (id: string) =>
+            slideshowLeads.has(id) || slideshowConsumed.has(id) || cardGridLeads.has(id) || cardGridConsumed.has(id);
+          const assetId = pic && pic.class === "image" ? shownAssetId(pic, assetsById) : undefined;
+          const asset = assetId ? assetsById.get(assetId) : undefined;
+          const plain =
+            pic &&
+            words.every((w) => w && PROSE_CLASSES.has(w.class) && !isCreditOnly(w)) &&
+            ![lockup.image, ...lockup.texts].some(special);
+          // Only a picture the text module will show: one Site Import copies
+          // into its own folder. Anything else stays a separate image module,
+          // stacked above the words as before — never a logo silently dropped.
+          if (plain && asset?.storageUrl) {
+            flushProse();
+            promoteAsset(assetId as string);
+            modules.push({
+              id: nextModuleId(pic.sourceId),
+              type: "text",
+              column: "main",
+              name: "Imported logo and name",
+              text: lockupHtml({
+                src: asset.storageUrl,
+                alt: attrFromHtml(pic.html, "alt") || asset.altText || "",
+                widthPx: Math.min(shownWidthPx(pic.html, pic.box) || pic.box?.w || 64, 160),
+                gapPx: lockup.gapPx,
+                wordsHtml: words.map((w) => styleProseHtml(w as ElementIR, proseLook)).join(""),
+                link: imageLink(pic),
+              }),
+              settings: { importSourceIds: [lockup.image, ...lockup.texts].join(",") },
+            });
+            lockupsPoured.add(lockup);
+            report.elements.mapped += 1;
+            dispositions.mapped += 1;
+            continue;
+          }
+          lockupsRefused.add(lockup);
         }
 
         if (PROSE_CLASSES.has(el.class)) {

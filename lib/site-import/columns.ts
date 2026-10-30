@@ -42,9 +42,22 @@ export type BandPlan = {
   columns: { x0: number; x1: number }[];
 };
 
+/** A logo lockup that ended up inside one Builder cell: the picture and the
+ *  one to three lines of words beside it. Builder has no rows inside a
+ *  column, so the mapper pours these into ONE text module that lays the
+ *  picture and words side by side (task 86bcv0fhh). */
+export type Lockup = {
+  image: string;
+  /** In the order the elements were given (document order). */
+  texts: string[];
+  /** The source gap between the picture's right edge and the words, px. */
+  gapPx: number;
+};
+
 export type SectionGrid = {
   cells: Map<string, Cell>;
   bands: BandPlan[];
+  lockups: Lockup[];
 };
 
 /** Track ratios of every Builder layout, by column count. MUST match
@@ -110,7 +123,7 @@ function validBox(box: Box | null | undefined): box is Box {
   );
 }
 
-type Positioned = { id: string; box: Box; group: string; kind: GridKind };
+type Positioned = { id: string; box: Box; group: string; kind: GridKind; order: number };
 type RawColumn = { x0: number; x1: number; ids: string[]; groups: string[]; items: Positioned[] };
 type RawBand = { columns: RawColumn[] };
 
@@ -203,12 +216,12 @@ function aligned(a: RawBand, b: RawBand): boolean {
 export function planSectionGrid(items: GridItem[]): SectionGrid {
   const positioned: Positioned[] = items
     .filter((it) => validBox(it.box))
-    .map((it) => ({ id: it.id, box: it.box as Box, group: it.group || "", kind: it.kind || "other" }));
+    .map((it, order) => ({ id: it.id, box: it.box as Box, group: it.group || "", kind: it.kind || "other", order }));
 
   const cells = new Map<string, Cell>();
   if (positioned.length < 2) {
     for (const it of items) cells.set(it.id, { band: 0, col: 0 });
-    return { cells, bands: [{ columns: [{ x0: 0, x1: 1 }] }] };
+    return { cells, bands: [{ columns: [{ x0: 0, x1: 1 }] }], lockups: [] };
   }
 
   const left = Math.min(...positioned.map((p) => p.box.x));
@@ -302,7 +315,42 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
   return {
     cells,
     bands: merged.map((band) => ({ columns: band.columns.map(({ x0, x1 }) => ({ x0, x1 })) })),
+    lockups: merged.flatMap((band) => band.columns.flatMap((col) => lockupsIn(col.items))),
   };
+}
+
+/**
+ * Logo lockups inside one finished cell. Step 3a' keeps a lockup in its
+ * section, and a hero picture beside it puts it in that hero's left column
+ * (#905) — either way the picture and its words share one cell, where they
+ * would otherwise stack. Same shape as `isLockup`: a logo-sized picture, and
+ * one to three runs of words to its right that sit beside it vertically,
+ * with nothing else beside it, adjacent in document order.
+ */
+function lockupsIn(items: Positioned[]): Lockup[] {
+  const ordered = [...items].sort((a, b) => a.order - b.order);
+  const found: Lockup[] = [];
+  const used = new Set<string>();
+  for (const pic of ordered) {
+    if (pic.kind !== "image" || used.has(pic.id)) continue;
+    const img = pic.box;
+    if (img.w > LOCKUP_MAX_PX || img.h > LOCKUP_MAX_PX) continue;
+    const beside = ordered.filter(
+      (t) =>
+        t !== pic &&
+        t.box.y < img.y + img.h + OVERLAP_TOLERANCE_PX &&
+        t.box.y + t.box.h > img.y - OVERLAP_TOLERANCE_PX
+    );
+    if (!beside.length || beside.length > LOCKUP_MAX_TEXTS) continue;
+    const right = img.x + img.w;
+    if (!beside.every((t) => t.kind === "prose" && t.box.x >= right - OVERLAP_TOLERANCE_PX && !used.has(t.id))) continue;
+    const members = [pic, ...beside].map((m) => ordered.indexOf(m)).sort((a, b) => a - b);
+    if (members[members.length - 1] - members[0] !== members.length - 1) continue;
+    const gap = Math.min(...beside.map((t) => t.box.x - right));
+    found.push({ image: pic.id, texts: beside.map((t) => t.id), gapPx: Math.round(Math.max(0, gap)) });
+    for (const m of [pic, ...beside]) used.add(m.id);
+  }
+  return found;
 }
 
 /** The Builder layout whose track ratios are closest to these widths. */

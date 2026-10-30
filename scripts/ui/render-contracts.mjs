@@ -20,6 +20,12 @@
  * in two years, that line is what explains why anyone cared.
  */
 
+import { createRequire } from 'node:module';
+
+// The importer's own lockup markup, so the contract renders exactly what an
+// import writes (lib/site-import/map.ts, task 86bcv0fhh).
+const { lockupHtml } = createRequire(import.meta.url)('../../lib/site-import/dist/map.js');
+
 const BANNER = '/images/Gemini_Generated_starcaster_banner.png';
 
 /** Settings shared by the image contracts, so a change of picture is one edit. */
@@ -921,6 +927,60 @@ export const RENDER_CONTRACTS = [
         : null;
     },
   })),
+  {
+    id: 'imported-logo-sits-left-of-its-brand-name',
+    why:
+      'Alphire\'s star logo sits beside "Alphire / AI Agency" in its hero, and an import could ' +
+      'only stack it above the name: Builder has no rows inside a column, and a text module ' +
+      'stripped any picture not from the gallery (task 86bcv0fhh). The importer now writes the ' +
+      'pair as one text module that sets the logo beside the words, with the picture from Site ' +
+      'Import\'s own Blob folder (decision A1). This measures the logo LEFT of the words and on ' +
+      'the same line — if the allowlist narrows again the picture is stripped and the probe ' +
+      'finds nothing; if the flex row is lost the logo stacks above and the boxes stop sharing a line.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'text',
+        text: lockupHtml({
+          src: 'https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImportApplied/proj_contract/assets/logo.png',
+          alt: 'Contract logo',
+          widthPx: 86,
+          gapPx: 24,
+          wordsHtml: '<p>Alphire</p><p>AI Agency</p>',
+        }),
+        settings: {},
+      }],
+    },
+    serve: [{
+      url: 'https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImportApplied/proj_contract/assets/logo.png',
+      file: '../../public/images/Gemini_Generated_starcaster_banner.png',
+      contentType: 'image/png',
+    }],
+    selector: '.builder-preview-module img[src*="/SiteImportApplied/"]',
+    read: ['display'],
+    probes: {
+      beside: {
+        subject: '.builder-preview-module img[src*="/SiteImportApplied/"]',
+        against: '.builder-preview-module div[style*="min-width"]',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'the imported logo is not on the page — a text module stripped its picture, so it can no longer sit beside anything.';
+      const probe = sample.probes?.beside;
+      if (!probe) return 'no probe was taken — the contract measured nothing, which cannot verify anything.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — the logo or its words did not render, so this contract can no longer fail for the right reason.`;
+      const logo = probe.subjectBox;
+      const words = probe.againstBox;
+      if (logo.right - logo.left < 20) return `the logo is ${logo.right - logo.left}px wide — it did not load or was squeezed away, so "beside" proves nothing.`;
+      if (logo.right > words.left) {
+        return `the logo (${logo.left}-${logo.right}) is not left of its words (${words.left}-${words.right}) — they overlap or the words come first.`;
+      }
+      if (!(probe.overlapY > 0)) {
+        return `the logo and its words do not share a line (vertical overlap ${probe.overlapY}px) — the logo has stacked above the name again.`;
+      }
+      return null;
+    },
+  },
   {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:
