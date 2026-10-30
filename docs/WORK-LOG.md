@@ -1,3 +1,15 @@
+## 2026-10-29 — Imported sites keep their buttons (#919)
+
+When Site Import copies a website, a link that the site dresses up as a
+button (a coloured or outlined pill on its own, like Alphire's "Let's Build
+Something Great →") now arrives as a real Button, with its link, its wording
+and its glow. Before, the importer only looked at the tag, saw a link, and
+poured it into a block of text, so Alphire's six calls to action came out as
+plain text links. A link sitting inside a sentence or paragraph is still a
+link. On Alphire's live home page the import went from no buttons to six,
+each with the cyan glow; Delray's "Book a Court" and "Register" now import as
+buttons too. Pages already imported change only when the import is re-applied.
+
 ## 2026-10-29 — The Substack Miner's list shows what each writer actually writes about (#918)
 
 Each row on the Candidates list now has a **Latest posts** column: the date of
