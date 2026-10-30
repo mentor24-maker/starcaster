@@ -1,0 +1,96 @@
+/* AI Quota (React island) —
+   components/settings/ai-quota-page.tsx, on Settings › AI Quota.
+   Observe's one-line summary that links here is .ai-spend-summary. */
+
+.ai-quota h3 {
+  margin: var(--space-6, 24px) 0 var(--space-3);
+}
+
+.ai-quota-alert {
+  border: 1px solid var(--error, #d32f2f);
+  border-radius: var(--radius-input);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--bg-alt);
+}
+
+.ai-quota-alert strong:first-child {
+  color: var(--error, #d32f2f);
+}
+
+.ai-quota-alert ul {
+  margin: var(--space-2) 0 0 var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.ai-quota-warn {
+  font-size: var(--text-sm);
+  color: var(--error, #d32f2f);
+}
+
+.ai-quota-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6, 24px);
+  margin-bottom: var(--space-4);
+}
+
+.ai-quota-tile-value {
+  font-size: var(--text-3xl);
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.ai-quota-tile-label,
+.ai-quota-note,
+.ai-quota-empty,
+.ai-quota-footer,
+.ai-quota-table .muted {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.ai-quota-footer {
+  font-size: var(--text-xs);
+  margin-top: var(--space-4);
+}
+
+.ai-quota-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ai-quota-table th {
+  text-align: left;
+}
+
+.ai-quota-table th,
+.ai-quota-table td {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+/* Doubled up because the base `table:not(…) th/td` rule sets text-align: left
+   at a higher specificity than one class (see _tables.css). */
+.ai-quota .ai-quota-table th.num,
+.ai-quota .ai-quota-table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ai-quota-metered {
+  color: var(--status-ok-ink);
+  white-space: nowrap;
+}
+
+.ai-quota-unmetered {
+  color: var(--status-warn-ink);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Observe › Dashboard: the one line that replaced the spend panel. */
+.ai-spend-summary {
+  margin: 0;
+}

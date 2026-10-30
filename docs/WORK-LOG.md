@@ -1,3 +1,15 @@
+## 2026-10-30 — AI spending has one home: Settings › AI Quota (#925)
+
+A new page, Settings › AI Quota, shows what AI has cost in the last day,
+week and month, by feature and by model. It also lists every job that uses
+AI: where it runs, how often, which model, and whether Starcaster can count
+its spending yet. The Mac Mini's browser jobs, which quietly spent about $35
+overnight on Oct 28–30, are now on the list, marked "not metered yet" until
+a later ticket counts them. Prices were brought up to date, including Claude
+Sonnet 5.5, the model that did that spending. One price was wrong in the other
+direction: since September, Sonnet 5 was being estimated 50% too high, because
+a price rise Anthropic cancelled was still in the table. Observe now keeps a
+one-line summary that links to the new page.
 ## 2026-10-29 — One page about each Substack writer (#920)
 
 Every writer on the Substack Miner list now has a View button beside
