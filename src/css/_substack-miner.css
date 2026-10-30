@@ -504,3 +504,133 @@ table.substack-miner-table:not(.builder-module-preview-table):not(.builder-previ
   padding: 0;
   list-style: none;
 }
+
+/* ── One writer's page (Substack Miner upgrade 4/4, task 86bcuxwq2) ─────
+   components/substack-miner/substack-writer-details.tsx. Pictures are a
+   fixed size (the width/height attributes reserve the room before they load)
+   and never stretch; text wraps rather than pushing the page sideways (T0). */
+
+.substack-writer-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.substack-writer-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.substack-writer-pictures {
+  display: flex;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+}
+
+.substack-writer-photo,
+.substack-writer-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+}
+
+.substack-writer-photo {
+  border-radius: 50%;
+}
+
+.substack-writer-heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.substack-writer-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.substack-writer-description {
+  margin: 0;
+  max-width: 70ch;
+}
+
+.substack-writer-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin: var(--space-2) 0 0;
+}
+
+.substack-writer-facts dt {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.substack-writer-facts dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.substack-writer-articles,
+.substack-writer-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.substack-writer-list {
+  gap: var(--space-2);
+}
+
+.substack-writer-article {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.substack-writer-cover {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+}
+
+.substack-writer-article-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 70ch;
+}
+
+.substack-writer-article-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.substack-writer-subtitle {
+  font-style: italic;
+}
+
+.substack-writer-excerpt {
+  opacity: 0.85;
+}
+
+.substack-writer-paid {
+  margin-left: var(--space-2);
+}

@@ -3,6 +3,14 @@ import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-not
 import { SubstackDecisionDialog, reasonTally, type Decision } from './substack-decision-dialog';
 import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './substack-suggestion-dialog';
 import { matchPostKeywords } from './match-post-keywords';
+import {
+  INITIAL_CANDIDATE,
+  LIST_HASH,
+  SUBSTACK_PAGE_ID,
+  SubstackWriterDetails,
+  candidateFromHash,
+  candidateHash,
+} from './substack-writer-details';
 
 /**
  * Acquire › Substack Miner — where Dane sees every Substack writer Starcaster
@@ -33,6 +41,11 @@ import { matchPostKeywords } from './match-post-keywords';
  * creators lands — opens with a box for pasting article, publication or
  * profile links; lib/acquire/SubstackSeedImport.js works out the writer behind
  * each. It was the Run tab's "Paste a seed list", which Dane never found there.
+ *
+ * ONE WRITER'S PAGE (Substack Miner upgrade 4/4, task 86bcuxwq2): View, beside
+ * Approve, opens components/substack-miner/substack-writer-details.tsx at
+ * `#page=acquireSubstackPage&candidate=<id>`. How that address survives the
+ * shell rewriting the hash is explained at the top of that file.
  *
  * EMPTY IS ALWAYS EXPLAINED (CLAUDE.md landmine 17): "No candidates yet. Paste
  * a link above…", "Nothing approved yet.", and a filter that hides
@@ -169,7 +182,7 @@ function errorText(err: unknown, fallback: string): string {
 }
 
 /** "Oct 9" this year, "Oct 9, 2025" otherwise (UI_RULES T7 rung 7); the full date is on hover. */
-function shortDate(iso: string | null): string {
+export function shortDate(iso: string | null): string {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
@@ -646,6 +659,20 @@ export default function SubstackMinerPanel(): React.ReactElement {
   const [csvText, setCsvText] = useState('');
   const [csvBusy, setCsvBusy] = useState(false);
   const [csvLines, setCsvLines] = useState<string[]>([]);
+  // One writer's page (upgrade 4/4). The id comes from the address: the hash
+  // as it is now, or the deep link the page was opened with, which the shell
+  // strips before this page is first shown (see substack-writer-details.tsx).
+  const pendingDeepLink = useRef(INITIAL_CANDIDATE);
+  const [detailId, setDetailId] = useState(() => candidateFromHash(window.location.hash) || INITIAL_CANDIDATE);
+  const [detailWriter, setDetailWriter] = useState<Candidate | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [detailSeq, setDetailSeq] = useState(0);
+  const [rereadBusy, setRereadBusy] = useState(false);
+  const [rereadLines, setRereadLines] = useState<string[]>([]);
+  // True when the details entry was pushed from the list in THIS tab, so Back
+  // to list can step back to the list's own entry rather than add another.
+  const openedFromList = useRef(false);
 
   const load = useCallback(async () => {
     const api = getApi();
@@ -702,21 +729,82 @@ export default function SubstackMinerPanel(): React.ReactElement {
     }
   }, []);
 
+  /**
+   * Which writer the address names as the page is shown: the hash if it still
+   * says, else the deep link this tab was opened with (taken once). The shell
+   * has already rewritten the hash to `#page=…` by now, so a writer found the
+   * second way has the address put back, without a new history entry.
+   */
+  const takeAddress = useCallback(() => {
+    const fromHash = candidateFromHash(window.location.hash);
+    const id = fromHash || pendingDeepLink.current;
+    pendingDeepLink.current = '';
+    setDetailId(id);
+    if (id && !fromHash) {
+      try { window.history.replaceState({ pageId: SUBSTACK_PAGE_ID, substackCandidate: id }, '', candidateHash(id)); } catch { /* the address is a convenience */ }
+    }
+  }, []);
+
   // Load each time the page is shown.
   useEffect(() => {
     const page = hostRef.current?.closest('.app-page');
     const visible = () => !page || !page.classList.contains('hidden');
-    if (visible()) void load();
+    if (visible()) { takeAddress(); void load(); }
     if (!page || typeof MutationObserver === 'undefined') return undefined;
     let wasVisible = visible();
     const observer = new MutationObserver(() => {
       const now = visible();
-      if (now && !wasVisible) void load();
+      if (now && !wasVisible) { takeAddress(); void load(); }
       wasVisible = now;
     });
     observer.observe(page, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
-  }, [load]);
+  }, [load, takeAddress]);
+
+  // Back and Forward. The shell's own popstate handler runs first and rewrites
+  // the hash to `#page=…`, so the writer is read from the history entry's
+  // state, where View put it; the hash is the fallback for a pasted address.
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const state = (e.state || {}) as { pageId?: string; substackCandidate?: string };
+      const onThisPage = state.pageId === SUBSTACK_PAGE_ID || /(?:^#|&)page=acquireSubstackPage(?:&|$)/.test(window.location.hash);
+      if (!onThisPage) return;
+      const id = state.substackCandidate || candidateFromHash(window.location.hash);
+      openedFromList.current = false;
+      setDetailId(id || '');
+      if (id && candidateFromHash(window.location.hash) !== id) {
+        try { window.history.replaceState({ pageId: SUBSTACK_PAGE_ID, substackCandidate: id }, '', candidateHash(id)); } catch { /* the address is a convenience */ }
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Read the writer the details page shows, whenever it opens or is asked again.
+  useEffect(() => { setRereadLines([]); }, [detailId]);
+  useEffect(() => {
+    if (!detailId) { setDetailWriter(null); setDetailError(''); setDetailLoading(false); return undefined; }
+    const api = getApi();
+    if (!api) return undefined;
+    let current = true;
+    const epoch = projectEpoch.current;
+    setDetailLoading(true);
+    setDetailError('');
+    setDetailWriter((w) => (w && w.id === detailId ? w : null));
+    api(`${CANDIDATES_PATH}/${encodeURIComponent(detailId)}`).then(
+      (reply) => {
+        if (!current || epoch !== projectEpoch.current) return;
+        setDetailWriter((reply?.data as Candidate) || null);
+        if (!reply?.data) setDetailError('Writer not found in this project');
+      },
+      (err) => {
+        if (!current || epoch !== projectEpoch.current) return;
+        setDetailWriter(null);
+        setDetailError(errorText(err, 'unknown error'));
+      },
+    ).finally(() => { if (current && epoch === projectEpoch.current) setDetailLoading(false); });
+    return () => { current = false; };
+  }, [detailId, detailSeq]);
 
   // A project switch: drop the old project's rows at once and read the new one's.
   useEffect(() => {
@@ -749,6 +837,14 @@ export default function SubstackMinerPanel(): React.ReactElement {
       // A pasted subscriber list belongs to the old project too.
       setCsvText('');
       setCsvLines([]);
+      // A writer's page belongs to the old project; go back to the list.
+      pendingDeepLink.current = '';
+      openedFromList.current = false;
+      setDetailId('');
+      setRereadLines([]);
+      if (candidateFromHash(window.location.hash)) {
+        try { window.history.replaceState({ pageId: SUBSTACK_PAGE_ID }, '', LIST_HASH); } catch { /* the address is a convenience */ }
+      }
       const page = hostRef.current?.closest('.app-page');
       if (!page || !page.classList.contains('hidden')) void load();
     };
@@ -758,6 +854,52 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
   const replaceRow = (row: Candidate) => {
     setCandidates((list) => (list || []).map((c) => (c.id === row.id ? row : c)));
+    setDetailWriter((w) => (w && w.id === row.id ? row : w));
+  };
+
+  /** View: a real history entry, so Back returns to the list as it was left. */
+  const openDetails = (id: string) => {
+    try {
+      window.history.pushState({ pageId: SUBSTACK_PAGE_ID, substackCandidate: id }, '', candidateHash(id));
+      openedFromList.current = true;
+    } catch { /* the address is a convenience */ }
+    setTab('candidates');
+    setDetailId(id);
+    window.scrollTo?.(0, 0);
+  };
+
+  const backToList = () => {
+    // Opened from the list in this tab: step back to that entry, exactly as
+    // the browser's own Back would. Opened from a pasted address there is no
+    // list entry behind it, so add one.
+    if (openedFromList.current && window.history.length > 1) {
+      openedFromList.current = false;
+      window.history.back();
+    } else {
+      try { window.history.pushState({ pageId: SUBSTACK_PAGE_ID }, '', LIST_HASH); } catch { /* the address is a convenience */ }
+    }
+    setDetailId('');
+  };
+
+  /** Re-read posts for the writer on the details page (POST /candidates/:id/read-posts, 1/4). */
+  const rereadPosts = async (id: string) => {
+    const api = getApi();
+    if (!api) return;
+    const epoch = projectEpoch.current;
+    setRereadBusy(true);
+    setRereadLines([]);
+    try {
+      const reply = await api(`${CANDIDATES_PATH}/${encodeURIComponent(id)}/read-posts`, { method: 'POST', body: '{}' });
+      if (epoch !== projectEpoch.current) return;
+      setRereadLines(postsReadSummaryText(reply?.data));
+      setDetailSeq((n) => n + 1);
+      void load();
+    } catch (err) {
+      if (epoch !== projectEpoch.current) return;
+      setRereadLines([`Posts were not re-read: ${errorText(err, 'unknown error')}`]);
+    } finally {
+      if (epoch === projectEpoch.current) setRereadBusy(false);
+    }
   };
 
   /** PATCH one writer; the server's answer replaces the row. */
@@ -1007,19 +1149,49 @@ export default function SubstackMinerPanel(): React.ReactElement {
         <p className="substack-miner-note">Showing the {LIST_LIMIT.toLocaleString()} most recently seen writers; the counts above cover those only.</p>
       ) : null}
 
-      <div className="substack-miner-toolbar">
-        <div className="substack-miner-tabs" role="tablist" aria-label="Substack Miner">
-          {tabButton('candidates', 'Candidates')}
-          {tabButton('run', 'Run')}
+      {!detailId ? (
+        <div className="substack-miner-toolbar">
+          <div className="substack-miner-tabs" role="tablist" aria-label="Substack Miner">
+            {tabButton('candidates', 'Candidates')}
+            {tabButton('run', 'Run')}
+          </div>
+          <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
-        <button type="button" className="btn" onClick={() => void load()} disabled={loading}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-      </div>
+      ) : null}
 
       {error ? <p className="substack-miner-error" role="alert">{error}</p> : null}
 
-      {tab === 'candidates' ? (
+      {detailId ? (() => {
+        // The list's copy is the freshest after a decision; the fetched one
+        // covers a writer beyond the list's limit, or a list not read yet.
+        const shown = all.find((w) => w.id === detailId) || (detailWriter && detailWriter.id === detailId ? detailWriter : null);
+        return (
+          <SubstackWriterDetails
+            writerId={detailId}
+            writer={shown}
+            loading={detailLoading}
+            loadError={detailError}
+            all={all}
+            settings={settings}
+            busy={rowBusy === detailId}
+            rowError={rowError.id === detailId && deciding?.candidate.id !== detailId ? rowError.message : ''}
+            link={links[detailId]}
+            rereadBusy={rereadBusy}
+            rereadLines={rereadLines}
+            onBack={backToList}
+            onView={openDetails}
+            onDecide={(decision) => { if (shown) setDeciding({ candidate: shown, decision }); }}
+            onThinkAgain={() => { if (shown) decide(shown, 'candidate'); }}
+            onAgree={() => { if (shown) void agree(shown); }}
+            onReread={() => void rereadPosts(detailId)}
+            onOpenContact={(id, known) => void openContact(id, known)}
+          />
+        );
+      })() : null}
+
+      {!detailId && tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
           <form className="substack-miner-card" aria-label="Add writers by link" onSubmit={addSeeds}>
             <label className="substack-miner-card-title" htmlFor="sm-seeds">Add writers by link</label>
@@ -1136,6 +1308,19 @@ export default function SubstackMinerPanel(): React.ReactElement {
                         </td>
                         <td className="actions-col">
                           <div className="table-actions-row">
+                            <a
+                              className="btn"
+                              href={candidateHash(c.id)}
+                              aria-label={`View ${c.name || c.handle}`}
+                              onClick={(e) => {
+                                // A plain click opens it here; Cmd/Ctrl-click opens a new tab, as a link should.
+                                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                                e.preventDefault();
+                                openDetails(c.id);
+                              }}
+                            >
+                              View
+                            </a>
                             {c.status === 'candidate' ? (
                               <>
                                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => setDeciding({ candidate: c, decision: 'approved' })}>
@@ -1172,36 +1357,10 @@ export default function SubstackMinerPanel(): React.ReactElement {
               </table>
             </div>
           ) : null}
-          {viewingSuggestion?.suggestion ? (
-            <SubstackSuggestionDialog
-              key={viewingSuggestion.id}
-              suggestion={viewingSuggestion.suggestion}
-              writerName={viewingSuggestion.name || viewingSuggestion.handle}
-              busy={rowBusy === viewingSuggestion.id}
-              error={rowError.id === viewingSuggestion.id ? rowError.message : ''}
-              onClose={() => { setViewingSuggestion(null); setRowError({ id: '', message: '' }); }}
-              onAgree={() => void agree(viewingSuggestion)}
-            />
-          ) : null}
-          {deciding ? (
-            <SubstackDecisionDialog
-              key={`${deciding.candidate.id}-${deciding.decision}`}
-              decision={deciding.decision}
-              writerName={deciding.candidate.name || deciding.candidate.handle}
-              // A note typed while the writer was still waiting is about this
-              // decision; one from the opposite decision is not, so it starts blank.
-              initialNote={deciding.candidate.status === 'candidate' ? deciding.candidate.note : ''}
-              offered={reasonTally(all, deciding.decision)}
-              busy={rowBusy === deciding.candidate.id}
-              error={rowError.id === deciding.candidate.id ? rowError.message : ''}
-              onCancel={() => { setDeciding(null); setRowError({ id: '', message: '' }); }}
-              onConfirm={(note, reasons) => void confirmDecision(note, reasons)}
-            />
-          ) : null}
         </div>
       ) : null}
 
-      {tab === 'run' ? (
+      {!detailId && tab === 'run' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Run">
           <form className="substack-miner-card" aria-label="Keywords" onSubmit={saveKeywords}>
             <label className="substack-miner-card-title" htmlFor="sm-keywords">Keywords</label>
@@ -1377,6 +1536,32 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <RunResult lines={csvLines} label="What the subscriber import did" />
           </form>
         </div>
+      ) : null}
+      {viewingSuggestion?.suggestion ? (
+        <SubstackSuggestionDialog
+          key={viewingSuggestion.id}
+          suggestion={viewingSuggestion.suggestion}
+          writerName={viewingSuggestion.name || viewingSuggestion.handle}
+          busy={rowBusy === viewingSuggestion.id}
+          error={rowError.id === viewingSuggestion.id ? rowError.message : ''}
+          onClose={() => { setViewingSuggestion(null); setRowError({ id: '', message: '' }); }}
+          onAgree={() => void agree(viewingSuggestion)}
+        />
+      ) : null}
+      {deciding ? (
+        <SubstackDecisionDialog
+          key={`${deciding.candidate.id}-${deciding.decision}`}
+          decision={deciding.decision}
+          writerName={deciding.candidate.name || deciding.candidate.handle}
+          // A note typed while the writer was still waiting is about this
+          // decision; one from the opposite decision is not, so it starts blank.
+          initialNote={deciding.candidate.status === 'candidate' ? deciding.candidate.note : ''}
+          offered={reasonTally(all, deciding.decision)}
+          busy={rowBusy === deciding.candidate.id}
+          error={rowError.id === deciding.candidate.id ? rowError.message : ''}
+          onCancel={() => { setDeciding(null); setRowError({ id: '', message: '' }); }}
+          onConfirm={(note, reasons) => void confirmDecision(note, reasons)}
+        />
       ) : null}
     </div>
   );

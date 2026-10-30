@@ -29,6 +29,7 @@ import SubstackMinerPanel, {
 } from "./substack-miner-panel";
 import { PROJECT_SWITCH_EVENT } from "../substack-notes/substack-notes-panel";
 import { reasonTally } from "./substack-decision-dialog";
+import { candidateHash } from "./substack-writer-details";
 
 /**
  * Substack Miner 4/7 (86bcfprxq). The screen is driven against a fake
@@ -187,7 +188,18 @@ async function fakeApi(path: string, options: RequestInit = {}) {
     const hit = store.contacts.find((c) => c.id === contact[1]) || fail("Contact not found");
     return { ok: true, data: { ...hit } };
   }
+  const readOne = path.match(/^\/api\/acquire\/substack-miner\/candidates\/([^/]+)\/read-posts$/);
+  if (readOne && method === "POST") {
+    const found = store.writers.find((w) => w.id === decodeURIComponent(readOne[1])) || fail("Writer not found in this project");
+    found.postsReadAt = "2026-10-29T12:00:00Z";
+    found.recentPosts = [{ title: "Freshly read", url: "https://x.substack.com/p/fresh", postedAt: "2026-10-28T09:00:00Z", subtitle: "", excerpt: "", coverImage: "", paid: false }];
+    return { ok: true, data: { writers: 1, due: 1, recent: 0, read: [{ handle: found.handle, name: found.name, posts: 1 }], failed: [], notReached: 0 } };
+  }
   const one = path.match(/^\/api\/acquire\/substack-miner\/candidates\/([^/]+)$/);
+  if (one && method === "GET") {
+    const found = store.writers.find((w) => w.id === decodeURIComponent(one[1])) || fail("Writer not found in this project");
+    return { ok: true, data: { ...found } };
+  }
   if (one && method === "PATCH") {
     const found = store.writers.find((w) => w.id === one[1]) || fail("Writer not found in this project");
     if (body.status && body.status !== found.status && !MOVES[found.status].includes(body.status)) {
@@ -301,6 +313,8 @@ beforeEach(() => {
   requests = [];
   openViewPage = vi.fn();
   (window as unknown as { App: unknown }).App = { api: vi.fn(fakeApi), contacts: { openViewPage }, setActivePage: vi.fn() };
+  // Every test starts on the list's own address.
+  window.history.replaceState(null, "", "#page=acquireSubstackPage");
 });
 
 afterEach(() => {
@@ -862,6 +876,149 @@ describe("decision reasons (86bch0j99)", () => {
     expect(decisionWhyText(writer({ status: "rejected", note: "spam" }))).toBe("Why rejected: spam");
     expect(decisionWhyText(writer({ status: "approved" }))).toBe("");
     expect(decisionWhyText(writer({ status: "candidate", note: "maybe" }))).toBe("");
+  });
+});
+
+describe("One writer's page (upgrade 4/4, 86bcuxwq2)", () => {
+  /** The View link on a row; it is a link so it can be opened in a new tab. */
+  function viewLink(handle: string): HTMLAnchorElement {
+    const found = rowFor(handle)?.querySelector<HTMLAnchorElement>("a.btn");
+    if (!found || found.textContent !== "View") throw new Error(`no View link for ${handle} in: ${text()}`);
+    return found;
+  }
+
+  function details(): HTMLElement | null {
+    return container!.querySelector<HTMLElement>('[data-testid="substack-writer-details"]');
+  }
+
+  /** The browser's Back, the way the browser does it: the address changes, then popstate. */
+  async function browserBack() {
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await flush();
+  }
+
+  it("View is directly left of Approve on every row, approved and rejected writers included", async () => {
+    stores.proj_doe.writers = [
+      writer({ handle: "waiting" }),
+      writer({ handle: "yes", status: "approved" }),
+      writer({ handle: "no", status: "rejected" }),
+    ];
+    await mount();
+    await show("all");
+    for (const handle of ["waiting", "yes", "no"]) {
+      const actions = rowFor(handle)!.querySelector(".table-actions-row")!;
+      expect(actions.firstElementChild?.textContent).toBe("View");
+      expect(viewLink(handle).getAttribute("href")).toBe(candidateHash(stores.proj_doe.writers.find((w) => w.handle === handle)!.id));
+    }
+    expect(rowFor("waiting")!.querySelector(".table-actions-row")!.children[1].textContent).toBe("Approve");
+  });
+
+  it("View opens one page about the writer at a real address, and Back returns to the list with the filter kept", async () => {
+    stores.proj_doe.writers = [
+      writer({ handle: "ada", name: "Ada Writes", status: "approved", photoUrl: "https://img/ada.jpg", logoUrl: "https://img/logo.png", recommendedBy: ["bea", "stranger"] }),
+      writer({ handle: "bea", name: "Bea", status: "approved" }),
+    ];
+    await mount();
+    await show("approved");
+    await click(viewLink("ada"));
+    expect(window.location.hash).toBe(candidateHash(stores.proj_doe.writers[0].id));
+    expect(details()).not.toBeNull();
+    expect(details()!.querySelector("img.substack-writer-photo")?.getAttribute("src")).toBe("https://img/ada.jpg");
+    expect(details()!.querySelector("img.substack-writer-logo")?.getAttribute("src")).toBe("https://img/logo.png");
+    // How found: a recommender in the list links to their own page; one outside it only to Substack.
+    const how = details()!.querySelector('section[aria-label="How found"]')!;
+    expect(how.textContent).toContain("Found via: Web search");
+    const hrefs = [...how.querySelectorAll("a")].map((a) => `${a.textContent}=${a.getAttribute("href")}`);
+    expect(hrefs).toEqual([
+      "Bea=https://bea.substack.com",
+      `View=${candidateHash(stores.proj_doe.writers[1].id)}`,
+      "stranger=https://stranger.substack.com",
+    ]);
+    expect(rowFor("ada")).toBeNull();
+
+    await browserBack();
+    expect(details()).toBeNull();
+    expect(window.location.hash).toBe("#page=acquireSubstackPage");
+    expect(el<HTMLSelectElement>('select[aria-label="Show"]').value).toBe("approved");
+    expect(rowFor("ada")).not.toBeNull();
+  });
+
+  it("an address naming a writer opens straight to that writer, read by id", async () => {
+    stores.proj_doe.writers = [writer({ handle: "ada", name: "Ada Writes" }), writer({ handle: "bea" })];
+    window.history.replaceState(null, "", candidateHash(stores.proj_doe.writers[0].id));
+    await mount();
+    expect(details()?.getAttribute("data-writer-id")).toBe(stores.proj_doe.writers[0].id);
+    expect(details()!.textContent).toContain("Ada Writes");
+    expect(requests.some((r) => r.method === "GET" && r.path === `/api/acquire/substack-miner/candidates/${stores.proj_doe.writers[0].id}`)).toBe(true);
+  });
+
+  it("a writer the shell stripped from the address is taken from the history entry, and the address is put back", async () => {
+    stores.proj_doe.writers = [writer({ handle: "ada", name: "Ada Writes" })];
+    await mount();
+    const id = stores.proj_doe.writers[0].id;
+    await act(async () => {
+      // What the shell leaves behind on Forward: its own page-only hash, our state.
+      window.dispatchEvent(new PopStateEvent("popstate", { state: { pageId: "acquireSubstackPage", substackCandidate: id } }));
+    });
+    await flush();
+    expect(details()?.getAttribute("data-writer-id")).toBe(id);
+    expect(window.location.hash).toBe(candidateHash(id));
+  });
+
+  it("an id that does not exist says so, with a link back to the list", async () => {
+    stores.proj_doe.writers = [writer({ handle: "ada" })];
+    window.history.replaceState(null, "", candidateHash("nope"));
+    await mount();
+    expect(details()!.textContent).toContain("No writer with that id in this project");
+    await click([...details()!.querySelectorAll("a")].find((a) => a.textContent === "Back to the list of writers")!);
+    expect(details()).toBeNull();
+    expect(rowFor("ada")).not.toBeNull();
+  });
+
+  it("approving from the page makes the contact as the list does, then shows Approved and In Contacts without a reload", async () => {
+    stores.proj_doe.writers = [writer({ handle: "kind", name: "Kind" })];
+    await mount();
+    await click(viewLink("kind"));
+    const listReads = requests.filter((r) => r.path.startsWith("/api/acquire/substack-miner/candidates?")).length;
+    await click(button("Approve", details()!));
+    type(dialog()!.querySelector<HTMLTextAreaElement>("textarea")!, "writes about coaching");
+    await submit(dialog()!);
+    expect(dialog()).toBeNull();
+    expect(stores.proj_doe.contacts).toHaveLength(1);
+    expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ status: "approved", note: "writes about coaching" });
+    expect(el('[data-testid="substack-writer-status"]').textContent).toBe("Approved");
+    const decision = details()!.querySelector('section[aria-label="Decision"]')!;
+    expect(decision.textContent).toContain("Added to Contacts");
+    expect(decision.textContent).toContain("writes about coaching");
+    await click(decision.querySelector<HTMLAnchorElement>(".substack-miner-contact a")!);
+    expect(openViewPage).toHaveBeenCalledWith(expect.objectContaining({ id: stores.proj_doe.contacts[0].id }));
+    expect(requests.filter((r) => r.path.startsWith("/api/acquire/substack-miner/candidates?")).length).toBe(listReads);
+  });
+
+  it("Re-read posts reads this writer's posts and shows them", async () => {
+    stores.proj_doe.writers = [writer({ handle: "ada" })];
+    await mount();
+    await click(viewLink("ada"));
+    expect(details()!.textContent).toContain("Posts not read yet — click Re-read posts");
+    await click(button("Re-read posts", details()!));
+    expect(requests.some((r) => r.method === "POST" && r.path.endsWith("/read-posts"))).toBe(true);
+    expect(details()!.textContent).toContain("Read posts for 1 writer");
+    expect(details()!.textContent).toContain("Freshly read");
+  });
+
+  it("switching project leaves the old project's writer and goes back to the list", async () => {
+    stores.proj_doe.writers = [writer({ handle: "ada" })];
+    await mount();
+    await click(viewLink("ada"));
+    activeProject = "proj_delray";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    expect(details()).toBeNull();
+    expect(window.location.hash).toBe("#page=acquireSubstackPage");
+    expect(rowFor("delrayonly")).not.toBeNull();
   });
 });
 

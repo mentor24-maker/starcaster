@@ -1,3 +1,14 @@
+## 2026-10-29 — One page about each Substack writer (#920)
+
+Every writer on the Substack Miner list now has a View button beside
+Approve. It opens a single page with everything Starcaster knows about that
+writer: their photo and logo, their articles with pictures, which keywords
+they use, who recommended them, their Notes, the suggestion and your
+decision. You can approve or reject from that page. It has its own web
+address, so it can be bookmarked or pasted into another tab, and the
+browser's Back button returns to the list with your filter still set. Each
+empty section says why it is empty, and a picture that will not load
+disappears instead of showing a broken icon.
 ## 2026-10-28 — The Mini's private doors are closed to other Tailscale devices (#891)
 
 Any device signed in to Dane's Tailscale could open the Mini's private
