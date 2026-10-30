@@ -84,6 +84,8 @@ type ViewProps = {
   dirty?: boolean;
   message?: string;
   error?: string;
+  /** The read itself failed: nothing below is known, so nothing is claimed. */
+  loadError?: string;
   onToggleOpen?: () => void;
   onToggleType?: (type: string) => void;
   onToggleTarget?: (id: string) => void;
@@ -93,9 +95,12 @@ type ViewProps = {
 /** The card, from props alone, so every sentence on it is testable without a
  *  browser (project-share-panel.test.tsx). */
 export function ShareWithView(props: ViewProps) {
-  const { saved, types, targets, open, saving, dirty, message, error } = props;
+  const { saved, types, targets, open, saving, dirty, message, error, loadError } = props;
   const savedTargetCount = saved.targets.filter((id) => saved.projects.some((p) => p.id === id)).length;
-  const summary = shareSummaryLine(saved.types, savedTargetCount);
+  // A failed read is not an empty answer. Showing EMPTY's sentences here told
+  // an owner of thirteen projects "You have no other projects to share with"
+  // and "Only a project owner can change sharing" (2026-10-30, task 86bcvk7uf).
+  const summary = loadError ? 'Could not read sharing settings' : shareSummaryLine(saved.types, savedTargetCount);
   const locked = !saved.canEdit || Boolean(saving);
   const noProjects = saved.projects.length === 0;
 
@@ -112,7 +117,13 @@ export function ShareWithView(props: ViewProps) {
         <span className="project-share-chevron" aria-hidden="true">{open ? '▾' : '▸'}</span>
       </button>
 
-      {open && (
+      {open && loadError && (
+        <div className="project-share-body">
+          <p className="meta project-share-error" role="alert">{loadError}</p>
+        </div>
+      )}
+
+      {open && !loadError && (
         <div className="project-share-body">
           {!saved.canEdit && <p className="meta">Only a project owner can change sharing.</p>}
 
@@ -184,6 +195,7 @@ export default function ProjectSharePanel() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     const onOpened = (event: Event) => {
@@ -208,16 +220,17 @@ export default function ProjectSharePanel() {
     const app = getApp();
     if (!id) return;
     if (typeof app?.api !== 'function') {
-      setError('The admin app has not finished loading. Reload the page and try again.');
+      setLoadError('The admin app has not finished loading. Reload the page and try again.');
       return;
     }
     setError('');
+    setLoadError('');
     try {
       const body = await app.api(`/api/projects/${encodeURIComponent(id)}/shares`);
       apply(readShareState(body));
     } catch (err) {
       apply(EMPTY);
-      setError(`Could not read this project's sharing: ${(err as Error)?.message || 'unknown error'}`);
+      setLoadError(`Could not read this project's sharing: ${(err as Error)?.message || 'unknown error'}`);
     }
   }, [apply]);
 
@@ -261,6 +274,7 @@ export default function ProjectSharePanel() {
       dirty={dirty}
       message={dirty ? '' : message}
       error={error}
+      loadError={loadError}
       onToggleOpen={() => setOpen((v) => !v)}
       onToggleType={(type) => setTypes((list) => toggle(list, type))}
       onToggleTarget={(id) => setTargets((list) => toggle(list, id))}

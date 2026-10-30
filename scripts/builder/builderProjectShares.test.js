@@ -255,6 +255,25 @@ test('saving empty lists clears every share the project had', async () => {
   assert.deepEqual(db.builder_project_shares.map((r) => r.id), ['keep']);
 });
 
+test('a missing shares table is named, not reported as "no projects" (86bcvk7uf)', async () => {
+  // 2026-10-30: production had never run builder_project_shares_setup.sql.
+  const { db, store, routes } = load();
+  delete db.builder_project_shares;
+  const handle = handlerFor(routes, store);
+  const res = await call(handle, { method: 'GET', path: '/api/projects/proj-a/shares' });
+  assert.equal(res.status, 503);
+  assert.match(res.body.error.message, /builder_project_shares table does not exist/);
+  assert.match(res.body.error.message, /builder_project_shares_setup\.sql/);
+
+  // PostgREST's own wording for the same thing.
+  const named = store.sharesReadError({ status: 404, error: "Could not find the table 'public.builder_project_shares' in the schema cache" }, 'x');
+  assert.equal(named.code, 'SHARES_TABLE_MISSING');
+  // Any other failure keeps its own message.
+  const other = store.sharesReadError({ status: 500, error: 'timeout' }, 'x');
+  assert.equal(other.error, 'timeout');
+  assert.equal(other.status, 500);
+});
+
 test('an unknown type in a PUT is refused with 400 naming the allowed types', async () => {
   const { db, store, routes } = load();
   const handle = handlerFor(routes, store);
