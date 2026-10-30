@@ -1962,6 +1962,19 @@ async function seedSubstackMiner(scope) {
   }
   const listed = must(await substackMinerStore.listCandidates(1000, scope), 'list Substack Miner writers');
   const byHandle = new Map(listed.map((c) => [c.handle, c]));
+  // The long row needs posts too, or the Latest posts / Also mentions columns
+  // render empty and the table's 1280px fit is never measured with real
+  // content in them (round-1 review of task 86bcuxwn5).
+  const nightSkies = byHandle.get('fixture-night-skies');
+  if (nightSkies) {
+    must(await substackMinerStore.recordRecentPosts(nightSkies.id, {
+      posts: [
+        { title: `${LONG}: what the winter sky over the marsh taught me about patience, stargazing and slow living`, url: 'https://fixture-night-skies.substack.com/p/winter-sky', postedAt: '2026-10-21T12:00:00Z', subtitle: 'Notes on substack growth and astronomy' },
+        { title: 'A short one', url: 'https://fixture-night-skies.substack.com/p/short', postedAt: '2026-10-14T12:00:00Z' },
+        { title: 'Counting meteors from the porch', url: 'https://fixture-night-skies.substack.com/p/meteors', postedAt: '2026-10-07T12:00:00Z' },
+      ],
+    }, scope), 'save Substack Miner posts');
+  }
   const approved = byHandle.get('fixture-approved');
   if (approved && approved.status === 'candidate') {
     must(await substackContactCapture.approveCandidate(approved.id, { status: 'approved' }, scope), 'approve Substack Miner writer');

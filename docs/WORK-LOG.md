@@ -10,6 +10,17 @@ link. On Alphire's live home page the import went from no buttons to six,
 each with the cyan glow; Delray's "Book a Court" and "Register" now import as
 buttons too. Pages already imported change only when the import is re-applied.
 
+## 2026-10-29 — The Substack Miner's list shows what each writer actually writes about (#918)
+
+Each row on the Candidates list now has a **Latest posts** column: the date of
+the writer's newest article ("Oct 21, 2026 · 8 days ago") and up to three of
+their newest article titles, each opening the article on Substack. Beside it,
+**Also mentions** lists the keywords those articles talk about that the row's
+Keywords column does not already show — so Dane can judge a writer without
+opening their publication. The **Recommended by** and **Found via** columns
+left the table to make room (they move to the writer's details page next); the
+Found via filter above the list still works. Empty cells say why: "Posts not
+read yet", "No posts", or "None beyond its keywords".
 ## 2026-10-29 — Buttons can glow, and an imported glow is kept (#913)
 
 A Button now has a Glow setting on its Frame tab: a colour, a size and a
