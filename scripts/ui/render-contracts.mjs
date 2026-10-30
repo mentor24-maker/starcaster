@@ -3181,6 +3181,65 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  /*
+   * An overlay band starts SQUARE. Every section carries a default corner from
+   * the generated sheet; the screen inherits its section's shape, so the
+   * corner nobody set was painted on starcaster.pro's footer band (operator,
+   * 2026-10-30, 86bcvqemm). Desktop and phone, because the phone corner comes
+   * from a different generated rule — plus the radius the operator DID set,
+   * so "square" cannot be bought by ignoring his setting.
+   */
+  ...[
+    { id: 'row-overlay-screen-starts-square', emulate: undefined },
+    { id: 'row-overlay-screen-starts-square-on-a-phone', emulate: { viewport: { width: 420, height: 900 } } },
+  ].map(({ id, emulate }) => ({
+    id,
+    why:
+      'A section with an overlay showed rounded corners nobody set: the section\'s default corner ' +
+      'is invisible until the overlay screen inherits it and paints it (86bcvqemm).',
+    section: {
+      layout: 'single',
+      overlayScreen: { background: { mode: 'color', color: '#1d4ed8' }, opacity: 60 },
+      modules: [{ type: 'heading', text: 'Footer band', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    ...(emulate ? { emulate } : {}),
+    read: ['borderTopLeftRadius', 'borderBottomRightRadius'],
+    expect(sample) {
+      const { borderTopLeftRadius: tl, borderBottomRightRadius: br } = sample.styles;
+      if (tl !== '0px' || br !== '0px') {
+        return `the overlay screen has rounded corners (${tl} / ${br}) the operator never set — the ` +
+          'section\'s default corner is reaching it again.';
+      }
+      return null;
+    },
+  })),
+
+  {
+    id: 'row-overlay-screen-keeps-a-radius-the-operator-set',
+    why:
+      'The square default must not cost the operator his own setting: a section given a border and ' +
+      'a corner radius keeps that radius, overlay and all (86bcvqemm).',
+    section: {
+      layout: 'single',
+      rowBorderWidth: '2',
+      rowBorderStyle: 'solid',
+      rowBorderColor: '#ffffff',
+      rowBorderRadius: '12',
+      overlayScreen: { background: { mode: 'color', color: '#1d4ed8' }, opacity: 60 },
+      modules: [{ type: 'heading', text: 'Rounded on purpose', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-row-overlay-screen',
+    read: ['borderTopLeftRadius'],
+    expect(sample) {
+      if (sample.styles.borderTopLeftRadius !== '12px') {
+        return `a section set to a 12px corner rendered its overlay at ${sample.styles.borderTopLeftRadius} — ` +
+          'the square default is overriding the operator\'s own setting.';
+      }
+      return null;
+    },
+  },
+
   {
     id: 'cell-video-background-lets-a-dropdown-menu-out-of-the-cell',
     why:

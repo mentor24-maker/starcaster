@@ -7895,6 +7895,19 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /*
+ * Every section carries a default corner from the generated sheet (24px, 16px
+ * on a phone). On a section with no fill it is invisible; the screen above
+ * inherits it and paints it, so an overlay band arrived with rounded corners
+ * nobody set (operator, 2026-10-30, 86bcvqemm). A section with an overlay
+ * starts square. A radius the operator DID set arrives as an inline style
+ * (with a border) and still wins. Three classes so it outranks the generated
+ * phone rules (`.builder-preview-device-mobile .builder-preview-section`).
+ */
+.builder-react-root .builder-preview-section.builder-preview-section-has-overlay-screen {
+  border-radius: 0;
+}
+
+/*
  * The columns are grid children; the two layers above are absolutely
  * positioned and out of flow. Without a stacking context of their own the
  * columns would paint underneath the video, which reads as the row having
