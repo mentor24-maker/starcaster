@@ -1,3 +1,14 @@
+## 2026-10-29 — One page about each Substack writer (#920)
+
+Every writer on the Substack Miner list now has a View button beside
+Approve. It opens a single page with everything Starcaster knows about that
+writer: their photo and logo, their articles with pictures, which keywords
+they use, who recommended them, their Notes, the suggestion and your
+decision. You can approve or reject from that page. It has its own web
+address, so it can be bookmarked or pasted into another tab, and the
+browser's Back button returns to the list with your filter still set. Each
+empty section says why it is empty, and a picture that will not load
+disappears instead of showing a broken icon.
 ## 2026-10-29 — An imported logo beside its name no longer becomes a band of its own (#916)
 
 Alphire's imported hero had its star logo and "Alphire / AI Agency" cut off
