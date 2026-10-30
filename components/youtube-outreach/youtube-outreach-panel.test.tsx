@@ -763,6 +763,13 @@ describe("the Mini's status banner (7/7)", () => {
     expect(out.lines[0]).toContain("Last signed in: ");
   });
 
+  it("judges staleness by the same number the Mini's stores do", async () => {
+    // The worker's check interval lives in lib/openclawSignIn.js; a screen with
+    // its own copy would call a healthy Mini stopped (or a stopped one fine).
+    const signIn = await import("../../lib/openclawSignIn.js");
+    expect(MINI_STALE_MS).toBe(signIn.MINI_STALE_MS);
+  });
+
   it("a check that has stopped coming is a warning, even if the last one was good", () => {
     const at = new Date(NOW - MINI_STALE_MS - 60000).toISOString();
     const s = miniStatus(check({ checkedAt: at }), [], NOW);

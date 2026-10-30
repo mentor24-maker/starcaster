@@ -605,7 +605,7 @@ describe("helpers", () => {
       .toEqual({ tone: "ok", state: "signed_in", text: "Mini: signed in to Reddit as danetest, checked 12 minutes ago." });
     expect(signInLine(check("signed_out", "2026-10-13T11:48:00Z", "Reddit on the Mini is signed out of danetest. Sign in again in the dane-of-earth browser."), now).tone).toBe("alarm");
     expect(signInLine(check("", null), now).state).toBe("unknown");
-    expect(signInLine(check("signed_in", "2026-10-13T08:00:00Z", "Mini: signed in to Reddit as danetest."), now).state).toBe("stale");
+    expect(signInLine(check("signed_in", "2026-10-13T04:00:00Z", "Mini: signed in to Reddit as danetest."), now).state).toBe("stale");
     expect(signInLine({ account: "", pace: null, browserCheck: null, browserCheckError: "database down" }, now).text)
       .toContain("could not be read: database down");
   });

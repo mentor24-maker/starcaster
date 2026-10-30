@@ -241,19 +241,19 @@ test('probeGateway: any reply is up, a refused connection is down', async () => 
 
 // ── The loop runs it hourly ─────────────────────────────────────────────────
 
-test('the worker checks on its first pass and then once an hour', async () => {
+test('the worker checks on its first pass and then every six hours', async () => {
   let now = T0;
   const calls = [];
   await poster.runPoster({
     adapters: [],
     stopAfterPasses: 4,
     clock: () => now,
-    sleep: async () => { now += 30 * MINUTE; },
+    sleep: async () => { now += 3 * HOUR; },
     write: () => {},
     recordBeat: () => {},
     checkHealth: async () => { calls.push(now); return ''; },
   });
-  assert.deepEqual(calls, [T0, T0 + HOUR]);
+  assert.deepEqual(calls, [T0, T0 + 6 * HOUR]);
 });
 
 test('a check that throws does not stop posting', async () => {

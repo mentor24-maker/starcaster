@@ -536,8 +536,12 @@ export function agoText(iso: string | null | undefined, now: number = Date.now()
   return `${days} days ago`;
 }
 
-/** The Mini checks hourly; a reading older than this means the checker stopped. */
-export const MINI_STALE_MS = 2 * 60 * 60 * 1000;
+/**
+ * A reading older than this means the checker stopped: the Mini checks every
+ * six hours, plus an hour of slack. MUST equal MINI_STALE_MS in
+ * lib/openclawSignIn.js (the panel test compares them).
+ */
+export const MINI_STALE_MS = 7 * 60 * 60 * 1000;
 
 export type MiniStatus = { tone: 'ok' | 'warn' | 'alarm'; lines: string[] };
 

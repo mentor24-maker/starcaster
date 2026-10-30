@@ -144,9 +144,9 @@ test('a Mini that never checked, or stopped checking, is waiting on the Mini —
   assert.equal(never.state, 'waiting_mini');
   assert.match(never.sentence, /never checked/);
 
-  const stale = overview.connectStage('YouTube', signedIn('Dane of Earth', 5 * 60), { label: 'x', page: overview.PAGES.youtube }, NOW);
+  const stale = overview.connectStage('YouTube', signedIn('Dane of Earth', 8 * 60), { label: 'x', page: overview.PAGES.youtube }, NOW);
   assert.equal(stale.state, 'waiting_mini');
-  assert.match(stale.sentence, /5 hours ago/);
+  assert.match(stale.sentence, /8 hours ago/);
 
   const out = overview.connectStage('YouTube', { state: 'signed_out', message: 'The browser is SIGNED OUT of YouTube.', checkedAt: new Date(NOW - MIN * 10).toISOString() }, { label: 'x', page: 'p' }, NOW);
   assert.equal(out.state, 'needs_you');
