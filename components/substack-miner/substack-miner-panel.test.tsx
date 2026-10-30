@@ -20,7 +20,11 @@ import SubstackMinerPanel, {
   keywordsGrowSummaryText,
   widerEmptyText,
   widerSourceText,
+  alsoMentions,
+  latestPosts,
+  postDateText,
   type Candidate,
+  type RecentPost,
   type WiderKeyword,
 } from "./substack-miner-panel";
 import { PROJECT_SWITCH_EVENT } from "../substack-notes/substack-notes-panel";
@@ -307,6 +311,86 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function post(title: string, postedAt: string, extra: Partial<RecentPost> = {}): RecentPost {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return { title, url: `https://x.substack.com/p/${slug}`, postedAt, subtitle: "", excerpt: "", coverImage: "", paid: false, ...extra };
+}
+
+describe("Latest posts and Also mentions (upgrade 3/4, 86bcuxwn5)", () => {
+  const posts = [
+    post("Older one", "2026-10-01T09:00:00Z"),
+    post("Newest: junior tennis camps", "2026-10-21T09:00:00Z", { excerpt: "On polymaths and coaching" }),
+    post("Middle", "2026-10-10T09:00:00Z"),
+    post("Oldest, not shown", "2026-09-01T09:00:00Z", { subtitle: "all about chess" }),
+  ];
+
+  it("headers read Writer · Subscribers · Keywords · Latest posts · Also mentions · Last seen · Notes read · Suggested · Actions", async () => {
+    stores.proj_doe.writers.push(writer({ handle: "ada" }));
+    await mount();
+    const headers = [...container!.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(headers).toEqual(["Writer", "Subscribers", "Keywords", "Latest posts", "Also mentions", "Last seen", "Notes read", "Suggested", "Actions"]);
+  });
+
+  it("shows the newest date and three newest titles, newest first, each opening the post in a new tab", async () => {
+    stores.proj_doe.keywords = ["tennis", "coaching", "chess"];
+    stores.proj_doe.writers.push(writer({ handle: "ada", keywordsHit: ["tennis"], recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    const row = rowFor("ada")!;
+    const links = [...row.querySelectorAll<HTMLAnchorElement>(".substack-miner-post-title")];
+    expect(links.map((a) => a.textContent)).toEqual(["Newest: junior tennis camps", "Middle", "Older one"]);
+    expect(links[0].getAttribute("href")).toBe("https://x.substack.com/p/newest-junior-tennis-camps");
+    expect(links[0].getAttribute("target")).toBe("_blank");
+    expect(links[0].getAttribute("title")).toBe("Newest: junior tennis camps");
+    expect(row.querySelector(".substack-miner-post-date")!.textContent).toContain("Oct 21, 2026");
+    // "chess" is only in the fourth post, which is not shown; tennis is already a Keyword.
+    const chips = [...row.querySelectorAll("td:nth-child(5) .substack-miner-chip")].map((c) => c.textContent);
+    expect(chips).toEqual(["coaching"]);
+  });
+
+  it("matches the wider list too when it exists, and the search list alone when it does not", async () => {
+    stores.proj_doe.keywords = ["coaching"];
+    stores.proj_doe.wider = [{ keyword: "polymaths", sources: [{ kind: "post", handle: "ada" }], firstSeenAt: "2026-10-22T00:00:00Z" }];
+    stores.proj_doe.writers.push(writer({ handle: "ada", recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    expect([...rowFor("ada")!.querySelectorAll("td:nth-child(5) .substack-miner-chip")].map((c) => c.textContent)).toEqual(["coaching", "polymaths"]);
+    const c = writer({ recentPosts: posts, postsReadAt: "x" });
+    expect(alsoMentions(c, { keywords: ["coaching"] })).toEqual(["coaching"]);
+    expect(alsoMentions(c, null)).toEqual([]);
+  });
+
+  it("empty cells say why: not read yet, no posts, nothing beyond its keywords", async () => {
+    stores.proj_doe.keywords = ["tennis"];
+    stores.proj_doe.writers.push(writer({ handle: "unread", postsReadAt: null }));
+    stores.proj_doe.writers.push(writer({ handle: "empty", recentPosts: [], postsReadAt: "2026-10-22T00:00:00Z" }));
+    stores.proj_doe.writers.push(writer({ handle: "same", keywordsHit: ["tennis"], recentPosts: posts, postsReadAt: "2026-10-22T00:00:00Z" }));
+    await mount();
+    expect(rowFor("unread")!.querySelector("td:nth-child(4)")!.textContent).toBe("Posts not read yet");
+    expect(rowFor("empty")!.querySelector("td:nth-child(4)")!.textContent).toBe("No posts");
+    expect(rowFor("same")!.querySelector("td:nth-child(5)")!.textContent).toBe("None beyond its keywords");
+  });
+
+  it("the Found via filter still narrows the list, and the most-recommended writer still comes first", async () => {
+    stores.proj_doe.writers.push(writer({ handle: "searched", foundVia: "web_search", recommendedBy: [] }));
+    stores.proj_doe.writers.push(writer({ handle: "rec1", foundVia: "recommendations", recommendedBy: ["a"] }));
+    stores.proj_doe.writers.push(writer({ handle: "rec3", foundVia: "recommendations", recommendedBy: ["a", "b", "c"] }));
+    await mount();
+    const order = () => [...container!.querySelectorAll("tbody tr")].map((tr) => tr.getAttribute("data-handle"));
+    expect(order()).toEqual(["rec3", "rec1", "searched"]);
+    type(el<HTMLSelectElement>('select[aria-label="Found via"]'), "recommendations");
+    await flush();
+    expect(order()).toEqual(["rec3", "rec1"]);
+  });
+
+  it("latestPosts sorts newest first and keeps three; postDateText says how long ago", () => {
+    expect(latestPosts(writer({ recentPosts: posts })).map((p) => p.title)).toEqual(["Newest: junior tennis camps", "Middle", "Older one"]);
+    const now = new Date(2026, 9, 29, 15, 0);
+    expect(postDateText(new Date(2026, 9, 21, 9, 0).toISOString(), now)).toMatch(/Oct 21, 2026 · 8 days ago$/);
+    expect(postDateText(new Date(2026, 9, 29, 1, 0).toISOString(), now)).toMatch(/· today$/);
+    expect(postDateText(new Date(2026, 9, 28, 23, 0).toISOString(), now)).toMatch(/· yesterday$/);
+    expect(postDateText("", now)).toBe("");
+  });
+});
+
 describe("Notes read column (Substack Miner 5/7)", () => {
   it("shows the date an approved writer's Notes were read, Not yet before then, and nothing for a candidate", () => {
     const read = notesReadText(writer({ status: "approved", lastNotesReadAt: "2026-10-09T12:00:00Z" }));
@@ -366,7 +450,8 @@ describe("Substack Miner screen", () => {
     ] });
     expect(text()).toContain("2 added.");
     expect(stores.proj_doe.writers.map((w) => w.foundVia)).toEqual(["seed", "seed"]);
-    expect(rowFor("kindoftsetsy")?.textContent).toContain("Pasted link");
+    // How it was found left the list in upgrade 3/4 (it moves to the details page); the store says seed.
+    expect(rowFor("kindoftsetsy")).not.toBeNull();
     expect(rowFor("another-one")).not.toBeNull();
   });
 

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PROJECT_SWITCH_EVENT, splitLines } from '../substack-notes/substack-notes-panel';
 import { SubstackDecisionDialog, reasonTally, type Decision } from './substack-decision-dialog';
 import { SubstackSuggestionDialog, SUGGESTED_WORD, type Suggestion } from './substack-suggestion-dialog';
+import { matchPostKeywords } from './match-post-keywords';
 
 /**
  * Acquire › Substack Miner — where Dane sees every Substack writer Starcaster
@@ -508,9 +509,79 @@ export function postsReadSummaryText(s: Record<string, any> | null | undefined):
   return out;
 }
 
+/** How many posts the Latest posts column shows (upgrade 3/4). */
+export const LATEST_POSTS_SHOWN = 3;
+
+/** The newest posts, newest first, whatever order they were stored in. */
+export function latestPosts(c: Candidate, count = LATEST_POSTS_SHOWN): RecentPost[] {
+  return [...(c.recentPosts || [])]
+    .sort((a, b) => (Date.parse(b.postedAt || '') || 0) - (Date.parse(a.postedAt || '') || 0))
+    .slice(0, count);
+}
+
+/** "Oct 21, 2026 · 8 days ago" — the full date always, so a list of them lines up. */
+export function postDateText(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso || '');
+  if (Number.isNaN(date.getTime())) return '';
+  const full = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(date)) / 86400000);
+  let ago: string;
+  if (days <= 0) ago = 'today';
+  else if (days === 1) ago = 'yesterday';
+  else if (days < 60) ago = `${days} days ago`;
+  else if (days < 730) ago = `${Math.round(days / 30.44)} months ago`;
+  else ago = `${Math.floor(days / 365.25)} years ago`;
+  return `${full} · ${ago}`;
+}
+
+/**
+ * The "Also mentions" keywords: the search list plus the wider list (2/4),
+ * found in the newest posts, minus what the Keywords column already says.
+ * Without a wider list it is the search list alone.
+ */
+export function alsoMentions(c: Candidate, settings: Pick<MinerSettings, 'keywords' | 'widerKeywords'> | null): string[] {
+  const keywords = [...(settings?.keywords || []), ...(settings?.widerKeywords || []).map((k) => k.keyword)];
+  return matchPostKeywords(latestPosts(c), keywords, c.keywordsHit);
+}
+
+function LatestPosts({ c }: { c: Candidate }): React.ReactElement {
+  if (!c.postsReadAt) return <span className="substack-miner-muted" title="Run tab, Read writers' posts">Posts not read yet</span>;
+  const posts = latestPosts(c);
+  if (!posts.length) return <span className="substack-miner-muted" title={`Posts read on ${c.postsReadAt}`}>No posts</span>;
+  return (
+    <div className="substack-miner-posts">
+      <span className="substack-miner-post-date" title={posts[0].postedAt}>{postDateText(posts[0].postedAt) || 'Date unknown'}</span>
+      <ul>
+        {posts.map((p) => (
+          <li key={p.url || p.title}>
+            <a className="substack-miner-link substack-miner-post-title" href={p.url} target="_blank" rel="noopener noreferrer" title={p.title}>
+              {p.title || p.url}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AlsoMentions({ c, settings }: { c: Candidate; settings: MinerSettings | null }): React.ReactElement {
+  // The Latest posts cell beside this one already says why there is nothing.
+  if (!c.postsReadAt) return <span className="substack-miner-muted" title="Posts not read yet">—</span>;
+  if (!latestPosts(c).length) return <span className="substack-miner-muted" title="No posts to read keywords from">—</span>;
+  const words = alsoMentions(c, settings);
+  if (!words.length) return <span className="substack-miner-muted">None beyond its keywords</span>;
+  return (
+    <span className="substack-miner-chips">
+      {words.map((k) => <span key={k} className="substack-miner-chip">{k}</span>)}
+    </span>
+  );
+}
+
 // ── One row ────────────────────────────────────────────────────────────────
 
-function RecommendedBy({ handles }: { handles: string[] }): React.ReactElement {
+/** Left the list in upgrade 3/4; kept for the details page (4/4). */
+export function RecommendedBy({ handles }: { handles: string[] }): React.ReactElement {
   if (!handles.length) return <span>0</span>;
   return (
     <details className="substack-miner-recommended">
@@ -1010,8 +1081,8 @@ export default function SubstackMinerPanel(): React.ReactElement {
                     <th scope="col">Writer</th>
                     <th scope="col">Subscribers</th>
                     <th scope="col">Keywords</th>
-                    <th scope="col">Recommended by</th>
-                    <th scope="col">Found via</th>
+                    <th scope="col">Latest posts</th>
+                    <th scope="col">Also mentions</th>
                     <th scope="col">Last seen</th>
                     <th scope="col">Notes read</th>
                     <th scope="col">Suggested</th>
@@ -1040,9 +1111,9 @@ export default function SubstackMinerPanel(): React.ReactElement {
                             </span>
                           ) : '—'}
                         </td>
-                        <td><RecommendedBy handles={c.recommendedBy || []} /></td>
-                        <td>{FOUND_VIA_LABELS[c.foundVia] || c.foundVia}</td>
-                        <td title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
+                        <td className="substack-miner-posts-cell"><LatestPosts c={c} /></td>
+                        <td><AlsoMentions c={c} settings={settings} /></td>
+                        <td className="substack-miner-date-cell" title={c.lastSeenAt || ''}>{shortDate(c.lastSeenAt)}</td>
                         <td title={notesReadTitle(c)}>{notesReadText(c)}</td>
                         <td className="substack-miner-suggested-cell">
                           {c.status === 'candidate' && c.suggestion ? (

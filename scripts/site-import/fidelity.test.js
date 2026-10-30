@@ -211,3 +211,17 @@ test('rowsForSection takes the first row and its band rows, nothing else', () =>
   const rows = [{ id: 'imps_004c07a43' }, { id: 'imps_004c07a43b1' }, { id: 'imps_004c07a43x' }, { id: 'imps_004c07a431' }];
   assert.deepEqual(F.rowsForSection('0-04c07a43', rows).map((r) => r.id), ['imps_004c07a43', 'imps_004c07a43b1']);
 });
+
+test('a glow the import carried onto a Button is not reported as lost (86bctde3a)', () => {
+  const s = heroSection({
+    elements: [{
+      sourceId: '0-b1', class: 'button', html: '<button>Go</button>', textContent: 'Go', textLength: 2,
+      computedStyles: { 'box-shadow': 'rgba(0, 217, 255, 0.18) 0px 0px 22px 0px, rgba(0, 217, 255, 0.04) 0px 0px 18px 0px inset' },
+      documentPosition: 0, depth: 4, assetRefs: [], box: { x: 0, y: 0, w: 148, h: 54 },
+    }],
+  });
+  const lostRow = row({ modules: [{ id: 'm', type: 'button', text: 'Go', settings: {} }] });
+  assert.equal(find(F.compareSection(s, { rows: [lostRow], theme: THEME }), 'shadow').length, 1);
+  const keptRow = row({ modules: [{ id: 'm', type: 'button', text: 'Go', settings: { buttonGlow: 'true', buttonGlowColor: '#00d9ff' } }] });
+  assert.equal(find(F.compareSection(s, { rows: [keptRow], theme: THEME }), 'shadow').length, 0);
+});

@@ -131,6 +131,16 @@
   vertical-align: middle;
 }
 
+/* Nine headers kept on one line each were most of the table's minimum width
+   ("Subscribers", "Also mentions" and "Notes read" set their columns); at
+   1280px they pushed Reject past the right edge (round-1 review of
+   86bcuxwn5). Here they wrap between words instead. Same selector shape as
+   the shared nowrap rule in _tables.css, plus the class, so it wins on
+   specificity rather than on file order. */
+table.substack-miner-table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th {
+  white-space: normal;
+}
+
 /* Names and handles wrap between words (and at a handle's dashes), and break
    inside a word only when one word cannot fit. `anywhere` would let the
    browser squeeze the column down to one letter. */
@@ -184,6 +194,65 @@
   margin-top: var(--space-2);
   opacity: 0.75;
   overflow-wrap: break-word;
+}
+
+/* Latest posts (upgrade 3/4): the newest date, then up to three titles,
+   each cut to two lines with "…" — the full title is on hover. The column
+   takes the room the dropped Recommended by / Found via columns gave up. */
+/* "Oct 29" on one line; the header above it may wrap, the date may not. */
+.substack-miner-date-cell {
+  white-space: nowrap;
+}
+
+.substack-miner-posts-cell {
+  width: 18%;
+}
+
+/* The writer's name and description need a share too, or the posts column
+   squeezes the description to one word a line. */
+.substack-miner-name-cell {
+  width: 16%;
+}
+
+/* Nine columns at 1280px (round-1 review of 86bcuxwn5): Approve and Reject
+   side by side took 186px and pushed Reject past the right edge. Stacked,
+   the column is as wide as its widest button. Text buttons, not icons, so
+   the one-row rule for icon actions does not apply here. */
+.substack-miner-table .table-actions-row {
+  flex-direction: column;
+  align-items: stretch;
+  width: auto;
+}
+
+.substack-miner-posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.substack-miner-post-date {
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.substack-miner-posts ul {
+  margin: 0;
+  padding-left: var(--space-5);
+  min-width: 0;
+}
+
+.substack-miner-post-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: break-word;
+}
+
+.substack-miner-muted {
+  opacity: 0.75;
 }
 
 .substack-miner-recommended summary {

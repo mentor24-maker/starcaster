@@ -931,6 +931,34 @@ test('attaching menus: Top Menu first, Footer Menu last, and a second attach cha
   assert.deepEqual(topOnly.sections.map((s) => s.savedSectionId || s.id), ['top1', 'a', 'b']);
 });
 
+test('a coloured glow reaches the Button and the picture; a grey shadow does not (86bctde3a)', () => {
+  const ir = completenessIr();
+  const sec = ir.pages[0].sections[0];
+  const btn = sec.elements.find((e) => e.sourceId === '0-btn');
+  btn.computedStyles = { 'box-shadow': 'rgba(0, 217, 255, 0.18) 0px 0px 22px 0px, rgba(0, 217, 255, 0.04) 0px 0px 18px 0px inset' };
+  const img = sec.elements.find((e) => e.sourceId === '0-imgsolo');
+  img.computedStyles = { 'box-shadow': 'rgba(0, 217, 255, 0.15) 0px 0px 60px 0px' };
+  const modules = mapSite(ir, { existingSlugs: [] }).pages[0].sections.flatMap((s) => s.modules);
+  const button = modules.find((m) => m.type === 'button');
+  assert.equal(button.settings.buttonGlow, 'true');
+  assert.equal(button.settings.buttonGlowColor, '#00d9ff');
+  assert.equal(button.settings.buttonGlowSize, '22');
+  assert.equal(button.settings.buttonGlowStrength, '18');
+  const picture = modules.find((m) => m.type === 'image');
+  assert.equal(picture.settings.imageShadow, 'true');
+  assert.equal(picture.settings.imageShadowColor, '#00d9ff');
+  assert.equal(picture.settings.imageShadowBlur, '60');
+  assert.equal(picture.settings.imageShadowOpacity, '15');
+
+  // An ordinary grey drop shadow leaves both modules exactly as before.
+  const plain = completenessIr();
+  const s2 = plain.pages[0].sections[0];
+  s2.elements.find((e) => e.sourceId === '0-btn').computedStyles = { 'box-shadow': 'rgba(0, 0, 0, 0.2) 0px 2px 6px 0px' };
+  const m2 = mapSite(plain, { existingSlugs: [] }).pages[0].sections.flatMap((s) => s.modules);
+  assert.ok(!Object.keys(m2.find((m) => m.type === 'button').settings).some((k) => /Glow/.test(k)));
+  assert.ok(!Object.keys(m2.find((m) => m.type === 'image').settings).some((k) => /Shadow/.test(k)));
+});
+
 /* ---------------------------------------------------------------------------
  * Downloaded but never placed (task 86bctde7n): Alphire downloaded 48 files
  * and Assets showed 10. Every image and PDF gets one row; fonts none.

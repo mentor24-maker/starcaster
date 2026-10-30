@@ -28,11 +28,13 @@
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
-import { chooseLayout, columnKeys, planSectionGrid, type Cell } from "./columns";
+import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind } from "./columns";
 import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
+  buttonGlowSettings,
   hasPaint,
+  imageGlowSettings,
   keepCellFill,
   planBands,
   planCards,
@@ -1002,6 +1004,12 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
 
 const PLACEHOLDER_CLASSES = new Set(["form", "table", "embed", "other"]);
 const PROSE_CLASSES = new Set(["heading", "text", "link"]);
+
+/** An element as the column planner's lockup rule sees it (columns.ts). */
+function gridKind(el: ElementIR): GridKind {
+  if (el.class === "image") return "image";
+  return PROSE_CLASSES.has(el.class) ? "prose" : "other";
+}
 const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
 
 /* ---------------------------------------------------------------------------
@@ -1637,7 +1645,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         }
       );
       const draft = planSectionGrid(
-        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId) }))
+        sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId), kind: gridKind(el) }))
       );
       const cardOf = planCards(sectionEls, bandOf, (id) => {
         const c = draft.cells.get(id);
@@ -1648,6 +1656,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           id: el.sourceId,
           box: el.box,
           group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+          kind: gridKind(el),
         }))
       );
       // No painted band anywhere: the section root may still carry the spacing.
@@ -1926,6 +1935,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               size: "100",
               ...(imageLink(el) || {}),
               ...cappedAt(importedImageCap(shownWidthPx(el.html, el.box), columnPxFor(currentCell), asset)),
+              ...imageGlowSettings(el.computedStyles),
               ...imageShapeFor(el, section),
               importSourceIds: el.sourceId,
             },
@@ -1945,6 +1955,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
             text: collapse(el.textContent) || "Imported button",
             settings: {
               href: attrFromHtml(el.html, "href"),
+              ...buttonGlowSettings(el.computedStyles),
               importSourceIds: el.sourceId,
             },
           });
