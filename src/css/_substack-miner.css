@@ -398,6 +398,44 @@ table.substack-miner-table:not(.builder-module-preview-table):not(.builder-previ
   margin: 0;
 }
 
+/* The Wider keywords card (Substack Miner upgrade 2/4): one keyword per line —
+   the word, where it came from, then its two buttons; wraps on a phone. */
+.substack-miner-wider-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+
+.substack-miner-wider-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+  min-width: 0;
+}
+
+.substack-miner-wider-word {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.substack-miner-wider-source {
+  color: var(--text-muted, #5f6368);
+  font-size: 0.875em;
+}
+
+.substack-miner-wider-actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
 .substack-miner-actions {
   display: flex;
   flex-wrap: wrap;

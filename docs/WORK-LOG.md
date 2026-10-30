@@ -1,3 +1,16 @@
+## 2026-10-29 — The Substack Miner learns new keywords from the writers Dane approves (#917)
+
+The Miner's search keywords were only ever the ones Dane typed in. Now it also
+keeps a second, wider list that it learns by itself from the writers he has
+approved: the reasons he ticked when approving them, plus the topics their
+newest posts and his "why I approved" notes talk about (one AI call picks out
+short topics like "metamodernism"). Each keyword says where it came from. The
+wider list is not searched on its own, because every searched keyword costs a
+web search and can bring in 20 new writers; it sits on the Run tab with an
+**Add to search** button and a **Remove** button, and a removed keyword never
+comes back. It grows from a **Grow keywords now** button and by itself once a
+day after the posts are read. If the AI step fails, the reason keywords are
+still added and the screen says the topics were skipped and why.
 ## 2026-10-29 — An imported logo beside its name no longer becomes a band of its own (#916)
 
 Alphire's imported hero had its star logo and "Alphire / AI Agency" cut off
