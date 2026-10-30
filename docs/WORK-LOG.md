@@ -1,3 +1,20 @@
+## 2026-10-28 — The Mini's private doors are closed to other Tailscale devices (#891)
+
+Any device signed in to Dane's Tailscale could open the Mini's private
+OpenClaw control page, and its password-less Chrome control and the browser
+door keeper whenever those run — measured again this morning from the
+MacBook. The fix is a Tailscale access rule that lets other devices reach only
+ssh, Screen Sharing, the public address and the YouTube helper on the Mini —
+the last two serve only what is already public. This change writes that
+rule down exactly, with Tailscale's own built-in tests (so the admin console
+refuses to save a rule that does the wrong thing), an undo, and the check that
+proves it worked. Dane switched it on the same day, adding Screen Sharing, and
+the outside check then showed all three private ports closed. One port turned
+out to be missing — 443, which the sign-in window needs from the MacBook and
+which reaches only what is already public — so the record now carries it, and
+Dane added it in the Tailscale admin page on 2026-10-29. That evening the
+check, run from a tailnet device, passed on every line: the three private
+ports closed and the sign-in window opening over 443.
 ## 2026-10-29 — Imported logos can sit beside their brand name (#921)
 
 On Alphire's website the star logo sits next to the words "Alphire / AI
