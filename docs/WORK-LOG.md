@@ -1,3 +1,14 @@
+## 2026-10-29 — An imported logo beside its name no longer becomes a band of its own (#916)
+
+Alphire's imported hero had its star logo and "Alphire / AI Agency" cut off
+into a separate band above the rest of the hero. The importer saw "small
+picture beside text" as a row of columns, and Builder can only make a row of
+columns into its own section. Now a logo-sized picture with a few lines of
+text right beside it stays part of the content around it. Measured on
+Alphire's stored capture: once the import is re-run, the hero comes out with
+text on the left and the picture on the right, with the logo inside the hero
+above the brand name. Putting the logo *beside* the name needs a new Builder
+ability, filed as its own ticket.
 ## 2026-10-29 — Imported sites keep their buttons (#919)
 
 When Site Import copies a website, a link that the site dresses up as a
