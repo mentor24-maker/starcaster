@@ -9,6 +9,16 @@ opening their publication. The **Recommended by** and **Found via** columns
 left the table to make room (they move to the writer's details page next); the
 Found via filter above the list still works. Empty cells say why: "Posts not
 read yet", "No posts", or "None beyond its keywords".
+## 2026-10-29 — Buttons can glow, and an imported glow is kept (#913)
+
+A Button now has a Glow setting on its Frame tab: a colour, a size and a
+strength, drawn as a soft haze round the button on the live site. It is off
+unless ticked, so no existing button changed. When a website being imported
+gives a button a coloured glow, the imported Button gets the same one, and a
+picture's glow lands on the picture's existing Drop Shadow setting, centred.
+Grey shadows import exactly as before. Alphire is not fixed by this yet. Its
+"buttons" are really links, so they import as text, and its hero picture's
+glow was never captured. Both are named on the ticket for follow-up.
 
 ## 2026-10-29 — The Substack Miner keeps each writer's newest posts and pictures (#915)
 

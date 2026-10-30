@@ -619,6 +619,53 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
  * and size. Animations are paused at time zero first, or two samples of the
  * same thing differ by however many milliseconds apart they were taken.
  */
+/**
+ * The mean colour painted in four bands just outside `selector`'s box, each
+ * `band` px thick and starting `gap` px from the edge, as { r, g, b } 0..255
+ * per side — plus `far`, the same band size sampled `far` px away from the
+ * element, which is the ground the near bands are compared against.
+ * Main-page only: a frame's coordinates are not the page's, so it answers
+ * null there rather than measuring the wrong place.
+ */
+async function readPixelsAround(page, target, selector, { gap = 2, band = 6, far = 120 } = {}) {
+  if (target !== page) return null;
+  try {
+    const box = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      el.scrollIntoView({ block: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight };
+    }, selector);
+    if (!box || box.w < 4 || box.h < 4) return null;
+    const sharp = require('sharp');
+    const mean = async (x, y, w, h) => {
+      const clip = {
+        x: Math.max(0, Math.round(x)), y: Math.max(0, Math.round(y)),
+        width: Math.round(w), height: Math.round(h),
+      };
+      if (clip.width < 1 || clip.height < 1 || clip.x + clip.width > box.vw || clip.y + clip.height > box.vh) return null;
+      const png = await page.screenshot({ clip, animations: 'disabled' });
+      const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const sum = [0, 0, 0];
+      for (let i = 0; i < data.length; i += info.channels) for (let c = 0; c < 3; c += 1) sum[c] += data[i + c];
+      const n = data.length / info.channels;
+      return { r: Math.round(sum[0] / n), g: Math.round(sum[1] / n), b: Math.round(sum[2] / n) };
+    };
+    const midW = box.w / 2;
+    const midH = box.h / 2;
+    return {
+      above: await mean(box.x + box.w / 4, box.y - gap - band, midW, band),
+      below: await mean(box.x + box.w / 4, box.y + box.h + gap, midW, band),
+      left: await mean(box.x - gap - band, box.y + box.h / 4, band, midH),
+      right: await mean(box.x + box.w + gap, box.y + box.h / 4, band, midH),
+      far: await mean(box.x + box.w + far, box.y + box.h / 4, band, midH),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 function compareRenderedModules(page) {
   return page.evaluate(() => {
     /*
@@ -1077,6 +1124,19 @@ try {
         }
         return out;
       }, contract.fontFaces);
+    }
+    /*
+     * Optional PIXELS: the mean colour actually painted in a thin band just
+     * OUTSIDE an element — above it, below it, left and right — read off a
+     * screenshot. It exists because a box-shadow is in no element's box and
+     * no computed style says whether it reached the screen: an ancestor's
+     * `overflow: hidden` clips it while getComputedStyle still reports it in
+     * full. The Button's glow (task 86bctde3a) is the first thing measured
+     * this way. Null — never a colour — when the read could not be taken, so
+     * a blind reading cannot pass for a dark one.
+     */
+    if (result && result.found && contract.pixels) {
+      result.pixels = await readPixelsAround(page, target, contract.selector, contract.pixels);
     }
     for (const [url, handler] of served) await page.unroute(url, handler);
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });
