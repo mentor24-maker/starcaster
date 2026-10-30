@@ -163,6 +163,15 @@ function documentForSection({
   cellBorderWidth,
   cellBorderColor,
   cellBorderStyle,
+  /*
+   * The ROW's own border and corner. The renderer applies the radius only
+   * alongside a width, so the four travel together — a fixture without them
+   * cannot ask whether a corner the operator set survives (86bcvqemm).
+   */
+  rowBorderWidth,
+  rowBorderColor,
+  rowBorderStyle,
+  rowBorderRadius,
 } = {}) {
   /*
    * SPACER SECTIONS, above and below, so the page is tall enough to SCROLL.
@@ -216,6 +225,10 @@ function documentForSection({
     ...(cellBorderWidth ? { cellBorderWidth } : {}),
     ...(cellBorderColor ? { cellBorderColor } : {}),
     ...(cellBorderStyle ? { cellBorderStyle } : {}),
+    ...(rowBorderWidth ? { rowBorderWidth } : {}),
+    ...(rowBorderColor ? { rowBorderColor } : {}),
+    ...(rowBorderStyle ? { rowBorderStyle } : {}),
+    ...(rowBorderRadius ? { rowBorderRadius } : {}),
     modules: modules.map(moduleFrom),
   };
 
