@@ -39,7 +39,7 @@
  *      A link nobody could check is left `posting` for a person, because
  *      calling it failed could hide a comment that is live.
  *
- * AND ONCE AN HOUR, IT LOOKS AT ITS OWN BROWSER (7/7, task 86bcda6dt):
+ * AND EVERY SIX HOURS, IT LOOKS AT ITS OWN BROWSER (7/7, task 86bcda6dt):
  * is OpenClaw answering, and is each account's profile still signed in as
  * the right account? The answer goes onto the account's settings row for the
  * screen, and a bad one goes to the bus by name (./health.js).
@@ -411,7 +411,7 @@ function defaultCheckRequested(adapters) {
   return (sinceMs) => require('../../lib/outreachAccounts').checkRequestedSince(projectIds, sinceMs);
 }
 
-/** The real hourly check: every account, through OpenClaw, alarms to the bus. */
+/** The real sign-in check: every account, through OpenClaw, alarms to the bus. */
 function defaultHealthCheck(node, extraChecks = []) {
   const health = require('./health.js');
   // The alarm names the machine the way the roll call does ("mac-mini"), not
@@ -488,7 +488,7 @@ async function runPoster(options = {}) {
     try {
       return await requested(sinceMs);
     } catch (err) {
-      write(`[outreach-health] could not look for a "Check now" request: ${err.message} — the hourly check still runs`);
+      write(`[outreach-health] could not look for a "Check now" request: ${err.message} — the scheduled check still runs`);
       return false;
     }
   };
@@ -521,7 +521,7 @@ async function runPoster(options = {}) {
       }
     }
 
-    // THE HOURLY LOOK AT THE BROWSER. Runs on the first pass too, so a worker
+    // THE REGULAR LOOK AT THE BROWSER. Runs on the first pass too, so a worker
     // started against a signed-out browser says so within minutes, not an hour
     // — and early whenever the Outreach screen's "Check now" asked for it.
     const healthAt = clock();

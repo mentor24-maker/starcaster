@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * The posting worker's hourly look at its own browser (YouTube outreach 7/7,
+ * The posting worker's regular look at its own browser (YouTube outreach 7/7,
  * task 86bcda6dt). Without it, a signed-out browser leaves every approved
  * comment sitting at `approved` forever, which looks exactly like a quiet week.
  *
- * Once an hour, for every account an adapter posts with — and every account
+ * Every six hours (and on "Check now"), for every account an adapter posts with — and every account
  * listed as a sign-in-only check, which is how Substack is watched before
  * anything posts there (poster.js SIGN_IN_CHECKS) — it asks two separate
  * questions, in this order:
@@ -45,8 +45,8 @@ const path = require('node:path');
 
 const signIn = require('../../lib/openclawSignIn.js');
 
-/** How often the worker checks. "Within about an hour" is the ticket's promise. */
-const CHECK_EVERY_MS = 60 * 60 * 1000;
+/** How often the worker checks on its own (lib/openclawSignIn.js says why six hours). */
+const { CHECK_EVERY_MS } = signIn;
 
 /** How long an open alarm stays quiet before it is said again. */
 const REPOST_EVERY_MS = 6 * 60 * 60 * 1000;
@@ -161,7 +161,7 @@ function decideAlarm({ entry, state, now, everyMs = REPOST_EVERY_MS }) {
  */
 function alarmPost(node, message, title = SITE_TITLES.youtube) {
   return `⚠️ **${title} (${node || 'the Mini'})** — ${message}\n\n`
-    + `_Repeated at most once every ${Math.round(REPOST_EVERY_MS / 3600000)} hours until a check comes back good; checked hourly._`;
+    + `_Repeated at most once every ${Math.round(REPOST_EVERY_MS / 3600000)} hours until a check comes back good; checked every ${Math.round(CHECK_EVERY_MS / 3600000)} hours._`;
 }
 
 function clearPost(node, message, title = SITE_TITLES.youtube) {
@@ -283,7 +283,7 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
     try {
       await deps.post(body);
     } catch (err) {
-      // Not recorded as sent, so the next hourly check tries again.
+      // Not recorded as sent, so the next check tries again.
       problems.push(`the ${decision.action === 'post' ? 'alarm' : 'all-clear'} for ${key} could not be posted to the bus: ${err.message}`);
       continue;
     }

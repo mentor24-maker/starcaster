@@ -337,7 +337,7 @@ test('the Mini is only asked to read when its last check says signed in, recentl
   try {
     const cases = [
       [miniCheck('signed_in', { minutesAgo: 30 }), null],
-      [miniCheck('signed_in', { minutesAgo: 3 * 60 }), /last checked its Reddit sign-in 3 hours ago, so its worker may have stopped/],
+      [miniCheck('signed_in', { minutesAgo: 8 * 60 }), /last checked its Reddit sign-in 8 hours ago, so its worker may have stopped/],
       [miniCheck('wrong_account', { message: 'Signed in as u/someoneelse.' }), /not signed in to Reddit \(Signed in as u\/someoneelse\)/],
       [miniCheck('gateway_down', { message: 'OpenClaw did not answer' }), /not signed in to Reddit \(OpenClaw did not answer\)/],
       [async () => ({ ok: true, data: { state: '', checkedAt: null } }), /has never checked its Reddit sign-in — its worker may not be running/],

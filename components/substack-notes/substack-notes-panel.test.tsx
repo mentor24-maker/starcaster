@@ -859,7 +859,7 @@ describe("the Mini's Substack sign-in line (YouTube outreach 7/7)", () => {
   });
 
   it("a reading that has stopped coming is a warning, even if the last one was good", () => {
-    const line = signInLine({ ...good, checkedAt: "2026-10-08T14:00:00Z" }, NOW);
+    const line = signInLine({ ...good, checkedAt: "2026-10-08T10:00:00Z" }, NOW);
     expect(line.tone).toBe("warn");
     expect(line.text).toContain("the posting worker may have stopped");
   });
