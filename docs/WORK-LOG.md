@@ -1,3 +1,17 @@
+## 2026-10-29 — Imported logos can sit beside their brand name (#921)
+
+On Alphire's website the star logo sits next to the words "Alphire / AI
+Agency". Builder cannot put two things side by side inside one column, so an
+import could only stack the logo on top of the name. The importer now spots
+that shape — a small picture with a line or two of words right beside it — and
+writes the pair as one text box that sets the logo on the left and the words
+on the right. For that to work, a text box had to be allowed to show a picture
+from the import's own storage folder (Dane's choice, option A1); pictures from
+anywhere else are still removed, and that is tested. A browser check now
+measures that the logo really sits left of the words, and it was broken on
+purpose twice to prove it notices. Alphire's home page needs re-importing once
+this is live to pick it up.
+
 ## 2026-10-29 — The Substack Miner learns new keywords from the writers Dane approves (#917)
 
 The Miner's search keywords were only ever the ones Dane typed in. Now it also
