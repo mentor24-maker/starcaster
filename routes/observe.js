@@ -217,6 +217,15 @@ async function handle(req, res, pathname, method) {
         if (!payload.ok) return sendErr(res, 500, payload.error), true;
         return sendOk(res, 200, payload.data), true;
      }
+     if (pathname === '/api/observe/ai-quota') {
+        // Settings › AI Quota: the last 30 days of spend, plus every job that
+        // uses AI — including the ones on the Mini no meter row describes.
+        const payload = await getAiSpendSummary(20000, scope, req.query?.since || null);
+        if (!payload.ok) return sendErr(res, 500, payload.error), true;
+        const { listAiJobs } = require('../lib/aiJobs');
+        const { RATES_CHECKED } = require('../lib/aiPricing');
+        return sendOk(res, 200, { ...payload.data, jobs: listAiJobs(payload.data.byFeature), ratesChecked: RATES_CHECKED }), true;
+     }
      if (pathname === '/api/observe/page-views') {
         const payload = await listPageViews(req.query?.limit || 1000, scope);
         if (!payload.ok) return sendErr(res, 500, payload.error), true;
