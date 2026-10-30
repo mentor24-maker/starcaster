@@ -226,6 +226,24 @@ async function handle(req, res, pathname, method) {
         const { RATES_CHECKED } = require('../lib/aiPricing');
         return sendOk(res, 200, { ...payload.data, jobs: listAiJobs(payload.data.byFeature, payload.data.byJob), ratesChecked: RATES_CHECKED }), true;
      }
+     if (pathname === '/api/observe/ai-billed') {
+        // Settings › AI Quota, "What Anthropic actually billed" (AI Quota 2/5).
+        // The bill is the whole organization's — every tenant's calls and the
+        // Mini's — so only the platform owner sees it.
+        if (String(req?.authUser?.role || '').trim().toLowerCase() !== 'owner') {
+          return sendOk(res, 200, { status: 'owner-only' }), true;
+        }
+        const { getAnthropicBilling, compareMeterToBill } = require('../lib/anthropicBilling');
+        const billing = await getAnthropicBilling({ days: 30 });
+        if (!billing.ok) return sendOk(res, 200, { status: 'error', message: billing.error }), true;
+        if (billing.data.status !== 'ok') return sendOk(res, 200, billing.data), true;
+        const { getMeteredAnthropicSpend } = require('../lib/observeStore');
+        const meter = await getMeteredAnthropicSpend(billing.data.startingAt, billing.data.finishedUntil);
+        const comparison = meter.ok
+          ? { ...compareMeterToBill(meter.data.costUsd, billing.data.finishedUsd), meterCalls: meter.data.calls, meterUnpricedCalls: meter.data.unpricedCalls, meterTruncated: meter.data.truncated }
+          : null;
+        return sendOk(res, 200, { ...billing.data, comparison, comparisonError: meter.ok ? '' : meter.error }), true;
+     }
      if (pathname === '/api/observe/page-views') {
         const payload = await listPageViews(req.query?.limit || 1000, scope);
         if (!payload.ok) return sendErr(res, 500, payload.error), true;

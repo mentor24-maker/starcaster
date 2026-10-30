@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import BilledSection, { useBilled } from './ai-billed-section';
 
 /**
  * Settings › AI Quota — the one home for what AI costs (task 86bcvj7k9).
@@ -315,7 +316,15 @@ export default function AiQuotaPage(): React.ReactElement {
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load AI spend.'));
   }, []);
 
-  useLoadWhenShown(hostRef, load);
+  // Anthropic's bill loads on its own, so a slow read there never holds up
+  // the meter's figures (AI Quota 2/5).
+  const [billed, loadBilled] = useBilled();
+  const loadAll = useCallback(() => {
+    load();
+    loadBilled();
+  }, [load, loadBilled]);
+
+  useLoadWhenShown(hostRef, loadAll);
 
   let body: React.ReactElement;
   if (error) {
@@ -329,5 +338,10 @@ export default function AiQuotaPage(): React.ReactElement {
   } else {
     body = <AiQuotaView data={data} />;
   }
-  return <div ref={hostRef}>{body}</div>;
+  return (
+    <div ref={hostRef}>
+      <BilledSection data={billed} />
+      {body}
+    </div>
+  );
 }
