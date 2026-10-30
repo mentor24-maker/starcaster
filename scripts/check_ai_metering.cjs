@@ -30,6 +30,8 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 const SCAN_DIRS = ['lib', 'routes'];
 const METER = 'recordAiUsage';
+/** Either meter writes the row; OpenClaw's reads its own response shape. */
+const METERS = [METER, 'recordOpenClawCall'];
 
 // Endpoints that generate tokens, and therefore cost money.
 const GENERATION_PATTERNS = [
@@ -40,6 +42,10 @@ const GENERATION_PATTERNS = [
   // The official SDK never spells the endpoint URL, so a file calling Claude
   // through it would pass this check unmetered (first SDK use: task 86bbztj0e).
   { provider: 'anthropic', re: /require\(\s*['"]@anthropic-ai\/sdk['"]\s*\)|from\s+['"]@anthropic-ai\/sdk['"]/ },
+  // OpenClaw's gateway, at whatever base URL is configured. Every Mini AI call
+  // goes through it to Anthropic, unseen until AI Quota 3/5 (task 86bcvj7vc);
+  // its meter is recordOpenClawCall(), which writes the same row.
+  { provider: 'openclaw', re: /fetch\(\s*`\$\{[^}]+\}\/v1\/responses`/ },
 ];
 
 // Files exempt from the rule, each with the reason. A path lands here only
@@ -80,7 +86,7 @@ function main() {
     if (!providers.length) continue;
 
     if (EXEMPT.has(rel)) continue;
-    if (source.includes(METER)) metered.push({ rel, providers });
+    if (METERS.some((name) => source.includes(name))) metered.push({ rel, providers });
     else missing.push({ rel, providers });
   }
 

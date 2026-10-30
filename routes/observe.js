@@ -224,7 +224,7 @@ async function handle(req, res, pathname, method) {
         if (!payload.ok) return sendErr(res, 500, payload.error), true;
         const { listAiJobs } = require('../lib/aiJobs');
         const { RATES_CHECKED } = require('../lib/aiPricing');
-        return sendOk(res, 200, { ...payload.data, jobs: listAiJobs(payload.data.byFeature), ratesChecked: RATES_CHECKED }), true;
+        return sendOk(res, 200, { ...payload.data, jobs: listAiJobs(payload.data.byFeature, payload.data.byJob), ratesChecked: RATES_CHECKED }), true;
      }
      if (pathname === '/api/observe/page-views') {
         const payload = await listPageViews(req.query?.limit || 1000, scope);
