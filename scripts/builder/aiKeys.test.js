@@ -137,6 +137,38 @@ test('planAlarms: a dry account posts once, stays quiet for 6h, re-posts after, 
   assert.equal(worse.post.length, 1, 'going down in a different way is news at once');
 });
 
+test('planAlarms: a blind check stays quiet for a blip, posts once after an hour, re-posts after 6h, and clears on a reading', () => {
+  const T0 = Date.parse('2026-10-30T12:00:00Z');
+  const MIN = 60000;
+  const blindRow = [{ id: 'website-anthropic', verdict: VERDICT.CANNOT_TELL, reason: 'Doppler prd could not be read' }];
+
+  const first = aiKeys.planAlarms({ rows: blindRow, state: {}, now: T0 });
+  assert.equal(first.blind.length + first.post.length, 0, 'one CANNOT TELL is a blip, not news');
+  assert.equal(first.next['blind:website-anthropic'].since, new Date(T0).toISOString(), 'the first blind wake must be recorded');
+
+  const recovered = aiKeys.planAlarms({ rows: [{ id: 'website-anthropic', verdict: VERDICT.WORKS }], state: first.next, now: T0 + 10 * MIN });
+  assert.equal(recovered.sighted.length, 0, 'a blip that was never announced gets no all-clear');
+  assert.deepEqual(recovered.next, {});
+
+  const fiftyMin = aiKeys.planAlarms({ rows: blindRow, state: first.next, now: T0 + 50 * MIN });
+  assert.equal(fiftyMin.blind.length, 0);
+
+  const anHour = aiKeys.planAlarms({ rows: blindRow, state: fiftyMin.next, now: T0 + 60 * MIN });
+  assert.equal(anHour.blind.length, 1, 'blind for an hour must reach the bus');
+  assert.match(aiKeys.renderMessage({ ...anHour, node: 'mac-mini', at: 'now' }), /check is blind[\s\S]*Doppler prd could not be read/);
+
+  const nextWake = aiKeys.planAlarms({ rows: blindRow, state: anHour.next, now: T0 + 70 * MIN });
+  assert.equal(nextWake.blind.length, 0, 'once per 6h, not every wake');
+
+  const sixLater = aiKeys.planAlarms({ rows: blindRow, state: nextWake.next, now: T0 + 60 * MIN + 6 * 3600000 });
+  assert.equal(sixLater.blind.length, 1, 'still blind 6h later says so again');
+
+  const reading = aiKeys.planAlarms({ rows: [{ id: 'website-anthropic', verdict: VERDICT.OUT_OF_CREDIT }], state: sixLater.next, now: T0 + 8 * 3600000 });
+  assert.equal(reading.sighted.length, 1, 'a real reading clears the blind alarm');
+  assert.equal(reading.post.length, 1, 'and is judged on its own');
+  assert.equal(reading.next['blind:website-anthropic'], undefined);
+});
+
 test('renderMessage: names the account to top up and never a key value', () => {
   const row = {
     id: 'website-anthropic', provider: 'anthropic', place: 'the website (Doppler prd)', job: 'Write with AI',

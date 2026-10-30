@@ -7,7 +7,8 @@
  * only gathers the keys, keeps the alarm state and posts.
  *
  *   npm run ai-keys                        check and print, write nothing
- *   npm run ai-keys -- --check             the same, and post to the bus when a key is OUT OF CREDIT or INVALID
+ *   npm run ai-keys -- --check             the same, and post to the bus when a key is OUT OF CREDIT or INVALID,
+ *                                          or has read CANNOT TELL for over an hour
  *   npm run ai-keys -- --check --dry-run   say what it WOULD post, send nothing, stamp nothing
  *
  * WHERE THE KEYS COME FROM. No value is ever printed — fingerprints only.
@@ -146,8 +147,15 @@ if (CHECK) {
     let state = {};
     try { state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) || {}; } catch { state = {}; }
     const decided = aiKeys.planAlarms({ rows, state });
-    if (!decided.post.length && !decided.clear.length) {
-      console.log('ai-keys: nothing to post (no key newly down, none recovered, open alarms posted under 6h ago).');
+    const saveState = () => {
+      fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+      fs.writeFileSync(STATE_FILE, `${JSON.stringify(decided.next, null, 2)}\n`);
+    };
+    if (!decided.post.length && !decided.clear.length && !decided.blind.length && !decided.sighted.length) {
+      console.log('ai-keys: nothing to post (no key newly down or recovered, none blind for over an hour, open alarms posted under 6h ago).');
+      // Still save: a first CANNOT TELL records when the blindness started, and
+      // without that record a blind check could never reach its one-hour mark.
+      if (!DRY && JSON.stringify(decided.next) !== JSON.stringify(state)) saveState();
     } else {
       const node = relay.node?.name || 'an unnamed machine';
       const text = aiKeys.renderMessage({ ...decided, comparisons, node, at: new Date().toISOString() });
@@ -156,8 +164,7 @@ if (CHECK) {
       } else {
         try {
           require('./lib/clickup.cjs').postBusMessage(BUS_CHANNEL, text);
-          fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-          fs.writeFileSync(STATE_FILE, `${JSON.stringify(decided.next, null, 2)}\n`);
+          saveState();
           console.log('ai-keys: posted to the bus.');
         } catch (err) {
           // Not stamped, so the next wake tries again rather than going quiet.

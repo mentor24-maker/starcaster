@@ -13,6 +13,13 @@ again. The same check sits at the top of Settings › APIs as an "AI keys"
 panel. Its first reading: the website and the Mini share one Anthropic key
 (account 33d0ab74…), which is out of credit, and the OpenAI key is out of
 credit too.
+
+It also speaks up when it cannot see. If the check itself stays unable to
+read a key for more than an hour — say the Mini loses its access to the
+place the website's keys are kept — it posts that it is blind and why, every
+six hours until it can read again, rather than going quiet. Going quiet is
+how the outreach worker sat broken for two days with nobody told.
+
 ## 2026-10-29 — One page about each Substack writer (#920)
 
 Every writer on the Substack Miner list now has a View button beside
