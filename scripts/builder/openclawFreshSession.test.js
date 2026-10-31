@@ -12,6 +12,9 @@ const assert = require('node:assert/strict');
 
 const client = require('../../lib/openclawResponsesClient.js');
 
+// About sessions, not the Mini's daily limit (miniAiLimit.test.js): let every request through.
+require('../../lib/miniAiLimit').checkRequest = async () => ({ allowed: true });
+
 async function captureBodies(requests) {
   const saved = {
     fetch: global.fetch,

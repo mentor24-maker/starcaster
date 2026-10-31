@@ -25,6 +25,10 @@ const ROOT = path.join(__dirname, '..', '..');
 const observeStore = require('../../lib/observeStore');
 const client = require('../../lib/openclawResponsesClient.js');
 
+// These tests are about the meter, not the Mini's daily limit
+// (scripts/builder/miniAiLimit.test.js), so every request is let through.
+require('../../lib/miniAiLimit').checkRequest = async () => ({ allowed: true });
+
 /** Run one request against a stubbed gateway; return the rows it metered. */
 async function meter(request, respond) {
   const saved = {

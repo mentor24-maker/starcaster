@@ -7,6 +7,9 @@
  *   GET  /api/ai-quota/alarm   the settings and the last check (platform owner)
  *   PUT  /api/ai-quota/alarm   save the daily limit, spike multiple, email (platform owner)
  *   GET  /api/ai-quota/check   the scheduled check — CRON ONLY
+ *   GET  /api/ai-quota/mini-limit  today's use of the Mini's background-AI limit
+ *                              (AI Quota 5/5, lib/miniAiLimit.js) — any signed-in
+ *                              user, because the Outreach screen shows it
  *
  * Owner-only because the alarm guards the whole account's bill, the same rule
  * `/api/observe/ai-billed` keeps.
@@ -53,6 +56,15 @@ async function handle(req, res, pathname, method) {
     if (/UNREADABLE|NOT RECORDED|NOT DELIVERED|:post/.test(line)) console.error(line);
     else console.log(line);
     return sendOk(res, 200, result.data), true;
+  }
+
+  if (pathname === `${PREFIX}/mini-limit`) {
+    if (method !== 'GET') return sendErr(res, 405, 'Method not allowed'), true;
+    if (!req.authUser) return sendErr(res, 401, 'Sign in to read the Mini\'s AI limit'), true;
+    const read = await require('../lib/miniAiLimit').readLimitStatus();
+    // "Could not tell" is an answer the screen shows, never an empty one.
+    if (!read.ok) return sendOk(res, 200, { status: 'error', message: read.error }), true;
+    return sendOk(res, 200, { status: 'ok', ...read.data }), true;
   }
 
   if (pathname === `${PREFIX}/alarm`) {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { MiniLimitLine, type MiniLimit } from './mini-ai-limit';
 
 /**
  * Settings › AI Quota, "Spending alarm" (AI Quota 4/5, task 86bcvj7zm).
@@ -39,6 +40,8 @@ export type Alarm =
     dailyLimitUsd: number;
     spikeMultiple: number;
     alertEmail: string;
+    /** The Mini's background AI requests a day (AI Quota 5/5). */
+    miniDailyRequests: number;
     defaultEmail: string;
     lastCheckAt: string | null;
     lastCheck: LastCheck;
@@ -99,24 +102,26 @@ export function LastCheckLine({ alarm }: { alarm: Extract<Alarm, { status: 'ok' 
   );
 }
 
-type FormValues = { dailyLimitUsd: string; spikeMultiple: string; alertEmail: string };
+type FormValues = { dailyLimitUsd: string; spikeMultiple: string; alertEmail: string; miniDailyRequests: string };
 
-export function AlarmView({ alarm, onSave, saving, message }: {
+export function AlarmView({ alarm, onSave, saving, message, miniLimit = null }: {
   alarm: Alarm;
+  miniLimit?: MiniLimit | null;
   onSave: (values: FormValues) => void;
   saving: boolean;
   message: { ok: boolean; text: string } | null;
 }): React.ReactElement {
   const ready = alarm.status === 'ok' ? alarm : null;
-  const [values, setValues] = useState<FormValues>({ dailyLimitUsd: '', spikeMultiple: '', alertEmail: '' });
+  const [values, setValues] = useState<FormValues>({ dailyLimitUsd: '', spikeMultiple: '', alertEmail: '', miniDailyRequests: '' });
   useEffect(() => {
     if (!ready) return;
     setValues({
       dailyLimitUsd: String(ready.dailyLimitUsd),
       spikeMultiple: String(ready.spikeMultiple),
       alertEmail: ready.alertEmail,
+      miniDailyRequests: String(ready.miniDailyRequests ?? 40),
     });
-  }, [ready?.dailyLimitUsd, ready?.spikeMultiple, ready?.alertEmail]);
+  }, [ready?.dailyLimitUsd, ready?.spikeMultiple, ready?.alertEmail, ready?.miniDailyRequests]);
 
   if (alarm.status === 'owner-only') {
     return <p className="ai-quota-empty">The spending alarm guards the whole account’s bill, so only the platform owner can set it.</p>;
@@ -152,16 +157,27 @@ export function AlarmView({ alarm, onSave, saving, message }: {
           <span>Email alerts to</span>
           <input type="email" value={values.alertEmail} placeholder={ready?.defaultEmail || 'your email'} onChange={set('alertEmail')} />
         </label>
+        <label className="field">
+          <span>Mini AI requests a day</span>
+          <input type="number" min="0" step="1" value={values.miniDailyRequests} onChange={set('miniDailyRequests')} required />
+        </label>
         <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </form>
       <p className="ai-quota-footer">
         Spike: today is more than this many times the average of the last 7 days. Not judged while those days averaged
         $0. Days are UTC, the same days Anthropic bills by. A blank email means yours.
       </p>
+      <p className="ai-quota-footer">
+        Mini AI requests a day: a brake, not an alarm. Once the Mac Mini has made this many AI requests today
+        (Mountain time), its background jobs — the sign-in check, Reddit watch, the Substack Notes search and the
+        Reddit thread reader — stop until midnight, and one line goes to the bus. Posting a reply you approved is
+        never stopped, but it counts.
+      </p>
       {message && (
         <p className={message.ok ? 'ai-alarm-saved' : 'ai-quota-warn'} role="status">{message.text}</p>
       )}
       {ready && <LastCheckLine alarm={ready} />}
+      {ready && <MiniLimitLine reading={miniLimit} />}
     </div>
   );
 }
@@ -193,6 +209,7 @@ export function useAlarm(): [Alarm | null, () => void, (v: FormValues) => void, 
         dailyLimitUsd: Number(values.dailyLimitUsd),
         spikeMultiple: Number(values.spikeMultiple),
         alertEmail: values.alertEmail,
+        miniDailyRequests: Number(values.miniDailyRequests),
       }),
     })
       .then((res) => {
@@ -200,7 +217,7 @@ export function useAlarm(): [Alarm | null, () => void, (v: FormValues) => void, 
         setAlarm(saved);
         // Say what was SAVED, read back from the database — not what was typed.
         if (saved.status === 'ok') {
-          setMessage({ ok: true, text: `Saved: alert above ${money(saved.dailyLimitUsd)} a day or ${saved.spikeMultiple}× a normal day, by email to ${saved.alertEmail || saved.defaultEmail}.` });
+          setMessage({ ok: true, text: `Saved: alert above ${money(saved.dailyLimitUsd)} a day or ${saved.spikeMultiple}× a normal day, by email to ${saved.alertEmail || saved.defaultEmail}; the Mini stops its background AI after ${saved.miniDailyRequests} request${saved.miniDailyRequests === 1 ? '' : 's'} a day.` });
         }
       })
       .catch((err) => setMessage({ ok: false, text: `Not saved. ${err instanceof Error ? err.message : ''}` }))
@@ -209,8 +226,9 @@ export function useAlarm(): [Alarm | null, () => void, (v: FormValues) => void, 
   return [alarm, load, save, saving, message];
 }
 
-export default function AlarmSection({ alarm, onSave, saving, message }: {
+export default function AlarmSection({ alarm, onSave, saving, message, miniLimit = null }: {
   alarm: Alarm | null;
+  miniLimit?: MiniLimit | null;
   onSave: (values: FormValues) => void;
   saving: boolean;
   message: { ok: boolean; text: string } | null;
@@ -219,7 +237,7 @@ export default function AlarmSection({ alarm, onSave, saving, message }: {
     <section className="ai-quota ai-alarm-section">
       <h3>Spending alarm</h3>
       {alarm
-        ? <AlarmView alarm={alarm} onSave={onSave} saving={saving} message={message} />
+        ? <AlarmView alarm={alarm} onSave={onSave} saving={saving} message={message} miniLimit={miniLimit} />
         : <p className="ai-quota-empty">Reading the alarm’s settings…</p>}
     </section>
   );
