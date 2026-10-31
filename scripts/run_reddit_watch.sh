@@ -14,6 +14,11 @@
 #                 NO beat and no failure post. A schedule that never reads
 #                 must go stale on the roll call
 #                 (`npm run heartbeat -- --stale-check`), not read as healthy.
+#   exit 5     -> stopped for today by the Mini's daily AI limit (AI Quota
+#                 5/5) before anything was read: NO beat and no failure post.
+#                 The limit posts its own one line a day; a "reddit-watch
+#                 failed" alarm on top of it would make the brake read as a
+#                 broken job.
 #   otherwise  -> one bus post per 6 hours (scripts/report_job_failure.mjs) —
 #                 a signed-out browser included: it is a failure, never
 #                 "found nothing".
@@ -48,6 +53,8 @@ if [ "$status" -eq 0 ]; then
   npm run --silent heartbeat -- --beat --role "$ROLE" || true
 elif [ "$status" -eq 4 ]; then
   echo "=== $ROLE: nothing was read this pass — no beat recorded"
+elif [ "$status" -eq 5 ]; then
+  echo "=== $ROLE: stopped for today by the Mini's AI limit — no beat, no failure post"
 else
   echo "=== $ROLE pass exited $status"
   npm run --silent report:failure -- --job "$ROLE" --status "$status" --log "$LOG" || true

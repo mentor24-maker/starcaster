@@ -13,8 +13,12 @@ same records the AI Quota page already totals, so the two can't disagree. If
 the count can't be read, the background jobs wait rather than spend unchecked.
 A Reddit post waiting to be read stays waiting at the limit and is read after
 midnight — it is never marked failed — and the Substack search says the
-limit's own sentence instead of blaming the browser. It adds two columns to the alarm's table, which still has to be created in
-production.
+limit's own sentence instead of blaming the browser. Reddit watch stops the
+same way: at the limit it writes nothing to any subreddit, so each keeps its
+last good reading, and it does not set off a "Reddit watch failed" alarm on
+top of the limit's own line. It adds two columns to the alarm's table, which
+still has to be created in production.
+
 ## 2026-10-30 — The Mac Mini's AI spending is counted now (#927)
 
 Every AI call the Mac Mini makes goes through its AI browser, OpenClaw,
