@@ -122,6 +122,13 @@ function sentence(state, { site = 'youtube', who = 'Dane of Earth', profile = 'd
  */
 function readCall(call, site, extractJson, who) {
   if (!call || !call.ok) {
+    // The Mini's daily AI limit (AI Quota 5/5, lib/miniAiLimit.js) refused the
+    // check before it reached the browser: nothing was learned about the
+    // sign-in, so it is "cannot tell" — and the screen shows the limit's own
+    // sentence, not a sign-in sentence wrapped around it.
+    if (call && call.code === 'MINI_AI_LIMIT') {
+      return { state: 'cannot_tell', detail: text(call.error), stopped: true };
+    }
     // The probe found the gateway up a moment ago, so a refused connection
     // now is the gateway going down mid-check — still the gateway's alarm.
     if (call && call.status === 502 && /Failed to reach OpenClaw/i.test(text(call.error))) {
@@ -238,7 +245,9 @@ async function runHealthCheck({ checks, deps, now = Date.now() }) {
       }
       reading = readCall(call, check.site, deps.extractJson, check.who);
     }
-    const message = sentence(reading.state, { site: check.site, who: check.who, profile: check.profile, detail: reading.detail });
+    const message = reading.stopped
+      ? reading.detail
+      : sentence(reading.state, { site: check.site, who: check.who, profile: check.profile, detail: reading.detail });
     let write;
     try {
       const saved = { state: reading.state, message, checkedAt };

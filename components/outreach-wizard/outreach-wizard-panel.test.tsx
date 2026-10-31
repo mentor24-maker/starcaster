@@ -72,6 +72,8 @@ let activeProject = "proj_doe";
 let failNext = "";
 let calls = 0;
 let lessonReads: string[] = [];
+let limitReads = 0;
+let miniLimit: Record<string, unknown> = { status: "ok", limit: 40, used: 3, reached: false, reachedAt: null, sentence: "" };
 let setActivePage: ReturnType<typeof vi.fn>;
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
@@ -81,6 +83,8 @@ beforeEach(() => {
   failNext = "";
   calls = 0;
   lessonReads = [];
+  limitReads = 0;
+  miniLimit = { status: "ok", limit: 40, used: 3, reached: false, reachedAt: null, sentence: "" };
   posts = [];
   redditAccount = { ...redditAccount!, expectedAccount: "" };
   window.localStorage.clear();
@@ -102,6 +106,11 @@ beforeEach(() => {
       if (path.startsWith("/api/outreach/lessons?")) {
         lessonReads.push(path);
         return { ok: true, data: { channel: "x", lessons: [], score: null, scoreError: "" } };
+      }
+      // AI Quota 5/5: the Mini's daily AI limit, read beside the overview.
+      if (path === "/api/ai-quota/mini-limit") {
+        limitReads += 1;
+        return { ok: true, data: miniLimit };
       }
       calls += 1;
       if (path !== "/api/outreach/overview") throw new Error(`unexpected ${path}`);
@@ -230,6 +239,21 @@ describe("OutreachWizardPanel", () => {
     await act(async () => {});
     expect(calls).toBe(2);
     expect(stages()[0].textContent).toContain("proj_other:");
+  });
+
+  it("says nothing about the Mini's AI limit until it has stopped something (AI Quota 5/5)", async () => {
+    await mount();
+    expect(limitReads).toBeGreaterThan(0);
+    expect(container!.textContent).not.toContain("Stopped for today");
+  });
+
+  it("leads with the stopped sentence once the Mini's AI limit is reached (AI Quota 5/5)", async () => {
+    miniLimit = { status: "ok", limit: 1, used: 1, reached: true, reachedAt: "2026-10-30T09:12:00.000Z", sentence: "Stopped for today: the Mini's AI limit (1 request) was reached at 3:12 AM." };
+    await mount();
+    await act(async () => {});
+    const alert = container!.querySelector(".outreach-wizard-panel > [role=alert]");
+    expect(alert?.textContent).toContain("Stopped for today: the Mini's AI limit (1 request) was reached at 3:12 AM.");
+    expect(alert?.textContent).toContain("Settings › AI Quota");
   });
 
   it("the Learn stage shows its lessons on the wizard itself, for the channel picked (13/19)", async () => {

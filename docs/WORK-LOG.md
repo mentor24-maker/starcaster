@@ -1,3 +1,83 @@
+## 2026-10-31 — The build loop stops picking up tickets that are waiting on another one (#932)
+
+When a ticket can't start until another one is finished, ClickUp records that
+as a "waiting on" link. The build loop's own clock already read those links,
+but the list it claims work from did not. So the final Outreach wizard ticket
+(19/19), which is waiting on the sign-in window (7/19), was first in line on
+every pass for three days, and one pass even moved it to Building before
+handing it back. Now the claim list and the claim command both leave such a
+ticket alone and say which ticket it is waiting on. It comes back on its own
+once that ticket is Live.
+
+## 2026-10-30 — A daily brake on the Mac Mini's background AI (#930)
+
+The alarm from #929 tells Dane when spending runs away; this one stops it while
+he is asleep. The Mac Mini now has a daily limit on its background AI
+requests (40 to start), set on Settings › AI Quota. Once the Mini has made that
+many AI requests in a day, its unattended jobs (the sign-in check, Reddit
+watch, the Substack Notes search and the Reddit thread reader) stop until
+midnight Mountain time, and the Outreach and AI Quota screens say so in one
+sentence: "Stopped for today: the Mini's AI limit (40 requests) was reached at
+3:12 AM." One line goes to the bus, once a day. Posting a reply Dane approved
+is never stopped, though it counts toward the day. The count comes from the
+same records the AI Quota page already totals, so the two can't disagree. If
+the count can't be read, the background jobs wait rather than spend unchecked.
+A Reddit post waiting to be read stays waiting at the limit and is read after
+midnight — it is never marked failed — and the Substack search says the
+limit's own sentence instead of blaming the browser. Reddit watch stops the
+same way: at the limit it writes nothing to any subreddit, so each keeps its
+last good reading, and it does not set off a "Reddit watch failed" alarm on
+top of the limit's own line. It adds two columns to the alarm's table, which
+still has to be created in production.
+
+## 2026-10-30 — The Mac Mini's AI spending is counted now (#927)
+
+Every AI call the Mac Mini makes goes through its AI browser, OpenClaw,
+straight to Anthropic, so Starcaster's spending meter never saw any of it —
+that is how about $35 went unnoticed on Oct 28–30. Now each of those calls
+writes one line to the same spending log the website uses: which job asked,
+when, whether it worked, and how much it used. Settings › AI Quota shows each
+Mini job's calls today, calls this week and estimated cost, instead of "not
+metered yet", and the page's totals include the Mini. When OpenClaw does not
+say how much a call used, the page says "cost unknown" rather than pretending
+it was free. Two older website features that also talk to OpenClaw are
+counted the same way, and the build now refuses any new OpenClaw call that
+skips the count.
+## 2026-10-30 — An alarm when AI spending runs away (#929)
+
+On Oct 28–30 the Anthropic account drained two nights running and the first
+sign was an empty balance. Now, every hour, Starcaster checks today's AI
+spend against two numbers Dane sets on Settings › AI Quota: a daily limit
+($5 to start) and a "spike" multiple (alert when today is more than 3 times a
+normal day over the last week). When either is passed, a line goes to the bus
+and an email goes to Dane saying how much, against what limit, and what spent
+most of it. It uses Anthropic's real bill when that is connected and
+Starcaster's own estimate otherwise, and says which. It repeats at most every
+6 hours, says "back to normal" once it clears, and if it cannot read the
+spend at all it says that too instead of staying quiet. It needs one new
+database table, which Dane runs once in Supabase.
+## 2026-10-30 — Starcaster now says which account each AI key bills, and shouts when one runs dry (#923)
+
+The AI features stopped because the Anthropic account ran out of credit, and
+buying credit did not fix it: the credit went into a different account from
+the one Starcaster's key bills, and nothing said which. A new check now
+looks at every AI key the website and the Mac Mini use, tries each one with
+a one-word request, and reports the account it bills and whether it works —
+OUT OF CREDIT, refused, working, or could not tell. It never shows a key,
+only a short fingerprint so two keys can be told apart. The Mini runs it
+every ten minutes and posts to the bus once when a key stops working (and
+again every six hours while it stays down), then once more when it works
+again. The same check sits at the top of Settings › APIs as an "AI keys"
+panel. Its first reading: the website and the Mini share one Anthropic key
+(account 33d0ab74…), which is out of credit, and the OpenAI key is out of
+credit too.
+
+It also speaks up when it cannot see. If the check itself stays unable to
+read a key for more than an hour — say the Mini loses its access to the
+place the website's keys are kept — it posts that it is blind and why, every
+six hours until it can read again, rather than going quiet. Going quiet is
+how the outreach worker sat broken for two days with nobody told.
+
 ## 2026-10-30 — AI Quota shows Anthropic's real bill next to Starcaster's guess (#926)
 
 Starcaster's AI spending figures are an estimate: they only count the calls

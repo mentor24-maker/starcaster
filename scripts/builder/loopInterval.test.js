@@ -366,6 +366,51 @@ test('outsideBlockerIds names exactly the blockers the list cannot show', () => 
   assert.deepEqual(li.outsideBlockerIds([null, 7, {}]), []);
 });
 
+// ---------------------------------------------------------------------------
+// The claim list and `claim` apply the SAME dependency rule (task 86bcvz0r7)
+// ---------------------------------------------------------------------------
+
+test('splitBlocked drops exactly the dependency-blocked tickets, in order, and keeps wrong-repo ones', () => {
+  // Outreach wizard 19/19 was first on the claim list for three days while it
+  // waited on 7/19: the pacing count applied this rule and the claim list did not.
+  const { kept, dropped } = li.splitBlocked(QUEUE, { blockers: RESOLVED });
+  assert.deepEqual(dropped.map((x) => x.id), ['a4', 'a5']);
+  assert.match(dropped[0].why, /waiting on a1/);
+  // a3 (wrong repo) stays: the build pass must SEE it in order to escalate it.
+  assert.deepEqual(kept.map((t) => t.id), ['a1', 'a2', 'a3', 'a6', 'a7', 'b1', 'b2']);
+});
+
+test('splitBlocked reads blockers from the WHOLE list, not only the candidates', () => {
+  // The real shape: 86bcrmbyz (Queued) waits on 86bcrmbh9, which IS in the list
+  // but in "needs your input", so it is not among the claim-ordered candidates.
+  const all = [
+    { id: 'q', status: { status: 'Queued', type: 'custom' }, dependencies: [{ task_id: 'q', depends_on: 'h' }] },
+    { id: 'h', status: { status: 'needs your input', type: 'custom' } },
+  ];
+  const r = li.splitBlocked([all[0]], { all });
+  assert.deepEqual(r.kept, []);
+  assert.match(r.dropped[0].why, /waiting on h \(needs your input\)/);
+});
+
+test('BREAK-TEST: the claim list and the pacing count agree on what dependencies block', () => {
+  const pacing = li.claimableDepth({ loop: 'loop-build', tasks: QUEUE, resolveRepo: fakeRepo, blockers: RESOLVED });
+  const pacedOut = pacing.excluded.filter((x) => /waiting on/.test(x.why)).map((x) => x.id).sort();
+  const listedOut = li.splitBlocked(QUEUE, { blockers: RESOLVED }).dropped.map((x) => x.id).sort();
+  assert.deepEqual(listedOut, pacedOut);
+});
+
+test('dependencyBlockReason: what `claim` asks about one ticket', () => {
+  const t = (deps) => ({ id: 'x', dependencies: deps });
+  assert.equal(li.dependencyBlockReason(t([])), null);
+  assert.equal(li.dependencyBlockReason(t([{ task_id: 'other', depends_on: 'x' }])), null, 'a mirror edge never blocks');
+  assert.match(li.dependencyBlockReason(t([{ task_id: 'x', depends_on: 'gone' }])), /treated as still open/,
+    'an unreadable blocker blocks — the safe direction');
+  const live = new Map([['done', { id: 'done', status: { status: 'Live', type: 'closed' } }]]);
+  assert.equal(li.dependencyBlockReason(t([{ task_id: 'x', depends_on: 'done' }]), { blockers: live }), null);
+  const open = new Map([['h', { id: 'h', status: { status: 'needs your input', type: 'custom' } }]]);
+  assert.match(li.dependencyBlockReason(t([{ task_id: 'x', depends_on: 'h' }]), { blockers: open }), /waiting on h \(needs your input\)/);
+});
+
 test('BREAK-TEST: a queue of ONLY wrong-repo tickets is depth 0, not depth 3', () => {
   // The whole point of "claimable, not queued". If this ever regresses, the
   // loop wakes every 15 minutes forever for work it can never take.

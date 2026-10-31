@@ -60,6 +60,7 @@ const builder     = require('./builder');
 const seoAltText  = require('./seoAltText');
 const communityAssets = require('./communityAssets');
 const observe     = require('./observe');
+const aiQuota     = require('./aiQuota');
 const personas    = require('./personas');
 const tasks       = require('./tasks');
 const polls       = require('./polls');
@@ -142,6 +143,7 @@ const ROUTE_MODULES = [
   messaging,
   activityLog,
   observe,
+  aiQuota,
   config,
   platformScreenshots,
   personas,
@@ -190,6 +192,7 @@ const CRON_PATHS = new Set([
   '/api/acquire/substack-miner/read-notes-due',
   '/api/acquire/substack-miner/read-posts-due',
   '/api/outreach/youtube/conversations/read-due',
+  '/api/ai-quota/check',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {

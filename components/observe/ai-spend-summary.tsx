@@ -20,7 +20,7 @@ export function spendSummaryText(spend: SpendLine): string {
   const dollars = `$${(Number(spend.totalUsd) || 0).toFixed(2)}`;
   const calls = (Number(spend.pricedCalls) || 0) + (Number(spend.unpricedCalls) || 0);
   const partial = spend.complete ? '' : ' (incomplete — some calls could not be priced)';
-  return `AI spend, last 30 days: ${dollars}${partial} across ${calls} website call${calls === 1 ? '' : 's'}.`;
+  return `AI spend, last 30 days: ${dollars}${partial} across ${calls} AI call${calls === 1 ? '' : 's'}.`;
 }
 
 function openAiQuota(event: React.MouseEvent) {

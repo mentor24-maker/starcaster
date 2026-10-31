@@ -7405,6 +7405,45 @@ button.builder-inline-asset-status-btn:focus-visible {
   opacity: 1;
 }
 
+/* A project switch is still reloading the app: the green button shows a spinner
+   in place of its check until the switch settles. */
+.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching {
+  position: relative;
+  cursor: progress;
+}
+
+.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching .icon-btn-glyph {
+  visibility: hidden;
+}
+
+.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-top-color: currentColor;
+  box-sizing: border-box;
+  animation: settings-project-switch-spin 0.8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes settings-project-switch-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching::after {
+    animation: none;
+    border-color: currentColor;
+    border-style: dotted;
+  }
+}
+
 .builder-agents-actions-heading {
   text-align: center;
   white-space: nowrap;

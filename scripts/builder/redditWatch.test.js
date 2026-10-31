@@ -204,6 +204,101 @@ test('signed out is a failure recorded on the subreddit, and the rest of the pro
   } finally { restore(); }
 });
 
+/**
+ * OpenClaw behind the REAL daily-limit gate (lib/openclawResponsesClient.js →
+ * lib/miniAiLimit.js checkRequest), with today's count already at the limit.
+ * Anything that slips past the gate reaches `fetch` and fails the test.
+ */
+function limitReached() {
+  const client = require('../../lib/openclawResponsesClient.js');
+  const posts = [];
+  const limitDeps = {
+    node: 'mac-mini',
+    readAlarm: async () => ({ ok: true, data: { exists: true, miniDailyRequests: 1 } }),
+    readCalls: async () => ({ ok: true, data: [{ created_at: new Date().toISOString(), metadata: { job: 'starcaster:openclaw-smoke' } }] }),
+    claimPost: async () => ({ ok: true, data: posts.length === 0 }),
+    releasePost: async () => ({ ok: true }),
+    postBus: async (t) => { posts.push(t); return { ok: true }; },
+  };
+  return { posts, callOpenClaw: (req) => client.callOpenClawResponses({ ...req, limitDeps }) };
+}
+
+test('THE MINI\'S DAILY AI LIMIT stops the watch: nothing is marked failed, the last good reading stays, and it is not counted as a failure', async () => {
+  const { store, due, restore } = withDb();
+  const savedFetch = global.fetch;
+  global.fetch = async () => { throw new Error('the limit should have refused this before it was sent'); };
+  try {
+    await approve(store, ['polymath', 'philosophy', 'zen']);
+    // A good reading first, so there is something the limit must not replace.
+    const browser = fakeBrowser();
+    const first = await due.runRedditWatchDue({
+      callOpenClaw: browser.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['x'] }), canonDocs: CANON, now: () => NOW,
+    });
+    assert.equal(first.data.read, 2, first.error);
+    const before = (await store.listSubreddits(100, SCOPE)).data;
+
+    const gate = limitReached();
+    const run = await due.runRedditWatchDue({
+      callOpenClaw: gate.callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['x'] }), canonDocs: CANON, now: () => NOW + 4 * HOUR,
+    });
+    assert.equal(run.ok, true, run.error);
+    assert.equal(run.data.read, 0);
+    assert.equal(run.data.failed, 0, 'the brake is not a broken job: no "reddit-watch failed" alarm');
+    assert.match(run.data.stoppedForToday, /^Stopped for today: the Mini's AI limit \(1 request\)/);
+    assert.deepEqual(run.data.projects[0].subreddits, [], 'no subreddit is reported as read or failed');
+    assert.deepEqual((await store.listSubreddits(100, SCOPE)).data, before, 'nothing written to any subreddit');
+    assert.equal(gate.posts.length, 1, 'the limit posts its own one line');
+    const log = due.formatWatchLog(run.data);
+    assert.match(log, /STOPPED — Stopped for today/);
+    assert.match(log, /No subreddit was marked failed/);
+    assert.doesNotMatch(log, /READ FAILED|no beat is recorded/);
+  } finally { global.fetch = savedFetch; restore(); }
+});
+
+test('THE MINI\'S DAILY AI LIMIT reached while reading comments: the subreddit read is kept and the pass stops there', async () => {
+  const { store, due, restore } = withDb();
+  try {
+    await approve(store, ['polymath', 'philosophy']);
+    const browser = fakeBrowser({
+      listing: (sub) => ({
+        signedIn: true, found: true, promotionRule: '', rising: [],
+        new: [{ id: `${sub}1`.slice(0, 12), title: 'How do generalists learn?', body: 'a generalist', author: 'a', postedAt: new Date(NOW - HOUR).toISOString(), score: 5, comments: 3 }],
+      }),
+    });
+    const sentence = 'Stopped for today: the Mini\'s AI limit (40 requests) was reached at 3:12 AM.';
+    const calls = [];
+    const callOpenClaw = async (req) => {
+      calls.push(req.input);
+      // The listing goes through; the limit is reached on the comments read.
+      return calls.length === 1 ? browser.callOpenClaw(req) : { ok: false, status: 429, code: 'MINI_AI_LIMIT', error: sentence };
+    };
+    const run = await due.runRedditWatchDue({
+      callOpenClaw, extractJson: browser.extractJson,
+      readKeywords: async () => ({ ok: true, data: ['generalist'] }), canonDocs: CANON, now: () => NOW,
+    });
+    assert.equal(run.data.read, 1, 'the listing was really read, and is recorded');
+    assert.equal(run.data.failed, 0);
+    assert.equal(run.data.stoppedForToday, sentence);
+    assert.equal(calls.length, 2, 'the second subreddit is not asked for: it would be refused too');
+    const subs = (await store.listSubreddits(100, SCOPE)).data;
+    assert.equal(subs.filter((s) => s.lastReadState === 'read').length, 1);
+    assert.equal(subs.filter((s) => s.lastReadState === 'failed').length, 0);
+    assert.equal(subs.filter((s) => s.lastReadState === '').length, 1, 'the other waits for tomorrow');
+  } finally { restore(); }
+});
+
+test('reddit_watch_due exits 5 (no beat, no failure post) when the limit stopped it, and run_reddit_watch.sh treats 5 like 4', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'reddit_watch_due.mjs'), 'utf8');
+  assert.match(script, /const STOPPED_FOR_TODAY = 5;/);
+  assert.match(script, /process\.exit\(run\.data\.stoppedForToday \? STOPPED_FOR_TODAY : NOTHING_READ\)/);
+  const runner = fs.readFileSync(path.join(__dirname, '..', 'run_reddit_watch.sh'), 'utf8');
+  const branch = runner.match(/elif \[ "\$status" -eq 5 \]; then\n([^\n]*)\n/);
+  assert.ok(branch, 'run_reddit_watch.sh has its own branch for exit 5');
+  assert.doesNotMatch(branch[1], /report:failure|heartbeat/);
+});
+
 test('a pass with no watched project reads nothing and says no beat is recorded', async () => {
   const { due, restore } = withDb();
   try {

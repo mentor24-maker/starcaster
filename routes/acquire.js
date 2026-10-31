@@ -22,6 +22,7 @@ const { listHandlers: listContentHandlers, createHandler: createContentHandler, 
 const { runPeerDiscovery } = require('../lib/peerDiscovery');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { recordAiUsage } = require('../lib/aiUsage');
+const { recordOpenClawCall } = require('../lib/openclawResponsesClient');
 const {
   listWebsitePeers,
   getWebsitePeer,
@@ -705,7 +706,25 @@ async function callOpenClawResponses(inputPayload) {
     'No markdown fences. No prose. JSON only.',
   ].join('\n');
 
+  // The website's own OpenClaw door — the Mini's go through
+  // lib/openclawResponsesClient.js. Both write the same meter row (AI Quota 3/5).
   async function sendPrompt(inputText) {
+    const startedAt = Date.now();
+    const res = await sendPromptOnce(inputText);
+    if (res.sent) {
+      await recordOpenClawCall({
+        label: 'starcaster:acquire-reddit',
+        ok: res.ok,
+        status: res.status,
+        durationMs: Date.now() - startedAt,
+        payload: res.data,
+      });
+    }
+    const { sent, ...result } = res;
+    return result;
+  }
+
+  async function sendPromptOnce(inputText) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -730,18 +749,19 @@ async function callOpenClawResponses(inputPayload) {
       }
       if (!response.ok) {
         return {
+          sent: true,
           ok: false,
           status: response.status || 502,
           error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
           data: payload,
         };
       }
-      return { ok: true, status: response.status || 200, data: payload };
+      return { sent: true, ok: true, status: response.status || 200, data: payload };
     } catch (err) {
       if (err?.name === 'AbortError') {
-        return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+        return { sent: true, ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
       }
-      return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+      return { sent: false, ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
     } finally {
       clearTimeout(timer);
     }
@@ -832,7 +852,25 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
     `ALREADY USED REPLIES IN CURRENT RUN (MUST AVOID): ${usedReplies.join(' | ') || '(none)'}`,
   ].join('\n');
 
+  // The website's own OpenClaw door — the Mini's go through
+  // lib/openclawResponsesClient.js. Both write the same meter row (AI Quota 3/5).
   async function sendPrompt(inputText) {
+    const startedAt = Date.now();
+    const res = await sendPromptOnce(inputText);
+    if (res.sent) {
+      await recordOpenClawCall({
+        label: 'starcaster:youtube-reply-offers',
+        ok: res.ok,
+        status: res.status,
+        durationMs: Date.now() - startedAt,
+        payload: res.data,
+      });
+    }
+    const { sent, ...result } = res;
+    return result;
+  }
+
+  async function sendPromptOnce(inputText) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -857,18 +895,19 @@ async function callOpenClawYoutubeReplyOffers(inputPayload) {
       }
       if (!response.ok) {
         return {
+          sent: true,
           ok: false,
           status: response.status || 502,
           error: safeText(payload?.error?.message || payload?.message || payload?.error) || `OpenClaw /v1/responses failed (${response.status})`,
           data: payload,
         };
       }
-      return { ok: true, status: response.status || 200, data: payload };
+      return { sent: true, ok: true, status: response.status || 200, data: payload };
     } catch (err) {
       if (err?.name === 'AbortError') {
-        return { ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
+        return { sent: true, ok: false, status: 504, error: 'OpenClaw /v1/responses request timed out' };
       }
-      return { ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
+      return { sent: false, ok: false, status: 502, error: `OpenClaw /v1/responses request failed: ${safeText(err?.message) || 'unknown error'}` };
     } finally {
       clearTimeout(timer);
     }

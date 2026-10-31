@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import BilledSection, { useBilled } from './ai-billed-section';
+import AlarmSection, { useAlarm } from './ai-spend-alarm-section';
+import { useMiniLimit } from './mini-ai-limit';
 
 /**
  * Settings › AI Quota — the one home for what AI costs (task 86bcvj7k9).
@@ -43,6 +45,18 @@ type UnpricedRow = { provider: string; model: string; calls: number; tokens: num
 
 type RecentTotal = { costUsd: number; calls: number; unpricedCalls: number; covered: boolean };
 
+type UsageWindow = { calls: number; costUsd: number; unpricedCalls: number };
+
+/** A Mini job's OpenClaw calls, from the meter rows (AI Quota 3/5). */
+export type JobUsage = {
+  calls: number;
+  failedCalls: number;
+  unpricedCalls: number;
+  costUsd: number;
+  last24h: UsageWindow;
+  last7d: UsageWindow;
+};
+
 export type AiJob = {
   id: string;
   name: string;
@@ -52,6 +66,7 @@ export type AiJob = {
   model: string;
   metered: boolean;
   meterNote: string;
+  usage?: JobUsage | null;
 };
 
 export type AiQuota = {
@@ -92,6 +107,34 @@ function cost(value: number, fullyPriced: boolean): string {
   return fullyPriced ? money(value) : `${money(value)} + unpriced`;
 }
 
+/**
+ * A window's cost. Calls OpenClaw sent no token counts for are counted but
+ * cannot be priced, so they read "cost unknown" — never as $0.
+ */
+export function windowCost(w: UsageWindow): string {
+  if (w.calls > 0 && w.unpricedCalls === w.calls) return 'cost unknown';
+  // One sign-in check costs a fraction of a cent; "$0.00" would read as free.
+  if (w.costUsd > 0 && w.costUsd < 0.005) return w.unpricedCalls === 0 ? 'under $0.01' : 'under $0.01 + unpriced';
+  return cost(w.costUsd, w.unpricedCalls === 0);
+}
+
+/** The meter column for one job: its calls and cost, or why there are none. */
+export function MeterCell({ job }: { job: AiJob }): React.ReactElement {
+  const usage = job.usage;
+  if (!usage) return <>{job.meterNote}</>;
+  return (
+    <>
+      <div>
+        {usage.last24h.calls} today · {usage.last7d.calls} this week
+      </div>
+      <div className="muted">
+        {windowCost(usage.last7d)} this week
+        {usage.failedCalls > 0 && ` · ${usage.failedCalls} failed in ${WINDOW_DAYS} days`}
+      </div>
+    </>
+  );
+}
+
 function TotalTile({ label, total }: { label: string; total: RecentTotal }) {
   return (
     <div className="ai-quota-tile">
@@ -110,7 +153,7 @@ export function AiQuotaView({ data }: { data: AiQuota }): React.ReactElement {
   const last30: RecentTotal = {
     costUsd: data.totalUsd, calls: allCalls, unpricedCalls: data.unpricedCalls, covered: true,
   };
-  const websiteJobs = data.jobs.filter((job) => job.metered);
+  const websiteJobs = data.jobs.filter((job) => job.id.startsWith('website:'));
   const unseen = data.jobs.filter((job) => !job.metered && job.meterNote === 'not metered yet');
 
   return (
@@ -177,7 +220,7 @@ export function AiQuotaView({ data }: { data: AiQuota }): React.ReactElement {
 
       <h3>By model</h3>
       {data.byModel.length === 0 ? (
-        <p className="ai-quota-empty">No model was called by the website in the last {WINDOW_DAYS} days.</p>
+        <p className="ai-quota-empty">No model was called — by the website or through OpenClaw — in the last {WINDOW_DAYS} days.</p>
       ) : (
         <div className="table-wrap"><table className="ai-quota-table">
           <thead>
@@ -209,7 +252,7 @@ export function AiQuotaView({ data }: { data: AiQuota }): React.ReactElement {
               <td>{job.machine}<div className="muted">{job.runner}</div></td>
               <td>{job.cadence}</td>
               <td className="muted">{job.model}</td>
-              <td className={job.metered ? 'ai-quota-metered' : 'ai-quota-unmetered'}>{job.meterNote}</td>
+              <td className={job.metered ? 'ai-quota-metered' : 'ai-quota-unmetered'}><MeterCell job={job} /></td>
             </tr>
           ))}
         </tbody>
@@ -278,12 +321,26 @@ export default function AiQuotaPage(): React.ReactElement {
   // Anthropic's bill loads on its own, so a slow read there never holds up
   // the meter's figures (AI Quota 2/5).
   const [billed, loadBilled] = useBilled();
+  // The spending alarm's settings load on their own too (AI Quota 4/5).
+  const [alarm, loadAlarm, saveAlarm, savingAlarm, alarmMessage] = useAlarm();
+  // And today's use of the Mini's background-AI limit (AI Quota 5/5).
+  const [miniLimit, loadMiniLimit] = useMiniLimit();
   const loadAll = useCallback(() => {
     load();
     loadBilled();
-  }, [load, loadBilled]);
+    loadAlarm();
+    loadMiniLimit();
+  }, [load, loadBilled, loadAlarm, loadMiniLimit]);
 
   useLoadWhenShown(hostRef, loadAll);
+  // A saved limit changes today's reading, so read it again after a save.
+  const savedLimit = alarm && alarm.status === 'ok' ? alarm.miniDailyRequests : null;
+  const firstLimit = useRef(true);
+  useEffect(() => {
+    if (savedLimit === null) return;
+    if (firstLimit.current) { firstLimit.current = false; return; }
+    loadMiniLimit();
+  }, [savedLimit, loadMiniLimit]);
 
   let body: React.ReactElement;
   if (error) {
@@ -299,6 +356,7 @@ export default function AiQuotaPage(): React.ReactElement {
   }
   return (
     <div ref={hostRef}>
+      <AlarmSection alarm={alarm} onSave={saveAlarm} saving={savingAlarm} message={alarmMessage} miniLimit={miniLimit} />
       <BilledSection data={billed} />
       {body}
     </div>

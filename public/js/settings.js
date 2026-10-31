@@ -115,6 +115,9 @@ App.settings = (function () {
   }
 
   let openingProjectsPage = false;
+  // Project the Projects table shows as active while a switch is still reloading
+  // the app (App.refresh takes seconds); cleared when the switch settles.
+  let pendingActiveProjectId = '';
 
   function openProjectsPage() {
     // Re-entrancy guard: the render calls below can indirectly navigate, and a
@@ -682,7 +685,8 @@ App.settings = (function () {
       const name = String(project?.name || project?.slug || id || 'Untitled');
       const logoDataUrl = getProjectLogoDataUrl(project);
       const row = document.createElement('tr');
-      const isActive = id && id === String(state.currentProjectId || '');
+      const isSwitching = Boolean(pendingActiveProjectId);
+      const isActive = id && id === String(pendingActiveProjectId || state.currentProjectId || '');
 
       const projectCell = document.createElement('td');
       const projectLink = document.createElement('button');
@@ -736,17 +740,35 @@ App.settings = (function () {
         });
         const activateBtn = App.makeIconButton(
           'approve',
-          isActive ? 'Active' : 'Set Active',
+          isActive ? (isSwitching ? 'Switching…' : 'Active') : 'Set Active',
           () => {
-            selectProjectForSession(id, { keepView: false }).then((ok) => {
-              if (!ok) return;
-              refreshCurrentPageAfterProjectChange();
-              notify('Active project updated');
-            });
+            if (pendingActiveProjectId) return;
+            pendingActiveProjectId = id;
+            renderProjectsTable();
+            selectProjectForSession(id, { keepView: false })
+              .then((ok) => {
+                pendingActiveProjectId = '';
+                renderProjectsTable();
+                if (!ok) {
+                  notify('Could not switch to that project', true);
+                  return;
+                }
+                refreshCurrentPageAfterProjectChange();
+                notify('Active project updated');
+              })
+              .catch((err) => {
+                pendingActiveProjectId = '';
+                renderProjectsTable();
+                notify(err?.message || 'Could not switch to that project', true);
+              });
           },
-          { disabled: isActive }
+          { disabled: isActive || isSwitching }
         );
         if (isActive) activateBtn.classList.add('settings-project-active-btn');
+        if (isActive && isSwitching) {
+          activateBtn.classList.add('is-switching');
+          activateBtn.setAttribute('aria-busy', 'true');
+        }
         const isOwner = String(project?.membership?.role || '').toLowerCase() === 'owner';
         const canDelete = isOwner && !project?.virtual && !id.startsWith('proj_default_');
         const deleteBtn = App.makeIconButton('delete', 'Delete', () => {

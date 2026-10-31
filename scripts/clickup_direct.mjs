@@ -621,6 +621,28 @@ if (!TOKEN) {
 
 /** Every page of a list's open tasks. The endpoint caps at 100 per page and
  *  a first-page-only read silently starves everything past it (DOCTRINE 5.12). */
+/**
+ * Read back every blocker a "waiting on" edge points at that the list itself
+ * cannot show — the list returns open tasks only, so a FINISHED blocker is
+ * exactly the one missing. One that cannot be read is left out, which
+ * `loopInterval.dependencyBlockReason` treats as still blocking: the safe
+ * direction. Shared by `next-interval`, `queue --claimable` and `claim` so the
+ * three cannot disagree about what blocks (task 86bcvz0r7).
+ */
+async function readOutsideBlockers(ids) {
+  const blockers = [];
+  for (const id of ids) {
+    try {
+      const out = await call('GET', `/api/v2/task/${id}`);
+      if (out.res.ok && out.json?.id) blockers.push(out.json);
+      else console.error(`  (blocker ${id} could not be read — HTTP ${out.res.status}; treated as still open)`);
+    } catch (err) {
+      console.error(`  (blocker ${id} could not be read — ${err.message}; treated as still open)`);
+    }
+  }
+  return blockers;
+}
+
 async function fetchAllTasks(list, { includeClosed = false, fatal = true } = {}) {
   // includeClosed: ClickUp's v2 list endpoint DROPS closed-type statuses by
   // default, so `Live` tickets are invisible without it — 36 tasks come back
@@ -2998,6 +3020,18 @@ if (cmd === 'claim') {
     console.error('Take the next task in the queue.');
     process.exit(3);
   }
+  // A ticket an unfinished blocker still holds is not claimable either, by the
+  // same rule the claim list applies — so a pass that names a ticket by hand
+  // cannot take what the list would have hidden (task 86bcvz0r7).
+  const outside = loopInterval.outsideBlockerIds([seen.json]);
+  const heldBy = loopInterval.dependencyBlockReason(seen.json, {
+    blockers: new Map((await readOutsideBlockers(outside)).map((b) => [String(b.id), b])),
+  });
+  if (heldBy) {
+    console.error(`NOT claimed: "${task}" is ${heldBy}. Nothing was written.`);
+    console.error('It becomes claimable on its own once that ticket is finished. Take the next task in the queue.');
+    process.exit(3);
+  }
   // Hand the exact status it is in to the ordinary guarded write, so there is
   // one writer, one verifier and one place that clears assignees.
   if (arg('status') || arg('if-status')) {
@@ -3533,16 +3567,7 @@ if (cmd === 'whoami') {
   // round 1: a ticket waiting on a Live blocker read as blocked on every
   // cycle). Read each such id back once; one that cannot be read stays
   // unseen, which the module treats as still blocking — the safe direction.
-  const blockers = [];
-  for (const id of loopInterval.outsideBlockerIds(tasks)) {
-    try {
-      const out = await call('GET', `/api/v2/task/${id}`);
-      if (out.res.ok && out.json?.id) blockers.push(out.json);
-      else console.error(`  (blocker ${id} could not be read — HTTP ${out.res.status}; treated as still open)`);
-    } catch (err) {
-      console.error(`  (blocker ${id} could not be read — ${err.message}; treated as still open)`);
-    }
-  }
+  const blockers = await readOutsideBlockers(loopInterval.outsideBlockerIds(tasks));
 
   const { depth, excluded, note } = loopInterval.claimableDepth({
     loop,
@@ -3592,7 +3617,19 @@ if (cmd === 'whoami') {
   if (claimable) {
     // Filtering AND ordering in one call, from the module the pacing curve
     // reads, so the first line is the ticket the claim rule actually names.
-    wanted = loopStatuses.claimOrder(tasks);
+    //
+    // And WITHOUT the tickets an unfinished ClickUp dependency still holds
+    // (task 86bcvz0r7). The pacing count already left them out; this list did
+    // not, so Outreach wizard 19/19 (86bcrmbyz) was first in line on every
+    // pass for three days while it waited on 7/19, and one pass claimed it
+    // into Building. Only the dependency rule is applied — a ticket whose
+    // repo escalates stays listed, because listing it is how it gets escalated.
+    const ordered = loopStatuses.claimOrder(tasks);
+    const listed = new Set(tasks.map((t) => String(t?.id)));
+    const blockers = await readOutsideBlockers(loopInterval.outsideBlockerIds(ordered).filter((id) => !listed.has(id)));
+    const { kept, dropped } = loopInterval.splitBlocked(ordered, { all: tasks, blockers });
+    for (const x of dropped) console.error(`  (not claimable: ${x.id} — ${x.why})`);
+    wanted = kept;
   } else {
     wanted = status
       ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase())

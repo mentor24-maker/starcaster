@@ -108,6 +108,7 @@
     "heartbeat": "doppler run --project starcaster --config dev --no-check-version -- node scripts/node_heartbeat.mjs",
     "throughput": "doppler run --project starcaster --config dev --no-check-version -- node scripts/loop_throughput.mjs",
     "stale-ready": "doppler run --project starcaster --config dev --no-check-version -- node scripts/stale_ready.mjs",
+    "ai-keys": "doppler run --project starcaster --config dev --no-check-version -- node scripts/ai_keys_check.mjs",
     "worker-watch": "doppler run --project starcaster --config dev --no-check-version -- node scripts/worker_watch.mjs",
     "site-import-watch": "doppler run --project starcaster --config dev --no-check-version -- node scripts/site_import_watch.mjs",
     "sql:unapplied": "doppler run --project starcaster --config dev --no-check-version -- node scripts/unapplied_sql_watch.mjs",
