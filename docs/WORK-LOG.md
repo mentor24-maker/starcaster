@@ -1,3 +1,16 @@
+## 2026-10-30 — An alarm when AI spending runs away (#929)
+
+On Oct 28–30 the Anthropic account drained two nights running and the first
+sign was an empty balance. Now, every hour, Starcaster checks today's AI
+spend against two numbers Dane sets on Settings › AI Quota: a daily limit
+($5 to start) and a "spike" multiple (alert when today is more than 3 times a
+normal day over the last week). When either is passed, a line goes to the bus
+and an email goes to Dane saying how much, against what limit, and what spent
+most of it. It uses Anthropic's real bill when that is connected and
+Starcaster's own estimate otherwise, and says which. It repeats at most every
+6 hours, says "back to normal" once it clears, and if it cannot read the
+spend at all it says that too instead of staying quiet. It needs one new
+database table, which Dane runs once in Supabase.
 ## 2026-10-30 — Starcaster now says which account each AI key bills, and shouts when one runs dry (#923)
 
 The AI features stopped because the Anthropic account ran out of credit, and

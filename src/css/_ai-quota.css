@@ -167,3 +167,54 @@
   cursor: pointer;
   font-size: var(--text-sm);
 }
+
+/* Spending alarm (AI Quota 4/5): the two limits and what the last check saw. */
+.ai-alarm-section {
+  margin-bottom: var(--space-6, 24px);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-alarm-section h3 {
+  margin-top: 0;
+}
+
+.ai-alarm-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.ai-alarm-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+  flex: 0 0 auto;
+}
+
+.ai-alarm-form .field span {
+  white-space: nowrap;
+}
+
+.ai-alarm-form input[type='number'] {
+  width: 9ch;
+}
+
+.ai-alarm-form input[type='email'] {
+  width: 28ch;
+  max-width: 100%;
+}
+
+/* legacy.css pins every submit button to the top of a flex row
+   (`button[type="submit"] { align-self: flex-start }`); sit it on the inputs' baseline. */
+.ai-alarm-form button[type='submit'] {
+  align-self: flex-end;
+}
+
+.ai-alarm-last,
+.ai-alarm-saved {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+}
