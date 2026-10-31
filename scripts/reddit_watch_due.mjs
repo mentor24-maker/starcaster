@@ -18,9 +18,12 @@
  * Exit: 0 at least one subreddit read and none failed; 1 a read failed or was
  * refused for at least one subreddit — signed out, the browser down, an answer
  * it could not read — or the project list could not be read; 4 NOTHING was
- * read (no project has an approved subreddit). A failed read is never "found
- * nothing", and a pass that read nothing is not a clean pass: the runner
- * records no beat for either.
+ * read (no project has an approved subreddit); 5 the Mini's daily AI limit
+ * (AI Quota 5/5) stopped the pass before anything was read — a normal decline,
+ * with no failure post (the limit posts its own line). A failed read is never
+ * "found nothing", and a pass that read nothing is not a clean pass: the
+ * runner records no beat for any of these. A pass that read some subreddits
+ * and was then stopped is a clean pass for what it read: exit 0.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +31,8 @@ import { createRequire } from 'node:module';
 
 /** Nothing was due: no beat, and no failure post either. */
 const NOTHING_READ = 4;
+/** Stopped for today by the Mini's daily AI limit, nothing read: no beat, no failure post. */
+const STOPPED_FOR_TODAY = 5;
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -60,4 +65,5 @@ if (!run.ok) {
 }
 console.log(formatWatchLog(run.data));
 if (run.data.failed) process.exit(1);
-process.exit(run.data.read ? 0 : NOTHING_READ);
+if (run.data.read) process.exit(0);
+process.exit(run.data.stoppedForToday ? STOPPED_FOR_TODAY : NOTHING_READ);

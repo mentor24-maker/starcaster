@@ -372,9 +372,11 @@ function createRedditAdapter(options = {}) {
     /**
      * Read the oldest post waiting for the Mini (17/19). One per pass, like
      * posting. Returns null when nothing waits, else `{ id, outcome, why }`
-     * with outcome `read`, `failed`, or `unsaved` (the browser answered but
+     * with outcome `read`, `failed`, `unsaved` (the browser answered but
      * the row could not be written: Dane pasted it meanwhile, which wins, or
-     * the database refused, which leaves it `reading` for the next pass).
+     * the database refused, which leaves it `reading` for the next pass), or
+     * `stopped` (the Mini's daily AI limit refused the read; nothing is
+     * written and the post waits for tomorrow).
      */
     async readPending() {
       const pending = await deps.store.listPendingReads(1, scope);
@@ -389,6 +391,13 @@ function createRedditAdapter(options = {}) {
           + 'Only read. Do not post, vote, join, follow, message or change anything.',
         input: buildReadInstructions({ item, profile }),
       });
+      // The Mini's daily AI limit (AI Quota 5/5, lib/miniAiLimit.js) refused
+      // the read before it reached the browser. Nothing was learned about the
+      // post, so it stays `reading` and is read after midnight — failing it
+      // would drain every post Dane asked for into "failed" by morning.
+      if (!res.ok && res.code === 'MINI_AI_LIMIT') {
+        return { id: item.id, outcome: 'stopped', why: text(res.error) };
+      }
       const judged = res.ok
         ? interpretRead(item, deps.extractJson(res.text), text(res.text))
         : { ok: false, code: 'READ_BROWSER_FAILED', error: `The Mini's browser could not read the post (OpenClaw: ${res.error}).` };

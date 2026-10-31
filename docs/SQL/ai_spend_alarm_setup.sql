@@ -18,6 +18,8 @@ create table if not exists public.ai_spend_alarm (
   daily_limit_usd      numeric     not null default 5,
   spike_multiple       numeric     not null default 3,
   alert_email          text        not null default '',
+  mini_daily_requests  integer     not null default 40,
+  mini_limit_posted_day text,
   over_limit_alarm_at  timestamptz,
   spike_alarm_at       timestamptz,
   unreadable_alarm_at  timestamptz,
@@ -28,6 +30,15 @@ create table if not exists public.ai_spend_alarm (
   constraint ai_spend_alarm_limit_positive check (daily_limit_usd > 0),
   constraint ai_spend_alarm_multiple_sane check (spike_multiple >= 1)
 );
+
+-- AI Quota 5/5 (ClickUp 86bcvj7zw): the Mini's daily limit on background AI
+-- requests (lib/miniAiLimit.js), and the Mountain-time day its "limit reached"
+-- bus line last went out — claimed atomically so it posts once a day. Added
+-- with ALTER as well, for a database that already ran the first version.
+alter table public.ai_spend_alarm add column if not exists mini_daily_requests integer not null default 40;
+alter table public.ai_spend_alarm add column if not exists mini_limit_posted_day text;
+alter table public.ai_spend_alarm drop constraint if exists ai_spend_alarm_mini_requests_sane;
+alter table public.ai_spend_alarm add constraint ai_spend_alarm_mini_requests_sane check (mini_daily_requests >= 0);
 
 -- Server-only table (service key); no browser reads it. RLS on with no
 -- policies, like every other table since 2026-08-18.

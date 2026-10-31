@@ -360,6 +360,14 @@ test('an answer the pass cannot read, or OpenClaw down, is "could not tell" (502
     }));
     assert.equal(down.status, 502);
     assert.equal((await all(miner)).length, 0);
+    const sentence = 'Stopped for today: the Mini\'s AI limit (40 requests) was reached at 3:12 AM.';
+    const stopped = await search.runNotesSearchPass({ keyword: 'polymath' }, SCOPE_A, deps({
+      callOpenClaw: async () => ({ ok: false, status: 429, code: 'MINI_AI_LIMIT', error: sentence }),
+    }));
+    assert.equal(stopped.code, 'MINI_AI_LIMIT');
+    assert.equal(stopped.error, sentence, 'the limit\'s own sentence, not a broken browser');
+    assert.notEqual(stopped.status, 502);
+    assert.equal((await all(miner)).length, 0);
   } finally {
     restore();
   }

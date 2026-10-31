@@ -85,7 +85,9 @@ console.log(`Project: ${project.name} (${project.id})`);
 const run = await runNotesSearchPass({ keyword, anyHour }, scope, { projectTimeZone: async () => String(project.timezone || '') });
 if (!run.ok) {
   if (run.keyword) console.error(`Keyword: "${run.keyword}"`);
-  if (run.status === 409) {
+  // Outside the reading hours (409), or stopped for today by the Mini's daily
+  // AI limit (AI Quota 5/5): a normal decline, not a failure.
+  if (run.status === 409 || run.code === 'MINI_AI_LIMIT') {
     console.error(`Not now: ${run.error}`);
     process.exit(3);
   }

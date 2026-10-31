@@ -16,6 +16,7 @@ function alarm(overrides: Partial<Extract<Alarm, { status: 'ok' }>> = {}): Alarm
     dailyLimitUsd: 5,
     spikeMultiple: 3,
     alertEmail: 'dane@example.com',
+    miniDailyRequests: 40,
     defaultEmail: 'dane@example.com',
     lastCheckAt: '2026-10-30T17:37:00.000Z',
     lastCheck: { source: 'bill', todayUsd: 14.2, averageUsd: 1, topSpender: 'the API key “Mac Mini OpenClaw”', active: { 'over-limit': true, spike: true } },

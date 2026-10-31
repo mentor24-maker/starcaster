@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import BilledSection, { useBilled } from './ai-billed-section';
 import AlarmSection, { useAlarm } from './ai-spend-alarm-section';
+import { useMiniLimit } from './mini-ai-limit';
 
 /**
  * Settings › AI Quota — the one home for what AI costs (task 86bcvj7k9).
@@ -322,13 +323,24 @@ export default function AiQuotaPage(): React.ReactElement {
   const [billed, loadBilled] = useBilled();
   // The spending alarm's settings load on their own too (AI Quota 4/5).
   const [alarm, loadAlarm, saveAlarm, savingAlarm, alarmMessage] = useAlarm();
+  // And today's use of the Mini's background-AI limit (AI Quota 5/5).
+  const [miniLimit, loadMiniLimit] = useMiniLimit();
   const loadAll = useCallback(() => {
     load();
     loadBilled();
     loadAlarm();
-  }, [load, loadBilled, loadAlarm]);
+    loadMiniLimit();
+  }, [load, loadBilled, loadAlarm, loadMiniLimit]);
 
   useLoadWhenShown(hostRef, loadAll);
+  // A saved limit changes today's reading, so read it again after a save.
+  const savedLimit = alarm && alarm.status === 'ok' ? alarm.miniDailyRequests : null;
+  const firstLimit = useRef(true);
+  useEffect(() => {
+    if (savedLimit === null) return;
+    if (firstLimit.current) { firstLimit.current = false; return; }
+    loadMiniLimit();
+  }, [savedLimit, loadMiniLimit]);
 
   let body: React.ReactElement;
   if (error) {
@@ -344,7 +356,7 @@ export default function AiQuotaPage(): React.ReactElement {
   }
   return (
     <div ref={hostRef}>
-      <AlarmSection alarm={alarm} onSave={saveAlarm} saving={savingAlarm} message={alarmMessage} />
+      <AlarmSection alarm={alarm} onSave={saveAlarm} saving={savingAlarm} message={alarmMessage} miniLimit={miniLimit} />
       <BilledSection data={billed} />
       {body}
     </div>

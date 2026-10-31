@@ -7,6 +7,7 @@ import RedditSubreddits from './reddit-subreddits';
 import RedditConversations from './reddit-conversations';
 import YoutubeConversations from './youtube-conversations';
 import LearnControls from './learn-controls';
+import { MiniLimitBanner } from '../settings/mini-ai-limit';
 
 export { PROJECT_SWITCH_EVENT };
 
@@ -452,6 +453,8 @@ export default function OutreachWizardPanel(): React.ReactElement {
   return (
     <div className="outreach-wizard-panel" ref={hostRef}>
       {error ? <p className="outreach-wizard-error" role="alert">{error}</p> : null}
+      {/* AI Quota 5/5: when the Mini's daily AI limit has stopped its checks, say so first. */}
+      {overview ? <MiniLimitBanner version={overview.generatedAt} /> : null}
       {!overview && !error ? <p className="outreach-wizard-muted">{loading ? 'Reading where each channel stands…' : ''}</p> : null}
       {channels.length ? (
         <div className="outreach-wizard-tabs" role="tablist" aria-label="Channel">
