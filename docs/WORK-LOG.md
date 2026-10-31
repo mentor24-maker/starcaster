@@ -11,6 +11,27 @@ Starcaster's own estimate otherwise, and says which. It repeats at most every
 6 hours, says "back to normal" once it clears, and if it cannot read the
 spend at all it says that too instead of staying quiet. It needs one new
 database table, which Dane runs once in Supabase.
+## 2026-10-30 — Starcaster now says which account each AI key bills, and shouts when one runs dry (#923)
+
+The AI features stopped because the Anthropic account ran out of credit, and
+buying credit did not fix it: the credit went into a different account from
+the one Starcaster's key bills, and nothing said which. A new check now
+looks at every AI key the website and the Mac Mini use, tries each one with
+a one-word request, and reports the account it bills and whether it works —
+OUT OF CREDIT, refused, working, or could not tell. It never shows a key,
+only a short fingerprint so two keys can be told apart. The Mini runs it
+every ten minutes and posts to the bus once when a key stops working (and
+again every six hours while it stays down), then once more when it works
+again. The same check sits at the top of Settings › APIs as an "AI keys"
+panel. Its first reading: the website and the Mini share one Anthropic key
+(account 33d0ab74…), which is out of credit, and the OpenAI key is out of
+credit too.
+
+It also speaks up when it cannot see. If the check itself stays unable to
+read a key for more than an hour — say the Mini loses its access to the
+place the website's keys are kept — it posts that it is blind and why, every
+six hours until it can read again, rather than going quiet. Going quiet is
+how the outreach worker sat broken for two days with nobody told.
 
 ## 2026-10-30 — AI Quota shows Anthropic's real bill next to Starcaster's guess (#926)
 
