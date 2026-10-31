@@ -43,13 +43,17 @@ test('the schedules listed match the Mini install scripts', () => {
   assert.equal(job('openclaw-sign-in-check').everyHours, CHECK_EVERY_MS / 3600000);
 });
 
-test('every Mini job says it is not metered, and why', () => {
+test('every OpenClaw job on the Mini is metered; the rest say why they are not', () => {
+  // AI Quota 3/5 (86bcvj7vc): an OpenClaw job is metered once it lists the
+  // labels it sends; one that runs no paid model says why it is not in the total.
   for (const j of MINI_JOBS) {
-    assert.equal(j.metered, false, j.id);
-    assert.ok(j.meterNote, `${j.id} must say why it is not in the total`);
-  }
-  for (const id of ['openclaw-sign-in-check', 'reddit-watch', 'substack-notes-search', 'outreach-posting']) {
-    assert.equal(job(id).meterNote, NOT_METERED, id);
+    if (j.runner === 'OpenClaw browser') {
+      assert.equal(j.metered, true, j.id);
+      assert.ok(j.labels.length > 0, `${j.id} must list the OpenClaw labels it sends`);
+    } else {
+      assert.equal(j.metered, false, j.id);
+      assert.ok(j.meterNote && j.meterNote !== NOT_METERED, `${j.id} must say why it is not in the total`);
+    }
   }
 });
 

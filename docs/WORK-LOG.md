@@ -1,3 +1,16 @@
+## 2026-10-30 — The Mac Mini's AI spending is counted now (#927)
+
+Every AI call the Mac Mini makes goes through its AI browser, OpenClaw,
+straight to Anthropic, so Starcaster's spending meter never saw any of it —
+that is how about $35 went unnoticed on Oct 28–30. Now each of those calls
+writes one line to the same spending log the website uses: which job asked,
+when, whether it worked, and how much it used. Settings › AI Quota shows each
+Mini job's calls today, calls this week and estimated cost, instead of "not
+metered yet", and the page's totals include the Mini. When OpenClaw does not
+say how much a call used, the page says "cost unknown" rather than pretending
+it was free. Two older website features that also talk to OpenClaw are
+counted the same way, and the build now refuses any new OpenClaw call that
+skips the count.
 ## 2026-10-30 — An alarm when AI spending runs away (#929)
 
 On Oct 28–30 the Anthropic account drained two nights running and the first

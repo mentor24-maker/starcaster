@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { AiQuotaView, type AiQuota } from './ai-quota-page';
+import { AiQuotaView, windowCost, type AiQuota } from './ai-quota-page';
 import { spendSummaryText } from '../observe/ai-spend-summary';
 
 /**
@@ -84,6 +84,45 @@ describe('AiQuotaView', () => {
     expect(html).toContain('not in these totals');
   });
 
+  it('shows a metered Mini job’s calls today, this week and its cost (AI Quota 3/5)', () => {
+    const watched = {
+      ...MINI_JOB,
+      metered: true,
+      meterNote: 'metered',
+      usage: {
+        calls: 9, failedCalls: 2, unpricedCalls: 0, costUsd: 0.9,
+        last24h: { calls: 3, costUsd: 0.3, unpricedCalls: 0 },
+        last7d: { calls: 7, costUsd: 0.7, unpricedCalls: 0 },
+      },
+    };
+    const html = view(quota({ jobs: [watched] }));
+    expect(html).toContain('3 today · 7 this week');
+    expect(html).toContain('$0.70 this week');
+    expect(html).toContain('2 failed in 30 days');
+    expect(html).not.toContain('not metered yet');
+    expect(html).not.toContain('not in these totals');
+  });
+
+  it('never shows calls without token counts as $0', () => {
+    const blind = {
+      ...MINI_JOB,
+      metered: true,
+      meterNote: 'metered',
+      usage: {
+        calls: 2, failedCalls: 0, unpricedCalls: 2, costUsd: 0,
+        last24h: { calls: 2, costUsd: 0, unpricedCalls: 2 },
+        last7d: { calls: 2, costUsd: 0, unpricedCalls: 2 },
+      },
+    };
+    const html = view(quota({ jobs: [blind] }));
+    expect(html).toContain('cost unknown this week');
+    expect(html).not.toContain('$0.00 this week');
+    expect(windowCost({ calls: 0, costUsd: 0, unpricedCalls: 0 })).toBe('$0.00');
+    expect(windowCost({ calls: 3, costUsd: 0.5, unpricedCalls: 1 })).toBe('$0.50 + unpriced');
+    // A fraction of a cent is not free.
+    expect(windowCost({ calls: 1, costUsd: 0.0037, unpricedCalls: 0 })).toBe('under $0.01');
+  });
+
   it('says why no website features are listed when none ran', () => {
     const html = view(quota({ byFeature: [], byModel: [], jobs: [MINI_JOB], pricedCalls: 0, totalUsd: 0 }));
     expect(html).toContain('made no AI calls in the last 30 days');
@@ -104,8 +143,8 @@ describe('AiQuotaView', () => {
 describe('spendSummaryText (Observe)', () => {
   it('says when the figure is partial', () => {
     expect(spendSummaryText({ totalUsd: 3, complete: false, pricedCalls: 2, unpricedCalls: 1 }))
-      .toBe('AI spend, last 30 days: $3.00 (incomplete — some calls could not be priced) across 3 website calls.');
+      .toBe('AI spend, last 30 days: $3.00 (incomplete — some calls could not be priced) across 3 AI calls.');
     expect(spendSummaryText({ totalUsd: 3, complete: true, pricedCalls: 1, unpricedCalls: 0 }))
-      .toBe('AI spend, last 30 days: $3.00 across 1 website call.');
+      .toBe('AI spend, last 30 days: $3.00 across 1 AI call.');
   });
 });
