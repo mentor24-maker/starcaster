@@ -224,6 +224,31 @@ function unclaimableReason(task, { wantStatus, resolveRepo, byId, blockers } = {
     if (r && r.action === 'escalate') return `repo escalates — ${r.reason}`;
   }
 
+  const blocked = dependencyBlockReason(task, { byId, blockers });
+  if (blocked) return blocked;
+
+  return null;
+}
+
+/**
+ * Is this task waiting on a blocker that has not finished? Returns null when
+ * it is not, or "waiting on <id> (<status>)" when it is.
+ *
+ * Its own function since task 86bcvz0r7, because three callers ask the same
+ * question and must not answer it three ways: the pacing count
+ * (`claimableDepth`), the claim list (`queue --claimable`) and `claim`
+ * itself. Until then only the pacing count asked, so the claim list put a
+ * blocked ticket first on every pass — Outreach wizard 19/19 (86bcrmbyz),
+ * waiting on 7/19, was claimed into Building on 2026-10-30 with its ClickUp
+ * dependency recorded the whole time.
+ *
+ * @param {object} task  a ClickUp task carrying `dependencies`
+ * @param {object} opts
+ * @param {Map<string,object>} [opts.byId]      tasks from the list itself
+ * @param {Map<string,object>} [opts.blockers]  blockers read from OUTSIDE the list
+ */
+function dependencyBlockReason(task, { byId, blockers } = {}) {
+  if (!task || typeof task !== 'object') return null;
   // Blocked by an unfinished dependency. ClickUp records a "waiting on" edge
   // as an entry whose `task_id` is THIS task and whose `depends_on` is the
   // blocker; the mirror entry (this task blocking another) has them the other
@@ -251,6 +276,39 @@ function unclaimableReason(task, { wantStatus, resolveRepo, byId, blockers } = {
   }
 
   return null;
+}
+
+/**
+ * Split a list into the tasks no unfinished blocker holds, and the ones one
+ * does (with the reason). Order is preserved, so a caller that claim-ordered
+ * the list first still reads the first kept task as the one to claim.
+ *
+ * Only the dependency rule — never status, never repo. `queue --claimable`
+ * must keep listing a ticket whose repo escalates, because listing it is how
+ * the build pass finds it and escalates it; dropping it would leave it sitting
+ * in Queued with nothing ever looking at it.
+ *
+ * @param {object[]} tasks
+ * @param {object} [opts]
+ * @param {object[]} [opts.all]      every task in the list (blockers may be any status)
+ * @param {object[]|Map<string,object>} [opts.blockers]  read from outside the list
+ * @returns {{ kept:object[], dropped:Array<{task:object,id:string,why:string}> }}
+ */
+function splitBlocked(tasks, { all, blockers } = {}) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  const pool = Array.isArray(all) ? all : list;
+  const byId = new Map(pool.filter((t) => t && t.id != null).map((t) => [String(t.id), t]));
+  const seen = blockers instanceof Map
+    ? blockers
+    : new Map((Array.isArray(blockers) ? blockers : []).filter((t) => t && t.id != null).map((t) => [String(t.id), t]));
+  const kept = [];
+  const dropped = [];
+  for (const t of list) {
+    const why = dependencyBlockReason(t, { byId, blockers: seen });
+    if (why) dropped.push({ task: t, id: String(t?.id), why });
+    else kept.push(t);
+  }
+  return { kept, dropped };
 }
 
 /**
@@ -544,6 +602,8 @@ module.exports = {
   intervalForDepth,
   wantedStatuses,
   unclaimableReason,
+  dependencyBlockReason,
+  splitBlocked,
   outsideBlockerIds,
   blockedSummary,
   claimableDepth,
