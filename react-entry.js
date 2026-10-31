@@ -8,6 +8,7 @@ import InvitationsPanel from './components/invitations/invitations-panel';
 import ConnectionsPanel from './components/connections/connections-panel';
 import AiSpendSummary from './components/observe/ai-spend-summary';
 import AiQuotaPage from './components/settings/ai-quota-page';
+import AiKeysPanel from './components/settings/ai-keys-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 import FootagePanel from './components/studio/footage-panel';
 import FontsManager from './components/fonts/fonts-manager';
@@ -39,6 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (assetRenditionsHost) {
     createRoot(assetRenditionsHost).render(<AssetRenditionsPanel />);
+  }
+
+  const aiKeysHost = document.getElementById('aiKeysReactRoot');
+
+  if (aiKeysHost) {
+    createRoot(aiKeysHost).render(<AiKeysPanel />);
   }
 
   const aiSpendHost = document.getElementById('aiSpendReactRoot');
