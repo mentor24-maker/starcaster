@@ -11,7 +11,9 @@ sentence: "Stopped for today: the Mini's AI limit (40 requests) was reached at
 is never stopped, though it counts toward the day. The count comes from the
 same records the AI Quota page already totals, so the two can't disagree. If
 the count can't be read, the background jobs wait rather than spend unchecked.
-It adds two columns to the alarm's table, which still has to be created in
+A Reddit post waiting to be read stays waiting at the limit and is read after
+midnight — it is never marked failed — and the Substack search says the
+limit's own sentence instead of blaming the browser. It adds two columns to the alarm's table, which still has to be created in
 production.
 ## 2026-10-30 — The Mac Mini's AI spending is counted now (#927)
 

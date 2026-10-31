@@ -691,6 +691,35 @@ test('OpenClaw not answering is a failed read that says so, and posting still ru
   }
 });
 
+test('THE MINI\'S DAILY AI LIMIT leaves a post waiting to be read, never failed, and posting still runs', async () => {
+  const env = withDb();
+  try {
+    const added = await env.store.addItem({ url: POST_URL }, DANE, SIGNED_IN);
+    const toPost = await approved(env);
+    const posting = standIns();
+    const sentence = 'Stopped for today: the Mini\'s AI limit (40 requests) was reached at 3:12 AM.';
+    const callOpenClaw = async (request) => (request.user === 'starcaster:reddit-post-reader'
+      ? { ok: false, status: 429, code: 'MINI_AI_LIMIT', error: sentence }
+      : posting.callOpenClaw(request));
+    const report = await onePass(adapterFor(env, { ...posting, callOpenClaw }));
+    assert.deepEqual(report.read, { id: added.data.id, outcome: 'stopped', why: sentence });
+    const row = await readRow(env, added.data.id);
+    assert.equal(row.readState, 'reading', 'still waiting: it is read after midnight');
+    assert.equal(row.readError, '');
+    assert.equal(row.readCode, '');
+    assert.match(poster.formatPass({ reports: [report] }), new RegExp(`reddit: post ${added.data.id} left waiting — Stopped for today`));
+    assert.equal(report.posted.outcome, 'posted', 'an approved comment is not background');
+    assert.equal((await readRow(env, toPost.id)).status, 'posted');
+
+    // Tomorrow the same post is read like any other.
+    const next = await onePass(adapterFor(env, reader(READ_ANSWER)));
+    assert.equal(next.read.outcome, 'read');
+    assert.equal((await readRow(env, added.data.id)).postTitle, 'How do you keep going?');
+  } finally {
+    env.restore();
+  }
+});
+
 test('a paste that lands while the Mini is reading wins; the Mini\'s late answer is not saved over it', async () => {
   const env = withDb();
   try {

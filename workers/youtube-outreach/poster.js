@@ -207,7 +207,7 @@ function formatRead(r) {
   const head = `[outreach-poster] ${r.site}`;
   if (!r.read) return '';
   if (r.read.error) return `${head}: COULD NOT READ the posts waiting to be read — ${r.read.error}\n`;
-  const words = { read: 'READ', failed: 'COULD NOT BE READ', unsaved: 'read, but NOT SAVED' }[r.read.outcome];
+  const words = { read: 'READ', failed: 'COULD NOT BE READ', unsaved: 'read, but NOT SAVED', stopped: 'left waiting' }[r.read.outcome];
   return `${head}: post ${r.read.id} ${words}${r.read.why ? ` — ${r.read.why}` : ''}\n`;
 }
 
