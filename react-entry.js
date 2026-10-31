@@ -6,7 +6,8 @@ import YoutubeVideoAcquirePanel from './components/acquire/youtube-video-acquire
 import AssetRenditionsPanel from './components/assets/asset-renditions-panel';
 import InvitationsPanel from './components/invitations/invitations-panel';
 import ConnectionsPanel from './components/connections/connections-panel';
-import AiSpendPanel from './components/observe/ai-spend-panel';
+import AiSpendSummary from './components/observe/ai-spend-summary';
+import AiQuotaPage from './components/settings/ai-quota-page';
 import AiKeysPanel from './components/settings/ai-keys-panel';
 import NoWorkspacePanel from './components/invitations/no-workspace-panel';
 import FootagePanel from './components/studio/footage-panel';
@@ -50,7 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const aiSpendHost = document.getElementById('aiSpendReactRoot');
 
   if (aiSpendHost) {
-    createRoot(aiSpendHost).render(<AiSpendPanel />);
+    createRoot(aiSpendHost).render(<AiSpendSummary />);
+  }
+
+  const aiQuotaHost = document.getElementById('aiQuotaReactRoot');
+
+  if (aiQuotaHost) {
+    createRoot(aiQuotaHost).render(<AiQuotaPage />);
   }
 
   const invitationsHost = document.getElementById('invitationsReactRoot');
