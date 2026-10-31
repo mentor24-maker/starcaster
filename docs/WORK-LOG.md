@@ -1,3 +1,14 @@
+## 2026-10-31 — The build loop stops picking up tickets that are waiting on another one (#932)
+
+When a ticket can't start until another one is finished, ClickUp records that
+as a "waiting on" link. The build loop's own clock already read those links,
+but the list it claims work from did not. So the final Outreach wizard ticket
+(19/19), which is waiting on the sign-in window (7/19), was first in line on
+every pass for three days, and one pass even moved it to Building before
+handing it back. Now the claim list and the claim command both leave such a
+ticket alone and say which ticket it is waiting on. It comes back on its own
+once that ticket is Live.
+
 ## 2026-10-30 — A daily brake on the Mac Mini's background AI (#930)
 
 The alarm from #929 tells Dane when spending runs away; this one stops it while
