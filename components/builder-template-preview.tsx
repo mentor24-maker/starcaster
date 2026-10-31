@@ -2046,6 +2046,10 @@ function BuilderSectionPreview({
         sectionBackgroundLayer || sectionOverlayScreenStyle
           ? " builder-preview-section-layered"
           : ""
+      }${
+        // Drops the stylesheet's default section corner, which the overlay
+        // screen would otherwise inherit and paint (86bcvqemm).
+        sectionOverlayScreenStyle ? " builder-preview-section-has-overlay-screen" : ""
       }`}
       style={gridStyle}
       {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
