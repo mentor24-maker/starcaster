@@ -1,3 +1,18 @@
+## 2026-10-30 — A daily brake on the Mac Mini's background AI (#930)
+
+The alarm from #929 tells Dane when spending runs away; this one stops it while
+he is asleep. The Mac Mini now has a daily limit on its background AI
+requests (40 to start), set on Settings › AI Quota. Once the Mini has made that
+many AI requests in a day, its unattended jobs (the sign-in check, Reddit
+watch, the Substack Notes search and the Reddit thread reader) stop until
+midnight Mountain time, and the Outreach and AI Quota screens say so in one
+sentence: "Stopped for today: the Mini's AI limit (40 requests) was reached at
+3:12 AM." One line goes to the bus, once a day. Posting a reply Dane approved
+is never stopped, though it counts toward the day. The count comes from the
+same records the AI Quota page already totals, so the two can't disagree. If
+the count can't be read, the background jobs wait rather than spend unchecked.
+It adds two columns to the alarm's table, which still has to be created in
+production.
 ## 2026-10-30 — The Mac Mini's AI spending is counted now (#927)
 
 Every AI call the Mac Mini makes goes through its AI browser, OpenClaw,
