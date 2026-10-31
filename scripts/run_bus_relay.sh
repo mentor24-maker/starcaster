@@ -239,6 +239,20 @@ npm run --silent site-import-watch -- --check || true
 # it, one all-clear when it does. Never allowed to fail the relay: 1 is
 # UNAPPLIED and 2 is CANNOT TELL, both readings, not failures.
 npm run --silent sql:unapplied -- --check || true
+# THE NINTH — has an AI key run out of credit or been refused? (ticket 86bcvhfht)
+#
+# On 2026-10-30 Write with AI and outreach posting stopped on "credit balance
+# is too low", and credit bought in Dane's Individual Org did not help: the key
+# bills a different Anthropic organization, and nothing said which. The
+# outreach worker had logged CANNOT_TELL for two days with nobody told. This
+# probes every AI key (the website's from Doppler prd, the Mini's OpenClaw copy)
+# with a one-token request, names the ACCOUNT each bills, and posts once per 6h
+# per dead key, one all-clear when it works — and once per 6h when a key has
+# been UNREADABLE for over an hour, because a check that stays blind is the
+# two-days-of-CANNOT_TELL failure again. Only the relay's owner posts, so
+# nothing is said twice. Never allowed to fail the relay: 1 is a dead key and 2
+# is CANNOT TELL, both readings, not failures.
+npm run --silent ai-keys -- --check || true
 
 # THE ONE REPAIR, on the idle wake (task 86bbtnk3k — audit Phase 4). The sweep
 # became reachable on 2026-09-02 and was then called by nothing, which is the

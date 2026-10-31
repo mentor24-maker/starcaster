@@ -339,6 +339,41 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, payload, { diagnostics: payload }), true;
   }
 
+  // GET /api/settings/ai-keys
+  // Every AI key THIS deployment uses, the account each one bills, and whether
+  // a real request is served right now (ticket 86bcvhfht). Unlike /verify
+  // below, which lists models and so passes a key whose account has no credit,
+  // this sends one-token requests — lib/aiKeys.js says why. Values are never
+  // returned, only fingerprints. The Mini's OpenClaw key is not on this
+  // server; `npm run ai-keys` checks it on the Mini and posts to the bus.
+  if (pathname === '/api/settings/ai-keys' && method === 'GET') {
+    // Returns true when it has already sent a 429; that is the repo convention.
+    if (checkEndpointLimit(req, res, 'settings.verifyCredentials')) return true;
+    const aiKeys = require('../lib/aiKeys');
+    const entries = [
+      ['anthropic', 'Write with AI, outreach reply drafts, alt text, tagging and every other Claude feature'],
+      ['openai', 'the features that call OpenAI'],
+      ['gemini', 'the features that call Google Gemini'],
+    ].map(([provider, job]) => {
+      const diag = getProviderCredentialDiagnostics(provider);
+      const from = diag?.sources?.api_key;
+      const source = from === 'file'
+        ? 'Settings › APIs (overrides the environment variable)'
+        : from === 'env' ? `environment variable ${diag.envKeys?.api_key || ''}`.trim() : '';
+      return {
+        id: `website-${provider}`,
+        provider,
+        place: 'the website',
+        job,
+        source,
+        key: getProviderValues(provider).api_key,
+      };
+    });
+    const rows = await aiKeys.checkKeys(entries);
+    const keys = rows.map((row) => ({ ...row, accountLabel: row.account ? aiKeys.describeAccount(row.account) : '' }));
+    return sendOk(res, 200, { checkedAt: new Date().toISOString(), keys }), true;
+  }
+
   // GET /api/settings/apis/:provider/verify
   // Live authenticated call to the provider: does it work, and as whom?
   const apiVerifyMatch = pathname.match(/^\/api\/settings\/apis\/([^/]+)\/verify$/);

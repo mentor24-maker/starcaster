@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import BilledSection, { useBilled } from './ai-billed-section';
+import AlarmSection, { useAlarm } from './ai-spend-alarm-section';
 
 /**
  * Settings › AI Quota — the one home for what AI costs (task 86bcvj7k9).
@@ -319,10 +320,13 @@ export default function AiQuotaPage(): React.ReactElement {
   // Anthropic's bill loads on its own, so a slow read there never holds up
   // the meter's figures (AI Quota 2/5).
   const [billed, loadBilled] = useBilled();
+  // The spending alarm's settings load on their own too (AI Quota 4/5).
+  const [alarm, loadAlarm, saveAlarm, savingAlarm, alarmMessage] = useAlarm();
   const loadAll = useCallback(() => {
     load();
     loadBilled();
-  }, [load, loadBilled]);
+    loadAlarm();
+  }, [load, loadBilled, loadAlarm]);
 
   useLoadWhenShown(hostRef, loadAll);
 
@@ -340,6 +344,7 @@ export default function AiQuotaPage(): React.ReactElement {
   }
   return (
     <div ref={hostRef}>
+      <AlarmSection alarm={alarm} onSave={saveAlarm} saving={savingAlarm} message={alarmMessage} />
       <BilledSection data={billed} />
       {body}
     </div>
