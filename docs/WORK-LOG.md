@@ -1,3 +1,16 @@
+## 2026-10-31 — A project can share specific website pages with another project (#933)
+
+Settings › Projects › Share with now has a Pages dropdown next to the three
+library types. Ticked pages show up on the receiving project's Pages screen
+behind a new "Shared by Project" button, which only appears when something is
+actually shared there, and Import copies the page in as an unpublished draft
+without the other site's header, footer or theme. Review caught one serious
+bug before it shipped: saving a page together with a library type (say,
+Themes) was refused by the database after the old shares had already been
+cleared, so the owner lost everything they had been sharing. Every row in a
+save now carries the same fields, and a test reproduces the database's rule.
+It needs `docs/SQL/builder_project_shares_pages.sql` run once in Supabase.
+
 ## 2026-10-31 — The build loop stops picking up tickets that are waiting on another one (#932)
 
 When a ticket can't start until another one is finished, ClickUp records that

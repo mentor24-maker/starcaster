@@ -11944,3 +11944,37 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   border-radius: 4px;
   border: 1px solid rgba(9, 16, 24, 0.18);
 }
+
+/* "Shared by Project" on the Pages screen (task 86bcw3m94) —
+   components/builder/builder-shared-pages.tsx. The host sits in the heading's
+   button row; `display: contents` lets its button wrap with the others. */
+.builder-shared-pages-host {
+  display: contents;
+}
+
+.builder-shared-pages-dialog {
+  width: min(52rem, calc(100vw - 2rem));
+}
+
+.builder-shared-pages-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.builder-shared-pages-dialog-head h3 {
+  margin: 0;
+}
+
+.builder-shared-pages-group + .builder-shared-pages-group {
+  margin-top: var(--space-4);
+}
+
+.builder-shared-pages-group h4 {
+  margin: var(--space-3) 0 var(--space-2);
+}
+
+.builder-shared-pages-group table {
+  width: 100%;
+}

@@ -162,6 +162,9 @@
             <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
             <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
             <button type="button" onclick="App.setActivePage('builderPageArchivesPage')" class="btn">Archives</button>
+            <!-- "Shared by Project" (task 86bcw3m94): React, renders nothing
+                 unless another project shares at least one page with this one. -->
+            <span id="builderReactRootSharedPages" class="builder-shared-pages-host"></span>
           </div>
         </div>
         <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>

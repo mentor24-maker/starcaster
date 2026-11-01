@@ -6,6 +6,7 @@
  *   GET  /api/projects/:id/shares     what project :id shares, and with whom it MAY
  *   PUT  /api/projects/:id/shares     replace that set — owners of :id only
  *   GET  /api/builder/shared/:type    what other projects share with the ACTIVE one
+ *   GET  /api/builder/shared/pages    the specific pages other projects share with it (86bcw3m94)
  *
  * And two writes, into the ACTIVE project only:
  *
@@ -13,6 +14,8 @@
  *   POST /api/builder/shared/themes/:id/import           copy one shared theme in (86bcu6uav)
  *   POST /api/builder/shared/page_templates/:id/import   copy one shared page template in,
  *                                                        with the sections its frame uses (86bcu6ubh)
+ *   POST /api/builder/shared/pages/:id/import            copy one shared page in, as a draft,
+ *                                                        body only (86bcw3m94)
  *
  * Its own module rather than more lines in projects.js and builder.js
  * (routes/CLAUDE.md: do not grow the monoliths). Registered AHEAD of
@@ -33,6 +36,7 @@ const sharedImport = require('../lib/builderSharedImport');
 const { requestProjectScope } = require('../lib/requestProjectScope');
 const { copySharedTheme: defaultCopySharedTheme } = require('../lib/builderSharedThemeImport');
 const { copySharedPageTemplate: defaultCopySharedPageTemplate } = require('../lib/builderSharedTemplateImport');
+const { copySharedPage: defaultCopySharedPage } = require('../lib/builderSharedPageImport');
 
 function safeText(value) {
   return String(value || '').trim();
@@ -49,6 +53,7 @@ function createHandler(deps = {}) {
   const copySharedSavedSection = deps.copySharedSavedSection || sharedImport.copySharedSavedSection;
   const copySharedTheme = deps.copySharedTheme || defaultCopySharedTheme;
   const copySharedPageTemplate = deps.copySharedPageTemplate || defaultCopySharedPageTemplate;
+  const copySharedPage = deps.copySharedPage || defaultCopySharedPage;
 
   async function callerProjects(res, userId) {
     const result = await listProjectsForUser(userId);
@@ -75,6 +80,12 @@ function createHandler(deps = {}) {
     // member and say why, from the same rule the PUT enforces below.
     const canEdit = safeText(project?.membership?.role) === 'owner';
 
+    // This project's own pages: the picker's choices, and the only ids a PUT
+    // may name — the same rule as the project list above.
+    const pagesRes = await store.listProjectPages(projectId);
+    if (!pagesRes.ok) return sendErr(res, pagesRes.status || 500, pagesRes.error || 'Could not read this project\'s pages'), true;
+    const pages = pagesRes.data.map((p) => ({ id: p.id, name: p.name, slug: p.slug }));
+
     if (method === 'PUT') {
       if (!canEdit) {
         return sendErr(res, 403, 'Only project owners can change what this project shares', { code: 'FORBIDDEN' }), true;
@@ -82,8 +93,11 @@ function createHandler(deps = {}) {
       const body = await parseJsonBody(req);
       const types = textList(body?.types);
       const targetProjectIds = textList(body?.targetProjectIds);
-      if (!types || !targetProjectIds) {
-        return sendErr(res, 400, 'Send { types: [...], targetProjectIds: [...] } — an empty list shares nothing', { code: 'VALIDATION_ERROR' }), true;
+      // Optional, so a caller written before pages could be shared still
+      // saves — and absent means no pages, never "keep whatever was there".
+      const pageIds = body?.pageIds === undefined ? [] : textList(body.pageIds);
+      if (!types || !targetProjectIds || !pageIds) {
+        return sendErr(res, 400, 'Send { types: [...], targetProjectIds: [...], pageIds: [...] } — an empty list shares nothing', { code: 'VALIDATION_ERROR' }), true;
       }
       const unknownTypes = types.filter((t) => !store.isShareObjectType(t));
       if (unknownTypes.length) {
@@ -94,21 +108,68 @@ function createHandler(deps = {}) {
       if (foreign.length) {
         return sendErr(res, 403, `You can only share with projects you belong to (not: ${foreign.join(', ')})`, { code: 'FORBIDDEN' }), true;
       }
+      const ownPages = new Set(pages.map((p) => p.id));
+      const foreignPages = pageIds.filter((id) => !ownPages.has(id));
+      if (foreignPages.length) {
+        return sendErr(res, 403, `You can only share this project's own pages (not: ${foreignPages.join(', ')})`, { code: 'FORBIDDEN' }), true;
+      }
       const saved = await store.replaceSharesFrom(projectId, {
         types,
         targetProjectIds,
+        pageIds,
         ownerUserId: userId,
         createdByUserId: userId,
       });
-      if (!saved.ok) return sendErr(res, saved.status || 500, saved.error || 'Could not save shares'), true;
-      const summary = { ...store.summarizeShares(saved.data), projects: choices, canEdit };
+      if (!saved.ok) {
+        return sendErr(res, saved.status || 500, saved.error || 'Could not save shares', saved.code ? { code: saved.code } : undefined), true;
+      }
+      const summary = { ...store.summarizeShares(saved.data), projects: choices, pages, canEdit };
       return sendOk(res, 200, summary, summary), true;
     }
 
     const current = await store.listSharesFrom(5000, projectId);
     if (!current.ok) return sendErr(res, current.status || 500, current.error || 'Could not read shares'), true;
-    const summary = { ...store.summarizeShares(current.data), projects: choices, canEdit };
+    const summary = { ...store.summarizeShares(current.data), projects: choices, pages, canEdit };
     return sendOk(res, 200, summary, summary), true;
+  }
+
+  async function sourceProjectNames(sourceIds) {
+    const names = {};
+    for (const sourceId of sourceIds) {
+      const found = await getProjectById(sourceId);
+      // A share row naming a project that has since been deleted still lists
+      // that project's items by id rather than failing the whole read.
+      if (found?.ok && found.data) names[sourceId] = safeText(found.data.name);
+    }
+    return names;
+  }
+
+  // Summaries only (name, address, where from): the page body is read at
+  // import, from the source, after the share is checked again.
+  async function handleSharedPagesRead(req, res) {
+    const { projectId } = requestProjectScope(req);
+    if (!projectId) return sendErr(res, 400, 'An active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const shares = await store.listPageSharesWith(projectId);
+    if (!shares.ok) return sendErr(res, shares.status || 500, shares.error), true;
+    const projectNames = await sourceProjectNames([...new Set(shares.data.map((s) => s.sourceProjectId))]);
+    const result = await store.listSharedPages(projectId, { projectNames });
+    if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
+    const items = result.data;
+    return sendOk(res, 200, items, { items, type: store.PAGES_TYPE }, { total: items.length }), true;
+  }
+
+  // Writes ONE new, unpublished page into the active project and nothing
+  // anywhere else.
+  async function handlePageImport(req, res, pageId) {
+    const { projectId, userId } = requestProjectScope(req);
+    if (!userId) return sendErr(res, 401, 'Not authenticated', { code: 'AUTH_REQUIRED' }), true;
+    if (!projectId) return sendErr(res, 400, 'An active project is required', { code: 'PROJECT_REQUIRED' }), true;
+    const result = await copySharedPage({ targetProjectId: projectId, ownerUserId: userId, pageId });
+    if (!result.ok) {
+      const code = result.status === 404 ? 'NOT_SHARED' : undefined;
+      return sendErr(res, result.status || 500, result.error || 'Could not import the page', code ? { code } : undefined), true;
+    }
+    return sendOk(res, 201, result.data, result.data), true;
   }
 
   async function handleSharedRead(req, res, objectType) {
@@ -120,13 +181,7 @@ function createHandler(deps = {}) {
 
     const sources = await store.listSourcesSharingWith(projectId, objectType);
     if (!sources.ok) return sendErr(res, sources.status || 500, sources.error), true;
-    const projectNames = {};
-    for (const sourceId of sources.data) {
-      const found = await getProjectById(sourceId);
-      // A share row naming a project that has since been deleted still lists
-      // that project's items by id rather than failing the whole read.
-      if (found?.ok && found.data) projectNames[sourceId] = safeText(found.data.name);
-    }
+    const projectNames = await sourceProjectNames(sources.data);
     const result = await store.listSharedItems(projectId, objectType, { projectNames });
     if (!result.ok) return sendErr(res, result.status || 500, result.error), true;
     const items = result.data;
@@ -195,6 +250,15 @@ function createHandler(deps = {}) {
     const importMatch = path.match(/^\/api\/builder\/shared\/saved_sections\/([^/]+)\/import\/?$/);
     if (importMatch && requestMethod === 'POST') {
       return handleImport(req, res, decodeURIComponent(importMatch[1] || '').trim());
+    }
+
+    const pageImportMatch = path.match(/^\/api\/builder\/shared\/pages\/([^/]+)\/import\/?$/);
+    if (pageImportMatch && requestMethod === 'POST') {
+      return handlePageImport(req, res, decodeURIComponent(pageImportMatch[1] || '').trim());
+    }
+
+    if (/^\/api\/builder\/shared\/pages\/?$/.test(path) && requestMethod === 'GET') {
+      return handleSharedPagesRead(req, res);
     }
 
     const sharedMatch = path.match(/^\/api\/builder\/shared\/([^/]+)\/?$/);
