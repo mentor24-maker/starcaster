@@ -157,6 +157,8 @@ describe('SharePagePicker', () => {
     expect(pagePickerLabel(pages, [])).toBe('Choose pages');
     expect(pagePickerLabel(pages, ['pg-faq'])).toBe('FAQ');
     expect(pagePickerLabel(pages, ['pg-faq', 'pg-home'])).toBe('2 pages selected');
+    // A page with no name reads the way the Pages dialog reads it, never as its id.
+    expect(pagePickerLabel([{ id: '1431', name: '', slug: 'x' }], ['1431'])).toBe('Untitled page');
     // An id that is not one of these pages is not counted.
     expect(pagePickerLabel(pages, ['pg-gone'])).toBe('Choose pages');
   });

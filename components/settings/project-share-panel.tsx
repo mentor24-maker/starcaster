@@ -91,7 +91,7 @@ function pageCountLabel(count: number): string {
  *  caller's projects are counted, so the line agrees with the ticks below it;
  *  the same goes for pages that are still this project's. */
 export function shareSummaryLine(types: string[], targetCount: number, pageCount = 0): string {
-  const labels = SHARE_TYPES.filter((t) => types.includes(t.type)).map((t) => t.label);
+  const labels: string[] = SHARE_TYPES.filter((t) => types.includes(t.type)).map((t) => t.label);
   if (pageCount > 0) labels.push(pageCountLabel(pageCount));
   if (!labels.length || targetCount < 1) return 'Not shared with any project';
   return `${labels.join(', ')} → ${targetCount} ${targetCount === 1 ? 'project' : 'projects'}`;
@@ -105,7 +105,7 @@ function toggle(list: string[], value: string): string[] {
 export function pagePickerLabel(pages: SharePage[], selected: string[]): string {
   const picked = pages.filter((p) => selected.includes(p.id));
   if (picked.length === 0) return 'Choose pages';
-  if (picked.length === 1) return picked[0].name || picked[0].slug || picked[0].id;
+  if (picked.length === 1) return picked[0].name || 'Untitled page';
   return `${pageCountLabel(picked.length)} selected`;
 }
 
@@ -190,7 +190,7 @@ export function SharePagePicker({
               <label key={p.id} className="project-share-option" role="option" aria-selected={selected.includes(p.id)}>
                 <input type="checkbox" checked={selected.includes(p.id)} onChange={() => onToggle?.(p.id)} />
                 <span>
-                  {p.name || p.id} <span className="meta">{pageAddress(p)}</span>
+                  {p.name || 'Untitled page'} <span className="meta">{pageAddress(p)}</span>
                 </span>
               </label>
             ))

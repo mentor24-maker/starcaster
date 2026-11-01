@@ -541,7 +541,9 @@ test('import copies the page BODY into B as an unpublished draft, and touches no
   assert.equal(copy.owner_user_id, 'dana');
   assert.equal(copy.is_published, false);
   assert.equal(copy.slug, 'page-b1-2');
-  assert.equal(copy.form_id, null);
+  // Left OFF the copy, never null: the pages table refuses a null form_id
+  // (NOT NULL, blank default), which failed every import in the browser.
+  assert.equal('form_id' in copy, false);
   assert.equal('page_template_id' in copy, false);
   assert.equal('theme_id' in copy, false);
   const sections = copy.layout_sections.sections;
