@@ -13,6 +13,7 @@ import SiteImportPage, { SiteImportErrorBoundary } from './components/builder/si
 import { SavedSectionEditorModal } from './components/builder/saved-section-editor-modal';
 import { BuilderThemeColorField } from './components/builder/builder-theme-color-field';
 import { BuilderSharedPageTemplatesIsland } from './components/builder/builder-shared-page-templates';
+import { BuilderSharedPagesIsland } from './components/builder/builder-shared-pages';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -460,8 +461,22 @@ function mountSharedPageTemplatesOnLoad() {
   createRoot(host).render(<BuilderSharedPageTemplatesIsland />);
 }
 
+/**
+ * "Shared by Project" on the Pages screen (task 86bcw3m94). Same reasoning as
+ * above: its host is permanent markup, so it mounts once on load. It renders
+ * nothing unless another project shares at least one page with this one.
+ */
+function mountSharedPagesOnLoad() {
+  const host = document.getElementById('builderReactRootSharedPages');
+  if (!host || host.dataset.mounted === '1') return;
+  host.dataset.mounted = '1';
+  createRoot(host).render(<BuilderSharedPagesIsland />);
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', mountSharedPageTemplatesOnLoad, { once: true });
+  document.addEventListener('DOMContentLoaded', mountSharedPagesOnLoad, { once: true });
 } else {
   mountSharedPageTemplatesOnLoad();
+  mountSharedPagesOnLoad();
 }
