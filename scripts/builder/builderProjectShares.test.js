@@ -57,6 +57,7 @@ function load(initial = {}, { missingColumns = [] } = {}) {
   for (const p of freshModules) delete require.cache[p];
   const supabase = require(supabasePath);
   const db = {};
+  const inserts = [];
   for (const name of Object.values(TABLES)) db[name] = (initial[name] || []).map((r) => ({ ...r }));
   let nextId = 1;
 
@@ -75,7 +76,16 @@ function load(initial = {}, { missingColumns = [] } = {}) {
       return { ok: true, status: 204, data: [] };
     }
     if (method === 'POST') {
-      const added = (Array.isArray(body) ? body : [body]).map((r) => ({ id: `row-${nextId++}`, ...r }));
+      const list = Array.isArray(body) ? body : [body];
+      inserts.push({ table, rows: list });
+      // PostgREST refuses a bulk insert whose objects do not all carry the
+      // same keys (PGRST102). The round-1 review found a mixed save hitting
+      // exactly that after the delete had run, so the fake enforces it too.
+      const keySet = (r) => Object.keys(r).sort().join(',');
+      if (list.some((r) => keySet(r) !== keySet(list[0]))) {
+        return { ok: false, status: 400, error: 'PGRST102: All object keys must match' };
+      }
+      const added = list.map((r) => ({ id: `row-${nextId++}`, ...r }));
       rows.push(...added);
       return { ok: true, status: 201, data: added };
     }
@@ -84,7 +94,7 @@ function load(initial = {}, { missingColumns = [] } = {}) {
 
   const store = require('../../lib/builderProjectSharesStore');
   const routes = require('../../routes/projectShares');
-  return { db, store, routes };
+  return { db, store, routes, inserts };
 }
 
 // Dana owns A and B and is a plain member of M. C belongs to somebody else.
@@ -436,9 +446,40 @@ test('an owner shares two pages with one project; reading back shows both', asyn
     assert.equal(row.project_id, 'proj-a');
     assert.equal(row.owner_user_id, 'dana');
   }
-  // A library-type row does not name object_id, so it saves on a database
-  // that has not run the pages SQL.
-  assert.equal('object_id' in db.builder_project_shares.find((r) => r.object_type === 'themes'), false);
+  // A mixed save gives every row an object_id ('' for the library type), so
+  // one bulk insert carries one key set.
+  assert.equal(db.builder_project_shares.find((r) => r.object_type === 'themes').object_id, '');
+});
+
+test('a mixed save (a type AND a page) sends one insert whose rows all carry the same keys', async () => {
+  const { db, store, routes, inserts } = load(pagesWorld([pageShare('old', 'a1')]));
+  const handle = handlerFor(routes, store);
+  const res = await call(handle, {
+    method: 'PUT',
+    path: '/api/projects/proj-a/shares',
+    body: { types: ['themes', 'saved_sections'], targetProjectIds: ['proj-b'], pageIds: ['a1', 'a2'] },
+  });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  const shareInserts = inserts.filter((i) => i.table === 'builder_project_shares');
+  assert.equal(shareInserts.length, 1);
+  const keySets = new Set(shareInserts[0].rows.map((r) => Object.keys(r).sort().join(',')));
+  assert.equal(keySets.size, 1, `rows carried different keys: ${[...keySets].join(' | ')}`);
+  assert.deepEqual(res.body.data.types.slice().sort(), ['saved_sections', 'themes']);
+  assert.deepEqual(res.body.data.pageIds, ['a1', 'a2']);
+  assert.equal(db.builder_project_shares.length, 4);
+});
+
+test('a library-only save still leaves object_id out, so it works before the pages SQL runs', async () => {
+  const { db, store, routes } = load(pagesWorld(), { missingColumns: ['object_id'] });
+  const handle = handlerFor(routes, store);
+  const res = await call(handle, {
+    method: 'PUT',
+    path: '/api/projects/proj-a/shares',
+    body: { types: ['themes'], targetProjectIds: ['proj-b'], pageIds: [] },
+  });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(db.builder_project_shares.length, 1);
+  assert.equal('object_id' in db.builder_project_shares[0], false);
 });
 
 test('a page from another project cannot be named in a PUT (403, nothing written)', async () => {
