@@ -314,6 +314,12 @@ sign-in window on the live site, unnoticed for two weeks. `sql:unapplied`
 runs on the relay's wake and posts each unapplied file to the bus once a day
 until production has it (task 86bcu8ftx). A gap that is deliberate goes in
 `EXPLAINED` in `lib/unappliedSql.js` with its reason.
+The same wake rewrites the ClickUp ticket **SQL waiting for you** and assigns
+Dane while anything is waiting, because he is the one who runs it and the bus
+never reaches him (task 86bcwam1k). Give every new docs/SQL file a
+`-- FEATURE: <what breaks without it, in plain words>` header line — that is
+what the ticket tells him — and a `-- RUN AFTER docs/SQL/<file>` line when it
+needs another file first.
 
 The admin app carries a strip across the top saying which database it is
 talking to, `npm run dev` refuses to start against the live one without
