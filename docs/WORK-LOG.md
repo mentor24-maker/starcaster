@@ -8,7 +8,7 @@ the word-for-word version has it and the tidy version left it out. Where the two
 heard different words nearby, nothing is marked: when in doubt, the speech
 stays. Pauses longer than a second are shortened to half a second, and never
 where somebody starts speaking inside one. On five real minutes of a Zoom call
-it found 21 of 24 "um"s and "uh"s and would remove 26 seconds. Nothing runs it
+it found 21 of 24 "um"s and "uh"s and would remove 24 seconds. Its marks are in exactly the shape the cut-marks table stores. Nothing runs it
 on footage yet; the next two tickets wire it into the Mini and show the marks on
 the Footage screen.
 

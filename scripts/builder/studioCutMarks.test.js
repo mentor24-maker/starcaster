@@ -27,6 +27,7 @@ const {
   RULES_VERSION,
   VERBATIM_PROMPT,
 } = require('../../workers/studio/cutMarks.js');
+const { marksOrError, totalCut, MARK_KINDS } = require('../../lib/videoCutMarksStore.js');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'studio-cut-marks');
 
@@ -78,9 +79,9 @@ test('"because, because" yields exactly one repeat, and the second "because" sta
   assert.ok(i >= 0, 'the fixture has "because, because"');
   const first = verbatim[i];
   const second = verbatim[i + 1];
-  const repeats = result.marks.filter((m) => m.kind.includes('repeat') && m.start <= first.start && m.end > first.start);
+  const repeats = result.marks.filter((m) => m.kind === 'repeat' && m.start <= first.start && m.end > first.start);
   assert.equal(repeats.length, 1);
-  assert.equal(repeats[0].text, first.word);
+  assert.equal(repeats[0].words, first.word);
   assert.equal(inMark(second.start), false, 'the second copy is the one kept');
 });
 
@@ -107,13 +108,25 @@ test('nothing the clean transcript has is cut — it is still all there in what 
 
 test('the fixture marks, for the ticket', () => {
   // Printed so the build pass can paste them; the asserts above are the proof.
-  const lines = result.marks.map((m) => `${m.start.toFixed(2)}–${m.end.toFixed(2)} ${m.kind}${m.text ? ` "${m.text}"` : ''}`);
+  const lines = result.marks.map((m) => `${m.start.toFixed(2)}–${m.end.toFixed(2)} ${m.kind}`
+    + `${m.words ? ` "${m.words}"` : ''}${m.keep_s ? ` (keeps ${m.keep_s}s)` : ''}`);
   console.log(`${lines.join('\n')}\n${result.marks.length} marks, ${result.cutS}s removed of 300s`);
   assert.ok(result.cutS > 0 && result.cutS < 60);
   assert.equal(result.rulesVersion, RULES_VERSION);
   for (let i = 1; i < result.marks.length; i += 1) {
-    assert.ok(result.marks[i].start > result.marks[i - 1].end, 'marks are sorted and do not overlap');
+    assert.ok(result.marks[i].start >= result.marks[i - 1].end, 'marks are sorted and do not overlap');
   }
+});
+
+test('the marks are exactly what lib/videoCutMarksStore.js keeps, and cutS is its total', () => {
+  // 1c hands these straight to upsertCutMarks; the store refuses a bad mark
+  // with a 400, so a shape drift here would fail every recording there.
+  const checked = marksOrError(result.marks);
+  assert.equal(checked.ok, true, checked.error);
+  assert.deepEqual(checked.value, result.marks, 'the store keeps every key and drops none');
+  assert.equal(totalCut(checked.value), result.cutS);
+  assert.ok(result.marks.every((m) => MARK_KINDS.includes(m.kind)));
+  assert.equal(typeof result.rulesVersion, 'string');
 });
 
 // --- the rules one at a time, on made-up words ---------------------------------
@@ -125,7 +138,7 @@ function words(text, t0 = 0, step = 0.4) {
 
 test('a repeat cuts the FIRST copy: "I, I was" → the first "I"', () => {
   const { marks } = findCutMarks({ cleanWords: words('so I was there today'), verbatimWords: words('so I, I was there today') });
-  assert.deepEqual(marks.map((m) => [m.kind, m.text, m.start]), [['repeat', 'I,', 0.4]]);
+  assert.deepEqual(marks.map((m) => [m.kind, m.words, m.start]), [['repeat', 'I,', 0.4]]);
 });
 
 test('a two-word repeat: "I was, I was going" → "I was,"', () => {
@@ -133,7 +146,7 @@ test('a two-word repeat: "I was, I was going" → "I was,"', () => {
     cleanWords: words('and then I was going home now'),
     verbatimWords: words('and then I was, I was going home now'),
   });
-  assert.deepEqual(marks.map((m) => [m.kind, m.text]), [['repeat', 'I was,']]);
+  assert.deepEqual(marks.map((m) => [m.kind, m.words]), [['repeat', 'I was,']]);
 });
 
 test('a false start: "I was, I started" → "I was," marked as weaker evidence', () => {
@@ -141,8 +154,8 @@ test('a false start: "I was, I started" → "I was," marked as weaker evidence',
     cleanWords: words('then I started building it'),
     verbatimWords: words('then I was, I started building it'),
   });
-  assert.deepEqual(marks.map((m) => [m.kind, m.text]), [['false_start', 'I was,']]);
-  assert.match(marks[0].why, /weaker evidence/);
+  assert.deepEqual(marks.map((m) => [m.kind, m.words]), [['false_start', 'I was,']]);
+  assert.match(marks[0].why, /weaker evidence/i);
 });
 
 test('an extra the rules cannot explain is kept', () => {
@@ -174,7 +187,7 @@ test('fillers: um umm uh uhh er ah hmm, any case, with punctuation', () => {
 test('a pause longer than 1.0 s keeps 0.5 s, a quarter second each side', () => {
   const cleanWords = [...words('one two three', 0), ...words('four five', 4)];
   const { marks, cutS } = findCutMarks({ cleanWords, verbatimWords: cleanWords, silences: [{ start: 1.2, end: 4.0 }] });
-  assert.deepEqual(marks.map((m) => [m.kind, m.start, m.end]), [['pause', 1.45, 3.75]]);
+  assert.deepEqual(marks.map((m) => [m.kind, m.start, m.end, m.keep_s]), [['pause', 1.2, 4, 0.5]]);
   assert.equal(cutS, 2.3);
 });
 
@@ -191,17 +204,26 @@ test('a "silence" with a word starting inside it is not shortened', () => {
 
 test('a silence still open at the end of the file runs to the duration', () => {
   const { marks } = findCutMarks({ silences: [{ start: 8, end: null }], durationS: 10 });
-  assert.deepEqual(marks.map((m) => [m.start, m.end]), [[8.25, 9.75]]);
+  assert.deepEqual(marks.map((m) => [m.start, m.end, m.keep_s]), [[8, 10, 0.5]]);
 });
 
-test('overlapping marks merge into one, naming both', () => {
+test('a filler stretched across a pause ends where the sound stopped, so the two never overlap', () => {
   const cleanWords = [...words('so then', 0), ...words('we left', 3)];
   const verbatimWords = [...words('so then uh', 0), ...words('we left', 3)];
   verbatimWords[2].end = 3; // the last word before a pause stretches across it
-  const { marks } = findCutMarks({ cleanWords, verbatimWords, silences: [{ start: 1.0, end: 3.0 }], durationS: 4 });
-  assert.equal(marks.length, 1);
-  assert.equal(marks[0].kind, 'filler+pause');
-  assert.deepEqual([marks[0].start, marks[0].end], [0.8, 3]);
+  const { marks, cutS } = findCutMarks({ cleanWords, verbatimWords, silences: [{ start: 1.0, end: 3.0 }], durationS: 4 });
+  assert.deepEqual(marks.map((m) => [m.kind, m.start, m.end, m.keep_s]), [['filler', 0.8, 1, 0], ['pause', 1, 3, 0.5]]);
+  assert.equal(cutS, 1.7);
+});
+
+test('a mark that would cut into a word both passes heard is refused', () => {
+  // A word time can be wrong; the guard is what keeps that from costing speech.
+  const cleanWords = words('a b c d e f g h');
+  const verbatimWords = words('a b c uh d e um f g h');
+  verbatimWords[3].end = verbatimWords[7].start; // "uh" stretched over "d e um"
+  const { marks } = findCutMarks({ cleanWords, verbatimWords });
+  // "uh" now spans kept words, so it is refused — never cut into "d" or "e".
+  assert.deepEqual(marks.map((m) => [m.kind, m.words]), [['filler', 'um']]);
 });
 
 test('parseSilencedetect reads ffmpeg\'s lines, a negative start, and an unfinished silence', () => {

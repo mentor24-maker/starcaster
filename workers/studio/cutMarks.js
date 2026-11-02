@@ -28,8 +28,11 @@
 
 const { whisperArgs } = require('./transcribePass.js');
 
-/** Bump when any rule below changes, so stored marks can say which rules made them. */
-const RULES_VERSION = 1;
+/**
+ * Bump when any rule below changes, so stored marks can say which rules made
+ * them. Text, because video_cut_marks.rules_version is.
+ */
+const RULES_VERSION = '1';
 
 /** The hint that makes whisper write what was said rather than what was meant. */
 const VERBATIM_PROMPT = 'Umm, uh, so, like, I mean, you know, I- I was, uh, thinking, hmm.';
@@ -79,10 +82,6 @@ const ANCHOR_WORDS = 2;
 const EPS = 0.005;
 
 const FILLER = /^(?:u+h*m+|u+h+|e+r+|a+h+|h+m+)$/;
-
-function round2(value) {
-  return Math.round(value * 100) / 100;
-}
 
 /** "Umm," → "umm"; "I-" → "i"; "don't" → "dont". Case and punctuation are not words. */
 function norm(word) {
@@ -265,29 +264,52 @@ function classifyRun(b, start, end) {
 }
 
 const WHY = {
-  filler: 'a filler word the clean transcript left out',
-  repeat: 'a repeated word the clean transcript said once',
-  false_start: 'an abandoned start the clean transcript left out — weaker evidence than a filler or a repeat: it restarts with the same word',
-  pause: `a silence longer than ${PAUSE_MIN_S}s, shortened to ${PAUSE_KEEP_S}s`,
+  filler: 'A filler word ("um", "uh") that the clean transcript left out.',
+  repeat: 'A word said twice in a row; the clean transcript has it once, so the first copy goes.',
+  false_start: 'A start that was abandoned and begun again with the same word. Weaker evidence than a filler or a repeat.',
+  pause: `A silence longer than ${PAUSE_MIN_S} s, shortened so ${PAUSE_KEEP_S} s stays — a quarter second each side.`,
 };
 
 /**
- * The pause marks: each silence longer than PAUSE_MIN_S, minus PAUSE_KEEP_S/2
- * at each side. A silence with a kept word starting inside the cut is not
- * silence — the room is loud or the speaker is quiet — so it is left alone.
+ * The pause marks: each silence longer than PAUSE_MIN_S, stored whole with
+ * `keep_s: PAUSE_KEEP_S` — the shape lib/videoCutMarksStore.js keeps, where a
+ * pause is shortened, not removed. A silence with a kept word starting inside
+ * what would be cut is not silence — the room is loud or the speaker is
+ * quiet — so it is left alone.
  */
 function pauseMarks(silences, keptStarts, durationS) {
   const marks = [];
-  for (const s of Array.isArray(silences) ? silences : []) {
-    const end = s.end == null ? durationS : s.end;
+  for (const s of silences) {
+    const end = Math.min(s.end == null ? durationS : s.end, durationS);
     if (!Number.isFinite(s.start) || !Number.isFinite(end)) continue;
     if (end - s.start <= PAUSE_MIN_S + EPS) continue;
     const from = s.start + PAUSE_KEEP_S / 2;
     const to = end - PAUSE_KEEP_S / 2;
     if (keptStarts.some((t) => t > from + EPS && t < to - EPS)) continue;
-    marks.push({ start: from, end: to, kind: 'pause', text: '', why: WHY.pause });
+    marks.push({ start: s.start, end, kind: 'pause', keep_s: PAUSE_KEEP_S, words: '', why: WHY.pause });
   }
   return marks;
+}
+
+/**
+ * A word's end is the next word's start (docs/STUDIO.md, "Word timing"), so
+ * the last word before a pause stretches across it. The silence report says
+ * where the sound actually stopped: a word mark ends where a silence begins
+ * and starts where one ends. Then a word mark and a pause never overlap, and
+ * each keeps its own kind.
+ */
+function trimToSound(mark, silences, durationS) {
+  let { start, end } = mark;
+  for (const s of silences) {
+    const sEnd = s.end == null ? durationS : s.end;
+    if (s.start > start + EPS && s.start < end) end = s.start;
+    if (sEnd > start && sEnd < end - EPS && s.start <= start + EPS) start = sEnd;
+  }
+  return { ...mark, start, end };
+}
+
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
 }
 
 /**
@@ -298,12 +320,14 @@ function pauseMarks(silences, keptStarts, durationS) {
  * @param {Array<{start,end,word}>} input.verbatimWords words from `verbatimWhisperArgs`, same audio
  * @param {Array<{start,end}>}      input.silences      `parseSilencedetect` of the same audio
  * @param {number}                  input.durationS     the audio's length
- * @returns {{ marks: Array<{start,end,kind,text,why}>, cutS: number, rulesVersion: number }}
- *   `marks` sorted and merged where they overlap — a merged mark's `kind`
- *   joins its parts' (`filler+pause`) — and `cutS` the seconds they remove.
+ * @returns {{ marks: Array<{start,end,kind,keep_s,words,why}>, cutS: number, rulesVersion: string }}
+ *   `marks` in the shape lib/videoCutMarksStore.js keeps, sorted, never
+ *   overlapping (overlaps merge); `cutS` the seconds they remove, computed
+ *   the way the store computes it.
  */
 function findCutMarks({ cleanWords = [], verbatimWords = [], silences = [], durationS = null } = {}) {
   const duration = Number.isFinite(Number(durationS)) && Number(durationS) > 0 ? Number(durationS) : Infinity;
+  const quiet = (Array.isArray(silences) ? silences : []).filter((s) => s && Number.isFinite(s.start));
   const { b, vIdx, inClean, hunks } = align(cleanWords, verbatimWords);
 
   // Starts of every word the cut must keep. A verbatim word's start is its
@@ -317,39 +341,41 @@ function findCutMarks({ cleanWords = [], verbatimWords = [], silences = [], dura
   for (const h of hunks) {
     if (!h.trusted) continue;
     for (const f of classifyRun(b, h.start, h.end)) {
-      const first = verbatimWords[vIdx[f.from]];
-      const last = verbatimWords[vIdx[f.to - 1]];
-      const start = Number(first.start);
-      // A word's end is the next word's start (docs/STUDIO.md, "Word timing").
-      const end = Number(last.end);
+      const start = Number(verbatimWords[vIdx[f.from]].start);
+      const end = Number(verbatimWords[vIdx[f.to - 1]].end);
       if (!(end > start)) continue;
       // Never cut into a word both passes heard.
       if (keptVerbatimStarts.some((t) => t > start + EPS && t < end - EPS)) continue;
-      const text = verbatimWords.slice(vIdx[f.from], vIdx[f.to - 1] + 1).map((w) => w.word).join(' ');
-      raw.push({ start, end, kind: f.kind, text, why: WHY[f.kind] });
+      const words = verbatimWords.slice(vIdx[f.from], vIdx[f.to - 1] + 1).map((w) => w.word).join(' ');
+      raw.push(trimToSound({ start, end, kind: f.kind, keep_s: 0, words, why: WHY[f.kind] }, quiet, duration));
     }
   }
-  raw.push(...pauseMarks(silences, keptStarts, duration));
+  raw.push(...pauseMarks(quiet, keptStarts, duration));
 
-  const clipped = raw
-    .map((m) => ({ ...m, start: Math.max(0, m.start), end: Math.min(duration, m.end) }))
+  const sorted = raw
+    .map((m) => ({ ...m, start: round3(Math.max(0, m.start)), end: round3(Math.min(duration, m.end)) }))
     .filter((m) => m.end - m.start > EPS)
     .sort((x, y) => x.start - y.start || x.end - y.end);
 
+  // Overlaps merge. Two of one kind become one mark; a mark overlapping one
+  // of another kind keeps only the part after it, so every mark still has
+  // exactly one kind and the time is never counted twice.
   const marks = [];
-  for (const m of clipped) {
+  for (const m of sorted) {
     const prev = marks[marks.length - 1];
-    if (prev && m.start <= prev.end + EPS) {
-      prev.end = Math.max(prev.end, m.end);
-      if (!prev.kind.split('+').includes(m.kind)) prev.kind = `${prev.kind}+${m.kind}`;
-      prev.text = [prev.text, m.text].filter(Boolean).join(' ');
-      if (!prev.why.includes(m.why)) prev.why = `${prev.why}; ${m.why}`;
-    } else {
-      marks.push({ ...m });
+    if (prev && m.start < prev.end - EPS) {
+      if (m.kind === prev.kind) {
+        prev.end = Math.max(prev.end, m.end);
+        prev.words = [prev.words, m.words].filter(Boolean).join(' ');
+        continue;
+      }
+      if (m.end <= prev.end + EPS) continue;
+      m.start = prev.end;
+      m.keep_s = Math.min(m.keep_s, round3(m.end - m.start));
     }
+    marks.push({ ...m });
   }
-  for (const m of marks) { m.start = round2(m.start); m.end = round2(m.end); }
-  const cutS = round2(marks.reduce((sum, m) => sum + (m.end - m.start), 0));
+  const cutS = round3(marks.reduce((sum, m) => sum + (m.end - m.start - m.keep_s), 0));
   return { marks, cutS, rulesVersion: RULES_VERSION };
 }
 
