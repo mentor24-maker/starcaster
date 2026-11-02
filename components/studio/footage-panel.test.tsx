@@ -533,11 +533,29 @@ describe("Footage panel — the words Reel Spinner would cut (86bcwaw8e)", () =>
     }
   });
 
-  it("the helpers: midpoints decide a word, kinds with none are left out", () => {
-    // A word whose edge pokes past the mark but whose middle is outside stays in.
+  it("the helpers: overlap decides a word, kinds with none are left out", () => {
+    // A neighbour the mark only grazes (a rounding error at its edge) stays in.
     expect(markWords([{ start: 0.5, end: 1.5, word: "edge" }], [
-      { start: 0, end: 0.9, kind: "filler", keep_s: 0 },
+      { start: 0, end: 0.55, kind: "filler", keep_s: 0 },
     ])).toEqual([{ type: "word", word: "edge", cut: null, why: "" }]);
+    // The recogniser stretches the word before a pause across the silence, and
+    // the rules (workers/studio/cutMarks.js trimToSound) end the mark where the
+    // sound stopped — so the mark is far shorter than the word and the word's
+    // middle lies outside it. It is still that word, and it is still cut.
+    expect(markWords([
+      { start: 0.0, end: 0.3, word: "right" },
+      { start: 0.4, end: 1.6, word: "uh" },
+      { start: 1.7, end: 2.0, word: "so" },
+    ], [
+      { start: 0.4, end: 0.7, kind: "filler", keep_s: 0, why: "filler word" },
+      { start: 0.7, end: 1.6, kind: "pause", keep_s: 0.5 },
+    ]).filter((p) => p.type === "word" && p.cut).map((p) => (p as { word: string }).word)).toEqual(["uh"]);
+    // A repeat or false start can cover several words; every one is cut.
+    expect(markWords([
+      { start: 0, end: 0.2, word: "we" }, { start: 0.3, end: 0.5, word: "went" },
+      { start: 0.6, end: 0.8, word: "we" }, { start: 0.9, end: 1.1, word: "went" },
+    ], [{ start: 0, end: 0.5, kind: "repeat", keep_s: 0 }])
+      .map((p) => (p.type === "word" ? `${p.word}${p.cut ? "~" : ""}` : "|"))).toEqual(["we~", "went~", "we", "went"]);
     // A pause after the last word still shows.
     expect(markWords([{ start: 0, end: 1, word: "end" }], [
       { start: 1, end: 4, kind: "pause", keep_s: 0.5 },

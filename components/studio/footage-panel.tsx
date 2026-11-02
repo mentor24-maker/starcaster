@@ -392,26 +392,40 @@ export type MarkedPiece =
   | { type: 'pause'; from: number; to: number };
 
 /**
- * The word-for-word transcript with the marks laid over it. A word is crossed
- * out when its MIDDLE falls inside a filler, repeat or false-start mark — the
- * middle, not its edges, because a word's timing and a mark's are found by
- * different steps and can disagree by a few hundredths at either end. A pause
- * mark covers silence, not a word, so it becomes its own marker, placed
- * before the first word that comes after it.
+ * How much of a word a mark covers decides whether it is crossed out: at
+ * least half of whichever is SHORTER, the word or the mark. Not the word's
+ * middle — the recogniser stretches the word before a pause across the
+ * silence, and the rules (workers/studio/cutMarks.js trimToSound) end its mark
+ * where the sound stopped, so a 0.3 s mark sits inside a 1.2 s word whose
+ * middle lies in the pause. Against the shorter of the two, that word is
+ * fully covered; a neighbour the mark only grazes by a rounding error is not.
+ */
+function covers(mark: CutMark, word: VerbatimWord): boolean {
+  const overlap = Math.min(mark.end, word.end) - Math.max(mark.start, word.start);
+  if (overlap <= 0) return false;
+  const shorter = Math.min(mark.end - mark.start, word.end - word.start);
+  return shorter <= 0 ? true : overlap >= shorter / 2;
+}
+
+/**
+ * The word-for-word transcript with the marks laid over it. A filler, repeat
+ * or false-start mark crosses out every word it covers (`covers`, above) — a
+ * repeat or false start can span several. A pause mark covers silence, not a
+ * word, so it becomes its own marker, placed before the first word that
+ * starts after the pause begins.
  */
 export function markWords(words: VerbatimWord[], marks: CutMark[]): MarkedPiece[] {
   const spans = marks.filter((m) => m.kind !== 'pause');
   const pauses = marks.filter((m) => m.kind === 'pause').sort((a, b) => a.start - b.start);
   const out: MarkedPiece[] = [];
+  const pushPause = (pause: CutMark) => out.push({ type: 'pause', from: pause.end - pause.start, to: pause.keep_s || 0 });
   let p = 0;
   for (const w of words) {
-    const mid = (w.start + w.end) / 2;
-    while (p < pauses.length && (pauses[p].start + pauses[p].end) / 2 <= mid) {
-      const pause = pauses[p];
-      out.push({ type: 'pause', from: pause.end - pause.start, to: pause.keep_s || 0 });
+    while (p < pauses.length && pauses[p].start < w.start) {
+      pushPause(pauses[p]);
       p += 1;
     }
-    const mark = spans.find((m) => mid >= m.start && mid <= m.end);
+    const mark = spans.find((m) => covers(m, w));
     out.push({
       type: 'word',
       word: w.word,
@@ -419,10 +433,7 @@ export function markWords(words: VerbatimWord[], marks: CutMark[]): MarkedPiece[
       why: mark?.why || '',
     });
   }
-  for (; p < pauses.length; p += 1) {
-    const pause = pauses[p];
-    out.push({ type: 'pause', from: pause.end - pause.start, to: pause.keep_s || 0 });
-  }
+  for (; p < pauses.length; p += 1) pushPause(pauses[p]);
   return out;
 }
 
