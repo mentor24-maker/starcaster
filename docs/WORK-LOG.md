@@ -1,3 +1,16 @@
+## 2026-11-01 — Reel Spinner gets a place to keep what each recording should cut (#935)
+
+The first step of Reel Spinner, the Studio video pipeline, is spotting what to
+cut from a recording: the "um"s, words said twice, false starts and long
+pauses. This adds the database table where those decisions are kept — one row
+per recording, a list of "cut from here to here, because…" entries plus the
+word-for-word transcript they came from — and the code that saves and reads
+them. Nothing edits any video; these are notes about what to cut, used by a
+later step. Nothing writes to the table or shows it yet; the next two tickets
+do. A badly formed note (an end before its start, an unknown kind of cut) is
+refused with a message naming which one. It needs
+`docs/SQL/video_cut_marks_setup.sql` run once in Supabase.
+
 ## 2026-10-31 — A project can share specific website pages with another project (#933)
 
 Settings › Projects › Share with now has a Pages dropdown next to the three
