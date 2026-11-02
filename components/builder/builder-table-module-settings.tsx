@@ -1,11 +1,14 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import type {
   BackgroundSettings,
+  BuilderCellModuleRecord,
   BuilderPageRecord,
   BuilderTemplateModule
 } from "@/lib/builder-template";
+import { readAdminJson } from "@/lib/admin-fetch";
+import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { createEmptyModule, isPlainTextVariant, normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import {
   cloneTableCellModule,
@@ -73,6 +76,51 @@ function TableCellModules({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteGroup, setPaletteGroup] = useState<ModulePaletteGroup | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [savedModules, setSavedModules] = useState<BuilderCellModuleRecord[]>([]);
+
+  /**
+   * The cell loads Saved Modules itself rather than having them threaded down
+   * from the page editor: a table is edited from several hosts (page, saved
+   * section, module repository) and none of them passed the list, so the
+   * library here never showed a single saved module (task 86bcwwc4g).
+   * Loaded each time the library opens, so a module saved a minute ago is in it.
+   */
+  useEffect(() => {
+    if (!paletteOpen) return;
+    let cancelled = false;
+    builderAdminFetch("/api/admin/cell-modules", { cache: "no-store" })
+      .then((response) => readAdminJson<{ cellModules?: BuilderCellModuleRecord[] }>(response, "Failed to load saved modules."))
+      .then((data) => {
+        if (cancelled) return;
+        const blocked = new Set<string>(TABLE_CELL_EXCLUDED_PALETTE_GROUPS);
+        setSavedModules(
+          (data.cellModules ?? []).filter(
+            (record) => record.modules.length === 1 && !blocked.has(record.modules[0].type)
+          )
+        );
+      })
+      .catch(() => {
+        // The library still offers every starter module; only saved ones are missing.
+        if (!cancelled) setSavedModules([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [paletteOpen]);
+
+  /**
+   * A plain copy, deliberately without `savedModuleId`: canonical propagation
+   * (lib/canonicalPropagation.js) walks only a section's own modules, never
+   * the modules inside a table cell, so a link here would claim to follow the
+   * saved module and never update.
+   */
+  function addSavedModule(cellModuleId: string) {
+    const saved = savedModules.find((record) => record.id === cellModuleId);
+    if (!saved) return;
+    const { savedModuleId: _link, canonical: _follows, canonicalLocked: _locked, ...copy } = saved.modules[0];
+    onUpdate(cellKey, [...modules, cloneTableCellModule(copy, "saved")]);
+    closePalette();
+  }
 
   function addModule(item: ModulePaletteItem) {
     const mod = createEmptyModule(item.type, "");
@@ -312,9 +360,11 @@ function TableCellModules({
         {paletteOpen && (
           <BuilderModulePaletteModal
             activeGroup={paletteGroup}
+            cellModules={savedModules}
             excludeGroups={TABLE_CELL_EXCLUDED_PALETTE_GROUPS}
             onSelectGroup={setPaletteGroup}
             onSelectItem={addModule}
+            onSelectSavedModule={addSavedModule}
             onClose={closePalette}
           />
         )}
