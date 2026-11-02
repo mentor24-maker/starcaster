@@ -242,6 +242,54 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   overflow-wrap: anywhere;
 }
 
+/* With cuts marked (Reel Spinner 1d, 86bcwaw8e). The word-for-word text
+   flows as one paragraph inside the same scrolling box the clean lines use;
+   a crossed-out word stays readable, and each pause marker is a small chip
+   that never breaks across a line. */
+.studio-footage-cuts-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.studio-footage-cuts-switch .btn {
+  white-space: nowrap;
+  width: fit-content;
+}
+
+.studio-footage-cuts-summary {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.studio-footage-cuts-words {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.studio-footage-cut-word {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  color: var(--muted, #6b7280);
+  cursor: help;
+}
+
+.studio-footage-cut-pause {
+  display: inline-block;
+  white-space: nowrap;
+  margin: 0 0.35rem 0 0;
+  padding: 0 0.4rem;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  color: var(--muted, #6b7280);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.6;
+  cursor: help;
+}
+
 /* Search what you said (86bcdek0z). Results sit above the list; each line
    wraps like a transcript line, and an unbroken run of characters breaks
    rather than widening the page (T0). */

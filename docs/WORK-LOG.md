@@ -1,3 +1,16 @@
+## 2026-11-01 — Footage transcripts can show what Reel Spinner would cut (#937)
+
+On Assets › Footage, a recording's transcript now has two views: **Clean**,
+the transcript as before, and **With cuts marked**, the word-for-word version
+with every "um", doubled word and false start crossed out, a small marker
+where a long pause would be shortened (and to how long), and one line on top
+saying how much time all of that saves. Hovering a crossed-out word says what
+kind of cut it is and why. It is for looking, not deciding — the yes/no on
+cuts comes later, at the rough cut. Each blank answer says why it is blank:
+not checked yet, the check failed (and its reason), or nothing to cut. Until
+the step that finds the cuts runs, every recording says "Not checked for cuts
+yet". If the cuts table is missing from a database, the Footage list still
+loads and the cuts view names the problem instead of going blank.
 ## 2026-11-01 — Reel Spinner: the rules that find the "um"s, repeats and long pauses in a recording (#936)
 
 The first piece of automatic editing for Studio. Whisper normally tidies speech

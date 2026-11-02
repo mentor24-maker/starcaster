@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FootagePanel, {
   PROJECT_SWITCH_EVENT, timestamp, transcriptSentence, noMatchSentence, queryTooShort, queryWords,
+  cutSummary, cutsSentence, markWords, spokenDuration,
 } from "./footage-panel";
 
 /**
@@ -72,6 +73,8 @@ let thumbnailsWork = false;
 let transcriptReads: string[] = [];
 let searchReads: string[] = [];
 let searchAnswer: Record<string, unknown> = {};
+let cutsReads: string[] = [];
+let cutsAnswer: { ok: boolean; data?: unknown; error?: { message: string } } = { ok: true, data: {} };
 const TRANSCRIPT = {
   sourceId: "fx-1",
   state: "done",
@@ -117,11 +120,17 @@ beforeEach(() => {
   transcriptReads = [];
   searchReads = [];
   searchAnswer = {};
+  cutsReads = [];
+  cutsAnswer = { ok: true, data: {} };
   (window as unknown as { App: unknown }).App = {
     api: async (path: string) => {
       if (path.startsWith("/api/studio/search")) {
         searchReads.push(path);
         return { ok: true, data: searchAnswer };
+      }
+      if (path.endsWith("/cuts")) {
+        cutsReads.push(path);
+        return cutsAnswer;
       }
       if (path.includes("/transcript")) {
         transcriptReads.push(path);
@@ -419,5 +428,145 @@ describe("Footage panel — searching what was said (86bcdek0z)", () => {
     await flush();
     expect(container?.querySelector('[data-testid="studio-search-empty"]')).toBeNull();
     expect((container!.querySelector('[data-testid="studio-search-input"]') as HTMLInputElement).value).toBe("");
+  });
+});
+
+describe("Footage panel — the words Reel Spinner would cut (86bcwaw8e)", () => {
+  // "So uh I I think, um, we start. [long pause] The the plan is simple."
+  const WORDS = [
+    { start: 0.0, end: 0.3, word: "So" },
+    { start: 0.4, end: 0.6, word: "uh" },
+    { start: 0.7, end: 0.8, word: "I" },
+    { start: 0.9, end: 1.0, word: "I" },
+    { start: 1.1, end: 1.4, word: "think," },
+    { start: 1.5, end: 1.8, word: "um," },
+    { start: 1.9, end: 2.1, word: "we" },
+    { start: 2.2, end: 2.6, word: "start." },
+    { start: 5.0, end: 5.2, word: "The" },
+    { start: 5.3, end: 5.5, word: "plan" },
+    { start: 5.6, end: 5.8, word: "is" },
+    { start: 5.9, end: 6.3, word: "simple." },
+  ];
+  // Three word marks ("uh", the first "I", "um,") and one pause.
+  const MARKS = [
+    { start: 0.35, end: 0.65, kind: "filler", keep_s: 0, words: "uh", why: "filler word" },
+    { start: 0.65, end: 0.85, kind: "repeat", keep_s: 0, words: "I", why: "said twice" },
+    { start: 1.45, end: 1.85, kind: "filler", keep_s: 0, words: "um", why: "filler word" },
+    { start: 2.6, end: 5.0, kind: "pause", keep_s: 0.5 },
+  ];
+
+  function withDone() {
+    const rows = CATALOG.proj_fixture.sessions[0].sources;
+    const saved = { ...rows[0].transcript };
+    rows[0].transcript = { state: "done", reason: "" };
+    return () => { rows[0].transcript = saved; };
+  }
+
+  function click(el: Element | null | undefined) {
+    if (!el) throw new Error("nothing to click");
+    act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+  }
+
+  async function openWithCuts() {
+    await mount();
+    click(container?.querySelector('[data-testid="studio-transcript-open"]'));
+    await flush();
+    click(container?.querySelector('[data-testid="studio-cuts-mode-cuts"]'));
+    await flush();
+  }
+
+  it("crosses out exactly the words the marks cover, and marks the pause", async () => {
+    cutsAnswer = { ok: true, data: {
+      sourceId: "fx-1", state: "done", reason: "", durationS: 1864, cutS: 3.4,
+      verbatimWords: WORDS, marks: MARKS,
+    } };
+    const restore = withDone();
+    try {
+      await openWithCuts();
+      expect(cutsReads).toEqual(["/api/studio/sources/fx-1/cuts"]);
+      const struck = [...(container?.querySelectorAll(".studio-footage-cut-word") || [])];
+      expect(struck.map((el) => el.textContent)).toEqual(["uh", "I", "um,"]);
+      expect(struck.map((el) => el.getAttribute("title"))).toEqual([
+        "filler: filler word", "repeated word: said twice", "filler: filler word",
+      ]);
+      const words = container?.querySelector('[data-testid="studio-cuts-words"]')?.textContent || "";
+      expect(words).toContain("⏸ 2.4 s → 0.5 s");
+      // The pause sits between "start." and "The", where the silence was.
+      expect(words.indexOf("start.")).toBeLessThan(words.indexOf("⏸"));
+      expect(words.indexOf("⏸")).toBeLessThan(words.indexOf("The"));
+      expect(container?.querySelector('[data-testid="studio-cuts-summary"]')?.textContent)
+        .toBe("Would cut 3 s of 31 min 4 s — 2 fillers · 1 repeat · 1 pause shortened");
+
+      // Clean puts the transcript back exactly as it was, with nothing crossed out.
+      click(container?.querySelector('[data-testid="studio-cuts-mode-clean"]'));
+      await flush();
+      expect(container?.querySelectorAll(".studio-footage-cut-word").length).toBe(0);
+      expect(container?.querySelectorAll('[data-testid="studio-transcript-lines"] li').length).toBe(3);
+    } finally {
+      restore();
+    }
+  });
+
+  it("each empty state has its own sentence", async () => {
+    const restore = withDone();
+    try {
+      for (const [data, sentence] of [
+        [{ state: "not_yet", reason: "", marks: [], verbatimWords: [], cutS: 0, durationS: null }, "Not checked for cuts yet"],
+        [{ state: "failed", reason: "the model timed out", marks: [], verbatimWords: [], cutS: 0, durationS: null },
+          "Finding cuts failed: the model timed out"],
+        [{ state: "done", reason: "", marks: [], verbatimWords: WORDS, cutS: 0, durationS: 7 }, "Nothing to cut in this recording"],
+      ] as const) {
+        cutsAnswer = { ok: true, data: { sourceId: "fx-1", ...data } };
+        // eslint-disable-next-line no-await-in-loop
+        await openWithCuts();
+        expect(container?.querySelector('[data-testid="studio-cuts-empty"]')?.textContent).toBe(sentence);
+        expect(container?.querySelectorAll(".studio-footage-cut-word").length).toBe(0);
+        act(() => root?.unmount());
+        container?.remove();
+      }
+      cutsAnswer = { ok: false, error: { message: "relation \"video_cut_marks\" does not exist" } };
+      await openWithCuts();
+      expect(container?.querySelector('[role="alert"]')?.textContent)
+        .toBe('Cuts not shown: relation "video_cut_marks" does not exist');
+    } finally {
+      restore();
+    }
+  });
+
+  it("the helpers: overlap decides a word, kinds with none are left out", () => {
+    // A neighbour the mark only grazes (a rounding error at its edge) stays in.
+    expect(markWords([{ start: 0.5, end: 1.5, word: "edge" }], [
+      { start: 0, end: 0.55, kind: "filler", keep_s: 0 },
+    ])).toEqual([{ type: "word", word: "edge", cut: null, why: "" }]);
+    // The recogniser stretches the word before a pause across the silence, and
+    // the rules (workers/studio/cutMarks.js trimToSound) end the mark where the
+    // sound stopped — so the mark is far shorter than the word and the word's
+    // middle lies outside it. It is still that word, and it is still cut.
+    expect(markWords([
+      { start: 0.0, end: 0.3, word: "right" },
+      { start: 0.4, end: 1.6, word: "uh" },
+      { start: 1.7, end: 2.0, word: "so" },
+    ], [
+      { start: 0.4, end: 0.7, kind: "filler", keep_s: 0, why: "filler word" },
+      { start: 0.7, end: 1.6, kind: "pause", keep_s: 0.5 },
+    ]).filter((p) => p.type === "word" && p.cut).map((p) => (p as { word: string }).word)).toEqual(["uh"]);
+    // A repeat or false start can cover several words; every one is cut.
+    expect(markWords([
+      { start: 0, end: 0.2, word: "we" }, { start: 0.3, end: 0.5, word: "went" },
+      { start: 0.6, end: 0.8, word: "we" }, { start: 0.9, end: 1.1, word: "went" },
+    ], [{ start: 0, end: 0.5, kind: "repeat", keep_s: 0 }])
+      .map((p) => (p.type === "word" ? `${p.word}${p.cut ? "~" : ""}` : "|"))).toEqual(["we~", "went~", "we", "went"]);
+    // A pause after the last word still shows.
+    expect(markWords([{ start: 0, end: 1, word: "end" }], [
+      { start: 1, end: 4, kind: "pause", keep_s: 0.5 },
+    ])[1]).toEqual({ type: "pause", from: 3, to: 0.5 });
+    expect(spokenDuration(190)).toBe("3 min 10 s");
+    expect(spokenDuration(3725)).toBe("1 h 2 min 5 s");
+    expect(cutSummary({ cutS: 190, durationS: null, marks: [
+      { start: 0, end: 1, kind: "false_start", keep_s: 0 },
+      { start: 2, end: 3, kind: "false_start", keep_s: 0 },
+    ] }, 1864)).toBe("Would cut 3 min 10 s of 31 min 4 s — 2 false starts");
+    expect(cutSummary({ cutS: 0, durationS: null, marks: [] }, null)).toBe("Would cut 0 s");
+    expect(cutsSentence({ state: "done", reason: "", marks: [{ start: 0, end: 1, kind: "filler", keep_s: 0 }] })).toBe("");
   });
 });
