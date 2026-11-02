@@ -1,3 +1,16 @@
+## 2026-11-02 — Studio: the Mac Mini deletes a video's downloaded original once it is ready (#939)
+
+Every uploaded video is downloaded onto the Mini so the Studio can measure it
+and make a smaller working copy. Until now the original was never deleted
+afterwards, so the Mini's disk filled until new uploads stopped downloading.
+Now the Mini deletes the original once the video is ready. The working copy
+stays, and the original is still in Google Drive. If a later step ever needs
+the original again, the Mini downloads it from Drive again instead of
+marking the video as failed. A half-hourly sweep clears the originals that
+were already there: about 7 GB of the 9.6 GB on the Mini today. The rest are
+small clips whose original is their working copy, so they stay. The same
+change fixes a crash in the path that handles a video replaced in Drive.
+
 ## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
 
 The rules from the last step now run on real footage, with nobody starting
