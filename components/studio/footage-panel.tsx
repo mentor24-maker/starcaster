@@ -50,6 +50,8 @@ type SourceRow = {
   driveUrl: string | null;
   /** lib/studioFootage.js transcriptStateFor. */
   transcript: TranscriptState;
+  /** lib/studioFootage.js cutMarksStateFor (Reel Spinner 1d). */
+  cutMarks?: { state: 'done' | 'failed' | 'not_yet' | 'unknown'; reason: string; cutS: number | null };
 };
 
 type TranscriptState = {
@@ -64,6 +66,24 @@ type Transcript = {
   state: string;
   language: string;
   segments: Segment[];
+};
+
+/** lib/videoCutMarksStore.js MARK_KINDS. */
+export type CutKind = 'pause' | 'filler' | 'repeat' | 'false_start';
+
+export type CutMark = { start: number; end: number; kind: CutKind; keep_s: number; words?: string; why?: string };
+
+export type VerbatimWord = { start: number; end: number; word: string };
+
+/** GET /api/studio/sources/:id/cuts — lib/studioFootage.js cutsViewFor. */
+export type Cuts = {
+  sourceId: string;
+  state: 'done' | 'failed' | 'not_yet';
+  reason: string;
+  durationS: number | null;
+  verbatimWords: VerbatimWord[];
+  marks: CutMark[];
+  cutS: number;
 };
 
 type SessionGroup = {
@@ -86,6 +106,8 @@ type Footage = {
   readLimit: number;
   /** Why the transcript states could not be read; '' when they were. */
   transcriptsError?: string;
+  /** Why the cut-marks states could not be read; '' when they were. */
+  cutMarksError?: string;
 };
 
 type AppShape = {
@@ -342,6 +364,155 @@ function TranscriptCell({ source, open, onOpen }: {
   );
 }
 
+/** What each kind of cut reads as, on hover and in the summary. */
+const CUT_KIND_LABELS: Record<Exclude<CutKind, 'pause'>, string> = {
+  filler: 'filler',
+  repeat: 'repeated word',
+  false_start: 'false start',
+};
+
+/** A span of seconds the way a person says it: "45 s", "3 min 10 s", "1 h 2 min 5 s". */
+export function spokenDuration(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h) return `${h} h ${m} min ${s} s`;
+  if (m) return `${m} min ${s} s`;
+  return `${s} s`;
+}
+
+/** A pause length, to the tenth: "2.4 s". */
+function tenths(seconds: number): string {
+  return `${(Math.round(seconds * 10) / 10).toFixed(1)} s`;
+}
+
+export type MarkedPiece =
+  | { type: 'word'; word: string; cut: Exclude<CutKind, 'pause'> | null; why: string }
+  | { type: 'pause'; from: number; to: number };
+
+/**
+ * How much of a word a mark covers decides whether it is crossed out: at
+ * least half of whichever is SHORTER, the word or the mark. Not the word's
+ * middle — the recogniser stretches the word before a pause across the
+ * silence, and the rules (workers/studio/cutMarks.js trimToSound) end its mark
+ * where the sound stopped, so a 0.3 s mark sits inside a 1.2 s word whose
+ * middle lies in the pause. Against the shorter of the two, that word is
+ * fully covered; a neighbour the mark only grazes by a rounding error is not.
+ */
+function covers(mark: CutMark, word: VerbatimWord): boolean {
+  const overlap = Math.min(mark.end, word.end) - Math.max(mark.start, word.start);
+  if (overlap <= 0) return false;
+  const shorter = Math.min(mark.end - mark.start, word.end - word.start);
+  return shorter <= 0 ? true : overlap >= shorter / 2;
+}
+
+/**
+ * The word-for-word transcript with the marks laid over it. A filler, repeat
+ * or false-start mark crosses out every word it covers (`covers`, above) — a
+ * repeat or false start can span several. A pause mark covers silence, not a
+ * word, so it becomes its own marker, placed before the first word that
+ * starts after the pause begins.
+ */
+export function markWords(words: VerbatimWord[], marks: CutMark[]): MarkedPiece[] {
+  const spans = marks.filter((m) => m.kind !== 'pause');
+  const pauses = marks.filter((m) => m.kind === 'pause').sort((a, b) => a.start - b.start);
+  const out: MarkedPiece[] = [];
+  const pushPause = (pause: CutMark) => out.push({ type: 'pause', from: pause.end - pause.start, to: pause.keep_s || 0 });
+  let p = 0;
+  for (const w of words) {
+    while (p < pauses.length && pauses[p].start < w.start) {
+      pushPause(pauses[p]);
+      p += 1;
+    }
+    const mark = spans.find((m) => covers(m, w));
+    out.push({
+      type: 'word',
+      word: w.word,
+      cut: mark ? (mark.kind as Exclude<CutKind, 'pause'>) : null,
+      why: mark?.why || '',
+    });
+  }
+  for (; p < pauses.length; p += 1) pushPause(pauses[p]);
+  return out;
+}
+
+function counted(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * "Would cut 3 min 10 s of 31 min 4 s — 142 fillers · 23 repeats · 6 false
+ * starts · 41 pauses shortened". A kind with none is left out rather than
+ * printed as "0 repeats". The length falls back to the file's own when the
+ * marks row did not record one, and is left out when neither knows it.
+ */
+export function cutSummary(cuts: Pick<Cuts, 'cutS' | 'marks' | 'durationS'>, fileDurationS: number | null): string {
+  const of = cuts.durationS ?? fileDurationS;
+  const count = (kind: CutKind) => cuts.marks.filter((m) => m.kind === kind).length;
+  const parts = [
+    count('filler') ? counted(count('filler'), 'filler', 'fillers') : '',
+    count('repeat') ? counted(count('repeat'), 'repeat', 'repeats') : '',
+    count('false_start') ? counted(count('false_start'), 'false start', 'false starts') : '',
+    count('pause') ? `${counted(count('pause'), 'pause', 'pauses')} shortened` : '',
+  ].filter(Boolean);
+  const head = `Would cut ${spokenDuration(cuts.cutS)}${of !== null && Number.isFinite(of) ? ` of ${spokenDuration(of)}` : ''}`;
+  return parts.length ? `${head} — ${parts.join(' · ')}` : head;
+}
+
+/**
+ * The sentence the "With cuts marked" view shows instead of the transcript,
+ * or '' when there are marks to show. Each reason has its own sentence
+ * (CLAUDE.md landmine 17): "not checked" and "nothing to cut" are opposite
+ * answers and must never read the same.
+ */
+export function cutsSentence(cuts: Pick<Cuts, 'state' | 'reason' | 'marks'>): string {
+  if (cuts.state === 'not_yet') return 'Not checked for cuts yet';
+  if (cuts.state === 'failed') return `Finding cuts failed: ${cuts.reason || 'no reason was recorded'}`;
+  if (!cuts.marks.length) return 'Nothing to cut in this recording';
+  return '';
+}
+
+function MarkedTranscript({ cuts, fileDurationS }: { cuts: Cuts; fileDurationS: number | null }): React.ReactElement {
+  const sentence = cutsSentence(cuts);
+  if (sentence) return <p className="studio-footage-empty" data-testid="studio-cuts-empty">{sentence}</p>;
+  const pieces = markWords(cuts.verbatimWords, cuts.marks);
+  return (
+    <>
+      <p className="studio-footage-cuts-summary" data-testid="studio-cuts-summary">{cutSummary(cuts, fileDurationS)}</p>
+      {cuts.verbatimWords.length ? (
+        <div
+          className="studio-footage-transcript-lines studio-footage-cuts-words"
+          data-testid="studio-cuts-words"
+          data-ui-no-sideways="transcript with cuts marked"
+        >
+          {pieces.map((piece, i) => {
+            if (piece.type === 'pause') {
+              return (
+                <span key={i} className="studio-footage-cut-pause" title="long pause, shortened">
+                  {`⏸ ${tenths(piece.from)} → ${tenths(piece.to)}`}
+                </span>
+              );
+            }
+            if (!piece.cut) return <span key={i}>{`${piece.word} `}</span>;
+            const label = CUT_KIND_LABELS[piece.cut];
+            return (
+              <span key={i}>
+                <del className="studio-footage-cut-word" data-cut-kind={piece.cut} title={piece.why ? `${label}: ${piece.why}` : label}>
+                  {piece.word}
+                </del>
+                {' '}
+              </span>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="studio-footage-empty">The word-for-word transcript was not kept with these cuts, so they cannot be shown against it.</p>
+      )}
+    </>
+  );
+}
+
 /**
  * What was said in one file, a line per segment, each starting with its time.
  * An hour is ~1,000 lines, so the list scrolls inside its own box and wraps
@@ -351,6 +522,40 @@ function TranscriptCell({ source, open, onOpen }: {
 function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () => void }): React.ReactElement {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState('');
+  const [mode, setMode] = useState<'clean' | 'cuts'>('clean');
+  const [cuts, setCuts] = useState<Cuts | null>(null);
+  const [cutsError, setCutsError] = useState('');
+
+  // The marks are read the first time "With cuts marked" is chosen, not
+  // before: most visits only want to read what was said, and the word-for-word
+  // list is several times the size of the clean one.
+  useEffect(() => {
+    setMode('clean');
+    setCuts(null);
+    setCutsError('');
+  }, [source.id]);
+
+  useEffect(() => {
+    if (mode !== 'cuts' || cuts) return undefined;
+    let cancelled = false;
+    setCutsError('');
+    const api = getApp()?.api;
+    if (typeof api !== 'function') {
+      setCutsError('The admin app is still loading — try again in a moment.');
+      return undefined;
+    }
+    (async () => {
+      try {
+        const body = await api(`/api/studio/sources/${encodeURIComponent(source.id)}/cuts`);
+        if (cancelled) return;
+        if (!body?.ok) setCutsError(body?.error?.message || 'The cut marks could not be read.');
+        else setCuts(body.data as Cuts);
+      } catch (err) {
+        if (!cancelled) setCutsError(err instanceof Error ? err.message : 'The cut marks could not be read.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, cuts, source.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -381,12 +586,33 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
         <h4>{`Transcript of ${name}`}</h4>
         <button type="button" className="btn" onClick={onClose}>Close</button>
       </div>
-      {error ? <p className="studio-footage-error" role="alert">{`Transcript not shown: ${error}`}</p> : null}
-      {!error && !transcript ? <p className="studio-footage-empty">Loading the transcript…</p> : null}
-      {transcript && !transcript.segments.length ? (
+      <div className="studio-footage-cuts-switch" role="group" aria-label="How to show the transcript">
+        {([['clean', 'Clean'], ['cuts', 'With cuts marked']] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={mode === value ? 'btn btn-primary' : 'btn btn-ghost'}
+            aria-pressed={mode === value}
+            data-testid={`studio-cuts-mode-${value}`}
+            onClick={() => setMode(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {mode === 'cuts' ? (
+        <>
+          {cutsError ? <p className="studio-footage-error" role="alert">{`Cuts not shown: ${cutsError}`}</p> : null}
+          {!cutsError && !cuts ? <p className="studio-footage-empty">Loading the cuts…</p> : null}
+          {cuts ? <MarkedTranscript cuts={cuts} fileDurationS={source.durationS} /> : null}
+        </>
+      ) : null}
+      {mode === 'clean' && error ? <p className="studio-footage-error" role="alert">{`Transcript not shown: ${error}`}</p> : null}
+      {mode === 'clean' && !error && !transcript ? <p className="studio-footage-empty">Loading the transcript…</p> : null}
+      {mode === 'clean' && transcript && !transcript.segments.length ? (
         <p className="studio-footage-empty">This transcript is finished but has no lines in it — nothing was heard as speech.</p>
       ) : null}
-      {transcript && transcript.segments.length ? (
+      {mode === 'clean' && transcript && transcript.segments.length ? (
         <ol
           className="studio-footage-transcript-lines"
           data-testid="studio-transcript-lines"

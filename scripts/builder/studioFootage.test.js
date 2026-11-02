@@ -15,13 +15,13 @@ const path = require('path');
 
 const fs = require('fs');
 const {
-  buildFootage, readFilters, effectiveDate, transcriptStateFor,
+  buildFootage, readFilters, effectiveDate, transcriptStateFor, cutMarksStateFor, cutsViewFor,
   buildSearchResults, clockOf, SEARCH_MOMENTS_PER_FILE,
   NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE,
 } = require('../../lib/studioFootage');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
-const SQL_TEXT = ['video_studio_setup.sql', 'video_transcripts_setup.sql']
+const SQL_TEXT = ['video_studio_setup.sql', 'video_transcripts_setup.sql', 'video_cut_marks_setup.sql']
   .map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
@@ -31,6 +31,7 @@ const projectScopePath = require.resolve('../../lib/projectScope.js');
 const sessionsStorePath = require.resolve('../../lib/videoSessionsStore.js');
 const sourcesStorePath = require.resolve('../../lib/videoSourcesStore.js');
 const transcriptsStorePath = require.resolve('../../lib/videoTranscriptsStore.js');
+const cutMarksStorePath = require.resolve('../../lib/videoCutMarksStore.js');
 const googleDrivePath = require.resolve('../../lib/googleDrive.js');
 const routePath = require.resolve('../../routes/studio.js');
 
@@ -191,15 +192,19 @@ test('transcript state: the row\'s verdict, else plates are never transcribed, e
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
-const ROUTE_MODULES = [projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, routePath];
+const ROUTE_MODULES = [
+  projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, cutMarksStorePath, routePath,
+];
 
-function withRoute({ drive, failTranscripts = false } = {}) {
+function withRoute({ drive, failTranscripts = false, failCutMarks = false } = {}) {
   const db = createFakeDb(parseSchemaText(SQL_TEXT));
-  const sbQuery = failTranscripts
-    ? (args) => (args.table === 'video_transcripts'
-      ? Promise.resolve({ ok: false, status: 404, error: 'relation "video_transcripts" does not exist' })
-      : db.sbQuery(args))
-    : db.sbQuery;
+  const missing = new Set([
+    ...(failTranscripts ? ['video_transcripts'] : []),
+    ...(failCutMarks ? ['video_cut_marks'] : []),
+  ]);
+  const sbQuery = (args) => (missing.has(args.table)
+    ? Promise.resolve({ ok: false, status: 404, error: `relation "${args.table}" does not exist` })
+    : db.sbQuery(args));
   const saved = {};
   const swap = (p, exports) => {
     saved[p] = require.cache[p];
@@ -211,6 +216,7 @@ function withRoute({ drive, failTranscripts = false } = {}) {
       videoSessions: 'video_sessions',
       videoSources: 'video_sources',
       videoTranscripts: 'video_transcripts',
+      videoCutMarks: 'video_cut_marks',
     }),
     sbQuery,
   });
@@ -220,13 +226,14 @@ function withRoute({ drive, failTranscripts = false } = {}) {
   const sessions = require(sessionsStorePath);
   const sources = require(sourcesStorePath);
   const transcripts = require(transcriptsStorePath);
+  const cutMarks = require(cutMarksStorePath);
   const restore = () => {
     for (const [p, entry] of Object.entries(saved)) {
       if (entry) require.cache[p] = entry; else delete require.cache[p];
     }
     for (const p of ROUTE_MODULES) delete require.cache[p];
   };
-  return { route, sessions, sources, transcripts, restore };
+  return { route, sessions, sources, transcripts, cutMarks, restore };
 }
 
 function call(route, url, scope) {
@@ -543,6 +550,155 @@ test('GET /api/studio/footage still lists the files when the transcript states c
     assert.equal(body.sessions[0].sources[0].id, made.id);
     assert.equal(body.sessions[0].sources[0].transcript.state, 'unknown',
       'a failed read is "could not tell", never "not transcribed yet"');
+  } finally {
+    restore();
+  }
+});
+
+// ── the words Reel Spinner would cut (Reel Spinner 1d, 86bcwaw8e) ───────────
+
+test('cut-marks state: the row\'s verdict, else not checked yet; an unread map is "could not tell"', () => {
+  const states = {
+    done1: { state: 'done', reason: '', cutS: 190.5 },
+    fail1: { state: 'failed', reason: 'the model timed out' },
+  };
+  assert.deepEqual(cutMarksStateFor({ id: 'DONE1' }, states), { state: 'done', reason: '', cutS: 190.5 });
+  assert.deepEqual(cutMarksStateFor({ id: 'fail1' }, states), { state: 'failed', reason: 'the model timed out', cutS: null });
+  assert.equal(cutMarksStateFor({ id: 'other' }, states).state, 'not_yet');
+  assert.equal(cutMarksStateFor({ id: 'done1' }, null).state, 'unknown',
+    'a map that could not be read is never "not checked yet"');
+});
+
+test('cutsViewFor: no row is not_yet with nothing in it; a row keeps its words and marks', () => {
+  assert.deepEqual(cutsViewFor('src1', null), {
+    sourceId: 'src1', state: 'not_yet', reason: '', durationS: null,
+    verbatimWords: [], marks: [], cutS: 0, updatedAt: '',
+  });
+  const view = cutsViewFor('src1', {
+    sourceId: 'src1', state: 'done', reason: '', durationS: 60, cutS: 0.3,
+    verbatimWords: [{ start: 0, end: 0.3, word: 'uh', p: null }],
+    marks: [{ start: 0, end: 0.3, kind: 'filler', keep_s: 0, words: 'uh', why: '' }],
+    updatedAt: '2026-11-01T00:00:00Z', verbatimText: 'uh', model: 'x', projectId: 'proj_a',
+  });
+  assert.equal(view.state, 'done');
+  assert.equal(view.marks.length, 1);
+  assert.equal(view.verbatimWords[0].word, 'uh');
+  assert.equal(view.projectId, undefined, 'only what the screen shows is sent');
+});
+
+const CUT_WORDS = [
+  { start: 0, end: 0.3, word: 'So' },
+  { start: 0.4, end: 0.6, word: 'uh' },
+  { start: 0.7, end: 1, word: 'right' },
+];
+const CUT_MARKS = [{ start: 0.35, end: 0.65, kind: 'filler', keep_s: 0, words: 'uh', why: 'filler word' }];
+
+test('cuts: the right project gets its marks and the word-for-word transcript', async () => {
+  const stores = withRoute();
+  const { route, cutMarks, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const saved = await cutMarks.upsertCutMarks(made.id, {
+      state: 'done', durationS: 61, verbatimText: 'So uh right', verbatimWords: CUT_WORDS, marks: CUT_MARKS,
+    }, SCOPE_A);
+    assert.equal(saved.ok, true, saved.error);
+
+    const { handled, res } = await call(route, `/api/studio/sources/${made.id}/cuts`, SCOPE_A);
+    assert.equal(handled, true);
+    assert.equal(res.statusCode, 200);
+    const body = json(res).data;
+    assert.equal(body.state, 'done');
+    assert.equal(body.durationS, 61);
+    assert.equal(body.cutS, 0.3);
+    assert.deepEqual(body.verbatimWords.map((w) => w.word), ['So', 'uh', 'right']);
+    assert.deepEqual(body.marks.map((m) => m.kind), ['filler']);
+  } finally {
+    restore();
+  }
+});
+
+test('cuts: our own file not checked yet is a 200 saying not_yet, never a 404', async () => {
+  const stores = withRoute();
+  const { route, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(route, `/api/studio/sources/${made.id}/cuts`, SCOPE_A);
+    assert.equal(res.statusCode, 200);
+    assert.equal(json(res).data.state, 'not_yet');
+  } finally {
+    restore();
+  }
+});
+
+test('cuts: another project\'s file is a 404, never its marks', async () => {
+  const stores = withRoute();
+  const { route, cutMarks, restore } = stores;
+  try {
+    const theirs = await sourceIn(stores, SCOPE_B);
+    const saved = await cutMarks.upsertCutMarks(theirs.id, {
+      state: 'done', verbatimText: 'Project B secrets', verbatimWords: [{ start: 0, end: 1, word: 'Project B secrets' }],
+      marks: [],
+    }, SCOPE_B);
+    assert.equal(saved.ok, true, saved.error);
+    const { res } = await call(route, `/api/studio/sources/${theirs.id}/cuts`, SCOPE_A);
+    assert.equal(res.statusCode, 404);
+    assert.equal(json(res).error.code, 'NOT_FOUND');
+    assert.doesNotMatch(String(res.body), /Project B secrets/);
+  } finally {
+    restore();
+  }
+});
+
+test('cuts: a database that cannot read the marks says so, never "not checked yet"', async () => {
+  const stores = withRoute({ failCutMarks: true });
+  const { route, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(route, `/api/studio/sources/${made.id}/cuts`, SCOPE_A);
+    assert.notEqual(res.statusCode, 200);
+    assert.match(json(res).error.message, /Could not read the cut marks: .*video_cut_marks/);
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage carries each file\'s cut-marks state, this project\'s only', async () => {
+  const stores = withRoute();
+  const { route, cutMarks, restore } = stores;
+  try {
+    const done = await sourceIn(stores, SCOPE_A, { driveFileId: 'c1' });
+    const failed = await sourceIn(stores, SCOPE_A, { driveFileId: 'c2' });
+    const fresh = await sourceIn(stores, SCOPE_A, { driveFileId: 'c3' });
+    for (const [id, data] of [
+      [done.id, { state: 'done', verbatimWords: CUT_WORDS, marks: CUT_MARKS }],
+      [failed.id, { state: 'failed', reason: 'the model timed out' }],
+    ]) {
+      const saved = await cutMarks.upsertCutMarks(id, data, SCOPE_A);
+      assert.equal(saved.ok, true, saved.error);
+    }
+    const body = json((await call(route, '/api/studio/footage', SCOPE_A)).res);
+    assert.equal(body.data.cutMarksError, '');
+    const byId = Object.fromEntries(body.data.sessions.flatMap((s) => s.sources).map((f) => [f.id, f.cutMarks]));
+    assert.deepEqual(byId[done.id], { state: 'done', reason: '', cutS: 0.3 });
+    assert.deepEqual(byId[failed.id], { state: 'failed', reason: 'the model timed out', cutS: null });
+    assert.equal(byId[fresh.id].state, 'not_yet');
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage still lists the files when the cut-marks table is missing', async () => {
+  const stores = withRoute({ failCutMarks: true });
+  const { route, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(route, '/api/studio/footage', SCOPE_A);
+    assert.equal(res.statusCode, 200, 'a table nobody has created yet must not take the screen down');
+    const body = json(res).data;
+    assert.match(body.cutMarksError, /video_cut_marks/);
+    assert.equal(body.transcriptsError, '');
+    assert.equal(body.sessions[0].sources[0].id, made.id);
+    assert.equal(body.sessions[0].sources[0].cutMarks.state, 'unknown');
   } finally {
     restore();
   }
