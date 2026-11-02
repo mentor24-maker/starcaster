@@ -393,6 +393,15 @@ For an agent session working on this, not for day-to-day use.
   store in `lib/videoTranscriptsStore.js`. No row means "not transcribed yet",
   never a state. Search uses the `simple` text-search config on purpose — see
   the note in the SQL.
+- Cut marks (Reel Spinner 1a): `docs/SQL/video_cut_marks_setup.sql`
+  (`video_cut_marks`, one row per source; apply after the catalog file);
+  store in `lib/videoCutMarksStore.js`. Each row is a set of DECISIONS — the
+  pauses, fillers, repeats and false starts to cut, in seconds — never an
+  edited file, plus the word-for-word transcript they were found in, kept apart
+  from `video_transcripts` so search and the Transcript view keep reading clean
+  text. No row means "not looked at yet", never a state. `rules_version` lets a
+  later rule change find old rows and redo them; `cut_s` is derived from the
+  marks by the store, never supplied.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).
