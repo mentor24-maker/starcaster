@@ -1,3 +1,16 @@
+## 2026-11-01 — SQL waiting to be run now has its own ClickUp ticket, assigned to Dane (#934)
+
+When a feature ships with a database change, the code goes live by itself but
+the SQL has to be pasted into Supabase by Dane. A check already noticed when
+that had not happened, but it only told the agent chat, so the warning reached
+everyone except the one person who could act on it — that is how project
+sharing and the Substack Miner sat broken for days. The same hourly check now
+keeps one ClickUp ticket, "SQL waiting for you", up to date: how many files
+are waiting, a link to each, what breaks without it in plain words, and an
+order that is safe to run top to bottom. Dane is assigned while anything is
+waiting and unassigned once nothing is. If the check cannot read the live
+database it says so at the top rather than ever claiming nothing is waiting.
+
 ## 2026-10-31 — A project can share specific website pages with another project (#933)
 
 Settings › Projects › Share with now has a Pages dropdown next to the three
