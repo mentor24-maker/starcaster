@@ -381,6 +381,52 @@ Two things the pipeline step has to handle:
 - A word can arrive as **several tokens** (21 of 251 on this clip). Tokens
   that do not begin with a space continue the previous word.
 
+## Finding what to cut (Reel Spinner step 1)
+
+Once a recording's transcript is `done`, the transcribe step puts a
+`cut_marks` job on the queue and the Mini works out what an editor would take
+out. Nothing is edited: each result is a list of **decisions** — "from 12.62 s
+to 12.80 s is an 'uh'" — stored in `video_cut_marks`, one row per recording.
+Nothing touches a video file until the last step of the Reel Spinner.
+
+**What it marks**, four kinds:
+
+- **filler** — "um", "uh", "er", "hmm".
+- **repeat** — the same word or few words said twice in a row ("I, I was").
+- **false start** — a short phrase abandoned and restarted.
+- **pause** — any silence **over 1 second** is shortened so **0.5 seconds**
+  stays (a quarter second each side), so the speech keeps a beat rather than
+  being jammed together.
+
+**How it decides.** The Mini runs whisper a second time on the same audio, told
+to write what was said word for word, and ffmpeg listens for the silences. A
+word is only marked if the word-for-word pass heard it and the ordinary
+transcript tidied it away; wherever the two passes disagree any other way,
+nothing nearby is touched. When unsure, the speech is kept. **Everyone is
+treated the same** — guests on a Zoom call too; there is no speaker detection
+(Dane, 2026-11-01).
+
+- **whisper, ffmpeg or the model missing**, or the database unreachable, is
+  the machine's fault: the job waits 15 minutes and tries again, no attempt is
+  used up, and no row is written.
+- **whisper or ffmpeg failing on the file** writes a `failed` row with the
+  reason, and the job retries on the queue's usual schedule.
+- **Time allowed:** the same as transcription for the second whisper, plus
+  five minutes and a tenth of a second per second of audio for the silence
+  check. Measured on the Mini (2026-11-02), five minutes of a Zoom call took
+  40 s in all and came back with 37 marks — 27 pauses, 7 fillers, 3 repeats —
+  49.6 s to cut.
+- **Disk:** the only file it writes is whisper's temporary JSON (a few
+  megabytes an hour), deleted when the job ends.
+- A new transcription always goes first: a pile of cut-marks jobs waits behind
+  it, never in front.
+
+**Catching up:** recordings transcribed before this existed were never queued.
+`npm run studio:backfill-cuts` (on the Mini) lists every finished transcript
+with no cut-marks row and no job waiting, and prints the running tally —
+`cut marks: 27 done · 0 failed · 0 still to do`. It is a dry run until you add
+`-- --apply`, and a second `--apply` enqueues nothing.
+
 ## Where the pieces live
 
 For an agent session working on this, not for day-to-day use.

@@ -250,12 +250,15 @@ function parseWhisperJson(raw) {
 /**
  * Run whisper once. Every answer names what happened — `missing` (the machine
  * has no whisper), `timeout`, `failed`, or `ok` with the parsed transcript.
+ * `argsFor` is the one thing the cut-marks pass changes: it runs the same
+ * whisper with cutMarks.js `verbatimWhisperArgs`. The JSON lives in a
+ * temporary folder that is removed on every path out.
  */
-function runWhisper({ settings, wav, timeoutMs, run = spawnSync, tmpRoot = os.tmpdir() }) {
-  const workDir = fs.mkdtempSync(path.join(tmpRoot, 'studio-whisper-'));
+function runWhisper({ settings, wav, timeoutMs, run = spawnSync, tmpRoot = os.tmpdir(), argsFor = whisperArgs }) {
+  const workDir = fs.mkdtempSync(path.join(tmpRoot || os.tmpdir(), 'studio-whisper-'));
   const outBase = path.join(workDir, 'transcript');
   try {
-    const res = run(settings.bin, whisperArgs({ ...settings, wav, outBase }), {
+    const res = run(settings.bin, argsFor({ ...settings, wav, outBase }), {
       encoding: 'utf8',
       timeout: timeoutMs,
       maxBuffer: WHISPER_MAX_BUFFER,
@@ -360,6 +363,8 @@ async function transcribeJob({
     return { ...base, outcome: 'outage', jobAction: released ? 'released' : 'failed', reason };
   };
 
+  let audioWav = '';
+
   /** Write a transcript row, read it back, and complete — or say why not. */
   const settle = async (data, outcome, reason) => {
     const saved = await catalog.upsertTranscript(sourceId, data, scope);
@@ -385,7 +390,16 @@ async function transcribeJob({
       return { ...base, outcome: 'failed', jobAction: 'failed', reason };
     }
     const completed = queue.complete(job.id, owner);
-    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
+    const result = { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
+    // Only a done transcript has words to compare, so only a done transcript
+    // is handed on to find its cuts (Reel Spinner 1c). Keyed by the source id,
+    // so a second enqueue for the same source is the same job.
+    if (data.state === TRANSCRIPT_DONE) {
+      const { enqueueCutMarks } = require('./cutMarksPass.js');
+      const queued = enqueueCutMarks(queue, { sourceId, wavPath: audioWav });
+      result.cutMarks = queued.created ? 'cut marks queued' : 'cut marks already queued';
+    }
+    return result;
   };
 
   if (!sourceId) {
@@ -407,6 +421,7 @@ async function transcribeJob({
   }
 
   const audio = audioFor({ sourceId, payload, options, env, exists, readFile });
+  audioWav = audio.wav;
   if (audio.noAudio) {
     return settle({ state: TRANSCRIPT_NO_AUDIO, reason: 'this recording has no sound track, so there is nothing to transcribe' },
       'no_audio', 'no sound track — recorded as no_audio');
@@ -508,11 +523,15 @@ module.exports = {
   transcribeJob,
   enqueueTranscribe,
   parseWhisperJson,
+  runWhisper,
+  audioFor,
   whisperArgs,
   whisperSettings,
   whisperTimeoutMs,
   leaseForTranscribe,
   audioSeconds,
   STAGE_TRANSCRIBE,
+  TRANSCRIPT_DONE,
   TRANSCRIPT_NO_AUDIO,
+  RELEASE_HOLD_MS,
 };

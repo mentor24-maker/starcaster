@@ -6,8 +6,8 @@
  * Reel Spinner 1b (86bcwaw8a). Pure: no network, no files, no clock. Given two
  * whisper transcripts of the same audio and ffmpeg's silence report, it says
  * which stretches are "um"s, repeated words, short false starts, and pauses
- * long enough to shorten. Nothing runs it on real footage yet — 1c wires it
- * into the Mini's worker, 1d shows the marks on the Footage screen.
+ * long enough to shorten. workers/studio/cutMarksPass.js (1c) runs it on
+ * every transcribed recording; 1d shows the marks on the Footage screen.
  *
  * WHY TWO TRANSCRIPTS (measured on the Mini, 2026-11-01, five minutes of a
  * Zoom call — the fixture under scripts/builder/fixtures/studio-cut-marks/).
