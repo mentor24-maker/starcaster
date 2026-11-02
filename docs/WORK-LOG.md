@@ -11,6 +11,20 @@ not checked yet, the check failed (and its reason), or nothing to cut. Until
 the step that finds the cuts runs, every recording says "Not checked for cuts
 yet". If the cuts table is missing from a database, the Footage list still
 loads and the cuts view names the problem instead of going blank.
+## 2026-11-01 — Reel Spinner: the rules that find the "um"s, repeats and long pauses in a recording (#936)
+
+The first piece of automatic editing for Studio. Whisper normally tidies speech
+as it writes it down, so it hides the very "um"s we want to cut; asked to write
+every word, it finds them — but it also changes some real words. So each
+recording is transcribed both ways, and a word is only marked for cutting when
+the word-for-word version has it and the tidy version left it out. Where the two
+heard different words nearby, nothing is marked: when in doubt, the speech
+stays. Pauses longer than a second are shortened to half a second, and never
+where somebody starts speaking inside one. On five real minutes of a Zoom call
+it found 21 of 24 "um"s and "uh"s and would remove 24 seconds. Its marks are in exactly the shape the cut-marks table stores. Nothing runs it
+on footage yet; the next two tickets wire it into the Mini and show the marks on
+the Footage screen.
+
 ## 2026-11-01 — Reel Spinner gets a place to keep what each recording should cut (#935)
 
 The first step of Reel Spinner, the Studio video pipeline, is spotting what to
