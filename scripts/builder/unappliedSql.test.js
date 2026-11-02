@@ -234,6 +234,19 @@ test('a FEATURE line is what breaks; without one the first comment is used AND m
     { text: 'Outreach wizard 16/19: the comments worth replying to.', guessed: true });
 });
 
+test('a RUN AFTER line written right under FEATURE (the CLAUDE.md shape) is not read as part of the feature', () => {
+  const sql = `-- youtube_conversations_setup.sql
+-- FEATURE: the Creators screen is empty
+-- RUN AFTER docs/SQL/youtube_creators_setup.sql
+create table if not exists youtube_conversations (id uuid primary key);`;
+  assert.deepEqual(unapplied.featureOf(sql, 'youtube_conversations_setup.sql'),
+    { text: 'the Creators screen is empty', guessed: false });
+  assert.deepEqual(unapplied.statedRunAfter(sql), ['youtube_creators_setup.sql']);
+  // Without a FEATURE line, the guess stops at RUN AFTER too.
+  const guessed = `-- a_setup.sql\n-- Adds the a table.\n-- RUN AFTER docs/SQL/b_setup.sql\nselect 1;`;
+  assert.deepEqual(unapplied.featureOf(guessed, 'a_setup.sql'), { text: 'Adds the a table.', guessed: true });
+});
+
 test('a file that references or alters a table another waiting file creates runs after it', () => {
   const { deps } = waitingReading();
   assert.deepEqual(deps['youtube_conversations_setup.sql'], ['youtube_creators_setup.sql']);
