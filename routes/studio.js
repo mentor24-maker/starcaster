@@ -8,6 +8,9 @@
  *   GET /api/studio/sources/:id/thumbnail      the file's picture, from Drive
  *   GET /api/studio/sources/:id/transcript     what was said in it (?words=1
  *                                              adds the per-word timings)
+ *   GET /api/studio/sources/:id/cuts           what Reel Spinner would cut from
+ *                                              it, against the word-for-word
+ *                                              transcript (not_yet if unchecked)
  *   GET /api/studio/search?q=<words>           every recording where those
  *                                              words were said, and when
  *
@@ -28,10 +31,13 @@
 const { sendOk, sendErr, getUrlObj } = require('./http');
 const { listSessions } = require('../lib/videoSessionsStore');
 const { listSources, getSourceById } = require('../lib/videoSourcesStore');
-const { buildFootage, readFilters, buildSearchResults } = require('../lib/studioFootage');
+const { buildFootage, readFilters, buildSearchResults, cutsViewFor } = require('../lib/studioFootage');
 const {
   getTranscriptBySource, listTranscriptStates, searchTranscripts, MAX_STATE_IDS,
 } = require('../lib/videoTranscriptsStore');
+const {
+  getCutMarksBySource, listCutMarkStates, MAX_STATE_IDS: MAX_CUT_STATE_IDS,
+} = require('../lib/videoCutMarksStore');
 const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 
@@ -98,10 +104,25 @@ function forgetToken(stale) {
  * screen down, and must not read as "not transcribed yet" either.
  */
 async function readTranscriptStates(sourceRows, scope) {
+  return readStatesInBatches(sourceRows, scope, listTranscriptStates, MAX_STATE_IDS);
+}
+
+/**
+ * The cut-marks state of every listed source (Reel Spinner 1d), on the same
+ * terms: a failed read leaves the list up and each file says "could not
+ * tell", never "not checked yet". That matters here more than anywhere — the
+ * table is new, and a database that has not had docs/SQL/video_cut_marks_setup.sql
+ * run must not take the Footage screen down with it.
+ */
+async function readCutMarkStates(sourceRows, scope) {
+  return readStatesInBatches(sourceRows, scope, listCutMarkStates, MAX_CUT_STATE_IDS);
+}
+
+async function readStatesInBatches(sourceRows, scope, listStates, maxIds) {
   const ids = sourceRows.map((row) => String(row?.id || '').trim()).filter(Boolean);
   const batches = [];
-  for (let i = 0; i < ids.length; i += MAX_STATE_IDS) batches.push(ids.slice(i, i + MAX_STATE_IDS));
-  const results = await Promise.all(batches.map((batch) => listTranscriptStates(batch, scope)));
+  for (let i = 0; i < ids.length; i += maxIds) batches.push(ids.slice(i, i + maxIds));
+  const results = await Promise.all(batches.map((batch) => listStates(batch, scope)));
   const failed = results.find((r) => !r.ok);
   if (failed) return { states: null, error: failed.error || `status ${failed.status}` };
   return { states: Object.assign({}, ...results.map((r) => r.data)), error: '' };
@@ -126,12 +147,16 @@ async function sendFootage(req, res, urlObj) {
   if (!sessions.ok) return sendErr(res, sessions.status || 500, `Could not read the sessions: ${sessions.error}`);
   if (!sources.ok) return sendErr(res, sources.status || 500, `Could not read the files: ${sources.error}`);
 
-  const transcripts = await readTranscriptStates(sources.data, scope);
+  const [transcripts, cutMarks] = await Promise.all([
+    readTranscriptStates(sources.data, scope),
+    readCutMarkStates(sources.data, scope),
+  ]);
   const view = buildFootage({
     sessions: sessions.data,
     sources: sources.data,
     filters: read.filters,
     transcripts: transcripts.states,
+    cutMarks: cutMarks.states,
   });
   // At the ceiling there may be more rows than were read, so the counts are a
   // floor and the screen has to say so.
@@ -141,7 +166,29 @@ async function sendFootage(req, res, urlObj) {
     truncated,
     readLimit: READ_LIMIT,
     transcriptsError: transcripts.error,
+    cutMarksError: cutMarks.error,
   });
+}
+
+/**
+ * What Reel Spinner would cut from one file (Reel Spinner 1d, 86bcwaw8e).
+ * The source is looked up in THIS project first, so another project's file is
+ * a 404 exactly like one that does not exist — never its marks. A file of ours
+ * that has not been checked is a 200 with state `not_yet`: that is the ordinary
+ * answer (lib/videoCutMarksStore.js), and the screen has a sentence for it.
+ */
+async function sendCuts(req, res, sourceId) {
+  const scope = requestScope(req);
+  const found = await getSourceById(sourceId, scope);
+  if (!found.ok) {
+    const status = found.status === 404 ? 404 : (found.status || 500);
+    return sendErr(res, status, found.error || 'Source not found', { code: status === 404 ? 'NOT_FOUND' : undefined });
+  }
+  const read = await getCutMarksBySource(found.data.id, scope);
+  if (!read.ok) {
+    return sendErr(res, read.status || 500, `Could not read the cut marks: ${read.error}`);
+  }
+  return sendOk(res, 200, cutsViewFor(found.data.id, read.data));
 }
 
 /**
@@ -335,6 +382,12 @@ async function handle(req, res, pathname, method) {
     // true means it has ALREADY sent the 429 (CLAUDE.md landmine 11).
     if (checkEndpointLimit(req, res, 'studio.thumbnail')) return true;
     await sendThumbnail(req, res, decodeURIComponent(thumb[1]));
+    return true;
+  }
+
+  const cuts = pathname.match(/^\/api\/studio\/sources\/([^/]+)\/cuts$/);
+  if (cuts) {
+    await sendCuts(req, res, decodeURIComponent(cuts[1]));
     return true;
   }
 
