@@ -56,6 +56,7 @@ const { watchDrive, STAGE_WATCH } = require('./drive.js');
 const { runProbe, STAGE_PROBE } = require('./probePass.js');
 const { runProxy, STAGE_PROXY } = require('./proxyPass.js');
 const { runTranscribe, STAGE_TRANSCRIBE } = require('./transcribePass.js');
+const { runCutMarks, STAGE_CUT_MARKS } = require('./cutMarksPass.js');
 
 /** How long to wait after a tick that found nothing to do. */
 const DEFAULT_IDLE_MS = 30 * 1000;
@@ -145,6 +146,13 @@ const STAGE_RUNNERS = {
   [STAGE_TRANSCRIBE]: {
     label: 'transcribe',
     run: ({ queue, owner, env }) => runTranscribe({ queue, owner, env, max: 1 }),
+  },
+  // LAST, on purpose: a tick runs the first stage in this list with work due,
+  // so a backlog of cut-marks jobs (the backfill queues ~28 at once) waits
+  // behind any new recording's transcription rather than in front of it.
+  [STAGE_CUT_MARKS]: {
+    label: 'cut marks',
+    run: ({ queue, owner, env }) => runCutMarks({ queue, owner, env, max: 1 }),
   },
 };
 

@@ -1,3 +1,16 @@
+## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
+
+The rules from the last step now run on real footage, with nobody starting
+them. When the Mini finishes transcribing a recording, it queues a second job
+for the same file: transcribe it again word for word, listen for the silences,
+compare the two, and save the list of "uh"s, repeats, false starts and long
+pauses to cut. A new transcription always goes first, so a pile of these never
+delays a new video. If the Mini is missing a tool, the job just waits and tries
+again later; if one file will not process, that file gets a note saying why and
+the others carry on. A catch-up command queues the recordings transcribed before
+this existed. On a real five-minute recording it found 37 cuts worth 49.6
+seconds in 40 seconds. Nothing on screen yet — that is the next ticket.
+
 ## 2026-11-01 — Footage transcripts can show what Reel Spinner would cut (#937)
 
 On Assets › Footage, a recording's transcript now has two views: **Clean**,
