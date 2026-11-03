@@ -1,3 +1,12 @@
+## 2026-11-03 — Website forms can email the visitor a "we got your message" confirmation (#945)
+
+Each CRM form now has a "Confirmation email" section in its editor. Switch it
+on, write a subject and a message, and the visitor gets that email after they
+submit — with their own details filled in where the message says
+`{{first_name}}` or `{{email}}`. Replies go to the team's Contact Alert Email.
+It only sends when the visitor gave an email address, a form without an Email
+field cannot have it switched on, and a mail problem never stops the
+submission from being saved. Forms nobody changes send nothing, as before.
 ## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
 
 The "Success Message" typed in a CRM form's editor now actually shows on the
