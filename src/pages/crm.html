@@ -144,16 +144,20 @@
                   <span>When a visitor submits</span>
                   <select id="crmFormEditorAfterSubmit" class="crm-form-editor-select">
                     <option value="message" selected>Show the success message</option>
-                    <option value="redirect">Go to a page</option>
+                    <option value="page">Go to a page on this site</option>
+                    <option value="url">Go to a web address</option>
                   </select>
                 </label>
-                <div id="crmFormEditorRedirectFields" class="hidden">
+                <div id="crmFormEditorRedirectPageFields" class="hidden">
                   <label class="field crm-form-editor-setting">
                     <span>Page</span>
                     <select id="crmFormEditorRedirectPage" class="crm-form-editor-select">
-                      <option value="">Type an address below…</option>
+                      <option value="">Choose a page…</option>
                     </select>
                   </label>
+                  <p id="crmFormEditorRedirectPageMissing" class="crm-form-editor-missing-page hidden" role="alert">The page this form sent visitors to no longer exists — choose another. Until you do, visitors see the success message.</p>
+                </div>
+                <div id="crmFormEditorRedirectUrlFields" class="hidden">
                   <label class="field crm-form-editor-setting">
                     <span>Address</span>
                     <input type="text" id="crmFormEditorRedirectUrl" placeholder="/thank-you or https://…" />

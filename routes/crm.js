@@ -25,6 +25,7 @@ const {
   alertSubjectFor,
 } = require('../lib/crmFormHandling');
 const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
+const { findFormRedirectPage } = require('../lib/crmFormRedirectPage');
 const { clientIp } = require('../lib/rateLimiter');
 
 function requestScope(req) {
@@ -257,7 +258,10 @@ async function handle(req, res, pathname, method) {
     // The visitor's confirmation, when the form has one on (task 86bcx18bg).
     // Awaited for the same Vercel reason as the alert; never fails the submit.
     await sendVisitorConfirmation({ projectId: scopedProjectId, form, email: submittedEmail, data: submittedData, ip: clientIp(req) });
-    const outcome = submitSuccessResponse(form);
+    // "Go to a page" is stored as the page's id and turned into its CURRENT
+    // address here, so renaming the page moves the form with it (86bcxmq23).
+    const target = await findFormRedirectPage(form, scopedProjectId);
+    const outcome = submitSuccessResponse(form, target.page);
     return sendOk(res, 200, outcome, outcome), true;
   }
 
@@ -385,7 +389,12 @@ async function handle(req, res, pathname, method) {
     // Anyone can read a form by id — a published page has to. The team's alert
     // addresses are not theirs to read, so a request with no signed-in user
     // gets only where the form sends visitors (task 86bcx188j).
-    const form = req.authUser ? found : { ...found, handling: publicFormHandling(found.handling) };
+    // "Go to a page" is resolved to the page's current address here too, and
+    // the editor is told when that page has been deleted (task 86bcxmq23).
+    const target = await findFormRedirectPage(found, found.projectId);
+    const form = req.authUser
+      ? { ...found, redirectPageMissing: target.missing }
+      : { ...found, handling: publicFormHandling(found.handling, target.page) };
     return sendOk(res, 200, form, { form }), true;
   }
 

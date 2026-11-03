@@ -138,6 +138,7 @@ const RELOAD = [
   // Fresh limiter counters per test: every test emails the same visitor.
   'lib/rateLimiter.js',
   'lib/crmFormConfirmation.js',
+  'lib/crmFormRedirectPage.js',
   'lib/projectScope.js',
   'lib/projectsStore.js',
   'lib/publicSiteHostBinding.js',
@@ -147,7 +148,7 @@ const RELOAD = [
  * Load routes/crm.js against the fake database, a fake contact list that
  * enforces one contact per email, a fake form, and a mailer that records.
  */
-function loadRoute({ form = null, projectAlertEmails = [] } = {}) {
+function loadRoute({ form = null, projectAlertEmails = [], pages = [] } = {}) {
   const db = fakeDatabase();
   const contacts = [];
   const mail = [];
@@ -186,6 +187,14 @@ function loadRoute({ form = null, projectAlertEmails = [] } = {}) {
   swap('lib/projectSiteSettingsStore.js', {
     ...require('../../lib/projectSiteSettingsStore.js'),
     getContactAlertEmails: async () => projectAlertEmails,
+  });
+  // The builder's pages, by id and project — what "Go to a page" resolves
+  // against at submit time (task 86bcxmq23). Mutable so a test can rename one.
+  swap('lib/builderPagesStore.js', {
+    getPage: async (id, scope) => {
+      const page = pages.find((p) => String(p.id) === String(id) && (!scope?.projectId || p.projectId === scope.projectId));
+      return page ? { ok: true, status: 200, data: page } : { ok: false, status: 404, error: 'Page not found' };
+    },
   });
   swap('lib/mailer.js', { sendEmail: async (message) => { mail.push(message); return { ok: true }; } });
   swap('lib/activityLog.js', { logActivity: () => {} });
@@ -601,6 +610,84 @@ test('the public read of a form hides its alert addresses; a signed-in read keep
     assert.equal(JSON.stringify(anon.payload).includes('Private'), false);
     const admin = await call(route, 'GET', '/api/crm/forms/form_1', { authUser: { id: 'user_owner_1' } });
     assert.deepEqual(admin.payload.data.handling.alertEmails, ['coach@example.com']);
+  } finally {
+    restore();
+  }
+});
+
+// ── "Go to a page" follows the page, not a copy of its address (86bcxmq23) ───
+
+test('a page id alone is a valid "Go to a page"; a stale copied address beside it is dropped', () => {
+  const pageOnly = handling.normalizeFormHandling({ afterSubmit: 'redirect', redirectPageId: '42' });
+  assert.equal(pageOnly.afterSubmit, 'redirect');
+  assert.equal(pageOnly.redirectPageId, '42');
+  assert.equal(pageOnly.redirectUrl, '');
+  const both = handling.normalizeFormHandling({ afterSubmit: 'redirect', redirectPageId: '42', redirectUrl: '/old-copy' });
+  assert.equal(both.redirectPageId, '42');
+  assert.equal(both.redirectUrl, '', 'the page id wins — never both');
+  const urlOnly = handling.normalizeFormHandling({ afterSubmit: 'redirect', redirectUrl: '/typed' });
+  assert.equal(urlOnly.redirectUrl, '/typed');
+  assert.equal(urlOnly.redirectPageId, '');
+});
+
+test('submit sends the visitor to the page\'s CURRENT address after it is renamed', async () => {
+  const pages = [{ id: '42', projectId: PROJECT_ID, slug: 'white-paper' }];
+  // Saved the old way: the page's id AND a copy of its address at the time.
+  const form = baseForm({ afterSubmit: 'redirect', redirectPageId: '42', redirectUrl: '/white-paper' });
+  const { route, restore } = loadRoute({ form, pages });
+  try {
+    assert.equal((await submit(route)).payload.redirectUrl, '/white-paper');
+    pages[0].slug = 'white-paper-v2';
+    const after = await submit(route);
+    assert.equal(after.payload.redirectUrl, '/white-paper-v2', 'the rename must reach the form');
+    assert.equal(after.payload.data.redirectUrl, '/white-paper-v2');
+    const anon = await call(route, 'GET', '/api/crm/forms/form_1');
+    assert.equal(anon.payload.data.handling.redirectUrl, '/white-paper-v2', 'the public read resolves it too');
+  } finally {
+    restore();
+  }
+});
+
+test('a deleted target page shows the success message, says so loudly, and the editor is told', async () => {
+  const form = baseForm({ afterSubmit: 'redirect', redirectPageId: '42', redirectUrl: '/white-paper' });
+  const { route, restore } = loadRoute({ form, pages: [] });
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args.join(' '));
+  try {
+    const { status, payload } = await submit(route);
+    assert.equal(status, 200);
+    assert.equal(payload.redirectUrl, '', 'never a 404 — and never the stale copied address');
+    assert.equal(payload.message, "Thanks — we'll call you");
+    assert.ok(logged.some((line) => line.includes('no longer exists')), 'logged on the server');
+    const admin = await call(route, 'GET', '/api/crm/forms/form_1', { authUser: { id: FORM_OWNER } });
+    assert.equal(admin.payload.data.redirectPageMissing, true);
+  } finally {
+    console.error = originalError;
+    restore();
+  }
+});
+
+test('a page from another project is not a target', async () => {
+  const pages = [{ id: '42', projectId: 'proj_other', slug: 'elsewhere' }];
+  const form = baseForm({ afterSubmit: 'redirect', redirectPageId: '42' });
+  const { route, restore } = loadRoute({ form, pages });
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    assert.equal((await submit(route)).payload.redirectUrl, '');
+  } finally {
+    console.error = originalError;
+    restore();
+  }
+});
+
+test('a typed web address is unchanged, and the home page resolves to "/"', async () => {
+  assert.equal(handling.redirectAddressFor({ afterSubmit: 'redirect', redirectUrl: 'https://example.com/x' }), 'https://example.com/x');
+  assert.equal(handling.redirectAddressFor({ afterSubmit: 'redirect', redirectPageId: '7' }, { id: '7', slug: '' }), '/');
+  const { route, restore } = loadRoute({ form: baseForm({ afterSubmit: 'redirect', redirectUrl: '/typed' }) });
+  try {
+    assert.equal((await submit(route)).payload.redirectUrl, '/typed');
   } finally {
     restore();
   }

@@ -1410,32 +1410,42 @@ App.crm = (function () {
     return `/${slug}`;
   }
 
+  // The choice is a page (stored by id, its address looked up when a visitor
+  // submits) OR a typed address — never both, so the two can't disagree and a
+  // rename can't strand the form on a copied address (86bcxmq23).
   function syncFormHandlingVisibility() {
-    const redirect = el('crmFormEditorAfterSubmit')?.value === 'redirect';
-    el('crmFormEditorRedirectFields')?.classList.toggle('hidden', !redirect);
+    const choice = el('crmFormEditorAfterSubmit')?.value;
+    el('crmFormEditorRedirectPageFields')?.classList.toggle('hidden', choice !== 'page');
+    el('crmFormEditorRedirectUrlFields')?.classList.toggle('hidden', choice !== 'url');
     const confirm = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
     el('crmFormEditorConfirmFields')?.classList.toggle('hidden', !confirm);
   }
 
   function populateFormHandlingEditor(form) {
     const h = (form && form.handling && typeof form.handling === 'object') ? form.handling : {};
+    // A form saved before 86bcxmq23 may carry both a page and a copied
+    // address; the page wins, as it does on the server.
+    const pageId = safeText(h.redirectPageId);
+    const choice = h.afterSubmit !== 'redirect' ? 'message' : (pageId ? 'page' : 'url');
     const pageSelect = el('crmFormEditorRedirectPage');
+    let pageMissing = false;
     if (pageSelect) {
       const pages = (Array.isArray(formEditorPages) ? formEditorPages : [])
         .filter((page) => page && page.id)
         .sort((a, b) => safeText(a.name || a.pageName || a.slug).localeCompare(safeText(b.name || b.pageName || b.slug)));
-      pageSelect.innerHTML = '<option value="">Type an address below…</option>' + pages.map((page) => (
-        `<option value="${escHtml(page.id)}" data-path="${escHtml(pagePath(page))}">${escHtml(safeText(page.name || page.pageName) || pagePath(page))} (${escHtml(pagePath(page))})</option>`
+      pageSelect.innerHTML = '<option value="">Choose a page…</option>' + pages.map((page) => (
+        `<option value="${escHtml(page.id)}">${escHtml(safeText(page.name || page.pageName) || pagePath(page))} (${escHtml(pagePath(page))})</option>`
       )).join('');
-      pageSelect.value = pages.some((page) => page.id === h.redirectPageId) ? h.redirectPageId : '';
+      const listed = pages.some((page) => String(page.id) === pageId);
+      pageSelect.value = listed ? pageId : '';
+      pageMissing = Boolean(pageId) && !listed && form?.redirectPageMissing === true;
       pageSelect.onchange = () => {
-        const option = pageSelect.selectedOptions[0];
-        const path = option?.dataset?.path || '';
-        if (path && el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = path;
+        el('crmFormEditorRedirectPageMissing')?.classList.add('hidden');
       };
     }
-    if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = h.afterSubmit === 'redirect' ? 'redirect' : 'message';
-    if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = h.redirectUrl || '';
+    el('crmFormEditorRedirectPageMissing')?.classList.toggle('hidden', !pageMissing);
+    if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = choice;
+    if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = pageId ? '' : (h.redirectUrl || '');
     if (el('crmFormEditorAlertEmails')) el('crmFormEditorAlertEmails').value = (Array.isArray(h.alertEmails) ? h.alertEmails : []).join(', ');
     if (el('crmFormEditorAlertSubject')) el('crmFormEditorAlertSubject').value = h.alertSubject || '';
     // Visitor confirmation email (86bcx18bg).
@@ -1460,10 +1470,20 @@ App.crm = (function () {
 
   /** Returns the settings, or a string naming what is wrong with them. */
   function readFormHandlingFromEditor(fields) {
-    const afterSubmit = el('crmFormEditorAfterSubmit')?.value === 'redirect' ? 'redirect' : 'message';
-    const redirectUrl = el('crmFormEditorRedirectUrl')?.value.trim() || '';
-    if (afterSubmit === 'redirect' && !redirectUrl) {
-      return 'After submit is set to "Go to a page" — pick a page or type an address.';
+    const choice = el('crmFormEditorAfterSubmit')?.value;
+    const afterSubmit = choice === 'page' || choice === 'url' ? 'redirect' : 'message';
+    // Only one kind is kept: a page id OR a typed address, never both. While
+    // "Show the success message" is chosen, whichever was filled in is kept so
+    // switching back later does not lose it — the page first.
+    const pickedPage = el('crmFormEditorRedirectPage')?.value || '';
+    const typedUrl = el('crmFormEditorRedirectUrl')?.value.trim() || '';
+    const redirectPageId = choice === 'page' || (choice === 'message' && pickedPage) ? pickedPage : '';
+    const redirectUrl = redirectPageId || choice === 'page' ? '' : typedUrl;
+    if (choice === 'page' && !redirectPageId) {
+      return 'After submit is set to "Go to a page on this site" — choose the page.';
+    }
+    if (choice === 'url' && !redirectUrl) {
+      return 'After submit is set to "Go to a web address" — type the address.';
     }
     if (redirectUrl && !/^\/(?![\/\\])/.test(redirectUrl) && !/^https?:\/\//i.test(redirectUrl)) {
       return 'The After submit address must start with "/" (a page on this site) or "https://".';
@@ -1483,7 +1503,7 @@ App.crm = (function () {
     return {
       afterSubmit,
       redirectUrl,
-      redirectPageId: el('crmFormEditorRedirectPage')?.value || '',
+      redirectPageId,
       alertEmails: alertParts,
       alertSubject: el('crmFormEditorAlertSubject')?.value.trim() || '',
       confirmationEnabled,

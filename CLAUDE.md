@@ -293,6 +293,12 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     "You Might Also Like" module, whose default `matchBy` is `categories`,
     render nothing everywhere. Match by **tags** works.
 
+19. **Link to one of our records by its id, never by a copy of its name or
+    address.** A copied slug works the day it is saved and breaks silently the
+    day the page is renamed — a form's "After submit" page did exactly that
+    until 2026-11-03. Store the id; resolve it when shown or used.
+    `docs/DOCTRINE.md` §5.34.
+
 ## Working locally
 
 Production is not where you find out whether something works. Full guide:
