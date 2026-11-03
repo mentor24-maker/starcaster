@@ -70,6 +70,7 @@ import {
   tagFontSize,
   tagHref
 } from "@/lib/blog-tag-cloud";
+import { crmSubmitErrorOutcome, crmSubmitSuccessOutcome } from "@/lib/crm-form-submit-outcome";
 import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
@@ -640,18 +641,28 @@ function CrmFormPreview({
           _trap: honeypot
         })
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(readApiErrorMessage(data, "Failed to submit the form."));
       }
 
-      const success = data as { message?: string };
-      setMessage(success.message ?? form?.successMessage ?? "Thank you!");
+      // The form's own Success Message, and its redirect on a live site —
+      // lib/builder-client/crm-form-submit-outcome.ts (task 86bcwy44f).
+      const outcome = crmSubmitSuccessOutcome(form, data, liveSite);
       setValues({});
       setHoneypot("");
+      if (outcome.kind === "redirect") {
+        window.location.assign(outcome.url);
+        return;
+      }
+      setMessage(outcome.message);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : form?.errorMessage ?? "Something went wrong. Please try again.");
+      // The visitor sees the form's Error Message; the technical reason goes
+      // to the console, where whoever is debugging the site can find it.
+      const outcome = crmSubmitErrorOutcome(form, submitError);
+      if (outcome.kind === "error" && outcome.detail) console.warn("[crm form] submit failed:", outcome.detail);
+      setError(outcome.message);
     } finally {
       setIsSubmitting(false);
     }

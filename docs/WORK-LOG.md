@@ -1,3 +1,14 @@
+## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
+
+The "Success Message" typed in a CRM form's editor now actually shows on the
+live site; before, every visitor saw the same fixed sentence whatever the editor
+said. A failed submit now shows the form's own "Error Message" instead of a
+technical error. And each form has a new "After submit" choice: keep showing the
+message, or send the visitor to a page such as a Thank You page, picked from the
+site's pages or typed as an address. The setting is kept inside what a form
+already stores, so no database change was needed. Forms nobody changes behave as
+before. Keeping every submission, per-form team alerts and a confirmation email
+to the visitor are their own tickets now.
 ## 2026-11-02 — Reel Spinner: one recording that will not save no longer ties up the Mini (#942)
 
 The Mini's video worker had been stuck on one 106-minute recording for two

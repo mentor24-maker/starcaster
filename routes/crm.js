@@ -9,6 +9,7 @@ const { logActivity } = require('../lib/activityLog');
 const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
+const { normalizeFormHandling, submitSuccessResponse } = require('../lib/crmFormHandling');
 
 function requestScope(req) {
   return {
@@ -104,6 +105,28 @@ async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) 
     }
   } catch (err) {
     console.error('[crm] Contact alert email threw:', err?.message || err);
+  }
+}
+
+/**
+ * The form a public submission names, inside the project the request resolved
+ * to. A form id from another project — or another CRM — reads as no form at
+ * all: its message and redirect must never apply to someone else's site. Any
+ * failure here also reads as no form, so the visitor still gets today's
+ * answer rather than an error (task 86bcwy44f).
+ */
+async function loadSubmittedForm(crmFormId, crmConfigId, projectId) {
+  const id = String(crmFormId || '').trim();
+  if (!id) return null;
+  try {
+    const form = await getForm(id, { projectId, userId: '' });
+    if (!form) return null;
+    if (form.projectId && form.projectId !== projectId) return null;
+    if (form.crmConfigId && crmConfigId && form.crmConfigId !== crmConfigId) return null;
+    return form;
+  } catch (err) {
+    console.error('[crm] Loading the submitted form failed:', err?.message || err);
+    return null;
   }
 }
 
@@ -211,7 +234,12 @@ async function handle(req, res, pathname, method) {
       isDuplicate: !stored,
     });
 
-    return sendOk(res, 200, {}, { message: 'Thank you! Your information has been saved.' }), true;
+    // The form's OWN success message, and where it sends the visitor — not a
+    // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
+    // here, answers exactly as before.
+    const form = await loadSubmittedForm(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
+    const outcome = submitSuccessResponse(form);
+    return sendOk(res, 200, outcome, outcome), true;
   }
 
   if (pathname === '/api/crm/contacts' && method === 'GET') {
@@ -306,6 +334,7 @@ async function handle(req, res, pathname, method) {
       accentColor: String(body.accentColor || '').trim(),
       styles: body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles) ? body.styles : {},
       fields: Array.isArray(body.fields) ? body.fields : [],
+      handling: body.handling !== undefined ? normalizeFormHandling(body.handling) : undefined,
     }, requestScope(req));
     if (!created) {
       const detail = getLastFormStoreError();
@@ -353,6 +382,7 @@ async function handle(req, res, pathname, method) {
       patch.stylesPatch = body.stylesPatch;
     }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
+    if (body.handling !== undefined) patch.handling = normalizeFormHandling(body.handling);
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
       const detail = getLastFormStoreError();
