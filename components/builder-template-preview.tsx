@@ -4,7 +4,8 @@ import Image from "next/image";
 import { isVideoFile, MEDIA_DIRECT_UPLOAD_MAX_BYTES, uploadFileToBlob } from "@/lib/media-blob-upload";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type PageAddressMap, resolvePageLinksInSettings } from "@/lib/page-link";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -257,7 +258,22 @@ type BuilderTemplatePreviewProps = {
   applyThemePageMargins?: boolean;
   /** When true, shell background is rendered by BuilderViewportShellLayout (or similar). */
   suppressShellBackground?: boolean;
+  /**
+   * Page id → that page's CURRENT slug, for links stored by reference
+   * (lib/builder-client/page-link.js, task 86bcxmrw2). The live site gets it
+   * from /api/public/page; the Builder preview builds it from the page list.
+   * Without it a reference renders its saved fallback address — exactly what
+   * the link showed before references existed.
+   */
+  pageAddresses?: PageAddressMap | null;
 };
+
+/**
+ * The page-address map, for every module at any depth (a table cell's modules
+ * render through BuilderModulePreview too). One context so no module has to be
+ * handed it, and no module can forget to resolve.
+ */
+const PageAddressContext = createContext<PageAddressMap | null>(null);
 
 type ContactFormField = {
   id: string;
@@ -1481,7 +1497,8 @@ export function BuilderTemplatePreview({
   liveSite = false,
   projectId = "",
   applyThemePageMargins = true,
-  suppressShellBackground = false
+  suppressShellBackground = false,
+  pageAddresses = null
 }: BuilderTemplatePreviewProps) {
   const shellBackground = suppressShellBackground
     ? {}
@@ -1660,6 +1677,7 @@ export function BuilderTemplatePreview({
   });
 
   return (
+    <PageAddressContext.Provider value={pageAddresses}>
     <div
       className={
         shellClassName
@@ -1705,6 +1723,7 @@ export function BuilderTemplatePreview({
       {shellClassName ? <GameModuleOverlayHosts /> : null}
       {shellClassName ? <BuilderReminderRuntime layoutSections={layoutSections} /> : null}
     </div>
+    </PageAddressContext.Provider>
   );
 }
 
@@ -2521,7 +2540,25 @@ function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: str
   return columnStyle;
 }
 
-function BuilderModulePreview({
+/**
+ * Every module renders through here, so this is the one place a page link
+ * stored by reference (`page:<id>|<fallback>`) becomes the page's current
+ * address. Below this line every renderer reads plain strings, exactly as it
+ * always has — none of them had to learn what a reference is.
+ */
+function BuilderModulePreview(props: BuilderModulePreviewProps) {
+  const pageAddresses = useContext(PageAddressContext);
+  const { module } = props;
+  const resolved = useMemo(() => {
+    const settings = resolvePageLinksInSettings(module.settings, pageAddresses);
+    return settings === module.settings ? module : { ...module, settings };
+  }, [module, pageAddresses]);
+  return <BuilderModulePreviewBody {...props} module={resolved} />;
+}
+
+type BuilderModulePreviewProps = Parameters<typeof BuilderModulePreviewBody>[0];
+
+function BuilderModulePreviewBody({
   module,
   columnWidthPercent = 100,
   emailPreview = false,

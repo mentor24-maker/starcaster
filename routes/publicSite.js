@@ -122,7 +122,12 @@ async function handle(req, res, pathname, method) {
     const { buildRenditionMapForPages } = require('../lib/assetRenditionsForPages');
     const renditions = await buildRenditionMapForPages(scopedProjectId, result.data);
 
-    return respondJson(res, req, 200, { ok: true, pages: result.data, renditions }), true;
+    // Current addresses of the pages these pages link to by reference
+    // (lib/pageLinkAddresses.js) — the reason a renamed page's buttons follow it.
+    const { pageAddressesFor } = require('../lib/pageLinkAddresses');
+    const pageAddresses = await pageAddressesFor(scopedProjectId, result.data);
+
+    return respondJson(res, req, 200, { ok: true, pages: result.data, renditions, pageAddresses }), true;
   }
 
   // GET /api/public/fonts?slugs=orbitron,space-mono&projectId=... — the files
@@ -190,10 +195,18 @@ async function handle(req, res, pathname, method) {
     const { buildRenditionMapForPages } = require('../lib/assetRenditionsForPages');
     const renditions = await buildRenditionMapForPages(scopedProjectId, [page]);
 
+    // The current address of every page this one links to by reference, so
+    // a button to a renamed page reaches it at its NEW address. A snapshot
+    // published before the rename is resolved here too — the reference is in
+    // the snapshot, the address is read now. lib/pageLinkAddresses.js.
+    const { pageAddressesFor } = require('../lib/pageLinkAddresses');
+    const pageAddresses = await pageAddressesFor(scopedProjectId, page);
+
     return respondJson(res, req, 200, {
       ok: true,
       page,
       renditions,
+      pageAddresses,
       // Which of the two answered. Useful in a browser's network tab when a
       // page looks stale: "draft" means this project has not published it.
       source: built ? 'published' : 'draft',
@@ -223,7 +236,10 @@ async function handle(req, res, pathname, method) {
     const result = await listRestrictedAdminSitePagesForProject(scopedProjectId);
     if (!result.ok) return respondErr(res, req, result.status || 500, result.error || 'Failed to load pages'), true;
 
-    return respondJson(res, req, 200, { ok: true, pages: result.data }), true;
+    const { pageAddressesFor } = require('../lib/pageLinkAddresses');
+    const pageAddresses = await pageAddressesFor(scopedProjectId, result.data);
+
+    return respondJson(res, req, 200, { ok: true, pages: result.data, pageAddresses }), true;
   }
 
   // GET /api/public/bug-report/viewer?projectId=… — which visibility tier the

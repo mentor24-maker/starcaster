@@ -975,6 +975,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: 100%;
 }
 
+/* A page link whose page was deleted (task 86bcxmrw2): the note takes its own
+   line under the select, so it never squeezes the control beside it. */
+.builder-react-root .builder-project-data-picker-missing {
+  flex: 1 1 100%;
+  color: var(--danger, #b42318);
+  font-size: 0.85em;
+  white-space: normal;
+}
+
 .builder-react-root .builder-module-background-details {
   display: flex;
   flex-wrap: wrap;

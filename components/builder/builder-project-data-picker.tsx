@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { sortPagesByName } from "../../public/shared/pageSort.js";
+import { makePageLink, parsePageLink } from "@/lib/page-link";
 
 /**
  * The shared "pick it from a list" control — master rules C1/C2
@@ -22,25 +23,51 @@ export type BuilderPickerValueKind = "path" | "slug" | "id";
 
 export type BuilderPickerOption = { label: string; path: string; slug: string; id: string };
 
-/** Value a given option writes for the configured kind. */
-export function pickerOptionValue(option: BuilderPickerOption, valueKind: BuilderPickerValueKind): string {
+/** The copied address an option stands for, in the configured kind. */
+function pickerOptionAddress(option: BuilderPickerOption, valueKind: BuilderPickerValueKind): string {
   if (valueKind === "path") return option.path;
   if (valueKind === "slug") return option.slug;
   return option.id;
 }
 
 /**
+ * Value a given option writes for the configured kind.
+ *
+ * A PAGE is stored by reference — its id, with today's address kept only as
+ * a fallback (lib/builder-client/page-link.js, task 86bcxmrw2) — so renaming
+ * the page or changing its address can never break the link. Posts and CRM
+ * forms keep the value they always wrote.
+ */
+export function pickerOptionValue(
+  option: BuilderPickerOption,
+  valueKind: BuilderPickerValueKind,
+  source: BuilderPickerSource = "pages"
+): string {
+  const address = pickerOptionAddress(option, valueKind);
+  if (source === "pages" && valueKind !== "id" && option.id) return makePageLink(option.id, address);
+  return address;
+}
+
+/**
  * Pure state resolution — exported for tests. Given the loaded options and
- * the stored value: "" selects the none row; a value matching an option
- * selects it; anything else is Custom mode.
+ * the stored value: "" selects the none row; a page reference selects its page
+ * by id (whatever the page's address is now), or reports the page as missing;
+ * an old copied address that matches an option selects it; anything else is
+ * Custom mode.
  */
 export function resolvePickerSelection(
   options: BuilderPickerOption[],
   value: string,
-  valueKind: BuilderPickerValueKind
-): { mode: "none" | "option" | "custom"; selected?: BuilderPickerOption } {
+  valueKind: BuilderPickerValueKind,
+  source: BuilderPickerSource = "pages"
+): { mode: "none" | "option" | "custom" | "missing"; selected?: BuilderPickerOption; fallback?: string } {
   if (!value) return { mode: "none" };
-  const selected = options.find((option) => pickerOptionValue(option, valueKind) === value);
+  const reference = parsePageLink(value);
+  if (reference) {
+    const selected = options.find((option) => option.id === reference.pageId);
+    return selected ? { mode: "option", selected } : { mode: "missing", fallback: reference.fallback };
+  }
+  const selected = options.find((option) => pickerOptionAddress(option, valueKind) === value);
   return selected ? { mode: "option", selected } : { mode: "custom" };
 }
 
@@ -107,6 +134,7 @@ function loadOptions(source: BuilderPickerSource): Promise<BuilderPickerOption[]
 }
 
 const CUSTOM = "__custom__";
+const MISSING = "__missing__";
 
 type BuilderProjectDataPickerProps = {
   source: BuilderPickerSource;
@@ -171,35 +199,58 @@ export function BuilderProjectDataPicker({
     );
   }
 
-  const selection = resolvePickerSelection(options, value, valueKind);
+  const selection = resolvePickerSelection(options, value, valueKind, source);
+  const missing = !customPinned && selection.mode === "missing";
   const customMode = customPinned || selection.mode === "custom";
+  // The <select> is keyed by what an option IS, never by the stored string:
+  // an old copied address and a reference to the same page select one row.
+  const optionKey = (option: BuilderPickerOption) => option.id || pickerOptionAddress(option, valueKind);
 
   return (
     <span className="builder-project-data-picker">
       <select
         aria-label={ariaLabel}
-        value={customMode ? CUSTOM : selection.mode === "none" ? "" : pickerOptionValue(selection.selected!, valueKind)}
+        value={
+          missing ? MISSING
+            : customMode ? CUSTOM
+              : selection.mode === "none" ? ""
+                : optionKey(selection.selected!)
+        }
         onChange={(event) => {
-          if (event.target.value === CUSTOM) {
+          const next = event.target.value;
+          if (next === MISSING) return;
+          if (next === CUSTOM) {
             setCustomPinned(true);
             return;
           }
           setCustomPinned(false);
-          onChange(event.target.value);
+          if (!next) {
+            onChange("");
+            return;
+          }
+          const option = options.find((entry) => optionKey(entry) === next);
+          if (option) onChange(pickerOptionValue(option, valueKind, source));
         }}
       >
         {noneLabel !== undefined ? <option value="">{noneLabel}</option> : null}
+        {missing ? <option value={MISSING}>Missing page ({selection.fallback || "no saved address"})</option> : null}
         {options.map((option) => (
-          <option key={option.id || pickerOptionValue(option, valueKind)} value={pickerOptionValue(option, valueKind)}>
+          <option key={optionKey(option)} value={optionKey(option)}>
             {option.label}
           </option>
         ))}
         <option value={CUSTOM}>Custom…</option>
       </select>
+      {missing ? (
+        <span className="builder-project-data-picker-missing" role="note">
+          The page this linked to no longer exists. Visitors are sent to its old address
+          {selection.fallback ? ` (${selection.fallback})` : ""}; choose another page.
+        </span>
+      ) : null}
       {customMode ? (
         <input
           type="text"
-          value={value}
+          value={parsePageLink(value) ? "" : value}
           placeholder={placeholder}
           aria-label={ariaLabel ? `${ariaLabel} (custom value)` : "Custom value"}
           onChange={(event) => onChange(event.target.value)}
