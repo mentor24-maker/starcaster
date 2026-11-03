@@ -23,7 +23,11 @@
  * fact about the machine: the job is released for 15 minutes with no attempt
  * spent and NO cut-marks row is written. whisper or ffmpeg failing on this WAV
  * is about the file: a `failed` row carries the reason (DOCTRINE 5.31), and the
- * job fails through the queue's retry rules.
+ * job fails through the queue's retry rules. The one exception is
+ * saveRetry.js, shared with transcribePass (task 86bcwzu4b): a save failing
+ * for the same source four times in a row while other saves succeed is
+ * charged to that source, and the found cuts are kept beside the WAV between
+ * tries so a retry does not run the verbatim whisper again.
  *
  * THE LEASE IS SIZED ONCE, BEFORE EITHER TOOL STARTS. Both run under
  * spawnSync, so this process cannot renew its lease while they run. The
@@ -52,6 +56,7 @@ const {
   RELEASE_HOLD_MS,
 } = require('./transcribePass.js');
 const { runFfmpeg, FAILURES } = require('./proxy.js');
+const saveRetry = require('./saveRetry.js');
 const {
   findCutMarks,
   parseSilencedetect,
@@ -183,19 +188,45 @@ async function cutMarksJob({
     return { ...base, outcome: 'outage', jobAction: released ? 'released' : 'failed', reason };
   };
 
+  let audioWav = '';
+
+  /**
+   * A save that did not land: released free, or — saveRetry.js's rule — charged
+   * to this source and blocked. `keep` says the tools ran for this data.
+   */
+  const saveFailed = async (why, data, outcome, reason, keep) => {
+    const verdict = saveRetry.noteSaveFailed(queue, { stage: STAGE_CUT_MARKS, sourceId, error: why });
+    const kept = keep
+      ? saveRetry.keepUnsaved({ wavPath: audioWav, stage: STAGE_CUT_MARKS, sourceId, data, outcome, reason, stat })
+      : '';
+    const keptNote = kept
+      ? ` The cuts found are kept at ${kept}, so the next try saves them without running whisper again.`
+      : '';
+    if (!verdict.charge) return releaseIt(`${why}. ${saveRetry.describeRelease(verdict)}${keptNote}`);
+    const charged = `${why}. ${saveRetry.describeCharge(verdict)}`;
+    const existing = await catalog.getCutMarksBySource(sourceId, scope);
+    if (existing.ok && text(existing.data && existing.data.state) !== CUTS_DONE) {
+      await catalog.upsertCutMarks(sourceId, { state: CUTS_FAILED, reason: charged, rulesVersion: RULES_VERSION }, scope);
+    }
+    return blockIt(`${charged}${keptNote} Fix: find why this one save is refused (the cause is above), `
+      + 'then delete this blocked job and queue the source again.');
+  };
+
   /** Write a cut-marks row, read it back, and complete — or say why not. */
-  const settle = async (data, outcome, reason) => {
+  const settle = async (data, outcome, reason, { keep = false } = {}) => {
     const saved = await catalog.upsertCutMarks(sourceId, data, scope);
     if (!saved.ok) {
       if (saved.status === 400 || saved.status === 404) {
         return blockIt(`the ${data.state} cut marks for source ${sourceId} were refused by the catalog: ${saved.error}`);
       }
-      return releaseIt(`the ${data.state} cut marks for source ${sourceId} could not be written: ${saved.error}`);
+      return saveFailed(`the ${data.state} cut marks for source ${sourceId} could not be written: ${saved.error}`,
+        data, outcome, reason, keep);
     }
     // Read it back (landmine 12/13): the write answering 200 is not the evidence.
     const readBack = await catalog.getCutMarksBySource(sourceId, scope);
     if (!readBack.ok) {
-      return releaseIt(`the cut marks for source ${sourceId} were written but could not be read back: ${readBack.error}`);
+      return saveFailed(`the cut marks for source ${sourceId} were written but could not be read back: ${readBack.error}`,
+        data, outcome, reason, keep);
     }
     const row = readBack.data;
     const marks = Array.isArray(data.marks) ? data.marks : [];
@@ -206,6 +237,8 @@ async function cutMarksJob({
         + `${row && Array.isArray(row.marks) ? row.marks.length : 0}, so the catalog did not keep them. `
         + `Fix: inspect video_cut_marks for source ${sourceId} by hand, then delete this blocked job.`);
     }
+    saveRetry.noteSaveSucceeded(queue, { stage: STAGE_CUT_MARKS, sourceId });
+    saveRetry.dropUnsaved({ wavPath: audioWav, stage: STAGE_CUT_MARKS });
     if (data.state === CUTS_FAILED) {
       queue.fail(job.id, owner, reason);
       return { ...base, outcome: 'failed', jobAction: 'failed', reason };
@@ -213,7 +246,8 @@ async function cutMarksJob({
     const completed = queue.complete(job.id, owner);
     return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
   };
-  const failIt = (reason, extra = {}) => settle({ state: CUTS_FAILED, reason, rulesVersion: RULES_VERSION, ...extra }, 'failed', reason);
+  const failIt = (reason, extra = {}, keep = false) => settle({ state: CUTS_FAILED, reason, rulesVersion: RULES_VERSION, ...extra },
+    'failed', reason, { keep });
 
   if (!sourceId) {
     return blockIt('this cut_marks job names no source, so there is nothing to look at. '
@@ -250,6 +284,7 @@ async function cutMarksJob({
       + `and source ${sourceId} was left as it was. Fix: npm run provision:node:apply (Studio 2 of 6 installs it).`);
   }
   const audio = audioFor({ sourceId, payload, options, env, exists, readFile });
+  audioWav = audio.wav;
   if (!audio.wavExists) {
     return failIt(`the sound file made for transcription is not on disk at ${audio.wav}, so there was nothing to `
       + 'listen to. Fix: re-run the proxy step for this source, which remakes the WAV.');
@@ -272,6 +307,14 @@ async function cutMarksJob({
     }, 'done', 'no words in the transcript — nothing marked');
   }
 
+  // An earlier try found the cuts and only the save failed: save those,
+  // rather than run the verbatim whisper again to find the same ones.
+  const kept = saveRetry.takeUnsaved({ wavPath: audio.wav, stage: STAGE_CUT_MARKS, sourceId, stat, readFile });
+  if (kept) {
+    const result = await settle(kept.data, kept.outcome, kept.reason, { keep: true });
+    return { ...result, savedFromEarlierTry: kept.file };
+  }
+
   // Stretch the lease BEFORE either tool starts, while this process can still talk.
   if (!queue.heartbeat(job.id, owner, { leaseMs: leaseForCutMarks(durationS) })) {
     return { ...base, outcome: 'lost', jobAction: 'none',
@@ -287,7 +330,7 @@ async function cutMarksJob({
       + `looked for and source ${sourceId} was left as it was. Fix: npm run provision:node:apply.`);
   }
   if (verbatim.kind !== 'ok') {
-    return failIt(`the word-for-word whisper pass could not run on source ${sourceId} (${audio.wav}): ${verbatim.detail}`, { model });
+    return failIt(`the word-for-word whisper pass could not run on source ${sourceId} (${audio.wav}): ${verbatim.detail}`, { model }, true);
   }
 
   const ffmpegBin = text(options.ffmpegBin || env.STUDIO_FFMPEG) || 'ffmpeg';
@@ -298,7 +341,7 @@ async function cutMarksJob({
   }
   if (!silence.ok) {
     const tail = text(silence.detail).split('\n').slice(-3).join(' | ');
-    return failIt(`ffmpeg could not listen for pauses in source ${sourceId} (${audio.wav}): ${tail}`, { model });
+    return failIt(`ffmpeg could not listen for pauses in source ${sourceId} (${audio.wav}): ${tail}`, { model }, true);
   }
 
   const v = verbatim.transcript;
@@ -321,7 +364,7 @@ async function cutMarksJob({
     verbatimText: v.text,
     verbatimWords: v.words,
     marks: found.marks,
-  }, 'done', `${found.marks.length} mark(s) (${summary}), ${found.cutS} s to cut`);
+  }, 'done', `${found.marks.length} mark(s) (${summary}), ${found.cutS} s to cut`, { keep: true });
 }
 
 /**
