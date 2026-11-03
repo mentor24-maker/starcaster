@@ -16,7 +16,9 @@ const {
   formForSubmission,
   contactSourceForForm,
 } = require('../lib/crmFormSubmissionsStore');
-const { normalizeFormHandling, submitSuccessResponse } = require('../lib/crmFormHandling');
+const { normalizeFormHandling, submitSuccessResponse, confirmationSettingsProblem } = require('../lib/crmFormHandling');
+const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
+const { clientIp } = require('../lib/rateLimiter');
 
 function requestScope(req) {
   return {
@@ -239,6 +241,9 @@ async function handle(req, res, pathname, method) {
     // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
     // here, answers exactly as before. `form` was looked up above, scoped to
     // this project, by formForSubmission.
+    // The visitor's confirmation, when the form has one on (task 86bcx18bg).
+    // Awaited for the same Vercel reason as the alert; never fails the submit.
+    await sendVisitorConfirmation({ projectId: scopedProjectId, form, email: submittedEmail, data: submittedData, ip: clientIp(req) });
     const outcome = submitSuccessResponse(form);
     return sendOk(res, 200, outcome, outcome), true;
   }
@@ -330,6 +335,8 @@ async function handle(req, res, pathname, method) {
     if (!crmConfigId || !name) {
       return sendErr(res, 400, 'crmConfigId and name are required', { code: 'VALIDATION_ERROR' }), true;
     }
+    const confirmProblem = confirmationSettingsProblem(body.handling, body.fields);
+    if (confirmProblem) return sendErr(res, 400, confirmProblem, { code: 'VALIDATION_ERROR' }), true;
     const created = await createForm({
       crmConfigId,
       name,
@@ -406,6 +413,13 @@ async function handle(req, res, pathname, method) {
     }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
     if (body.handling !== undefined) patch.handling = normalizeFormHandling(body.handling);
+    if (patch.handling !== undefined || patch.fields !== undefined) {
+      const confirmProblem = confirmationSettingsProblem(
+        patch.handling !== undefined ? patch.handling : existing.handling,
+        patch.fields !== undefined ? patch.fields : existing.fields
+      );
+      if (confirmProblem) return sendErr(res, 400, confirmProblem, { code: 'VALIDATION_ERROR' }), true;
+    }
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
       const detail = getLastFormStoreError();

@@ -1,3 +1,20 @@
+## 2026-11-03 — Website forms can email the visitor a "we got your message" confirmation (#945)
+
+Each CRM form now has a "Confirmation email" section in its editor. Switch it
+on, write a subject and a message, and the visitor gets that email after they
+submit — with their own details filled in where the message says
+`{{first_name}}` or `{{email}}`. Replies go to the team's Contact Alert Email.
+It only sends when the visitor gave an email address, a form without an Email
+field cannot have it switched on, and a mail problem never stops the
+submission from being saved. Forms nobody changes send nothing, as before.
+Because anyone on the internet can submit a form, the confirmation is also
+rationed: one per email address an hour and five per visitor's connection an
+hour. Past that the email is quietly skipped but the submission still goes
+through, so nobody can use a form to have our sending domain spam strangers.
+The confirmation also only goes to ONE ordinary email address: if the Email
+box holds a list of addresses, or a name with an address in angle brackets,
+no confirmation is sent (the submission is still saved), so the ration
+cannot be dodged by typing forty strangers into one box.
 ## 2026-11-02 — Studio: the Mac Mini deletes a video's downloaded original once it is ready (#939)
 
 Every uploaded video is downloaded onto the Mini so the Studio can measure it
