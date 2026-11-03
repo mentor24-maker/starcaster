@@ -1,3 +1,17 @@
+## 2026-11-02 — Website forms show their own thank-you message, can send visitors to a page, and keep every submission (#941)
+
+A client's contact form now does what a site owner expects. The "Success
+Message" typed in the form editor now actually shows; before, every visitor saw
+the same fixed sentence no matter what the editor said. Each form can instead
+send the visitor to a page, such as a Thank You page. It can alert its own list
+of team addresses, or fall back to the site's usual alert address as before. It
+can also email the visitor a confirmation that greets them by name. Every
+submission is now kept, including a returning visitor's second message, which
+used to be thrown away. CRM › Forms shows how many each form has received and
+lists them. Forms nobody changes behave exactly as they did. One database step
+(`docs/SQL/crm_form_handling.sql`) has to run on the live site before this goes
+live.
+
 ## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
 
 The rules from the last step now run on real footage, with nobody starting
