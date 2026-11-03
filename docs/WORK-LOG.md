@@ -1,3 +1,15 @@
+## 2026-11-02 — Reel Spinner: one recording that will not save no longer ties up the Mini (#942)
+
+The Mini's video worker had been stuck on one 106-minute recording for two
+days: the transcript would not save, so it tried again every 15 minutes, and
+each try redid a 14-minute transcription first. Everything else waited behind
+it. Now the error says the actual reason instead of just "fetch failed". When
+only the save fails, the finished transcription is kept, so the next try just
+saves it. And if one recording's save fails four times in a row while other
+recordings save fine, that recording is set aside with the reason and the queue
+moves on. If every save is failing, which is a real outage, no recording is
+blamed and they all simply wait. The cut-finding step got the same treatment.
+
 ## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
 
 The rules from the last step now run on real footage, with nobody starting

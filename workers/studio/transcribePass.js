@@ -32,6 +32,13 @@
  * file: a `failed` transcript row carries the reason, so the Footage screen can
  * say why there is no transcript (DOCTRINE 5.31), and the job fails through
  * the queue's retry rules.
+ *
+ * ONE EXCEPTION TO "THE CATALOG UNREACHABLE IS THE MACHINE'S FAULT", and
+ * saveRetry.js is the whole of it (task 86bcwzu4b): a save that fails for
+ * the SAME source four times in a row while other saves succeed is charged
+ * to that source and blocked with the reason, and whisper's output is kept
+ * beside the WAV between tries, so a retry is a save rather than a whole
+ * transcription again.
  */
 
 const fs = require('node:fs');
@@ -43,6 +50,7 @@ const { derivedPathsFor, resolveDerivedDir, ACTIONS, SKIP_REASONS } = require('.
 const { REQUIRED_MODELS, modelPath } = require('../../lib/nodeProvision.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const videoTranscriptsStore = require('../../lib/videoTranscriptsStore.js');
+const saveRetry = require('./saveRetry.js');
 
 const STAGE_TRANSCRIBE = 'transcribe';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -365,19 +373,49 @@ async function transcribeJob({
 
   let audioWav = '';
 
+  /**
+   * A save that did not land. Released free — unless saveRetry.js says it has
+   * failed for THIS source too many times while other saves succeeded, in
+   * which case it is charged to the recording and blocked with the reason.
+   * `keep` says whisper ran for this data, so it is worth keeping for the
+   * next try.
+   */
+  const saveFailed = async (why, data, outcome, reason, keep) => {
+    const verdict = saveRetry.noteSaveFailed(queue, { stage: STAGE_TRANSCRIBE, sourceId, error: why });
+    const kept = keep
+      ? saveRetry.keepUnsaved({ wavPath: audioWav, stage: STAGE_TRANSCRIBE, sourceId, data, outcome, reason, stat })
+      : '';
+    const keptNote = kept
+      ? ` What whisper produced is kept at ${kept}, so the next try saves it without running whisper again.`
+      : '';
+    if (!verdict.charge) return releaseIt(`${why}. ${saveRetry.describeRelease(verdict)}${keptNote}`);
+    // Say so where the Footage screen looks — but never over a transcript
+    // that is already done: a good row from an earlier save is worth more
+    // than the news that this one failed.
+    const charged = `${why}. ${saveRetry.describeCharge(verdict)}`;
+    const existing = await catalog.getTranscriptBySource(sourceId, scope);
+    if (existing.ok && text(existing.data && existing.data.state) !== TRANSCRIPT_DONE) {
+      await catalog.upsertTranscript(sourceId, { state: TRANSCRIPT_FAILED, reason: charged }, scope);
+    }
+    return blockIt(`${charged}${keptNote} Fix: find why this one save is refused (the cause is above), `
+      + 'then delete this blocked job and queue the source again.');
+  };
+
   /** Write a transcript row, read it back, and complete — or say why not. */
-  const settle = async (data, outcome, reason) => {
+  const settle = async (data, outcome, reason, { keep = false } = {}) => {
     const saved = await catalog.upsertTranscript(sourceId, data, scope);
     if (!saved.ok) {
       if (saved.status === 400 || saved.status === 404) {
         return blockIt(`the ${data.state} transcript for source ${sourceId} was refused by the catalog: ${saved.error}`);
       }
-      return releaseIt(`the ${data.state} transcript for source ${sourceId} could not be written: ${saved.error}`);
+      return saveFailed(`the ${data.state} transcript for source ${sourceId} could not be written: ${saved.error}`,
+        data, outcome, reason, keep);
     }
     // Read it back (landmine 12/13): the write answering 200 is not the evidence.
     const readBack = await catalog.getTranscriptBySource(sourceId, scope);
     if (!readBack.ok) {
-      return releaseIt(`the transcript for source ${sourceId} was written but could not be read back: ${readBack.error}`);
+      return saveFailed(`the transcript for source ${sourceId} was written but could not be read back: ${readBack.error}`,
+        data, outcome, reason, keep);
     }
     const row = readBack.data;
     if (!row || text(row.state) !== data.state || text(row.text) !== text(data.text)) {
@@ -385,6 +423,8 @@ async function transcribeJob({
         + `"${text(row && row.state) || 'nothing'}", so the catalog did not keep it. `
         + `Fix: inspect video_transcripts for source ${sourceId} by hand, then delete this blocked job.`);
     }
+    saveRetry.noteSaveSucceeded(queue, { stage: STAGE_TRANSCRIBE, sourceId });
+    saveRetry.dropUnsaved({ wavPath: audioWav, stage: STAGE_TRANSCRIBE });
     if (data.state === TRANSCRIPT_FAILED) {
       queue.fail(job.id, owner, reason);
       return { ...base, outcome: 'failed', jobAction: 'failed', reason };
@@ -427,6 +467,14 @@ async function transcribeJob({
       'no_audio', 'no sound track — recorded as no_audio');
   }
 
+  // An earlier try ran whisper and only the save failed: save that, rather
+  // than spend another whole transcription to arrive at the same words.
+  const kept = saveRetry.takeUnsaved({ wavPath: audio.wav, stage: STAGE_TRANSCRIBE, sourceId, stat, readFile });
+  if (kept) {
+    const result = await settle(kept.data, kept.outcome, kept.reason, { keep: true });
+    return { ...result, savedFromEarlierTry: kept.file };
+  }
+
   const settings = whisperSettings(options, env);
   // The machine's faults come before the file's: a missing model must never
   // be written up as a recording that "failed to transcribe".
@@ -457,7 +505,8 @@ async function transcribeJob({
   }
   if (result.kind !== 'ok') {
     const reason = `whisper could not transcribe source ${sourceId} (${audio.wav}): ${result.detail}`;
-    return settle({ state: TRANSCRIPT_FAILED, reason, model: path.basename(settings.model, '.bin') }, 'failed', reason);
+    return settle({ state: TRANSCRIPT_FAILED, reason, model: path.basename(settings.model, '.bin') }, 'failed', reason,
+      { keep: true });
   }
 
   const t = result.transcript;
@@ -469,7 +518,7 @@ async function transcribeJob({
     text: t.text,
     segments: t.segments,
     words: t.words,
-  }, 'done', `${t.words.length} word(s) in ${t.segments.length} segment(s)`);
+  }, 'done', `${t.words.length} word(s) in ${t.segments.length} segment(s)`, { keep: true });
 }
 
 /**
