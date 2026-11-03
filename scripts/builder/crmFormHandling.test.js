@@ -432,6 +432,52 @@ test('one client cannot email a stream of different strangers', async () => {
   }
 });
 
+test('only ONE plain address is owed a confirmation — never a list or a "Name <addr>"', () => {
+  const owed = (email) => handling.buildConfirmationEmail({ handling: CONFIRM }, { email });
+  assert.equal(owed('v@example.com').to, 'v@example.com', 'a normal address still gets one');
+  assert.equal(owed("o'brien@example.co.uk").to, "o'brien@example.co.uk", 'an apostrophe is a real address');
+  const forty = Array.from({ length: 40 }, (_, i) => `stranger${i}@example.com`);
+  for (const bad of [
+    forty.join(','),
+    forty.join(';'),
+    'a@example.com b@example.com',
+    'Win a prize http://x.test <victim@example.com>',
+    '"Prize" victim@example.com',
+    'victim@example.com\nBcc: other@example.com',
+    'two@@example.com',
+    'a@b@example.com',
+    'no-at-sign.example.com',
+    'v@localhost',
+    `${'x'.repeat(65)}@example.com`,
+    `v@${'d'.repeat(250)}.com`,
+  ]) {
+    assert.equal(owed(bad), null, `must send nothing for ${JSON.stringify(bad.slice(0, 60))}`);
+  }
+});
+
+test('a comma-joined list or a "Name <addr>" in the Email box sends nothing, and the submit still succeeds', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    const list = Array.from({ length: 40 }, (_, i) => `stranger${i}@example.com`).join(',');
+    for (const email of [list, 'Win a prize http://x.test <victim@example.com>']) {
+      const { status, payload } = await submit(route, { email });
+      assert.equal(status, 200);
+      assert.equal(payload.message, "Thanks — we'll call you");
+    }
+    const toVisitors = mail.filter((m) => /stranger|victim/.test(String(m.to)));
+    assert.equal(toVisitors.length, 0, `no confirmation to a list or a display name, got ${toVisitors.length}`);
+    const normal = await submit(route, { email: 'single@example.com' });
+    assert.equal(normal.status, 200);
+    assert.equal(mail.filter((m) => m.to === 'single@example.com').length, 1, 'a normal address still sends one');
+  } finally {
+    console.warn = quiet;
+    restore();
+  }
+});
+
 test('a mail failure never fails the submission', async () => {
   const form = { ...baseForm(CONFIRM), fields: FIELDS };
   const { route, restore } = loadRoute({ form });
