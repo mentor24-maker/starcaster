@@ -16,7 +16,14 @@ const {
   formForSubmission,
   contactSourceForForm,
 } = require('../lib/crmFormSubmissionsStore');
-const { normalizeFormHandling, submitSuccessResponse, confirmationSettingsProblem } = require('../lib/crmFormHandling');
+const {
+  normalizeFormHandling,
+  submitSuccessResponse,
+  confirmationSettingsProblem,
+  publicFormHandling,
+  resolveAlertRecipients,
+  alertSubjectFor,
+} = require('../lib/crmFormHandling');
 const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
 const { clientIp } = require('../lib/rateLimiter');
 
@@ -45,9 +52,10 @@ function humanizeFieldKey(key) {
 }
 
 /**
- * Email the project's Contact Alert recipients about a public form
- * submission. Set on the tenant admin Settings page; an empty list means no
- * alerts.
+ * Email the team about a public form submission: the form's own alert list
+ * and subject when it has them (CRM › Forms › Edit, task 86bcx188j), otherwise
+ * the project's Contact Alert Email from the tenant admin Settings page. An
+ * empty result means no alerts.
  *
  * All recipients go on one message rather than one message each, so a reply
  * keeps the whole team on the thread.
@@ -56,15 +64,17 @@ function humanizeFieldKey(key) {
  * visitor must not see an error because the site owner's mail provider is
  * misconfigured. Failures are logged for the server logs instead.
  */
-async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) {
+async function notifyContactAlertEmail({ projectId, form, email, data, isDuplicate }) {
   try {
-    const alertTo = await getContactAlertEmails(projectId);
+    const alertTo = resolveAlertRecipients(form, await getContactAlertEmails(projectId));
     if (!alertTo.length) return;
 
     const projectResult = await getPublicProjectById(projectId);
     const siteName = String(projectResult?.data?.name || '').trim() || 'your site';
 
     const rows = [];
+    // Which form it came from, so a team with several forms knows which one.
+    if (String(form?.name || '').trim()) rows.push(['Form', String(form.name).trim()]);
     if (email) rows.push(['Email', email]);
     for (const [key, value] of Object.entries(data || {})) {
       const text = String(value ?? '').trim();
@@ -94,7 +104,7 @@ async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) 
       to: alertTo,
       fromName: siteName,
       replyTo: email || undefined,
-      subject: `New contact form submission — ${siteName}`,
+      subject: alertSubjectFor(form, { siteName, email, data }),
       text: textBody,
       html: `
         <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18324a;">
@@ -224,14 +234,17 @@ async function handle(req, res, pathname, method) {
       pageUrl: body.pageUrl,
     });
 
-    // Notify the project's internal Contact Alert Email, if one is set on the
-    // Settings page. Awaited rather than fire-and-forget: on Vercel the lambda
+    // Notify the form's own alert list (task 86bcx188j), or else the project's
+    // internal Contact Alert Email, if one is set on the Settings page. No form
+    // id, or one that does not belong here, alerts exactly as before. Awaited
+    // rather than fire-and-forget: on Vercel the lambda
     // freezes as soon as the response is sent, which silently kills in-flight
     // work (see docs — that is what truncated Header/Footer propagation).
     // Deliberately never fails the submission — the visitor's data is already
     // saved, so a mail problem must not show them an error.
     await notifyContactAlertEmail({
       projectId: scopedProjectId,
+      form,
       email: submittedEmail,
       data: submittedData,
       isDuplicate: !stored,
@@ -367,8 +380,12 @@ async function handle(req, res, pathname, method) {
   if (formMatch && method === 'GET') {
     // Public — needed to render CRM forms on public landing pages
     const id = decodeURIComponent(formMatch[1]);
-    const form = await getForm(id, { projectId: '', userId: '' });
-    if (!form) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    const found = await getForm(id, { projectId: '', userId: '' });
+    if (!found) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    // Anyone can read a form by id — a published page has to. The team's alert
+    // addresses are not theirs to read, so a request with no signed-in user
+    // gets only where the form sends visitors (task 86bcx188j).
+    const form = req.authUser ? found : { ...found, handling: publicFormHandling(found.handling) };
     return sendOk(res, 200, form, { form }), true;
   }
 

@@ -1,3 +1,12 @@
+## 2026-11-03 — Each website form can alert its own team addresses, with its own subject (#944)
+
+Every form on a client's site used to alert the same people — the one Contact
+Alert Email in Settings — with the same subject line. Now each form's editor
+(CRM › Forms › Edit) has a "Team alerts" section: a list of addresses to alert
+for that form, and an optional subject that can include what the visitor typed,
+like their first name. Leave it blank and the form alerts the Settings address
+exactly as before, so nothing changes on existing sites. Every alert now says
+which form it came from, and the alert addresses are never shown to the public.
 ## 2026-11-03 — Website forms can email the visitor a "we got your message" confirmation (#945)
 
 Each CRM form now has a "Confirmation email" section in its editor. Switch it
