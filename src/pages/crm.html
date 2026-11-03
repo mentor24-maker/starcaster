@@ -154,6 +154,25 @@
                 </div>
               </section>
 
+              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorConfirmTitle">
+                <h3 class="crm-form-editor-section-title" id="crmFormEditorConfirmTitle">Confirmation email</h3>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="crmFormEditorConfirmEnabled" class="standard-form-checkbox" />
+                  <span>Email the visitor a confirmation <span class="meta">(needs an Email field)</span></span>
+                </label>
+                <div id="crmFormEditorConfirmFields" class="hidden">
+                  <label class="field crm-form-editor-setting">
+                    <span>Subject</span>
+                    <input type="text" id="crmFormEditorConfirmSubject" placeholder="We got your message" />
+                  </label>
+                  <label class="field crm-form-editor-setting">
+                    <span>Message</span>
+                    <textarea id="crmFormEditorConfirmBody" rows="5" placeholder="Hi {{first_name}}, thanks for getting in touch — we'll reply within a day."></textarea>
+                  </label>
+                  <p class="meta">Use <code>{{first_name}}</code>, <code>{{email}}</code> or any field's key to fill in what the visitor typed. Replies go to your Contact Alert Email.</p>
+                </div>
+              </section>
+
               <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBackground">
                 <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleBackground">Background</h3>
                 <div class="field crm-form-editor-setting">

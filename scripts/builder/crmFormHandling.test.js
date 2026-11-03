@@ -22,7 +22,14 @@ const FORM_OWNER = 'user_owner_1';
 // ── Pure rules ───────────────────────────────────────────────────────────────
 
 test('a form with no handling reads as today\'s behaviour', () => {
-  assert.deepEqual(handling.normalizeFormHandling(undefined), { afterSubmit: 'message', redirectUrl: '', redirectPageId: '' });
+  assert.deepEqual(handling.normalizeFormHandling(undefined), {
+    afterSubmit: 'message',
+    redirectUrl: '',
+    redirectPageId: '',
+    confirmationEnabled: false,
+    confirmationSubject: '',
+    confirmationBody: '',
+  });
   assert.equal(handling.isDefaultHandling(undefined), true);
   assert.deepEqual(handling.submitSuccessResponse({ successMessage: '' }), {
     message: handling.DEFAULT_SUCCESS_MESSAGE,
@@ -51,7 +58,7 @@ test('forms store: the redirect rides inside fields, never as its own column', (
   assert.equal('handling' in row, false, 'a handling column would need SQL that option B does not have');
   const metas = row.fields.filter((f) => f.key === META);
   assert.equal(metas.length, 1);
-  assert.deepEqual(metas[0].handling, REDIRECT);
+  assert.deepEqual(metas[0].handling, handling.normalizeFormHandling(REDIRECT));
   assert.ok(row.fields.some((f) => f.key === '__crm_form_styles__'), 'the styles entry is kept alongside');
 });
 
@@ -59,7 +66,7 @@ test('forms store: reading the row back gives the redirect, and no visitor-facin
   const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
   const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true });
   const form = sanitizeForm(row);
-  assert.deepEqual(form.handling, REDIRECT);
+  assert.deepEqual(form.handling, handling.normalizeFormHandling(REDIRECT));
   assert.deepEqual(form.fields.map((f) => f.key), ['email']);
 });
 
@@ -68,7 +75,7 @@ test('forms store: a save that does not touch After submit keeps it (Form Appear
   const stored = sanitizeForm(formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true }));
   // What updateForm does: merge the patch onto the stored form, write it again.
   const rewritten = formInputToRow(sanitizeForm({ ...stored, name: 'Renamed', styles: { buttonBg: '#ff0000' } }), { includeStylesMeta: true });
-  assert.deepEqual(sanitizeForm(rewritten).handling, REDIRECT);
+  assert.deepEqual(sanitizeForm(rewritten).handling, handling.normalizeFormHandling(REDIRECT));
   assert.equal(rewritten.fields.filter((f) => f.key === META).length, 1, 'never doubled');
 });
 
@@ -295,6 +302,119 @@ test('a form id from another project is ignored, not obeyed', async () => {
     const { payload } = await submit(route);
     assert.equal(payload.redirectUrl, '');
     assert.equal(payload.message, handling.DEFAULT_SUCCESS_MESSAGE);
+  } finally {
+    restore();
+  }
+});
+
+// ── Visitor confirmation email (task 86bcx18bg) ─────────────────────────────
+
+const CONFIRM = {
+  confirmationEnabled: true,
+  confirmationSubject: 'We got your message, {{first_name}}',
+  confirmationBody: 'Hi {{first_name}} {{last_name}},\n\nWe will reply to {{email}} soon. {{ unknown_key }}',
+};
+
+test('placeholders fill from what the visitor typed; unknown ones go blank, never braces', () => {
+  assert.equal(handling.fillPlaceholders('Hi {{first_name}}{{nope}}!', { first_name: 'Ana' }), 'Hi Ana!');
+  const message = handling.buildConfirmationEmail({ handling: CONFIRM }, { email: 'v@example.com', data: { first_name: 'Ana' }, siteName: 'Delray' });
+  assert.equal(message.subject, 'We got your message, Ana');
+  assert.equal(message.to, 'v@example.com');
+  assert.doesNotMatch(message.text, /[{}]/);
+  assert.match(message.text, /We will reply to v@example\.com soon\./);
+});
+
+test('what the visitor typed is escaped in the HTML copy', () => {
+  const message = handling.buildConfirmationEmail(
+    { handling: { ...CONFIRM, confirmationBody: 'Hi {{first_name}}' } },
+    { email: 'v@example.com', data: { first_name: '<img src=x onerror=alert(1)>' } }
+  );
+  assert.doesNotMatch(message.html, /<img/);
+  assert.match(message.html, /&lt;img/);
+});
+
+test('no confirmation is owed when it is off, or when no address was given', () => {
+  assert.equal(handling.buildConfirmationEmail({ handling: { ...CONFIRM, confirmationEnabled: false } }, { email: 'v@example.com' }), null);
+  assert.equal(handling.buildConfirmationEmail({ handling: CONFIRM }, { email: '' }), null);
+  assert.equal(handling.buildConfirmationEmail(null, { email: 'v@example.com' }), null);
+});
+
+test('a confirmation cannot be switched on for a form with no Email field', () => {
+  assert.match(handling.confirmationSettingsProblem(CONFIRM, [{ key: 'first_name', type: 'text' }]), /no Email field/);
+  assert.equal(handling.confirmationSettingsProblem(CONFIRM, FIELDS), '');
+  assert.equal(handling.confirmationSettingsProblem({ confirmationEnabled: false }, []), '', 'off is always allowed');
+});
+
+test('forms store: the confirmation settings ride inside fields and read back', () => {
+  const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: CONFIRM }, { includeStylesMeta: true });
+  const back = sanitizeForm(row);
+  assert.equal(back.handling.confirmationEnabled, true);
+  assert.equal(back.handling.confirmationSubject, CONFIRM.confirmationSubject);
+  assert.equal(back.handling.confirmationBody, CONFIRM.confirmationBody);
+});
+
+test('confirmation ON: the visitor is emailed with placeholders filled, reply-to the team', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  try {
+    const { status } = await submit(route);
+    assert.equal(status, 200);
+    const toVisitor = mail.filter((m) => m.to === 'visitor@example.com');
+    assert.equal(toVisitor.length, 1, 'exactly one confirmation to the visitor');
+    assert.equal(toVisitor[0].subject, 'We got your message, Ana');
+    assert.match(toVisitor[0].text, /^Hi Ana ,/);
+    assert.deepEqual(toVisitor[0].replyTo, ['team@example.com']);
+  } finally {
+    restore();
+  }
+});
+
+test('confirmation OFF: nothing is sent to the visitor', async () => {
+  const form = { ...baseForm({}), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  try {
+    await submit(route);
+    assert.equal(mail.filter((m) => m.to === 'visitor@example.com').length, 0);
+    assert.equal(mail.length, 1, 'only the team alert');
+  } finally {
+    restore();
+  }
+});
+
+test('a mail failure never fails the submission', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, restore } = loadRoute({ form });
+  const mailer = require.cache[require.resolve('../../lib/mailer.js')];
+  const original = mailer.exports.sendEmail;
+  mailer.exports.sendEmail = async () => { throw new Error('provider down'); };
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const { status, payload } = await submit(route);
+    assert.equal(status, 200);
+    assert.equal(payload.message, "Thanks — we'll call you");
+  } finally {
+    console.error = quiet;
+    mailer.exports.sendEmail = original;
+    restore();
+  }
+});
+
+test('saving a form with the confirmation on and no Email field is refused', async () => {
+  const { route, restore } = loadRoute({ form: { ...baseForm({}), fields: FIELDS } });
+  try {
+    const created = await call(route, 'POST', '/api/crm/forms', {
+      body: { crmConfigId: 'cfg_1', name: 'No email', fields: [{ key: 'first_name', type: 'text' }], handling: CONFIRM },
+      authUser: { id: FORM_OWNER },
+    });
+    assert.equal(created.status, 400);
+    assert.match(created.payload.error.message, /no Email field/);
+    const removed = await call(route, 'PUT', '/api/crm/forms/form_1', {
+      body: { fields: [{ key: 'first_name', type: 'text' }], handling: CONFIRM },
+      authUser: { id: FORM_OWNER },
+    });
+    assert.equal(removed.status, 400);
   } finally {
     restore();
   }

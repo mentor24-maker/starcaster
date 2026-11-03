@@ -1336,6 +1336,8 @@ App.crm = (function () {
   function syncFormHandlingVisibility() {
     const redirect = el('crmFormEditorAfterSubmit')?.value === 'redirect';
     el('crmFormEditorRedirectFields')?.classList.toggle('hidden', !redirect);
+    const confirm = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
+    el('crmFormEditorConfirmFields')?.classList.toggle('hidden', !confirm);
   }
 
   function populateFormHandlingEditor(form) {
@@ -1357,13 +1359,28 @@ App.crm = (function () {
     }
     if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = h.afterSubmit === 'redirect' ? 'redirect' : 'message';
     if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = h.redirectUrl || '';
+    // Visitor confirmation email (86bcx18bg).
+    if (el('crmFormEditorConfirmEnabled')) el('crmFormEditorConfirmEnabled').checked = h.confirmationEnabled === true;
+    if (el('crmFormEditorConfirmSubject')) el('crmFormEditorConfirmSubject').value = h.confirmationSubject || '';
+    if (el('crmFormEditorConfirmBody')) el('crmFormEditorConfirmBody').value = h.confirmationBody || '';
     const afterSelect = el('crmFormEditorAfterSubmit');
     if (afterSelect) afterSelect.onchange = syncFormHandlingVisibility;
+    const confirmBox = el('crmFormEditorConfirmEnabled');
+    if (confirmBox) {
+      confirmBox.onchange = () => {
+        const hasEmail = syncFormEditorFieldRowsFromDom().some((row) => row.selected && String(row.key || '').toLowerCase() === 'email');
+        if (confirmBox.checked && !hasEmail) {
+          confirmBox.checked = false;
+          notify('Add the Email field to this form first — without it there is no address to send the confirmation to.', true);
+        }
+        syncFormHandlingVisibility();
+      };
+    }
     syncFormHandlingVisibility();
   }
 
   /** Returns the settings, or a string naming what is wrong with them. */
-  function readFormHandlingFromEditor() {
+  function readFormHandlingFromEditor(fields) {
     const afterSubmit = el('crmFormEditorAfterSubmit')?.value === 'redirect' ? 'redirect' : 'message';
     const redirectUrl = el('crmFormEditorRedirectUrl')?.value.trim() || '';
     if (afterSubmit === 'redirect' && !redirectUrl) {
@@ -1372,10 +1389,18 @@ App.crm = (function () {
     if (redirectUrl && !/^\/(?![\/\\])/.test(redirectUrl) && !/^https?:\/\//i.test(redirectUrl)) {
       return 'The After submit address must start with "/" (a page on this site) or "https://".';
     }
+    const confirmationEnabled = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
+    const hasEmail = (fields || []).some((field) => String(field.key || '').toLowerCase() === 'email');
+    if (confirmationEnabled && !hasEmail) {
+      return 'This form has no Email field, so it cannot email the visitor a confirmation. Add the Email field or turn the confirmation off.';
+    }
     return {
       afterSubmit,
       redirectUrl,
       redirectPageId: el('crmFormEditorRedirectPage')?.value || '',
+      confirmationEnabled,
+      confirmationSubject: el('crmFormEditorConfirmSubject')?.value.trim() || '',
+      confirmationBody: el('crmFormEditorConfirmBody')?.value || '',
     };
   }
 
@@ -1829,7 +1854,7 @@ ${fieldHtml}
       return;
     }
 
-    const handling = readFormHandlingFromEditor();
+    const handling = readFormHandlingFromEditor(fields);
     if (typeof handling === 'string') { notify(handling, true); return; }
 
     const styles = readFormStylesFromEditor();
