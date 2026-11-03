@@ -3,12 +3,19 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj, nextId } = require('./http');
 const { resolvePublicProjectForRequest } = require('../lib/publicSiteHostBinding');
 const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = require('../lib/crmConfigStore');
-const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
+const { listContacts, getContact, createContact, updateContact, deleteContact, findContactByEmail } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
 const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
+const {
+  recordPublicSubmission,
+  listSubmissions,
+  countSubmissionsByForm,
+  formForSubmission,
+  contactSourceForForm,
+} = require('../lib/crmFormSubmissionsStore');
 const { normalizeFormHandling, submitSuccessResponse } = require('../lib/crmFormHandling');
 
 function requestScope(req) {
@@ -108,28 +115,6 @@ async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) 
   }
 }
 
-/**
- * The form a public submission names, inside the project the request resolved
- * to. A form id from another project — or another CRM — reads as no form at
- * all: its message and redirect must never apply to someone else's site. Any
- * failure here also reads as no form, so the visitor still gets today's
- * answer rather than an error (task 86bcwy44f).
- */
-async function loadSubmittedForm(crmFormId, crmConfigId, projectId) {
-  const id = String(crmFormId || '').trim();
-  if (!id) return null;
-  try {
-    const form = await getForm(id, { projectId, userId: '' });
-    if (!form) return null;
-    if (form.projectId && form.projectId !== projectId) return null;
-    if (form.crmConfigId && crmConfigId && form.crmConfigId !== crmConfigId) return null;
-    return form;
-  } catch (err) {
-    console.error('[crm] Loading the submitted form failed:', err?.message || err);
-    return null;
-  }
-}
-
 async function handle(req, res, pathname, method) {
   const urlObj = getUrlObj(req);
 
@@ -207,19 +192,35 @@ async function handle(req, res, pathname, method) {
     const scopedProjectId = bind.projectId;
     const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
     const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
+    // Looked up first so the contact's source can name it (task 86bcx1858).
+    const form = await formForSubmission(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
     let stored = true;
+    let contactId = '';
     try {
-      await createContact({
+      const created = await createContact({
         crmConfigId,
         email: submittedEmail,
         data: submittedData,
-        source: String(body.source || 'form').trim(),
+        source: contactSourceForForm(form, String(body.source || 'form')),
         tags: [],
       }, { projectId: scopedProjectId, userId: '' });
+      contactId = String(created?.id || '');
     } catch (err) {
       if (err.code !== 'DUPLICATE_EMAIL') throw err;
       stored = false;
+      const existing = await findContactByEmail(crmConfigId, submittedEmail, { projectId: scopedProjectId }).catch(() => null);
+      contactId = String(existing?.id || '');
     }
+    // Every submission is kept, a returning visitor's second message included.
+    // Never fails the visitor — see recordPublicSubmission.
+    await recordPublicSubmission({
+      form,
+      projectId: scopedProjectId,
+      contactId,
+      email: submittedEmail,
+      data: submittedData,
+      pageUrl: body.pageUrl,
+    });
 
     // Notify the project's internal Contact Alert Email, if one is set on the
     // Settings page. Awaited rather than fire-and-forget: on Vercel the lambda
@@ -236,8 +237,8 @@ async function handle(req, res, pathname, method) {
 
     // The form's OWN success message, and where it sends the visitor — not a
     // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
-    // here, answers exactly as before.
-    const form = await loadSubmittedForm(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
+    // here, answers exactly as before. `form` was looked up above, scoped to
+    // this project, by formForSubmission.
     const outcome = submitSuccessResponse(form);
     return sendOk(res, 200, outcome, outcome), true;
   }
@@ -313,7 +314,12 @@ async function handle(req, res, pathname, method) {
       crmConfigId = configs[0]?.id || '';
     }
     if (!crmConfigId) return sendOk(res, 200, [], { forms: [] }, { total: 0 }), true;
-    const forms = await listForms(crmConfigId, scope);
+    const listed = await listForms(crmConfigId, scope);
+    // A count that could not be read is null, never 0 (CLAUDE.md landmine 17).
+    const counts = await countSubmissionsByForm(listed.map((f) => f.id), scope)
+      .catch((err) => ({ ok: false, error: err?.message }));
+    if (!counts.ok) console.error('[crm] Counting form submissions failed:', counts.error);
+    const forms = listed.map((f) => ({ ...f, submissionCount: counts.ok ? (counts.data[f.id] ?? 0) : null }));
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -357,6 +363,23 @@ async function handle(req, res, pathname, method) {
     const form = await getForm(id, { projectId: '', userId: '' });
     if (!form) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
     return sendOk(res, 200, form, { form }), true;
+  }
+
+  // GET /api/crm/forms/:id/submissions — admin only (not in the public
+  // exemptions, which match /api/crm/forms/:id alone), within this project.
+  const submissionsMatch = pathname.match(/^\/api\/crm\/forms\/([^/]+)\/submissions$/);
+  if (submissionsMatch && method === 'GET') {
+    const id = decodeURIComponent(submissionsMatch[1]);
+    const scope = requestScope(req);
+    const form = await getForm(id, scope);
+    if (!form || (form.projectId && form.projectId !== scope.projectId)) {
+      return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    }
+    const result = await listSubmissions(id, scope);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, `Could not read this form's submissions: ${result.error}`, { code: 'CRM_SUBMISSIONS_READ_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, { submissions: result.data }, { total: result.data.length }), true;
   }
 
   if (formMatch && method === 'PUT') {

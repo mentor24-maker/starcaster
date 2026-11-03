@@ -1,3 +1,15 @@
+## 2026-11-02 — Website forms keep every submission, and each form lists its own (#943)
+
+When someone filled in a website form with an email that was already in the
+contact list, their message used to be thrown away — only the alert email ever
+saw it. Now every submission is kept, including a returning visitor's second
+and third messages, along with which form and which page it came from. The
+contact list still shows that person once, and their contact now says which
+form brought them in. In CRM › Forms each form shows how many submissions it
+has, and a new Submissions button lists them, newest first. This needs one new
+database table, which has to be added on the live site before the change goes
+out.
+
 ## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
 
 The "Success Message" typed in a CRM form's editor now actually shows on the
