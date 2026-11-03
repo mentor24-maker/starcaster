@@ -564,3 +564,13 @@
     max-height: none;
   }
 }
+
+/* After submit: the chosen page was deleted (task 86bcxmq23). */
+.crm-form-editor-missing-page {
+  margin: 4px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--ink-warning);
+  border-left-width: 4px;
+  border-radius: 8px;
+  color: var(--ink-warning);
+}

@@ -11,6 +11,19 @@ time it is shown. If the page is deleted, the link falls back to the address
 it was saved with, and the picker says the page no longer exists. Links saved
 before this keep working exactly as they did; a one-time upgrade for those
 runs once this is live. Menus and links typed into text are the next ticket.
+## 2026-11-03 — A form's "after submit" page now follows the page when it is renamed (#946)
+
+When a website form was set to send visitors to a page after they submit, it
+quietly saved a copy of that page's address. Rename the page and the form kept
+sending people to the old, dead address. The form editor also had a page list
+and an address box that could disagree, and could refuse to save when Dane
+switched DEO's "Request White Paper" form over to a page. Now "After submit"
+has three plain choices — show the message, go to a page on this site, or go
+to a web address — and choosing a page stores the page itself, not its
+address; the address is looked up fresh every time someone submits. If the
+page is deleted, the editor says so and visitors see the success message
+instead of an error page. The rule — link to our own records by reference,
+never by a copied address — is now written into the project's doctrine.
 
 ## 2026-11-03 — Each website form can alert its own team addresses, with its own subject (#944)
 
