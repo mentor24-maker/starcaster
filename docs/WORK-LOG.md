@@ -10,6 +10,40 @@ marking the video as failed. A half-hourly sweep clears the originals that
 were already there: about 7 GB of the 9.6 GB on the Mini today. The rest are
 small clips whose original is their working copy, so they stay. The same
 change fixes a crash in the path that handles a video replaced in Drive.
+## 2026-11-02 — Website forms keep every submission, and each form lists its own (#943)
+
+When someone filled in a website form with an email that was already in the
+contact list, their message used to be thrown away — only the alert email ever
+saw it. Now every submission is kept, including a returning visitor's second
+and third messages, along with which form and which page it came from. The
+contact list still shows that person once, and their contact now says which
+form brought them in. In CRM › Forms each form shows how many submissions it
+has, and a new Submissions button lists them, newest first. This needs one new
+database table, which has to be added on the live site before the change goes
+out.
+
+## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
+
+The "Success Message" typed in a CRM form's editor now actually shows on the
+live site; before, every visitor saw the same fixed sentence whatever the editor
+said. A failed submit now shows the form's own "Error Message" instead of a
+technical error. And each form has a new "After submit" choice: keep showing the
+message, or send the visitor to a page such as a Thank You page, picked from the
+site's pages or typed as an address. The setting is kept inside what a form
+already stores, so no database change was needed. Forms nobody changes behave as
+before. Keeping every submission, per-form team alerts and a confirmation email
+to the visitor are their own tickets now.
+## 2026-11-02 — Reel Spinner: one recording that will not save no longer ties up the Mini (#942)
+
+The Mini's video worker had been stuck on one 106-minute recording for two
+days: the transcript would not save, so it tried again every 15 minutes, and
+each try redid a 14-minute transcription first. Everything else waited behind
+it. Now the error says the actual reason instead of just "fetch failed". When
+only the save fails, the finished transcription is kept, so the next try just
+saves it. And if one recording's save fails four times in a row while other
+recordings save fine, that recording is set aside with the reason and the queue
+moves on. If every save is failing, which is a real outage, no recording is
+blamed and they all simply wait. The cut-finding step got the same treatment.
 
 ## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
 
