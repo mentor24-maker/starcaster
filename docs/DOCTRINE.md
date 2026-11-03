@@ -2062,6 +2062,41 @@ documentation. It bit the `stdio: 'ignore'` assertion, then the `process.exit(2)
 one, then a `process.exit(1)` count that found two — the call, and the sentence
 saying there was only one.
 
+### 5.34 Link to a thing by its id, never by a copy of its name or address
+
+Anything the operator chooses from a list of our own records — pages, posts,
+forms, events, media — is stored as **the record's id**, and turned into its
+name or address at the moment it is shown or used. A copied slug works on the
+day it is saved and breaks silently the day the source is renamed: nothing
+errors, the save said "saved", and the only one who sees it is the visitor
+who lands on a dead address.
+
+The incident (2026-11-03, task 86bcxmq23): a CRM form's "After submit: go to a
+page" copied the chosen page's address into a text box when it was picked, and
+only that copy was read when a visitor submitted. The page's id was saved
+right beside it and nothing ever read it. Rename the page and every form
+pointing at it sent visitors to a 404. The same design produced a second
+defect: re-picking the page already shown fires no change event, so nothing
+was copied and the save refused with "pick a page or type an address" while a
+page was plainly picked. And the list and the box could disagree, because two
+fields held one choice.
+
+The rule, in three parts:
+
+- **Store the id, resolve on use.** The server turns the id into the record's
+  CURRENT address when it is needed (`redirectAddressFor`,
+  `lib/crmFormHandling.js`; the lookup is `lib/crmFormRedirectPage.js`).
+- **One choice, one field.** "A record of ours" and "a typed address" are two
+  different choices and store two different things — never both. Data saved
+  under the old shape is read as the id; the stale copy is dropped.
+- **A record that is gone is said by name.** The editor says the page no
+  longer exists; the live site falls back to something harmless (the success
+  message), never a 404, and the server logs it.
+
+Dane, verbatim: *"We need all such links to be done by reference so that if the
+source changes, all references to it change accordingly."* Other modules'
+page links (buttons, menus, cards) still store copies; that is its own ticket.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory
