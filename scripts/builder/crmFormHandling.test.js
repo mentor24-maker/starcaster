@@ -4,7 +4,8 @@
  * CRM form handling, slice B (Loop Queue 86bcwy44f): the form's own success
  * message, and "After submit: go to a page" — kept inside the form's existing
  * `fields` list, so no database change — with forms that set nothing behaving
- * exactly as before.
+ * exactly as before. Plus each form's own team-alert list and subject
+ * (86bcx188j), falling back to the project's Contact Alert Email when blank.
  *
  * The submit endpoint is driven through routes/crm.js with an in-memory
  * database and contact list standing in for Supabase.
@@ -22,7 +23,7 @@ const FORM_OWNER = 'user_owner_1';
 // ── Pure rules ───────────────────────────────────────────────────────────────
 
 test('a form with no handling reads as today\'s behaviour', () => {
-  assert.deepEqual(handling.normalizeFormHandling(undefined), { afterSubmit: 'message', redirectUrl: '', redirectPageId: '' });
+  assert.deepEqual(handling.normalizeFormHandling(undefined), { afterSubmit: 'message', redirectUrl: '', redirectPageId: '', alertEmails: [], alertSubject: '' });
   assert.equal(handling.isDefaultHandling(undefined), true);
   assert.deepEqual(handling.submitSuccessResponse({ successMessage: '' }), {
     message: handling.DEFAULT_SUCCESS_MESSAGE,
@@ -42,7 +43,7 @@ test('redirect is honoured only with a safe address', () => {
 // ── Where it is kept: inside `fields`, no column ─────────────────────────────
 
 const META = handling.CRM_FORM_HANDLING_META_KEY;
-const REDIRECT = { afterSubmit: 'redirect', redirectUrl: '/thank-you', redirectPageId: 'pg_9' };
+const REDIRECT = { afterSubmit: 'redirect', redirectUrl: '/thank-you', redirectPageId: 'pg_9', alertEmails: [], alertSubject: '' };
 const FIELDS = [{ key: 'email', label: 'Email', type: 'email', required: true }];
 
 test('forms store: the redirect rides inside fields, never as its own column', () => {
@@ -295,6 +296,92 @@ test('a form id from another project is ignored, not obeyed', async () => {
     const { payload } = await submit(route);
     assert.equal(payload.redirectUrl, '');
     assert.equal(payload.message, handling.DEFAULT_SUCCESS_MESSAGE);
+  } finally {
+    restore();
+  }
+});
+
+// ── Per-form team alerts (Loop Queue 86bcx188j) ───────────────────────────────
+
+test('alert addresses are cleaned: lower-cased, de-duplicated, non-addresses dropped', () => {
+  const h = handling.normalizeFormHandling({ alertEmails: 'Team@Example.com, nope; team@example.com\nsales@example.com' });
+  assert.deepEqual(h.alertEmails, ['team@example.com', 'sales@example.com']);
+  assert.deepEqual(handling.invalidEmailEntries('a@b.co, nope'), ['nope']);
+});
+
+test('a form with only alert settings is not "default" — they are stored', () => {
+  assert.equal(handling.isDefaultHandling({ alertEmails: ['a@b.co'] }), false);
+  assert.equal(handling.isDefaultHandling({ alertSubject: 'Hi' }), false);
+  const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'F', fields: [], handling: { alertEmails: 'a@b.co', alertSubject: 'New lead: {{first_name}}' } });
+  const back = sanitizeForm(row);
+  assert.deepEqual(back.handling.alertEmails, ['a@b.co']);
+  assert.equal(back.handling.alertSubject, 'New lead: {{first_name}}');
+  assert.equal(back.fields.length, 0, 'no visitor-facing field for it');
+});
+
+test('a visitor value cannot put a line break into the alert subject', () => {
+  const form = { handling: handling.normalizeFormHandling({ alertSubject: 'Lead: {{first_name}}' }) };
+  const subject = handling.alertSubjectFor(form, { siteName: 'Site', data: { first_name: 'Ann\r\nBcc: x@evil.example' } });
+  assert.equal(/[\r\n]/.test(subject), false);
+  assert.equal(handling.alertSubjectFor({ handling: { alertSubject: '{{nothing}}' } }, { siteName: 'Site' }), 'New contact form submission — Site');
+});
+
+test('a form with its own alert addresses emails those addresses only, with its own subject', async () => {
+  const form = baseForm({ alertEmails: 'Coach@Example.com, desk@example.com', alertSubject: 'Lesson request from {{first_name}}' });
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['owner@example.com'] });
+  try {
+    const { status } = await submit(route);
+    assert.equal(status, 200);
+    assert.equal(mail.length, 1);
+    assert.deepEqual(mail[0].to, ['coach@example.com', 'desk@example.com']);
+    assert.equal(mail[0].subject, 'Lesson request from Ana');
+    assert.match(mail[0].text, /Form: Contact us/, 'the alert names the form it came from');
+  } finally {
+    restore();
+  }
+});
+
+test('a form with no alert addresses alerts the project Contact Alert Email, with the old subject', async () => {
+  const { route, mail, restore } = loadRoute({ form: baseForm({}), projectAlertEmails: ['owner@example.com'] });
+  try {
+    await submit(route);
+    assert.deepEqual(mail.map((m) => m.to), [['owner@example.com']]);
+    assert.match(mail[0].subject, /^New contact form submission — /);
+  } finally {
+    restore();
+  }
+});
+
+test('a mail failure never fails the submission', async () => {
+  const { route, restore } = loadRoute({ form: baseForm({ alertEmails: 'a@b.co' }) });
+  const mailer = require.resolve('../../lib/mailer.js');
+  const previous = require.cache[mailer].exports.sendEmail;
+  require.cache[mailer].exports.sendEmail = async () => { throw new Error('provider down'); };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const { status, payload } = await submit(route);
+    assert.equal(status, 200);
+    assert.equal(payload.message, "Thanks — we'll call you");
+  } finally {
+    console.error = originalError;
+    require.cache[mailer].exports.sendEmail = previous;
+    restore();
+  }
+});
+
+test('the public read of a form hides its alert addresses; a signed-in read keeps them', async () => {
+  const form = baseForm({ afterSubmit: 'redirect', redirectUrl: '/thanks', alertEmails: 'coach@example.com', alertSubject: 'Private' });
+  const { route, restore } = loadRoute({ form });
+  try {
+    const anon = await call(route, 'GET', '/api/crm/forms/form_1');
+    assert.equal(anon.status, 200);
+    assert.equal(anon.payload.data.handling.redirectUrl, '/thanks');
+    assert.equal(JSON.stringify(anon.payload).includes('coach@example.com'), false);
+    assert.equal(JSON.stringify(anon.payload).includes('Private'), false);
+    const admin = await call(route, 'GET', '/api/crm/forms/form_1', { authUser: { id: 'user_owner_1' } });
+    assert.deepEqual(admin.payload.data.handling.alertEmails, ['coach@example.com']);
   } finally {
     restore();
   }

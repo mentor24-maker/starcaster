@@ -1328,6 +1328,7 @@ App.crm = (function () {
   }
 
   // ── After submit: show the message or go to a page (86bcwy44f) ──────────────
+  // ── …and who on the team is alerted, under what subject (86bcx188j) ─────────
   function pagePath(page) {
     const slug = safeText(page?.slug).replace(/^\/+/, '');
     return `/${slug}`;
@@ -1357,6 +1358,8 @@ App.crm = (function () {
     }
     if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = h.afterSubmit === 'redirect' ? 'redirect' : 'message';
     if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = h.redirectUrl || '';
+    if (el('crmFormEditorAlertEmails')) el('crmFormEditorAlertEmails').value = (Array.isArray(h.alertEmails) ? h.alertEmails : []).join(', ');
+    if (el('crmFormEditorAlertSubject')) el('crmFormEditorAlertSubject').value = h.alertSubject || '';
     const afterSelect = el('crmFormEditorAfterSubmit');
     if (afterSelect) afterSelect.onchange = syncFormHandlingVisibility;
     syncFormHandlingVisibility();
@@ -1372,10 +1375,19 @@ App.crm = (function () {
     if (redirectUrl && !/^\/(?![\/\\])/.test(redirectUrl) && !/^https?:\/\//i.test(redirectUrl)) {
       return 'The After submit address must start with "/" (a page on this site) or "https://".';
     }
+    // Team alerts (86bcx188j). A typo here would otherwise be dropped on save
+    // and the form would quietly alert the project list instead — say which.
+    const alertParts = (el('crmFormEditorAlertEmails')?.value || '').split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean);
+    const badAlert = alertParts.filter((part) => !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(part));
+    if (badAlert.length) {
+      return `"${badAlert[0]}" is not an email address — fix it in Alert these addresses, or clear the field to use the Contact Alert Email from Settings.`;
+    }
     return {
       afterSubmit,
       redirectUrl,
       redirectPageId: el('crmFormEditorRedirectPage')?.value || '',
+      alertEmails: alertParts,
+      alertSubject: el('crmFormEditorAlertSubject')?.value.trim() || '',
     };
   }
 
