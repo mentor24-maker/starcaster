@@ -6,15 +6,128 @@ const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = req
 const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
-const { processPublicSubmission } = require('../lib/crmFormSubmit');
-const { listSubmissions, countSubmissionsByForm } = require('../lib/crmFormSubmissionsStore');
-const { normalizeFormHandling, publicFormHandling } = require('../lib/crmFormHandling');
+const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
+const { getPublicProjectById } = require('../lib/projectsStore');
+const { sendEmail } = require('../lib/mailer');
+const { normalizeFormHandling, submitSuccessResponse } = require('../lib/crmFormHandling');
 
 function requestScope(req) {
   return {
     projectId: String(req?.projectContext?.project?.id || '').trim(),
     userId: String(req?.authUser?.id || '').trim(),
   };
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** "first_name" -> "First Name" — used for alert-email row labels. */
+function humanizeFieldKey(key) {
+  return String(key || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * Email the project's Contact Alert recipients about a public form
+ * submission. Set on the tenant admin Settings page; an empty list means no
+ * alerts.
+ *
+ * All recipients go on one message rather than one message each, so a reply
+ * keeps the whole team on the thread.
+ *
+ * Swallows every failure by design: the contact row is already saved, and the
+ * visitor must not see an error because the site owner's mail provider is
+ * misconfigured. Failures are logged for the server logs instead.
+ */
+async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) {
+  try {
+    const alertTo = await getContactAlertEmails(projectId);
+    if (!alertTo.length) return;
+
+    const projectResult = await getPublicProjectById(projectId);
+    const siteName = String(projectResult?.data?.name || '').trim() || 'your site';
+
+    const rows = [];
+    if (email) rows.push(['Email', email]);
+    for (const [key, value] of Object.entries(data || {})) {
+      const text = String(value ?? '').trim();
+      if (!text) continue;
+      if (key === 'email' && email) continue;
+      rows.push([humanizeFieldKey(key), text]);
+    }
+    if (!rows.length) rows.push(['(no details submitted)', '']);
+
+    const textBody = [
+      `New contact form submission on ${siteName}.`,
+      '',
+      ...rows.map(([label, value]) => `${label}: ${value}`),
+      '',
+      isDuplicate
+        ? 'Note: this email address was already in your contacts, so no new record was created.'
+        : 'This has been saved to your Contact Manager.',
+    ].join('\n');
+
+    const htmlRows = rows.map(([label, value]) => `
+      <tr>
+        <td style="padding: 6px 12px 6px 0; color: #587592; font-size: 13px; vertical-align: top; white-space: nowrap;">${escapeHtml(label)}</td>
+        <td style="padding: 6px 0; color: #18324a; font-size: 14px;">${escapeHtml(value)}</td>
+      </tr>`).join('');
+
+    const mail = await sendEmail({
+      to: alertTo,
+      fromName: siteName,
+      replyTo: email || undefined,
+      subject: `New contact form submission — ${siteName}`,
+      text: textBody,
+      html: `
+        <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18324a;">
+          <h2 style="margin: 0 0 16px;">New contact form submission</h2>
+          <table style="border-collapse: collapse;">${htmlRows}</table>
+          <p style="margin: 20px 0 0; color: #587592; font-size: 13px;">
+            ${isDuplicate
+              ? 'This email address was already in your contacts, so no new record was created.'
+              : 'This has been saved to your Contact Manager.'}
+          </p>
+        </div>
+      `,
+    });
+
+    if (!mail.ok) {
+      console.error('[crm] Contact alert email failed:', mail.error);
+    }
+  } catch (err) {
+    console.error('[crm] Contact alert email threw:', err?.message || err);
+  }
+}
+
+/**
+ * The form a public submission names, inside the project the request resolved
+ * to. A form id from another project — or another CRM — reads as no form at
+ * all: its message and redirect must never apply to someone else's site. Any
+ * failure here also reads as no form, so the visitor still gets today's
+ * answer rather than an error (task 86bcwy44f).
+ */
+async function loadSubmittedForm(crmFormId, crmConfigId, projectId) {
+  const id = String(crmFormId || '').trim();
+  if (!id) return null;
+  try {
+    const form = await getForm(id, { projectId, userId: '' });
+    if (!form) return null;
+    if (form.projectId && form.projectId !== projectId) return null;
+    if (form.crmConfigId && crmConfigId && form.crmConfigId !== crmConfigId) return null;
+    return form;
+  } catch (err) {
+    console.error('[crm] Loading the submitted form failed:', err?.message || err);
+    return null;
+  }
 }
 
 async function handle(req, res, pathname, method) {
@@ -91,18 +204,41 @@ async function handle(req, res, pathname, method) {
     // system host the body's projectId is otherwise an unverified claim.
     const bind = await resolvePublicProjectForRequest(req, body.projectId);
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
-    // Contact, submission row, team alert, visitor confirmation — and the
-    // form's OWN success message and redirect, not a fixed sentence
-    // (task 86bcwy44f). lib/crmFormSubmit.js.
-    const outcome = await processPublicSubmission({
-      crmConfigId,
-      crmFormId: String(body.crm_form_id || body.crmFormId || '').trim(),
-      projectId: bind.projectId,
-      email: String(body.email || '').trim().toLowerCase() || null,
-      data: (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) ? body.data : {},
-      source: String(body.source || 'form').trim(),
-      pageUrl: String(body.pageUrl || '').trim(),
+    const scopedProjectId = bind.projectId;
+    const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
+    const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
+    let stored = true;
+    try {
+      await createContact({
+        crmConfigId,
+        email: submittedEmail,
+        data: submittedData,
+        source: String(body.source || 'form').trim(),
+        tags: [],
+      }, { projectId: scopedProjectId, userId: '' });
+    } catch (err) {
+      if (err.code !== 'DUPLICATE_EMAIL') throw err;
+      stored = false;
+    }
+
+    // Notify the project's internal Contact Alert Email, if one is set on the
+    // Settings page. Awaited rather than fire-and-forget: on Vercel the lambda
+    // freezes as soon as the response is sent, which silently kills in-flight
+    // work (see docs — that is what truncated Header/Footer propagation).
+    // Deliberately never fails the submission — the visitor's data is already
+    // saved, so a mail problem must not show them an error.
+    await notifyContactAlertEmail({
+      projectId: scopedProjectId,
+      email: submittedEmail,
+      data: submittedData,
+      isDuplicate: !stored,
     });
+
+    // The form's OWN success message, and where it sends the visitor — not a
+    // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
+    // here, answers exactly as before.
+    const form = await loadSubmittedForm(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
+    const outcome = submitSuccessResponse(form);
     return sendOk(res, 200, outcome, outcome), true;
   }
 
@@ -177,13 +313,7 @@ async function handle(req, res, pathname, method) {
       crmConfigId = configs[0]?.id || '';
     }
     if (!crmConfigId) return sendOk(res, 200, [], { forms: [] }, { total: 0 }), true;
-    const listed = await listForms(crmConfigId, scope);
-    // Each form's submission count. A count that could not be read is null,
-    // not 0 — the Forms list says "could not count" rather than "0".
-    const counts = scope.projectId
-      ? await countSubmissionsByForm(listed.map((f) => f.id), scope)
-      : { ok: false, data: {} };
-    const forms = listed.map((f) => ({ ...f, submissionCount: counts.ok ? (counts.data[f.id] ?? 0) : null }));
+    const forms = await listForms(crmConfigId, scope);
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -224,26 +354,9 @@ async function handle(req, res, pathname, method) {
   if (formMatch && method === 'GET') {
     // Public — needed to render CRM forms on public landing pages
     const id = decodeURIComponent(formMatch[1]);
-    const found = await getForm(id, { projectId: '', userId: '' });
-    if (!found) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
-    // Anyone can read a form by id — a published page has to. The team's alert
-    // addresses and the confirmation wording are not theirs to read, so a
-    // request with no signed-in user gets only where the form sends visitors.
-    const form = req.authUser ? found : { ...found, handling: publicFormHandling(found.handling) };
-    return sendOk(res, 200, form, { form }), true;
-  }
-
-  const submissionsMatch = pathname.match(/^\/api\/crm\/forms\/([^/]+)\/submissions$/);
-  if (submissionsMatch && method === 'GET') {
-    const id = decodeURIComponent(submissionsMatch[1]);
-    const scope = requestScope(req);
-    const form = await getForm(id, scope);
+    const form = await getForm(id, { projectId: '', userId: '' });
     if (!form) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
-    const result = await listSubmissions(id, { projectId: form.projectId || scope.projectId });
-    if (!result.ok) {
-      return sendErr(res, result.status || 500, `Could not read this form's submissions: ${result.error}`, { code: 'CRM_SUBMISSIONS_READ_FAILED' }), true;
-    }
-    return sendOk(res, 200, result.data, { submissions: result.data }, { total: result.data.length }), true;
+    return sendOk(res, 200, form, { form }), true;
   }
 
   if (formMatch && method === 'PUT') {

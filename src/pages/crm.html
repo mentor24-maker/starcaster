@@ -33,13 +33,6 @@
               <button type="button" id="crmCreateFormBtn" class="btn btn-primary">+ New Form</button>
             </div>
             <div id="crmFormsList"></div>
-            <div id="crmFormSubmissionsView" class="hidden">
-              <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
-                <button type="button" id="crmFormSubmissionsBackBtn" class="btn">← All forms</button>
-              </div>
-              <h3 id="crmFormSubmissionsTitle" class="crm-form-editor-col-title">Submissions</h3>
-              <div id="crmFormSubmissionsBody"></div>
-            </div>
           </div>
 
           <div id="crmFieldsPanel" class="hidden">
@@ -158,37 +151,6 @@
                     <span>Address</span>
                     <input type="text" id="crmFormEditorRedirectUrl" placeholder="/thank-you or https://…" />
                   </label>
-                </div>
-              </section>
-
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorAlertsTitle">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorAlertsTitle">Team alerts</h3>
-                <label class="field crm-form-editor-setting">
-                  <span>Alert these addresses <span class="meta">(optional — separate with commas)</span></span>
-                  <input type="text" id="crmFormEditorAlertEmails" placeholder="Blank: the Contact Alert Email from Settings" />
-                </label>
-                <label class="field crm-form-editor-setting">
-                  <span>Alert subject <span class="meta">(optional)</span></span>
-                  <input type="text" id="crmFormEditorAlertSubject" placeholder="New contact form submission — your site" />
-                </label>
-              </section>
-
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorConfirmTitle">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorConfirmTitle">Confirmation email</h3>
-                <label class="crm-form-editor-setting crm-form-editor-checkbox-row">
-                  <input type="checkbox" id="crmFormEditorConfirmEnabled" class="standard-form-checkbox" />
-                  <span>Email the visitor a confirmation <span class="meta">(only when the form asks for their email)</span></span>
-                </label>
-                <div id="crmFormEditorConfirmFields" class="hidden">
-                  <label class="field crm-form-editor-setting">
-                    <span>Subject</span>
-                    <input type="text" id="crmFormEditorConfirmSubject" placeholder="We got your message" />
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Message</span>
-                    <textarea id="crmFormEditorConfirmBody" rows="5" placeholder="Hi {{first_name}}, thanks for getting in touch — we'll reply within a day."></textarea>
-                  </label>
-                  <p class="meta">Use <code>{{first_name}}</code>, <code>{{email}}</code> or any field's key to fill in what the visitor typed.</p>
                 </div>
               </section>
 

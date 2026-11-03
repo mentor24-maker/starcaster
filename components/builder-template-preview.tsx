@@ -638,7 +638,6 @@ function CrmFormPreview({
           crmConfigId: form?.crmConfigId ?? "",
           crm_form_id: crmFormId,
           projectId,
-          pageUrl: typeof window !== "undefined" ? window.location.pathname + window.location.search : "",
           _trap: honeypot
         })
       });

@@ -1269,7 +1269,6 @@ App.crm = (function () {
   async function openFormsView() {
     activeCrmTab = 'forms';
     showPanel('crmFormsPanel');
-    showFormsListView();
 
     const btn = el('crmCreateFormBtn');
     if (btn) btn.onclick = () => openFormEditor(null);
@@ -1302,10 +1301,9 @@ App.crm = (function () {
           <div>
             <strong style="font-size:1.05rem;">${escHtml(f.name)}</strong>
             ${f.heading ? `<span class="meta" style="margin-left:0.5rem;">— ${escHtml(f.heading)}</span>` : ''}
-            <div class="meta" style="margin-top:0.2rem;">${f.fields.length} field${f.fields.length !== 1 ? 's' : ''} · Submit: "${escHtml(f.submitLabel)}" · ${escHtml(submissionCountLabel(f.submissionCount))}</div>
+            <div class="meta" style="margin-top:0.2rem;">${f.fields.length} field${f.fields.length !== 1 ? 's' : ''} · Submit: "${escHtml(f.submitLabel)}"</div>
           </div>
           <div style="display:flex; gap:0.5rem; flex-shrink:0;">
-            <button class="btn" data-view-submissions="${f.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem;">Submissions</button>
             <button class="btn" data-view-embed="${f.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem;">Embed Code</button>
             <button class="btn" data-edit-form="${f.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem;">Edit</button>
             <button class="btn" data-delete-form="${f.id}" style="padding:0.25rem 0.6rem; font-size:0.8rem;">Delete</button>
@@ -1314,12 +1312,6 @@ App.crm = (function () {
       </div>
     `).join('');
 
-    container.querySelectorAll('[data-view-submissions]').forEach((btn) => {
-      btn.onclick = () => {
-        const form = currentForms.find((f) => f.id === btn.dataset.viewSubmissions);
-        if (form) openFormSubmissions(form);
-      };
-    });
     container.querySelectorAll('[data-view-embed]').forEach((btn) => {
       btn.onclick = () => {
         const form = currentForms.find((f) => f.id === btn.dataset.viewEmbed);
@@ -1335,75 +1327,7 @@ App.crm = (function () {
     });
   }
 
-  // ── Form submissions (86bcwy44f) ────────────────────────────────────────────
-  // A count the server could not read arrives as null and says so, rather than
-  // reading as "0 submissions" (CLAUDE.md landmine 17).
-  function submissionCountLabel(count) {
-    if (count === null || count === undefined) return 'submissions could not be counted';
-    return `${count} submission${count === 1 ? '' : 's'}`;
-  }
-
-  function showFormsListView() {
-    el('crmFormsList')?.classList.remove('hidden');
-    el('crmCreateFormBtn')?.closest('.page-heading-actions')?.classList.remove('hidden');
-    el('crmFormSubmissionsView')?.classList.add('hidden');
-  }
-
-  function formatSubmissionDate(value) {
-    const date = new Date(value || '');
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
-  }
-
-  function submissionFieldsMarkup(form, data) {
-    const labels = new Map((form.fields || []).map((f) => [f.key, f.label || f.key]));
-    const entries = Object.entries(data || {}).filter(([, value]) => String(value ?? '').trim());
-    if (!entries.length) return '<span class="meta">(no other fields)</span>';
-    return entries.map(([key, value]) => `<div><strong>${escHtml(labels.get(key) || key)}:</strong> ${escHtml(String(value))}</div>`).join('');
-  }
-
-  async function openFormSubmissions(form) {
-    el('crmFormsList')?.classList.add('hidden');
-    el('crmCreateFormBtn')?.closest('.page-heading-actions')?.classList.add('hidden');
-    const view = el('crmFormSubmissionsView');
-    const body = el('crmFormSubmissionsBody');
-    if (!view || !body) return;
-    view.classList.remove('hidden');
-    const back = el('crmFormSubmissionsBackBtn');
-    if (back) back.onclick = () => showFormsListView();
-    const title = el('crmFormSubmissionsTitle');
-    if (title) title.textContent = `Submissions: ${form.name || 'Form'}`;
-    body.innerHTML = '<p class="meta">Loading submissions…</p>';
-
-    let rows;
-    try {
-      const res = await api(`/api/crm/forms/${encodeURIComponent(form.id)}/submissions`);
-      rows = App.normalizeApiArray(res, 'submissions');
-    } catch (err) {
-      body.innerHTML = `<p class="meta">Could not load this form's submissions: ${escHtml(err.message || 'unknown error')}</p>`;
-      return;
-    }
-    if (!rows.length) {
-      body.innerHTML = `<p class="meta">No submissions to "${escHtml(form.name || 'this form')}" yet. Submissions are kept from the day this list was added; earlier ones are in Contacts.</p>`;
-      return;
-    }
-    body.innerHTML = `
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead><tr><th>Date</th><th>Email</th><th>Page</th><th>Fields</th></tr></thead>
-          <tbody>
-            ${rows.map((row) => `
-              <tr>
-                <td style="white-space:nowrap;">${escHtml(formatSubmissionDate(row.createdAt))}</td>
-                <td>${escHtml(row.email || '—')}</td>
-                <td>${escHtml(row.pageUrl || '—')}</td>
-                <td>${submissionFieldsMarkup(form, row.data)}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-  }
-
-  // ── After submit, team alerts, confirmation email (86bcwy44f) ───────────────
+  // ── After submit: show the message or go to a page (86bcwy44f) ──────────────
   function pagePath(page) {
     const slug = safeText(page?.slug).replace(/^\/+/, '');
     return `/${slug}`;
@@ -1412,8 +1336,6 @@ App.crm = (function () {
   function syncFormHandlingVisibility() {
     const redirect = el('crmFormEditorAfterSubmit')?.value === 'redirect';
     el('crmFormEditorRedirectFields')?.classList.toggle('hidden', !redirect);
-    const confirm = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
-    el('crmFormEditorConfirmFields')?.classList.toggle('hidden', !confirm);
   }
 
   function populateFormHandlingEditor(form) {
@@ -1435,15 +1357,8 @@ App.crm = (function () {
     }
     if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = h.afterSubmit === 'redirect' ? 'redirect' : 'message';
     if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = h.redirectUrl || '';
-    if (el('crmFormEditorAlertEmails')) el('crmFormEditorAlertEmails').value = Array.isArray(h.alertEmails) ? h.alertEmails.join(', ') : '';
-    if (el('crmFormEditorAlertSubject')) el('crmFormEditorAlertSubject').value = h.alertSubject || '';
-    if (el('crmFormEditorConfirmEnabled')) el('crmFormEditorConfirmEnabled').checked = h.confirmationEnabled === true;
-    if (el('crmFormEditorConfirmSubject')) el('crmFormEditorConfirmSubject').value = h.confirmationSubject || '';
-    if (el('crmFormEditorConfirmBody')) el('crmFormEditorConfirmBody').value = h.confirmationBody || '';
     const afterSelect = el('crmFormEditorAfterSubmit');
     if (afterSelect) afterSelect.onchange = syncFormHandlingVisibility;
-    const confirmBox = el('crmFormEditorConfirmEnabled');
-    if (confirmBox) confirmBox.onchange = syncFormHandlingVisibility;
     syncFormHandlingVisibility();
   }
 
@@ -1457,19 +1372,10 @@ App.crm = (function () {
     if (redirectUrl && !/^\/(?![\/\\])/.test(redirectUrl) && !/^https?:\/\//i.test(redirectUrl)) {
       return 'The After submit address must start with "/" (a page on this site) or "https://".';
     }
-    const confirmationEnabled = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
-    if (confirmationEnabled && !formEditorFieldRows.some((row) => row.selected && row.key === 'email')) {
-      return 'A confirmation email needs the Email field on the form — add it, or turn the confirmation off.';
-    }
     return {
       afterSubmit,
       redirectUrl,
       redirectPageId: el('crmFormEditorRedirectPage')?.value || '',
-      alertEmails: el('crmFormEditorAlertEmails')?.value || '',
-      alertSubject: el('crmFormEditorAlertSubject')?.value.trim() || '',
-      confirmationEnabled,
-      confirmationSubject: el('crmFormEditorConfirmSubject')?.value.trim() || '',
-      confirmationBody: el('crmFormEditorConfirmBody')?.value || '',
     };
   }
 
@@ -1777,7 +1683,7 @@ ${fieldHtml}
     new FormData(form).forEach(function(v,k){data[k]=v;});
     fetch('${origin}/api/crm/contact-submit',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({crmConfigId:data.crmConfigId,crm_form_id:'${escHtml(form.id)}',projectId:data.projectId,_trap:data._trap||'',email:data.email||'',data:data,source:'form',pageUrl:location.pathname+location.search})
+      body:JSON.stringify({crmConfigId:data.crmConfigId,crm_form_id:'${escHtml(form.id)}',projectId:data.projectId,_trap:data._trap||'',email:data.email||'',data:data,source:'form'})
     }).then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error('submit failed');return b;});}).then(function(b){
       var go=b&&(b.redirectUrl||(b.data&&b.data.redirectUrl));
       // Same rule as the live module: a same-site path or an http(s) address.

@@ -1,15 +1,13 @@
 'use strict';
 
 /**
- * CRM form handling (Loop Queue 86bcwy44f): every submission kept, the form's
- * own success message and redirect, per-form team alerts, the visitor's
- * confirmation email — and forms with none of the new settings behaving
+ * CRM form handling, slice B (Loop Queue 86bcwy44f): the form's own success
+ * message, and "After submit: go to a page" — kept inside the form's existing
+ * `fields` list, so no database change — with forms that set nothing behaving
  * exactly as before.
  *
  * The submit endpoint is driven through routes/crm.js with an in-memory
- * database standing in for Supabase, so the duplicate-email case is checked by
- * READING THE SUBMISSION ROWS BACK, not by trusting the insert (CLAUDE.md
- * landmine 12: a scoped insert can succeed and still land with no tenant).
+ * database and contact list standing in for Supabase.
  */
 
 const test = require('node:test');
@@ -24,10 +22,7 @@ const FORM_OWNER = 'user_owner_1';
 // ── Pure rules ───────────────────────────────────────────────────────────────
 
 test('a form with no handling reads as today\'s behaviour', () => {
-  const h = handling.normalizeFormHandling(undefined);
-  assert.equal(h.afterSubmit, 'message');
-  assert.deepEqual(h.alertEmails, []);
-  assert.equal(h.confirmationEnabled, false);
+  assert.deepEqual(handling.normalizeFormHandling(undefined), { afterSubmit: 'message', redirectUrl: '', redirectPageId: '' });
   assert.equal(handling.isDefaultHandling(undefined), true);
   assert.deepEqual(handling.submitSuccessResponse({ successMessage: '' }), {
     message: handling.DEFAULT_SUCCESS_MESSAGE,
@@ -44,48 +39,54 @@ test('redirect is honoured only with a safe address', () => {
   }
 });
 
-test('alert list: the form\'s own addresses, else the project\'s', () => {
-  const own = { handling: { alertEmails: 'Sales@Example.com, bad-address, ops@example.com; sales@example.com' } };
-  assert.deepEqual(handling.resolveAlertRecipients(own, ['owner@example.com']), ['sales@example.com', 'ops@example.com']);
-  assert.deepEqual(handling.resolveAlertRecipients({ handling: {} }, ['owner@example.com']), ['owner@example.com']);
-  assert.deepEqual(handling.resolveAlertRecipients(null, []), []);
+// ── Where it is kept: inside `fields`, no column ─────────────────────────────
+
+const META = handling.CRM_FORM_HANDLING_META_KEY;
+const REDIRECT = { afterSubmit: 'redirect', redirectUrl: '/thank-you', redirectPageId: 'pg_9' };
+const FIELDS = [{ key: 'email', label: 'Email', type: 'email', required: true }];
+
+test('forms store: the redirect rides inside fields, never as its own column', () => {
+  const { formInputToRow } = require('../../lib/crmFormsStore.js');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true });
+  assert.equal('handling' in row, false, 'a handling column would need SQL that option B does not have');
+  const metas = row.fields.filter((f) => f.key === META);
+  assert.equal(metas.length, 1);
+  assert.deepEqual(metas[0].handling, REDIRECT);
+  assert.ok(row.fields.some((f) => f.key === '__crm_form_styles__'), 'the styles entry is kept alongside');
 });
 
-test('placeholders fill from the submission; unknown ones go blank', () => {
-  assert.equal(
-    handling.fillPlaceholders('Hi {{first_name}} ({{ email }}) {{nope}}!', { first_name: 'Ana', email: 'a@b.co' }),
-    'Hi Ana (a@b.co) !'
-  );
-});
-
-test('the public view of a form never carries the team\'s addresses', () => {
-  const pub = handling.publicFormHandling({
-    afterSubmit: 'redirect',
-    redirectUrl: '/thanks',
-    alertEmails: ['team@example.com'],
-    confirmationEnabled: true,
-    confirmationBody: 'secret wording',
-  });
-  assert.deepEqual(pub, { afterSubmit: 'redirect', redirectUrl: '/thanks' });
-});
-
-// ── The forms store's round trip ─────────────────────────────────────────────
-
-test('forms store: handling is written only when the caller sets it', () => {
+test('forms store: reading the row back gives the redirect, and no visitor-facing field for it', () => {
   const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
-  const form = { id: 'f1', crmConfigId: 'c1', name: 'Contact', handling: { afterSubmit: 'redirect', redirectUrl: '/thanks' } };
-  assert.equal('handling' in formInputToRow(form), false, 'a save that does not touch handling must not write the column');
-  const row = formInputToRow(form, { includeHandling: true });
-  assert.equal(row.handling.redirectUrl, '/thanks');
-  assert.equal(sanitizeForm({ ...row, handling: row.handling }).handling.afterSubmit, 'redirect');
-  assert.equal(sanitizeForm({ id: 'old' }).handling.afterSubmit, 'message', 'a row from before the column reads as defaults');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true });
+  const form = sanitizeForm(row);
+  assert.deepEqual(form.handling, REDIRECT);
+  assert.deepEqual(form.fields.map((f) => f.key), ['email']);
+});
+
+test('forms store: a save that does not touch After submit keeps it (Form Appearance panel, rename)', () => {
+  const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
+  const stored = sanitizeForm(formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true }));
+  // What updateForm does: merge the patch onto the stored form, write it again.
+  const rewritten = formInputToRow(sanitizeForm({ ...stored, name: 'Renamed', styles: { buttonBg: '#ff0000' } }), { includeStylesMeta: true });
+  assert.deepEqual(sanitizeForm(rewritten).handling, REDIRECT);
+  assert.equal(rewritten.fields.filter((f) => f.key === META).length, 1, 'never doubled');
+});
+
+test('forms store: a form with no After submit setting stores exactly the fields it did before', () => {
+  const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS }, { includeStylesMeta: true });
+  assert.equal(row.fields.some((f) => f.key === META), false);
+  assert.equal(sanitizeForm({ id: 'old', fields: FIELDS }).handling.afterSubmit, 'message', 'a form from before reads as defaults');
+  // Switching back to "Show message" with no page removes the entry again.
+  const cleared = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: [...FIELDS, { key: META, type: 'meta', handling: REDIRECT }], handling: {} }, { includeStylesMeta: true });
+  assert.equal(cleared.fields.some((f) => f.key === META), false);
 });
 
 // ── The submit endpoint, end to end ──────────────────────────────────────────
 
 /** An in-memory PostgREST: just enough of eq / in / order for these stores. */
 function fakeDatabase() {
-  const tables = { app_projects: [{ id: PROJECT_ID, name: 'Tenant Site', domain: PROJECT_DOMAIN }], crm_form_submissions: [] };
+  const tables = { app_projects: [{ id: PROJECT_ID, name: 'Tenant Site', domain: PROJECT_DOMAIN }] };
   const calls = [];
   function parse(query) {
     const filters = [];
@@ -104,7 +105,7 @@ function fakeDatabase() {
     calls,
     module: {
       isConfigured: () => true,
-      tableConfig: () => ({ crmFormSubmissions: 'crm_form_submissions' }),
+      tableConfig: () => ({}),
       sbQuery: async (options) => {
         calls.push(options);
         const table = options.table;
@@ -115,10 +116,7 @@ function fakeDatabase() {
           return { ok: true, status: 201, data: rows };
         }
         const filters = parse(options.query);
-        let rows = tables[table].filter((row) => filters.every((f) => f(row)));
-        if (/order=created_at\.desc/.test(options.query || '')) {
-          rows = rows.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-        }
+        const rows = tables[table].filter((row) => filters.every((f) => f(row)));
         return { ok: true, status: 200, data: rows };
       },
     },
@@ -127,8 +125,6 @@ function fakeDatabase() {
 
 const RELOAD = [
   'routes/crm.js',
-  'lib/crmFormSubmit.js',
-  'lib/crmFormSubmissionsStore.js',
   'lib/projectScope.js',
   'lib/projectsStore.js',
   'lib/publicSiteHostBinding.js',
@@ -160,7 +156,6 @@ function loadRoute({ form = null, projectAlertEmails = [] } = {}) {
       contacts.push(created);
       return created;
     },
-    findContactByEmail: async (_config, email) => contacts.find((c) => c.email === email) || null,
     listContacts: async () => contacts,
     getContact: async () => null,
     updateContact: async () => null,
@@ -223,7 +218,6 @@ function submit(route, overrides = {}) {
       projectId: PROJECT_ID,
       email: 'Visitor@Example.com',
       data: { first_name: 'Ana', message: 'Call me' },
-      pageUrl: '/contact',
       ...overrides,
     },
   });
@@ -255,33 +249,6 @@ test('submit answers with the FORM\'s success message, not a fixed sentence', as
   }
 });
 
-test('the same email twice: ONE contact, TWO submission rows, both tenanted', async () => {
-  const { route, db, contacts, restore } = loadRoute({ form: baseForm({}) });
-  try {
-    assert.equal((await submit(route)).status, 200);
-    assert.equal((await submit(route, { data: { first_name: 'Ana', message: 'Second message' } })).status, 200);
-    assert.equal(contacts.length, 1, 'a returning visitor is not a second contact');
-    assert.equal(contacts[0].source, 'Form: Contact us', "the contact's source names the form");
-
-    // Read the rows back the way the Submissions list does.
-    const read = await db.module.sbQuery({
-      table: 'crm_form_submissions',
-      query: `select=*&crm_form_id=eq.form_1&project_id=eq.${PROJECT_ID}`,
-    });
-    assert.equal(read.data.length, 2, 'the second submission is kept, not thrown away');
-    for (const row of read.data) {
-      assert.equal(row.project_id, PROJECT_ID);
-      assert.equal(row.owner_user_id, FORM_OWNER);
-      assert.equal(row.crm_contact_id, contacts[0].id, 'both rows link to the one contact');
-      assert.equal(row.email, 'visitor@example.com');
-      assert.equal(row.page_url, '/contact');
-    }
-    assert.deepEqual(read.data.map((r) => r.data.message).sort(), ['Call me', 'Second message']);
-  } finally {
-    restore();
-  }
-});
-
 test('a redirect form answers with where to send the visitor', async () => {
   const { route, restore } = loadRoute({ form: baseForm({ afterSubmit: 'redirect', redirectUrl: '/thank-you' }) });
   try {
@@ -293,62 +260,29 @@ test('a redirect form answers with where to send the visitor', async () => {
   }
 });
 
-test('team alerts: a form\'s own list replaces the project\'s; none falls back', async () => {
-  const own = loadRoute({ form: baseForm({ alertEmails: ['sales@example.com'], alertSubject: 'Lead from {{first_name}}' }), projectAlertEmails: ['owner@example.com'] });
+test('a returning visitor (same email twice) still gets the form\'s answer both times', async () => {
+  const { route, contacts, restore } = loadRoute({ form: baseForm({ afterSubmit: 'redirect', redirectUrl: '/thank-you' }) });
   try {
-    await submit(own.route);
-    const alerts = own.mail.filter((m) => m.to.includes('sales@example.com') || m.to.includes('owner@example.com'));
-    assert.equal(alerts.length, 1);
-    assert.deepEqual(alerts[0].to, ['sales@example.com'], 'only the form\'s addresses');
-    assert.equal(alerts[0].subject, 'Lead from Ana');
+    const first = await submit(route);
+    const second = await submit(route);
+    assert.equal(contacts.length, 1);
+    assert.equal(second.status, 200);
+    assert.equal(first.payload.redirectUrl, '/thank-you');
+    assert.equal(second.payload.redirectUrl, '/thank-you');
   } finally {
-    own.restore();
-  }
-
-  const fallback = loadRoute({ form: baseForm({}), projectAlertEmails: ['owner@example.com'] });
-  try {
-    await submit(fallback.route);
-    assert.equal(fallback.mail.length, 1, 'confirmation is off, so only the alert goes out');
-    assert.deepEqual(fallback.mail[0].to, ['owner@example.com']);
-    assert.equal(fallback.mail[0].subject, 'New contact form submission — Tenant Site');
-  } finally {
-    fallback.restore();
-  }
-});
-
-test('confirmation on: the visitor gets it with placeholders filled; off: nothing', async () => {
-  const on = loadRoute({
-    form: baseForm({ confirmationEnabled: true, confirmationSubject: 'We got your message', confirmationBody: 'Hi {{first_name}}, thanks!' }),
-  });
-  try {
-    await submit(on.route);
-    const toVisitor = on.mail.filter((m) => (Array.isArray(m.to) ? m.to : [m.to]).includes('visitor@example.com'));
-    assert.equal(toVisitor.length, 1);
-    assert.equal(toVisitor[0].subject, 'We got your message');
-    assert.equal(toVisitor[0].text, 'Hi Ana, thanks!');
-  } finally {
-    on.restore();
-  }
-
-  const off = loadRoute({ form: baseForm({ confirmationEnabled: false, confirmationSubject: 'unused' }) });
-  try {
-    await submit(off.route);
-    assert.equal(off.mail.length, 0, 'no alert list and no confirmation means no mail at all');
-  } finally {
-    off.restore();
+    restore();
   }
 });
 
 test('a submit with no form id behaves exactly as before', async () => {
-  const { route, db, contacts, mail, restore } = loadRoute({ form: baseForm({}), projectAlertEmails: ['owner@example.com'] });
+  const { route, contacts, mail, restore } = loadRoute({ form: baseForm({ afterSubmit: 'redirect', redirectUrl: '/thank-you' }), projectAlertEmails: ['owner@example.com'] });
   try {
     const { status, payload } = await submit(route, { crm_form_id: undefined });
     assert.equal(status, 200);
     assert.equal(payload.message, handling.DEFAULT_SUCCESS_MESSAGE);
     assert.equal(payload.redirectUrl, '');
     assert.equal(contacts[0].source, 'form');
-    assert.equal(db.tables.crm_form_submissions.length, 0);
-    assert.deepEqual(mail.map((m) => m.to), [['owner@example.com']]);
+    assert.deepEqual(mail.map((m) => m.to), [['owner@example.com']], 'the project alert still goes out');
   } finally {
     restore();
   }
@@ -356,40 +290,11 @@ test('a submit with no form id behaves exactly as before', async () => {
 
 test('a form id from another project is ignored, not obeyed', async () => {
   const foreign = { ...baseForm({ afterSubmit: 'redirect', redirectUrl: '/elsewhere' }), projectId: 'proj_other' };
-  const { route, db, restore } = loadRoute({ form: foreign });
+  const { route, restore } = loadRoute({ form: foreign });
   try {
     const { payload } = await submit(route);
     assert.equal(payload.redirectUrl, '');
-    assert.equal(db.tables.crm_form_submissions.length, 0);
-  } finally {
-    restore();
-  }
-});
-
-test('public GET of a form hides the team\'s addresses; a signed-in user sees them', async () => {
-  const form = baseForm({ alertEmails: ['team@example.com'], confirmationEnabled: true, confirmationBody: 'x' });
-  const { route, restore } = loadRoute({ form });
-  try {
-    const anon = await call(route, 'GET', '/api/crm/forms/form_1');
-    assert.deepEqual(anon.payload.form.handling, { afterSubmit: 'message', redirectUrl: '' });
-    const admin = await call(route, 'GET', '/api/crm/forms/form_1', { authUser: { id: 'u1' } });
-    assert.deepEqual(admin.payload.form.handling.alertEmails, ['team@example.com']);
-  } finally {
-    restore();
-  }
-});
-
-test('Forms list carries each form\'s submission count, and Submissions lists newest first', async () => {
-  const { route, restore } = loadRoute({ form: baseForm({}) });
-  try {
-    await submit(route, { data: { message: 'first' } });
-    await new Promise((r) => setTimeout(r, 5));
-    await submit(route, { data: { message: 'second' } });
-    const list = await call(route, 'GET', '/api/crm/forms?configId=cfg_1', { authUser: { id: 'u1' } });
-    assert.equal(list.payload.forms[0].submissionCount, 2);
-    const subs = await call(route, 'GET', '/api/crm/forms/form_1/submissions', { authUser: { id: 'u1' } });
-    assert.equal(subs.status, 200);
-    assert.deepEqual(subs.payload.submissions.map((s) => s.data.message), ['second', 'first']);
+    assert.equal(payload.message, handling.DEFAULT_SUCCESS_MESSAGE);
   } finally {
     restore();
   }

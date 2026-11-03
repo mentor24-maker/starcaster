@@ -186,21 +186,6 @@
   margin-bottom: 0.75rem;
 }
 
-/* "Email the visitor a confirmation": box left, words right (86bcwy44f). The
-   block rule above would otherwise stack the box over its label. */
-.crm-form-editor-col-settings .crm-form-editor-checkbox-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-.crm-form-editor-col-settings .crm-form-editor-checkbox-row input[type="checkbox"] {
-  flex: 0 0 auto;
-  width: auto;
-  min-height: 0;
-  margin: 0.2rem 0 0;
-}
-
 .crm-form-editor-col-settings input[type="color"] {
   width: 100%;
   min-height: 42px;
