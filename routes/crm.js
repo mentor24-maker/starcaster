@@ -11,6 +11,7 @@ const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
 const { normalizeFormHandling, submitSuccessResponse, confirmationSettingsProblem } = require('../lib/crmFormHandling');
 const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
+const { clientIp } = require('../lib/rateLimiter');
 
 function requestScope(req) {
   return {
@@ -241,7 +242,7 @@ async function handle(req, res, pathname, method) {
     const form = await loadSubmittedForm(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
     // The visitor's confirmation, when the form has one on (task 86bcx18bg).
     // Awaited for the same Vercel reason as the alert; never fails the submit.
-    await sendVisitorConfirmation({ projectId: scopedProjectId, form, email: submittedEmail, data: submittedData });
+    await sendVisitorConfirmation({ projectId: scopedProjectId, form, email: submittedEmail, data: submittedData, ip: clientIp(req) });
     const outcome = submitSuccessResponse(form);
     return sendOk(res, 200, outcome, outcome), true;
   }

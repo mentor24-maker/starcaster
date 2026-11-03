@@ -7,6 +7,10 @@ submit — with their own details filled in where the message says
 It only sends when the visitor gave an email address, a form without an Email
 field cannot have it switched on, and a mail problem never stops the
 submission from being saved. Forms nobody changes send nothing, as before.
+Because anyone on the internet can submit a form, the confirmation is also
+rationed: one per email address an hour and five per visitor's connection an
+hour. Past that the email is quietly skipped but the submission still goes
+through, so nobody can use a form to have our sending domain spam strangers.
 ## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
 
 The "Success Message" typed in a CRM form's editor now actually shows on the

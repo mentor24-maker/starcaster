@@ -132,6 +132,9 @@ function fakeDatabase() {
 
 const RELOAD = [
   'routes/crm.js',
+  // Fresh limiter counters per test: every test emails the same visitor.
+  'lib/rateLimiter.js',
+  'lib/crmFormConfirmation.js',
   'lib/projectScope.js',
   'lib/projectsStore.js',
   'lib/publicSiteHostBinding.js',
@@ -378,6 +381,53 @@ test('confirmation OFF: nothing is sent to the visitor', async () => {
     assert.equal(mail.filter((m) => m.to === 'visitor@example.com').length, 0);
     assert.equal(mail.length, 1, 'only the team alert');
   } finally {
+    restore();
+  }
+});
+
+test('two quick submissions to the same address send ONE confirmation, and both succeed', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    // Each call comes from a different client, so only the per-address
+    // limit can be what holds the later ones back.
+    const first = await submit(route);
+    const second = await submit(route);
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200, 'the submission itself still succeeds');
+    assert.equal(second.payload.message, "Thanks — we'll call you");
+    const toVisitor = mail.filter((m) => m.to === 'visitor@example.com');
+    assert.equal(toVisitor.length, 1, `one confirmation per address per hour, got ${toVisitor.length}`);
+  } finally {
+    console.warn = quiet;
+    restore();
+  }
+});
+
+test('one client cannot email a stream of different strangers', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    for (let i = 0; i < 20; i += 1) {
+      const res = { statusCode: 0, body: '', headers: {}, setHeader() {}, end(chunk) { this.body = chunk || ''; } };
+      const req = {
+        method: 'POST',
+        url: '/api/crm/contact-submit',
+        headers: { host: PROJECT_DOMAIN, 'user-agent': 'test-agent' },
+        socket: { remoteAddress: '203.0.113.9' },
+        body: { crmConfigId: 'cfg_1', crm_form_id: 'form_1', projectId: PROJECT_ID, email: `stranger${i}@example.com`, data: { first_name: 'X' } },
+      };
+      await route.handle(req, res, '/api/crm/contact-submit', 'POST');
+      assert.equal(res.statusCode, 200);
+    }
+    const toStrangers = mail.filter((m) => /^stranger\d+@/.test(m.to));
+    assert.ok(toStrangers.length >= 1 && toStrangers.length <= 5, `at most five per client per hour, got ${toStrangers.length}`);
+  } finally {
+    console.warn = quiet;
     restore();
   }
 });
