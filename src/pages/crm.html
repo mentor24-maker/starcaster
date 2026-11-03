@@ -138,6 +138,29 @@
                 <input type="text" id="crmFormEditorErrorMsg" placeholder="Something went wrong. Please try again." />
               </label>
 
+              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorAfterSubmitTitle">
+                <h3 class="crm-form-editor-section-title" id="crmFormEditorAfterSubmitTitle">After submit</h3>
+                <label class="field crm-form-editor-setting">
+                  <span>When a visitor submits</span>
+                  <select id="crmFormEditorAfterSubmit" class="crm-form-editor-select">
+                    <option value="message" selected>Show the success message</option>
+                    <option value="redirect">Go to a page</option>
+                  </select>
+                </label>
+                <div id="crmFormEditorRedirectFields" class="hidden">
+                  <label class="field crm-form-editor-setting">
+                    <span>Page</span>
+                    <select id="crmFormEditorRedirectPage" class="crm-form-editor-select">
+                      <option value="">Type an address below…</option>
+                    </select>
+                  </label>
+                  <label class="field crm-form-editor-setting">
+                    <span>Address</span>
+                    <input type="text" id="crmFormEditorRedirectUrl" placeholder="/thank-you or https://…" />
+                  </label>
+                </div>
+              </section>
+
               <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBackground">
                 <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleBackground">Background</h3>
                 <div class="field crm-form-editor-setting">

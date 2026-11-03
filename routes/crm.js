@@ -16,6 +16,7 @@ const {
   formForSubmission,
   contactSourceForForm,
 } = require('../lib/crmFormSubmissionsStore');
+const { normalizeFormHandling, submitSuccessResponse } = require('../lib/crmFormHandling');
 
 function requestScope(req) {
   return {
@@ -234,7 +235,12 @@ async function handle(req, res, pathname, method) {
       isDuplicate: !stored,
     });
 
-    return sendOk(res, 200, {}, { message: 'Thank you! Your information has been saved.' }), true;
+    // The form's OWN success message, and where it sends the visitor — not a
+    // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
+    // here, answers exactly as before. `form` was looked up above, scoped to
+    // this project, by formForSubmission.
+    const outcome = submitSuccessResponse(form);
+    return sendOk(res, 200, outcome, outcome), true;
   }
 
   if (pathname === '/api/crm/contacts' && method === 'GET') {
@@ -334,6 +340,7 @@ async function handle(req, res, pathname, method) {
       accentColor: String(body.accentColor || '').trim(),
       styles: body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles) ? body.styles : {},
       fields: Array.isArray(body.fields) ? body.fields : [],
+      handling: body.handling !== undefined ? normalizeFormHandling(body.handling) : undefined,
     }, requestScope(req));
     if (!created) {
       const detail = getLastFormStoreError();
@@ -398,6 +405,7 @@ async function handle(req, res, pathname, method) {
       patch.stylesPatch = body.stylesPatch;
     }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
+    if (body.handling !== undefined) patch.handling = normalizeFormHandling(body.handling);
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
       const detail = getLastFormStoreError();

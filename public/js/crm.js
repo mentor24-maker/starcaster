@@ -35,6 +35,8 @@ App.crm = (function () {
   const CRM_FORM_STYLES_META_KEY = '__crm_form_styles__';
 
   let formEditorThemePalette = null;
+  // The project's Builder pages, for the "Go to a page" picker (86bcwy44f).
+  let formEditorPages = [];
   let formEditorThemeTypography = null;
 
   const THEME_COLOR_TOKENS = {
@@ -262,6 +264,7 @@ App.crm = (function () {
       const pages = Array.isArray(pagesRes?.pages)
         ? pagesRes.pages
         : (Array.isArray(pagesRes?.data) ? pagesRes.data : []);
+      formEditorPages = pages;
       const editorTheme = pickFormEditorTheme(themes, pages);
       if (!editorTheme) {
         formEditorThemePalette = null;
@@ -1400,6 +1403,58 @@ App.crm = (function () {
       </div>`;
   }
 
+  // ── After submit: show the message or go to a page (86bcwy44f) ──────────────
+  function pagePath(page) {
+    const slug = safeText(page?.slug).replace(/^\/+/, '');
+    return `/${slug}`;
+  }
+
+  function syncFormHandlingVisibility() {
+    const redirect = el('crmFormEditorAfterSubmit')?.value === 'redirect';
+    el('crmFormEditorRedirectFields')?.classList.toggle('hidden', !redirect);
+  }
+
+  function populateFormHandlingEditor(form) {
+    const h = (form && form.handling && typeof form.handling === 'object') ? form.handling : {};
+    const pageSelect = el('crmFormEditorRedirectPage');
+    if (pageSelect) {
+      const pages = (Array.isArray(formEditorPages) ? formEditorPages : [])
+        .filter((page) => page && page.id)
+        .sort((a, b) => safeText(a.name || a.pageName || a.slug).localeCompare(safeText(b.name || b.pageName || b.slug)));
+      pageSelect.innerHTML = '<option value="">Type an address below…</option>' + pages.map((page) => (
+        `<option value="${escHtml(page.id)}" data-path="${escHtml(pagePath(page))}">${escHtml(safeText(page.name || page.pageName) || pagePath(page))} (${escHtml(pagePath(page))})</option>`
+      )).join('');
+      pageSelect.value = pages.some((page) => page.id === h.redirectPageId) ? h.redirectPageId : '';
+      pageSelect.onchange = () => {
+        const option = pageSelect.selectedOptions[0];
+        const path = option?.dataset?.path || '';
+        if (path && el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = path;
+      };
+    }
+    if (el('crmFormEditorAfterSubmit')) el('crmFormEditorAfterSubmit').value = h.afterSubmit === 'redirect' ? 'redirect' : 'message';
+    if (el('crmFormEditorRedirectUrl')) el('crmFormEditorRedirectUrl').value = h.redirectUrl || '';
+    const afterSelect = el('crmFormEditorAfterSubmit');
+    if (afterSelect) afterSelect.onchange = syncFormHandlingVisibility;
+    syncFormHandlingVisibility();
+  }
+
+  /** Returns the settings, or a string naming what is wrong with them. */
+  function readFormHandlingFromEditor() {
+    const afterSubmit = el('crmFormEditorAfterSubmit')?.value === 'redirect' ? 'redirect' : 'message';
+    const redirectUrl = el('crmFormEditorRedirectUrl')?.value.trim() || '';
+    if (afterSubmit === 'redirect' && !redirectUrl) {
+      return 'After submit is set to "Go to a page" — pick a page or type an address.';
+    }
+    if (redirectUrl && !/^\/(?![\/\\])/.test(redirectUrl) && !/^https?:\/\//i.test(redirectUrl)) {
+      return 'The After submit address must start with "/" (a page on this site) or "https://".';
+    }
+    return {
+      afterSubmit,
+      redirectUrl,
+      redirectPageId: el('crmFormEditorRedirectPage')?.value || '',
+    };
+  }
+
   function buildFormEditorFieldRows(allFields, form) {
     if (!form) {
       return allFields.map((f) => ({ ...f, selected: true }));
@@ -1705,7 +1760,12 @@ ${fieldHtml}
     fetch('${origin}/api/crm/contact-submit',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({crmConfigId:data.crmConfigId,crm_form_id:'${escHtml(form.id)}',projectId:data.projectId,_trap:data._trap||'',email:data.email||'',data:data,source:'form',pageUrl:location.pathname+location.search})
-    }).then(function(r){return r.json();}).then(function(){
+    }).then(function(r){return r.json().then(function(b){if(!r.ok)throw new Error('submit failed');return b;});}).then(function(b){
+      var go=b&&(b.redirectUrl||(b.data&&b.data.redirectUrl));
+      // Same rule as the live module: a same-site path or an http(s) address.
+      // No regex here — this sits inside a template literal, which eats backslashes.
+      var c1=go?go.charAt(1):'';
+      if(go&&((go.charAt(0)==='/'&&c1!=='/'&&c1!==String.fromCharCode(92))||go.indexOf('https://')===0||go.indexOf('http://')===0)){window.location.assign(go);return;}
       if(msg)msg.textContent='${escHtml(form.successMessage || 'Thank you!')}';
       form.reset();
     }).catch(function(){if(msg)msg.textContent='${escHtml(form.errorMessage || 'Something went wrong.')}';});
@@ -1742,6 +1802,7 @@ ${fieldHtml}
     if (el('crmFormEditorSuccessMsg'))  el('crmFormEditorSuccessMsg').value  = form?.successMessage || 'Thank you! Your information has been saved.';
     if (el('crmFormEditorErrorMsg'))    el('crmFormEditorErrorMsg').value    = form?.errorMessage || 'Something went wrong. Please try again.';
     await loadFormEditorTheme();
+    populateFormHandlingEditor(form);
     populateFormStylesEditor(form);
     bindFormColorPickers();
 
@@ -1844,6 +1905,9 @@ ${fieldHtml}
       return;
     }
 
+    const handling = readFormHandlingFromEditor();
+    if (typeof handling === 'string') { notify(handling, true); return; }
+
     const styles = readFormStylesFromEditor();
     const payload = {
       crmConfigId: currentConfig.id,
@@ -1855,6 +1919,7 @@ ${fieldHtml}
       accentColor: legacyAccentFromStyles(styles),
       styles,
       fields,
+      handling,
     };
 
     try {
