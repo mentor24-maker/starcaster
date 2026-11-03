@@ -23,6 +23,11 @@ const { cursorResource, STAGE_WATCH } = require('../../workers/studio/drive.js')
 const tickOnce = (opts) => daemon.tickOnce({ watchers: {}, ...opts });
 const runDaemon = (opts) => daemon.runDaemon({ watchers: {}, ...opts });
 
+// The Drive tests below are about the Drive watch, so they run it ALONE: the
+// cache sweep (workers/studio/evict.js) is the other default watcher and has
+// its own tests in studioEvict.test.js.
+const DRIVE_ONLY = { [STAGE_WATCH]: daemon.WATCHERS[STAGE_WATCH] };
+
 const OWNER = 'studio-test-1';
 
 function tmpdir(name) {
@@ -101,7 +106,7 @@ test('a new video in Inbox becomes exactly ONE ingest job, and a quiet Drive add
   const drive = fakeDrive({ files: [{ id: 'f1', name: 'wedding-wide.mov' }] });
   const spy = ingestSpy();
 
-  const first = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: spy.runners });
+  const first = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: spy.runners });
   assert.equal(ingestJobs(q).length, 1, 'the file Drive reported is now on the queue for ingest');
   assert.equal(ingestJobs(q)[0].subjectId, 'f1');
   assert.equal(first.watched.length, 1);
@@ -109,7 +114,7 @@ test('a new video in Inbox becomes exactly ONE ingest job, and a quiet Drive add
   assert.match(formatTick(first), /drive watch OK: 1 new file\(s\) queued/,
     'and the tick line says so, the way it says a stage ran');
 
-  const second = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: spy.runners });
+  const second = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: spy.runners });
   assert.equal(second.watched.length, 1, 'the watch ran again');
   assert.equal(ingestJobs(q).length, 1, 'and with nothing new in Drive it queued nothing');
   assert.equal(drive.calls.listChanges, 2);
@@ -119,7 +124,7 @@ test('a new video in Inbox becomes exactly ONE ingest job, and a quiet Drive add
 test('the file the watch finds is picked up by ingest IN THE SAME TICK, not an idle sleep later', async () => {
   const q = watchedQueue();
   const drive = fakeDrive({ files: [{ id: 'f1', name: 'a.mov' }] });
-  const report = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: runnerThat('complete') });
+  const report = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: runnerThat('complete') });
   assert.equal(report.stage, 'ingest');
   assert.equal(report.worked, true);
   assert.equal(q.counts().done, 1);
@@ -131,7 +136,7 @@ test('a Drive that refuses the sign-in is REPORTED, and the ingest runner still 
   q.enqueue({ stage: 'ingest', subjectKind: 'drive_file', subjectId: 'already-waiting' });
   const drive = fakeDrive({ token: { ok: false, status: 401, error: 'invalid_grant' } });
 
-  const report = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: runnerThat('complete') });
+  const report = await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: runnerThat('complete') });
 
   assert.ok(report.watched[0].result.blocked, 'the watch says it is blocked');
   assert.equal(report.watched[0].result.blocked.kind, 'auth');
@@ -165,7 +170,7 @@ test('the watch runs no more often than its cadence — injected clock, no timer
   const watchedAt = {};
   const every = daemon.DEFAULT_DRIVE_WATCH_EVERY_MS;
   const start = 7_000_000;
-  const tick = (now) => daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: {}, watchedAt, now });
+  const tick = (now) => daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: {}, watchedAt, now });
 
   assert.equal((await tick(start)).watched.length, 1, 'the first tick watches');
   assert.equal((await tick(start + 1_000)).watched.length, 0);
@@ -180,7 +185,7 @@ test('a watch that keeps FAILING is still held to its cadence — no retry storm
   const drive = fakeDrive({ token: { ok: false, status: 401, error: 'invalid_grant' } });
   const watchedAt = {};
   for (let i = 0; i < 10; i += 1) {
-    await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, runners: {}, watchedAt, now: 7_000_000 + i * 1000 });
+    await daemon.tickOnce({ queue: q, owner: OWNER, env: DRIVE_ENV, drive, watchers: DRIVE_ONLY, runners: {}, watchedAt, now: 7_000_000 + i * 1000 });
   }
   assert.equal(drive.calls.getAccessToken, 1, 'ten ticks in ten seconds ask Google once');
   assert.equal(q.listJobs({ stage: STAGE_WATCH }).length, 1, 'and there is one blocked row, not ten');
@@ -197,6 +202,7 @@ test('runDaemon watches Drive by default, on its own cadence across ticks', asyn
     owner: OWNER,
     env: DRIVE_ENV,
     drive,
+    watchers: DRIVE_ONLY,
     runners: {},
     stopAfterTicks: 3,
     clock: () => { now += 1000; return now; },
@@ -211,8 +217,8 @@ test('runDaemon watches Drive by default, on its own cadence across ticks', asyn
   q.close();
 });
 
-test('the daemon\'s default watcher list is the Drive watch', () => {
-  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH]);
+test('the daemon\'s default watcher list is the Drive watch, then the cache sweep', () => {
+  assert.deepEqual(Object.keys(daemon.WATCHERS), [STAGE_WATCH, daemon.STAGE_CACHE_SWEEP]);
   assert.equal(daemon.WATCHERS[STAGE_WATCH].everyMs, daemon.DEFAULT_DRIVE_WATCH_EVERY_MS);
 });
 

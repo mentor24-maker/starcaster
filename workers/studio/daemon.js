@@ -57,6 +57,7 @@ const { runProbe, STAGE_PROBE } = require('./probePass.js');
 const { runProxy, STAGE_PROXY } = require('./proxyPass.js');
 const { runTranscribe, STAGE_TRANSCRIBE } = require('./transcribePass.js');
 const { runCutMarks, STAGE_CUT_MARKS } = require('./cutMarksPass.js');
+const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
 const DEFAULT_IDLE_MS = 30 * 1000;
@@ -106,6 +107,17 @@ const DEFAULT_BEAT_EVERY_MS = 5 * 60 * 1000;
  * first watch afterwards reads every change it missed, page by page.
  */
 const DEFAULT_DRIVE_WATCH_EVERY_MS = 60 * 1000;
+
+/**
+ * How often the cache sweep deletes the originals of ready sources: every
+ * half hour. The proxy pass deletes each one the moment it is ready, so this
+ * is the backstop — it cleared the originals that were already in the cache
+ * when eviction shipped, and catches any the proxy pass could not delete. One
+ * catalog read and a stat per source, so the cadence costs nothing; a tighter
+ * one would buy nothing, because the disk floor is 50 GB, not seconds.
+ */
+const DEFAULT_CACHE_SWEEP_EVERY_MS = 30 * 60 * 1000;
+const STAGE_CACHE_SWEEP = 'cache.sweep';
 
 /** Rotate at 8 MB, keep 5 — about six weeks of ordinary logging. */
 const DEFAULT_LOG_MAX_BYTES = 8 * 1024 * 1024;
@@ -180,6 +192,13 @@ const WATCHERS = {
     label: 'drive watch',
     everyMs: DEFAULT_DRIVE_WATCH_EVERY_MS,
     run: ({ queue, env, drive }) => watchDrive({ queue, env, ...(drive ? { drive } : {}) }),
+  },
+  // Clock-driven for the same reason the watch is: nothing puts a job on the
+  // queue for it. workers/studio/evict.js says what it deletes and what it keeps.
+  [STAGE_CACHE_SWEEP]: {
+    label: 'cache sweep',
+    everyMs: DEFAULT_CACHE_SWEEP_EVERY_MS,
+    run: ({ queue, env }) => sweepReadyOriginals({ queue, env }),
   },
 };
 
@@ -526,6 +545,7 @@ function formatTick(report) {
 function formatWatch(w) {
   if (w.error) return `${w.label} THREW: ${w.error.message} — the stages still ran this tick`;
   const r = w.result || {};
+  if (w.stage === STAGE_CACHE_SWEEP) return formatSweep(w.label, r);
   if (r.blocked) return `${w.label} BLOCKED (${r.blocked.kind}): ${r.blocked.reason}`;
   const queued = Array.isArray(r.processed) ? r.processed.length : 0;
   const skipped = Array.isArray(r.skipped) ? r.skipped.length : 0;
@@ -537,6 +557,18 @@ function formatWatch(w) {
   if (r.cursor && r.cursor.initialised) bits.push('started watching from now, nothing replayed');
   if (blind) bits.push(`${blind} thing(s) it could not check`);
   if (r.recovered) bits.push('the previous block has cleared');
+  return bits.join(', ');
+}
+
+/** The cache sweep's outcome, in the tick line. "Could not tell" never reads as clean. */
+function formatSweep(label, r) {
+  if (!r.ok && r.error) return `${label} COULD NOT TELL: ${r.error}`;
+  const gb = (bytes) => `${(bytes / (1024 ** 3)).toFixed(1)} GB`;
+  const bits = [`${label} ${r.ok ? 'OK' : 'FINISHED WITH FAILURES'}: `
+    + `${(r.evicted || []).length} original(s) deleted (${gb(r.freedBytes || 0)} freed), `
+    + `${r.absent || 0} already gone, ${(r.kept || []).length} kept`];
+  for (const e of r.errors || []) bits.push(`could not delete ${e.id}: ${e.why}`);
+  if (r.truncated) bits.push('CANNOT TELL about sources past the first page of the catalog');
   return bits.join(', ');
 }
 
@@ -692,6 +724,9 @@ module.exports = {
   DEFAULT_REAP_EVERY_MS,
   DEFAULT_BEAT_EVERY_MS,
   DEFAULT_DRIVE_WATCH_EVERY_MS,
+  DEFAULT_CACHE_SWEEP_EVERY_MS,
+  STAGE_CACHE_SWEEP,
+  formatSweep,
   DEFAULT_LOG_MAX_BYTES,
   DEFAULT_LOG_KEEP,
 };

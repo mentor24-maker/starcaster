@@ -7,6 +7,46 @@ for that form, and an optional subject that can include what the visitor typed,
 like their first name. Leave it blank and the form alerts the Settings address
 exactly as before, so nothing changes on existing sites. Every alert now says
 which form it came from, and the alert addresses are never shown to the public.
+## 2026-11-03 — Website forms can email the visitor a "we got your message" confirmation (#945)
+
+Each CRM form now has a "Confirmation email" section in its editor. Switch it
+on, write a subject and a message, and the visitor gets that email after they
+submit — with their own details filled in where the message says
+`{{first_name}}` or `{{email}}`. Replies go to the team's Contact Alert Email.
+It only sends when the visitor gave an email address, a form without an Email
+field cannot have it switched on, and a mail problem never stops the
+submission from being saved. Forms nobody changes send nothing, as before.
+Because anyone on the internet can submit a form, the confirmation is also
+rationed: one per email address an hour and five per visitor's connection an
+hour. Past that the email is quietly skipped but the submission still goes
+through, so nobody can use a form to have our sending domain spam strangers.
+The confirmation also only goes to ONE ordinary email address: if the Email
+box holds a list of addresses, or a name with an address in angle brackets,
+no confirmation is sent (the submission is still saved), so the ration
+cannot be dodged by typing forty strangers into one box.
+## 2026-11-02 — Studio: the Mac Mini deletes a video's downloaded original once it is ready (#939)
+
+Every uploaded video is downloaded onto the Mini so the Studio can measure it
+and make a smaller working copy. Until now the original was never deleted
+afterwards, so the Mini's disk filled until new uploads stopped downloading.
+Now the Mini deletes the original once the video is ready. The working copy
+stays, and the original is still in Google Drive. If a later step ever needs
+the original again, the Mini downloads it from Drive again instead of
+marking the video as failed. A half-hourly sweep clears the originals that
+were already there: about 7 GB of the 9.6 GB on the Mini today. The rest are
+small clips whose original is their working copy, so they stay. The same
+change fixes a crash in the path that handles a video replaced in Drive.
+## 2026-11-02 — Website forms keep every submission, and each form lists its own (#943)
+
+When someone filled in a website form with an email that was already in the
+contact list, their message used to be thrown away — only the alert email ever
+saw it. Now every submission is kept, including a returning visitor's second
+and third messages, along with which form and which page it came from. The
+contact list still shows that person once, and their contact now says which
+form brought them in. In CRM › Forms each form shows how many submissions it
+has, and a new Submissions button lists them, newest first. This needs one new
+database table, which has to be added on the live site before the change goes
+out.
 
 ## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
 

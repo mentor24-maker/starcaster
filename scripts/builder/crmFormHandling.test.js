@@ -23,7 +23,16 @@ const FORM_OWNER = 'user_owner_1';
 // ── Pure rules ───────────────────────────────────────────────────────────────
 
 test('a form with no handling reads as today\'s behaviour', () => {
-  assert.deepEqual(handling.normalizeFormHandling(undefined), { afterSubmit: 'message', redirectUrl: '', redirectPageId: '', alertEmails: [], alertSubject: '' });
+  assert.deepEqual(handling.normalizeFormHandling(undefined), {
+    afterSubmit: 'message',
+    redirectUrl: '',
+    redirectPageId: '',
+    alertEmails: [],
+    alertSubject: '',
+    confirmationEnabled: false,
+    confirmationSubject: '',
+    confirmationBody: '',
+  });
   assert.equal(handling.isDefaultHandling(undefined), true);
   assert.deepEqual(handling.submitSuccessResponse({ successMessage: '' }), {
     message: handling.DEFAULT_SUCCESS_MESSAGE,
@@ -52,7 +61,7 @@ test('forms store: the redirect rides inside fields, never as its own column', (
   assert.equal('handling' in row, false, 'a handling column would need SQL that option B does not have');
   const metas = row.fields.filter((f) => f.key === META);
   assert.equal(metas.length, 1);
-  assert.deepEqual(metas[0].handling, REDIRECT);
+  assert.deepEqual(metas[0].handling, handling.normalizeFormHandling(REDIRECT));
   assert.ok(row.fields.some((f) => f.key === '__crm_form_styles__'), 'the styles entry is kept alongside');
 });
 
@@ -60,7 +69,7 @@ test('forms store: reading the row back gives the redirect, and no visitor-facin
   const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
   const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true });
   const form = sanitizeForm(row);
-  assert.deepEqual(form.handling, REDIRECT);
+  assert.deepEqual(form.handling, handling.normalizeFormHandling(REDIRECT));
   assert.deepEqual(form.fields.map((f) => f.key), ['email']);
 });
 
@@ -69,7 +78,7 @@ test('forms store: a save that does not touch After submit keeps it (Form Appear
   const stored = sanitizeForm(formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: REDIRECT }, { includeStylesMeta: true }));
   // What updateForm does: merge the patch onto the stored form, write it again.
   const rewritten = formInputToRow(sanitizeForm({ ...stored, name: 'Renamed', styles: { buttonBg: '#ff0000' } }), { includeStylesMeta: true });
-  assert.deepEqual(sanitizeForm(rewritten).handling, REDIRECT);
+  assert.deepEqual(sanitizeForm(rewritten).handling, handling.normalizeFormHandling(REDIRECT));
   assert.equal(rewritten.fields.filter((f) => f.key === META).length, 1, 'never doubled');
 });
 
@@ -126,6 +135,9 @@ function fakeDatabase() {
 
 const RELOAD = [
   'routes/crm.js',
+  // Fresh limiter counters per test: every test emails the same visitor.
+  'lib/rateLimiter.js',
+  'lib/crmFormConfirmation.js',
   'lib/projectScope.js',
   'lib/projectsStore.js',
   'lib/publicSiteHostBinding.js',
@@ -158,6 +170,7 @@ function loadRoute({ form = null, projectAlertEmails = [] } = {}) {
       return created;
     },
     listContacts: async () => contacts,
+    findContactByEmail: async (_configId, email) => contacts.find((c) => c.email === email) || null,
     getContact: async () => null,
     updateContact: async () => null,
     deleteContact: async () => null,
@@ -301,6 +314,212 @@ test('a form id from another project is ignored, not obeyed', async () => {
   }
 });
 
+// ── Visitor confirmation email (task 86bcx18bg) ─────────────────────────────
+
+const CONFIRM = {
+  confirmationEnabled: true,
+  confirmationSubject: 'We got your message, {{first_name}}',
+  confirmationBody: 'Hi {{first_name}} {{last_name}},\n\nWe will reply to {{email}} soon. {{ unknown_key }}',
+};
+
+test('placeholders fill from what the visitor typed; unknown ones go blank, never braces', () => {
+  assert.equal(handling.fillPlaceholders('Hi {{first_name}}{{nope}}!', { first_name: 'Ana' }), 'Hi Ana!');
+  const message = handling.buildConfirmationEmail({ handling: CONFIRM }, { email: 'v@example.com', data: { first_name: 'Ana' }, siteName: 'Delray' });
+  assert.equal(message.subject, 'We got your message, Ana');
+  assert.equal(message.to, 'v@example.com');
+  assert.doesNotMatch(message.text, /[{}]/);
+  assert.match(message.text, /We will reply to v@example\.com soon\./);
+});
+
+test('what the visitor typed is escaped in the HTML copy', () => {
+  const message = handling.buildConfirmationEmail(
+    { handling: { ...CONFIRM, confirmationBody: 'Hi {{first_name}}' } },
+    { email: 'v@example.com', data: { first_name: '<img src=x onerror=alert(1)>' } }
+  );
+  assert.doesNotMatch(message.html, /<img/);
+  assert.match(message.html, /&lt;img/);
+});
+
+test('no confirmation is owed when it is off, or when no address was given', () => {
+  assert.equal(handling.buildConfirmationEmail({ handling: { ...CONFIRM, confirmationEnabled: false } }, { email: 'v@example.com' }), null);
+  assert.equal(handling.buildConfirmationEmail({ handling: CONFIRM }, { email: '' }), null);
+  assert.equal(handling.buildConfirmationEmail(null, { email: 'v@example.com' }), null);
+});
+
+test('a confirmation cannot be switched on for a form with no Email field', () => {
+  assert.match(handling.confirmationSettingsProblem(CONFIRM, [{ key: 'first_name', type: 'text' }]), /no Email field/);
+  assert.equal(handling.confirmationSettingsProblem(CONFIRM, FIELDS), '');
+  assert.equal(handling.confirmationSettingsProblem({ confirmationEnabled: false }, []), '', 'off is always allowed');
+});
+
+test('forms store: the confirmation settings ride inside fields and read back', () => {
+  const { formInputToRow, sanitizeForm } = require('../../lib/crmFormsStore.js');
+  const row = formInputToRow({ id: 'f1', crmConfigId: 'c1', name: 'Contact', fields: FIELDS, handling: CONFIRM }, { includeStylesMeta: true });
+  const back = sanitizeForm(row);
+  assert.equal(back.handling.confirmationEnabled, true);
+  assert.equal(back.handling.confirmationSubject, CONFIRM.confirmationSubject);
+  assert.equal(back.handling.confirmationBody, CONFIRM.confirmationBody);
+});
+
+test('confirmation ON: the visitor is emailed with placeholders filled, reply-to the team', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  try {
+    const { status } = await submit(route);
+    assert.equal(status, 200);
+    const toVisitor = mail.filter((m) => m.to === 'visitor@example.com');
+    assert.equal(toVisitor.length, 1, 'exactly one confirmation to the visitor');
+    assert.equal(toVisitor[0].subject, 'We got your message, Ana');
+    assert.match(toVisitor[0].text, /^Hi Ana ,/);
+    assert.deepEqual(toVisitor[0].replyTo, ['team@example.com']);
+  } finally {
+    restore();
+  }
+});
+
+test('confirmation OFF: nothing is sent to the visitor', async () => {
+  const form = { ...baseForm({}), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  try {
+    await submit(route);
+    assert.equal(mail.filter((m) => m.to === 'visitor@example.com').length, 0);
+    assert.equal(mail.length, 1, 'only the team alert');
+  } finally {
+    restore();
+  }
+});
+
+test('two quick submissions to the same address send ONE confirmation, and both succeed', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    // Each call comes from a different client, so only the per-address
+    // limit can be what holds the later ones back.
+    const first = await submit(route);
+    const second = await submit(route);
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200, 'the submission itself still succeeds');
+    assert.equal(second.payload.message, "Thanks — we'll call you");
+    const toVisitor = mail.filter((m) => m.to === 'visitor@example.com');
+    assert.equal(toVisitor.length, 1, `one confirmation per address per hour, got ${toVisitor.length}`);
+  } finally {
+    console.warn = quiet;
+    restore();
+  }
+});
+
+test('one client cannot email a stream of different strangers', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    for (let i = 0; i < 20; i += 1) {
+      const res = { statusCode: 0, body: '', headers: {}, setHeader() {}, end(chunk) { this.body = chunk || ''; } };
+      const req = {
+        method: 'POST',
+        url: '/api/crm/contact-submit',
+        headers: { host: PROJECT_DOMAIN, 'user-agent': 'test-agent' },
+        socket: { remoteAddress: '203.0.113.9' },
+        body: { crmConfigId: 'cfg_1', crm_form_id: 'form_1', projectId: PROJECT_ID, email: `stranger${i}@example.com`, data: { first_name: 'X' } },
+      };
+      await route.handle(req, res, '/api/crm/contact-submit', 'POST');
+      assert.equal(res.statusCode, 200);
+    }
+    const toStrangers = mail.filter((m) => /^stranger\d+@/.test(m.to));
+    assert.ok(toStrangers.length >= 1 && toStrangers.length <= 5, `at most five per client per hour, got ${toStrangers.length}`);
+  } finally {
+    console.warn = quiet;
+    restore();
+  }
+});
+
+test('only ONE plain address is owed a confirmation — never a list or a "Name <addr>"', () => {
+  const owed = (email) => handling.buildConfirmationEmail({ handling: CONFIRM }, { email });
+  assert.equal(owed('v@example.com').to, 'v@example.com', 'a normal address still gets one');
+  assert.equal(owed("o'brien@example.co.uk").to, "o'brien@example.co.uk", 'an apostrophe is a real address');
+  const forty = Array.from({ length: 40 }, (_, i) => `stranger${i}@example.com`);
+  for (const bad of [
+    forty.join(','),
+    forty.join(';'),
+    'a@example.com b@example.com',
+    'Win a prize http://x.test <victim@example.com>',
+    '"Prize" victim@example.com',
+    'victim@example.com\nBcc: other@example.com',
+    'two@@example.com',
+    'a@b@example.com',
+    'no-at-sign.example.com',
+    'v@localhost',
+    `${'x'.repeat(65)}@example.com`,
+    `v@${'d'.repeat(250)}.com`,
+  ]) {
+    assert.equal(owed(bad), null, `must send nothing for ${JSON.stringify(bad.slice(0, 60))}`);
+  }
+});
+
+test('a comma-joined list or a "Name <addr>" in the Email box sends nothing, and the submit still succeeds', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, mail, restore } = loadRoute({ form, projectAlertEmails: ['team@example.com'] });
+  const quiet = console.warn;
+  console.warn = () => {};
+  try {
+    const list = Array.from({ length: 40 }, (_, i) => `stranger${i}@example.com`).join(',');
+    for (const email of [list, 'Win a prize http://x.test <victim@example.com>']) {
+      const { status, payload } = await submit(route, { email });
+      assert.equal(status, 200);
+      assert.equal(payload.message, "Thanks — we'll call you");
+    }
+    const toVisitors = mail.filter((m) => /stranger|victim/.test(String(m.to)));
+    assert.equal(toVisitors.length, 0, `no confirmation to a list or a display name, got ${toVisitors.length}`);
+    const normal = await submit(route, { email: 'single@example.com' });
+    assert.equal(normal.status, 200);
+    assert.equal(mail.filter((m) => m.to === 'single@example.com').length, 1, 'a normal address still sends one');
+  } finally {
+    console.warn = quiet;
+    restore();
+  }
+});
+
+test('a mail failure never fails the submission', async () => {
+  const form = { ...baseForm(CONFIRM), fields: FIELDS };
+  const { route, restore } = loadRoute({ form });
+  const mailer = require.cache[require.resolve('../../lib/mailer.js')];
+  const original = mailer.exports.sendEmail;
+  mailer.exports.sendEmail = async () => { throw new Error('provider down'); };
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const { status, payload } = await submit(route);
+    assert.equal(status, 200);
+    assert.equal(payload.message, "Thanks — we'll call you");
+  } finally {
+    console.error = quiet;
+    mailer.exports.sendEmail = original;
+    restore();
+  }
+});
+
+test('saving a form with the confirmation on and no Email field is refused', async () => {
+  const { route, restore } = loadRoute({ form: { ...baseForm({}), fields: FIELDS } });
+  try {
+    const created = await call(route, 'POST', '/api/crm/forms', {
+      body: { crmConfigId: 'cfg_1', name: 'No email', fields: [{ key: 'first_name', type: 'text' }], handling: CONFIRM },
+      authUser: { id: FORM_OWNER },
+    });
+    assert.equal(created.status, 400);
+    assert.match(created.payload.error.message, /no Email field/);
+    const removed = await call(route, 'PUT', '/api/crm/forms/form_1', {
+      body: { fields: [{ key: 'first_name', type: 'text' }], handling: CONFIRM },
+      authUser: { id: FORM_OWNER },
+    });
+    assert.equal(removed.status, 400);
+  } finally {
+    restore();
+  }
+});
+
 // ── Per-form team alerts (Loop Queue 86bcx188j) ───────────────────────────────
 
 test('alert addresses are cleaned: lower-cased, de-duplicated, non-addresses dropped', () => {
@@ -353,7 +572,7 @@ test('a form with no alert addresses alerts the project Contact Alert Email, wit
   }
 });
 
-test('a mail failure never fails the submission', async () => {
+test('a mail failure to a form\'s own alert list never fails the submission', async () => {
   const { route, restore } = loadRoute({ form: baseForm({ alertEmails: 'a@b.co' }) });
   const mailer = require.resolve('../../lib/mailer.js');
   const previous = require.cache[mailer].exports.sendEmail;
