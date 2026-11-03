@@ -940,7 +940,16 @@ try {
 
     await render(
       page,
-      contract.section ? documentForSection(contract.section) : documentFor(contract.module),
+      {
+        ...(contract.section ? documentForSection(contract.section) : documentFor(contract.module)),
+        /*
+         * Page id → current slug, which the preview page reads from the stored
+         * draft (the editor writes it from its page list). It is how a
+         * contract says "this page has since been renamed" without a database
+         * (task 86bcxmrw2). Absent unless a contract asks.
+         */
+        ...(contract.pageAddresses ? { pageAddresses: contract.pageAddresses } : {}),
+      },
       contract.emulate?.storedDevice || contract.emulate?.previewDevice || 'desktop',
       contract.emulate?.liveSite === true
     );

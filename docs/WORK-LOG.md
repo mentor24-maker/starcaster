@@ -1,3 +1,16 @@
+## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
+
+When you pick one of your own pages in a Builder setting — a Button's Link,
+the "target page" of a search, blog or event module, the page an admin is sent
+to after signing in, a table cell image's link — the setting used to save a
+copy of that page's address. Rename the page or change its address and every
+one of those copies kept pointing at the old address, so the button broke on
+the live site and the picker showed it as "Custom…". Now the setting remembers
+the page itself, and the live site looks up the page's current address every
+time it is shown. If the page is deleted, the link falls back to the address
+it was saved with, and the picker says the page no longer exists. Links saved
+before this keep working exactly as they did; a one-time upgrade for those
+runs once this is live. Menus and links typed into text are the next ticket.
 ## 2026-11-03 — A form's "after submit" page now follows the page when it is renamed (#946)
 
 When a website form was set to send visitors to a page after they submit, it

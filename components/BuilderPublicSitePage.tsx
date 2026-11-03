@@ -51,7 +51,17 @@ type SitePage = {
   accentColor?: string;
   themeId?: string;
   themeShell?: SiteThemeShell | null;
+  /**
+   * Page id → current slug for the pages this one links to by reference
+   * (lib/pageLinkAddresses.js). Sent beside the page, not inside it.
+   */
+  pageAddresses?: Record<string, string> | null;
 };
+
+function readPageAddresses(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, string>;
+}
 
 function mapSitePageRecord(page: Record<string, unknown>): SitePage {
   const doc = normalizeBuilderDocument(page);
@@ -143,12 +153,12 @@ async function fetchPublicPage(projectId: string, slug: string): Promise<SitePag
     `/api/public/page?projectId=${encodeURIComponent(projectId)}&slug=${encodeURIComponent(slug)}`
   );
   if (!res.ok) return null;
-  const data = await res.json() as { page?: unknown; renditions?: unknown };
+  const data = await res.json() as { page?: unknown; renditions?: unknown; pageAddresses?: unknown };
   // Registered before the page renders so the first paint already picks the
   // right image file rather than swapping it afterwards.
   registerImageRenditionMap(data.renditions);
   if (!data.page || typeof data.page !== "object") return null;
-  return mapSitePageRecord(data.page as Record<string, unknown>);
+  return { ...mapSitePageRecord(data.page as Record<string, unknown>), pageAddresses: readPageAddresses(data.pageAddresses) };
 }
 
 async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unauthorized"> {
@@ -158,9 +168,10 @@ async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unaut
   );
   if (res.status === 401) return "unauthorized";
   if (!res.ok) return [];
-  const data = await res.json() as { pages?: unknown[] };
+  const data = await res.json() as { pages?: unknown[]; pageAddresses?: unknown };
   const pages = Array.isArray(data.pages) ? data.pages : [];
-  return pages.map((p: unknown) => mapSitePageRecord(p as Record<string, unknown>));
+  const pageAddresses = readPageAddresses(data.pageAddresses);
+  return pages.map((p: unknown) => ({ ...mapSitePageRecord(p as Record<string, unknown>), pageAddresses }));
 }
 
 function findHomePage(pages: SitePage[]): SitePage | null {
@@ -396,6 +407,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           applyThemePageMargins={false}
           suppressShellBackground
           projectId={projectId}
+          pageAddresses={page.pageAddresses}
           liveSite
         />
       </BuilderViewportShellLayout>

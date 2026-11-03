@@ -13,10 +13,29 @@ const OPTIONS: BuilderPickerOption[] = [
 ];
 
 describe("pickerOptionValue", () => {
-  it("maps kinds to the right stored value", () => {
-    expect(pickerOptionValue(OPTIONS[0], "path")).toBe("/home");
-    expect(pickerOptionValue(OPTIONS[0], "slug")).toBe("home");
+  it("stores a PAGE by reference — its id, with today's address only as the fallback (86bcxmrw2)", () => {
+    expect(pickerOptionValue(OPTIONS[0], "path")).toBe("page:p1|/home");
+    expect(pickerOptionValue(OPTIONS[0], "slug")).toBe("page:p1|home");
     expect(pickerOptionValue(OPTIONS[0], "id")).toBe("p1");
+  });
+
+  it("posts and CRM forms keep the value they always wrote", () => {
+    expect(pickerOptionValue(OPTIONS[0], "path", "posts")).toBe("/home");
+    expect(pickerOptionValue(OPTIONS[0], "slug", "posts")).toBe("home");
+    expect(pickerOptionValue(OPTIONS[0], "id", "crm-forms")).toBe("p1");
+  });
+});
+
+describe("resolvePickerSelection — references", () => {
+  it("selects the page by id even after its address changed", () => {
+    const renamed = [{ ...OPTIONS[0], slug: "home-v2", path: "/home-v2" }, OPTIONS[1]];
+    const state = resolvePickerSelection(renamed, "page:p1|/home", "path");
+    expect(state.mode).toBe("option");
+    expect(state.selected?.label).toBe("Home");
+  });
+
+  it("names a deleted page as missing, keeping its saved address", () => {
+    expect(resolvePickerSelection(OPTIONS, "page:gone|/old", "path")).toEqual({ mode: "missing", fallback: "/old" });
   });
 });
 

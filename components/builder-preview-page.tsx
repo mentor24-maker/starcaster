@@ -19,6 +19,7 @@ import {
 } from "@/components/builder/builder-utils";
 import { BuilderViewportShellLayout } from "@/components/builder/builder-viewport-shell-layout";
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
+import { buildPageAddressMap } from "@/lib/page-link";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 
@@ -45,7 +46,14 @@ type PreviewDraft = {
   themeId?: string;
   themeShellBackground?: ThemeShellBackgroundSource;
   themeRecord?: BuilderThemeRecord | null;
+  /** Page id → current slug, for links stored by reference (lib/builder-client/page-link.js). */
+  pageAddresses?: Record<string, string> | null;
 };
+
+function readPageAddresses(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, string>;
+}
 
 type BuilderThemeRecord = {
   id?: string;
@@ -136,6 +144,8 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
       ? themePalette
       : mergeCrmThemePalette(themePalette, themeRecord.palette);
     return {
+      // Every page is in hand already, so the map is free — and complete.
+      pageAddresses: buildPageAddressMap(pages),
       name: String(match.name ?? "").trim(),
       pageBackground: doc.pageBackground,
       theme: doc.theme,
@@ -234,6 +244,7 @@ export function BuilderPreviewPage() {
           themeStyles?: BuilderThemeStyles;
           themeId?: string;
           themeShellBackground?: ThemeShellBackgroundSource;
+          pageAddresses?: unknown;
         };
         const document = normalizeBuilderDocument(parsed);
         const storedPalette = parsed.themePalette;
@@ -251,6 +262,7 @@ export function BuilderPreviewPage() {
           themeStyles: resolvedStyles,
           themeId,
           themeShellBackground: storedShellBackground,
+          pageAddresses: readPageAddresses(parsed.pageAddresses),
         });
         if (hasCrmPaletteColors(storedPalette) && resolvedStyles) {
           setThemePalette(storedPalette);
@@ -323,6 +335,7 @@ export function BuilderPreviewPage() {
         suppressShellBackground
         previewMode
         liveSite={isLive}
+        pageAddresses={draft.pageAddresses}
       />
     </BuilderViewportShellLayout>
   ) : null;

@@ -1019,6 +1019,51 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'button-linked-to-a-renamed-page-follows-it',
+    why:
+      'A Button whose Link was picked from the page list saved a COPY of the page\'s address, so ' +
+      'renaming the page left the button pointing at the old address — a 404 on the live site, and ' +
+      '"Custom…" in the picker (task 86bcxmrw2, operator 2026-11-03). The picker now stores the page ' +
+      'by id. This stores a reference whose saved address is the OLD one and says the page now lives ' +
+      'at a new address: the link must go to the new one.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'See the menu', settings: { href: 'page:4242|/old-menu' } }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-button',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { button: 'a.builder-preview-button' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.button;
+      if (!frame) return 'the button did not render as a link at all, so where it points could not be read.';
+      if (frame.href === '/menu-v2') return null;
+      if (frame.href === '/old-menu') return 'the button still points at the page\'s OLD address (/old-menu) — the reference was not resolved to where the page lives now.';
+      return `the button points at ${JSON.stringify(frame.href)}, expected "/menu-v2" (the renamed page's current address).`;
+    },
+  },
+  {
+    id: 'button-linked-to-a-deleted-page-uses-its-saved-address',
+    why:
+      'The other half of the same rule: when the page a button linked to is gone, the button keeps ' +
+      'the address it was saved with rather than going nowhere (task 86bcxmrw2).',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Old page', settings: { href: 'page:777|/was-here' } }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-button',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { button: 'a.builder-preview-button' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.button;
+      if (!frame) return 'the button did not render as a link at all, so where it points could not be read.';
+      return frame.href === '/was-here'
+        ? null
+        : `a button whose page was deleted points at ${JSON.stringify(frame.href)}, expected its saved address "/was-here".`;
+    },
+  },
+  {
     id: 'button-right-aligned-sits-at-the-right-edge-of-its-column',
     why:
       'The other value of the same control. A fix that centres by stretching, or by a rule that ' +

@@ -1,6 +1,7 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { buildPageAddressMap } from "@/lib/page-link";
 import { useGoogleFontLinks } from "./builder/use-google-font-links";
 import { useLibraryFontFaces } from "./builder/use-library-font-faces";
 import { resolveSessionProjectId } from "@/lib/adapters/starcaster-app";
@@ -2779,6 +2780,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       themePalette: builderThemeToCrmPalette(paletteSource),
       themeStyles: buildBuilderThemeStyles(paletteSource),
       themeShellBackground: paletteSource,
+      // So a link stored by reference previews at the page's current address.
+      pageAddresses: buildPageAddressMap(pages),
     };
   }
 
