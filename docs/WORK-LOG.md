@@ -15,6 +15,29 @@ The confirmation also only goes to ONE ordinary email address: if the Email
 box holds a list of addresses, or a name with an address in angle brackets,
 no confirmation is sent (the submission is still saved), so the ration
 cannot be dodged by typing forty strangers into one box.
+## 2026-11-02 — Studio: the Mac Mini deletes a video's downloaded original once it is ready (#939)
+
+Every uploaded video is downloaded onto the Mini so the Studio can measure it
+and make a smaller working copy. Until now the original was never deleted
+afterwards, so the Mini's disk filled until new uploads stopped downloading.
+Now the Mini deletes the original once the video is ready. The working copy
+stays, and the original is still in Google Drive. If a later step ever needs
+the original again, the Mini downloads it from Drive again instead of
+marking the video as failed. A half-hourly sweep clears the originals that
+were already there: about 7 GB of the 9.6 GB on the Mini today. The rest are
+small clips whose original is their working copy, so they stay. The same
+change fixes a crash in the path that handles a video replaced in Drive.
+## 2026-11-02 — Website forms keep every submission, and each form lists its own (#943)
+
+When someone filled in a website form with an email that was already in the
+contact list, their message used to be thrown away — only the alert email ever
+saw it. Now every submission is kept, including a returning visitor's second
+and third messages, along with which form and which page it came from. The
+contact list still shows that person once, and their contact now says which
+form brought them in. In CRM › Forms each form shows how many submissions it
+has, and a new Submissions button lists them, newest first. This needs one new
+database table, which has to be added on the live site before the change goes
+out.
 
 ## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
 

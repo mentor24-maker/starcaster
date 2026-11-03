@@ -37,6 +37,7 @@ const fs = require('node:fs');
 const { probeFile, PROBE_FAILURES } = require('./probe.js');
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const { enqueueProxy } = require('./proxyPass.js');
+const { enqueueRefetch } = require('./evict.js');
 
 const STAGE_PROBE = 'probe';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -183,6 +184,25 @@ async function probeJob({
     };
   };
 
+  /**
+   * The original is not on this disk, but Drive has it: ask ingest to bring it
+   * back and finish this job. Ingest puts the row back to `downloaded` and
+   * enqueues a fresh probe once the bytes are verified, so the chain re-runs
+   * from the start rather than this job waiting on a download it cannot see.
+   */
+  const refetchIt = (source, missingPath, what) => {
+    const asked = enqueueRefetch(queue, source);
+    queue.complete(job.id, owner);
+    return {
+      ...base,
+      outcome: 'refetching',
+      jobAction: 'completed',
+      reason: `the original for source ${sourceId} is not on disk${missingPath ? ` at ${missingPath}` : ''} `
+        + `(the cache deletes it once a source is ready), so it was ${asked.created ? 'queued' : 'already queued'} `
+        + `to be downloaded again from Drive; the ${what} re-runs once it is back`,
+    };
+  };
+
   if (!sourceId) {
     return blockIt('this probe job names no source, so there is nothing to probe. '
       + 'Fix: this should not be reachable from ingest — report it, then delete the job.');
@@ -205,13 +225,16 @@ async function probeJob({
   // local_path at the new bytes, and probing the old path would describe a
   // file that is no longer the source.
   const localPath = text(row.data.localPath) || text(payload.localPath);
-  if (!localPath) {
-    return failIt(`source ${sourceId} has no downloaded file recorded against it (local_path is blank), `
-      + 'so there was nothing on this machine to probe. Fix: re-ingest the file from Drive.');
-  }
-  if (!exists(localPath)) {
-    return failIt(`the downloaded file for source ${sourceId} is not on disk at ${localPath} — it was moved `
-      + 'or deleted after ingest. Fix: re-ingest the file from Drive.');
+  if (!localPath || !exists(localPath)) {
+    // The cache deletes a ready source's original (evict.js), and Drive still
+    // has it — so a missing original is a download to repeat, not a broken
+    // file. Ingest fetches it back and asks for this probe again.
+    if (text(row.data.driveFileId)) return refetchIt(row.data, localPath, 'probe');
+    return failIt(localPath
+      ? `the downloaded file for source ${sourceId} is not on disk at ${localPath}, and the row names no `
+        + 'Drive file to fetch it back from. Fix: re-ingest the file from Drive.'
+      : `source ${sourceId} has no downloaded file recorded against it (local_path is blank), `
+        + 'so there was nothing on this machine to probe. Fix: re-ingest the file from Drive.');
   }
 
   const result = probe(localPath, { sourcePath: text(payload.sourcePath) || undefined });
@@ -288,7 +311,7 @@ async function runProbe(options = {}) {
   } = options;
   if (!queue) throw new Error('runProbe needs a queue (workers/studio/queue.js)');
 
-  const report = { owner, probed: [], failed: [], blocked: [], released: [] };
+  const report = { owner, probed: [], failed: [], blocked: [], released: [], refetching: [] };
   for (let done = 0; done < Math.max(1, Number(max) || 1); done += 1) {
     const job = queue.claim(owner, { stages: [STAGE_PROBE] });
     if (!job) break;
@@ -305,6 +328,7 @@ async function runProbe(options = {}) {
       failed: report.failed,
       blocked: report.blocked,
       outage: report.released,
+      refetching: report.refetching,
     }[result.outcome] || report.failed;
     bucket.push(result);
     if (result.outcome === 'outage') break; // the tool or the service will not be back this second

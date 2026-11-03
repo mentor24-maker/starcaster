@@ -540,6 +540,10 @@ function realCatalog() {
     findSourceByContentHash: videoSourcesStore.findSourceByContentHash,
     createSource: videoSourcesStore.createSource,
     getSourceById: videoSourcesStore.getSourceById,
+    // The replaced-file path and the refetch path both write to an existing
+    // row. Without this the real catalog had no updateSource at all, so a
+    // file replaced in Drive threw on the Mini instead of being re-ingested.
+    updateSource: videoSourcesStore.updateSource,
     findSessionByTitle: videoSessionsStore.findSessionByTitle,
     createSession: videoSessionsStore.createSession,
   };
@@ -812,6 +816,10 @@ function readJobPayload(job) {
     recordedAt: text(payload.createdTime) || text(payload.modifiedTime) || '',
     watchedSizeBytes: Number(payload.sizeBytes) || 0,
     watchedMd5: text(payload.md5Checksum),
+    // Set by the probe and proxy passes when a source's original is missing
+    // because the cache evicted it (evict.js). It turns "same md5, nothing to
+    // do" into "same md5, the bytes are gone from this disk, fetch them back".
+    refetch: payload.refetch === true,
   };
 }
 
@@ -1038,9 +1046,20 @@ async function ingestJob({
     );
   }
   let replacing = null;
+  let refetching = null;
   if (already.data) {
     const storedMd5 = text(already.data.driveMd5);
-    if (storedMd5 && storedMd5 === expectedMd5) {
+    const cachedHere = text(already.data.localPath) && fs.existsSync(text(already.data.localPath));
+    if (storedMd5 && storedMd5 === expectedMd5 && facts.refetch && !cachedHere) {
+      // The same file, asked for again because its original was evicted from
+      // the cache and a later stage needs it. Fall through to the download;
+      // the row is updated in place below, never duplicated.
+      refetching = already.data;
+      base.refetchingSourceId = already.data.id;
+    } else if (storedMd5 && storedMd5 === expectedMd5) {
+      // Asked to refetch, but the original is already back on disk: the
+      // stage that asked only needs the probe chain to run again.
+      if (facts.refetch && cachedHere) askForProbe(already.data, '', driveName);
       // A row still at `downloaded` never got its probe — it was ingested
       // before the probe pass existed, or by a pass that died between the two.
       // Asking again here is what lets those heal rather than stay stuck.
@@ -1054,9 +1073,10 @@ async function ingestJob({
         reason: `this Drive file is already in the catalog as source ${already.data.id} `
           + 'and Drive reports the same md5, so it is the same file and nothing was downloaded',
       };
+    } else {
+      replacing = already.data;
+      base.replacingSourceId = already.data.id;
     }
-    replacing = already.data;
-    base.replacingSourceId = already.data.id;
   }
 
   // ── Is there room? ───────────────────────────────────────────────────────
@@ -1210,6 +1230,60 @@ async function ingestJob({
       + 'Fix: a corrupt part file is the usual cause and has now been deleted — delete this blocked job '
       + 'to download it again.'
     );
+  }
+
+  // ── A refetch: the same bytes, back on disk for the row that has them ────
+  // Asked before the content-hash dedupe below, which would otherwise find
+  // this very row by its hash and delete the copy as a duplicate.
+  if (refetching) {
+    if (digests.sha256 !== text(refetching.contentHash) && text(refetching.contentHash)) {
+      await removeQuietly(verifyPath);
+      return blockIt(
+        `source ${refetching.id} was fetched again from Drive, and Drive's md5 matches the row, but the bytes `
+        + `hash to ${digests.sha256} where the row says ${refetching.contentHash}. Nothing was changed. `
+        + `Fix: inspect row ${refetching.id} and the file in Drive by hand, then delete this blocked job.`
+      );
+    }
+    if (verifyPath !== paths.finalPath) await fsp.rename(verifyPath, paths.finalPath);
+    // Back to `downloaded`, like a replacement: the probe and proxy re-run on
+    // these bytes, and the cache's sweep leaves a source that is not `ready`
+    // alone — which is what keeps it from deleting the file it just fetched.
+    const updated = await catalog.updateSource(refetching.id, {
+      state: STATE_DOWNLOADED,
+      localPath: paths.finalPath,
+    }, scope);
+    if (!updated.ok) {
+      return releaseIt(`source ${refetching.id} was fetched again but its row could not be updated: ${updated.error}`);
+    }
+    const readBackRefetched = await catalog.getSourceById(refetching.id, scope);
+    if (!readBackRefetched.ok) {
+      return releaseIt(
+        `source ${refetching.id} was updated but could not be read back to check it: ${readBackRefetched.error}`
+      );
+    }
+    if (text(readBackRefetched.data.localPath) !== paths.finalPath
+      || text(readBackRefetched.data.state) !== STATE_DOWNLOADED) {
+      return blockIt(
+        `source ${refetching.id} was fetched again but reads back as state "${text(readBackRefetched.data.state)}" `
+        + `at "${text(readBackRefetched.data.localPath)}", so the catalog did not keep the update. `
+        + `Fix: inspect row ${refetching.id} by hand, then delete this blocked job.`
+      );
+    }
+    askForProbe(readBackRefetched.data, paths.finalPath, driveName);
+    queue.complete(job.id, owner);
+    return {
+      ...base,
+      outcome: 'ingested',
+      jobAction: 'completed',
+      sourceId: refetching.id,
+      contentHash: digests.sha256,
+      bytes: expectedBytes,
+      resumedFrom,
+      restarted,
+      refetched: true,
+      reason: `the original of source ${refetching.id} had been deleted from the cache once it was ready, and a `
+        + `later stage needed it, so it was downloaded again (${humanBytes(expectedBytes)}) and handed back to the probe`,
+    };
   }
 
   // ── One row, or none ─────────────────────────────────────────────────────

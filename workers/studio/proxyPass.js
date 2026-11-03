@@ -45,6 +45,7 @@ const { buildDerivatives, encodeTimeoutMs, FAILURES, ACTIONS, SKIP_REASONS } = r
 const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const videoTranscriptsStore = require('../../lib/videoTranscriptsStore.js');
 const { enqueueTranscribe, TRANSCRIPT_NO_AUDIO } = require('./transcribePass.js');
+const { evictOriginal, enqueueRefetch } = require('./evict.js');
 
 const STAGE_PROXY = 'proxy';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -190,13 +191,26 @@ async function proxyJob({
   // The row's path wins over the payload's, as in the probe pass: a Drive
   // replacement re-points local_path at the new bytes.
   const localPath = text(row.data.localPath) || text(payload.localPath);
-  if (!localPath) {
-    return failIt(`source ${sourceId} has no downloaded file recorded against it (local_path is blank), `
-      + 'so there was nothing on this machine to make copies of. Fix: re-ingest the file from Drive.');
-  }
-  if (!exists(localPath)) {
-    return failIt(`the downloaded file for source ${sourceId} is not on disk at ${localPath} — it was moved `
-      + 'or deleted after ingest. Fix: re-ingest the file from Drive.');
+  if (!localPath || !exists(localPath)) {
+    // The same rule as the probe pass: an original the cache evicted is still
+    // in Drive, so it is fetched back rather than the source being failed.
+    if (text(row.data.driveFileId)) {
+      const asked = enqueueRefetch(queue, row.data);
+      queue.complete(job.id, owner);
+      return {
+        ...base,
+        outcome: 'refetching',
+        jobAction: 'completed',
+        reason: `the original for source ${sourceId} is not on disk${localPath ? ` at ${localPath}` : ''} `
+          + `(the cache deletes it once a source is ready), so it was ${asked.created ? 'queued' : 'already queued'} `
+          + 'to be downloaded again from Drive; probe and proxy re-run once it is back',
+      };
+    }
+    return failIt(localPath
+      ? `the downloaded file for source ${sourceId} is not on disk at ${localPath}, and the row names no `
+        + 'Drive file to fetch it back from. Fix: re-ingest the file from Drive.'
+      : `source ${sourceId} has no downloaded file recorded against it (local_path is blank), `
+        + 'so there was nothing on this machine to make copies of. Fix: re-ingest the file from Drive.');
   }
 
   // Stretch the lease BEFORE the encode, while this process can still talk.
@@ -289,6 +303,15 @@ async function proxyJob({
     }
   }
 
+  // The original has done its work: every stage after this reads the derived
+  // copies. Delete it so the cache holds only sources not yet ready (evict.js
+  // says when it is kept instead). AFTER the read-back, so a row that did not
+  // keep `ready` never loses its bytes, and never fatal — an original that
+  // could not be deleted here is caught by the daemon's sweep.
+  const eviction = evictOriginal(readBack.data, {
+    cacheDir: require('./ingest.js').resolveCacheDir(options, env),
+  });
+
   const completed = queue.complete(job.id, owner);
   return {
     ...base,
@@ -297,6 +320,7 @@ async function proxyJob({
     proxyPath,
     proxyAction: proxyOut.action,
     transcription,
+    eviction,
     reason: proxyOut.action === ACTIONS.SKIPPED
       ? `original used directly (${proxyOut.reason}), WAV and contact sheet made`
       : `proxy ${proxyOut.action}, WAV and contact sheet made`,
@@ -319,7 +343,7 @@ async function runProxy(options = {}) {
   } = options;
   if (!queue) throw new Error('runProxy needs a queue (workers/studio/queue.js)');
 
-  const report = { owner, ready: [], failed: [], blocked: [], released: [], lost: [] };
+  const report = { owner, ready: [], failed: [], blocked: [], released: [], lost: [], refetching: [] };
   for (let done = 0; done < Math.max(1, Number(max) || 1); done += 1) {
     const job = queue.claim(owner, { stages: [STAGE_PROXY] });
     if (!job) break;
@@ -337,6 +361,7 @@ async function runProxy(options = {}) {
       blocked: report.blocked,
       outage: report.released,
       lost: report.lost,
+      refetching: report.refetching,
     }[result.outcome] || report.failed;
     bucket.push(result);
     if (result.outcome === 'outage') break;

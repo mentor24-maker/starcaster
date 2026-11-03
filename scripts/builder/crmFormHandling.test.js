@@ -167,6 +167,7 @@ function loadRoute({ form = null, projectAlertEmails = [] } = {}) {
       return created;
     },
     listContacts: async () => contacts,
+    findContactByEmail: async (_configId, email) => contacts.find((c) => c.email === email) || null,
     getContact: async () => null,
     updateContact: async () => null,
     deleteContact: async () => null,
