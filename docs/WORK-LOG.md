@@ -1,3 +1,14 @@
+## 2026-11-03 — The form editor's styling settings get their own column beside the preview (#952)
+
+On CRM: Edit Form, the Settings column held both the form's own settings and
+every styling control (background, border, heading, labels and fields,
+button), so it was a long scroll and the colours you were changing sat far
+from the preview showing them. The page now has four columns — Settings, Form
+Fields, Styles, Preview — with all the styling in the new Styles column right
+beside the preview. Nothing about what a setting does or how a form saves
+changed. On a medium-width window the columns sit two per row, and on a narrow
+one, one per row.
+
 ## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
 
 When you pick one of your own pages in a Builder setting — a Button's Link,
