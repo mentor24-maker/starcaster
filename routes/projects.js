@@ -85,11 +85,16 @@ async function handle(req, res, pathname, method) {
     const data = result.data || {};
     const resolvedFrom = safeText(data.resolvedFrom);
     const sessionToken = safeText(req?.authSession?.token);
+    // Re-pin when the tab's header named a different project than the pin, as
+    // well as when there was no pin: the header now wins (resolveCurrentProject),
+    // and a pin left disagreeing would still steer any call that sends none.
     if (
       sessionToken
       && data.project?.id
-      && (resolvedFrom === 'header' || resolvedFrom === 'auto')
-      && !sessionActiveProjectId
+      && (
+        (resolvedFrom === 'header' && data.project.id !== sessionActiveProjectId)
+        || (resolvedFrom === 'auto' && !sessionActiveProjectId)
+      )
     ) {
       await setSessionActiveProject(sessionToken, data.project.id);
       data.sessionActiveProjectId = data.project.id;
