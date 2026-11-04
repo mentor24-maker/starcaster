@@ -16,5 +16,7 @@ export declare function resolvePageLinksInSettings<T extends Record<string, unkn
   addresses?: PageAddressMap | null
 ): T;
 export declare function resolvePageLinksInJsonText(text: string, addresses?: PageAddressMap | null): string;
+export declare const PAGE_LINK_ATTR: "data-page-link";
+export declare function resolvePageLinksInHtml(html: string, addresses?: PageAddressMap | null): string;
 export declare function collectPageLinkIds(value: unknown): Set<string>;
 export declare function buildPageAddressMap(pages: unknown): Record<string, string>;

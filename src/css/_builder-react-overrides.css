@@ -12010,3 +12010,67 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-shared-pages-group table {
   width: 100%;
 }
+
+/* The rich-text toolbar's Link dialog: "A page on this site" or "A web
+   address" (task 86bcxthq5). It sits in flow under the toolbar rather than
+   floating, so it can never be clipped by the shell's overflow: hidden. */
+.builder-react-root .builder-rich-text-link-dialog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-modes {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-modes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.builder-react-root .builder-rich-text-link-dialog select,
+.builder-react-root .builder-rich-text-link-dialog input[type="text"] {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-note {
+  flex: 1 0 100%;
+  font-size: 0.85em;
+  color: var(--ink-warning);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button {
+  border: 1px solid rgba(9, 16, 24, 0.12);
+  background: var(--bg-surface);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font: inherit;
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button:first-child {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

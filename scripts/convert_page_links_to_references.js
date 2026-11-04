@@ -18,7 +18,10 @@
  * - Only the settings the page picker writes are touched (PICKER_FIELDS), plus
  *   the same settings on modules inside a table cell, plus a table cell image's
  *   Link, plus — since task 86bcxmt5x — the link on each item of a menu, card
- *   grid or carousel (LIST_FIELDS). Rich-text links are not touched.
+ *   grid or carousel (LIST_FIELDS), plus — since task 86bcxthq5 — every
+ *   `<a href="/...">` in a module's rich text (`module.text`: text blocks and
+ *   headings), which gains `data-page-link="page:<id>|/..."` beside its
+ *   unchanged href.
  * - A saved address that matches exactly ONE page's CURRENT address in the
  *   SAME project becomes that page's reference, with the address kept as its
  *   fallback. Anything else is left exactly as it is: an external URL is left
@@ -121,6 +124,32 @@ function classifyValue(raw, kind, bySlug) {
   return { action: 'upgrade', to: makePageLink(id, value) };
 }
 
+const RICH_TEXT_ANCHOR_RE = /<a\b[^>]*>/gi;
+const RICH_TEXT_HREF_RE = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+
+/**
+ * Upgrade the typed page addresses in one rich-text value (task 86bcxthq5).
+ * Each matching `<a>` keeps its href byte for byte and gains the reference
+ * beside it; a link that already carries one, an external address and an
+ * address matching no single page are left exactly as they are. Returns the
+ * SAME string when nothing changed.
+ */
+function convertRichTextLinks(html, bySlug, entry, report) {
+  if (typeof html !== 'string' || html.indexOf('<a') === -1) return html;
+  return html.replace(RICH_TEXT_ANCHOR_RE, (tag) => {
+    if (/\sdata-page-link\s*=/i.test(tag)) return tag;
+    const match = RICH_TEXT_HREF_RE.exec(tag);
+    if (!match) return tag;
+    const href = (match[1] ?? match[2] ?? '').replace(/&amp;/g, '&');
+    const verdict = classifyValue(href, 'path', bySlug);
+    if (verdict.action === 'unmatched') report.unmatched.push({ ...entry, value: href, reason: verdict.reason });
+    if (verdict.action !== 'upgrade') return tag;
+    report.upgraded.push({ ...entry, value: href, to: verdict.to });
+    const attr = verdict.to.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    return tag.replace(/\s*(\/?)>$/, ` data-page-link="${attr}"$1>`);
+  });
+}
+
 function moduleLabel(mod) {
   return String(mod?.name || mod?.type || 'module');
 }
@@ -199,7 +228,13 @@ function convertModule(mod, bySlug, where, report, inTableCell = false) {
     }
   }
 
-  return nextSettings ? { ...mod, settings: nextSettings } : mod;
+  const text = convertRichTextLinks(mod.text, bySlug, { where, module: moduleLabel(mod), type, setting: 'text link' }, report);
+
+  if (!nextSettings && text === mod.text) return mod;
+  const next = { ...mod };
+  if (nextSettings) next.settings = nextSettings;
+  if (text !== mod.text) next.text = text;
+  return next;
 }
 
 /** Convert an array of sections. Returns the SAME array when nothing changed. */

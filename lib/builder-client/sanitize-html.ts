@@ -1,5 +1,6 @@
 import type DOMPurifyType from "dompurify";
 import { isAllowedRichTextImageSrc } from "@/lib/rich-text-image";
+import { isPageLink, PAGE_LINK_ATTR } from "@/lib/page-link";
 
 const RICH_TEXT_ALLOWED_TAGS = [
   "p",
@@ -41,7 +42,12 @@ const RICH_TEXT_ALLOWED_ATTR = [
   "alt",
   "width",
   "height",
-  "loading"
+  "loading",
+  // A link picked from the page list carries the page's id beside its href
+  // (task 86bcxthq5). Allowlisted by name only — ALLOW_DATA_ATTR stays off —
+  // and the hook below drops it from anything but an <a>, and drops any value
+  // that is not a `page:<id>|<address>` reference.
+  "data-page-link"
 ] as const;
 
 const EMBED_EXTRA_TAGS = ["iframe"] as const;
@@ -76,6 +82,10 @@ function configureDomPurify() {
   const DOMPurify = getDomPurify();
 
   DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+    if (node.hasAttribute(PAGE_LINK_ATTR) && (node.tagName !== "A" || !isPageLink(node.getAttribute(PAGE_LINK_ATTR)))) {
+      node.removeAttribute(PAGE_LINK_ATTR);
+    }
+
     if (node.tagName === "A") {
       node.setAttribute("rel", "noopener noreferrer");
       if (node.getAttribute("target") === "_blank") {
@@ -131,7 +141,10 @@ export function sanitizeRichTextHtml(html: string) {
     return getDomPurify().sanitize(html, {
       ALLOWED_TAGS: [...RICH_TEXT_ALLOWED_TAGS],
       ALLOWED_ATTR: [...RICH_TEXT_ALLOWED_ATTR],
-      ALLOW_DATA_ATTR: false
+      ALLOW_DATA_ATTR: false,
+      // DOMPurify reads "page:12|/about" as a URL with an unknown scheme and
+      // drops it; the hook above checks the value is a reference instead.
+      ADD_URI_SAFE_ATTR: [PAGE_LINK_ATTR]
     });
   } catch {
     return stripDangerousRichTextHtml(html);
@@ -170,7 +183,7 @@ const INLINE_ALLOWED_TAGS = [
   "abbr"
 ] as const;
 
-const INLINE_ALLOWED_ATTR = ["href", "target", "rel", "style", "class", "id", "title"] as const;
+const INLINE_ALLOWED_ATTR = ["href", "target", "rel", "style", "class", "id", "title", "data-page-link"] as const;
 
 /**
  * Sanitize markup destined for the inside of a heading. Same guarantees as
@@ -183,7 +196,10 @@ export function sanitizeInlineHtml(html: string) {
     return getDomPurify().sanitize(html, {
       ALLOWED_TAGS: [...INLINE_ALLOWED_TAGS],
       ALLOWED_ATTR: [...INLINE_ALLOWED_ATTR],
-      ALLOW_DATA_ATTR: false
+      ALLOW_DATA_ATTR: false,
+      // DOMPurify reads "page:12|/about" as a URL with an unknown scheme and
+      // drops it; the hook above checks the value is a reference instead.
+      ADD_URI_SAFE_ATTR: [PAGE_LINK_ATTR]
     });
   } catch {
     return stripDangerousRichTextHtml(html);
@@ -276,7 +292,10 @@ export function sanitizeBlogBodyHtml(html: string) {
     const clean = getDomPurify().sanitize(html, {
       ALLOWED_TAGS: [...RICH_TEXT_ALLOWED_TAGS, ...BLOG_BODY_EXTRA_TAGS],
       ALLOWED_ATTR: [...RICH_TEXT_ALLOWED_ATTR, ...BLOG_BODY_EXTRA_ATTR],
-      ALLOW_DATA_ATTR: false
+      ALLOW_DATA_ATTR: false,
+      // DOMPurify reads "page:12|/about" as a URL with an unknown scheme and
+      // drops it; the hook above checks the value is a reference instead.
+      ADD_URI_SAFE_ATTR: [PAGE_LINK_ATTR]
     });
 
     return filterAllowedBlogEmbeds(clean);

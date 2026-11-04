@@ -162,3 +162,25 @@ test('a list with nothing to convert is returned as the same object', () => {
   const sections = [{ id: 's', modules: [{ type: 'navigation', settings: { navItems: JSON.stringify([{ href: 'https://x.y' }]) } }] }];
   assert.equal(convertSections(sections, bySlug, 'p', emptyReport()), sections);
 });
+
+test('a typed page address inside a text block gains the reference beside its unchanged href (86bcxthq5)', () => {
+  const report = emptyReport();
+  const text =
+    '<p><a href="/about" rel="noopener noreferrer">About</a> · <a href="https://x.example/">out</a> · ' +
+    '<a href="/nowhere">gone</a> · <a href="/about" data-page-link="page:2|/about">done</a></p>';
+  const sections = [{ id: 's1', modules: [{ id: 'm1', type: 'text', text, settings: {} }] }];
+  const [section] = convertSections(sections, bySlug, 'page "x"', report);
+  assert.equal(
+    section.modules[0].text,
+    text.replace('<a href="/about" rel="noopener noreferrer">', '<a href="/about" rel="noopener noreferrer" data-page-link="page:2|/about">')
+  );
+  assert.equal(report.upgraded.length, 1);
+  assert.equal(report.upgraded[0].to, 'page:2|/about');
+  assert.deepEqual(report.unmatched.map((u) => u.value), ['/nowhere']);
+});
+
+test('rich text with nothing to upgrade leaves the module the same object', () => {
+  const mod = { id: 'm', type: 'text', text: '<p><a href="https://x.example/">x</a></p>', settings: {} };
+  const sections = [{ id: 's', modules: [mod] }];
+  assert.equal(convertSections(sections, bySlug, 'p', emptyReport()), sections);
+});

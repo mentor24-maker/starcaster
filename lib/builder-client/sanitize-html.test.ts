@@ -3,6 +3,7 @@ import {
   escapeHtmlText,
   sanitizeBlogBodyHtml,
   sanitizeEmbedHtml,
+  sanitizeInlineHtml,
   sanitizeRichTextHtml,
   stripDangerousBlogBodyHtml
 } from "@/lib/sanitize-html";
@@ -75,5 +76,26 @@ describe("sanitizeEmbedHtml", () => {
     expect(clean.toLowerCase()).not.toContain("<style");
     expect(clean).toContain('id="dexscreener-embed"');
     expect(clean.toLowerCase()).toContain("<iframe");
+  });
+});
+
+describe("a rich-text link picked from the page list (task 86bcxthq5)", () => {
+  it("keeps the page reference on a link", () => {
+    const html = sanitizeRichTextHtml('<p><a href="/about" data-page-link="page:12|/about">About</a></p>');
+    expect(html).toContain('data-page-link="page:12|/about"');
+    expect(html).toContain('href="/about"');
+  });
+
+  it("keeps it inside a heading too", () => {
+    expect(sanitizeInlineHtml('<a href="/a" data-page-link="page:3|/a">A</a>')).toContain('data-page-link="page:3|/a"');
+  });
+
+  it("drops a value that is not a reference, and the attribute anywhere but a link", () => {
+    expect(sanitizeRichTextHtml('<a href="/x" data-page-link="javascript:alert(1)">x</a>')).not.toContain("data-page-link");
+    expect(sanitizeRichTextHtml('<span data-page-link="page:1|/x">x</span>')).not.toContain("data-page-link");
+  });
+
+  it("still drops every other data attribute", () => {
+    expect(sanitizeRichTextHtml('<a href="/x" data-evil="1">x</a>')).not.toContain("data-evil");
   });
 });
