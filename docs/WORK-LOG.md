@@ -14,6 +14,31 @@ re-picks them in the new panel. While building this, a hidden fault in the menu/
 (#948) turned up: a list setting holding text with one of these links would
 have been garbled when shown. That is fixed here, before anything could
 trigger it.
+## 2026-11-03 — The form editor's styling settings get their own column beside the preview (#952)
+
+On CRM: Edit Form, the Settings column held both the form's own settings and
+every styling control (background, border, heading, labels and fields,
+button), so it was a long scroll and the colours you were changing sat far
+from the preview showing them. The page now has four columns — Settings, Form
+Fields, Styles, Preview — with all the styling in the new Styles column right
+beside the preview. Nothing about what a setting does or how a form saves
+changed. On a medium-width window the columns sit two per row, and on a narrow
+one, one per row.
+
+## 2026-11-03 — Deleting a page now warns you about links still pointing to it, and client sites are checked weekly (#951)
+
+Renaming a page can no longer break a link to it, but deleting one still could,
+with no warning. Now, when you delete a page on Builder › Pages and any button,
+menu item or form still points to it, the confirm box lists each one by name
+(for example *Header › Menu item "About", shown on 12 pages*) and the button
+says Delete Anyway. A page nothing links to asks exactly what it always did.
+As a backstop, a weekly check reads every client site (it never changes
+anything) and rewrites one ClickUp ticket, "Broken links on client sites",
+listing every link that goes to a page that doesn't exist. Dane is assigned
+only while it lists something. Its first dry run found 40 such links on six
+sites, mostly menu items typed as addresses like /projects or /blog that no
+page has.
+
 ## 2026-11-03 — Renaming a page no longer breaks the site menu, cards, slides or image links (#948)
 
 A site's menu, its feature cards, carousel slides, an image's link, a galaxy's
