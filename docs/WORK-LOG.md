@@ -10,6 +10,16 @@ crumb picked from your page list follows that page if it is renamed. An empty
 Breadcrumb shows nothing to visitors, and tells whoever is building the page
 to add items. No live page used this module yet, so nothing on any client's
 site changes until someone adds one.
+## 2026-11-03 — The floating Save Page button no longer follows you to other screens (#949)
+
+After you left Builder > Pages for another screen — Contacts, a CRM form — the
+green floating Save Page button could stay on screen, hovering mid-right, even
+several screens later. The editor is kept open in the background when you
+switch screens, and the button had no way to tell its screen was gone. It now
+checks whether its own screen is showing and hides the moment you leave; back
+on Builder > Pages it works exactly as before, and the saved-section editor's
+Save Section button still appears. A first version of this fix left 18px of
+blank space under the page editor; that is gone too.
 
 ## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
 
