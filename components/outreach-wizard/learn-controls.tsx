@@ -98,7 +98,7 @@ function LessonRow({ lesson, label, busy, onChange, onDelete }: {
           >
             <label htmlFor={inputId} className="outreach-learn-hidden-label">Lesson</label>
             <input id={inputId} type="text" className="outreach-lesson-input" value={text} maxLength={160} onChange={(e) => setText(e.target.value)} />
-            <button type="submit" className="btn btn-primary" disabled={busy || !text.trim()}>Save</button>
+            <button type="submit" className="btn btn-save" disabled={busy || !text.trim()}>Save</button>
             <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setText(lesson.text); setEditing(false); }}>Cancel</button>
           </form>
         ) : (

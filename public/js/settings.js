@@ -2656,7 +2656,7 @@ App.settings = (function () {
           await refreshProjectContext();
           renderProjectDetails();
           applyProjectToHeader();
-          notify('Project saved');
+          App.components.SavedNotice.show('Project saved', { page: byId('settingsProjectDetailPage') });
         } catch (err) {
           notify(err.message, true);
         }

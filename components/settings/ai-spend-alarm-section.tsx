@@ -161,7 +161,7 @@ export function AlarmView({ alarm, onSave, saving, message, miniLimit = null }: 
           <span>Mini AI requests a day</span>
           <input type="number" min="0" step="1" value={values.miniDailyRequests} onChange={set('miniDailyRequests')} required />
         </label>
-        <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
       </form>
       <p className="ai-quota-footer">
         Spike: today is more than this many times the average of the last 7 days. Not judged while those days averaged

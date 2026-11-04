@@ -101,7 +101,7 @@ App.components.DataGrid = function DataGrid(opts) {
       toolbarActions.innerHTML = '';
       for (const action of bulkActions) {
         toolbarActions.appendChild(h('button', {
-          class: 'btn btn-sm' + (action.danger ? ' btn-danger' : (action.primary ? ' btn-primary' : '')),
+          class: 'btn btn-sm' + (action.danger ? ' btn-danger' : (action.save ? ' btn-save' : (action.primary ? ' btn-primary' : ''))),
           onclick: () => action.onClick(Array.from(selectedIds), clearSelection)
         }, action.label));
       }
@@ -329,8 +329,9 @@ App.components.DataGrid = function DataGrid(opts) {
  * @param {object} opts
  * @param {string}          opts.title    - Modal header title
  * @param {string|Node}     opts.body     - HTML string or DOM node for body content
- * @param {Array<{ label: string, primary?: boolean, onClick: () => void }>} [opts.actions]
- *   Footer buttons. primary=true styles as the main CTA.
+ * @param {Array<{ label: string, primary?: boolean, save?: boolean, onClick: () => void }>} [opts.actions]
+ *   Footer buttons. primary=true styles as the main CTA; save=true is the green
+ *   Save button (`.btn-save`) — use it for every action that commits work.
  * @param {() => void}      [opts.onClose] - Called when modal is dismissed
  * @param {boolean}         [opts.closeOnBackdrop] - Click backdrop to close. Default: true.
  *
@@ -359,7 +360,7 @@ App.components.Modal = function Modal(opts) {
   const footer = h('div', { class: 'c-modal__footer' });
   for (const action of actions) {
     footer.appendChild(h('button', {
-      class:   'btn' + (action.primary ? ' btn-primary' : ' btn-ghost'),
+      class:   'btn' + (action.save ? ' btn-save' : (action.primary ? ' btn-primary' : ' btn-ghost')),
       onclick: () => { action.onClick(); }
     }, action.label));
   }
@@ -423,8 +424,8 @@ App.components.Modal = function Modal(opts) {
  * @param {string}          opts.title     - Card header title
  * @param {string|Node}     [opts.body]    - Body content (HTML string or Node)
  * @param {string}          [opts.subtitle] - Subtitle shown under title
- * @param {Array<{ label: string, onClick: () => void, primary?: boolean }>} [opts.actions]
- *   Buttons shown in the card header (top right).
+ * @param {Array<{ label: string, onClick: () => void, primary?: boolean, save?: boolean }>} [opts.actions]
+ *   Buttons shown in the card header (top right). save=true is the green Save button.
  * @param {string}          [opts.class]   - Extra CSS class on the card el
  * @param {string}          [opts.status]  - Status badge text (e.g. 'sent', 'draft')
  * @param {string}          [opts.statusClass] - CSS class for the status badge
@@ -454,7 +455,7 @@ App.components.Card = function Card(opts) {
   }
   for (const action of (opts.actions || [])) {
     actionsEl.appendChild(h('button', {
-      class:   'btn btn-sm ' + (action.primary ? 'btn-primary' : 'btn-ghost'),
+      class:   'btn btn-sm ' + (action.save ? 'btn-save' : (action.primary ? 'btn-primary' : 'btn-ghost')),
       onclick: action.onClick
     }, action.label));
   }
@@ -545,6 +546,66 @@ App.components.Toast = (function () {
     error:   (msg, opts) => show(msg, { ...opts, type: 'error' }),
     info:    (msg, opts) => show(msg, { ...opts, type: 'info' }),
   };
+}());
+
+// ---------------------------------------------------------------------------
+// 5. SavedNotice — "it saved", at the top of the page, gone on its own
+// ---------------------------------------------------------------------------
+
+/**
+ * App.components.SavedNotice.show(message, options)
+ *   options.page     — the `.app-page` section that saved (default: the visible one)
+ *   options.duration — ms before it fades (default: 3000)
+ *
+ * Scrolls back to the top, moves keyboard focus to the page's heading, and shows
+ * a confirmation card at the top of the screen that fades by itself — nothing to
+ * close (operator, 2026-11-04, task 86bcyjag0). Use it instead of a toast after a
+ * form's Save, where the button sits at the bottom of a long form and a corner
+ * toast is easy to miss. Errors still go through App.notify.
+ */
+App.components.SavedNotice = (function () {
+  let current = null;
+
+  function scrollPageToTop(page) {
+    for (let node = page; node && node !== document.body; node = node.parentElement) {
+      if (node.scrollTop > 0) node.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function focusHeading(page) {
+    const heading = page && page.querySelector('.page-heading-row h2, h2');
+    if (!heading) return;
+    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: true });
+  }
+
+  function show(message, { page = null, duration = 3000 } = {}) {
+    const target = page || document.querySelector('.app-page:not(.hidden)');
+    scrollPageToTop(target);
+    focusHeading(target);
+
+    if (current) current.remove();
+    const notice = h('div', { class: 'c-saved-notice', role: 'status', 'aria-live': 'polite' },
+      h('span', { class: 'c-saved-notice__icon', 'aria-hidden': 'true' }, '✓'),
+      h('span', { class: 'c-saved-notice__message' }, String(message))
+    );
+    current = notice;
+    document.body.appendChild(notice);
+    requestAnimationFrame(() => notice.classList.add('c-saved-notice--visible'));
+
+    setTimeout(() => {
+      notice.classList.remove('c-saved-notice--visible');
+      notice.addEventListener('transitionend', () => {
+        notice.remove();
+        if (current === notice) current = null;
+      }, { once: true });
+    }, duration);
+
+    return notice;
+  }
+
+  return { show };
 }());
 
 // ---------------------------------------------------------------------------

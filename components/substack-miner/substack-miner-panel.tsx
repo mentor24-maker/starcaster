@@ -1372,7 +1372,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <textarea id="sm-keywords" rows={5} value={keywordsText} onChange={(e) => setKeywordsText(e.target.value)} disabled={!settings} />
             {keywordsMessage ? <p className="substack-miner-card-note" role="status">{keywordsMessage}</p> : null}
             <div className="substack-miner-actions">
-              <button type="submit" className="btn btn-primary" disabled={keywordsBusy || !settings || !keywordsDirty}>
+              <button type="submit" className="btn btn-save" disabled={keywordsBusy || !settings || !keywordsDirty}>
                 {keywordsBusy ? 'Saving…' : 'Save keywords'}
               </button>
             </div>

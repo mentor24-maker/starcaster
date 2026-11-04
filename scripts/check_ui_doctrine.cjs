@@ -598,6 +598,57 @@ function checkNoDuplicatedChrome(files) {
 }
 
 // ---------------------------------------------------------------------------
+// B1 — every Save button on the admin screens wears `.btn-save`.
+//
+// Green means "commit this work" (_variables.css). Until 2026-11-04 the admin
+// screens had no green class at all, so Save was blue on one screen, black on
+// the next and green on a third, and Project Settings' Save stretched the full
+// width of the form because the one rule sizing it named a class nothing
+// carried (task 86bcyjag0). One class now carries colour AND width, so the
+// rule is just "a Save button wears it".
+//
+// Scope is the `btn` family only — a button whose classes include the bare
+// token `btn`. That keeps it off client-site modules, which use their own
+// class families and keep the client's theme colours, and off the Builder's
+// `submit-button` toolbar, which has its own green (`.admin-save-button`).
+// A label is matched when it is literally "Save…" — `{busy ? 'Saving…' : 'Save'}`
+// counts, a choice like "Save & Publish" in a `submit-button` dialog does not
+// reach this rule at all.
+// ---------------------------------------------------------------------------
+// Attributes are read quote- and brace-aware: a JSX `onClick={() => …}` holds
+// a `>` that would otherwise end the tag early and read the handler as the label.
+const B1_BUTTON = /<button\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})*)>([\s\S]{0,300}?)<\/button>/g;
+
+function b1SaveButtonsMissingClass(src) {
+  const misses = [];
+  for (const m of src.matchAll(B1_BUTTON)) {
+    const attrs = m[1];
+    const label = m[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    if (!/(^|[>'"`]|\s)Save\b/.test(label)) continue;
+    const cls = (attrs.match(/\bclass(?:Name)?=(["'])([^"']*)\1/) || [])[2];
+    if (cls === undefined) continue;
+    const tokens = cls.split(/\s+/);
+    if (!tokens.includes('btn') || tokens.includes('btn-save')) continue;
+    const line = src.slice(0, m.index).split('\n').length;
+    misses.push({ line, cls, label: label.trim().slice(0, 60) });
+  }
+  return misses;
+}
+
+function checkSaveButtonClass(files) {
+  for (const file of files.filter((f) => /^(src\/pages\/.*\.html|public\/js\/[^/]+\.js|components\/.*\.tsx)$/.test(f))) {
+    if (/\.test\.tsx$/.test(file) || !fs.existsSync(file)) continue;
+    for (const miss of b1SaveButtonsMissingClass(fs.readFileSync(file, 'utf8'))) {
+      failures.push(
+        `[B1] ${file}:${miss.line} — "${miss.label}" is class="${miss.cls}".\n` +
+          `      A Save button wears \`btn btn-save\` (green, sized to its label). In a\n` +
+          `      Modal/Card action list, pass \`save: true\` instead of \`primary: true\`.`
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // D7 — dialogs and popup editors size to their content.
 //
 // A dialog declares a floor, grows to fit what is inside it, and stops at 75%
@@ -763,6 +814,9 @@ function run({ all = false } = {}) {
     // were fixed in the same change that added this, so anything it catches
     // is new.
     checkSizeSelectStep(sh("git ls-files 'components/builder/*.tsx'").split('\n').filter(Boolean));
+    // B1 is gated repo-wide from day one: the change that added it moved every
+    // Save button onto `.btn-save`, so anything it catches is new.
+    checkSaveButtonClass(sh("git ls-files 'src/pages/*.html' 'public/js/*.js' 'components/*.tsx'").split('\n').filter(Boolean));
   } else {
     const files = stagedFiles();
     if (!files.length) return { failures, notes };
@@ -776,6 +830,7 @@ function run({ all = false } = {}) {
     checkNoDuplicatedChrome(files);
     checkDialogWidths(files);
     checkSizeSelectStep(files);
+    checkSaveButtonClass(files);
 
     if (isMerging()) {
       notes.push(
@@ -794,7 +849,7 @@ function run({ all = false } = {}) {
 // w8NumberFields is exported for scripts/builder/uiDoctrineSizeStep.test.js —
 // the parser is the part with edge cases, and a checker nobody tests is a
 // checker that can silently stop catching things.
-module.exports = { run, w8NumberFields };
+module.exports = { run, w8NumberFields, b1SaveButtonsMissingClass };
 
 if (require.main === module) {
   if (String(process.env.SKIP_CONVENTIONS || '') === '1') {

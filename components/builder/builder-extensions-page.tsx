@@ -343,7 +343,7 @@ export function BuilderExtensionsPage({ onRegisterOpenItem }: Props) {
 
           <div />
           <div className="builder-ext-form-actions">
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>
+            <button type="submit" className="btn btn-save" disabled={isSaving}>
               {isSaving ? "Saving…" : draft.id ? "Update Extension" : "Save Extension"}
             </button>
             <button type="button" className="btn" onClick={() => { setDraft(emptyDraft()); setStatus(null); }}>

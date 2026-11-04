@@ -69,7 +69,7 @@ App.envConfig = (function () {
                />
              </td>
              <td class="env-action-cell">
-               <button class="btn btn-sm btn-primary" onclick="App.envConfig.save('${entry.key}')">Save</button>
+               <button class="btn btn-save btn-sm" onclick="App.envConfig.save('${entry.key}')">Save</button>
                <button class="btn btn-sm btn-ghost" onclick="App.envConfig.cancelEdit()">Cancel</button>
              </td>`
           : `<td class="env-value-cell">
@@ -122,7 +122,7 @@ App.envConfig = (function () {
       return;
     }
 
-    const btn = input.closest('tr').querySelector('.btn-primary');
+    const btn = input.closest('tr').querySelector('.btn-save');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
     try {

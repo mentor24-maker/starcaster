@@ -307,7 +307,7 @@ export function BuilderAgentsPage({ initialView, onRegisterSetView }: Props) {
             <div className="page-heading-actions">
               <button
                 type="button"
-                className="btn"
+                className="btn btn-save"
                 onClick={() => savePreset({ clone: false })}
               >
                 Save Agent

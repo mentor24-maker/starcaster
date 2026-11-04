@@ -251,15 +251,11 @@
   margin: -0.25rem 0 0.5rem calc(var(--label-col-width, 180px) + var(--label-col-gap, 0.6rem));
 }
 
-#settingsProjectDetailsPanel .project-details-form .project-details-save-row {
+/* No `.project-details-form` in the selector: no element carries that class,
+   so the rule never matched and Save Project stretched full width
+   (task 86bcyjag0). Its width now comes from `.btn-save`. */
+#settingsProjectDetailsPanel .project-details-save-row {
   margin-top: 0.35rem;
-}
-
-#settingsProjectDetailsPanel .project-details-form .project-details-save-row .btn {
-  width: fit-content;
-  max-width: 100%;
-  white-space: nowrap;
-  justify-self: start;
 }
 
 
@@ -9285,6 +9281,48 @@ table {
 .c-toast--visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* SavedNotice — the confirmation card at the top of the screen after a Save.
+   No close button: it fades on its own after 3s (task 86bcyjag0). The fade is
+   a transition so components.js can remove the node on `transitionend`. */
+.c-saved-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  padding: 14px 22px;
+  border-radius: var(--c-radius);
+  border: 1px solid var(--btn-green);
+  background: var(--bg-surface);
+  box-shadow: var(--c-shadow-md);
+  color: var(--c-text);
+  font-size: var(--text-md);
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.c-saved-notice--visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.c-saved-notice__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--btn-green);
+  color: var(--btn-flat-ink);
+  font-size: var(--text-base);
 }
 
 .c-toast--success { background: var(--c-success); }

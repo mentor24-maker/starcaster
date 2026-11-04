@@ -430,14 +430,14 @@
 /* Save Form sits under the preview and wears the Builder's Save Page face:
    same green, same size (measured off the floating Save Page button). The
    hover goes LIGHTER, not darker like Save Page's — operator, 2026-11-03.
-   `.btn.` because the generic .btn sizing loads after this file. */
+   `.btn.` because the generic .btn sizing loads after this file. The green
+   and the grey-green disabled state come from the shared `.btn-save`
+   (_buttons.css); only the size and the lighter hover are this button's own. */
 .btn.crm-form-editor-save-btn {
   margin-top: 1rem;
   padding: 14px 28px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--btn-green);
-  color: var(--btn-flat-ink);
   font-size: 0.95rem; /* Save Page's own size, off the type scale on purpose: the ask was "the same size" */
   font-weight: 700;
   line-height: normal;
@@ -445,14 +445,7 @@
 
 .btn.crm-form-editor-save-btn:hover:not(:disabled) {
   background: var(--btn-green-light);
-  color: var(--btn-flat-ink);
-  opacity: 1;
-}
-
-.btn.crm-form-editor-save-btn:disabled {
-  background: var(--btn-green-disabled);
-  color: var(--btn-flat-ink);
-  opacity: 1;
+  border-color: var(--btn-green-light);
 }
 
 .crm-form-preview-shell {

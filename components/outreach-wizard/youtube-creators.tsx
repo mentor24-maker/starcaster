@@ -224,7 +224,7 @@ export default function YoutubeCreators({ onChanged }: { onChanged?: () => void 
       <form className="outreach-wizard-connect-form" onSubmit={(e) => { e.preventDefault(); void saveKeywords(); }}>
         <label htmlFor="yt-creators-keywords">Keywords</label>
         <input id="yt-creators-keywords" type="text" className="outreach-wizard-account-input yt-creators-keywords" value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <button type="submit" className="btn" disabled={!!busy || !draft.trim()}>Save keywords</button>
+        <button type="submit" className="btn btn-save" disabled={!!busy || !draft.trim()}>Save keywords</button>
       </form>
       {keywords ? <p className="outreach-wizard-muted">{keywordsSourceText(keywords)}</p> : null}
       <div className="outreach-wizard-stage-actions">

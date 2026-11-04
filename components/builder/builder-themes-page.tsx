@@ -540,7 +540,7 @@ export function BuilderThemesPage() {
         </button>
         <button
           type="button"
-          className="submit-button builder-themes-btn"
+          className="submit-button admin-save-button builder-themes-btn"
           onClick={handleSave}
           disabled={isSaving}
         >
