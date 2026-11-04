@@ -92,6 +92,7 @@ import {
   type CrmFormStylesEventDetail
 } from "./builder/builder-crm-form-module-settings";
 import { BugReportModule } from "./builder/builder-bug-report-module";
+import { parseBreadcrumbItems } from "./builder/builder-breadcrumb-module-settings";
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
@@ -1448,6 +1449,78 @@ function CrmContactsTablePreview({
         </BuilderBodyPortal>
       )}
     </div>
+  );
+}
+
+/*
+ * The Breadcrumb trail as a visitor sees it (task 86bcxwe6z). The module had a
+ * full settings panel and an editor card for months while this renderer did
+ * not exist, so a published Breadcrumb was an empty gap on the live page.
+ *
+ * Links arrive already resolved: a crumb picked from the page list is stored
+ * as `page:<id>|/path` and the caller runs resolvePageLinksInSettings over the
+ * module's settings before it gets here. The defaults are the editor card's
+ * (builder-module-card.tsx), so the two draw the same trail.
+ */
+function BreadcrumbModulePreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
+  // A crumb with no label has nothing to show a visitor; the editor card
+  // numbers it ("Item 2") so the builder can find it, the page skips it.
+  const items = parseBreadcrumbItems(settings).filter((item) => item.label.trim());
+  if (items.length === 0) {
+    if (liveSite) return null;
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        This breadcrumb has no trail items yet — add them in module settings.
+      </BuilderOnlyNote>
+    );
+  }
+  const separator = settings.separator || "›";
+  const fontSize = parseInt(settings.fontSize ?? "14", 10) || 14;
+  const color = settings.color || "#587592";
+  const activeColor = settings.activeColor || "#18324a";
+  const alignment = settings.alignment === "center" || settings.alignment === "right" ? settings.alignment : "left";
+  const justify = alignment === "center" ? "center" : alignment === "right" ? "flex-end" : "flex-start";
+
+  // The fixed layout lives in _builder-react-overrides.css (`.builder-preview-
+  // breadcrumb`); only what the panel sets is inline. The list resets there
+  // matter: the trail renders inside arbitrary tenant themes, and a theme's
+  // `ol`/`li` rules would otherwise number or indent it (§5.28).
+  return (
+    <nav aria-label="Breadcrumb" className="builder-preview-breadcrumb" style={{ textAlign: alignment }}>
+      <ol style={{ justifyContent: justify, fontSize, fontWeight: settings.bold === "true" ? 700 : 400 }}>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          const url = typeof item.url === "string" ? item.url.trim() : "";
+          return (
+            <li key={item.id || index}>
+              {isLast ? (
+                <span aria-current="page" className="builder-preview-breadcrumb-current" style={{ color: activeColor }}>
+                  {item.label}
+                </span>
+              ) : url ? (
+                <Link className="builder-preview-breadcrumb-link" href={url} style={{ color }}>
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="builder-preview-breadcrumb-text" style={{ color }}>{item.label}</span>
+              )}
+              {isLast ? null : (
+                <span aria-hidden="true" className="builder-preview-breadcrumb-sep" style={{ color }}>
+                  {separator}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -2884,6 +2957,10 @@ function BuilderModulePreviewBody({
 
   if (module.type === "tractor-nav") {
     return <TractorNavRuntime settings={module.settings} />;
+  }
+
+  if (module.type === "breadcrumb") {
+    return <BreadcrumbModulePreview settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "galaxy") {

@@ -12083,3 +12083,46 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   opacity: 0.5;
   cursor: default;
 }
+
+/*
+ * Breadcrumb trail on a live page and in Preview (task 86bcxwe6z;
+ * BreadcrumbModulePreview in builder-template-preview.tsx). Colours, size,
+ * weight and alignment come inline from the panel; the layout is here. The
+ * list resets are not decoration: the trail renders inside arbitrary tenant
+ * themes, and a theme's `ol`/`li` rules would number or indent it (§5.28).
+ */
+.builder-preview-breadcrumb > ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-preview-breadcrumb > ol > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-preview-breadcrumb-link,
+.builder-preview-breadcrumb-text {
+  text-decoration: none;
+}
+
+.builder-preview-breadcrumb-link:hover,
+.builder-preview-breadcrumb-link:focus-visible {
+  text-decoration: underline;
+}
+
+.builder-preview-breadcrumb-current {
+  font-weight: 600;
+}
+
+.builder-preview-breadcrumb-sep {
+  opacity: 0.5;
+}
