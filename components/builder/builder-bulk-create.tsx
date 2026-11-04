@@ -1,5 +1,6 @@
 import type { BuilderPageRecord, BuilderSavedSectionRecord, BuilderTemplateRecord, BuilderThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useState } from "react";
+import { pageLinkHref } from "@/lib/page-link";
 import { CONTENT_DISPLAY_MODELS } from "./builder-content-models";
 import type { BuilderMenuItem } from "./builder-menu";
 
@@ -152,7 +153,13 @@ export function BuilderBulkCreate({
   }, [templates, savedSections]);
 
   const selectedMenu = menuOptions.find((opt) => opt.id === selectedMenuId);
-  const menuItems = selectedMenu?.items ?? [];
+  // A menu item picked by page stores "page:<id>|/about". This screen only
+  // reads the address to name the new page, and has no page list to look the
+  // id up in, so it uses the address saved when the page was picked.
+  const menuItems = useMemo(
+    () => (selectedMenu?.items ?? []).map((item) => ({ ...item, href: pageLinkHref(item.href || "", undefined) })),
+    [selectedMenu],
+  );
   const selectedTemplate = createableTemplates.find((t) => t.id === selectedTemplateId) ?? null;
   const useContentModel = Boolean(selectedModelId);
 

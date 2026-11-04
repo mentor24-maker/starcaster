@@ -47,7 +47,7 @@ test('only picker settings change; free-text links and other settings are untouc
   const sections = [{
     id: 's1', title: 'Hero', modules: [
       { type: 'button', name: 'CTA', settings: { href: '/about', text: '/about' } },
-      { type: 'image', settings: { linkUrl: '/about' } },
+      { type: 'text', settings: { content: '<a href="/about">About</a>' } },
       { type: 'blog-post-list', settings: { postSlug: 'blog-post-view' } },
       { type: 'navigation', settings: { href: '/about' } },
     ],
@@ -56,7 +56,7 @@ test('only picker settings change; free-text links and other settings are untouc
   const next = convertSections(sections, bySlug, 'page "Home"', report);
   assert.equal(next[0].modules[0].settings.href, 'page:2|/about');
   assert.equal(next[0].modules[0].settings.text, '/about');
-  assert.equal(next[0].modules[1], sections[0].modules[1], 'an image outside a table has no page picker');
+  assert.equal(next[0].modules[1], sections[0].modules[1], 'rich-text links are not converted');
   assert.equal(next[0].modules[2].settings.postSlug, 'page:3|blog-post-view');
   assert.equal(next[0].modules[3], sections[0].modules[3]);
   assert.equal(report.upgraded.length, 2);
@@ -125,4 +125,40 @@ test('read-back: normalized extras are fine, a dropped module or a missing refer
   assert.match(readBackProblem([{ modules: [{ settings: { href: 'page:2|/about' } }] }], wanted), /1 module/);
   assert.match(readBackProblem([{ modules: [{ settings: { href: '/about' } }, { settings: {} }] }], wanted), /page 2/);
   assert.match(readBackProblem([], wanted), /0 section/);
+});
+
+// Task 86bcxmt5x: menus, cards, slides and an image's Link have a picker now.
+test('a menu item, a card, a slide and an image link are converted; typed and external ones are not', () => {
+  const navItems = JSON.stringify([
+    { id: 'a', label: 'About', href: '/about' },
+    { id: 'b', label: 'Shop', href: 'https://shop.example.com' },
+    { id: 'c', label: 'Lost', href: '/nowhere', parentId: 'a' },
+  ]);
+  const cards = JSON.stringify([{ id: 'k', title: 'Home', linkUrl: '/' }]);
+  const items = JSON.stringify([{ id: 'i', title: 'Slide', linkUrl: '/about', imageUrl: '/about' }]);
+  const sections = [{ id: 's', modules: [
+    { type: 'navigation', settings: { navItems } },
+    { type: 'feature-cards', settings: { cards } },
+    { type: 'carousel', settings: { items } },
+    { type: 'image', settings: { linkUrl: '/about' } },
+  ] }];
+  const report = emptyReport();
+  const [section] = convertSections(sections, bySlug, 'p', report);
+  const nav = JSON.parse(section.modules[0].settings.navItems);
+  assert.equal(nav[0].href, 'page:2|/about');
+  assert.deepEqual(nav[1], { id: 'b', label: 'Shop', href: 'https://shop.example.com' });
+  assert.deepEqual(nav[2], { id: 'c', label: 'Lost', href: '/nowhere', parentId: 'a' });
+  assert.equal(JSON.parse(section.modules[1].settings.cards)[0].linkUrl, 'page:1|/');
+  const slide = JSON.parse(section.modules[2].settings.items)[0];
+  assert.equal(slide.linkUrl, 'page:2|/about');
+  assert.equal(slide.imageUrl, '/about', 'only the link field of an item is touched');
+  assert.equal(section.modules[3].settings.linkUrl, 'page:2|/about');
+  assert.equal(report.upgraded.length, 4);
+  assert.equal(report.unmatched.length, 1);
+  assert.match(report.unmatched[0].setting, /navItems › Lost › href/);
+});
+
+test('a list with nothing to convert is returned as the same object', () => {
+  const sections = [{ id: 's', modules: [{ type: 'navigation', settings: { navItems: JSON.stringify([{ href: 'https://x.y' }]) } }] }];
+  assert.equal(convertSections(sections, bySlug, 'p', emptyReport()), sections);
 });

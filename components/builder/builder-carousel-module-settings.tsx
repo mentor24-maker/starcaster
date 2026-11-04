@@ -1,3 +1,4 @@
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { Fragment, type CSSProperties } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { BuilderNumberSelectControl } from "./builder-inline-number-select";
@@ -598,12 +599,14 @@ export function BuilderCarouselModuleSettings({
                 ) : null}
                 {showItemCopy ? thumbFor("beside") : null}
                 <BuilderModuleField label="Link" width="text-md" className="builder-card-field--a">
-                  <input
-                    type="text"
+                  <BuilderProjectDataPicker
+                    source="pages"
+                    valueKind="path"
                     value={item.linkUrl}
-                    onChange={(event) => updateItem(item.id, { linkUrl: event.target.value })}
+                    onChange={(linkUrl) => updateItem(item.id, { linkUrl })}
+                    noneLabel="— No link —"
                     placeholder="/path-or-url"
-                    aria-label={`${Noun} ${index + 1} link`}
+                    ariaLabel={`${Noun} ${index + 1} link`}
                   />
                 </BuilderModuleField>
                 {showItemCopy ? null : thumbFor("beside")}

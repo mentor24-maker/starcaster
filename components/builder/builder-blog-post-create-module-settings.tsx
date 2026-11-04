@@ -49,7 +49,10 @@ export function BuilderBlogPostCreateModuleSettings({
               key: "redirectAfterCreate",
               label: "Redirect To",
               width: "full",
-              control: "text",
+              control: "picker",
+              source: "pages",
+              valueKind: "path",
+              noneLabel: "— Stay on this page —",
               placeholder: "/admin/posts  (leave blank to stay on this page)"
             }
           ],

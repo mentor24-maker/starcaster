@@ -2176,6 +2176,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   display: contents;
 }
 
+/* The Link column is the shared page picker (task 86bcxmt5x): a page is
+   stored by reference so renaming it cannot break the menu. The picker is a
+   composite — a select, plus a text input under Custom… — so it fills its
+   one track and the typed address wraps under the select rather than
+   pushing past the column into the action buttons. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href {
+  min-width: 0;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker {
+  display: flex;
+  width: 100%;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker > select,
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker > input[type="text"] {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
 /* The three action buttons keep their own row, right-aligned so the ✕ sits
    on the block edge (L8) rather than wherever three 26px buttons happen to
    end. */
