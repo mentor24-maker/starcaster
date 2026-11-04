@@ -55,8 +55,22 @@ function isOnScreen(rect: DOMRect): boolean {
  * anchor, fell back to floating mid-right, and stayed on every other screen
  * (task 86bcxtw7m). The host marker renders in place, inside the owning
  * screen: when it has no layout box, that screen is not showing.
+ *
+ * It is absolutely positioned so it takes no space: the page editor's section
+ * is a grid with an 18px gap, and an in-flow marker became its own row there,
+ * adding 18px of blank space under every page. An absolute box still returns a
+ * rect while its screen shows and none once an ancestor is display:none —
+ * never use display:none/contents here, which have no rect and would hide the
+ * rail for good.
  */
-const HOST_STYLE: CSSProperties = { display: "block", height: 0, width: 0, overflow: "hidden" };
+const HOST_STYLE: CSSProperties = {
+  position: "absolute",
+  display: "block",
+  height: 0,
+  width: 0,
+  overflow: "hidden",
+  pointerEvents: "none"
+};
 
 function isHostShowing(host: HTMLElement | null): boolean {
   return Boolean(host && host.getClientRects().length > 0);

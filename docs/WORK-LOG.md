@@ -1,3 +1,14 @@
+## 2026-11-03 — The floating Save Page button no longer follows you to other screens (#949)
+
+After you left Builder > Pages for another screen — Contacts, a CRM form — the
+green floating Save Page button could stay on screen, hovering mid-right, even
+several screens later. The editor is kept open in the background when you
+switch screens, and the button had no way to tell its screen was gone. It now
+checks whether its own screen is showing and hides the moment you leave; back
+on Builder > Pages it works exactly as before, and the saved-section editor's
+Save Section button still appears. A first version of this fix left 18px of
+blank space under the page editor; that is gone too.
+
 ## 2026-11-03 — The form editor's styling settings get their own column beside the preview (#952)
 
 On CRM: Edit Form, the Settings column held both the form's own settings and

@@ -114,4 +114,17 @@ describe("the floating Save rail leaves with its screen", () => {
 
     expect(railVisibility()).toBe("visible");
   });
+
+  it("its in-place marker takes no space in the screen's layout", () => {
+    // jsdom cannot measure a grid gap, so pin the property that keeps the
+    // marker out of flow: in-flow, it became an extra row in the page
+    // editor's grid and added 18px of blank space under every page.
+    renderRail(null);
+
+    const marker = screen?.querySelector<HTMLElement>('span[aria-hidden="true"]');
+    expect(marker).toBeTruthy();
+    expect(marker?.style.position).toBe("absolute");
+    expect(marker?.style.display).not.toBe("none");
+    expect(marker?.style.display).not.toBe("contents");
+  });
 });
