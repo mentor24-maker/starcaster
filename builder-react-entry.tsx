@@ -14,6 +14,7 @@ import { SavedSectionEditorModal } from './components/builder/saved-section-edit
 import { BuilderThemeColorField } from './components/builder/builder-theme-color-field';
 import { BuilderSharedPageTemplatesIsland } from './components/builder/builder-shared-page-templates';
 import { BuilderSharedPagesIsland } from './components/builder/builder-shared-pages';
+import { confirmPageDelete } from './components/builder/confirm-page-delete';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -387,6 +388,9 @@ declare global {
       mount: typeof mountSiteImportReact;
       unmount: typeof unmountSiteImportReact;
     };
+    PageDeleteReact: {
+      confirm: typeof confirmPageDelete;
+    };
   }
 }
 
@@ -446,6 +450,13 @@ window.SavedSectionEditorReact = {
 window.SiteImportReact = {
   mount: mountSiteImportReact,
   unmount: unmountSiteImportReact,
+};
+
+// Builder › Pages (the frozen vanilla table) asks this before deleting, so the
+// warning about links still pointing at the page is the same one the React
+// page list shows (task 86bcxn69z).
+window.PageDeleteReact = {
+  confirm: confirmPageDelete,
 };
 
 /**

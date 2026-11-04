@@ -83,6 +83,7 @@ const siteImport  = require('./siteImport');
 const siteExport  = require('./siteExport');
 const themeWizard = require('./themeWizard');
 const themeUsage  = require('./themeUsage');
+const builderPageLinks = require('./builderPageLinks');
 const fonts       = require('./fonts');
 const publicSite  = require('./publicSite');
 
@@ -134,6 +135,8 @@ const ROUTE_MODULES = [
   // '/api/builder/themes/<id>/', which builder's one-segment regex ignores
   // today and would 405 the day it grows a catch-all.
   themeUsage,
+  // Ahead of `builder` for the same reason: it owns '/api/builder/page-links/'.
+  builderPageLinks,
   builder,
   siteImport,
   siteExport,

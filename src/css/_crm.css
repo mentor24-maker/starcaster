@@ -158,11 +158,12 @@
   font-size: 0.8rem;
 }
 
-/* CRM form editor — three-column layout */
+/* CRM form editor — four columns: Settings, Form Fields, Styles, Preview.
+   Two per row below 1400px, one per row below 1100px (further down). */
 
 .crm-form-editor-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(280px, 1.2fr);
+  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(240px, 0.95fr) minmax(280px, 1.2fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -181,12 +182,14 @@
   margin: 0 0 0.75rem;
 }
 
-.crm-form-editor-col-settings .crm-form-editor-setting {
+.crm-form-editor-col-settings .crm-form-editor-setting,
+.crm-form-editor-col-styles .crm-form-editor-setting {
   display: block;
   margin-bottom: 0.75rem;
 }
 
-.crm-form-editor-col-settings input[type="color"] {
+.crm-form-editor-col-settings input[type="color"],
+.crm-form-editor-col-styles input[type="color"] {
   width: 100%;
   min-height: 42px;
   padding: 0.25rem;
@@ -424,6 +427,34 @@
   text-align: left;
 }
 
+/* Save Form sits under the preview and wears the Builder's Save Page face:
+   same green, same size (measured off the floating Save Page button). The
+   hover goes LIGHTER, not darker like Save Page's — operator, 2026-11-03.
+   `.btn.` because the generic .btn sizing loads after this file. */
+.btn.crm-form-editor-save-btn {
+  margin-top: 1rem;
+  padding: 14px 28px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--btn-green);
+  color: var(--btn-flat-ink);
+  font-size: 0.95rem; /* Save Page's own size, off the type scale on purpose: the ask was "the same size" */
+  font-weight: 700;
+  line-height: normal;
+}
+
+.btn.crm-form-editor-save-btn:hover:not(:disabled) {
+  background: var(--btn-green-light);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
+
+.btn.crm-form-editor-save-btn:disabled {
+  background: var(--btn-green-disabled);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
+
 .crm-form-preview-shell {
   width: 100%;
   max-width: 100%;
@@ -553,6 +584,12 @@
   font-size: 0.75rem;
   resize: vertical;
   box-sizing: border-box;
+}
+
+@media (max-width: 1400px) {
+  .crm-form-editor-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1100px) {

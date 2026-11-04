@@ -1,3 +1,4 @@
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import {
@@ -1445,7 +1446,7 @@ export function BuilderNavigationModuleSettings({
               <div className="builder-nav-item-fields">
                 <span>Parent Page</span>
                 <span>Page Name</span>
-                <span>Slug</span>
+                <span>Link</span>
                 {module.settings.navItemSizing === "custom" && <span className="builder-nav-item-width-wrap">Width</span>}
               </div>
               <span className="builder-nav-items-header-action">Action</span>
@@ -1474,7 +1475,18 @@ export function BuilderNavigationModuleSettings({
                         ))}
                       </select>
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
-                      <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+                      {/* A page is stored by reference, so renaming it cannot break the menu (task 86bcxmt5x). */}
+                      <span className="builder-nav-item-href">
+                        <BuilderProjectDataPicker
+                          source="pages"
+                          valueKind="path"
+                          value={item.href}
+                          onChange={(href) => updateItem(item.id, { href })}
+                          noneLabel="— No link —"
+                          placeholder="/path-or-url"
+                          ariaLabel={`${item.label || `Link ${index + 1}`} link`}
+                        />
+                      </span>
                       {isCustomSizing && (
                         <div className="builder-nav-item-width-wrap">
                           <input

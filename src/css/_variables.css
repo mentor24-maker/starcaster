@@ -43,6 +43,7 @@
   --btn-green: #00cc00;
   --btn-green-hover: #00a300;
   --btn-green-disabled: #aaccaa;
+  --btn-green-light: #4ddb4d; /* a LIGHTER hover, for CRM Save Form (operator, 2026-11-03) */
   --btn-blue: #0000cc;
   --btn-blue-hover: #0000a3;
   --btn-blue-disabled: #aaaacc;

@@ -457,7 +457,10 @@ export function BuilderGalaxyModuleSettings({ module, onUpdateModule, themeColor
                   key: "linkUrl",
                   label: "Link to",
                   width: "text-md",
-                  control: "text",
+                  control: "picker",
+                  source: "pages",
+                  valueKind: "path",
+                  noneLabel: "— No link —",
                   placeholder: "https://",
                   visibleWhen: (settings) => proximityIsInline(settings.placement),
                   rendersVia: "GalaxyRuntime"

@@ -110,6 +110,7 @@ import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
 import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
+import { confirmPageDelete as askBeforePageDelete } from "./builder/confirm-page-delete";
 import { BuilderSectionSaveModal } from "./builder/builder-section-save-modal";
 import {
   BuilderSharedBlockSaveModal,
@@ -2689,9 +2690,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     finally { setIsSaving(false); }
   }
 
+  /**
+   * Ask before deleting, naming every button, menu item and form that would be
+   * left pointing at a deleted page (task 86bcxn69z). Nothing linking → the
+   * same `window.confirm` as always. One function for both Pages screens:
+   * components/builder/confirm-page-delete.tsx.
+   */
+  function confirmPageDelete(pageIds: string[], question: string): Promise<boolean> {
+    return askBeforePageDelete(pageIds, question, (id) => pages.find((page) => page.id === id)?.name || "");
+  }
+
   async function deletePageById(pageId: string, pageName: string) {
     if (!pageId) { startNewPage(); return; }
-    if (!window.confirm(`Delete page "${pageName}"? This cannot be undone.`)) return;
+    if (!(await confirmPageDelete([pageId], `Delete page "${pageName}"? This cannot be undone.`))) return;
     setError(null); setMessage(null);
     try {
       const response = await builderAdminFetch(`/api/admin/pages/${pageId}`, { method: "DELETE" });
@@ -2705,7 +2716,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   async function deletePagesByIds(pageIds: string[]) {
     if (pageIds.length === 0) return;
     const n = pageIds.length;
-    if (!window.confirm(`Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    if (!(await confirmPageDelete(pageIds, `Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`))) return;
     setError(null); setMessage(null); setIsSaving(true);
     let failed = 0;
     for (const id of pageIds) {

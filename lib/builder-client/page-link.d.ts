@@ -15,5 +15,6 @@ export declare function resolvePageLinksInSettings<T extends Record<string, unkn
   settings: T,
   addresses?: PageAddressMap | null
 ): T;
+export declare function resolvePageLinksInJsonText(text: string, addresses?: PageAddressMap | null): string;
 export declare function collectPageLinkIds(value: unknown): Set<string>;
 export declare function buildPageAddressMap(pages: unknown): Record<string, string>;

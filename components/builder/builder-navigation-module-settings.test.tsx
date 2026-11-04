@@ -58,7 +58,7 @@ describe("Navigation settings editor", () => {
     // a title added without bumping it (or the reverse) fails the check for a
     // reason that reads like a layout bug. Kept honest here instead.
     const html = navHtml();
-    for (const title of ["Parent Page", "Page Name", "Slug", "Action"]) {
+    for (const title of ["Parent Page", "Page Name", "Link", "Action"]) {
       expect(html).toContain(`>${title}<`);
     }
   });

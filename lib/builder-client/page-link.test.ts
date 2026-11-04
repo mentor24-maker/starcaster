@@ -7,6 +7,7 @@ import {
   pageLinkHref,
   parsePageLink,
   resolvePageLink,
+  resolvePageLinksInJsonText,
   resolvePageLinksInSettings
 } from "./page-link";
 
@@ -65,4 +66,54 @@ describe("page links stored by reference (task 86bcxmrw2)", () => {
   it("builds the id → slug map from page records", () => {
     expect(buildPageAddressMap([{ id: 3, slug: "/a" }, { id: "", slug: "b" }, { id: "4", slug: "" }])).toEqual({ "3": "a", "4": "" });
   });
+
+  describe("links inside a list stored as JSON text — menus, cards, slides (task 86bcxmt5x)", () => {
+    const navItems = JSON.stringify([
+      { id: "a", label: "About", href: makePageLink("42", "/about") },
+      { id: "b", label: "Shop", href: "https://shop.example.com" },
+      { id: "c", label: "Old", href: "/typed-path", parentId: "a" }
+    ]);
+
+    it("a menu item follows its page after the page's address changes", () => {
+      const out = resolvePageLinksInSettings({ navItems }, { "42": "about-v2" });
+      const items = JSON.parse(out.navItems);
+      expect(items[0].href).toBe("/about-v2");
+    });
+
+    it("leaves typed addresses and external links exactly as they were", () => {
+      const out = JSON.parse(resolvePageLinksInSettings({ navItems }, { "42": "x" }).navItems);
+      expect(out[1].href).toBe("https://shop.example.com");
+      expect(out[2]).toEqual({ id: "c", label: "Old", href: "/typed-path", parentId: "a" });
+    });
+
+    it("uses the saved address when the page is gone", () => {
+      const out = JSON.parse(resolvePageLinksInSettings({ navItems }, {}).navItems);
+      expect(out[0].href).toBe("/about");
+    });
+
+    it("resolves at any depth, including a module stored inside a menu item", () => {
+      const text = JSON.stringify([{ id: "a", featureModule: { settings: { href: makePageLink("7", "/x") } } }]);
+      expect(JSON.parse(resolvePageLinksInJsonText(text, { "7": "y" }))[0].featureModule.settings.href).toBe("/y");
+    });
+
+    it("survives a fallback with quotes and backslashes in it", () => {
+      const text = JSON.stringify([{ linkUrl: makePageLink("9", '/a"b\\c') }]);
+      expect(JSON.parse(resolvePageLinksInJsonText(text, {}))[0].linkUrl).toBe('/a"b\\c');
+      expect(JSON.parse(resolvePageLinksInJsonText(text, { "9": "z" }))[0].linkUrl).toBe("/z");
+    });
+
+    it("returns the same settings object when no list holds a reference", () => {
+      const settings = { navItems: JSON.stringify([{ href: "/a" }]), text: "Visit page:1|x today" };
+      expect(resolvePageLinksInSettings(settings, { "1": "q" })).toBe(settings);
+    });
+
+    it("does not touch prose that merely mentions a reference", () => {
+      expect(resolvePageLinksInJsonText('see "page:1|/a" here', { "1": "q" })).toBe('see "page:1|/a" here');
+    });
+
+    it("the server finds the ids inside a menu, so it can send their addresses", () => {
+      expect([...collectPageLinkIds({ settings: { navItems } })]).toEqual(["42"]);
+    });
+  });
 });
+
