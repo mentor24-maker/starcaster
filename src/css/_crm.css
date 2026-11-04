@@ -158,11 +158,12 @@
   font-size: 0.8rem;
 }
 
-/* CRM form editor — three-column layout */
+/* CRM form editor — four columns: Settings, Form Fields, Styles, Preview.
+   Two per row below 1400px, one per row below 1100px (further down). */
 
 .crm-form-editor-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(280px, 1.2fr);
+  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(240px, 0.95fr) minmax(280px, 1.2fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -181,12 +182,14 @@
   margin: 0 0 0.75rem;
 }
 
-.crm-form-editor-col-settings .crm-form-editor-setting {
+.crm-form-editor-col-settings .crm-form-editor-setting,
+.crm-form-editor-col-styles .crm-form-editor-setting {
   display: block;
   margin-bottom: 0.75rem;
 }
 
-.crm-form-editor-col-settings input[type="color"] {
+.crm-form-editor-col-settings input[type="color"],
+.crm-form-editor-col-styles input[type="color"] {
   width: 100%;
   min-height: 42px;
   padding: 0.25rem;
@@ -581,6 +584,12 @@
   font-size: 0.75rem;
   resize: vertical;
   box-sizing: border-box;
+}
+
+@media (max-width: 1400px) {
+  .crm-form-editor-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1100px) {
