@@ -7,6 +7,7 @@ import {
   pageLinkHref,
   parsePageLink,
   resolvePageLink,
+  resolvePageLinksInHtml,
   resolvePageLinksInJsonText,
   resolvePageLinksInSettings
 } from "./page-link";
@@ -117,3 +118,45 @@ describe("page links stored by reference (task 86bcxmrw2)", () => {
   });
 });
 
+
+describe("links typed inside rich text (task 86bcxthq5)", () => {
+  const html =
+    '<p>See <a href="/old-menu" data-page-link="page:42|/old-menu" rel="noopener noreferrer">the menu</a>, ' +
+    '<a href="/typed">typed</a> and <a href="https://x.example/">out</a>.</p>';
+
+  it("points a picked page at its current address and leaves every other byte alone", () => {
+    const next = resolvePageLinksInHtml(html, { "42": "menu-v2" });
+    expect(next).toBe(html.replace('href="/old-menu"', 'href="/menu-v2"'));
+  });
+
+  it("returns the same string when nothing is a picked page", () => {
+    const plain = '<p><a href="/typed">typed</a></p>';
+    expect(resolvePageLinksInHtml(plain, { "42": "x" })).toBe(plain);
+  });
+
+  it("keeps the saved address for a deleted page, and when nobody could look", () => {
+    expect(resolvePageLinksInHtml(html, { "9": "other" })).toBe(html);
+    expect(resolvePageLinksInHtml(html, null)).toBe(html);
+  });
+
+  it("reads single-quoted and entity-encoded attributes, and adds an href when there was none", () => {
+    expect(resolvePageLinksInHtml("<a data-page-link='page:42|/a'>x</a>", { "42": "b&c" })).toBe(
+      '<a href="/b&amp;c" data-page-link=\'page:42|/a\'>x</a>'
+    );
+  });
+
+  it("ignores an attribute that is not a reference", () => {
+    const odd = '<a href="/x" data-page-link="javascript:alert(1)">x</a>';
+    expect(resolvePageLinksInHtml(odd, { "42": "y" })).toBe(odd);
+  });
+
+  it("resolves rich text held in a setting, but never reads JSON text as HTML", () => {
+    expect(resolvePageLinksInSettings({ body: html }, { "42": "menu-v2" }).body).toContain('href="/menu-v2"');
+    const json = JSON.stringify([{ html }]);
+    expect(resolvePageLinksInSettings({ items: json }, { "42": "menu-v2" }).items).toBe(json);
+  });
+
+  it("the server finds the id inside rich text, so the live page is sent its address", () => {
+    expect([...collectPageLinkIds([{ modules: [{ text: html }] }])]).toEqual(["42"]);
+  });
+});

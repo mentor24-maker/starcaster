@@ -4,13 +4,13 @@ import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { Extension } from "@tiptap/core";
 import Color from "@tiptap/extension-color";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
 import StarterKit from "@tiptap/starter-kit";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { PageLink, RichTextLinkDialog, type RichTextLinkValue } from "@/components/builder/rich-text-page-link";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import { prepareRichTextHtmlForEditor, prepareRichTextHtmlForStorage } from "@/lib/builder-template";
@@ -207,6 +207,7 @@ export function BuilderRichTextEditor({
   // overwrite the document with a stale reading of itself.
   const codeViewEditedRef = useRef(false);
   const [isCodeView, setIsCodeView] = useState(false);
+  const [linkDialog, setLinkDialog] = useState<RichTextLinkValue | null>(null);
   const [codeViewValue, setCodeViewValue] = useState("");
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const editor = useEditor({
@@ -218,7 +219,7 @@ export function BuilderRichTextEditor({
         },
         link: false
       }),
-      Link.configure({
+      PageLink.configure({
         openOnClick: false,
         HTMLAttributes: { rel: "noopener noreferrer", target: "_blank" }
       }),
@@ -511,26 +512,27 @@ export function BuilderRichTextEditor({
       return;
     }
 
-    const previousUrl = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", previousUrl || "https://");
+    const attributes = editor.getAttributes("link") as { href?: string; pageLink?: string | null };
+    setLinkDialog({ href: attributes.href || "", pageLink: attributes.pageLink || null });
+  }
 
-    if (url === null) {
-      return;
-    }
-
+  function applyLink(value: RichTextLinkValue) {
+    setLinkDialog(null);
     const chain = chainWithSelection();
 
     if (!chain) {
       return;
     }
 
-    if (url === "") {
-      chain.extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    chain.extendMarkRange("link").setLink({ href: url }).run();
+    // The page's id rides beside the href (task 86bcxthq5); a typed address clears it.
+    chain.extendMarkRange("link").setLink({ href: value.href }).updateAttributes("link", { pageLink: value.pageLink }).run();
   }
+
+  function removeLink() {
+    setLinkDialog(null);
+    chainWithSelection()?.extendMarkRange("link").unsetLink().run();
+  }
+
 
   function insertImageSrc(src: string) {
     if (!editor) {
@@ -859,6 +861,15 @@ export function BuilderRichTextEditor({
           <RichTextClearIcon />
         </button>
       </div>
+
+      {linkDialog ? (
+        <RichTextLinkDialog
+          current={linkDialog}
+          onApply={applyLink}
+          onRemove={removeLink}
+          onClose={() => setLinkDialog(null)}
+        />
+      ) : null}
 
       {isCodeView ? (
         <textarea

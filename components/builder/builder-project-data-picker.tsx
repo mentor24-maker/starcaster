@@ -74,7 +74,7 @@ export function resolvePickerSelection(
 // One fetch per source per session — many pickers, zero duplicate requests.
 const cache = new Map<BuilderPickerSource, Promise<BuilderPickerOption[]>>();
 
-function loadOptions(source: BuilderPickerSource): Promise<BuilderPickerOption[]> {
+export function loadPickerOptions(source: BuilderPickerSource): Promise<BuilderPickerOption[]> {
   const existing = cache.get(source);
   if (existing) return existing;
 
@@ -166,7 +166,7 @@ export function BuilderProjectDataPicker({
 
   useEffect(() => {
     let alive = true;
-    loadOptions(source)
+    loadPickerOptions(source)
       .then((loaded) => {
         if (alive) setOptions(loaded);
       })

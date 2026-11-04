@@ -1,3 +1,19 @@
+## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
+
+The Link button in a text block or heading used to pop up a box asking for an
+address, so a link to one of your own pages was a copy of its address — and
+renaming that page broke it. The Link button now opens a small panel with two
+choices: "A page on this site", picked from your page list, or "A web
+address", typed as before. A picked page is remembered by the page itself, so
+the link follows the page when its address changes; if the page is deleted,
+the link keeps the address it was saved with and the panel says so. Every link
+saved before this keeps working exactly as it did. Links typed into text
+before today stay ordinary addresses: the one-time upgrade script had already
+run and been removed (#954), so they start following their page once someone
+re-picks them in the new panel. While building this, a hidden fault in the menu/card change
+(#948) turned up: a list setting holding text with one of these links would
+have been garbled when shown. That is fixed here, before anything could
+trigger it.
 ## 2026-11-03 — The form editor's styling settings get their own column beside the preview (#952)
 
 On CRM: Edit Form, the Settings column held both the form's own settings and

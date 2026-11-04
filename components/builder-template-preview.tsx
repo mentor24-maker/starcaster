@@ -5,7 +5,7 @@ import { isVideoFile, MEDIA_DIRECT_UPLOAD_MAX_BYTES, uploadFileToBlob } from "@/
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
-import { type PageAddressMap, resolvePageLinksInSettings } from "@/lib/page-link";
+import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings } from "@/lib/page-link";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -2551,7 +2551,10 @@ function BuilderModulePreview(props: BuilderModulePreviewProps) {
   const { module } = props;
   const resolved = useMemo(() => {
     const settings = resolvePageLinksInSettings(module.settings, pageAddresses);
-    return settings === module.settings ? module : { ...module, settings };
+    // A text or heading module keeps its rich text on `module.text`, where a
+    // link picked from the page list carries the page's id (task 86bcxthq5).
+    const text = typeof module.text === "string" ? resolvePageLinksInHtml(module.text, pageAddresses) : module.text;
+    return settings === module.settings && text === module.text ? module : { ...module, settings, text };
   }, [module, pageAddresses]);
   return <BuilderModulePreviewBody {...props} module={resolved} />;
 }
