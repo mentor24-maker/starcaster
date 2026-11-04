@@ -380,8 +380,6 @@
                   </label>
                 </div>
               </section>
-
-              <button type="submit" class="btn btn-primary">Save Form</button>
             </form>
           </div>
           <div class="crm-form-editor-col crm-form-editor-col-fields">
@@ -392,6 +390,8 @@
           <div class="crm-form-editor-col crm-form-editor-col-preview">
             <h3 class="crm-form-editor-col-title">Preview</h3>
             <div id="crmFormEditorPreview" class="crm-form-editor-preview" aria-live="polite"></div>
+            <!-- Outside the <form> so it can sit under the preview; form= keeps it its submit button. -->
+            <button type="submit" form="crmFormEditorForm" class="btn crm-form-editor-save-btn">Save Form</button>
           </div>
         </div>
       </section>
