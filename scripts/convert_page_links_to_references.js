@@ -17,8 +17,8 @@
  * RULES
  * - Only the settings the page picker writes are touched (PICKER_FIELDS), plus
  *   the same settings on modules inside a table cell, plus a table cell image's
- *   Link. Nothing typed into free text (menus, rich text, cards) — that is the
- *   follow-up ticket.
+ *   Link, plus — since task 86bcxmt5x — the link on each item of a menu, card
+ *   grid or carousel (LIST_FIELDS). Rich-text links are not touched.
  * - A saved address that matches exactly ONE page's CURRENT address in the
  *   SAME project becomes that page's reference, with the address kept as its
  *   fallback. Anything else is left exactly as it is: an external URL is left
@@ -59,6 +59,22 @@ const PICKER_FIELDS = {
   'event-manager': { viewPageUrl: 'path' },
   'blog-post-list': { postSlug: 'slug' },
   'blog-latest-posts': { postSlug: 'slug' },
+  // Task 86bcxmt5x — these had only a typed address box until then.
+  image: { linkUrl: 'path' },
+  galaxy: { linkUrl: 'path' },
+  'blog-post-card': { url: 'path' },
+  'blog-post-create': { viewPageUrl: 'path', redirectAfterCreate: 'path' },
+};
+
+/**
+ * Settings that hold a LIST as JSON text, and the field on each item that is
+ * a link (task 86bcxmt5x): a menu's items, a card grid's cards, a carousel's
+ * slides. Each item's link is classified exactly like a picker setting.
+ */
+const LIST_FIELDS = {
+  navigation: { navItems: { href: 'path' } },
+  'feature-cards': { cards: { linkUrl: 'path' } },
+  carousel: { items: { linkUrl: 'path' } },
 };
 
 /** Fields that exist only on modules inside a table cell (its own dropdown). */
@@ -129,6 +145,38 @@ function convertModule(mod, bySlug, where, report, inTableCell = false) {
       report.upgraded.push({ ...entry, to: verdict.to });
     } else if (verdict.action === 'unmatched') {
       report.unmatched.push({ ...entry, reason: verdict.reason });
+    }
+  }
+
+  for (const [key, itemFields] of Object.entries(LIST_FIELDS[type] || {})) {
+    const source = nextSettings || settings;
+    if (typeof source[key] !== 'string' || !source[key]) continue;
+    let items = null;
+    try { items = JSON.parse(source[key]); } catch (_) { items = null; }
+    if (!Array.isArray(items)) continue;
+    let listChanged = false;
+    const nextItems = items.map((item, index) => {
+      if (!item || typeof item !== 'object') return item;
+      let nextItem = null;
+      for (const [field, kind] of Object.entries(itemFields)) {
+        const verdict = classifyValue(item[field], kind, bySlug);
+        const label = item.label || item.title || `item ${index + 1}`;
+        const entry = { where, module: moduleLabel(mod), type, setting: `${key} › ${label} › ${field}`, value: item[field] };
+        if (verdict.action === 'upgrade') {
+          if (!nextItem) nextItem = { ...item };
+          nextItem[field] = verdict.to;
+          report.upgraded.push({ ...entry, to: verdict.to });
+        } else if (verdict.action === 'unmatched') {
+          report.unmatched.push({ ...entry, reason: verdict.reason });
+        }
+      }
+      if (!nextItem) return item;
+      listChanged = true;
+      return nextItem;
+    });
+    if (listChanged) {
+      if (!nextSettings) nextSettings = { ...settings };
+      nextSettings[key] = JSON.stringify(nextItems);
     }
   }
 
@@ -289,6 +337,7 @@ if (require.main === module) {
 
 module.exports = {
   PICKER_FIELDS,
+  LIST_FIELDS,
   indexPagesBySlug,
   classifyValue,
   convertModule,
