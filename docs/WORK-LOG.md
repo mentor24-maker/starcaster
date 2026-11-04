@@ -1,3 +1,16 @@
+## 2026-11-03 — Renaming a page no longer breaks breadcrumbs, rotating headlines, the sign-in redirect or blog-manager links (#956)
+
+Five more settings only had a box to type a page's address into: a
+Breadcrumb's crumbs, a Headline Rotator's headline links, the Player Portal
+sign-in's "Redirect path", and the Blog Links Manager's "Blog Manager page"
+and "Post view page". Rename the page and those links broke. Each now has the
+same page list the Button and the site menu got: pick a page and the link
+follows it when its address changes, while "Custom…" still takes any typed
+address and old links keep working as they were. The weekly broken-link check
+and the page-delete warning now look at these too. Building it turned up that
+the Breadcrumb module never actually shows on a live site at all; that has
+its own ticket.
+
 ## 2026-11-03 — Deleting a page now warns you about links still pointing to it, and client sites are checked weekly (#951)
 
 Renaming a page can no longer break a link to it, but deleting one still could,
