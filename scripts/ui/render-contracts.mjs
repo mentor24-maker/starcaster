@@ -1113,6 +1113,46 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'text-block-link-to-a-renamed-page-follows-it',
+    why:
+      'A link typed inside a text block was a copied address, so renaming the page broke it — the ' +
+      'last place a page link was still a copy (task 86bcxthq5). The Link dialog now stores a picked ' +
+      'page by id in a data-page-link attribute beside the href. This saves a picked link whose href ' +
+      'is the OLD address, a typed internal address, a picked link to a deleted page and an external ' +
+      'link, and says the page now lives somewhere new: the picked link must follow the page, and the ' +
+      'other three must render exactly as they were saved.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'text',
+        text:
+          '<p><a class="rt-picked" href="/old-menu" data-page-link="page:4242|/old-menu">Menu</a> ' +
+          '<a class="rt-typed" href="/typed-path">Typed</a> ' +
+          '<a class="rt-gone" href="/was-here" data-page-link="page:777|/was-here">Gone</a> ' +
+          '<a class="rt-ext" href="https://shop.example.com/">Shop</a></p>',
+        settings: {},
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: 'a.rt-picked',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: { picked: 'a.rt-picked', typed: 'a.rt-typed', gone: 'a.rt-gone', ext: 'a.rt-ext' },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the text block did not render the picked link at all, so where it points could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => frame[name]?.href !== href)
+        .map(([name, href]) => `${name} link points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (frame.picked.href === '/old-menu') wrong.unshift('the picked link still points at the page\'s OLD address — the reference inside the text was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
     id: 'button-right-aligned-sits-at-the-right-edge-of-its-column',
     why:
       'The other value of the same control. A fix that centres by stretching, or by a rule that ' +

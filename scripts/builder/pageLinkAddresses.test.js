@@ -64,3 +64,13 @@ test('a failed lookup answers null — "could not look", never "the page is gone
   reset(async () => { throw new Error('network'); });
   assert.equal(await pageAddressesFor('proj_1', page), null);
 });
+
+test('a link picked inside a text block is looked up too, so the live page gets its address (86bcxthq5)', async () => {
+  reset(async () => ({ ok: true, data: [{ id: 55, slug: 'menu-v2' }] }));
+  const withText = {
+    layoutSections: [{ modules: [{ type: 'text', text: '<p><a href="/old-menu" data-page-link="page:55|/old-menu">Menu</a></p>', settings: {} }] }],
+  };
+  const map = await pageAddressesFor('proj_1', withText);
+  assert.deepEqual(map, { 55: 'menu-v2' });
+  assert.match(queries[0].query, /id=in\.\(55\)/);
+});
