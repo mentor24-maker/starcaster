@@ -1,3 +1,16 @@
+## 2026-11-04 — The Breadcrumb module now shows up on the live site (#958)
+
+The Breadcrumb module — the little "Home › Programs › Court Fees" trail that
+tells a visitor where they are — could be added and set up in the Builder, but
+the page itself never drew it, so a published page had an empty gap where the
+trail should be. It now appears on the live site and in Preview: every crumb
+but the last is a link, the last one is the page you are on, and the size,
+bold, colours, separator and alignment you choose in the panel all apply. A
+crumb picked from your page list follows that page if it is renamed. An empty
+Breadcrumb shows nothing to visitors, and tells whoever is building the page
+to add items. No live page used this module yet, so nothing on any client's
+site changes until someone adds one.
+
 ## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
 
 The Link button in a text block or heading used to pop up a box asking for an
