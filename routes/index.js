@@ -196,6 +196,7 @@ const CRON_PATHS = new Set([
   '/api/acquire/substack-miner/read-posts-due',
   '/api/outreach/youtube/conversations/read-due',
   '/api/ai-quota/check',
+  '/api/observe/usage-logs/prune',
 ]);
 
 function isAuthorizedCronRequest(req, pathname) {
