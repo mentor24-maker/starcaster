@@ -72,7 +72,7 @@ import {
   tagHref
 } from "@/lib/blog-tag-cloud";
 import { crmSubmitErrorOutcome, crmSubmitSuccessOutcome } from "@/lib/crm-form-submit-outcome";
-import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
+import { buildMegaColumns, navLinkTargetProps, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
   getNavMegaColumnCount,
@@ -11954,6 +11954,8 @@ type NavRenderItem = {
   id?: string;
   parentId?: string;
   width?: string;
+  /** "Opens in": `"_blank"` for New tab, absent for Same tab — see navLinkTargetProps. */
+  target?: string;
   /** The mega panel's extra column — a whole module, or the tile it replaced. */
   featureModule?: import("@/lib/builder-template").BuilderTemplateModule;
   featureImage?: string;
@@ -12036,6 +12038,7 @@ function NavMegaItem({
           aria-current={isActive ? "page" : undefined}
           className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
           href={href}
+          {...navLinkTargetProps(item)}
         >
           {item.label}
         </Link>
@@ -12065,6 +12068,7 @@ function NavMegaItem({
                   <Link
                     className="site-nav-mega-heading"
                     href={previewMode ? toPreviewHref(column.heading.href) : toPublicHref(column.heading.href)}
+                    {...navLinkTargetProps(column.heading)}
                   >
                     {column.heading.label}
                   </Link>
@@ -12081,6 +12085,7 @@ function NavMegaItem({
                     className={`site-nav-mega-link${linkActive ? " site-nav-link-active" : ""}`}
                     href={linkHref}
                     aria-current={linkActive ? "page" : undefined}
+                    {...navLinkTargetProps(link)}
                   >
                     {link.label}
                   </Link>
@@ -12103,7 +12108,7 @@ function NavMegaItem({
               <BuilderModulePreview module={item.featureModule} previewMode={previewMode} liveSite={liveSite} />
             </div>
           ) : featureImage || item.featureHeading ? (
-            <Link className="site-nav-mega-feature" href={href}>
+            <Link className="site-nav-mega-feature" href={href} {...navLinkTargetProps(item)}>
               {featureImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img {...imageProps(featureImage, { sizes: FEATURE_CARD_SIZES })} alt="" loading="lazy" />
@@ -12242,6 +12247,7 @@ function NavigationModulePreview({
               className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
               href={href}
               key={itemId}
+              {...navLinkTargetProps(item)}
               onClick={() => setMobileOpen(false)}
               style={itemWidth ? { flex: `0 0 ${itemWidth}`, width: itemWidth } : undefined}
             >
@@ -12276,6 +12282,7 @@ function NavigationModulePreview({
               aria-current={isActive ? "page" : undefined}
               className={`site-nav-link site-nav-dropdown-trigger${isActive ? " site-nav-link-active" : ""}`}
               href={href}
+              {...navLinkTargetProps(item)}
               onClick={() => setMobileOpen(false)}
             >
               {item.label}
@@ -12291,6 +12298,7 @@ function NavigationModulePreview({
                     href={childHref}
                     aria-current={childActive ? "page" : undefined}
                     className={`site-nav-link site-nav-dropdown-item${childActive ? " site-nav-link-active" : ""}`}
+                    {...navLinkTargetProps(child)}
                     onClick={() => setMobileOpen(false)}
                   >
                     {child.label}

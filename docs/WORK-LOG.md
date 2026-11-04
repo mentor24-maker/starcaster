@@ -1,3 +1,12 @@
+## 2026-11-04 — Menu links can now open in a new tab (#957)
+
+Each link in a site's menu has a new "Opens In" choice in the Builder: Same
+tab or New tab. Pick New tab and that menu item opens its page in a new
+browser tab on the live site — in the top bar, in drop-down and mega menus,
+and in the phone menu alike. Every menu that already exists stays on Same tab
+and behaves exactly as before. "New window" is not offered, because browsers
+open these links as tabs anyway and forcing a separate window gets stopped by
+pop-up blockers.
 ## 2026-11-04 — The Breadcrumb module now shows up on the live site (#958)
 
 The Breadcrumb module — the little "Home › Programs › Court Fees" trail that

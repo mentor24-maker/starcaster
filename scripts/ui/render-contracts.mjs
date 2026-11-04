@@ -81,6 +81,29 @@ const NAV_SUBMENU_ITEMS = JSON.stringify([
   { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
 ]);
 
+/**
+ * Judge for the Opens In contracts (86bcxur55): each named link either opens
+ * in a new tab (target="_blank" AND rel="noopener noreferrer") or carries no
+ * target at all. A link that did not render is a failure, never a pass.
+ */
+function expectMenuTargets(want) {
+  return (sample) => {
+    const frame = sample.series?.[0] || {};
+    const wrong = [];
+    for (const [name, newTab] of Object.entries(want)) {
+      const link = frame[name];
+      if (!link) { wrong.push(`the "${name}" link did not render, so how it opens could not be read`); continue; }
+      if (newTab) {
+        if (link.target !== '_blank') wrong.push(`the "${name}" item is set to New tab but its link has target=${JSON.stringify(link.target)}`);
+        else if (link.rel !== 'noopener noreferrer') wrong.push(`the "${name}" item opens a new tab without rel="noopener noreferrer" (rel=${JSON.stringify(link.rel)})`);
+      } else if (link.target != null || link.rel != null) {
+        wrong.push(`the "${name}" item is Same tab but its link carries target=${JSON.stringify(link.target)} rel=${JSON.stringify(link.rel)}`);
+      }
+    }
+    return wrong.length ? `${wrong.join('; ')}.` : null;
+  };
+}
+
 /** A theme with a button pair per ground (86bctakk0). The plain pair is navy,
  *  which vanishes on a dark row — so only the per-ground pair can pass there. */
 const SURFACE_BUTTON_PALETTE = {
@@ -1111,6 +1134,87 @@ export const RENDER_CONTRACTS = [
       if (frame.picked.href === '/old-menu') wrong.unshift('the picked menu item still points at the page\'s OLD address — the reference inside the menu was not resolved');
       return `${wrong.join('; ')}.`;
     },
+  },
+  /*
+   * MENU ITEMS THAT OPEN IN A NEW TAB — 86bcxur55.
+   *
+   * Dane, 2026-11-03: "Each menu item in the menu module needs a target
+   * setting." Every link a menu draws — a plain top-level link, a drop-down
+   * trigger, a drop-down child, a mega panel's heading and links — reads the
+   * one helper, navLinkTargetProps. These read the attributes off the real
+   * links: New tab items must carry target="_blank" WITH rel (or the opened
+   * page can reach back into the client's site), and Same tab items — which
+   * is every menu saved before the setting existed — must carry neither.
+   */
+  ...[
+    { id: 'menu-item-new-tab-opens-in-a-new-tab', emulate: undefined, where: 'at desktop width', anchor: '.site-nav-link' },
+    // On a phone the links sit folded behind the hamburger until it is
+    // tapped, so the contract stands on the hamburger and reads the links
+    // (attributes need no box) out of the same DOM the tap reveals.
+    { id: 'menu-item-new-tab-opens-in-a-new-tab-on-a-phone', emulate: { viewport: { width: 390, height: 900 } }, where: 'in the phone menu', anchor: '.site-nav-toggle' },
+  ].map(({ id, emulate, where, anchor }) => ({
+    id,
+    why:
+      `A menu item set to Opens In: New tab must open in a new tab ${where}, for a top-level link, a ` +
+      'drop-down trigger and a drop-down child, and an item left on Same tab must not (task 86bcxur55). ' +
+      'This reads target and rel off each rendered link.',
+    ...(emulate ? { emulate } : {}),
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'same', label: 'Home', href: '/' },
+          { id: 'ext', label: 'Shop', href: 'https://shop.example.com/', target: '_blank' },
+          { id: 'proj', label: 'Projects', href: '/projects', target: '_blank' },
+          { id: 'kid-new', label: 'Store', href: 'https://store.example.com/', parentId: 'proj', target: '_blank' },
+          { id: 'kid-same', label: 'Normie', href: '/normie', parentId: 'proj' },
+        ]),
+      },
+    },
+    selector: anchor,
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        same: '.site-nav-items > a.site-nav-link:nth-of-type(1)',
+        ext: '.site-nav-items > a.site-nav-link:nth-of-type(2)',
+        trigger: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+        kidNew: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(1)',
+        kidSame: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(2)',
+      },
+    },
+    expect: expectMenuTargets({ same: false, ext: true, trigger: true, kidNew: true, kidSame: false }),
+  })),
+  {
+    id: 'menu-item-new-tab-opens-in-a-new-tab-in-a-mega-panel',
+    why:
+      'A mega menu draws its links through a different component from the plain drop-down — its ' +
+      'trigger, column headings and column links — so the Opens In setting has to reach those too ' +
+      '(task 86bcxur55).',
+    module: {
+      type: 'navigation',
+      settings: {
+        navDropdownStyle: 'mega',
+        navItems: JSON.stringify([
+          { id: 'play', label: 'Play', href: '/play', target: '_blank' },
+          { id: 'col', label: 'Courts', href: '/courts', parentId: 'play' },
+          { id: 'book', label: 'Book', href: 'https://book.example.com/', parentId: 'col', target: '_blank' },
+          { id: 'fees', label: 'Fees', href: '/fees', parentId: 'col' },
+        ]),
+      },
+    },
+    selector: '.site-nav-mega',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        trigger: '.site-nav-mega-trigger > a.site-nav-link',
+        heading: 'a.site-nav-mega-heading',
+        book: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(2)',
+        fees: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(3)',
+      },
+    },
+    expect: expectMenuTargets({ trigger: true, heading: false, book: true, fees: false }),
   },
   {
     id: 'text-block-link-to-a-renamed-page-follows-it',
