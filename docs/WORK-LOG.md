@@ -7,9 +7,10 @@ choices: "A page on this site", picked from your page list, or "A web
 address", typed as before. A picked page is remembered by the page itself, so
 the link follows the page when its address changes; if the page is deleted,
 the link keeps the address it was saved with and the panel says so. Every link
-saved before this keeps working exactly as it did. The one-time script that
-upgrades old links now covers links inside text too; it still has to be run
-once this is live. While building this, a hidden fault in the menu/card change
+saved before this keeps working exactly as it did. Links typed into text
+before today stay ordinary addresses: the one-time upgrade script had already
+run and been removed (#954), so they start following their page once someone
+re-picks them in the new panel. While building this, a hidden fault in the menu/card change
 (#948) turned up: a list setting holding text with one of these links would
 have been garbled when shown. That is fixed here, before anything could
 trigger it.
