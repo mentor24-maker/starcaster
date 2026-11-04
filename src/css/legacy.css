@@ -7405,18 +7405,21 @@ button.builder-inline-asset-status-btn:focus-visible {
   opacity: 1;
 }
 
-/* A project switch is still reloading the app: the green button shows a spinner
-   in place of its check until the switch settles. */
-.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching {
+/* A project switch is still reloading the app: the clicked button (the green
+   check, or the Edit pencil while the editor opens) shows a spinner
+   in place of its icon until the switch settles. */
+.settings-projects-actions-cell .icon-btn.is-switching,
+.settings-projects-actions-cell .icon-btn.is-switching:disabled {
   position: relative;
   cursor: progress;
+  opacity: 1;
 }
 
-.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching .icon-btn-glyph {
+.settings-projects-actions-cell .icon-btn.is-switching .icon-btn-glyph {
   visibility: hidden;
 }
 
-.settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching::after {
+.settings-projects-actions-cell .icon-btn.is-switching::after {
   content: '';
   position: absolute;
   top: 50%;
@@ -7437,7 +7440,7 @@ button.builder-inline-asset-status-btn:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-projects-actions-cell .icon-btn.settings-project-active-btn.is-switching::after {
+  .settings-projects-actions-cell .icon-btn.is-switching::after {
     animation: none;
     border-color: currentColor;
     border-style: dotted;
