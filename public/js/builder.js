@@ -9302,7 +9302,12 @@ App.builder = (function () {
         }
       }, { marginLeft: '10px' });
       const deleteBtn = App.makeIconButton('delete', 'Delete Page', async () => {
-        if (!window.confirm(`Delete page "${safeText(item.name) || id}"?`)) return;
+        // Names any button, menu or form still linking here (task 86bcxn69z);
+        // falls back to the plain confirm if the React bundle is not loaded.
+        const question = `Delete page "${safeText(item.name) || id}"?`;
+        const nameOf = (pageId) => safeText((savedPages.find((p) => String(p.id) === String(pageId)) || {}).name);
+        const ask = window.PageDeleteReact && window.PageDeleteReact.confirm;
+        if (!(ask ? await ask([String(id)], question, nameOf) : window.confirm(question))) return;
         try {
           await api(`/api/builder/landing-pages/${encodeURIComponent(id)}`, { method: 'DELETE' });
           selectedPageIds.delete(id);
@@ -14308,7 +14313,11 @@ App.builder = (function () {
           return;
         }
         const n = ids.length;
-        if (!window.confirm(`Delete ${n} page${n === 1 ? '' : 's'}? This cannot be undone.`)) return;
+        // Names any button, menu or form still linking to them (task 86bcxn69z).
+        const question = `Delete ${n} page${n === 1 ? '' : 's'}? This cannot be undone.`;
+        const nameOf = (pageId) => safeText((savedPages.find((p) => String(p.id) === String(pageId)) || {}).name);
+        const ask = window.PageDeleteReact && window.PageDeleteReact.confirm;
+        if (!(ask ? await ask(ids.map(String), question, nameOf) : window.confirm(question))) return;
         landingPageBulkDeleteBtn.disabled = true;
         landingPageBulkDeleteBtn.textContent = 'Deleting…';
         let failed = 0;

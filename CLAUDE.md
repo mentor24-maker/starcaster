@@ -327,6 +327,15 @@ never reaches him (task 86bcwam1k). Give every new docs/SQL file a
 what the ticket tells him — and a `-- RUN AFTER docs/SQL/<file>` line when it
 needs another file first.
 
+`npm run broken-links` is the same shape for client sites (task 86bcxn69z): a
+read-only pass over every project's pages, saved sections and forms that names
+each link pointing at a page that no longer exists. Once a week on the relay's
+wake it rewrites the ticket **Broken links on client sites**, Dane assigned only
+while it lists something; a project it could not read is named, never counted
+as clean. The scan is `lib/pageInboundLinks.js`, and the delete warning on
+Builder › Pages calls the same one — a setting that starts holding page links
+is one entry in its `LINK_SETTINGS` / `LIST_LINK_SETTINGS`.
+
 The admin app carries a strip across the top saying which database it is
 talking to, `npm run dev` refuses to start against the live one without
 `ALLOW_CLOUD_DEV=1`, and all three read the same classifier
