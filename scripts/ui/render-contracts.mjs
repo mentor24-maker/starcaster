@@ -6001,4 +6001,136 @@ export const RENDER_CONTRACTS = [
     selector: 'a[data-galaxy-link]',
     absent: true,
   },
+  /*
+   * Breadcrumb (task 86bcxwe6z). The module had a settings panel and an
+   * editor card but no renderer at all, so a published trail was an empty
+   * gap. One trail serves three contracts: what it draws, where a picked
+   * page's crumb points after that page is renamed, and the empty case.
+   */
+  {
+    id: 'breadcrumb-trail-renders-links-separators-and-current',
+    why:
+      'A Breadcrumb rendered NOTHING on a live page — no case for it in the page renderer — while its ' +
+      'editor card showed the trail, so a tenant saw it in the Builder and an empty gap after publishing ' +
+      '(task 86bcxwe6z). Three items must give three labels and two separators inside a ' +
+      'nav labelled "Breadcrumb"; the first two are links, the last is the current page as plain text.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+          separator: '›',
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href', 'aria-label', 'aria-current'],
+      selectors: {
+        nav: 'nav.builder-preview-breadcrumb',
+        first: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        second: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+        lastLink: 'nav.builder-preview-breadcrumb li:nth-child(3) > a',
+        current: 'nav.builder-preview-breadcrumb li:nth-child(3) > [aria-current="page"]',
+        thirdSep: 'nav.builder-preview-breadcrumb li:nth-child(3) .builder-preview-breadcrumb-sep',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.nav) return 'no breadcrumb trail rendered at all.';
+      const wrong = [];
+      if (frame.nav['aria-label'] !== 'Breadcrumb') wrong.push(`the nav is labelled ${JSON.stringify(frame.nav['aria-label'])}, not "Breadcrumb"`);
+      if (sample.text !== 'Home›Programs›Court Fees') wrong.push(`the trail reads ${JSON.stringify(sample.text)}, expected "Home›Programs›Court Fees" (three labels, two separators)`);
+      if (!frame.first) wrong.push('the first crumb is not a link');
+      if (!frame.second) wrong.push('the second crumb is not a link');
+      if (frame.lastLink) wrong.push('the last crumb (the current page) is a link');
+      if (!frame.current) wrong.push('the last crumb is not marked as the current page');
+      if (frame.thirdSep) wrong.push('a separator follows the last crumb');
+      return wrong.length ? `${wrong.join('; ')}.` : null;
+    },
+  },
+  {
+    id: 'breadcrumb-crumb-to-a-renamed-page-follows-it',
+    why:
+      'A crumb picked from the page list is stored by the page\'s id (task 86bcxu518). This saves a ' +
+      'reference whose address is the OLD one beside a typed address and says the page now lives ' +
+      'somewhere new: the picked crumb must follow the page, the typed one must be left as saved ' +
+      '(task 86bcxwe6z).',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        typed: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the first crumb did not render as a link, so where it points could not be read.';
+      const want = { picked: '/home-v2', typed: '/programs' };
+      // The preview page serves internal links as static files ("/x.html").
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} crumb points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (seen('picked') === '/old-home') wrong.unshift('the picked crumb still points at the page\'s OLD address — the reference inside the trail was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-a-note-in-the-builder',
+    why:
+      'An empty Breadcrumb tells whoever is building the page why it is empty. Paired with the two ' +
+      'absence contracts below, which on their own would pass if nothing ever rendered (task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    expect(sample) {
+      return /no trail items/.test(sample.text || '')
+        ? null
+        : `an empty breadcrumb in the Builder rendered ${JSON.stringify(sample.text)}, not its "no trail items" note.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-no-note-on-a-live-site',
+    why:
+      'The "add them in module settings" note is for the builder; a visitor has no module settings ' +
+      '(landmine 16, DOCTRINE §5.29).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    absent: true,
+    emulate: { liveSite: true },
+  },
+  {
+    id: 'breadcrumb-empty-renders-no-trail-on-a-live-site',
+    why:
+      'An empty Breadcrumb on a published page renders nothing at all — not an empty nav landmark a ' +
+      'screen reader would announce (landmine 16, task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: 'nav.builder-preview-breadcrumb',
+    absent: true,
+    emulate: { liveSite: true },
+  },
 ];
