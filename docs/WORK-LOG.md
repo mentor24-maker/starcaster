@@ -1,3 +1,16 @@
+## 2026-11-03 — Renaming a page no longer breaks the site menu, cards, slides or image links (#948)
+
+A site's menu, its feature cards, carousel slides, an image's link, a galaxy's
+link, a blog post card and "redirect after create" only had a box to type an
+address into. Rename the page that address pointed at and the menu link broke
+on every page of the site. Each of them now has the same page list the Button
+got in #947: pick one of your pages and the link remembers the page itself, so
+it follows the page when its address changes. "Custom…" still takes any typed
+address, and every link saved before this keeps working exactly as it did.
+Two things are not done yet and each has its own ticket: links typed inside a
+text block, and the one-time upgrade of links saved before these changes,
+which has to wait until this is live and needs a machine that can reach the
+live database.
 ## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
 
 When you pick one of your own pages in a Builder setting — a Button's Link,
