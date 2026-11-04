@@ -1488,42 +1488,31 @@ function BreadcrumbModulePreview({
   const alignment = settings.alignment === "center" || settings.alignment === "right" ? settings.alignment : "left";
   const justify = alignment === "center" ? "center" : alignment === "right" ? "flex-end" : "flex-start";
 
-  // Inline list resets: the trail renders inside arbitrary tenant themes, and
-  // a theme's `ol`/`li` rules would otherwise number or indent it (§5.28).
+  // The fixed layout lives in _builder-react-overrides.css (`.builder-preview-
+  // breadcrumb`); only what the panel sets is inline. The list resets there
+  // matter: the trail renders inside arbitrary tenant themes, and a theme's
+  // `ol`/`li` rules would otherwise number or indent it (§5.28).
   return (
     <nav aria-label="Breadcrumb" className="builder-preview-breadcrumb" style={{ textAlign: alignment }}>
-      <ol
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: justify,
-          gap: 4,
-          listStyle: "none",
-          margin: 0,
-          padding: 0,
-          fontSize,
-          fontWeight: settings.bold === "true" ? 700 : 400
-        }}
-      >
+      <ol style={{ justifyContent: justify, fontSize, fontWeight: settings.bold === "true" ? 700 : 400 }}>
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           const url = typeof item.url === "string" ? item.url.trim() : "";
           return (
-            <li key={item.id || index} style={{ display: "inline-flex", alignItems: "center", gap: 4, margin: 0, padding: 0 }}>
+            <li key={item.id || index}>
               {isLast ? (
-                <span aria-current="page" className="builder-preview-breadcrumb-current" style={{ color: activeColor, fontWeight: 600 }}>
+                <span aria-current="page" className="builder-preview-breadcrumb-current" style={{ color: activeColor }}>
                   {item.label}
                 </span>
               ) : url ? (
-                <Link className="builder-preview-breadcrumb-link" href={url} style={{ color, textDecoration: "none" }}>
+                <Link className="builder-preview-breadcrumb-link" href={url} style={{ color }}>
                   {item.label}
                 </Link>
               ) : (
                 <span className="builder-preview-breadcrumb-text" style={{ color }}>{item.label}</span>
               )}
               {isLast ? null : (
-                <span aria-hidden="true" className="builder-preview-breadcrumb-sep" style={{ color, opacity: 0.5 }}>
+                <span aria-hidden="true" className="builder-preview-breadcrumb-sep" style={{ color }}>
                   {separator}
                 </span>
               )}
