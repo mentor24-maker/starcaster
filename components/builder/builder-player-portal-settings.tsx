@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 type BuilderPlayerPortalSettingsProps = {
@@ -53,11 +54,15 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
           </select>
         </BuilderSettingRow>
         <BuilderSettingRow label="Redirect path">
-          <input
-            type="text"
+          {/* A page picked here is stored by id, so renaming it cannot break the redirect (task 86bcxu518). */}
+          <BuilderProjectDataPicker
+            source="pages"
+            valueKind="path"
             value={settings.redirectPath ?? "/portal/dashboard"}
-            onChange={(event) => updateSetting("redirectPath", event.target.value)}
+            onChange={(redirectPath) => updateSetting("redirectPath", redirectPath)}
+            noneLabel="— Default (/portal/dashboard) —"
             placeholder="/portal/dashboard"
+            ariaLabel="Redirect path"
           />
         </BuilderSettingRow>
         <BuilderSettingRow label="Forgot password">

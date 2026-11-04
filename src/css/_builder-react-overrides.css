@@ -3014,6 +3014,41 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-item-grid-picker > button {
   flex: 0 0 auto;
 }
+/* A headline's Link is the shared page picker (task 86bcxu518). The table
+   styles its bare inputs; the picker's select gets the same box, and under
+   Custom… the typed address stacks below it inside the one cell. */
+.builder-react-root .builder-headline-table .builder-project-data-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-headline-table .builder-project-data-picker > select,
+.builder-react-root .builder-headline-table td > select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 10px 12px;
+  font: inherit;
+}
+/* A crumb's URL is the shared page picker (task 86bcxu518): a select, plus a
+   typed box under Custom…. It fills its one track, and the typed box wraps
+   under the select rather than pushing the actions out of the row. */
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 6px);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker > select,
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker > input[type="text"] {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
+}
 /* ---------------------------------------------------------------------------
  * Two-column editors — Feature Cards and Slideshow (operator, 2026-08-12):
  * global settings left, the items themselves right.
