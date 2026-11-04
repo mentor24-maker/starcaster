@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { installStackedColumnAlignment } from "@/lib/builder-stacked-columns";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
@@ -3090,12 +3091,15 @@ function HeadlineRotatorModuleEditor({
                   />
                 </td>
                 <td>
-                  <input
-                    aria-label={`Headline ${index + 1} link`}
-                    type="text"
+                  {/* A page is stored by reference, so renaming it cannot break the headline's link (task 86bcxu518). */}
+                  <BuilderProjectDataPicker
+                    source="pages"
+                    valueKind="path"
                     value={item.href}
-                    onChange={(e) => updateItem(item.id, { href: e.target.value })}
+                    onChange={(href) => updateItem(item.id, { href })}
+                    noneLabel="— No link —"
                     placeholder="/path-or-url"
+                    ariaLabel={`Headline ${index + 1} link`}
                   />
                 </td>
                 <td>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { BuilderTemplateModule } from "@/lib/builder-template";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { BuilderSettingRow } from "./builder-setting-row";
 
 type BuilderPlayerPortalSettingsProps = {
@@ -52,14 +53,6 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             <option value="false">No</option>
           </select>
         </BuilderSettingRow>
-        <BuilderSettingRow label="Redirect path">
-          <input
-            type="text"
-            value={settings.redirectPath ?? "/portal/dashboard"}
-            onChange={(event) => updateSetting("redirectPath", event.target.value)}
-            placeholder="/portal/dashboard"
-          />
-        </BuilderSettingRow>
         <BuilderSettingRow label="Forgot password">
           <select
             value={settings.showForgotPassword === "false" ? "false" : "true"}
@@ -68,6 +61,22 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             <option value="true">Yes</option>
             <option value="false">No</option>
           </select>
+        </BuilderSettingRow>
+      </div>
+      {/* Its own row: under Custom… the picker adds a typed box, which would push this
+          label above the others in the row (task 86bcxu518, review round 1). */}
+      <div className="builder-player-portal-settings-redirect">
+        <BuilderSettingRow label="Redirect path">
+          {/* A page picked here is stored by id, so renaming it cannot break the redirect (task 86bcxu518). */}
+          <BuilderProjectDataPicker
+            source="pages"
+            valueKind="path"
+            value={settings.redirectPath ?? "/portal/dashboard"}
+            onChange={(redirectPath) => updateSetting("redirectPath", redirectPath)}
+            noneLabel="— Default (/portal/dashboard) —"
+            placeholder="/portal/dashboard"
+            ariaLabel="Redirect path"
+          />
         </BuilderSettingRow>
       </div>
       <div className="builder-module-runtime-note">

@@ -105,12 +105,18 @@ const SCHEMA: BuilderSettingsSchema = {
            * defaults are the slugs the admin scaffold gives every tenant
            * (lib/projectAdminScaffold.js), so these are only touched by a
            * tenant who renamed those pages.
+           *
+           * A page picked here is stored by id, so renaming that page cannot
+           * break these links (task 86bcxu518); Custom… keeps a typed address.
            */
           {
             key: "managerPageUrl",
             label: "Blog Manager page",
             width: "text-md",
-            control: "text",
+            control: "picker",
+            source: "pages",
+            valueKind: "path",
+            noneLabel: "— Default —",
             placeholder: "/admin-blog-manager",
             rendersVia: RENDERS_VIA
           },
@@ -118,7 +124,10 @@ const SCHEMA: BuilderSettingsSchema = {
             key: "postViewUrl",
             label: "Post view page",
             width: "text-md",
-            control: "text",
+            control: "picker",
+            source: "pages",
+            valueKind: "path",
+            noneLabel: "— Default —",
             placeholder: "/blog-post-view",
             rendersVia: RENDERS_VIA
           }

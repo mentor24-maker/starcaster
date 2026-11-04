@@ -1217,6 +1217,54 @@ export const RENDER_CONTRACTS = [
     expect: expectMenuTargets({ trigger: true, heading: false, book: true, fees: false }),
   },
   {
+    id: 'headline-rotator-link-to-a-renamed-page-follows-it',
+    why:
+      'A Headline Rotator headline had only a typed link box, so renaming the page it pointed at ' +
+      'broke the link on the live site (task 86bcxu518). A picked page is now stored by id inside ' +
+      'the rotator\'s list of headlines. This saves a reference whose address is the OLD one, a ' +
+      'typed address, a deleted page and an external link, and says the page now lives somewhere ' +
+      'new: the picked headline must follow the page, and the other three must be left as saved.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'headline-rotator',
+        settings: {
+          headlines: JSON.stringify([
+            { id: 'picked', label: 'Picked', href: 'page:4242|/old-menu' },
+            { id: 'typed', label: 'Typed', href: '/typed-path' },
+            { id: 'gone', label: 'Gone', href: 'page:777|/was-here' },
+            { id: 'ext', label: 'Shop', href: 'https://shop.example.com/' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-headline-rotator',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: '.builder-preview-headline-rotator > a:nth-of-type(1)',
+        typed: '.builder-preview-headline-rotator > a:nth-of-type(2)',
+        gone: '.builder-preview-headline-rotator > a:nth-of-type(3)',
+        ext: '.builder-preview-headline-rotator > a:nth-of-type(4)',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the rotator did not render its headlines as links, so where they point could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      // The preview page serves internal links as static files ("/x.html").
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} headline points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (seen('picked') === '/old-menu') wrong.unshift('the picked headline still points at the page\'s OLD address — the reference inside the rotator was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
     id: 'text-block-link-to-a-renamed-page-follows-it',
     why:
       'A link typed inside a text block was a copied address, so renaming the page broke it — the ' +

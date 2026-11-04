@@ -130,3 +130,30 @@ test('a form showing its message is not a link, even with a page remembered', ()
   });
   assert.deepEqual(links, []);
 });
+
+test('the five settings 86bcxu518 made pickers are scanned, references and typed addresses both', () => {
+  const p = {
+    pages: [
+      { id: '1', name: 'Home', slug: '', layoutSections: [{ title: 'A', modules: [
+        { type: 'breadcrumb', settings: { items: JSON.stringify([{ id: 'c1', label: 'Courts', url: 'page:7|/seven' }, { id: 'c2', label: 'Old', url: '/gone' }]) } },
+        { type: 'headline-rotator', settings: { headlines: JSON.stringify([{ id: 'h1', label: 'Book now', href: '/gone' }]) } },
+        { type: 'player-portal', settings: { redirectPath: 'page:7|/seven' } },
+        { type: 'player-portal', settings: { redirectPath: '/portal/dashboard' } },
+        { type: 'admin-blog-links', settings: { managerPageUrl: '/gone', postViewUrl: 'page:7|/seven' } },
+      ] }] },
+      { id: '7', name: 'Seven', slug: 'seven', layoutSections: [] },
+    ],
+  };
+  const links = scan.collectProjectLinks(p);
+  assert.deepEqual(scan.linksToPages(links, p.pages, ['7'])['7'].map(scan.describeLink), [
+    'Home page › A › Breadcrumb › Crumb "Courts"',
+    'Home page › A › Player sign-in › After sign-in page',
+    'Home page › A › Blog Links Manager › Post view page',
+  ]);
+  // A typed address nothing answers is broken; /portal/dashboard is not a Builder page, so it is not judged.
+  assert.deepEqual(scan.brokenLinks(links, p.pages).map(scan.describeLink), [
+    'Home page › A › Breadcrumb › Crumb "Old"',
+    'Home page › A › Headline Rotator › Headline "Book now"',
+    'Home page › A › Blog Links Manager › Blog Manager page',
+  ]);
+});
