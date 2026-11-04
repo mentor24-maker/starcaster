@@ -10592,8 +10592,9 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 /* Dane: the gradients read as muddy, and a disabled button is hard to   */
 /* tell from a live one — part of why the new Publish step keeps getting */
 /* missed. So: GREEN = save this draft (Save Page / Save Template /      */
-/* Save Section / Save Cell / New Page / Bulk Create), BLUE = the        */
-/* primary action of the screen (Preview, Check, Publish, Refresh, and   */
+/* Save Section / Save Cell / New Page / Bulk Create, and Publish since */
+/* 2026-11-03, task 86bcxux97), BLUE = the primary action of the screen */
+/* (Preview, Check, Refresh, and                                        */
 /* every other `.submit-button`), and disabled is a real colour change   */
 /* rather than a fade.                                                   */
 /*                                                                      */
@@ -10603,8 +10604,9 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 /* stylesheet could tell them apart. That is why the ticket's "find      */
 /* where the green comes from" had no hex to find, and why Publish       */
 /* looked like one more routine save. The four that do not save a draft  */
-/* dropped the class and fall through to the base blue; the markup       */
-/* carries the reasoning at builder-publish-panel.tsx.                    */
+/* dropped the class and fall through to the base blue — Publish then    */
+/* took it back on the operator's word (2026-11-03); the markup carries  */
+/* the reasoning at builder-publish-panel.tsx.                           */
 /*                                                                      */
 /* SCOPE — read this before adding a rule here. `.builder-react-root` is */
 /* NOT admin-only: builder-react-entry.tsx mounts a published tenant     */
