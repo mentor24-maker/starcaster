@@ -239,6 +239,19 @@ npm run --silent site-import-watch -- --check || true
 # it, one all-clear when it does. Never allowed to fail the relay: 1 is
 # UNAPPLIED and 2 is CANNOT TELL, both readings, not failures.
 npm run --silent sql:unapplied -- --check || true
+# THE TENTH — does any client site link to a page that no longer exists?
+# (ticket 86bcxn69z)
+#
+# Links store the page itself now, so renaming a page cannot break one —
+# deleting it still can. The Pages screen warns at the moment of deleting; this
+# is the backstop across every project. ONCE A WEEK (it stamps itself, so all
+# but one wake a week exit 0 having done nothing), read-only, and it reports on
+# ONE ClickUp ticket, "Broken links on client sites", rewritten in place, with
+# Dane assigned only while it lists something — never on the bus, by his
+# decision. Runs only on the machine owning `broken-links-check` (it decides
+# that itself). Never allowed to fail the relay: 1 is BROKEN LINKS FOUND and 2
+# is CANNOT TELL, both readings, not failures.
+npm run --silent broken-links -- --check || true
 # THE NINTH — has an AI key run out of credit or been refused? (ticket 86bcvhfht)
 #
 # On 2026-10-30 Write with AI and outreach posting stopped on "credit balance
