@@ -1,3 +1,5 @@
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
+import { isPageLink } from "@/lib/page-link";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import { normalizeBuilderAssetUrl } from "@/lib/builder-template";
 import { IMAGE_SHAPE_KEY, IMAGE_SHAPE_OPTIONS, IMAGE_SHAPE_RADII_KEY, normalizeImageShape } from "@/lib/image-shape";
@@ -298,11 +300,16 @@ export function BuilderImageModuleSettings({
               visibleWhen: () => includeMedia,
               rendersVia: "BuilderImagePreview",
               render: (ctx) => (
-                <input
-                  placeholder="/path-or-url"
-                  type="text"
+                // A page is stored by reference (task 86bcxmt5x); only a typed
+                // address is normalized, never the reference itself.
+                <BuilderProjectDataPicker
+                  source="pages"
+                  valueKind="path"
                   value={ctx.settings.linkUrl ?? ""}
-                  onChange={(event) => ctx.set("linkUrl", normalizeBuilderAssetUrl(event.target.value))}
+                  onChange={(next) => ctx.set("linkUrl", isPageLink(next) ? next : normalizeBuilderAssetUrl(next))}
+                  noneLabel="— No link —"
+                  placeholder="/path-or-url"
+                  ariaLabel="Image link"
                 />
               )
             },

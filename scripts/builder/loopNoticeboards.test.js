@@ -41,14 +41,15 @@ function sourceFiles(dir) {
 // The registry itself
 // ---------------------------------------------------------------------------
 
-test('all five standing tickets are registered', () => {
-  // Six names for five tickets ("SQL waiting for you" joined on task 86bcwam1k): the team chat is registered under its old
+test('all six standing tickets are registered', () => {
+  // Seven names for six tickets ("SQL waiting for you" joined on task 86bcwam1k,
+  // "Broken links on client sites" on 86bcxn69z): the team chat is registered under its old
   // name too (task 86bc0mmyu). Until the first post from new code renames it,
   // the ticket still reads "Undelivered alarms", and dropping that name here
   // would make throughput count saving a message as a ticket that shipped.
   assert.deepEqual(
     [...noticeboards.NOTICEBOARD_NAMES].sort(),
-    ['Node roll call', 'Pipeline pause switch', 'Pipeline pulse', 'SQL waiting for you', 'Team chat', 'Undelivered alarms'],
+    ['Broken links on client sites', 'Node roll call', 'Pipeline pause switch', 'Pipeline pulse', 'SQL waiting for you', 'Team chat', 'Undelivered alarms'],
   );
 });
 

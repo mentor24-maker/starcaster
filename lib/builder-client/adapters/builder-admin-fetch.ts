@@ -46,6 +46,8 @@ const PATH_REWRITES: Array<[RegExp, string, string]> = [
   [/^\/api\/admin\/shared(\/|$)/, '/api/builder/shared$1', 'shared'],
   [/^\/api\/admin\/products(\/|$)/, '/api/builder/products$1', 'products'],
   [/^\/api\/admin\/themes(\/|$)/, '/api/builder/themes$1', 'themes'],
+  // What links to the pages about to be deleted (task 86bcxn69z).
+  [/^\/api\/admin\/page-links\/inbound$/, '/api/builder/page-links/inbound', 'pages'],
   [/^\/api\/admin\/polls(\/|$)/, '/api/polls$1', 'polls']
 ];
 

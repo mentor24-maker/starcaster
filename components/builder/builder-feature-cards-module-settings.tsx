@@ -1,3 +1,4 @@
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { Fragment } from "react";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
@@ -465,12 +466,14 @@ export function BuilderFeatureCardsModuleSettings({
                 />
               </BuilderModuleField>
               <BuilderModuleField label="Link" width="text-md" className="builder-card-field--b">
-                <input
-                  type="text"
+                <BuilderProjectDataPicker
+                  source="pages"
+                  valueKind="path"
                   value={card.linkUrl}
-                  onChange={(event) => updateCard(card.id, { linkUrl: event.target.value })}
+                  onChange={(linkUrl) => updateCard(card.id, { linkUrl })}
+                  noneLabel="— No link —"
                   placeholder="/path-or-url"
-                  aria-label={`${cardName} link`}
+                  ariaLabel={`${cardName} link`}
                 />
               </BuilderModuleField>
               <BuilderModuleField label="Link Text" width="text-md" className="builder-card-field--a">
