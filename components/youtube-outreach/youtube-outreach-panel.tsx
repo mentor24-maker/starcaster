@@ -797,7 +797,7 @@ function TargetEditor({ target, busy, error, onSave, onCancel }: {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       <div className="yt-outreach-actions">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -865,7 +865,7 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       <div className="yt-outreach-actions">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Close</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );

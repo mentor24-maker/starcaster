@@ -2454,7 +2454,7 @@ App.acquire = (function () {
         '    </div>',
         '    <div style="display:flex;gap:0.5rem;justify-content:flex-end;">',
         '      <button type="button" id="acquirePageEditCancelBtn" class="btn">Cancel</button>',
-        '      <button type="button" id="acquirePageEditSaveBtn" class="btn btn-primary">Save</button>',
+        '      <button type="button" id="acquirePageEditSaveBtn" class="btn btn-save">Save</button>',
         '    </div>',
         '  </div>',
         '</div>',
@@ -3408,7 +3408,7 @@ App.acquire = (function () {
         },
         {
           label: 'Save Selected',
-          primary: true,
+          save: true,
           onClick: async () => {
             const selected = Array.from(tbody.querySelectorAll('input[type="checkbox"]:checked'))
               .map((cb) => cb.dataset.keyword)
@@ -4095,6 +4095,7 @@ App.acquire = (function () {
       cancelBtn.addEventListener('click', () => feedbackPop.classList.add('hidden'));
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
+      saveBtn.className = 'btn btn-save';
       saveBtn.textContent = 'Save Feedback';
       saveBtn.addEventListener('click', () => {
         const selectedCategories = Array.from(catInput.options || []).filter((option) => option.selected).map((option) => String(option.value || '').trim()).filter(Boolean);
@@ -4396,6 +4397,7 @@ App.acquire = (function () {
       closeBtn.addEventListener('click', () => feedbackPop.classList.add('hidden'));
       const saveBtn = document.createElement('button');
       saveBtn.type = 'button';
+      saveBtn.className = 'btn btn-save';
       saveBtn.textContent = 'Save Feedback';
       saveBtn.addEventListener('click', () => {
         const selectedCategories = Array.from(catInput.options || []).filter((option) => option.selected).map((option) => String(option.value || '').trim()).filter(Boolean);
@@ -6498,7 +6500,7 @@ App.acquire = (function () {
       '    <label>Description<input class="pi-field" name="description" type="text" value="' + escAttr(pattern.description || '') + '" /></label>',
       '  </div>',
       '  <div class="pi-editor-actions">',
-      '    <button type="submit" class="btn btn-primary pi-save-btn">Save Handler</button>',
+      '    <button type="submit" class="btn btn-save pi-save-btn">Save Handler</button>',
       '    <button type="button" class="btn pi-cancel-btn">Cancel</button>',
       '    <span class="pi-save-status"></span>',
       '  </div>',
@@ -6608,7 +6610,7 @@ App.acquire = (function () {
       '        <label>Description<input class="pi-field" name="description" type="text" /></label>',
       '      </div>',
       '      <div class="pi-editor-actions">',
-      '        <button type="submit" class="btn btn-primary pi-save-btn">Save Handler</button>',
+      '        <button type="submit" class="btn btn-save pi-save-btn">Save Handler</button>',
       '        <button type="button" class="btn" id="piAiDiscardBtn">Discard</button>',
       '        <span class="pi-save-status" id="piAiSaveStatus"></span>',
       '      </div>',

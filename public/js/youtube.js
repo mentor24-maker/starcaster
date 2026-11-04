@@ -4422,7 +4422,7 @@ App.youtube = (function () {
         { label: 'Cancel', onClick: function() { modal.close(); } },
         {
           label: 'Save Ban',
-          primary: true,
+          save: true,
           onClick: function() {
             var reason = safeText(select.value);
             if (!reason) {

@@ -348,7 +348,7 @@ export function BuilderFormsPage() {
             </button>
             <button
               type="button"
-              className="builder-icon-button builder-icon-button-active"
+              className="btn btn-save"
               onClick={handleSave}
               disabled={isSaving}
             >

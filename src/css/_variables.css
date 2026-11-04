@@ -29,7 +29,8 @@
    * .builder-public-site so it cannot reach a published page.
    *
    * Two hues carry meaning and nothing else does: GREEN = "commit this work"
-   * (Save Page, Save Template, Save Section, Add), BLUE = "primary action"
+   * (Save Page, Save Template, Save Section, Add — `.btn-save` on the admin
+   * screens, `_buttons.css`), BLUE = "primary action"
    * (Preview, Publish, .btn-primary, every other .submit-button). Disabled is
    * an actual colour change rather than opacity, because a half-transparent
    * bright colour still reads as bright.
