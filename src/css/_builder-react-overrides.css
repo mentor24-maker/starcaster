@@ -2149,15 +2149,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    --nav-link-action-col is the three icon buttons at their fixed 26px,
    stated once so the header's title track and the row's button track
    cannot drift apart. --nav-link-width-col holds the 64px Width input
-   plus its "%" — it only appears under custom sizing. */
+   plus its "%" — it only appears under custom sizing.
+   --nav-link-target-col is the "Opens In" select (task 86bcxur55): two
+   fixed choices, "Same tab" / "New tab", so it is sized to them rather
+   than taking a share of the free space from the name and link columns,
+   which hold text of any length. */
 .builder-react-root .builder-nav-items-manager {
   --nav-link-action-col: 78px;
   --nav-link-width-col: 82px;
-  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-action-col);
+  --nav-link-target-col: 104px;
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-target-col) var(--nav-link-action-col);
 }
 
 .builder-react-root .builder-nav-items-manager[data-nav-width-col="true"] {
-  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-width-col) var(--nav-link-action-col);
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-target-col) var(--nav-link-width-col) var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header .builder-nav-item-fields > span {
+  white-space: nowrap;
 }
 
 .builder-react-root .builder-nav-items-manager .builder-nav-items-header,

@@ -4,6 +4,7 @@ import {
   eligibleNavParents,
   isNavDescendantOf,
   navDepthOf,
+  navLinkTargetProps,
   navSubtreeHeight,
   type NavMegaItem
 } from "@/lib/builder-nav-mega";
@@ -121,5 +122,22 @@ describe("eligibleNavParents", () => {
 
     expect(options).not.toContain("play-col");
     expect(options).not.toContain("book");
+  });
+});
+
+describe("navLinkTargetProps — a menu item's Opens in setting (task 86bcxur55)", () => {
+  it("opens a New tab item in a new tab, with rel so the page cannot reach back", () => {
+    expect(navLinkTargetProps({ target: "_blank" })).toEqual({ target: "_blank", rel: "noopener noreferrer" });
+  });
+
+  it("adds nothing to an item saved before the setting existed", () => {
+    expect(navLinkTargetProps({})).toEqual({});
+    expect(navLinkTargetProps(null)).toEqual({});
+  });
+
+  it("ignores any other value rather than passing it to the link", () => {
+    expect(navLinkTargetProps({ target: "_self" })).toEqual({});
+    expect(navLinkTargetProps({ target: "_top" })).toEqual({});
+    expect(navLinkTargetProps({ target: true })).toEqual({});
   });
 });

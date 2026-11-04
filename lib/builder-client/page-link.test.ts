@@ -71,7 +71,7 @@ describe("page links stored by reference (task 86bcxmrw2)", () => {
   describe("links inside a list stored as JSON text — menus, cards, slides (task 86bcxmt5x)", () => {
     const navItems = JSON.stringify([
       { id: "a", label: "About", href: makePageLink("42", "/about") },
-      { id: "b", label: "Shop", href: "https://shop.example.com" },
+      { id: "b", label: "Shop", href: "https://shop.example.com", target: "_blank" },
       { id: "c", label: "Old", href: "/typed-path", parentId: "a" }
     ]);
 
@@ -84,6 +84,8 @@ describe("page links stored by reference (task 86bcxmrw2)", () => {
     it("leaves typed addresses and external links exactly as they were", () => {
       const out = JSON.parse(resolvePageLinksInSettings({ navItems }, { "42": "x" }).navItems);
       expect(out[1].href).toBe("https://shop.example.com");
+      // A menu item's "Opens in" rides along untouched (task 86bcxur55).
+      expect(out[1].target).toBe("_blank");
       expect(out[2]).toEqual({ id: "c", label: "Old", href: "/typed-path", parentId: "a" });
     });
 

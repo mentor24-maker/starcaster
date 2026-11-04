@@ -140,3 +140,15 @@ export function eligibleNavParents(
     return navDepthOf(items, candidate) + 1 + ownHeight <= maxDepth;
   });
 }
+
+/**
+ * A menu item's "Opens in" setting, as the attributes its link carries
+ * (task 86bcxur55). Only `"_blank"` means anything: an item saved before the
+ * setting existed, or set back to Same tab, has no `target` key and gets no
+ * attributes — so every existing menu renders exactly as it did. A new tab
+ * always gets `rel="noopener noreferrer"`, so the opened page cannot reach
+ * back into the tenant's site through `window.opener`.
+ */
+export function navLinkTargetProps(item: { target?: unknown } | null | undefined): { target?: "_blank"; rel?: string } {
+  return item?.target === "_blank" ? { target: "_blank", rel: "noopener noreferrer" } : {};
+}
