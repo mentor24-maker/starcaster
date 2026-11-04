@@ -116,7 +116,8 @@ const buildTuned = (ids) => ({
         { id: 'home', label: 'Home', href: '/' },
         { id: 'play', label: 'Play', href: '/play' },
         { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
-        { id: 'about', label: 'About', href: '/about' },
+        // One New tab row, so the Opens In column holds both choices (86bcxur55).
+        { id: 'about', label: 'About', href: '/about', target: '_blank' },
       ]),
       navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
       navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
@@ -1185,7 +1186,7 @@ const buildPanelCheckSection = (ids) => {
             { id: 'home', label: 'Home', href: '/', width: '25' },
             { id: 'play', label: 'Play', href: '/play', width: '25' },
             { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
-            { id: 'about', label: 'About', href: '/about', width: '25' },
+            { id: 'about', label: 'About', href: '/about', width: '25', target: '_blank' },
           ]),
         },
       };

@@ -48,7 +48,39 @@ function isOnScreen(rect: DOMRect): boolean {
   return rect.bottom > 0 && rect.top < window.innerHeight;
 }
 
-function readAnchorPosition(anchorSelector: string | null): CSSProperties {
+/**
+ * The rail is portaled to <body>, so hiding the screen that owns it does not
+ * hide it. The admin app switches screens by adding `hidden` to the old one
+ * and leaves the editor mounted, so without this check the rail lost its
+ * anchor, fell back to floating mid-right, and stayed on every other screen
+ * (task 86bcxtw7m). The host marker renders in place, inside the owning
+ * screen: when it has no layout box, that screen is not showing.
+ *
+ * It is absolutely positioned so it takes no space: the page editor's section
+ * is a grid with an 18px gap, and an in-flow marker became its own row there,
+ * adding 18px of blank space under every page. An absolute box still returns a
+ * rect while its screen shows and none once an ancestor is display:none —
+ * never use display:none/contents here, which have no rect and would hide the
+ * rail for good.
+ */
+const HOST_STYLE: CSSProperties = {
+  position: "absolute",
+  display: "block",
+  height: 0,
+  width: 0,
+  overflow: "hidden",
+  pointerEvents: "none"
+};
+
+function isHostShowing(host: HTMLElement | null): boolean {
+  return Boolean(host && host.getClientRects().length > 0);
+}
+
+function readAnchorPosition(anchorSelector: string | null, host: HTMLElement | null): CSSProperties {
+  if (!isHostShowing(host)) {
+    return HIDDEN_POSITION;
+  }
+
   if (!anchorSelector) {
     return FALLBACK_POSITION;
   }
@@ -93,6 +125,7 @@ export function BuilderFloatingSaveRail({
 }: BuilderFloatingSaveRailProps) {
   const [position, setPosition] = useState<CSSProperties>(HIDDEN_POSITION);
   const actionsRef = useRef(actions);
+  const hostRef = useRef<HTMLSpanElement | null>(null);
   const positionSignatureRef = useRef("");
   const actionKey = actions.length > 0 ? actions[0]?.label ?? "" : "";
 
@@ -107,7 +140,7 @@ export function BuilderFloatingSaveRail({
     let frameId = 0;
 
     function applyPosition() {
-      const next = readAnchorPosition(anchorSelector);
+      const next = readAnchorPosition(anchorSelector, hostRef.current);
       const signature = positionSignature(next);
 
       if (signature === positionSignatureRef.current) {
@@ -139,12 +172,20 @@ export function BuilderFloatingSaveRail({
     const observer = new ResizeObserver(schedulePositionUpdate);
     observer.observe(document.documentElement);
 
+    // Leaving the screen changes no size the rail can see, so watch the
+    // attributes that hide an ancestor instead.
+    const visibilityObserver = new MutationObserver(schedulePositionUpdate);
+    for (let el = hostRef.current?.parentElement; el; el = el.parentElement) {
+      visibilityObserver.observe(el, { attributes: true, attributeFilter: ["class", "style", "hidden"] });
+    }
+
     return () => {
       if (frameId) {
         cancelAnimationFrame(frameId);
       }
 
       observer.disconnect();
+      visibilityObserver.disconnect();
       window.removeEventListener("resize", schedulePositionUpdate);
       window.removeEventListener("scroll", schedulePositionUpdate, true);
       positionSignatureRef.current = "";
@@ -160,20 +201,23 @@ export function BuilderFloatingSaveRail({
   }
 
   return (
-    <BuilderBodyPortal>
-      <aside aria-label="Save actions" className="builder-floating-save-rail" style={position}>
-        {actionsRef.current.map((action) => (
-          <button
-            key={action.label}
-            className="submit-button admin-blog-add-button"
-            disabled={isSaving}
-            onClick={action.onSave}
-            type="button"
-          >
-            {isSaving ? action.savingLabel : action.label}
-          </button>
-        ))}
-      </aside>
-    </BuilderBodyPortal>
+    <>
+      <span aria-hidden="true" ref={hostRef} style={HOST_STYLE} />
+      <BuilderBodyPortal>
+        <aside aria-label="Save actions" className="builder-floating-save-rail" style={position}>
+          {actionsRef.current.map((action) => (
+            <button
+              key={action.label}
+              className="submit-button admin-blog-add-button"
+              disabled={isSaving}
+              onClick={action.onSave}
+              type="button"
+            >
+              {isSaving ? action.savingLabel : action.label}
+            </button>
+          ))}
+        </aside>
+      </BuilderBodyPortal>
+    </>
   );
 }

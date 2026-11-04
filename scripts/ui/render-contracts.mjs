@@ -81,6 +81,29 @@ const NAV_SUBMENU_ITEMS = JSON.stringify([
   { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
 ]);
 
+/**
+ * Judge for the Opens In contracts (86bcxur55): each named link either opens
+ * in a new tab (target="_blank" AND rel="noopener noreferrer") or carries no
+ * target at all. A link that did not render is a failure, never a pass.
+ */
+function expectMenuTargets(want) {
+  return (sample) => {
+    const frame = sample.series?.[0] || {};
+    const wrong = [];
+    for (const [name, newTab] of Object.entries(want)) {
+      const link = frame[name];
+      if (!link) { wrong.push(`the "${name}" link did not render, so how it opens could not be read`); continue; }
+      if (newTab) {
+        if (link.target !== '_blank') wrong.push(`the "${name}" item is set to New tab but its link has target=${JSON.stringify(link.target)}`);
+        else if (link.rel !== 'noopener noreferrer') wrong.push(`the "${name}" item opens a new tab without rel="noopener noreferrer" (rel=${JSON.stringify(link.rel)})`);
+      } else if (link.target != null || link.rel != null) {
+        wrong.push(`the "${name}" item is Same tab but its link carries target=${JSON.stringify(link.target)} rel=${JSON.stringify(link.rel)}`);
+      }
+    }
+    return wrong.length ? `${wrong.join('; ')}.` : null;
+  };
+}
+
 /** A theme with a button pair per ground (86bctakk0). The plain pair is navy,
  *  which vanishes on a dark row — so only the per-ground pair can pass there. */
 const SURFACE_BUTTON_PALETTE = {
@@ -1111,6 +1134,87 @@ export const RENDER_CONTRACTS = [
       if (frame.picked.href === '/old-menu') wrong.unshift('the picked menu item still points at the page\'s OLD address — the reference inside the menu was not resolved');
       return `${wrong.join('; ')}.`;
     },
+  },
+  /*
+   * MENU ITEMS THAT OPEN IN A NEW TAB — 86bcxur55.
+   *
+   * Dane, 2026-11-03: "Each menu item in the menu module needs a target
+   * setting." Every link a menu draws — a plain top-level link, a drop-down
+   * trigger, a drop-down child, a mega panel's heading and links — reads the
+   * one helper, navLinkTargetProps. These read the attributes off the real
+   * links: New tab items must carry target="_blank" WITH rel (or the opened
+   * page can reach back into the client's site), and Same tab items — which
+   * is every menu saved before the setting existed — must carry neither.
+   */
+  ...[
+    { id: 'menu-item-new-tab-opens-in-a-new-tab', emulate: undefined, where: 'at desktop width', anchor: '.site-nav-link' },
+    // On a phone the links sit folded behind the hamburger until it is
+    // tapped, so the contract stands on the hamburger and reads the links
+    // (attributes need no box) out of the same DOM the tap reveals.
+    { id: 'menu-item-new-tab-opens-in-a-new-tab-on-a-phone', emulate: { viewport: { width: 390, height: 900 } }, where: 'in the phone menu', anchor: '.site-nav-toggle' },
+  ].map(({ id, emulate, where, anchor }) => ({
+    id,
+    why:
+      `A menu item set to Opens In: New tab must open in a new tab ${where}, for a top-level link, a ` +
+      'drop-down trigger and a drop-down child, and an item left on Same tab must not (task 86bcxur55). ' +
+      'This reads target and rel off each rendered link.',
+    ...(emulate ? { emulate } : {}),
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'same', label: 'Home', href: '/' },
+          { id: 'ext', label: 'Shop', href: 'https://shop.example.com/', target: '_blank' },
+          { id: 'proj', label: 'Projects', href: '/projects', target: '_blank' },
+          { id: 'kid-new', label: 'Store', href: 'https://store.example.com/', parentId: 'proj', target: '_blank' },
+          { id: 'kid-same', label: 'Normie', href: '/normie', parentId: 'proj' },
+        ]),
+      },
+    },
+    selector: anchor,
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        same: '.site-nav-items > a.site-nav-link:nth-of-type(1)',
+        ext: '.site-nav-items > a.site-nav-link:nth-of-type(2)',
+        trigger: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+        kidNew: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(1)',
+        kidSame: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(2)',
+      },
+    },
+    expect: expectMenuTargets({ same: false, ext: true, trigger: true, kidNew: true, kidSame: false }),
+  })),
+  {
+    id: 'menu-item-new-tab-opens-in-a-new-tab-in-a-mega-panel',
+    why:
+      'A mega menu draws its links through a different component from the plain drop-down — its ' +
+      'trigger, column headings and column links — so the Opens In setting has to reach those too ' +
+      '(task 86bcxur55).',
+    module: {
+      type: 'navigation',
+      settings: {
+        navDropdownStyle: 'mega',
+        navItems: JSON.stringify([
+          { id: 'play', label: 'Play', href: '/play', target: '_blank' },
+          { id: 'col', label: 'Courts', href: '/courts', parentId: 'play' },
+          { id: 'book', label: 'Book', href: 'https://book.example.com/', parentId: 'col', target: '_blank' },
+          { id: 'fees', label: 'Fees', href: '/fees', parentId: 'col' },
+        ]),
+      },
+    },
+    selector: '.site-nav-mega',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        trigger: '.site-nav-mega-trigger > a.site-nav-link',
+        heading: 'a.site-nav-mega-heading',
+        book: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(2)',
+        fees: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(3)',
+      },
+    },
+    expect: expectMenuTargets({ trigger: true, heading: false, book: true, fees: false }),
   },
   {
     id: 'headline-rotator-link-to-a-renamed-page-follows-it',
@@ -6048,5 +6152,137 @@ export const RENDER_CONTRACTS = [
     module: { type: 'galaxy', settings: { placement: 'window', intro: 'none', linkUrl: '/about' } },
     selector: 'a[data-galaxy-link]',
     absent: true,
+  },
+  /*
+   * Breadcrumb (task 86bcxwe6z). The module had a settings panel and an
+   * editor card but no renderer at all, so a published trail was an empty
+   * gap. One trail serves three contracts: what it draws, where a picked
+   * page's crumb points after that page is renamed, and the empty case.
+   */
+  {
+    id: 'breadcrumb-trail-renders-links-separators-and-current',
+    why:
+      'A Breadcrumb rendered NOTHING on a live page — no case for it in the page renderer — while its ' +
+      'editor card showed the trail, so a tenant saw it in the Builder and an empty gap after publishing ' +
+      '(task 86bcxwe6z). Three items must give three labels and two separators inside a ' +
+      'nav labelled "Breadcrumb"; the first two are links, the last is the current page as plain text.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+          separator: '›',
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href', 'aria-label', 'aria-current'],
+      selectors: {
+        nav: 'nav.builder-preview-breadcrumb',
+        first: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        second: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+        lastLink: 'nav.builder-preview-breadcrumb li:nth-child(3) > a',
+        current: 'nav.builder-preview-breadcrumb li:nth-child(3) > [aria-current="page"]',
+        thirdSep: 'nav.builder-preview-breadcrumb li:nth-child(3) .builder-preview-breadcrumb-sep',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.nav) return 'no breadcrumb trail rendered at all.';
+      const wrong = [];
+      if (frame.nav['aria-label'] !== 'Breadcrumb') wrong.push(`the nav is labelled ${JSON.stringify(frame.nav['aria-label'])}, not "Breadcrumb"`);
+      if (sample.text !== 'Home›Programs›Court Fees') wrong.push(`the trail reads ${JSON.stringify(sample.text)}, expected "Home›Programs›Court Fees" (three labels, two separators)`);
+      if (!frame.first) wrong.push('the first crumb is not a link');
+      if (!frame.second) wrong.push('the second crumb is not a link');
+      if (frame.lastLink) wrong.push('the last crumb (the current page) is a link');
+      if (!frame.current) wrong.push('the last crumb is not marked as the current page');
+      if (frame.thirdSep) wrong.push('a separator follows the last crumb');
+      return wrong.length ? `${wrong.join('; ')}.` : null;
+    },
+  },
+  {
+    id: 'breadcrumb-crumb-to-a-renamed-page-follows-it',
+    why:
+      'A crumb picked from the page list is stored by the page\'s id (task 86bcxu518). This saves a ' +
+      'reference whose address is the OLD one beside a typed address and says the page now lives ' +
+      'somewhere new: the picked crumb must follow the page, the typed one must be left as saved ' +
+      '(task 86bcxwe6z).',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        typed: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the first crumb did not render as a link, so where it points could not be read.';
+      const want = { picked: '/home-v2', typed: '/programs' };
+      // The preview page serves internal links as static files ("/x.html").
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} crumb points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (seen('picked') === '/old-home') wrong.unshift('the picked crumb still points at the page\'s OLD address — the reference inside the trail was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-a-note-in-the-builder',
+    why:
+      'An empty Breadcrumb tells whoever is building the page why it is empty. Paired with the two ' +
+      'absence contracts below, which on their own would pass if nothing ever rendered (task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    expect(sample) {
+      return /no trail items/.test(sample.text || '')
+        ? null
+        : `an empty breadcrumb in the Builder rendered ${JSON.stringify(sample.text)}, not its "no trail items" note.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-no-note-on-a-live-site',
+    why:
+      'The "add them in module settings" note is for the builder; a visitor has no module settings ' +
+      '(landmine 16, DOCTRINE §5.29).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    absent: true,
+    emulate: { liveSite: true },
+  },
+  {
+    id: 'breadcrumb-empty-renders-no-trail-on-a-live-site',
+    why:
+      'An empty Breadcrumb on a published page renders nothing at all — not an empty nav landmark a ' +
+      'screen reader would announce (landmine 16, task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: 'nav.builder-preview-breadcrumb',
+    absent: true,
+    emulate: { liveSite: true },
   },
 ];

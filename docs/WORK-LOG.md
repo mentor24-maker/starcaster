@@ -14,6 +14,37 @@ its own ticket. Review sent it back once: in the Headline Rotator, choosing
 Portal's Redirect path sat out of line with its row. Both now look like every
 other field, and the test page used to check settings panels now carries
 headlines, so that check can see this table.
+## 2026-11-04 — Menu links can now open in a new tab (#957)
+
+Each link in a site's menu has a new "Opens In" choice in the Builder: Same
+tab or New tab. Pick New tab and that menu item opens its page in a new
+browser tab on the live site — in the top bar, in drop-down and mega menus,
+and in the phone menu alike. Every menu that already exists stays on Same tab
+and behaves exactly as before. "New window" is not offered, because browsers
+open these links as tabs anyway and forcing a separate window gets stopped by
+pop-up blockers.
+## 2026-11-04 — The Breadcrumb module now shows up on the live site (#958)
+
+The Breadcrumb module — the little "Home › Programs › Court Fees" trail that
+tells a visitor where they are — could be added and set up in the Builder, but
+the page itself never drew it, so a published page had an empty gap where the
+trail should be. It now appears on the live site and in Preview: every crumb
+but the last is a link, the last one is the page you are on, and the size,
+bold, colours, separator and alignment you choose in the panel all apply. A
+crumb picked from your page list follows that page if it is renamed. An empty
+Breadcrumb shows nothing to visitors, and tells whoever is building the page
+to add items. No live page used this module yet, so nothing on any client's
+site changes until someone adds one.
+## 2026-11-03 — The floating Save Page button no longer follows you to other screens (#949)
+
+After you left Builder > Pages for another screen — Contacts, a CRM form — the
+green floating Save Page button could stay on screen, hovering mid-right, even
+several screens later. The editor is kept open in the background when you
+switch screens, and the button had no way to tell its screen was gone. It now
+checks whether its own screen is showing and hides the moment you leave; back
+on Builder > Pages it works exactly as before, and the saved-section editor's
+Save Section button still appears. A first version of this fix left 18px of
+blank space under the page editor; that is gone too.
 
 ## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
 
