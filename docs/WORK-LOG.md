@@ -12,6 +12,24 @@ only while it lists something. Its first dry run found 40 such links on six
 sites, mostly menu items typed as addresses like /projects or /blog that no
 page has.
 
+## 2026-11-03 — Renaming a page no longer breaks the site menu, cards, slides or image links (#948)
+
+A site's menu, its feature cards, carousel slides, an image's link, a galaxy's
+link, a blog post card and "redirect after create" only had a box to type an
+address into. Rename the page that address pointed at and the menu link broke
+on every page of the site. Each of them now has the same page list the Button
+got in #947: pick one of your pages and the link remembers the page itself, so
+it follows the page when its address changes. "Custom…" still takes any typed
+address, and every link saved before this keeps working exactly as it did.
+Two things are not done yet and each has its own ticket: links typed inside a
+text block, and the one-time upgrade of links saved before these changes,
+which has to wait until this is live and needs a machine that can reach the
+live database.
+Two more fixes came out of review: a site exported to WordPress now gets the
+page's current address for a menu link picked this way (it used to write the
+internal page code instead), and the "create pages from a menu" screen reads
+those links correctly too. Breadcrumbs, rotating headlines, the player sign-in
+redirect and the Blog Links Manager's links are next, on their own ticket.
 ## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
 
 When you pick one of your own pages in a Builder setting — a Button's Link,

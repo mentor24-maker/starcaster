@@ -1064,6 +1064,55 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'menu-item-linked-to-a-renamed-page-follows-it',
+    why:
+      'A navigation menu item had only a typed address box, so renaming a page broke the site menu ' +
+      'on every page (task 86bcxmt5x). Menu items now store a picked page by id, inside the menu\'s ' +
+      'list of items. This saves a reference whose address is the OLD one, a typed address and an ' +
+      'external link, and says the page now lives somewhere new: the picked item must follow the ' +
+      'page, and the other two must be left exactly as typed.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([
+            { id: 'picked', label: 'Menu', href: 'page:4242|/old-menu' },
+            { id: 'typed', label: 'Typed', href: '/typed-path' },
+            { id: 'gone', label: 'Gone', href: 'page:777|/was-here' },
+            { id: 'ext', label: 'Shop', href: 'https://shop.example.com/' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.site-nav-link',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: '.site-nav a.site-nav-link:nth-of-type(1)',
+        typed: '.site-nav a.site-nav-link:nth-of-type(2)',
+        gone: '.site-nav a.site-nav-link:nth-of-type(3)',
+        ext: '.site-nav a.site-nav-link:nth-of-type(4)',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the menu did not render a link at all, so where it points could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      // The preview page serves internal links as static files ("/x.html"),
+      // so the suffix is not part of what this measures.
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} item points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (frame.picked.href === '/old-menu') wrong.unshift('the picked menu item still points at the page\'s OLD address — the reference inside the menu was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
     id: 'button-right-aligned-sits-at-the-right-edge-of-its-column',
     why:
       'The other value of the same control. A fix that centres by stretching, or by a rule that ' +
