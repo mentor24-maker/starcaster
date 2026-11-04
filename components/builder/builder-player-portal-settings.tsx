@@ -53,6 +53,19 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             <option value="false">No</option>
           </select>
         </BuilderSettingRow>
+        <BuilderSettingRow label="Forgot password">
+          <select
+            value={settings.showForgotPassword === "false" ? "false" : "true"}
+            onChange={(event) => updateSetting("showForgotPassword", event.target.value)}
+          >
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+          </select>
+        </BuilderSettingRow>
+      </div>
+      {/* Its own row: under Custom… the picker adds a typed box, which would push this
+          label above the others in the row (task 86bcxu518, review round 1). */}
+      <div className="builder-player-portal-settings-redirect">
         <BuilderSettingRow label="Redirect path">
           {/* A page picked here is stored by id, so renaming it cannot break the redirect (task 86bcxu518). */}
           <BuilderProjectDataPicker
@@ -64,15 +77,6 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             placeholder="/portal/dashboard"
             ariaLabel="Redirect path"
           />
-        </BuilderSettingRow>
-        <BuilderSettingRow label="Forgot password">
-          <select
-            value={settings.showForgotPassword === "false" ? "false" : "true"}
-            onChange={(event) => updateSetting("showForgotPassword", event.target.value)}
-          >
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
         </BuilderSettingRow>
       </div>
       <div className="builder-module-runtime-note">

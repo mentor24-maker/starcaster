@@ -9,7 +9,12 @@ follows it when its address changes, while "Custom…" still takes any typed
 address and old links keep working as they were. The weekly broken-link check
 and the page-delete warning now look at these too. Building it turned up that
 the Breadcrumb module never actually shows on a live site at all; that has
-its own ticket.
+its own ticket. Review sent it back once: in the Headline Rotator, choosing
+"Custom…" drew the typed-address box as a large empty square, and the Player
+Portal's Redirect path sat out of line with its row. Both now look like every
+other field, and the test page used to check settings panels now carries
+headlines, so that check can see this table.
+
 ## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
 
 The Link button in a text block or heading used to pop up a box asking for an

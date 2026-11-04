@@ -3033,6 +3033,46 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   padding: 10px 12px;
   font: inherit;
 }
+/* The typed box under Custom…. The picker's own rule gives it
+   `flex: 1 1 200px` for a ROW; in this column-direction cell that basis is a
+   HEIGHT, and the box became a ~200px square (review round 1). Here it is one
+   line, full width, the select's height. */
+.builder-react-root .builder-headline-table .builder-project-data-picker > input[type="text"] {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+}
+/* The Link column gets a declared width, so a long page name in the select
+   cannot set the column and squeeze Headline to a sliver; Headline keeps a
+   floor of its own. */
+.builder-react-root .builder-headline-table td:nth-child(2) {
+  width: 16rem;
+}
+.builder-react-root .builder-headline-table td:first-child > input {
+  min-width: 12rem;
+}
+/* Player Portal's Redirect path sits in its own row under the four short
+   settings (review round 1), so the inline row is four tracks, not five. */
+.builder-react-root .builder-player-portal-settings-row {
+  grid-template-columns:
+    minmax(148px, 1.35fr)
+    minmax(108px, 0.9fr)
+    minmax(108px, 0.85fr)
+    minmax(124px, 0.95fr);
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-setting-row {
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 16px;
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-project-data-picker {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-project-data-picker > select {
+  flex: 1 1 16ch;
+  min-width: 0;
+  max-width: none;
+}
 /* A crumb's URL is the shared page picker (task 86bcxu518): a select, plus a
    typed box under Custom…. It fills its one track, and the typed box wraps
    under the select rather than pushing the actions out of the row. */
