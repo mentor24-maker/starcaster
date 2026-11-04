@@ -11,6 +11,11 @@ Two things are not done yet and each has its own ticket: links typed inside a
 text block, and the one-time upgrade of links saved before these changes,
 which has to wait until this is live and needs a machine that can reach the
 live database.
+Two more fixes came out of review: a site exported to WordPress now gets the
+page's current address for a menu link picked this way (it used to write the
+internal page code instead), and the "create pages from a menu" screen reads
+those links correctly too. Breadcrumbs, rotating headlines, the player sign-in
+redirect and the Blog Links Manager's links are next, on their own ticket.
 ## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
 
 When you pick one of your own pages in a Builder setting — a Button's Link,

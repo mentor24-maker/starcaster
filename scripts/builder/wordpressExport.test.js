@@ -166,6 +166,25 @@ test('blog posts, tags and the menu are exported, menu children after their pare
   assert.match(menu[2], new RegExp(`_menu_item_menu_item_parent\\]\\]></wp:meta_key>\\s*<wp:meta_value><!\\[CDATA\\[${aboutId}\\]\\]>`));
 });
 
+test('a menu item picked by page exports the page\'s CURRENT address, not the stored reference', () => {
+  // Picked when the page was /about; the page has since been renamed to /about-us.
+  const pickedHeader = section([mod('navigation', { settings: { navItems: JSON.stringify([
+    { id: 'n1', label: 'Home', href: '/' },
+    { id: 'n2', label: 'About', href: 'page:2|/about' },
+    { id: 'n3', label: 'Gone', href: 'page:999|/old-page' },
+  ]) } })], { title: 'Header', canonical: true, savedSectionId: 'ss-head' });
+  const pages = sitePages().map((p) => ({
+    ...p,
+    slug: p.id === '2' ? 'about-us' : p.slug,
+    layoutSections: p.layoutSections.map((s) => (s === header ? pickedHeader : s)),
+  }));
+  const { xml } = run({ pages });
+  const menu = xml.split('<item>').filter((b) => b.includes('nav_menu_item'));
+  const url = (b) => b.match(/_menu_item_url\]\]><\/wp:meta_key>\s*<wp:meta_value><!\[CDATA\[(.*?)\]\]>/)[1];
+  assert.deepEqual(menu.map(url), ['/', '/about-us', '/old-page']);
+  assert.ok(!xml.includes('page:2|'), 'the raw page reference leaked into the export');
+});
+
 test('the file is well-formed XML: names escaped, CDATA terminators split, control characters dropped', () => {
   const { xml } = run({
     posts: [{ id: 'p', title: 'A <b> & c', status: 'draft', body: 'ends ]]> here \u0001' }],
