@@ -182,10 +182,20 @@ in `docs/LOCAL_DEVELOPMENT.md` on that branch.
 
 ## Known, still open
 
-- **`observe_usage_logs` has no retention rule.** `routes/index.js` writes one
-  row per API request — 17,631 in a single `pg_stat_statements` window. It grows
-  forever and is already large enough to read almost entirely from disk (20%
-  cache hit). This is the leak that returns on its own.
+- **`observe_usage_logs` retention — fixed 2026-11-04 (task 86bcy80hd).**
+  `routes/index.js` writes one `vercel` / `api_request` row per API request,
+  and nothing removed them: 652,161 rows and 128 MB by 2026-11-04, the
+  table with the most disk reads in the database. An hourly Vercel cron,
+  `/api/observe/usage-logs/prune` (`lib/usageLogRetention.js`), now deletes
+  request rows older than **30 days**, at most 10,000 per run in batches of
+  1,000, so the first few days work through the backlog without spending the
+  disk budget doing it. **The AI-spend rows (`llm_tokens`) in the same table
+  are never touched.** Each run logs one `[observe.usage-logs] prune` line in
+  the Vercel logs; `complete=false stopped=batch-limit` is normal while the
+  backlog lasts. The table keeps its disk space until Postgres reuses it, so
+  the size figure falls only slowly — the row count is the number to watch.
+  The agent's read-only login cannot read `pg_stat_statements`; the
+  per-table reading (`pg_statio_user_tables`) is what it can see.
 - **Compute is the whole variable bill.** Derived from the 2026-08-16 meters:
   about $0.0134 per instance-hour, roughly three instances running around the
   clock, so about $7 a week. Egress was at 27% of 250 GB and everything else was

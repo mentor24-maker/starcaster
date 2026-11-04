@@ -78,6 +78,10 @@
     {
       "path": "/api/ai-quota/check",
       "schedule": "37 * * * *"
+    },
+    {
+      "path": "/api/observe/usage-logs/prune",
+      "schedule": "13 * * * *"
     }
   ]
 }
