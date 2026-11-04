@@ -1,3 +1,16 @@
+## 2026-11-04 — The request log no longer grows forever (#959)
+
+Every time anyone used the app, the database wrote down "a request happened"
+in a log table, and nothing ever cleared it. By today it held 652,161 rows,
+which made it the biggest table and the one doing the most disk reading on the
+smallest database size Supabase offers. That size gets a small daily allowance
+of disk reading, and running out of it is what makes the admin app and client
+sites time out. Now an hourly cleanup deletes those request rows once they are
+more than 30 days old. It takes small bites, so working through the backlog
+takes a few days and does not use up the allowance itself. The AI-spend
+records kept in the same table are never touched. Whether to move up from the
+smallest database size is still Dane's call, on Supabase's billing screen.
+
 ## 2026-11-03 — Renaming a page no longer breaks breadcrumbs, rotating headlines, the sign-in redirect or blog-manager links (#956)
 
 Five more settings only had a box to type a page's address into: a
