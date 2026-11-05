@@ -3041,11 +3041,25 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       <div className="admin-toolbar">
         <h2 className="admin-section-heading">{title}</h2>
         <div className="admin-actions builder-header-actions">
-          <button className={builderMode === "templates" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("templates")} type="button">Templates</button>
-          <button className={builderMode === "modules" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("modules")} type="button">Modules</button>
-          <button className={builderMode === "pages" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("pages")} type="button">Pages</button>
           {headerActions}
         </div>
+      </div>
+      {/* Templates / Modules / Pages switch the VIEW, so they are tabs, not
+          buttons beside the screen's actions (UI rule C9, task 86bcyrqbb —
+          they used to be the app's own Save and Cancel styles). */}
+      <div className="tab-bar builder-mode-tabs" role="tablist" aria-label="Builder workspace views">
+        {([["templates", "Templates"], ["modules", "Modules"], ["pages", "Pages"]] as const).map(([mode, label]) => (
+          <button
+            aria-selected={builderMode === mode}
+            className="tab-btn"
+            key={mode}
+            onClick={() => setBuilderMode(mode)}
+            role="tab"
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {message ? <div className="notice success admin-notice">{message}</div> : null}
