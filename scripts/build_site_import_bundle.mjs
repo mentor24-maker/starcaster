@@ -30,6 +30,8 @@ const bundles = [
   { entry: 'columns.ts', outfile: 'columns.js' },
   { entry: 'surfaces.ts', outfile: 'surfaces.js' },
   { entry: 'fidelity.ts', outfile: 'fidelity.js' },
+  // Reads an imported form's source HTML into its questions (task 86bcynjvc).
+  { entry: 'forms.ts', outfile: 'forms.js' },
   // The server requires this one (lib/siteImportTheme.js, the Site Import
   // screen's "Create theme from this import"), so the full build makes it.
   { entry: 'theme.ts', outfile: 'theme.js' },

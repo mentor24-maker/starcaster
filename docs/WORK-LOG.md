@@ -6,6 +6,21 @@ small round pale-red arrow that opens and closes the box. The blue strip
 across the top also stopped short of the right edge. The button area now
 grows to fit both buttons and the blue strip runs the full width, with the
 arrow, Check and Publish side by side on it.
+## 2026-11-04 — Site Import can read what an imported form asks (#965)
+
+When Site Import copies a site, any sign-up or contact form it finds has so
+far been kept only as a picture, plus the form's original code tucked away
+in the background. Nothing could read that code. Now something can: it works
+out each question the form asks, what kind of answer it wants (an email, a
+phone number, a pick-one list…), which ones are required, the choices, and
+what the button says — and it lists, in plain words, everything it chose to
+leave out, such as hidden spam traps and the original site's internal codes.
+Search boxes, sign-in forms and payment forms are recognised and left alone.
+On Strands Movie's home page it reads the real form as four questions — email,
+first name, last name and "What is the main skill you bring to the team?" with
+its eleven choices — under a "Join the Crew!" button. Nothing on any site
+changes yet; the next ticket uses this to put working forms where the
+pictures are.
 ## 2026-11-04 — Form embed code and preview show choice questions as choices (#969)
 
 A form question set to "Choose one", "Choose several" or "Dropdown list
