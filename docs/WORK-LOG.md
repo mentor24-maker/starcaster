@@ -13,6 +13,21 @@ the other screens in the UI normalization series reuse it.
 A review caught one thing before it merged: every button had started fading
 to 80% when you pointed at it, which undid the solid blue hover asked for on
 2026-08-30. Buttons now change colour on hover and never fade.
+## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
+
+When Site Import copied a site, any sign-up or contact form came across as a
+screenshot: it looked right but nobody could type into it. Now the import
+rebuilds each form as a real Starcaster form under Contacts › Forms and puts a
+working Form on the draft page where the picture used to be. It is careful with
+the client's existing setup. It only ever adds questions their contact list is
+missing and never changes ones already there. A sign-up that appears on several
+pages becomes one form used on all of them. Importing again updates that form
+rather than making a second copy, and if somebody has edited the form by hand
+since — even just its button colour — the import leaves it alone. A site search box or a sign-in form still
+comes across as a picture, with a note saying why. The import report now has a
+Forms section listing what was rebuilt and what was left out, such as spam traps
+and the old plugin's internal fields. Strands Movie gets its form in the next
+ticket.
 ## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
 
 Before this, importing a site a second time and building pages from it made a
