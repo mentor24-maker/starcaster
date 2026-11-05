@@ -358,13 +358,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
-.builder-react-root .builder-themes-selector {
-  flex: 1 1 180px;
-  min-width: 0;
-}
-
+/* A theme's name is a short title, so the picker and the name box are
+   sized to one (docs/UI_RULES.md W7) instead of growing across the row. */
+.builder-react-root .builder-themes-selector,
 .builder-react-root .builder-themes-name-input {
-  flex: 1 1 180px;
+  flex: 0 1 auto;
+  width: calc(var(--field-w-short) + 2rem);
+  max-width: 100%;
   min-width: 0;
 }
 
