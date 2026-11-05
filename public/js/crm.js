@@ -657,7 +657,10 @@ App.crm = (function () {
     { value: 'url', label: 'URL' },
     { value: 'number', label: 'Number' },
     { value: 'textarea', label: 'Textarea' },
-    { value: 'select', label: 'Dropdown List' },
+    { value: 'select', label: 'Dropdown list (choose one)' },
+    { value: 'multiselect', label: 'Dropdown list (choose several)' },
+    { value: 'radio', label: 'Choose one' },
+    { value: 'checkboxes', label: 'Choose several' },
     { value: 'boolean', label: 'Binary' },
     { value: 'date', label: 'Date' },
   ];
@@ -888,7 +891,7 @@ App.crm = (function () {
         </label>
       `);
     }
-    if (row.type === 'select') {
+    if (row.type === 'select' || row.type === 'multiselect' || row.type === 'radio' || row.type === 'checkboxes') {
       parts.push(`
         <label class="crm-field-detail-item crm-field-detail-grow">
           <span class="meta">Options</span>
