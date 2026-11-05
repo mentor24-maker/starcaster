@@ -81,6 +81,23 @@
   max-width: 52rem;
 }
 
+/*
+ * Inside the admin app the screen's own title row ("Legal: Privacy Policy")
+ * is the one title (docs/UI_RULES.md R11). The shared legal body also opens
+ * with an <h1> — the only title on the standalone /privacy-policy page — so
+ * hide it here rather than stack two titles. The "Effective date" line stays
+ * as the screen's grey description.
+ */
+.app-page.legal-app-page .legal-document h1 {
+  display: none;
+}
+
+.app-page.legal-app-page .legal-document .legal-effective {
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--page-desc-size);
+  color: var(--muted);
+}
+
 .auth-legal-footer {
   position: fixed;
   left: 0;

@@ -8,6 +8,18 @@ its buttons, lined up with the Preview / Save buttons in the row below, and
 on a narrow screen the buttons drop onto a second line instead of spilling
 out.
 
+## 2026-11-05 — Every admin screen now starts with one title row (#977)
+
+Admin screens each began a little differently: some had a sentence under the
+title and some didn't, two used their own bigger title size, and Builder ›
+Workspace stacked two titles ("Builder: Workspace" with "Page Builder" under
+it). Now every screen starts the same way: one title, that screen's buttons on
+the same row, and at most one short line of small grey text saying what the
+screen is for. The Workspace has a single title beside its buttons. Four long
+explanations were split so only their first sentence sits under the title; the
+rest is still there, just below. This is item 2 of the 10 UI normalization
+changes, and the rule is written down (R11 in docs/UI_RULES.md) so the
+remaining screens follow it.
 ## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
 
 On the Profile screen every box was about 100 pixels wide, the "Primary

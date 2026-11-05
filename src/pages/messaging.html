@@ -1,7 +1,9 @@
 
       <section id="messagingPage" class="app-page hidden">
-        <h2>Messaging</h2>
-        <p>Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
+        <div class="page-heading-row">
+          <h2>Messaging</h2>
+        </div>
+        <p class="page-heading-desc">Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
         <div class="cards">
           <article class="card">
             <h3>Topics</h3>
@@ -264,7 +266,7 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
-        <p>Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
+        <p class="page-heading-desc">Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
 
         <form id="messagingContentTypeForm">
           <input type="hidden" name="id" />
@@ -771,7 +773,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'email' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Email writing workspace placeholder.</p>
+        <p class="page-heading-desc">Email writing workspace placeholder.</p>
       </section>
       <section id="messagingPitchesPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -783,7 +785,7 @@
             <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingPitchesCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -929,7 +931,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'comment' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Comment writing workspace placeholder.</p>
+        <p class="page-heading-desc">Comment writing workspace placeholder.</p>
       </section>
       <section id="messagingKeywordsPage" class="app-page hidden"></section>
       <section id="messagingHashtagsPage" class="app-page hidden">
@@ -1240,13 +1242,13 @@
             <button type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
           </div>
         </div>
-        <p>The Topics editor now lives on the main Topics page.</p>
+        <p class="page-heading-desc">The Topics editor now lives on the main Topics page.</p>
       </section>
       <section id="createMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTopicsPage">Messaging Topics</a></h2>
         </div>
-        <p>The create form now opens inline on the main Topics page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Topics page.</p>
       </section>
       <section id="editMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -1388,13 +1390,13 @@
             <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
           </div>
         </div>
-        <p>The Tags editor now lives on the main Tags page.</p>
+        <p class="page-heading-desc">The Tags editor now lives on the main Tags page.</p>
       </section>
       <section id="createMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTagsPage">Messaging Tags</a></h2>
         </div>
-        <p>The create form now opens inline on the main Tags page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Tags page.</p>
       </section>
       <section id="editMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -1440,7 +1442,7 @@
             <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingSubheadingsCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -1589,7 +1591,7 @@
             <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingTaglinesCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -2041,7 +2043,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'description' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Description writing workspace placeholder.</p>
+        <p class="page-heading-desc">Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -2050,7 +2052,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'transcript' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Transcript writing workspace placeholder.</p>
+        <p class="page-heading-desc">Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -2059,7 +2061,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'cta' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>CTA writing workspace placeholder.</p>
+        <p class="page-heading-desc">CTA writing workspace placeholder.</p>
       </section>
 
 <dialog id="messagingFormatImportModal" class="c-modal">
