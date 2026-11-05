@@ -218,8 +218,10 @@ header {
 #appShell > header .menu-root > .menu-item > .menu-link {
   display: flex;
   align-items: center;
-  /* --text-sm and 0.4rem sides: measured at 1440, --text-base with 0.6rem
-     made the menu ~1090px and pushed name / Logout onto a second row. */
+  /* --text-sm and 0.35rem sides: measured at 1440, --text-base with 0.6rem
+     made the menu ~1090px and pushed name / Logout onto a second row, and
+     0.4rem pushed the Projects button off once the logo grew to 56px tall
+     (task 86bcyyfex). */
   padding: 0 0.35rem;
   font-size: var(--text-sm);
   white-space: nowrap;
