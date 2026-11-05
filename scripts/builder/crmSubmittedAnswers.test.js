@@ -37,5 +37,8 @@ test('the field editor offers both types and shows their Options box', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'js', 'crm.js'), 'utf8');
   assert.match(src, /\{ value: 'radio', label: 'Choose one' \}/);
   assert.match(src, /\{ value: 'checkboxes', label: 'Choose several' \}/);
-  assert.match(src, /row\.type === 'select' \|\| row\.type === 'radio' \|\| row\.type === 'checkboxes'/);
+  // Task 86bcynpyf: the two dropdowns read as a pair.
+  assert.match(src, /\{ value: 'select', label: 'Dropdown list \(choose one\)' \}/);
+  assert.match(src, /\{ value: 'multiselect', label: 'Dropdown list \(choose several\)' \}/);
+  assert.match(src, /row\.type === 'select' \|\| row\.type === 'multiselect' \|\| row\.type === 'radio' \|\| row\.type === 'checkboxes'/);
 });

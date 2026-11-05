@@ -460,10 +460,11 @@ function crmConfiguredSelectOptions(field: CrmFormField): string[] {
 
 /**
  * The field types whose answer is picked from the field's Options list:
- * Dropdown (`select`), Choose one (`radio`) and Choose several (`checkboxes`,
- * task 86bcynjv7). All three read the same `options` array.
+ * Dropdown (`select`), Dropdown choose-several (`multiselect`, task
+ * 86bcynpyf), Choose one (`radio`) and Choose several (`checkboxes`, task
+ * 86bcynjv7). All four read the same `options` array.
  */
-const CRM_CHOICE_FIELD_TYPES = new Set(["select", "radio", "checkboxes"]);
+const CRM_CHOICE_FIELD_TYPES = new Set(["select", "multiselect", "radio", "checkboxes"]);
 
 /**
  * A choice field the tenant never gave any options to — a dropdown, a set of
@@ -490,17 +491,189 @@ function crmAnswerText(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
+/**
+ * "Dropdown list (choose several)" (`multiselect`, task 86bcynpyf).
+ *
+ * A plain `<select multiple>` is a box you must hold Ctrl or ⌘ in to pick a
+ * second answer, which most visitors never discover. This is a button that
+ * looks like the single dropdown and opens a list of tick boxes; the closed
+ * button names what is chosen ("Writing, Music").
+ *
+ * Keyboard: Tab reaches the button, Enter/Space (or ↓) opens it, Tab moves
+ * through the tick boxes, Space or Enter toggles one, Escape closes the list
+ * and returns to the button. Clicking outside or tabbing away closes it.
+ *
+ * Required = at least one ticked. The tick boxes are not in the page while the
+ * list is closed, so they cannot carry `required` themselves; a hidden proxy
+ * input holding the joined answer does, and hands focus to the button when the
+ * browser points the visitor at it.
+ */
+function CrmMultiSelectDropdown({
+  field,
+  options,
+  chosen,
+  labelId,
+  onChange
+}: {
+  field: CrmFormField;
+  options: string[];
+  chosen: string[];
+  labelId?: string;
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const focusFirstOnOpen = useRef(false);
+  const baseId = useId();
+  const buttonId = `${baseId}-button`;
+  const listId = `${baseId}-list`;
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const onPointerDown = (event: Event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !focusFirstOnOpen.current) return;
+    focusFirstOnOpen.current = false;
+    listRef.current?.querySelector<HTMLInputElement>("input[type=checkbox]")?.focus();
+  }, [open]);
+
+  function toggle(option: string) {
+    const next = chosen.includes(option)
+      ? chosen.filter((o) => o !== option)
+      : options.filter((o) => o === option || chosen.includes(o));
+    onChange(next);
+  }
+
+  function close(returnFocus: boolean) {
+    setOpen(false);
+    if (returnFocus) buttonRef.current?.focus();
+  }
+
+  const summary = chosen.join(", ");
+
+  return (
+    <div
+      className="builder-crm-form-multiselect"
+      ref={wrapRef}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          close(true);
+        }
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (open && next && wrapRef.current && !wrapRef.current.contains(next)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        id={buttonId}
+        ref={buttonRef}
+        className="builder-crm-form-multiselect-button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-labelledby={labelId ? `${labelId} ${buttonId}` : undefined}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            focusFirstOnOpen.current = true;
+            if (open) listRef.current?.querySelector<HTMLInputElement>("input[type=checkbox]")?.focus();
+            else setOpen(true);
+          }
+        }}
+      >
+        <span className={summary ? "builder-crm-form-multiselect-summary" : "builder-crm-form-multiselect-summary is-placeholder"}>
+          {summary || "Select…"}
+        </span>
+      </button>
+      <input
+        className="builder-crm-form-multiselect-proxy"
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        required={field.required}
+        value={summary}
+        onChange={() => {}}
+        onFocus={() => buttonRef.current?.focus()}
+      />
+      {open ? (
+        <div
+          className="builder-crm-form-multiselect-list"
+          id={listId}
+          ref={listRef}
+          role="group"
+          aria-labelledby={labelId}
+        >
+          {options.map((option) => (
+            <label className="builder-crm-form-choice" key={option}>
+              <input
+                type="checkbox"
+                name={field.key}
+                value={option}
+                checked={chosen.includes(option)}
+                onChange={() => toggle(option)}
+                onKeyDown={(event) => {
+                  // Enter on a tick box would otherwise submit the whole form.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    toggle(option);
+                  }
+                }}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CrmFormFieldControl({
   field,
   value,
-  onChange
+  onChange,
+  labelId
 }: {
   field: CrmFormField;
   value: string | string[];
   onChange: (key: string, nextValue: string | string[]) => void;
+  /** The id of the question's label, for controls that are not a <label>'s own input. */
+  labelId?: string;
 }) {
   const inputType = crmPreviewInputType(field.type);
   const textValue = Array.isArray(value) ? value.join(", ") : value;
+
+  if (field.type === "multiselect") {
+    // Same rule as the dropdown: a live page never reaches the sample —
+    // CrmFormPreview drops an option-less multiselect from a published form.
+    const configured = crmConfiguredSelectOptions(field);
+    return (
+      <CrmMultiSelectDropdown
+        field={field}
+        options={configured.length ? configured : CRM_SELECT_CANVAS_SAMPLE}
+        chosen={Array.isArray(value) ? value : []}
+        labelId={labelId}
+        onChange={(next) => onChange(field.key, next)}
+      />
+    );
+  }
 
   if (field.type === "radio" || field.type === "checkboxes") {
     // Same rule as the dropdown below: a live page never reaches the sample —
@@ -683,6 +856,8 @@ function CrmFormPreview({
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
   const [values, setValues] = useState<Record<string, string | string[]>>({});
+  // Two copies of one form on a page must not share label ids.
+  const formUid = useId();
   const [honeypot, setHoneypot] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -834,13 +1009,25 @@ function CrmFormPreview({
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
         <div className="builder-contact-form-fields">
           {visibleFields.map((field) => {
+            const labelId = `${formUid}-label-${field.key}`;
             const control = (
               <CrmFormFieldControl
                 field={field}
                 value={values[field.key] ?? ""}
+                labelId={labelId}
                 onChange={(key, nextValue) => setValues((prev) => ({ ...prev, [key]: nextValue }))}
               />
             );
+            // A dropdown of tick boxes holds a button AND several inputs, so it
+            // cannot sit inside a <label> either; its label is named by id.
+            if (field.type === "multiselect") {
+              return (
+                <div className="builder-contact-form-field builder-crm-form-multiselect-field" key={field.key}>
+                  <span id={labelId} style={labelStyle}>{field.label}</span>
+                  {control}
+                </div>
+              );
+            }
             // A group of round buttons or tick boxes is one question with many
             // inputs, so it is a fieldset named by its legend — a <label> may
             // hold only one control.
