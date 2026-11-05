@@ -727,7 +727,6 @@ async function runThemeOnly(job, scope) {
   log(`Pages untouched: all ${after.size} page(s) read back with the same updated_at as before.`);
 }
 
-/** What the menu step will build — the dry run's promise, and --apply's. */
 /**
  * The Forms section of the report (task 86bcynjx2): every form on the source
  * site — rebuilt (with its question count, and whether a re-run will update
@@ -749,6 +748,7 @@ function logFormsPlan(out, prior) {
   for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
 }
 
+/** What the menu step will build — the dry run's promise, and --apply's. */
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
     log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);

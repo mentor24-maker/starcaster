@@ -69,12 +69,26 @@ function fixtureIr() {
 
 const SCOPE = { projectId: 'proj_strands', userId: 'user_dane' };
 
-/** In-memory CRM + forms stores with the real stores' shape: row or null. */
+/**
+ * In-memory CRM + forms stores with the real stores' shape: row or null.
+ * `state.failReads` makes listConfigs / getForm fail the way the real stores
+ * do — [] and null, with the reason in their last-error reporter.
+ */
 function fakeStores({ configs = [], untenanted = false } = {}) {
-  const state = { configs: configs.map((c) => JSON.parse(JSON.stringify(c))), forms: [], seq: 0, calls: { createForm: 0, updateForm: 0, createConfig: 0 } };
+  const state = {
+    configs: configs.map((c) => JSON.parse(JSON.stringify(c))), forms: [], seq: 0,
+    calls: { createForm: 0, updateForm: 0, createConfig: 0 },
+    failReads: { listConfigs: false, getForm: false },
+    lastConfigError: '', lastFormError: '',
+  };
   const copy = (x) => JSON.parse(JSON.stringify(x));
   const configStore = {
-    async listConfigs() { return copy(state.configs); },
+    async listConfigs() {
+      if (state.failReads.listConfigs) { state.lastConfigError = 'Could not reach Supabase: timeout'; return []; }
+      state.lastConfigError = '';
+      return copy(state.configs);
+    },
+    getLastConfigStoreError() { return state.lastConfigError; },
     async createConfig(input, scope) {
       state.calls.createConfig += 1;
       const c = { id: `crmc_${++state.seq}`, projectId: scope.projectId, ownerUserId: scope.userId, name: input.name, standardFields: input.standardFields, customFields: input.customFields };
@@ -117,10 +131,12 @@ function fakeStores({ configs = [], untenanted = false } = {}) {
       return copy(f);
     },
     async getForm(id) {
+      if (state.failReads.getForm) { state.lastFormError = 'Could not reach Supabase: timeout'; return null; }
+      state.lastFormError = '';
       const f = state.forms.find((x) => x.id === id);
       return f ? copy(f) : null;
     },
-    getLastFormStoreError() { return ''; },
+    getLastFormStoreError() { return state.lastFormError; },
   };
   return { state, configStore, formsStore };
 }
@@ -270,6 +286,52 @@ test('a form whose thank-you message was changed by hand is left alone on a re-r
   await stores.formsStore.updateForm(formId, { successMessage: 'Welcome to the crew!' });
   const again = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior: first.checkpoint });
   assert.match(again.results[0].outcome, /left alone/);
+});
+
+test('a re-run whose form read FAILS stops — no twin, checkpoint untouched', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  const stores = fakeStores();
+  const first = await applyImportForms(out.forms, { ...stores, scope: SCOPE });
+  const prior = JSON.parse(JSON.stringify(first.checkpoint));
+  stores.state.failReads.getForm = true;
+  await assert.rejects(
+    applyImportForms(out.forms, { ...stores, scope: SCOPE, prior }),
+    /failed: Could not reach Supabase: timeout — stopping rather than creating a duplicate/,
+  );
+  assert.equal(stores.state.calls.createForm, 1, 'no twin form was created');
+  assert.equal(stores.state.forms.length, 1);
+  assert.deepEqual(prior, first.checkpoint, 'the checkpoint the caller holds is unchanged');
+});
+
+test('a re-run whose form is cleanly GONE still creates it again', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  const stores = fakeStores();
+  const first = await applyImportForms(out.forms, { ...stores, scope: SCOPE });
+  stores.state.forms.length = 0; // deleted in Contacts › Forms
+  const again = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior: first.checkpoint });
+  assert.match(again.results[0].outcome, /created again/);
+  assert.equal(stores.state.calls.createForm, 2);
+});
+
+test('a CRM read that FAILS stops — no second CRM, no form', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  const stores = fakeStores({ configs: [{ id: 'crmc_x', name: 'Strands CRM', standardFields: [], customFields: [] }] });
+  stores.state.failReads.listConfigs = true;
+  await assert.rejects(
+    applyImportForms(out.forms, { ...stores, scope: SCOPE }),
+    /reading the project's CRM failed: Could not reach Supabase: timeout — stopping rather than creating a second CRM/,
+  );
+  assert.equal(stores.state.calls.createConfig, 0, 'no second CRM');
+  assert.equal(stores.state.calls.createForm, 0);
+  assert.equal(stores.state.configs.length, 1);
+});
+
+test('a store that cannot say why a read came back empty counts as failed', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  const stores = fakeStores();
+  delete stores.configStore.getLastConfigStoreError;
+  await assert.rejects(applyImportForms(out.forms, { ...stores, scope: SCOPE }), /cannot say whether/);
+  assert.equal(stores.state.calls.createConfig, 0);
 });
 
 test('a form that reads back without its tenant stops the run', async () => {
