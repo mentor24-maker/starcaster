@@ -1119,7 +1119,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
     <button
       type="button"
       role="tab"
-      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      className="tab-btn"
       aria-selected={tab === value}
       onClick={() => switchTab(value)}
     >
@@ -1144,7 +1144,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       ) : null}
 
       <div className="substack-notes-toolbar">
-        <div className="substack-notes-tabs" role="tablist" aria-label="Substack Notes">
+        <div className="tab-bar substack-notes-tabs" role="tablist" aria-label="Substack Notes">
           {tabButton('ideas', ideas.length ? `Ideas (${ideas.length})` : 'Ideas')}
           {tabButton('engage', engage.length ? `Engage (${engage.length})` : 'Engage')}
           {tabButton('approvals', waiting.length ? `Approvals (${waiting.length})` : 'Approvals')}
