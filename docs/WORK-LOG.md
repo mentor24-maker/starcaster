@@ -7,6 +7,17 @@ the Pages panel, which then could not be clicked. The box now grows to fit
 its buttons, lined up with the Preview / Save buttons in the row below, and
 on a narrow screen the buttons drop onto a second line instead of spilling
 out.
+## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
+
+On the Profile screen every box was about 100 pixels wide, the "Primary
+Contact Name (defaults to account)" label was stacked on five lines, and the
+profile picture sat on top of the fields. The cause was one misplaced style:
+the "label on the left, box on the right" layout was applied to the whole form
+instead of just the column of fields, so the entire form — fields and picture
+together — was squeezed into the narrow label column. Now the fields column
+gets that layout, the boxes are about 640 pixels wide on a laptop screen, the
+long labels fit on two lines, the picture sits to the right, and on a narrow
+window it drops neatly below the fields.
 
 ## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
 

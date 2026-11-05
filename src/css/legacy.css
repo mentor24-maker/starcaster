@@ -1622,6 +1622,25 @@ button[type="submit"] {
   margin-top: 0.25rem;
 }
 
+/* Settings › Profile. The label/control grid belongs on the FIELDS column,
+   not on the whole form: with it on the form, the entire two-column layout
+   (fields + avatar) was the grid's only item and landed in the 140px label
+   slot, squeezing every field to ~100px and pushing the avatar (min 260px)
+   over them (task 86bcyrqak). A wider label column keeps
+   "Primary Contact Name (defaults to account)" to two lines. */
+.profile-form {
+  margin-top: 1.25rem;
+}
+
+.profile-form-fields.standard-form-grid {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.profile-form-fields > .profile-save-row {
+  grid-column: 2;
+  justify-content: flex-start;
+}
+
 @media (max-width: 900px) {
   .media-edit-layout {
     grid-template-columns: 1fr;
