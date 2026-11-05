@@ -12375,3 +12375,14 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-preview-breadcrumb-sep {
   opacity: 0.5;
 }
+
+/*
+ * The Builder editor's title row is the screen's one title on Builder ›
+ * Workspace (and the page editor), so it uses the same size every other admin
+ * screen's title does (UI normalization 2 of 10, task 86bcyrqaw;
+ * docs/UI_RULES.md R11). It was clamp(1.55rem, 2.1vw, 2rem).
+ */
+.builder-react-root .admin-toolbar > .admin-section-heading {
+  font-size: var(--page-title-size);
+  line-height: var(--leading-tight);
+}

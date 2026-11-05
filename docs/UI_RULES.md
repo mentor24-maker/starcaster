@@ -1590,6 +1590,36 @@ is ever wider than the screen.*
   to distinguish them. Then the top-level headings … need to be a few points
   bigger")* — **[eye]**, sizes are tokens
 
+- **R11.** **Every admin screen starts the same way: one title, its
+  buttons on the same row, and at most one short grey line under it** —
+  UI normalization 2 of 10 (task 86bcyrqaw). Markup, in `src/pages/*.html`:
+
+  ```html
+  <div class="page-heading-row">
+    <h2>Section: Screen</h2>
+    <div class="page-heading-actions">…buttons…</div>   <!-- optional -->
+  </div>
+  <p class="page-heading-desc">One sentence saying what this screen is for.</p>  <!-- optional -->
+  ```
+
+  - **Never two titles.** A React island that draws its own title row (the
+    Builder editor on Builder › Workspace) takes the screen's title as a prop,
+    and the shell prints none above it — it used to stack "Builder: Workspace"
+    over "Page Builder".
+  - The title is `--page-title-size` (24px); the description is
+    `--page-desc-size` (~13px) in `--muted`. No screen sets its own title
+    size — the per-screen overrides on Training and Messaging › Content are
+    gone.
+  - The description is **one sentence that fits one line** at desktop width
+    (aim for 150 characters or fewer). At phone width it may wrap to two and is
+    cut off after that. Anything longer is an explanation, not a description:
+    it goes in an ordinary paragraph below.
+  - Status lines that change (`No pages selected.`) are not descriptions and
+    keep their own element.
+
+  *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
+  — **[eye]**, sizes are tokens
+
 ## S — System and structure
 
 *Umbrella: every module familiar; nothing hand-rolled; nothing stale.*
