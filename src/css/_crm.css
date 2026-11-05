@@ -616,6 +616,32 @@
   padding: 0;
 }
 
+/* Choose one / Choose several / Dropdown (choose several) in the preview pane
+   (task 86bcyqzhv): stacked choices, input left, label right. */
+.crm-form-preview-choices {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-self: var(--crm-form-field-justify, start);
+  min-width: 0;
+}
+
+.crm-form-preview-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-primary, #18324a);
+}
+
+.crm-form-preview-form .crm-form-preview-choice input {
+  grid-column: auto;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
 .crm-embed-modal-id-row {
   display: flex;
   gap: 0.5rem;
