@@ -153,6 +153,9 @@ const {
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
+const crmConfigStore = require('./lib/crmConfigStore.js');
+const crmFormsStore = require('./lib/crmFormsStore.js');
+const { applyImportForms, fillFormIds, checkFormLinks } = require('./lib/siteImportForms.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
@@ -315,9 +318,11 @@ async function main() {
       if (!live) continue; // human deleted it — re-run recreates, by design
       if (sha256(live) !== priorHash && !FORCED_SECTIONS.has(section.id)) {
         protectedSections.push({ page, section, live });
-        out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder;
+        const form = section.dispositions.form || 0;
+        out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder + form;
         out.report.elements.mapped -= section.dispositions.mapped;
         out.report.elements.placeholder -= section.dispositions.placeholder;
+        out.report.elements.form -= form;
       }
     }
   }
@@ -384,6 +389,7 @@ async function main() {
   }
   log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
+  logFormsPlan(out, prior);
 
   if (!reportReconciles(out.report)) {
     throw new Error('Report does not reconcile — refusing to proceed. This is a mapper bug; file it.');
@@ -524,6 +530,35 @@ async function main() {
     }
   }
 
+  // 3c. Forms (task 86bcynjx2): rebuild each source form as a Starcaster
+  //     form BEFORE the pages, so each page's Form module is written with
+  //     its form's id already in it. Add-only on the CRM; a re-run updates
+  //     the forms recorded in the checkpoint instead of making twins.
+  let formIds = {};
+  let formCheckpoint = { ...(prior.forms || {}) };
+  if (out.forms.length) {
+    log(`\nForms: rebuilding ${out.forms.length} form(s) under Contacts › Forms`);
+    const applied = await applyImportForms(out.forms, {
+      configStore: crmConfigStore,
+      formsStore: crmFormsStore,
+      scope,
+      prior: prior.forms || {},
+      log,
+    });
+    formIds = applied.formIds;
+    formCheckpoint = { ...formCheckpoint, ...applied.checkpoint };
+    for (const r of applied.results) {
+      const entry = out.report.forms.rebuilt.find((f) => f.key === r.key);
+      if (entry) { entry.outcome = r.outcome; entry.formId = r.formId; }
+      log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+    }
+    // Recorded NOW, not with the rest of the checkpoint: if a page write
+    // below fails, the next run must still find these forms, not make twins.
+    job = must(await store.updateJob(job.id, {
+      checkpoints: { ...(job.checkpoints || {}), map: { ...(job.checkpoints?.map || {}), forms: formCheckpoint } },
+    }), 'record form ids');
+  }
+
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
   const sectionHashes = { ...sectionHashesIn };
@@ -535,6 +570,7 @@ async function main() {
     priorPageIds,
     prepareSections: (page) => page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
       const clean = rewriteUrls(section, urlMap);
+      fillFormIds([clean], formIds);
       for (const module of clean.modules) {
         const overflowUrl = overflowUrls.get(module.id);
         if (overflowUrl) module.settings.importSourceHtmlUrl = overflowUrl;
@@ -574,6 +610,26 @@ async function main() {
     process.exitCode = 1;
   }
 
+  // 4a. Read the Form modules back: each must hold its form's id.
+  if (out.forms.length) {
+    const pagesByKey = new Map();
+    for (const page of out.pages) {
+      const id = pageIds[page.key];
+      if (!id) continue;
+      const fresh = await pagesStore.getPage(id, scope);
+      if (fresh.ok && fresh.data) pagesByKey.set(page.key, fresh.data);
+    }
+    const links = checkFormLinks(out.forms, formIds, pagesByKey, protectedIds);
+    if (links.problems.length) {
+      console.error('\nERROR: a Form module does not hold its form\'s id:');
+      for (const problem of links.problems) console.error(`  ${problem}`);
+      process.exitCode = 1;
+    } else {
+      log(`Forms: read back ${links.checked} Form module(s) — each holds its form's id.`);
+    }
+    if (links.skipped.length) log(`  not rewritten (section edited by a person, so protected): ${links.skipped.join(', ')}`);
+  }
+
   // 4b. The import theme: create, make default, READ BACK (landmine 12 —
   //     an insert that "succeeds" can still land without its tenant).
   let themeCheckpoint = null;
@@ -594,6 +650,8 @@ async function main() {
       sectionHashes,
       appliedNamespace: applied,
       ...(themeCheckpoint ? { theme: themeCheckpoint } : {}),
+      // How a re-run finds the forms it made (task 86bcynjx2).
+      ...(Object.keys(formCheckpoint).length ? { forms: formCheckpoint } : {}),
       // Carried over until the menu step below replaces it: these ids are
       // how a re-run finds the sections it made instead of minting twins.
       ...(prior.menus ? { menus: prior.menus } : {}),
@@ -670,6 +728,27 @@ async function runThemeOnly(job, scope) {
 }
 
 /** What the menu step will build — the dry run's promise, and --apply's. */
+/**
+ * The Forms section of the report (task 86bcynjx2): every form on the source
+ * site — rebuilt (with its question count, and whether a re-run will update
+ * the one it made) or left as a picture (with the reason) — plus everything
+ * the form reader kept or dropped, in plain words.
+ */
+function logFormsPlan(out, prior) {
+  const { rebuilt, pictures } = out.report.forms;
+  if (!rebuilt.length && !pictures.length) {
+    log('\nForms: none on the source site.');
+    return;
+  }
+  log(`\nForms: ${rebuilt.length} rebuilt as working forms, ${pictures.length} left as a picture`);
+  for (const f of rebuilt) {
+    const again = prior.forms?.[f.key]?.formId ? ` — updates the form made last time (${prior.forms[f.key].formId})` : '';
+    log(`  rebuilt, ${f.questions} question(s): "${f.name}" on ${f.pages.join(', ')}${again}`);
+    for (const line of [...f.kept, ...f.dropped, ...f.notes]) log(`     ${line}`);
+  }
+  for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
+}
+
 function logMenuPlan(job, out, prior) {
   if (NO_MENUS) {
     log(`\nMenus: skipped (${NAV ? '--nav writes the header master instead' : '--no-menus'}).`);
