@@ -1,3 +1,14 @@
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
+
 ## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
 
 Site Import gives every section it builds a name, so that importing the same
