@@ -1,3 +1,15 @@
+## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
+
+Buttons used to be black on most screens, white or blue on the Builder, green
+on Themes, and small black or grey on Training — for the same jobs — and they
+ran from 29px to 50px tall. Now the colour tells you what a button does:
+outlined white for an ordinary action (Back, Cancel, Refresh), blue for the
+screen's one main action (Create Page, Create Project, Add Contact), green for
+Save, red for Delete. There are two heights only, normal and small. On the way,
+Training's per-row Edit and Delete buttons, which had been white text on a white
+row and so invisible, became visible. The rule is written down (UI_RULES C9) so
+the other screens in the UI normalization series reuse it.
+
 ## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
 
 Every admin screen used to open with a large StarCaster logo band and a separate
