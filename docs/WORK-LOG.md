@@ -13,6 +13,71 @@ comes across as a picture, with a note saying why. The import report now has a
 Forms section listing what was rebuilt and what was left out, such as spam traps
 and the old plugin's internal fields. Strands Movie gets its form in the next
 ticket.
+## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
+
+Before this, importing a site a second time and building pages from it made a
+whole second copy of the site beside the first: every page again at a "-2"
+address, plus a second Top Menu. Now building from the new copy updates the
+pages the first import made. A section you changed after the first import is
+left alone and listed as one you edited. Menus are updated rather than doubled,
+and the new import theme is made without replacing the site's current default
+look. Every run now opens with one line saying what it will do: "Refreshing N
+pages built by the import of <site> on <date>; M sections you edited will be
+kept; K new pages." The Import again prompt on the Site Import screen says the
+same. Tried against a copy of the Delray site: 59 pages refreshed, none
+duplicated, and the 116 sections edited by hand all kept.
+## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
+
+In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
+buttons had been squeezed into a box too small for them, so they hung off
+the right edge of the bar and sat on top of the green ▶ button that opens
+the Pages panel, which then could not be clicked. The box now grows to fit
+its buttons, lined up with the Preview / Save buttons in the row below, and
+on a narrow screen the buttons drop onto a second line instead of spilling
+out.
+
+## 2026-11-05 — Every admin screen now starts with one title row (#977)
+
+Admin screens each began a little differently: some had a sentence under the
+title and some didn't, two used their own bigger title size, and Builder ›
+Workspace stacked two titles ("Builder: Workspace" with "Page Builder" under
+it). Now every screen starts the same way: one title, that screen's buttons on
+the same row, and at most one short line of small grey text saying what the
+screen is for. The Workspace has a single title beside its buttons. Four long
+explanations were split so only their first sentence sits under the title; the
+rest is still there, just below. This is item 2 of the 10 UI normalization
+changes, and the rule is written down (R11 in docs/UI_RULES.md) so the
+remaining screens follow it.
+## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
+
+On the Profile screen every box was about 100 pixels wide, the "Primary
+Contact Name (defaults to account)" label was stacked on five lines, and the
+profile picture sat on top of the fields. The cause was one misplaced style:
+the "label on the left, box on the right" layout was applied to the whole form
+instead of just the column of fields, so the entire form — fields and picture
+together — was squeezed into the narrow label column. Now the fields column
+gets that layout, the boxes are about 640 pixels wide on a laptop screen, the
+long labels fit on two lines, the picture sits to the right, and on a narrow
+window it drops neatly below the fields.
+
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
 
 ## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
 
