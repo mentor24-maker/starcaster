@@ -1,3 +1,16 @@
+## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
+
+Before this, importing a site a second time and building pages from it made a
+whole second copy of the site beside the first: every page again at a "-2"
+address, plus a second Top Menu. Now building from the new copy updates the
+pages the first import made. A section you changed after the first import is
+left alone and listed as one you edited. Menus are updated rather than doubled,
+and the new import theme is made without replacing the site's current default
+look. Every run now opens with one line saying what it will do: "Refreshing N
+pages built by the import of <site> on <date>; M sections you edited will be
+kept; K new pages." The Import again prompt on the Site Import screen says the
+same. Tried against a copy of the Delray site: 59 pages refreshed, none
+duplicated, and the 116 sections edited by hand all kept.
 ## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
 
 In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
