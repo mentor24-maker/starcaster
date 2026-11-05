@@ -8505,6 +8505,69 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: flex-end;
 }
 
+/* ── CRM form: "Choose one" / "Choose several" questions (task 86bcynjv7) ───
+ * One question, many inputs, so it is a <fieldset> + <legend> rather than a
+ * <label>. The fieldset is `display: contents` like every other field, so the
+ * legend sits in the label column and the choices in the field column of the
+ * form's own grid. The inputs are reset explicitly: the generic field rule
+ * makes every `input` 100% wide and 42px tall, and a tenant theme's
+ * `input { width: 100% }` would do the same (DOCTRINE §5.28). */
+.builder-react-root .builder-crm-form .builder-crm-form-choice-field {
+  display: contents;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend {
+  grid-column: 1;
+  float: none;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choices {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice input[type="radio"],
+.builder-react-root .builder-crm-form .builder-crm-form-choice input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 0;
+  height: auto;
+  margin: 0.2em 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* The two places the form stacks to one column — the same pair the generic
+ * field rules in _builder-react.css follow, or the choices would open an
+ * implicit second track beside a one-column grid. */
+@container crmform (max-width: 420px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend,
+  .builder-react-root .builder-crm-form .builder-crm-form-choices {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend,
+  .builder-react-root .builder-crm-form .builder-crm-form-choices {
+    grid-column: 1;
+  }
+}
+
 /* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────
  * The review table reuses the admin data table; what is new is a row of
  * seven day toggles and inputs sitting inside cells, which a tenant theme's
