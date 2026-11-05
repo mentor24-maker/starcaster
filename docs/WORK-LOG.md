@@ -10,6 +10,35 @@ an underline, with the selected one in blue. Tab reaches each one and Enter
 picks it. The rule is written down as C9 in the UI rules so new screens use
 it too.
 
+## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
+
+Sites copied in before today's form fix (#974) still show a picture of each
+sign-up form. The import tool now has a "forms only" pass that goes back over
+pages an import already built and swaps just those pictures for working forms,
+without re-copying the site or touching anything else on the page. If somebody
+has changed or removed one of those pictures, it is left alone and named. Each
+page is backed up first and checked after it is saved. Afterwards it puts back
+live only the pages that were already live and had no other unpublished
+changes, so nobody's half-finished edits go public by accident. A practice run
+on a copy of the live data found the Strands sign-up form on two pages, built
+it, and reported "nothing to change" when run a second time. Strands' home page
+already had unpublished edits, so that one waits for Dane to publish.
+
+## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
+
+When Site Import copied a site, any sign-up or contact form came across as a
+screenshot: it looked right but nobody could type into it. Now the import
+rebuilds each form as a real Starcaster form under Contacts › Forms and puts a
+working Form on the draft page where the picture used to be. It is careful with
+the client's existing setup. It only ever adds questions their contact list is
+missing and never changes ones already there. A sign-up that appears on several
+pages becomes one form used on all of them. Importing again updates that form
+rather than making a second copy, and if somebody has edited the form by hand
+since — even just its button colour — the import leaves it alone. A site search box or a sign-in form still
+comes across as a picture, with a note saying why. The import report now has a
+Forms section listing what was rebuilt and what was left out, such as spam traps
+and the old plugin's internal fields. Strands Movie gets its form in the next
+ticket.
 ## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
 
 Before this, importing a site a second time and building pages from it made a
