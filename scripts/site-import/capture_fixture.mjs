@@ -33,7 +33,9 @@ const {
   parseRobots, robotsVerdict, fetchSitemapUrls, extractLinks,
   normalizeCrawlUrl, CrawlQueue,
 } = require('../../lib/site-import/dist/crawl.js');
-const { computeSourceId } = require('../../lib/site-import/dist/normalize.js');
+const { computeSourceId, pageKeyCounter } = require('../../lib/site-import/dist/normalize.js');
+// Element crops are keyed by page address, in capture order (task 86bcyrt21).
+const pageKeys = pageKeyCounter();
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const [rawUrl, fixtureName] = args;
@@ -116,7 +118,7 @@ try {
         ),
         elementScreenshots: Object.fromEntries(
           raw.screenshots.elements.map((e) => [
-            computeSourceId(pageIdx, e.domPath),
+            computeSourceId(pageKeys.peek(raw.finalUrl || raw.url), e.domPath),
             `fixture://shots/p${pageIdx}.e-${e.domPath.replace(/[^a-z0-9]+/gi, '_').slice(0, 60)}.png`,
           ])
         ),
@@ -127,6 +129,7 @@ try {
       for (const link of extractLinks(raw.html, raw.finalUrl || item.url)) {
         queue.add(link, item.depth + 1);
       }
+      pageKeys.take(raw.finalUrl || raw.url);
       pages.push({ desktop });
       await new Promise((r) => setTimeout(r, 750)); // politeness
     } catch (err) {

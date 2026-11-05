@@ -18,7 +18,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { PlaywrightCaptureProvider, VIEWPORTS, DEFAULT_USER_AGENT } =
   require('../../lib/site-import/dist/capture-playwright.js');
-const { normalizeSite, computeSourceId } =
+const { normalizeSite, computeSourceId, pageSourceKey, pagePath } =
   require('../../lib/site-import/dist/normalize.js');
 
 const PAGE = `<!DOCTYPE html>
@@ -132,7 +132,7 @@ try {
     ),
     elementScreenshots: Object.fromEntries(
       raw.screenshots.elements.map((e) => [
-        computeSourceId(pageIdx, e.domPath),
+        computeSourceId(pageSourceKey(pagePath(raw.finalUrl || raw.url)), e.domPath),
         `fake/shots/p${pageIdx}.e-${e.domPath.replace(/[^a-z0-9]+/gi, '_')}.png`,
       ])
     ),

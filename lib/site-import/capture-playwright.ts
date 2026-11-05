@@ -14,7 +14,7 @@
  *  - domPath segments ("body/div[0]/p[2]", indexing ALL element siblings)
  *    must equal what walkCountables derives when it re-parses the
  *    serialized HTML — that is what lets the worker key element crops by
- *    computeSourceId(pageIdx, domPath) and have them join back on.
+ *    computeSourceId(pageKey, domPath) and have them join back on.
  */
 
 import { chromium, type Browser } from "playwright";

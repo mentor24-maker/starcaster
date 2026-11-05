@@ -161,7 +161,7 @@ try {
 // Required after env so lib/supabase.js sees the credentials.
 const store = require('./lib/siteImportStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
-const { normalizeSite, computeSourceId } = require('./lib/site-import/dist/normalize.js');
+const { normalizeSite, computeSourceId, pageKeyCounter } = require('./lib/site-import/dist/normalize.js');
 const {
   parseRobots, robotsVerdict, fetchSitemapUrls, extractLinks,
   normalizeCrawlUrl, CrawlQueue, looksLikeHtmlUrl,
@@ -285,6 +285,10 @@ async function runCaptureStage(job, opts) {
   let browserMs = 0;
   const capsHit = new Set();
   if (queue.hitDepthCap) capsHit.add('maxDepth');
+  // Element crops are keyed by the page's ADDRESS (task 86bcyrt21), counted
+  // in the same order normalizeSite will walk the kept pages: a page is only
+  // counted once it is kept, so a failed or duplicate page shifts nothing.
+  const pageKeys = pageKeyCounter();
 
   try {
     for (;;) {
@@ -308,6 +312,8 @@ async function runCaptureStage(job, opts) {
         // full-page shot URLs without having to download the capture JSON.
         const entry = { url: item.url, slug, depth: item.depth, viewports: {}, screenshots: {} };
         let duplicateOf = '';
+        let pageKey = '';
+        let pageUrl = '';
         for (const label of ['desktop', 'tablet', 'mobile']) {
           const raw = await provider.capture(item.url, {
             viewport: VIEWPORTS[label],
@@ -323,6 +329,9 @@ async function runCaptureStage(job, opts) {
               duplicateOf = finalUrl;
               break;
             }
+            // The same reading normalizeSite keys the page by.
+            pageUrl = raw.finalUrl || raw.url || item.url;
+            pageKey = pageKeys.peek(pageUrl);
           }
           // Upload screenshots, then persist the CaptureResult with Blob
           // URLs in place of binaries — element crops re-keyed by sourceId.
@@ -333,7 +342,7 @@ async function runCaptureStage(job, opts) {
           }
           const elementScreenshots = {};
           for (const e of raw.screenshots.elements) {
-            const sourceId = computeSourceId(pageIdx, e.domPath);
+            const sourceId = computeSourceId(pageKey, e.domPath);
             elementScreenshots[sourceId] = await uploadPng(job.id, `shots/${slug}.${label}.e${sourceId}.png`, e.png);
           }
           const captureResult = {
@@ -372,6 +381,7 @@ async function runCaptureStage(job, opts) {
           duplicates += 1;
           log(`  duplicate: redirects to ${duplicateOf}, already captured — skipped`);
         } else {
+          pageKeys.take(pageUrl);
           pages.push(entry);
         }
       } catch (err) {
