@@ -220,7 +220,7 @@ header {
   align-items: center;
   /* --text-sm and 0.4rem sides: measured at 1440, --text-base with 0.6rem
      made the menu ~1090px and pushed name / Logout onto a second row. */
-  padding: 0 0.4rem;
+  padding: 0 0.35rem;
   font-size: var(--text-sm);
   white-space: nowrap;
 }
