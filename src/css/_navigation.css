@@ -263,7 +263,8 @@ header {
 #appShell > header .auth-welcome-name,
 #appShell > header #brandProfileLabel {
   display: inline-block;
-  max-width: 7rem;
+  /* 7.75rem: "Dane Christensen" fits whole (it was cut at 7rem). */
+  max-width: 7.75rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

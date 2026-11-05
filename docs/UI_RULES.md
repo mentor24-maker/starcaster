@@ -1625,7 +1625,7 @@ is ever wider than the screen.*
     taking width from somewhere else, or accepting a second row below
     ~1440 (the header wraps rather than scrolling sideways, UI_RULES T0).
   - Menu text is `--text-sm` with 0.4rem sides; the logo is 22px tall; the
-    user's name is capped at 7rem and a project shown by name at 6rem, both
+    user's name is capped at 7.75rem and a project shown by name at 6rem, both
     ending in "…". Those four numbers are what make the worst case fit.
   - At 720px and below the menu folds behind a **Menu** button and opens as
     a full-width stacked list under the header.
