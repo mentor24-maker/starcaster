@@ -1031,12 +1031,16 @@ export const RENDER_CONTRACTS = [
           fields: [
             { key: 'email', label: 'Email', type: 'email', required: true },
             { key: 'skill', label: 'Main skill', type: 'radio', required: true, options: ['Acting', 'Writing', 'Music', 'Camera'] },
+            // After the radio group on purpose: every selector below takes the FIRST match.
+            { key: 'enjoys', label: 'Also enjoys', type: 'checkboxes', required: false, options: ['Writing', 'Music', 'Film'] },
           ],
         },
       },
     }],
     emulate: { liveSite: true },
-    selector: '.builder-crm-form-choice-field',
+    // The fieldset itself is `display: contents` (it joins the form's grid), so
+    // it has no box; the choices container is what occupies the page.
+    selector: '.builder-crm-form-choice-field .builder-crm-form-choices',
     read: ['display'],
     series: {
       count: 1,
