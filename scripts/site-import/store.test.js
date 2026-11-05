@@ -80,11 +80,63 @@ test('claimNextQueued: tries claimable jobs in order, tolerates lost races', asy
     if (options.query && options.query.includes('status=eq.queued')) {
       return { ok: true, status: 200, data: [{ ...JOB_ROW, id: 'simp_1' }, { ...JOB_ROW, id: 'simp_2' }] };
     }
+    // The project's other jobs (the duplicate backstop): none of this site.
+    if (options.query && options.query.startsWith('project_id=eq.')) {
+      return { ok: true, status: 200, data: [] };
+    }
     return { ok: true, status: 200, data: [JOB_ROW] };
   });
   const res = await store.claimNextQueued('host:1');
   assert.equal(res.ok, true);
   assert.equal(res.data.id, 'simp_2');
+});
+
+// Task 86bcynqrt — the wavecenter incident: a second import of a site that
+// had already finished was captured again in full while another waited.
+test('claimNextQueued: an unconfirmed duplicate is marked failed, not run, and the next job is claimed', async () => {
+  const done = { ...JOB_ROW, id: 'simp_1791865101467_8mi74x', source_url: 'https://www.wavecenter.com/', status: 'complete', created_at: '2026-10-13T12:00:00Z', finished_at: '2026-11-05T00:51:00Z' };
+  const dup = { ...JOB_ROW, id: 'simp_1793638349324_xq8r45', source_url: 'https://wavecenter.com/', created_at: '2026-11-02T12:00:00Z' };
+  const press = { ...JOB_ROW, id: 'simp_press', project_id: 'proj_2', source_url: 'https://www.pressplay.today/', created_at: '2026-11-03T12:00:00Z' };
+  const queue = [dup, press];
+  const failedWrites = [];
+  const { store } = loadStore((options) => {
+    if (options.method === 'PATCH' && options.body && options.body.status === 'failed') {
+      failedWrites.push({ query: options.query, body: options.body });
+      const id = decodeURIComponent(options.query.replace('id=eq.', ''));
+      queue.splice(queue.findIndex((r) => r.id === id), 1);
+      return { ok: true, status: 200, data: [{ ...dup, status: 'failed' }] };
+    }
+    if (options.method === 'PATCH') {
+      const id = decodeURIComponent(options.query.split('&')[0].replace('id=eq.', ''));
+      return { ok: true, status: 200, data: [{ ...[dup, press].find((r) => r.id === id), claimed_at: 'now' }] };
+    }
+    if (options.query.includes('status=eq.queued')) return { ok: true, status: 200, data: queue.slice() };
+    if (options.query.startsWith('project_id=eq.proj_1')) return { ok: true, status: 200, data: [dup, done] };
+    if (options.query.startsWith('project_id=eq.proj_2')) return { ok: true, status: 200, data: [press] };
+    const id = decodeURIComponent(options.query.split('&')[0].replace('id=eq.', ''));
+    return { ok: true, status: 200, data: [[dup, press, done].find((r) => r.id === id)] };
+  });
+  const res = await store.claimNextQueued('host:1');
+  assert.equal(res.ok, true);
+  assert.equal(res.data.id, 'simp_press');
+  assert.equal(failedWrites.length, 1);
+  assert.match(failedWrites[0].query, /simp_1793638349324_xq8r45/);
+  assert.equal(
+    failedWrites[0].body.error,
+    'Not started: duplicate of www.wavecenter.com, imported Nov 4, 2026 (job simp_1791865101467_8mi74x)'
+  );
+});
+
+test('claimNextQueued: if the project\'s jobs cannot be read, nothing is claimed', async () => {
+  const methods = [];
+  const { store } = loadStore((options) => {
+    methods.push(options.method || 'GET');
+    if (options.query && options.query.includes('status=eq.queued')) return { ok: true, status: 200, data: [JOB_ROW] };
+    return { ok: false, status: 503, error: 'down' };
+  });
+  const res = await store.claimNextQueued('host:1');
+  assert.equal(res.ok, false);
+  assert.equal(methods.includes('PATCH'), false);
 });
 
 test('reclaimStale frees only claimed, unfinished, quiet jobs', async () => {
