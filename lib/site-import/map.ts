@@ -424,6 +424,56 @@ export function pageWriteKey(irPath: string, occurrence: number): string {
   return occurrence <= 1 ? irPath : `${irPath}#${occurrence}`;
 }
 
+/**
+ * Recognise sections an import built under the OLD naming (task 86bcyrt21).
+ *
+ * A section id used to start with the page's place in the crawl order
+ * (`imps_3<dom>`); it now starts with a hash of the page's address
+ * (`imps_p<addr><dom>`). A job built before the change and then normalized
+ * again would otherwise see none of its own sections and add a second copy
+ * of each. The page is already matched by its write key, so within it a
+ * section is the same section when the element-path half — the part that
+ * never depended on crawl order — and the band suffix agree. Each mapped
+ * section reads its source id off its first module's
+ * `importSectionSourceId`, which every import-owned row carries.
+ *
+ * Returns the live sections with matched ids renamed to the new ones (a
+ * copy; nothing else about a section changes) and the old→new map. A
+ * section matching more than one old id is left alone rather than guessed.
+ */
+export function adoptLegacySectionIds<T extends { id: string }>(
+  live: T[],
+  mapped: { id: string; modules?: { settings?: Record<string, unknown> }[] }[]
+): { sections: T[]; renames: Map<string, string> } {
+  const strip = (v: string) => v.replace(/[^a-zA-Z0-9]+/g, "");
+  const liveIds = new Set(live.map((s) => s.id));
+  const mappedIds = new Set(mapped.map((s) => s.id));
+  const claimed = new Set<string>();
+  const renames = new Map<string, string>();
+  for (const m of mapped) {
+    if (liveIds.has(m.id)) continue; // already under its new name
+    const sourceId = m.modules?.[0]?.settings?.importSectionSourceId;
+    if (typeof sourceId !== "string") continue;
+    const parts = /^p[0-9a-f]{8}(?:~\d+)?-(.+)$/.exec(sourceId);
+    if (!parts) continue;
+    const base = `imps_${strip(sourceId)}`;
+    if (!m.id.startsWith(base)) continue;
+    const tail = strip(parts[1]) + m.id.slice(base.length); // "<dom>" or "<dom>b<band>"
+    const candidates = live.filter((s) => {
+      if (claimed.has(s.id) || mappedIds.has(s.id)) return false;
+      if (!s.id.startsWith("imps_") || !s.id.endsWith(tail)) return false;
+      return /^\d+$/.test(s.id.slice(5, s.id.length - tail.length));
+    });
+    if (candidates.length !== 1) continue;
+    claimed.add(candidates[0].id);
+    renames.set(candidates[0].id, m.id);
+  }
+  const sections = renames.size
+    ? live.map((s) => (renames.has(s.id) ? { ...s, id: renames.get(s.id) as string } : s))
+    : live;
+  return { sections, renames };
+}
+
 /** The source path a write key (or a pre-86bch6ger irPath key) stands for. */
 export function pathOfWriteKey(key: string): string {
   return String(key || "").replace(/#\d+$/, "");

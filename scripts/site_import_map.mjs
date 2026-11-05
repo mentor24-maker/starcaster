@@ -148,7 +148,7 @@ const savedSectionsStore = require('./lib/builderSavedSectionsStore.js');
 const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
-  mapSite, reportReconciles, mergeMappedSections,
+  mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
   writeMappedPages, summarizePageWrites,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
@@ -264,6 +264,43 @@ async function main() {
     menus: !NO_MENUS,
   });
 
+  // ---- Old section names (task 86bcyrt21) ---------------------------------
+  // Section ids used to start with the page's crawl position and now start
+  // with its address. A page this job built under the old names keeps its
+  // sections: each is renamed to its new id, and its fingerprint carried
+  // across, so the guard below still knows which ones somebody edited. An
+  // untouched section is fingerprinted as renamed (the mapper refreshes it);
+  // an edited one keeps its old fingerprint, which no longer matches, so it
+  // stays protected.
+  const sectionHashesIn = { ...priorHashes };
+  const pageForId = new Map();
+  let adoptedCount = 0;
+  for (const page of out.pages) {
+    const existingId = priorPageIds[page.key];
+    if (!existingId) continue;
+    pageForId.set(String(existingId), page);
+    const current = existingPages.find((p) => String(p.id) === String(existingId));
+    if (!current) continue;
+    const before = current.layoutSections || [];
+    const { sections, renames } = adoptLegacySectionIds(before, page.sections);
+    if (!renames.size) continue;
+    for (const [oldId, newId] of renames) {
+      const oldHash = priorHashes[oldId];
+      if (!oldHash) continue;
+      const was = before.find((sec) => sec.id === oldId);
+      const now = sections.find((sec) => sec.id === newId);
+      sectionHashesIn[newId] = sha256(was) === oldHash ? sha256(now) : oldHash;
+    }
+    current.layoutSections = sections;
+    adoptedCount += renames.size;
+  }
+  if (adoptedCount) log(`Old section names: ${adoptedCount} section(s) built under crawl-order ids recognised and renamed — none added twice.`);
+  const adoptOldNames = (fresh) => {
+    const page = pageForId.get(String(fresh.id));
+    if (!page) return fresh;
+    return { ...fresh, layoutSections: adoptLegacySectionIds(fresh.layoutSections || [], page.sections).sections };
+  };
+
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
   const protectedSections = [];
   for (const page of out.pages) {
@@ -272,7 +309,7 @@ async function main() {
     const current = existingPages.find((p) => String(p.id) === String(existingId));
     if (!current) continue;
     for (const section of page.sections) {
-      const priorHash = priorHashes[section.id];
+      const priorHash = sectionHashesIn[section.id];
       if (!priorHash) continue;
       const live = (current.layoutSections || []).find((s) => s.id === section.id);
       if (!live) continue; // human deleted it — re-run recreates, by design
@@ -489,7 +526,7 @@ async function main() {
 
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
-  const sectionHashes = { ...priorHashes };
+  const sectionHashes = { ...sectionHashesIn };
   /** pageId -> section ids this run owns; hashed at the very end. */
   const ownedSectionIds = new Map();
   // Keyed by page.key, never by source path: two captures of "/" keyed by
@@ -506,7 +543,7 @@ async function main() {
     }),
     getPage: async (id) => {
       const fresh = await pagesStore.getPage(id, scope);
-      return fresh.ok ? fresh.data : null;
+      return fresh.ok && fresh.data ? adoptOldNames(fresh.data) : null;
     },
     createPage: async (page, sections) => must(await pagesStore.createPage({
       name: page.name,
