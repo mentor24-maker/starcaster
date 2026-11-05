@@ -8868,6 +8868,13 @@ button.builder-inline-asset-status-btn:focus-visible {
   color: var(--text-muted, #5f6368);
 }
 
+/* The card heading is a section of the screen, never a second title
+   (docs/UI_RULES.md R11): it stays smaller than the 24px page title. */
+#envConfigPage .card-header h3 {
+  margin: 0;
+  font-size: var(--editor-item-size);
+}
+
 /* ── Key / description ────────────────────────────────────────────────── */
 .env-key {
   display: block;

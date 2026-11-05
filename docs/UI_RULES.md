@@ -1616,6 +1616,13 @@ is ever wider than the screen.*
     it goes in an ordinary paragraph below.
   - Status lines that change (`No pages selected.`) are not descriptions and
     keep their own element.
+  - **Nothing below the title may be bigger than it.** A card or section
+    heading under the title row is an `h3` at `--editor-item-size` or smaller
+    — Settings › Environment Configuration's 40px "Environment Variables"
+    card heading read as the real title once the page title became 24px.
+  - Shared content that opens with its own `<h1>` (the legal bodies, which are
+    also the standalone `/privacy-policy` page) keeps it for the standalone
+    page and hides it inside the admin app, where the title row is the title.
 
   *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
   — **[eye]**, sizes are tokens
