@@ -1127,7 +1127,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
     <button
       type="button"
       role="tab"
-      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      className="tab-btn"
       aria-selected={tab === value}
       onClick={() => setTab(value)}
     >
@@ -1151,7 +1151,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
       {!detailId ? (
         <div className="substack-miner-toolbar">
-          <div className="substack-miner-tabs" role="tablist" aria-label="Substack Miner">
+          <div className="tab-bar substack-miner-tabs" role="tablist" aria-label="Substack Miner">
             {tabButton('candidates', 'Candidates')}
             {tabButton('run', 'Run')}
           </div>

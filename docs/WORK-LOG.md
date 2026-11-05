@@ -19,6 +19,18 @@ reacting to the pointer at all. Those now darken on hover and grey out when
 unavailable, small buttons grey out instead of fading, and an Upload button
 that sat 2px taller than its neighbours is the same height. Buttons now change
 colour on hover and never fade, on every admin screen.
+## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
+
+Changing view used to look like three different controls: CRM had
+underlined text tabs, Outreach had faded grey pills, and the Builder
+Workspace's Templates / Modules / Pages looked exactly like Save and Cancel
+buttons, so picking a view felt like pressing an action. Now every one of
+them — plus the tabs on the Substack, Reddit and YouTube outreach screens,
+whose selected tab was a big blue action button — is the same plain text on
+an underline, with the selected one in blue. Tab reaches each one and Enter
+picks it. The rule is written down as C9 in the UI rules so new screens use
+it too.
+
 ## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
 
 Sites copied in before today's form fix (#974) still show a picture of each

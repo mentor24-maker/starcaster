@@ -1435,6 +1435,20 @@ Advanced — is the follow-on pass the operator sequenced after this.
   background picker, one color field, one margin pair, across all modules.
   *(7/1 "The backgrond selector on this is an older style. Upgrade the
   background selector in this module."; doctrine E1/E6)* — **[auto]**
+- **C9.** **Switching views is a tab, and every tab looks alike.** A row
+  of views (CRM's Contacts / Forms / Field Config, Outreach's channels, the
+  Workspace's Templates / Modules / Pages) is `.tab-bar` holding
+  `.tab-btn`s, from `src/css/_tabs.css`: plain text on one underline, the
+  selected tab in the accent colour with a thick underline. A tab is
+  **never** styled as a button — no `btn`, no `btn-primary`, no
+  `submit-button` — because a filled box reads as an action, and the
+  screen's one primary belongs to an action. In React mark it
+  `role="tablist"` / `role="tab"` with `aria-selected`; the selected look
+  keys off `aria-selected="true"` (or `.active`, which the frozen vanilla
+  CRM screen toggles). Tab reaches each tab, Enter selects it. Tabs sit on
+  their own row under the title, not among the title row's buttons.
+  *(UI normalization 5 of 10, task 86bcyrqbb, 2026-11-05: "Switching views
+  looks like three different controls across the app")* — **[eye]**
 
 ## T — Tables, lists, and CRUDs
 
