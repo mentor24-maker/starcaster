@@ -216,6 +216,35 @@
   margin-top: 0;
 }
 
+/* A colour setting is ONE line: its label on the left, the colour box on the
+   right, instead of a label line over a box line (operator, 2026-11-04). */
+.crm-form-editor-col-styles .crm-form-editor-setting-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.crm-form-editor-setting-color > span {
+  margin: 0;
+}
+
+.crm-form-editor-setting-color .crm-form-color-control {
+  flex: 0 1 auto;
+  margin-top: 0;
+}
+
+/* The shared picker brings a top margin meant for a box on its own line. */
+.crm-form-editor-setting-color .crm-form-standard-color {
+  margin-top: 0;
+}
+
+/* "Background Color" is the Background section's heading as well as its
+   label — the two used to be separate lines saying the same thing. */
+.crm-form-editor-setting-color > .crm-form-editor-section-title {
+  font-weight: 700;
+}
+
 .crm-form-color-control {
   margin-top: 0.35rem;
   min-width: 0;
@@ -434,7 +463,11 @@
    and the grey-green disabled state come from the shared `.btn-save`
    (_buttons.css); only the size and the lighter hover are this button's own. */
 .btn.crm-form-editor-save-btn {
-  margin-top: 1rem;
+  /* Centred in the Preview column, with 40px more room above and below than
+     it had (operator, 2026-11-04). */
+  display: flex;
+  width: fit-content;
+  margin: calc(1rem + 40px) auto 40px;
   padding: 14px 28px;
   border: 1px solid transparent;
   border-radius: 10px;
