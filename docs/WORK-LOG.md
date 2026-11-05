@@ -1,3 +1,13 @@
+## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
+
+In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
+buttons had been squeezed into a box too small for them, so they hung off
+the right edge of the bar and sat on top of the green ▶ button that opens
+the Pages panel, which then could not be clicked. The box now grows to fit
+its buttons, lined up with the Preview / Save buttons in the row below, and
+on a narrow screen the buttons drop onto a second line instead of spilling
+out.
+
 ## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
 
 On the screen where you build a CRM form, the column headings, the sections
