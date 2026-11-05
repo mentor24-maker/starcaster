@@ -12,7 +12,9 @@ the other screens in the UI normalization series reuse it.
 
 A review caught one thing before it merged: every button had started fading
 to 80% when you pointed at it, which undid the solid blue hover asked for on
-2026-08-30. Buttons now change colour on hover and never fade.
+2026-08-30. A second review found the Builder's own buttons on Themes (Theme
+Wizard, New, Create, Choose Image) still faded. Buttons now change colour on
+hover and never fade, on every admin screen.
 ## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
 
 When Site Import copied a site, any sign-up or contact form came across as a

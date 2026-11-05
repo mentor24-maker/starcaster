@@ -1399,7 +1399,10 @@ Advanced — is the follow-on pass the operator sequenced after this.
   are secondary. Every kind has a **hover colour** and a **disabled colour**
   — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
   `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
-  0,1,1 it outranked every `.btn` hover rule.) **Two sizes:** normal, `--btn-height` (36px), and small,
+  0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
+  `<button>`s without `.btn`, so that fade still reaches them; the Builder
+  block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
+  admin-only, so a client's published buttons are untouched.) **Two sizes:** normal, `--btn-height` (36px), and small,
   `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
   (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
   height, padding or colour: a rule like `.page-heading-row button

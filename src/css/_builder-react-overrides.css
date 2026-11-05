@@ -11036,6 +11036,16 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   cursor: not-allowed;
   transform: none !important;
 }
+/* No Builder kind fades on hover (UI_RULES C9: a hover COLOUR, never a
+   fade). These are plain <button>s without `.btn`, so the unclassed-button
+   fade in _buttons.css (`button:not(.btn):hover { opacity: 0.8 }`) still
+   caught them — Theme Wizard, New, Create and Choose Image on Themes all
+   measured 0.8 (round-2 review, 86bcyrqb9). Client sites keep their own. */
+.builder-react-root:not(.builder-public-site) .submit-button:hover,
+.builder-react-root:not(.builder-public-site) .secondary-button:hover,
+.builder-react-root:not(.builder-public-site) .danger-button:hover {
+  opacity: 1 !important;
+}
 
 /* ==========================================================================
  * THE REMINDER RECORD CARD IS ONE LATTICE (W0 / L6a / L8 / W9).
