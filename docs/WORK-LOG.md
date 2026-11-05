@@ -1,3 +1,11 @@
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
 ## 2026-11-04 — Form embed code and preview show choice questions as choices (#969)
 
 A form question set to "Choose one", "Choose several" or "Dropdown list
