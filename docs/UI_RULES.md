@@ -1569,6 +1569,27 @@ is ever wider than the screen.*
   blue color")* — **[eye]**, tokens are **[type]**-adjacent (named in
   `_variables.css`, so a drift is visible in one place)
 
+- **R10.** **Every editor screen has the same three heading levels, one
+  size each** — the UI normalization epic (tag `ui-normalization`), screen 1
+  being the CRM form editor (task 86bcyny0m). Use the named sizes in
+  `_variables.css`; never pick a size by hand for one of these:
+
+  | Level | What it is | Token | Size | Weight |
+  |---|---|---|---|---|
+  | Column title | the heading over a column (Form Actions, Styles, Preview) | `--editor-title-size` | 20px (`--text-xl`) | 800 |
+  | Item | a section inside a column (Border, Button, Team alerts) | `--editor-item-size` | ~17.6px (`--text-lg`) | 700 |
+  | Sub-item | every setting's label under an item (Border Size, Form Name) | `--editor-subitem-size` | ~14.4px (`--text-base`) | 700 |
+
+  A setting that stands alone with no sub-items of its own (Background
+  Color, a colour box beside it) is an **item**. Every sub-item is the same
+  size — no label is made smaller to fit a narrow row: if one would wrap,
+  shorten its wording (L2, L3; "Field Alignment" became "Field Align").
+  An explanation that made a label wrap ("optional — separate with commas")
+  moves to its own small `.meta` line under the label. *(operator
+  2026-11-04: "the font size of the items need to be a couple points bigger
+  to distinguish them. Then the top-level headings … need to be a few points
+  bigger")* — **[eye]**, sizes are tokens
+
 ## S — System and structure
 
 *Umbrella: every module familiar; nothing hand-rolled; nothing stale.*

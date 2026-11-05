@@ -23,6 +23,7 @@ const {
   publicFormHandling,
   resolveAlertRecipients,
   alertSubjectFor,
+  flattenSubmittedAnswers,
 } = require('../lib/crmFormHandling');
 const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
 const { findFormRedirectPage } = require('../lib/crmFormRedirectPage');
@@ -204,7 +205,8 @@ async function handle(req, res, pathname, method) {
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
     const scopedProjectId = bind.projectId;
     const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
-    const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
+    // A "Choose several" answer arrives as a list; store it as readable text.
+    const submittedData = flattenSubmittedAnswers((body.data && typeof body.data === 'object') ? body.data : {});
     // Looked up first so the contact's source can name it (task 86bcx1858).
     const form = await formForSubmission(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
     let stored = true;

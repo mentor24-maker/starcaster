@@ -1005,6 +1005,147 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
+    why:
+      'A "Choose one" question (task 86bcynjv7) shows every choice on the page as a round button, ' +
+      'so an imported form looks like the original instead of hiding 11 choices in a dropdown. ' +
+      'Three ways it fails unseen: an option missing, the buttons not sharing one `name` (then ' +
+      'several can be picked and the answer is whichever posted last), or the generic form rule ' +
+      'that makes every input 100% wide and 42px tall stretching each button across the column. ' +
+      'The form is served from a fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_choices' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_choices/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_choices',
+          heading: 'Join the crew',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          fields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'skill', label: 'Main skill', type: 'radio', required: true, options: ['Acting', 'Writing', 'Music', 'Camera'] },
+            // After the radio group on purpose: every selector below takes the FIRST match.
+            { key: 'enjoys', label: 'Also enjoys', type: 'checkboxes', required: false, options: ['Writing', 'Music', 'Film'] },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true },
+    // The fieldset itself is `display: contents` (it joins the form's grid), so
+    // it has no box; the choices container is what occupies the page.
+    selector: '.builder-crm-form-choice-field .builder-crm-form-choices',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['type', 'name', 'value'],
+      selectors: {
+        legend: '.builder-crm-form-choice-field > legend',
+        choices: '.builder-crm-form-choice-field .builder-crm-form-choices',
+        o1: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(1) input',
+        o2: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(2) input',
+        o3: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(3) input',
+        o4: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(4) input',
+        o5: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(5) input',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no "Choose one" fieldset rendered — the radio field was dropped or drawn as something else.';
+      const f = sample.series?.[0];
+      if (!f) return 'no series frame was taken — the contract measured nothing.';
+      if (!f.legend) return 'the question has no <legend> — its label is missing, or it is not a fieldset.';
+      const opts = [f.o1, f.o2, f.o3, f.o4];
+      const missing = opts.findIndex((o) => !o);
+      if (missing !== -1) return `option ${missing + 1} of 4 rendered no input — every configured choice must be on the page.`;
+      if (f.o5) return 'a fifth input rendered for a question with four options — something is adding choices.';
+      const types = opts.map((o) => o.type);
+      if (types.some((t) => t !== 'radio')) return `the choices rendered as ${types.join(', ')} — expected four radio buttons.`;
+      const names = new Set(opts.map((o) => o.name));
+      if (names.size !== 1 || !names.has('skill')) {
+        return `the four buttons carry names ${[...names].join(', ')} — they must share the field's one name ("skill") or more than one can be picked.`;
+      }
+      const values = opts.map((o) => o.value).join(', ');
+      if (values !== 'Acting, Writing, Music, Camera') return `the buttons answer ${values} — expected the options in order.`;
+      const wide = opts.find((o) => o.width > 40 || o.height > 40);
+      if (wide) return `a radio button is ${Math.round(wide.width)}×${Math.round(wide.height)}px — the generic "every input fills its column" rule is stretching it.`;
+      return null;
+    },
+  },
+  {
+    id: 'crm-form-choose-several-dropdown-keeps-two-choices-and-shows-both-when-closed',
+    why:
+      'A "Dropdown list (choose several)" question (task 86bcynpyf) is a button that opens a list of ' +
+      'tick boxes. Ticking two and clicking away must leave BOTH chosen and the closed box must name ' +
+      'both ("Writing, Music"). Ways it fails unseen: the list closing on the first tick (so a second ' +
+      'cannot be reached — the click below then fails), the second tick replacing the first, the ' +
+      'closed box still saying "Select…", or the list never closing. The form is served from a ' +
+      'fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_multiselect' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_multiselect/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_multiselect',
+          heading: 'Join the crew',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          fields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'enjoys', label: 'Also enjoys', type: 'multiselect', required: true, options: ['Writing', 'Music', 'Film'] },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true },
+    // Open it, tick the first two, then click the heading — outside the list.
+    click: [
+      '.builder-crm-form-multiselect-button',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(1) input',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(2) input',
+      '.builder-contact-form-heading',
+    ],
+    selector: '.builder-crm-form-multiselect-button',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['aria-expanded'],
+      selectors: {
+        button: '.builder-crm-form-multiselect-button',
+        list: '.builder-crm-form-multiselect-list',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no "choose several" dropdown rendered — the field was dropped or drawn as something else.';
+      const f = sample.series?.[0];
+      if (!f || !f.button) return 'no series frame was taken — the contract measured nothing.';
+      if (f.list) return 'the list of tick boxes is still open after clicking outside it.';
+      if (f.button['aria-expanded'] !== 'false') return `the closed button says aria-expanded="${f.button['aria-expanded']}" — it must report itself closed.`;
+      if (sample.text !== 'Writing, Music') {
+        return `the closed box reads "${sample.text}" after ticking Writing and Music — expected "Writing, Music" (both kept, in option order).`;
+      }
+      if (sample.box.height < 30 || sample.box.width < 120) {
+        return `the closed box is ${sample.box.width}×${sample.box.height}px — it should be drawn like the single dropdown, filling the field column.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:
       'A Button set to Centered sat at the left edge of every page (task 86bcg6j0z, operator ' +

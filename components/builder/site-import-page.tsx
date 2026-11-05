@@ -289,6 +289,9 @@ export default function SiteImportPage() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when the server said this site was already imported (409
+  // DUPLICATE_COMPLETE): the address to resend with confirmReimport.
+  const [reimportUrl, setReimportUrl] = useState<string | null>(null);
   // The project's Builder pages, read once a job has built some, to name the
   // pages it built. null = not read (or the read failed — see builderPagesError).
   const [builderPages, setBuilderPages] = useState<Array<{ id: string; name?: string; slug?: string }> | null>(null);
@@ -417,15 +420,15 @@ export default function SiteImportPage() {
     return () => window.clearInterval(timer);
   }, [selectedId, loadJobDetail]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!sourceUrl.trim() || submitting) return;
+  async function submitImport(url: string, confirmReimport: boolean) {
+    if (!url.trim() || submitting) return;
     setSubmitting(true);
     setStatus(null);
+    setReimportUrl(null);
     try {
       const body = await appApi("/api/site-import/jobs", {
         method: "POST",
-        body: JSON.stringify({ sourceUrl }),
+        body: JSON.stringify(confirmReimport ? { sourceUrl: url, confirmReimport: true } : { sourceUrl: url }),
       });
       const created = readEnvelopeObject<Job>(body, "job");
       setSourceUrl("");
@@ -436,10 +439,18 @@ export default function SiteImportPage() {
       await loadJobs();
       if (created) setSelectedId(created.id);
     } catch (err) {
+      // The server names the earlier import in plain words; a finished one
+      // can be imported again on purpose (task 86bcynqrt), a running one cannot.
+      if ((err as { code?: string }).code === "DUPLICATE_COMPLETE") setReimportUrl(url);
       setStatus({ message: (err as Error).message, isError: true });
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    void submitImport(sourceUrl, false);
   }
 
   async function handleCancel(id: string) {
@@ -490,6 +501,18 @@ export default function SiteImportPage() {
       </p>
       {status ? (
         <p className={`site-import-status${status.isError ? " is-error" : ""}`}>{status.message}</p>
+      ) : null}
+      {reimportUrl ? (
+        <p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={submitting}
+            onClick={() => void submitImport(reimportUrl, true)}
+          >
+            {submitting ? "Queuing…" : "Import again"}
+          </button>
+        </p>
       ) : null}
 
       <div className="site-import-columns">
