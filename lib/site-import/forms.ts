@@ -289,7 +289,9 @@ export function readSourceForm(html: string): SourceFormReading {
   const isRequired = (c: El): boolean =>
     c.attribs !== undefined && ("required" in c.attribs
       || attr(c, "aria-required").toLowerCase() === "true"
-      || attr(c, "data-parsley-required").toLowerCase() === "true");
+      // Parsley's documented form is the bare attribute; only an explicit
+      // "false" switches it off.
+      || ("data-parsley-required" in c.attribs && attr(c, "data-parsley-required").toLowerCase() !== "false"));
 
   const isTrap = (c: El): boolean => {
     if (styleHides(c)) return true;
@@ -326,10 +328,13 @@ export function readSourceForm(html: string): SourceFormReading {
   };
 
   // Radio buttons and tick boxes are grouped by shared name. Gravity Forms
-  // gives each tick box its own name (input_5.1, input_5.2), so tick boxes
-  // with unique names that share a fieldset / role=group are one question too.
+  // gives each tick box of one question its own name sharing a prefix
+  // (input_5.1, input_5.2), so those are one question too. Tick boxes that
+  // merely sit in the same fieldset are NOT grouped: two separately named
+  // consent boxes are two yes/no questions (round-1 review, PR #965).
   const grouped = new Set<El>();
   const sameType = (m: El, type: string) => tag(m) === "input" && attr(m, "type").toLowerCase() === type;
+  const SUBFIELD = /^(.+)\.\d+$/;
   const groupMembers = (c: El, type: string): El[] => {
     const name = attr(c, "name");
     if (name) {
@@ -337,10 +342,11 @@ export function readSourceForm(html: string): SourceFormReading {
       if (byName.length > 1 || type === "radio") return byName;
     }
     if (type === "checkbox") {
-      const box = ancestors(c, root).find((a) => tag(a) === "fieldset" || /^(group|radiogroup)$/.test(attr(a, "role")));
-      if (box) {
-        const inBox = fillable.filter((m) => sameType(m, type) && !grouped.has(m) && ancestors(m, root).includes(box));
-        if (inBox.length > 1) return inBox;
+      const prefix = SUBFIELD.exec(name)?.[1];
+      if (prefix) {
+        const siblings = fillable.filter((m) => sameType(m, type) && !grouped.has(m)
+          && SUBFIELD.exec(attr(m, "name"))?.[1] === prefix);
+        if (siblings.length > 1) return siblings;
       }
     }
     return [c];

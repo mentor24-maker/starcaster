@@ -165,3 +165,19 @@ test('keys stay unique when labels repeat', () => {
   const r = readSourceForm('<form><label>Name<input name="a"></label><label>Name<input name="b"></label><input type="email" name="e1"><input type="email" name="e2" aria-label="Other email"></form>');
   assert.deepEqual(r.fields.map((f) => f.key), ['name', 'name_2', 'email', 'other_email']);
 });
+
+test('separately named tick boxes in one fieldset stay separate yes/no questions', () => {
+  // Round-1 review of PR #965: a shared <fieldset> used to merge these into one
+  // optional multi-choice question, so a required "I agree" box lost its meaning.
+  const r = readSourceForm('<form><fieldset><legend>Consent</legend>'
+    + '<label><input type="checkbox" name="terms" required> I agree to the terms</label>'
+    + '<label><input type="checkbox" name="marketing"> Send me news</label>'
+    + '</fieldset><button>Go</button></form>');
+  assert.deepEqual(shape(r), [['i_agree_to_the_terms', 'boolean', true], ['send_me_news', 'boolean', false]]);
+});
+
+test('a bare data-parsley-required marks a field required; ="false" does not', () => {
+  const r = readSourceForm('<form><input type="email" name="e" data-parsley-required>'
+    + '<input type="text" name="n" aria-label="Nickname" data-parsley-required="false"><button>Go</button></form>');
+  assert.deepEqual(r.fields.map((f) => f.required), [true, false]);
+});
