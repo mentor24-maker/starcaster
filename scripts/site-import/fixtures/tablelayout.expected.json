@@ -15,12 +15,12 @@
         "lang": "",
         "sections": [
           {
-            "sourceId": "0-08c2bf26",
+            "sourceId": "p2a0c975e-08c2bf26",
             "type": "unknown",
             "screenshot": "SiteImport/job-fixture-tbl/shots/home.desktop.s0.png",
             "elements": [
               {
-                "sourceId": "0-3607c80e",
+                "sourceId": "p2a0c975e-3607c80e",
                 "class": "table",
                 "html": "<table width=\"800\" border=\"0\" cellpadding=\"4\"><tbody><tr><td colspan=\"2\" align=\"center\"><img src=\"banner.gif\" width=\"760\" height=\"90\" alt=\"Smith and Sons Plumbing\"></td></tr><tr><td width=\"180\" valign=\"top\" bgcolor=\"#003366\"><a href=\"index.html\"><font color=\"#ffffff\">Home</font></a><br><a href=\"services.html\"><font color=\"#ffffff\">Services</font></a><br><a href=\"contact.html\"><font color=\"#ffffff\">Contact</font></a></td><td valign=\"top\"><font face=\"Times New Roman\" size=\"4\">Serving the Delray area since 1974. No job too small!</font><table border=\"1\"><tbody><tr><td>Emergency</td><td>24 hours</td></tr><tr><td>Office</td><td>Mon–Fri 8–5</td></tr></tbody></table></td></tr></tbody></table>",
                 "textContent": "HomeServicesContactServing the Delray area since 1974. No job too small!Emergency24 hoursOfficeMon–Fri 8–5",
@@ -31,7 +31,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-445cbd61",
+                "sourceId": "p2a0c975e-445cbd61",
                 "class": "text",
                 "html": "Call us: 555-0100",
                 "textContent": "Call us: 555-0100",
@@ -46,7 +46,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-e7eaa896",
+                "sourceId": "p2a0c975e-e7eaa896",
                 "class": "text",
                 "html": "Family owned and operated for 50 years!",
                 "textContent": "Family owned and operated for 50 years!",

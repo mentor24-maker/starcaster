@@ -1,0 +1,15 @@
+<form action="/contact.php" method="post" class="contact">
+  <h3>Get in touch</h3>
+  <input type="hidden" name="source" value="Homepage contact box">
+  <input type="hidden" name="csrf_token" value="9f8e7d6c5b4a39281706f5e4d3c2b1a0">
+  <p><label for="name">Name *</label><input id="name" name="name" type="text"></p>
+  <p><label for="phone">Phone</label><input id="phone" name="phone" type="tel"></p>
+  <p><label for="mail">Email</label><input id="mail" name="mail" type="email" required></p>
+  <p><label for="site">Website</label><input id="site" name="site" type="url"></p>
+  <p><label for="guests">Number of guests</label><input id="guests" name="guests" type="number"></p>
+  <p><label for="colour">Favourite colour</label><input id="colour" name="colour" type="color"></p>
+  <p><label><input type="checkbox" name="newsletter" value="yes"> Send me the newsletter</label></p>
+  <div class="cf-turnstile" data-sitekey="0x4AAAAAAA"></div>
+  <p><label for="msg">Message</label><textarea id="msg" name="msg" aria-required="true"></textarea></p>
+  <p><button type="submit">Send message</button></p>
+</form>

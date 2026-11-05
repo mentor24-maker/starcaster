@@ -18,6 +18,7 @@ const path = require('node:path');
 const {
   normalizeSite,
   computeSourceId,
+  pageSourceKey,
   splitSrcsetCandidates,
 } = require('../../lib/site-import/dist/normalize.js');
 
@@ -122,7 +123,7 @@ test('srcset splitting survives commas inside URLs (Jetpack resize params)', () 
 test('element screenshot crops join by sourceId', () => {
   // The capture layer keys sanitizer-stripped elements' crops by the same
   // computeSourceId the normalizer derives — this pins that join.
-  const sid = computeSourceId(0, 'body/form[0]');
+  const sid = computeSourceId(pageSourceKey('/'), 'body/form[0]');
   const { ir } = normalizeSite({
     jobId: 'j',
     sourceUrl: 'https://x.test/',
