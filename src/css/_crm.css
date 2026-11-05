@@ -172,9 +172,14 @@
   min-width: 0;
 }
 
+/* Three heading levels, one size each (UI normalization, operator
+   2026-11-04): column title > item > sub-item. The sizes are the shared
+   --editor-* tokens so every editor in the series matches this one. */
 .crm-form-editor-col-title {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
+  margin: 0 0 0.6rem;
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
   color: var(--ink-primary, #18324a);
 }
 
@@ -197,8 +202,37 @@
 
 .crm-form-editor-section-title {
   margin: 0 0 0.65rem;
-  font-size: 1rem;
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  line-height: var(--leading-tight);
   color: var(--ink-primary, #18324a);
+}
+
+/* Sub-items: every setting's label, one font, bold, never wrapping. */
+.crm-form-editor-col-settings .crm-form-editor-setting > span:first-child,
+.crm-form-editor-col-styles .crm-form-editor-setting > span:first-child:not(.crm-form-editor-section-title),
+.crm-form-editor-col-settings .checkbox-row > span {
+  font-size: var(--editor-subitem-size);
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-primary, #18324a);
+}
+
+.crm-form-editor-setting > span:first-child .meta {
+  font-weight: 400;
+}
+
+/* An explanation that used to ride inside a label, making it wrap — now its
+   own small line under the label. */
+.crm-form-editor-col-settings .crm-form-editor-setting-hint {
+  display: block;
+  margin: 0.1rem 0 0.3rem;
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.crm-form-editor-col-settings p.crm-form-editor-setting-hint {
+  margin: 0.2rem 0 0.75rem;
 }
 
 .crm-form-editor-style-section {
@@ -242,7 +276,7 @@
 /* "Background Color" is the Background section's heading as well as its
    label — the two used to be separate lines saying the same thing. */
 .crm-form-editor-setting-color > .crm-form-editor-section-title {
-  font-weight: 700;
+  margin: 0;
 }
 
 .crm-form-color-control {
@@ -358,10 +392,6 @@
 .crm-form-editor-setting-row .crm-form-editor-setting {
   margin-bottom: 0;
   min-width: 0;
-}
-
-.crm-form-editor-setting-row .field > span {
-  font-size: 0.82rem;
 }
 
 .crm-form-width-control {
