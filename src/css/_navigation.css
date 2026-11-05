@@ -146,3 +146,211 @@ header {
 .menu-item.has-submenu:hover .submenu {
   display: block;
 }
+
+/* ── One-row admin header (task 86bcyrqau, UI normalization 1 of 10) ─────────
+   The logo band (154px) plus a separate menu bar (~45px, ~76px when it
+   wrapped) cost about 230px of every screen before any work appeared. The
+   menu now sits INSIDE the header (src/layout.html), so logo, menu, name /
+   Logout and Projects share one row of --admin-header-height.
+
+   Scoped to `#appShell > header` on purpose: the bare `header` rule above
+   reaches every <header> element in the app (two components carry a comment
+   saying they avoid <header> because of it), and this block must not resize
+   those. The rule for every later screen is written up in docs/UI_RULES.md
+   ("The admin header"). */
+#appShell > header {
+  --admin-header-height: 56px;
+  min-height: var(--admin-header-height);
+  padding: 0 0.75rem;
+  gap: 0.75rem;
+  align-items: stretch;
+  /* Still allowed to wrap: between phone width and ~1400px the 14 menu items
+     do not fit beside the logo, and a second row is the graceful failure —
+     the old rule's reason (UI_RULES T0/T8) still holds. */
+  flex-wrap: wrap;
+}
+
+#appShell > header > .brand-wordmark {
+  /* 1200x180 image at 22px tall = ~147px wide. */
+  width: auto;
+  height: 22px;
+  max-width: 40vw;
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+#appShell > header > .brand-fallback {
+  align-self: center;
+  font-size: var(--text-lg);
+  white-space: nowrap;
+}
+
+/* The second selector is the phone menu's OPEN state; it is named here, in
+   the base layer, so the 720px block only toggles it (UI_RULES R1). */
+#appShell > header > .top-nav,
+#appShell > header.admin-menu-open > .top-nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: none;
+  display: flex;
+}
+
+#appShell > header .menu-root {
+  flex: 1 1 auto;
+  min-height: var(--admin-header-height);
+}
+
+#appShell > header .menu-root > .menu-item {
+  display: flex;
+}
+
+#appShell > header .menu-root > .menu-item > .menu-link {
+  display: flex;
+  align-items: center;
+  /* --text-sm and 0.4rem sides: measured at 1440, --text-base with 0.6rem
+     made the menu ~1090px and pushed name / Logout onto a second row. */
+  padding: 0 0.4rem;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+/* Desktop: the sub-menu drops below its item. Declared here so the 720px
+   block only switches it to normal flow (UI_RULES R1). */
+#appShell > header .menu-root .submenu {
+  position: absolute;
+  top: 100%;
+}
+
+#appShell > header .submenu .submenu-link {
+  font-size: var(--text-base);
+  padding: 0.7rem 0.85rem;
+}
+
+#appShell > header > .auth-header-meta,
+#appShell > header > .brand-profile-button {
+  align-self: center;
+  font-size: var(--text-sm);
+}
+
+/* The phone-only menu button (src/layout.html). Laid out here, in the base
+   layer, and hidden; the 720px block below only shows it (UI_RULES R1). */
+#appShell > header > .admin-menu-toggle {
+  display: none;
+  align-items: center;
+  align-self: center;
+  order: 5;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  width: auto;
+  background: transparent;
+  color: var(--btn-text);
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-input);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#appShell > header > .auth-header-meta {
+  margin-left: 0;
+}
+
+#appShell > header > .brand-profile-button {
+  margin-left: 0;
+}
+
+#appShell > header .brand-profile-logo {
+  height: 32px;
+}
+
+/* At 1440 the row has ~10px to spare with "Dane Christensen" and a project
+   LOGO. A longer name, or a project shown by its name because it has no
+   logo, would push the row onto two lines — so both are capped and end in
+   an ellipsis; the full text stays in the title / the Settings screen. */
+#appShell > header .auth-welcome-name,
+#appShell > header #brandProfileLabel {
+  display: inline-block;
+  /* 7.75rem: "Dane Christensen" fits whole (it was cut at 7rem). */
+  max-width: 7.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#appShell > header #brandProfileLabel {
+  max-width: 6rem;
+}
+
+/* Phone: logo, account and a Menu button share the row; the menu is folded
+   away until the button opens it, then takes a full-width row of its own
+   below (legacy.css stacks its items at <= 720px). Folded, because the
+   stacked 14 items made the header ~640px tall at 390px. The header must
+   never be wider than the screen (acceptance: 390px). */
+@media (max-width: 720px) {
+  #appShell > header {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+  #appShell > header > .admin-menu-toggle {
+    display: inline-flex;
+  }
+  #appShell > header > .top-nav {
+    display: none;
+  }
+  #appShell > header.admin-menu-open > .top-nav {
+    display: flex;
+  }
+  #appShell > header.admin-menu-open {
+    padding-bottom: 0;
+  }
+  #appShell > header > .auth-header-meta {
+    margin-left: auto;
+  }
+  /* The OPEN selector is named too, and must be: the base layer's
+     `header.admin-menu-open > .top-nav` (1,2,1) sets `flex: 1 1 auto`, which
+     outranked the plain selector here (1,1,1) and squeezed the opened menu
+     into a 267px column beside the logo (review round 1 of task 86bcyrqau). */
+  #appShell > header > .top-nav,
+  #appShell > header.admin-menu-open > .top-nav {
+    order: 10;
+    /* Full bleed: 100% of the padded row plus both side paddings. */
+    flex: 0 0 calc(100% + 1.5rem);
+    margin: 0 -0.75rem;
+  }
+  #appShell > header .menu-root > .menu-item {
+    display: block;
+  }
+  /* Desktop pushes Training…Admin to the right; in the stacked phone list
+     that left Training hanging off on its own at the right edge. */
+  #appShell > header .menu-root > .menu-item-right-start,
+  #appShell > header .menu-root > .menu-item-right {
+    margin-left: 0;
+    border-left: none;
+  }
+  #appShell > header .menu-root > .menu-item > .menu-link {
+    padding: 0.75rem 1rem;
+  }
+  /* Sub-items in normal flow under their parent. legacy.css leaves the phone
+     sub-menu `position: relative` with the desktop `top: 100%`; once the row
+     has a definite height that resolved to ~368px, leaving a black gap under
+     Builder and painting Themes… over Campaigns (review round 2). */
+  #appShell > header .menu-root .submenu {
+    position: static;
+    top: auto;
+  }
+}
+
+/* Views that hide the menu on purpose (no workspace, Project Admin, the legal
+   pages) must hide the phone Menu button too — and keep the menu hidden even
+   if it was opened before the view changed. Without this the open rule
+   (1,2,1) outranked those views' `#topNav { display: none }` (1,1,1), so
+   tapping Menu brought back a menu they deliberately remove. */
+body.no-workspace-view #appShell > header > .admin-menu-toggle,
+body.project-admin-view #appShell > header > .admin-menu-toggle,
+body.public-legal-view #appShell > header > .admin-menu-toggle,
+body.no-workspace-view #appShell > header.admin-menu-open > .top-nav,
+body.project-admin-view #appShell > header.admin-menu-open > .top-nav,
+body.public-legal-view #appShell > header.admin-menu-open > .top-nav {
+  display: none;
+}
