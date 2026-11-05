@@ -1,3 +1,18 @@
+## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
+
+Site Import gives every section it builds a name, so that importing the same
+site again can find that section and update it instead of adding a second copy.
+The name used to begin with the page's place in the crawl ("the third page
+found"), and a second crawl finds pages in a different order. On wavecenter.com
+every section on the three pages that moved got a new name: only 24 of 42
+matched. The name now begins with the page's address, such as /sign-in, which
+doesn't change, and both wavecenter copies now match 42 of 42. Sites imported
+before this keep working too. When a re-import meets sections built under the
+old names, it recognises them and renames them in place. Without that step the
+four sites already imported would have gained 425 duplicate sections; with it
+they gain none, and any section somebody has edited stays protected. This is
+the groundwork for "Import again" updating a site rather than copying it twice.
+
 ## 2026-11-04 — Site Import can read what an imported form asks (#965)
 
 When Site Import copies a site, any sign-up or contact form it finds has so
