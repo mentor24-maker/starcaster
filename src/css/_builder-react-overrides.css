@@ -10983,6 +10983,60 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   opacity: 1 !important;
 }
 
+/* ==================================================================== */
+/* BUILDER BUTTONS JOIN THE ONE BUTTON SYSTEM — sizes and the outlined   */
+/* secondary kind (UI normalization 4 of 10, task 86bcyrqb9).            */
+/*                                                                      */
+/* The colour block above already says green = save, blue = main action, */
+/* red = delete. What it left alone was SIZE and the plain secondary: a  */
+/* `.secondary-button` measured 50px tall with a 2px navy border, a      */
+/* `.submit-button` 48px, while the same jobs on the rest of the admin   */
+/* app were 29–42px. Here they take the admin app's two tokens           */
+/* (--btn-height, --radius-btn …) and the same outlined secondary look,  */
+/* so Themes, the Workspace and Settings line up. Rules:                 */
+/* docs/UI_RULES.md, "Buttons: four kinds, two sizes".                   */
+/*                                                                      */
+/* Same guard as the block above: `:not(.builder-public-site)`, so a     */
+/* client's published buttons keep their theme. `!important` because     */
+/* the generated file reaches these elements at up to 0,5,0, and its     */
+/* "low-contrast" rule puts the 2px navy border on with !important.      */
+/* ==================================================================== */
+.builder-react-root:not(.builder-public-site) .submit-button,
+.builder-react-root:not(.builder-public-site) .secondary-button,
+.builder-react-root:not(.builder-public-site) .danger-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: var(--btn-height) !important;
+  padding: 0 var(--btn-pad-x) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-btn) !important;
+  font-size: var(--btn-font-size) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  box-shadow: none !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-ink);
+  border-color: var(--btn-secondary-border) !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button:hover:not(:disabled) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border) !important;
+  transform: none !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button:disabled {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-disabled-ink);
+  border-color: var(--btn-secondary-disabled-border) !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 /* ==========================================================================
  * THE REMINDER RECORD CARD IS ONE LATTICE (W0 / L6a / L8 / W9).
  * Panel sweep 11/15, ticket 86bbjt1b9.

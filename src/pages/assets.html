@@ -5,7 +5,7 @@
           <div class="page-heading-actions">
             <button id="openCreateVideoToolBtn" type="button" class="btn btn-primary hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
             <button id="openAssetFieldImportBtn" type="button" class="btn assets-header-action-btn hidden" onclick="App.assetFieldImport.openModal({ fromType: 'image', toType: 'tweet' }); return false;">Import from Assets</button>
-            <button id="uploadAssetsBtn" type="button" class="btn">Add Assets</button>
+            <button id="uploadAssetsBtn" type="button" class="btn btn-primary">Add Assets</button>
             <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')" class="btn">Manage Categories</button>
           </div>
         </div>
@@ -209,7 +209,7 @@
                   <div id="assetsBulkActionRow" class="crud-bulk-actions-row assets-bulk-action-row hidden">
                     <button id="assetsBulkEditBtn" type="button" class="btn" disabled>Edit All</button>
                     <button id="assetsBulkResizeBtn" type="button" class="btn" disabled>Resize Images</button>
-                    <button id="assetsBulkDeleteBtn" type="button" class="btn" disabled>Delete All</button>
+                    <button id="assetsBulkDeleteBtn" type="button" class="btn btn-danger" disabled>Delete All</button>
                   </div>
                 </th>
               </tr>
@@ -422,7 +422,7 @@
         <div class="page-heading-row">
           <h2>Assets: Categories</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
@@ -490,7 +490,7 @@
         <div class="page-heading-row">
           <h2>Manage Asset Categories</h2>
           <div class="page-heading-actions">
-            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
           </div>
         </div>
@@ -506,7 +506,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="assetCategories.openCategoriesPage">Assets: Categories</a>: Edit</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
@@ -819,7 +819,7 @@
                   <input id="generationHistorySelectAll" type="checkbox" aria-label="Select all jobs" onchange="App.assetsVideo.toggleAllGenerations(this)" />
                 </div>
                 <div class="crud-bulk-actions-row youtube-comment-bulk-actions">
-                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn">Delete Selected</button>
+                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn btn-danger">Delete Selected</button>
                   &nbsp;&nbsp;|&nbsp;&nbsp;
                   <select id="generationHistoryAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
                     <option value="">-- Topic --</option>

@@ -1384,6 +1384,37 @@ Advanced — is the follow-on pass the operator sequenced after this.
   something the renderer honors; duplicates are removed, not kept "just in
   case". *(7/1 "'content' field that doesn't do anything … remove it";
   6/28; 7/29; doctrine E7)* — **[eye]**
+- **C9. Buttons: four kinds, two sizes.** The colour says what the button
+  does, on every admin screen (UI normalization 4 of 10, task 86bcyrqb9):
+
+  | Kind | Looks | Admin app (vanilla) | Builder (React) |
+  |---|---|---|---|
+  | Secondary | outlined, white | `btn` (the default) — `btn-ghost` is the same | `secondary-button` |
+  | Main action | blue | `btn btn-primary` | `submit-button` |
+  | Save | green | `btn btn-save` | `submit-button admin-save-button` |
+  | Delete | red | `btn btn-danger` | `danger-button` |
+
+  **One main action per screen**, and it is the "Create …"/"Add …" button
+  in the heading row; Back, Cancel, Refresh, Import, Archives and the like
+  are secondary. Every kind has a hover and a **disabled colour** (never a
+  fade). **Two sizes:** normal, `--btn-height` (36px), and small,
+  `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
+  (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
+  height, padding or colour: a rule like `.page-heading-row button
+  { min-height: 42px }` is how one job ended up 29px on one screen and 50px
+  on another. Tokens in `_variables.css`; rules in `_buttons.css` (default
+  colours, loads first) and `legacy.css` "THE BUTTON SYSTEM" (sizes and
+  kinds, loads last); the Builder's admin-only block is in
+  `_builder-react-overrides.css`. A client's published site keeps its own
+  theme's buttons. *(operator 2026-11-05, approving the UI review: "I like
+  all of them.")* — **[eye]**, sizes and colours are tokens
+
+  **Deliberately not in the four kinds:** square table icon buttons
+  (`icon-btn` — a glyph, its own 36px square, already the same height as
+  a normal button); the Builder and Docs diagram tiles; accordion headers
+  and the Builder's panel-label pills; tab switchers (UI normalization 5
+  owns those); colour swatches, font pickers and image pickers that show a
+  value; and buttons a module renders on a client's site.
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …

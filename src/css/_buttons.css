@@ -14,32 +14,37 @@ button, .btn {
   font-size: 0.95rem;
   transition: opacity 0.2s;
 }
-button:hover, .btn:hover {
+button:hover {
   opacity: 0.8;
 }
 /*
- * Primary action = flat blue, one colour, no white flash on hover
- * (operator, 2026-08-30, task 86bbq5jvz). The old hover repainted the button
- * near-white and swapped the text to black, which reads as the button
- * vanishing rather than responding.
+ * THE DEFAULT KIND: a `.btn` with no kind is OUTLINED — secondary (UI
+ * normalization 4 of 10, task 86bcyrqb9). It used to inherit the black of
+ * `button, .btn` above, which is why header actions were black on most
+ * screens and white or blue on others for the same job.
  *
- * Disabled is a COLOUR, not an opacity: `button, .btn` above fades every
- * button to 0.8 on hover and legacy.css fades a disabled one to 0.5, and a
- * half-transparent bright blue still reads as a live button. That is the
- * confusion behind Publish being missed.
+ * This file loads BEFORE every other partial on purpose: a screen's own
+ * one-class rule for a special button (a square table icon, a colour
+ * swatch) must still win over the default. `:where()` keeps hover and
+ * disabled at one class for the same reason. The blue, red and small-size
+ * rules, and the sizes themselves, are in legacy.css ("THE BUTTON SYSTEM"),
+ * because that file loads last and used to redefine `.btn` from scratch.
  */
-.btn-primary {
-  background: var(--btn-blue);
-  color: var(--btn-flat-ink);
+.btn {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-ink);
+  border-color: var(--btn-secondary-border);
 }
-.btn-primary:hover:not(:disabled) {
-  background: var(--btn-blue-hover);
-  color: var(--btn-flat-ink);
+.btn:where(:hover:not(:disabled)) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border);
+  color: var(--btn-secondary-ink);
   opacity: 1;
 }
-.btn-primary:disabled {
-  background: var(--btn-blue-disabled);
-  color: var(--btn-flat-ink);
+.btn:where(:disabled) {
+  background: var(--btn-secondary-bg);
+  border-color: var(--btn-secondary-disabled-border);
+  color: var(--btn-secondary-disabled-ink);
   opacity: 1;
 }
 /*
@@ -75,17 +80,4 @@ button:hover, .btn:hover {
   border-color: var(--btn-green-disabled);
   color: var(--btn-flat-ink);
   opacity: 1;
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--ink-primary);
-  border: 1px solid var(--border-strong);
-}
-.btn-ghost:hover {
-  background: var(--bg-hover);
-  opacity: 1;
-}
-.btn-danger {
-  background: #dc2626;
-  color: #fff;
 }
