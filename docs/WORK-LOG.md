@@ -1,3 +1,15 @@
+## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
+
+Changing view used to look like three different controls: CRM had
+underlined text tabs, Outreach had faded grey pills, and the Builder
+Workspace's Templates / Modules / Pages looked exactly like Save and Cancel
+buttons, so picking a view felt like pressing an action. Now every one of
+them — plus the tabs on the Substack, Reddit and YouTube outreach screens,
+whose selected tab was a big blue action button — is the same plain text on
+an underline, with the selected one in blue. Tab reaches each one and Enter
+picks it. The rule is written down as C9 in the UI rules so new screens use
+it too.
+
 ## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
 
 In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
