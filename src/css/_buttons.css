@@ -14,7 +14,11 @@ button, .btn {
   font-size: 0.95rem;
   transition: opacity 0.2s;
 }
-button:hover {
+/* The fade is for unclassed buttons only. A `.btn` changes COLOUR on hover,
+   never opacity (docs/UI_RULES.md C9) — `button:hover` is 0,1,1 and outranked
+   every `.btn` hover rule, so it faded the flat blue Dane asked for on
+   2026-08-30 (task 86bbq5jvz) back to 80% (round-1 review, 86bcyrqb9). */
+button:not(.btn):hover {
   opacity: 0.8;
 }
 /*

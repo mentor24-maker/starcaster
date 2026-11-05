@@ -9446,6 +9446,7 @@ table {
   background: var(--btn-blue-hover);
   border-color: var(--btn-blue-hover);
   color: var(--btn-flat-ink);
+  opacity: 1;
 }
 .btn.btn-primary:disabled {
   background: var(--btn-blue-disabled);
@@ -9470,6 +9471,7 @@ table {
   background: var(--btn-danger-flat-hover);
   border-color: var(--btn-danger-flat-hover);
   color: var(--btn-flat-ink);
+  opacity: 1;
 }
 .btn.btn-danger:disabled {
   background: var(--btn-danger-flat-disabled);

@@ -9,6 +9,10 @@ Save, red for Delete. There are two heights only, normal and small. On the way,
 Training's per-row Edit and Delete buttons, which had been white text on a white
 row and so invisible, became visible. The rule is written down (UI_RULES C9) so
 the other screens in the UI normalization series reuse it.
+
+A review caught one thing before it merged: every button had started fading
+to 80% when you pointed at it, which undid the solid blue hover asked for on
+2026-08-30. Buttons now change colour on hover and never fade.
 ## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
 
 Before this, importing a site a second time and building pages from it made a

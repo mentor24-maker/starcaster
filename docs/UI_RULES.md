@@ -1396,8 +1396,10 @@ Advanced — is the follow-on pass the operator sequenced after this.
 
   **One main action per screen**, and it is the "Create …"/"Add …" button
   in the heading row; Back, Cancel, Refresh, Import, Archives and the like
-  are secondary. Every kind has a hover and a **disabled colour** (never a
-  fade). **Two sizes:** normal, `--btn-height` (36px), and small,
+  are secondary. Every kind has a **hover colour** and a **disabled colour**
+  — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
+  `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
+  0,1,1 it outranked every `.btn` hover rule.) **Two sizes:** normal, `--btn-height` (36px), and small,
   `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
   (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
   height, padding or colour: a rule like `.page-heading-row button
