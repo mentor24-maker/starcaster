@@ -1,0 +1,11 @@
+<form action="/volunteer" method="post">
+  <label for="vemail">Email</label><input id="vemail" type="email" name="email" required>
+  <fieldset>
+    <legend>How can you help? *</legend>
+    <label><input type="checkbox" name="help[]" value="events"> Events</label>
+    <label><input type="checkbox" name="help[]" value="coaching"> Coaching</label>
+    <label><input type="checkbox" name="help[]" value="fundraising"> Fundraising</label>
+  </fieldset>
+  <label><input type="checkbox" name="over18" value="1" required> I am over 18</label>
+  <input type="submit" value="Sign me up">
+</form>
