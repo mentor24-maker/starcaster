@@ -7,7 +7,10 @@
  * (`crm-form`) module plus one plan per DISTINCT form; lib/siteImportForms.js
  * writes the plans — add-only on the CRM, one form per source form, a re-run
  * updating its own forms rather than making twins. The stores are in-memory
- * fakes with the real stores' calling shape (row or null, never an envelope).
+ * fakes with the real stores' calling shape (row or null, never an envelope),
+ * and they clean styles and messages the way lib/crmFormsStore.js does — so a
+ * fingerprint test cannot pass because the fake stored something the real
+ * store would have rewritten.
  */
 
 const test = require('node:test');
@@ -20,6 +23,7 @@ const { serializeBuilderDocument } = require('../../lib/builder/document.js');
 const {
   applyImportForms, planCrmFields, fillFormIds, checkFormLinks,
 } = require('../../lib/siteImportForms.js');
+const { normalizeCrmFormStyles, mergeCrmFormStylesPatch } = require('../../lib/crmFormStyles.js');
 
 const STRANDS_FORM = fs.readFileSync(path.join(__dirname, 'fixtures', 'forms', 'strands-mailpoet.html'), 'utf8');
 const SEARCH_FORM = fs.readFileSync(path.join(__dirname, 'fixtures', 'forms', 'search.html'), 'utf8');
@@ -84,15 +88,21 @@ function fakeStores({ configs = [], untenanted = false } = {}) {
       return copy(c);
     },
   };
+  // What the real store's sanitize() does to a row on every read and write.
+  const clean = (f) => Object.assign(f, {
+    styles: normalizeCrmFormStyles(f.styles),
+    successMessage: String(f.successMessage || 'Thank you! Your information has been saved.'),
+    errorMessage: String(f.errorMessage || 'Something went wrong. Please try again.'),
+  });
   const formsStore = {
     async createForm(input, scope) {
       state.calls.createForm += 1;
-      const f = {
+      const f = clean({
         id: `crmf_${++state.seq}`,
         projectId: untenanted ? '' : scope.projectId,
         ownerUserId: untenanted ? '' : scope.userId,
         ...input,
-      };
+      });
       state.forms.push(f);
       return copy(f);
     },
@@ -101,7 +111,9 @@ function fakeStores({ configs = [], untenanted = false } = {}) {
       const f = state.forms.find((x) => x.id === id);
       if (!f) return null;
       const { stylesPatch, ...rest } = input;
-      Object.assign(f, rest, { styles: { ...(f.styles || {}), ...(stylesPatch || {}) } });
+      // As the real store: a patch merges onto the form's styles as they are NOW.
+      const styles = rest.styles !== undefined ? rest.styles : mergeCrmFormStylesPatch(f.styles, stylesPatch || {});
+      clean(Object.assign(f, rest, { styles }));
       return copy(f);
     },
     async getForm(id) {
@@ -226,6 +238,38 @@ test('a form changed by hand since the import is left alone on a re-run', async 
   assert.equal(stores.state.calls.updateForm, 0);
   assert.equal((await stores.formsStore.getForm(formId)).submitLabel, 'Sign me up');
   assert.equal(second.checkpoint[out.forms[0].key].fingerprint, first.checkpoint[out.forms[0].key].fingerprint, 'stays protected next time too');
+});
+
+test('a form whose button colour was changed by hand is left alone on a re-run', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  // A source button with a colour of its own, so the import writes one.
+  const plans = out.forms.map((p) => ({ ...p, styles: { ...p.styles, buttonBackgroundColor: '#cc0000' } }));
+  const stores = fakeStores();
+  const first = await applyImportForms(plans, { ...stores, scope: SCOPE });
+  const formId = first.formIds[plans[0].key];
+  assert.equal((await stores.formsStore.getForm(formId)).styles.buttonBackgroundColor, '#cc0000');
+
+  // Untouched, a re-run still updates: the store's cleaning alone is not an edit.
+  const untouched = await applyImportForms(plans, { ...stores, scope: SCOPE, prior: first.checkpoint });
+  assert.equal(untouched.results[0].outcome, 'updated', 'a form nobody touched must still match its fingerprint');
+
+  // Changed to green the way Contacts › Forms saves it: a stylesPatch.
+  await stores.formsStore.updateForm(formId, { stylesPatch: { buttonBackgroundColor: '#00aa00' } });
+  const updatesBefore = stores.state.calls.updateForm;
+  const again = await applyImportForms(plans, { ...stores, scope: SCOPE, prior: untouched.checkpoint });
+  assert.match(again.results[0].outcome, /left alone/);
+  assert.equal(stores.state.calls.updateForm, updatesBefore, 'the import wrote nothing to it');
+  assert.equal((await stores.formsStore.getForm(formId)).styles.buttonBackgroundColor, '#00aa00', 'their green stays');
+});
+
+test('a form whose thank-you message was changed by hand is left alone on a re-run', async () => {
+  const out = mapSite(fixtureIr(), { existingSlugs: [] });
+  const stores = fakeStores();
+  const first = await applyImportForms(out.forms, { ...stores, scope: SCOPE });
+  const formId = first.formIds[out.forms[0].key];
+  await stores.formsStore.updateForm(formId, { successMessage: 'Welcome to the crew!' });
+  const again = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior: first.checkpoint });
+  assert.match(again.results[0].outcome, /left alone/);
 });
 
 test('a form that reads back without its tenant stops the run', async () => {

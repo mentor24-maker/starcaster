@@ -8,7 +8,7 @@ the client's existing setup. It only ever adds questions their contact list is
 missing and never changes ones already there. A sign-up that appears on several
 pages becomes one form used on all of them. Importing again updates that form
 rather than making a second copy, and if somebody has edited the form by hand
-since, the import leaves it alone. A site search box or a sign-in form still
+since — even just its button colour — the import leaves it alone. A site search box or a sign-in form still
 comes across as a picture, with a note saying why. The import report now has a
 Forms section listing what was rebuilt and what was left out, such as spam traps
 and the old plugin's internal fields. Strands Movie gets its form in the next
