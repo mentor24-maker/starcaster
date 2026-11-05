@@ -12386,3 +12386,44 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: var(--page-title-size);
   line-height: var(--leading-tight);
 }
+
+/*
+ * Builder › Workspace › Publish header (task 86bcyrqaq).
+ *
+ * The header borrows the Pages list's heading grid, whose button column is a
+ * fixed 112px — room for ONE button. Publish carries two (Check and Publish,
+ * about 190px together), so they spilled 75px to the left and Check sat on
+ * top of the panel's collapse button (the round pale-red arrow, the
+ * "red element"). The blue bar is the collapse toggle itself, which filled
+ * only the left column, so it stopped where that too-narrow column began.
+ *
+ * Fix: the button column sizes to its buttons, and while the panel is open
+ * the blue is painted on the whole header row rather than on the toggle, so
+ * one bar runs edge to edge with the collapse arrow and both buttons on it,
+ * none overlapping. Scoped to Publish: the other headings that use this grid
+ * hold a single button and fit.
+ */
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  border-radius: 14px;
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout > .builder-pages-crud-heading-actions {
+  width: auto;
+  min-width: min-content;
+  max-width: none;
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout:has(.builder-panel-toggle[aria-expanded="true"]) {
+  background: var(--builder-header-workspace);
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout:has(.builder-panel-toggle[aria-expanded="true"]:hover) {
+  background: var(--builder-header-workspace-hover);
+}
+
+.builder-react-root .builder-publish-shell .builder-panel-toggle[aria-expanded="true"],
+.builder-react-root .builder-publish-shell .builder-panel-toggle[aria-expanded="true"]:hover {
+  background: transparent;
+}

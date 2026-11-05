@@ -10,6 +10,24 @@ explanations were split so only their first sentence sits under the title; the
 rest is still there, just below. This is item 2 of the 10 UI normalization
 changes, and the rule is written down (R11 in docs/UI_RULES.md) so the
 remaining screens follow it.
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
 
 ## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
 
