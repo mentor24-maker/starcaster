@@ -1,3 +1,15 @@
+## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
+
+On the Profile screen every box was about 100 pixels wide, the "Primary
+Contact Name (defaults to account)" label was stacked on five lines, and the
+profile picture sat on top of the fields. The cause was one misplaced style:
+the "label on the left, box on the right" layout was applied to the whole form
+instead of just the column of fields, so the entire form — fields and picture
+together — was squeezed into the narrow label column. Now the fields column
+gets that layout, the boxes are about 640 pixels wide on a laptop screen, the
+long labels fit on two lines, the picture sits to the right, and on a narrow
+window it drops neatly below the fields.
+
 ## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
 
 On the screen where you build a CRM form, the column headings, the sections
