@@ -1,5 +1,35 @@
+/*
+ * One page-top pattern for every admin screen (UI normalization 2 of 10,
+ * task 86bcyrqaw; docs/UI_RULES.md R11): exactly one title, that screen's
+ * buttons on the same row, and an optional one-line description in small
+ * grey text underneath. Never two titles.
+ */
 .page-heading-row h2 {
   margin: 0;
+  font-size: var(--page-title-size);
+  line-height: var(--leading-tight);
+}
+
+.page-heading-desc {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-5);
+  font-size: var(--page-desc-size);
+  line-height: var(--leading-normal);
+  color: var(--muted);
+}
+
+/* At phone width the description may take two lines, never more. */
+@media (max-width: 640px) {
+  .page-heading-row {
+    flex-wrap: wrap;
+  }
+
+  .page-heading-desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
 }
 
 .page-heading-back-link {
