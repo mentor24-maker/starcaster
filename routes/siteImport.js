@@ -21,6 +21,7 @@ const { requestProjectScope } = require('../lib/requestProjectScope');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/siteImportStore');
 const importTheme = require('../lib/siteImportTheme');
+const sameSite = require('../lib/siteImportSameSite');
 
 const PREFIX = '/api/site-import';
 
@@ -66,12 +67,49 @@ async function handle(req, res, pathname, method) {
     const { url, error } = validateSourceUrl(body.sourceUrl);
     if (error) return sendErr(res, 400, error, { code: 'VALIDATION_ERROR' }), true;
 
+    // Same site already here? (task 86bcynqrt — wavecenter.com was captured
+    // twice, with and without "www.", while another import waited behind it.)
+    // Waiting or running: always refused. Finished: refused until the caller
+    // confirms, because a site can change and taking a fresh copy is legitimate.
+    const existing = await store.listJobs(scope.projectId, 200);
+    if (!existing.ok) return sendErr(res, existing.status || 500, existing.error), true;
+    const { active, complete } = sameSite.findSameSite(existing.data, url);
+    const earlierDetail = (job) => ({
+      jobId: job.id,
+      sourceUrl: job.sourceUrl,
+      address: sameSite.displayAddress(job.sourceUrl),
+      status: job.status,
+      createdAt: job.createdAt,
+      finishedAt: job.finishedAt,
+    });
+    if (active) {
+      return sendErr(
+        res, 409,
+        `${sameSite.displayAddress(active.sourceUrl)} is already being imported for this project ` +
+          `(${active.status === 'queued' ? 'waiting' : active.status} since ${sameSite.formatDay(active.createdAt)}). ` +
+          'Nothing new was started.',
+        { code: 'DUPLICATE_ACTIVE', details: [earlierDetail(active)] }
+      ), true;
+    }
+    if (complete && body.confirmReimport !== true) {
+      return sendErr(
+        res, 409,
+        `${sameSite.displayAddress(complete.sourceUrl)} was already imported for this project on ` +
+          `${sameSite.formatDay(complete.finishedAt)}. Import it again to take a fresh copy of the site?`,
+        { code: 'DUPLICATE_COMPLETE', details: [earlierDetail(complete)] }
+      ), true;
+    }
+
     const created = await store.createJob({
       projectId: scope.projectId,
       ownerUserId: scope.userId,
       sourceUrl: url,
       caps: body.caps,
       clientAuthorization: body.clientAuthorization,
+      // The link the worker reads to tell a confirmed re-import from an
+      // unconfirmed duplicate, and the follow-on refresh ticket reads to find
+      // the pages the earlier import built.
+      checkpoints: complete ? { reimportOf: complete.id } : undefined,
     });
     if (!created.ok) return sendErr(res, created.status || 500, created.error), true;
     return sendOk(res, 201, { job: created.data }), true;
