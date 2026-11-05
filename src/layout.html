@@ -137,8 +137,11 @@
       <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
       <!-- The menu sits INSIDE the header so logo, menu and account share one
            row (task 86bcyrqau): the logo band plus a separate menu bar took
-           ~230px of every screen. `#topNav` keeps its id for App.els. -->
-      <nav class="top-nav" id="topNav">
+           ~230px of every screen. `#topNav` keeps its id for App.els.
+           Its onclick closes the phone menu when a menu link is tapped, so
+           the next screen does not load under an open menu. -->
+      <nav class="top-nav" id="topNav"
+        onclick="var h=this.parentNode,b;if(event.target.closest('a.menu-link')&&h.classList.contains('admin-menu-open')){h.classList.remove('admin-menu-open');b=h.querySelector('.admin-menu-toggle');if(b){b.setAttribute('aria-expanded','false');b.textContent='Menu';}}">
         <ul class="menu-root">
           <li class="menu-item has-submenu">
             <a href="#" class="menu-link" data-page="acquirePage">Acquire</a>

@@ -1628,7 +1628,15 @@ is ever wider than the screen.*
     user's name is capped at 7.75rem and a project shown by name at 6rem, both
     ending in "…". Those four numbers are what make the worst case fit.
   - At 720px and below the menu folds behind a **Menu** button and opens as
-    a full-width stacked list under the header.
+    a full-width stacked list under the header (opened `#topNav`: left 0,
+    width = the screen). Tapping any menu link closes it again. Any rule
+    that changes the opened menu's size must name the OPEN selector
+    (`header.admin-menu-open > .top-nav`) as well, or the base layer's open
+    rule outranks it — round 1 of review found the menu squeezed into a
+    267px column beside the logo that way.
+  - A view that hides `#topNav` on purpose (`no-workspace-view`,
+    `project-admin-view`, `public-legal-view`) hides the Menu button too; a
+    new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
 

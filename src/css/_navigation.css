@@ -300,10 +300,15 @@ header {
   #appShell > header > .auth-header-meta {
     margin-left: auto;
   }
-  #appShell > header > .top-nav {
+  /* The OPEN selector is named too, and must be: the base layer's
+     `header.admin-menu-open > .top-nav` (1,2,1) sets `flex: 1 1 auto`, which
+     outranked the plain selector here (1,1,1) and squeezed the opened menu
+     into a 267px column beside the logo (review round 1 of task 86bcyrqau). */
+  #appShell > header > .top-nav,
+  #appShell > header.admin-menu-open > .top-nav {
     order: 10;
     /* Full bleed: 100% of the padded row plus both side paddings. */
-    flex-basis: calc(100% + 1.5rem);
+    flex: 0 0 calc(100% + 1.5rem);
     margin: 0 -0.75rem;
   }
   #appShell > header .menu-root > .menu-item {
@@ -319,4 +324,18 @@ header {
   #appShell > header .menu-root > .menu-item > .menu-link {
     padding: 0.75rem 1rem;
   }
+}
+
+/* Views that hide the menu on purpose (no workspace, Project Admin, the legal
+   pages) must hide the phone Menu button too — and keep the menu hidden even
+   if it was opened before the view changed. Without this the open rule
+   (1,2,1) outranked those views' `#topNav { display: none }` (1,1,1), so
+   tapping Menu brought back a menu they deliberately remove. */
+body.no-workspace-view #appShell > header > .admin-menu-toggle,
+body.project-admin-view #appShell > header > .admin-menu-toggle,
+body.public-legal-view #appShell > header > .admin-menu-toggle,
+body.no-workspace-view #appShell > header.admin-menu-open > .top-nav,
+body.project-admin-view #appShell > header.admin-menu-open > .top-nav,
+body.public-legal-view #appShell > header.admin-menu-open > .top-nav {
+  display: none;
 }
