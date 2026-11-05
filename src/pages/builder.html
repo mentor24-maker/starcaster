@@ -1,7 +1,9 @@
 
       <section id="builderPage" class="app-page hidden">
-        <h2>Builder</h2>
-        <p>Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
+        <div class="page-heading-row">
+          <h2>Builder</h2>
+        </div>
+        <p class="page-heading-desc">Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
         <div class="builder-flow-map">
           <button class="btn builder-flow-node builder-flow-node-top" type="button" onclick="App.setActivePage('builderTemplatesPage')">
             <span class="builder-flow-node-kicker">Structure</span>
@@ -30,12 +32,8 @@
         </div>
       </section>
       <section id="builderBuilderWorkspacePage" class="app-page hidden">
-        <div class="page-heading-row">
-          <h2>Builder: Workspace</h2>
-          <div class="page-heading-actions">
-            <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
-          </div>
-        </div>
+        <!-- The title row comes from the React editor (BuilderWorkspace.tsx), so
+             the screen has one title with its buttons beside it. -->
         <div id="builderReactRootHub" class="builder-react-root hidden" aria-hidden="true"></div>
       </section>
       <section id="builderModulesPage" class="app-page hidden">
@@ -46,7 +44,7 @@
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
-        <p>Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
+        <p class="page-heading-desc">Build reusable content modules for modular page layouts. The saved library is the important part; this studio is where we configure each module type as we develop it.</p>
         <section class="builder-template-section">
           <div class="builder-template-section-header-row">
             <button
@@ -167,7 +165,7 @@
             <span id="builderReactRootSharedPages" class="builder-shared-pages-host"></span>
           </div>
         </div>
-        <p>Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
+        <p class="page-heading-desc">Manage saved page definitions, filter the library, sort columns, and edit records in bulk.</p>
         <div class="table-wrap">
           <table class="builder-pages-crud-table">
             <colgroup>
@@ -231,7 +229,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="builderManagePagesPage">Builder: Pages</a> &rsaquo; Archives</h2>
         </div>
-        <p>Saved page archives. Click an archive to view or restore its pages.</p>
+        <p class="page-heading-desc">Saved page archives. Click an archive to view or restore its pages.</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -312,7 +310,7 @@
             <button id="builderPopulateRunBtn" type="button" class="btn" disabled>Run Populate</button>
           </div>
         </div>
-        <p>Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
+        <p class="page-heading-desc">Match crawled pages to Builder pages by title, then inject each page's content as a Paragraph section. Use the diagnostics below to verify matches before running.</p>
 
         <div class="standard-form-grid builder-populate-run-row" style="margin-bottom:1.5rem;">
           <label for="builderPopulateRunSelect">Crawl Run</label>
@@ -640,7 +638,7 @@
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
-        <p>Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
+        <p class="page-heading-desc">Use OpenClaw job actions directly, or launch the API Setup Orchestrator agent preset for cross-channel provider onboarding.</p>
         <div id="builderReactRootAgents" class="builder-react-root"></div>
 
         <section class="docs-panel" style="margin-top: 1.25rem;">
@@ -937,7 +935,7 @@
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
-        <p>Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
+        <p class="page-heading-desc">Browse the extension repository for specialized platform capabilities that do not need to live inside the canonical UI.</p>
         <div id="builderExtensionsFeaturedGrid" class="builder-extensions-tree"></div>
       </section>
       <section id="builderSiteImportPage" class="app-page hidden">
@@ -947,7 +945,7 @@
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
-        <p>Capture a client's existing website — pages, screenshots, and assets — as raw material for rebuilding it in Builder. Internal staff tool.</p>
+        <p class="page-heading-desc">Capture a client's existing website — pages, screenshots, and assets — as raw material for rebuilding it in Builder. Internal staff tool.</p>
         <div id="builderReactRootSiteImport" class="builder-react-root"></div>
       </section>
       <section id="builderExtensionsManagerPage" class="app-page hidden">
@@ -957,7 +955,7 @@
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
-        <p>Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
+        <p class="page-heading-desc">Maintain a searchable extension repository with recursive parent-child taxonomy, definitions, and descriptive metadata.</p>
         <div id="builderReactRootExtensions" class="builder-react-root"></div>
       </section>
       <section id="builderExtensionIconBuilderPage" class="app-page hidden">
@@ -1075,7 +1073,7 @@
             <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
           </div>
         </div>
-        <p>Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
+        <p class="page-heading-desc">Paste a website URL to create a `640x360` screenshot, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Screenshot`.</p>
         <form id="builderScreenshotForm" class="standard-form-grid">
           <label for="builderScreenshotUrlInput">URL</label>
           <input id="builderScreenshotUrlInput" name="url" />
@@ -1107,7 +1105,7 @@
             <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
           </div>
         </div>
-        <p>Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
+        <p class="page-heading-desc">Generate an image thumbnail from the first page of a PDF file location, upload it into Vercel Blob, and store it in Assets as type `Image` with category `Thumbnail`.</p>
         <form id="builderThumbnailForm" class="standard-form-grid">
           <label for="builderThumbnailLocationInput">PDF File Location</label>
           <input id="builderThumbnailLocationInput" name="file_location" />
@@ -1144,7 +1142,7 @@
             <button type="button" onclick="App.builder.openExtensionsManager()" class="btn">Manage Extensions</button>
           </div>
         </div>
-        <p>Experimental proximity-aware navigation aid. Hover toward the center dot to activate concentric depth rings.</p>
+        <p class="page-heading-desc">Experimental proximity-aware navigation aid. Hover toward the center dot to activate concentric depth rings.</p>
         <div class="nav-probe-stage">
           <div class="nav-probe-ring nav-probe-ring-1000">
             <div class="nav-probe-ring nav-probe-ring-900">

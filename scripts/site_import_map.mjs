@@ -49,6 +49,14 @@
  *   pages were built without a theme (Alphire), which used to mean
  *   re-running the whole import. The Site Import screen's "Create theme
  *   from this import" does the same (lib/siteImportTheme.js, shared).
+ * - REFRESH (task 86bcynzn5, Dane 2026-11-04: "real refresh"): a confirmed
+ *   re-import (checkpoints.reimportOf) has no map checkpoint of its own, so
+ *   it builds against the earlier job's — the most recent one up the chain
+ *   that built pages (lib/siteImportRefresh.js). Its pages are UPDATED in
+ *   place, not added beside; sections edited since the first import are kept
+ *   by the clobber guard; the earlier menus are updated, not twinned. The
+ *   import theme is made but NOT made the default. The run opens with
+ *   "Refreshing N pages built by the import of <site> on <date>; …".
  * - Rollback: restore the snapshot id printed at apply time
  *   (POST /api/builder/page-snapshots/:id/restore) and/or the JSON backup.
  *
@@ -153,6 +161,9 @@ const {
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
+const {
+  resolveRefreshSource, planRefresh, refreshSummaryLine, findHumanModifiedSections, themeMakesDefault,
+} = require('./lib/siteImportRefresh.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
@@ -246,7 +257,20 @@ async function main() {
   if (!irUrl) throw new Error('Job has no normalize checkpoint — run the import worker first.');
   const ir = await fetchJson(irUrl);
 
-  const prior = job.checkpoints?.map || {};
+  // A confirmed re-import has no map checkpoint of its own: it REFRESHES the
+  // pages the earlier import built (task 86bcynzn5), so it starts from that
+  // job's page ids, section fingerprints and menu sections. Without this every
+  // earlier page counted as a taken address and a second set landed beside it.
+  const { prior, refresh, unbuiltChain } = await resolveRefreshSource(job, async (id) => {
+    const res = await store.getJob(id);
+    if (res && res.ok === false && res.status === 404) return null;
+    return must(res, `load earlier import ${id}`);
+  });
+  if (refresh) {
+    log(`Refresh: this is a re-import — building against the pages job ${refresh.job.id} (${refresh.job.sourceUrl}) built.`);
+  } else if (unbuiltChain?.length) {
+    log(`Re-import of ${unbuiltChain.map((j) => j.id).join(' → ')}, none of which had pages built — this is a first build.`);
+  }
   const priorPageIds = prior.pageIds || {};
   const priorHashes = prior.sectionHashes || {};
 
@@ -302,28 +326,21 @@ async function main() {
   };
 
   // ---- Clobber guard (dry run computes it too, so reports are identical) --
-  const protectedSections = [];
-  for (const page of out.pages) {
-    const existingId = priorPageIds[page.key];
-    if (!existingId) continue;
-    const current = existingPages.find((p) => String(p.id) === String(existingId));
-    if (!current) continue;
-    for (const section of page.sections) {
-      const priorHash = sectionHashesIn[section.id];
-      if (!priorHash) continue;
-      const live = (current.layoutSections || []).find((s) => s.id === section.id);
-      if (!live) continue; // human deleted it — re-run recreates, by design
-      if (sha256(live) !== priorHash && !FORCED_SECTIONS.has(section.id)) {
-        protectedSections.push({ page, section, live });
-        out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder;
-        out.report.elements.mapped -= section.dispositions.mapped;
-        out.report.elements.placeholder -= section.dispositions.placeholder;
-      }
-    }
+  const protectedSections = findHumanModifiedSections(out.pages, {
+    priorPageIds, sectionHashes: sectionHashesIn, existingPages, forced: FORCED_SECTIONS, fingerprint: sha256,
+  });
+  for (const { section } of protectedSections) {
+    out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder;
+    out.report.elements.mapped -= section.dispositions.mapped;
+    out.report.elements.placeholder -= section.dispositions.placeholder;
   }
   const protectedIds = new Set(protectedSections.map((p) => p.section.id));
+  const refreshLine = refresh
+    ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size)
+    : '';
 
   // ---- Report ------------------------------------------------------------
+  if (refreshLine) log(`\n${refreshLine}`);
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
@@ -405,8 +422,14 @@ async function main() {
   // The import theme: derived now so the dry run shows exactly what --apply
   // would save. Named against the project's CURRENT themes.
   const themePlan = NO_THEME ? null : await planImportTheme(job, scope, { ir });
+  // A refresh makes its theme but leaves the project's default alone: the
+  // site has been running on whatever default it has since the first import,
+  // possibly one Dane chose, and a refresh is not a new look.
+  const makeThemeDefault = themeMakesDefault(refresh);
   if (themePlan) {
-    log(`\nImport theme "${themePlan.name}" (becomes the project default on --apply):`);
+    log(makeThemeDefault
+      ? `\nImport theme "${themePlan.name}" (becomes the project default on --apply):`
+      : `\nImport theme "${themePlan.name}" (made on --apply, NOT made the default — this is a refresh; the current default stays):`);
     for (const note of themePlan.notes) log(`  ${note}`);
   } else {
     log('\nImport theme: skipped (--no-theme).');
@@ -578,9 +601,13 @@ async function main() {
   //     an insert that "succeeds" can still land without its tenant).
   let themeCheckpoint = null;
   if (themePlan) {
-    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: true });
-    log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
-    log(`  ${undoLine(themeCheckpoint)}`);
+    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: makeThemeDefault });
+    if (makeThemeDefault) {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
+      log(`  ${undoLine(themeCheckpoint)}`);
+    } else {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}); the project default is unchanged (refresh).`);
+    }
   }
 
   // 5. Checkpoint + final report (now carrying page ids).
@@ -593,6 +620,7 @@ async function main() {
       pageIds,
       sectionHashes,
       appliedNamespace: applied,
+      ...(refresh ? { refreshedFrom: refresh.job.id } : {}),
       ...(themeCheckpoint ? { theme: themeCheckpoint } : {}),
       // Carried over until the menu step below replaces it: these ids are
       // how a re-run finds the sections it made instead of minting twins.
@@ -606,6 +634,7 @@ async function main() {
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'update report');
   log(`\nAPPLY complete: ${writeSummary.distinctPages} draft page(s) (${writeSummary.created} created, ${writeSummary.updated} updated). Nothing was published.`);
+  if (refreshLine) log(refreshLine);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
 
   // Menus and nav LAST: nothing may write pages after the master instances

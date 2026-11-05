@@ -1621,6 +1621,43 @@ is ever wider than the screen.*
   to distinguish them. Then the top-level headings … need to be a few points
   bigger")* — **[eye]**, sizes are tokens
 
+- **R11.** **Every admin screen starts the same way: one title, its
+  buttons on the same row, and at most one short grey line under it** —
+  UI normalization 2 of 10 (task 86bcyrqaw). Markup, in `src/pages/*.html`:
+
+  ```html
+  <div class="page-heading-row">
+    <h2>Section: Screen</h2>
+    <div class="page-heading-actions">…buttons…</div>   <!-- optional -->
+  </div>
+  <p class="page-heading-desc">One sentence saying what this screen is for.</p>  <!-- optional -->
+  ```
+
+  - **Never two titles.** A React island that draws its own title row (the
+    Builder editor on Builder › Workspace) takes the screen's title as a prop,
+    and the shell prints none above it — it used to stack "Builder: Workspace"
+    over "Page Builder".
+  - The title is `--page-title-size` (24px); the description is
+    `--page-desc-size` (~13px) in `--muted`. No screen sets its own title
+    size — the per-screen overrides on Training and Messaging › Content are
+    gone.
+  - The description is **one sentence that fits one line** at desktop width
+    (aim for 150 characters or fewer). At phone width it may wrap to two and is
+    cut off after that. Anything longer is an explanation, not a description:
+    it goes in an ordinary paragraph below.
+  - Status lines that change (`No pages selected.`) are not descriptions and
+    keep their own element.
+  - **Nothing below the title may be bigger than it.** A card or section
+    heading under the title row is an `h3` at `--editor-item-size` or smaller
+    — Settings › Environment Configuration's 40px "Environment Variables"
+    card heading read as the real title once the page title became 24px.
+  - Shared content that opens with its own `<h1>` (the legal bodies, which are
+    also the standalone `/privacy-policy` page) keeps it for the standalone
+    page and hides it inside the admin app, where the title row is the title.
+
+  *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
+  — **[eye]**, sizes are tokens
+
 ## S — System and structure
 
 *Umbrella: every module familiar; nothing hand-rolled; nothing stale.*
@@ -1644,18 +1681,20 @@ is ever wider than the screen.*
   name and never flattened by a later convention pass.** *(lesson of
   2026-08-09)* — **[eye]** · Registry: blog-post-list → 3 columns
   (general / Page Design / Card Appearance).
-- **S6. The admin header is ONE row, 64px tall or less at 1440.** Logo,
+- **S6. The admin header is ONE row, 77px tall or less at 1440.** Logo,
   menu, name · Logout and the Projects button share one row
-  (`--admin-header-height`, 56px; rules in `src/css/_navigation.css`, scoped
+  (`--admin-header-height`, 76px — raised from 56 so the logo is readable,
+  Dane 2026-11-05, task 86bcyyfex; rules in `src/css/_navigation.css`, scoped
   to `#appShell > header`). *(UI normalization 1 of 10, task 86bcyrqau: the
   logo band plus a separate menu bar took ~230px of every screen. Dane,
   2026-11-05: "I like all of them.")* — **[eye]**
   - The menu lives INSIDE `<header>` in `src/layout.html`. A new top-level
-    menu item costs ~70px of a row that has about 20px to spare at 1440 with
+    menu item costs ~70px of a row that has almost nothing to spare at 1440 with
     the worst-case name and project label measured — so adding one means
     taking width from somewhere else, or accepting a second row below
     ~1440 (the header wraps rather than scrolling sideways, UI_RULES T0).
-  - Menu text is `--text-sm` with 0.4rem sides; the logo is 22px tall; the
+  - Menu text is `--text-sm` with 0.35rem sides; the logo is 56px tall
+    (10px above and below) with the image's blank right strip cropped off; the
     user's name is capped at 7.75rem and a project shown by name at 6rem, both
     ending in "…". Those four numbers are what make the worst case fit.
   - At 720px and below the menu folds behind a **Menu** button and opens as

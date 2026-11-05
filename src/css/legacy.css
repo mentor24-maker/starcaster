@@ -278,11 +278,6 @@ h2 {
   margin: 0;
 }
 
-.training-page .page-heading-row h2 {
-  font-size: 2rem;
-  font-weight: 800;
-}
-
 .training-page .youtube-miner-category-header-row label,
 .training-page .form-row > label {
   font-size: 1.15rem;
@@ -1121,10 +1116,6 @@ button[type="submit"] {
   background: linear-gradient(180deg, rgba(232, 245, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
-#messagingContentPage .page-heading-row h2 {
-  font-size: 2.25rem;
-}
-
 .messaging-content-actions-heading,
 .messaging-content-actions-cell {
   width: 1%;
@@ -1627,6 +1618,25 @@ button[type="submit"] {
   display: flex;
   justify-content: center;
   margin-top: 0.25rem;
+}
+
+/* Settings › Profile. The label/control grid belongs on the FIELDS column,
+   not on the whole form: with it on the form, the entire two-column layout
+   (fields + avatar) was the grid's only item and landed in the 140px label
+   slot, squeezing every field to ~100px and pushing the avatar (min 260px)
+   over them (task 86bcyrqak). A wider label column keeps
+   "Primary Contact Name (defaults to account)" to two lines. */
+.profile-form {
+  margin-top: 1.25rem;
+}
+
+.profile-form-fields.standard-form-grid {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.profile-form-fields > .profile-save-row {
+  grid-column: 2;
+  justify-content: flex-start;
 }
 
 @media (max-width: 900px) {
@@ -8882,6 +8892,13 @@ button.builder-inline-asset-status-btn:focus-visible {
   gap: 6px;
   font-size: 12px;
   color: var(--text-muted, #5f6368);
+}
+
+/* The card heading is a section of the screen, never a second title
+   (docs/UI_RULES.md R11): it stays smaller than the 24px page title. */
+#envConfigPage .card-header h3 {
+  margin: 0;
+  font-size: var(--editor-item-size);
 }
 
 /* ── Key / description ────────────────────────────────────────────────── */

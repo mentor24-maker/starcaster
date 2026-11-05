@@ -201,6 +201,14 @@
   --editor-item-size: var(--text-lg);     /* ~17.6px, bold — a section inside a column */
   --editor-subitem-size: var(--text-base);/* ~14.4px, bold — every setting label */
 
+  /*
+   * The top of every admin screen (UI normalization 2 of 10, task 86bcyrqaw):
+   * one title, its buttons on the same row, and at most one short grey line
+   * under it. docs/UI_RULES.md R11.
+   */
+  --page-title-size: var(--text-2xl);     /* 24px — the one title a screen has */
+  --page-desc-size: var(--text-sm);       /* ~13px — the optional line under it */
+
   --leading-tight: 1.25; /* headings, single-line UI */
   --leading-normal: 1.5; /* body copy */
 

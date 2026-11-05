@@ -9,7 +9,7 @@
             <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')" class="btn">Manage Categories</button>
           </div>
         </div>
-        <p>Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
+        <p class="page-heading-desc">Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
         <!-- React island: the scaled-copies sweep. Renders nothing when every
              image in the project already has its smaller copies. -->
         <div id="assetRenditionsRoot"></div>
@@ -494,13 +494,13 @@
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
           </div>
         </div>
-        <p>The Categories editor now lives on the main Categories page.</p>
+        <p class="page-heading-desc">The Categories editor now lives on the main Categories page.</p>
       </section>
       <section id="createAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="assetCategories.openCategoriesPage">Assets: Categories</a>: Create</h2>
         </div>
-        <p>The create form now opens inline on the main Categories page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Categories page.</p>
       </section>
       <section id="editAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -538,8 +538,10 @@
         </form>
       </section>
       <section id="assetsImagesPage" class="app-page hidden">
-        <h2>Assets: Images</h2>
-        <p>Images module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Images</h2>
+        </div>
+        <p class="page-heading-desc">Images module placeholder.</p>
       </section>
       <section id="assetsVideoPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -549,7 +551,7 @@
             <button type="button" onclick="App.assets.openAssetsManager('Video'); return false;" class="btn">Manage Videos</button>
           </div>
         </div>
-        <p>Manage your video assets here. Click <strong>Create Video</strong> to open the Video Production Factory.</p>
+        <p class="page-heading-desc">Manage your video assets here. Click <strong>Create Video</strong> to open the Video Production Factory.</p>
       </section>
       <section id="assetsCreateVideoToolPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -849,14 +851,16 @@
 
       </section>
       <section id="assetsMusicPage" class="app-page hidden">
-        <h2>Assets: Audio</h2>
-        <p>Audio module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Audio</h2>
+        </div>
+        <p class="page-heading-desc">Audio module placeholder.</p>
       </section>
       <section id="assetsFootagePage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Assets: Footage</h2>
         </div>
-        <p>Every video file the Studio pipeline has picked up from Google Drive, grouped by recording session, newest first.</p>
+        <p class="page-heading-desc">Every video file the Studio pipeline has picked up from Google Drive, grouped by recording session, newest first.</p>
         <!-- React island. Mounted by react-entry.js; see components/studio/footage-panel.tsx. -->
         <div id="studioFootageReactRoot"></div>
       </section>
@@ -864,7 +868,7 @@
         <div class="page-heading-row">
           <h2>Assets: Fonts</h2>
         </div>
-        <p>Fonts that are not Google Fonts, each name drawn in its own lettering. Only fonts a business website may use are accepted.</p>
+        <p class="page-heading-desc">Fonts that are not Google Fonts, each name drawn in its own lettering. Only fonts a business website may use are accepted.</p>
         <!-- React island. Mounted by react-entry.js; see components/fonts/fonts-manager.tsx. -->
         <div id="assetsFontsReactRoot"></div>
       </section>
