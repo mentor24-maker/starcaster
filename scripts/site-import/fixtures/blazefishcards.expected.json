@@ -15,12 +15,12 @@
         "lang": "en-US",
         "sections": [
           {
-            "sourceId": "0-08c2bf26",
+            "sourceId": "p2a0c975e-08c2bf26",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s0.png",
             "elements": [
               {
-                "sourceId": "0-11e41035",
+                "sourceId": "p2a0c975e-11e41035",
                 "class": "text",
                 "html": "☎ 561-243-7360",
                 "textContent": "☎ 561-243-7360",
@@ -44,7 +44,7 @@
                 ]
               },
               {
-                "sourceId": "0-ddc9bc4a",
+                "sourceId": "p2a0c975e-ddc9bc4a",
                 "class": "text",
                 "html": "◷ Mon – Sun: 7:00am – 10:00pm",
                 "textContent": "◷ Mon – Sun: 7:00am – 10:00pm",
@@ -68,7 +68,7 @@
                 ]
               },
               {
-                "sourceId": "0-19a3a2f3",
+                "sourceId": "p2a0c975e-19a3a2f3",
                 "class": "text",
                 "html": "Courts Open",
                 "textContent": "Courts Open",
@@ -92,7 +92,7 @@
                 ]
               },
               {
-                "sourceId": "0-a54a9c36",
+                "sourceId": "p2a0c975e-a54a9c36",
                 "class": "link",
                 "html": "<a href=\"#schedule\">Weekly Program Guide</a>",
                 "textContent": "Weekly Program Guide",
@@ -116,7 +116,7 @@
                 ]
               },
               {
-                "sourceId": "0-6147f293",
+                "sourceId": "p2a0c975e-6147f293",
                 "class": "link",
                 "html": "<a href=\"#book\">Court Reservations</a>",
                 "textContent": "Court Reservations",
@@ -140,7 +140,7 @@
                 ]
               },
               {
-                "sourceId": "0-61504158",
+                "sourceId": "p2a0c975e-61504158",
                 "class": "link",
                 "html": "<a href=\"#visit\">Pro Shop</a>",
                 "textContent": "Pro Shop",
@@ -164,7 +164,7 @@
                 ]
               },
               {
-                "sourceId": "0-654e090d",
+                "sourceId": "p2a0c975e-654e090d",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -198,12 +198,12 @@
             }
           },
           {
-            "sourceId": "0-04c07a43",
+            "sourceId": "p2a0c975e-04c07a43",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s1.png",
             "elements": [
               {
-                "sourceId": "0-266e8816",
+                "sourceId": "p2a0c975e-266e8816",
                 "class": "image",
                 "html": "<a class=\"brand\" href=\"https://www.blazefish.com/\" aria-label=\"Delray Tennis home\">\n      <img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/logo-delray.png\" alt=\"Delray Beach Tennis Center and Delray Swim &amp; Tennis Club\">    </a>",
                 "textContent": "",
@@ -229,7 +229,7 @@
                 ]
               },
               {
-                "sourceId": "0-601487b0",
+                "sourceId": "p2a0c975e-601487b0",
                 "class": "button",
                 "html": "<button class=\"menu-toggle\" aria-expanded=\"false\" aria-label=\"Open navigation\">☰</button>",
                 "textContent": "☰",
@@ -243,7 +243,7 @@
                 ]
               },
               {
-                "sourceId": "0-e023b9ea",
+                "sourceId": "p2a0c975e-e023b9ea",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#play\">Play <span>⌄</span></a>",
                 "textContent": "Play ⌄",
@@ -273,7 +273,7 @@
                 ]
               },
               {
-                "sourceId": "0-2be0f46a",
+                "sourceId": "p2a0c975e-2be0f46a",
                 "class": "heading",
                 "html": "<h4>Play</h4>",
                 "textContent": "Play",
@@ -301,7 +301,7 @@
                 ]
               },
               {
-                "sourceId": "0-1e22e58e",
+                "sourceId": "p2a0c975e-1e22e58e",
                 "class": "link",
                 "html": "<a href=\"#\">Book a Court</a>",
                 "textContent": "Book a Court",
@@ -328,7 +328,7 @@
                 ]
               },
               {
-                "sourceId": "0-1e252425",
+                "sourceId": "p2a0c975e-1e252425",
                 "class": "link",
                 "html": "<a href=\"#\">Court Fees</a>",
                 "textContent": "Court Fees",
@@ -355,7 +355,7 @@
                 ]
               },
               {
-                "sourceId": "0-da26f7b0",
+                "sourceId": "p2a0c975e-da26f7b0",
                 "class": "link",
                 "html": "<a href=\"#\">Open Play</a>",
                 "textContent": "Open Play",
@@ -382,7 +382,7 @@
                 ]
               },
               {
-                "sourceId": "0-23d50813",
+                "sourceId": "p2a0c975e-23d50813",
                 "class": "heading",
                 "html": "<h4>Play</h4>",
                 "textContent": "Play",
@@ -410,7 +410,7 @@
                 ]
               },
               {
-                "sourceId": "0-3d608cf5",
+                "sourceId": "p2a0c975e-3d608cf5",
                 "class": "link",
                 "html": "<a href=\"#\">Court Status</a>",
                 "textContent": "Court Status",
@@ -437,7 +437,7 @@
                 ]
               },
               {
-                "sourceId": "0-7d5d201e",
+                "sourceId": "p2a0c975e-7d5d201e",
                 "class": "link",
                 "html": "<a href=\"#\">Tennis Rules &amp; Info</a>",
                 "textContent": "Tennis Rules & Info",
@@ -464,7 +464,7 @@
                 ]
               },
               {
-                "sourceId": "0-b61f809c",
+                "sourceId": "p2a0c975e-b61f809c",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -492,7 +492,7 @@
                 ]
               },
               {
-                "sourceId": "0-67de32f4",
+                "sourceId": "p2a0c975e-67de32f4",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -519,7 +519,7 @@
                 ]
               },
               {
-                "sourceId": "0-67d7772f",
+                "sourceId": "p2a0c975e-67d7772f",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -546,7 +546,7 @@
                 ]
               },
               {
-                "sourceId": "0-6bd9bc12",
+                "sourceId": "p2a0c975e-6bd9bc12",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -573,7 +573,7 @@
                 ]
               },
               {
-                "sourceId": "0-2be62345",
+                "sourceId": "p2a0c975e-2be62345",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -600,7 +600,7 @@
                 ]
               },
               {
-                "sourceId": "0-1d3c8dce",
+                "sourceId": "p2a0c975e-1d3c8dce",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -630,7 +630,7 @@
                 ]
               },
               {
-                "sourceId": "0-e0b5c058",
+                "sourceId": "p2a0c975e-e0b5c058",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -659,7 +659,7 @@
                 ]
               },
               {
-                "sourceId": "0-eab3ba88",
+                "sourceId": "p2a0c975e-eab3ba88",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -687,7 +687,7 @@
                 ]
               },
               {
-                "sourceId": "0-2eb053fd",
+                "sourceId": "p2a0c975e-2eb053fd",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -715,7 +715,7 @@
                 ]
               },
               {
-                "sourceId": "0-714fabed",
+                "sourceId": "p2a0c975e-714fabed",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#learn\">Learn <span>⌄</span></a>",
                 "textContent": "Learn ⌄",
@@ -745,7 +745,7 @@
                 ]
               },
               {
-                "sourceId": "0-1ec31095",
+                "sourceId": "p2a0c975e-1ec31095",
                 "class": "heading",
                 "html": "<h4>Learn</h4>",
                 "textContent": "Learn",
@@ -773,7 +773,7 @@
                 ]
               },
               {
-                "sourceId": "0-b4e212eb",
+                "sourceId": "p2a0c975e-b4e212eb",
                 "class": "link",
                 "html": "<a href=\"#\">Adult Clinics</a>",
                 "textContent": "Adult Clinics",
@@ -800,7 +800,7 @@
                 ]
               },
               {
-                "sourceId": "0-b4e8ceb0",
+                "sourceId": "p2a0c975e-b4e8ceb0",
                 "class": "link",
                 "html": "<a href=\"#\">Private Lessons</a>",
                 "textContent": "Private Lessons",
@@ -827,7 +827,7 @@
                 ]
               },
               {
-                "sourceId": "0-f8e6fb25",
+                "sourceId": "p2a0c975e-f8e6fb25",
                 "class": "link",
                 "html": "<a href=\"#\">Cardio Tennis</a>",
                 "textContent": "Cardio Tennis",
@@ -854,7 +854,7 @@
                 ]
               },
               {
-                "sourceId": "0-d7cf2504",
+                "sourceId": "p2a0c975e-d7cf2504",
                 "class": "heading",
                 "html": "<h4>Learn</h4>",
                 "textContent": "Learn",
@@ -882,7 +882,7 @@
                 ]
               },
               {
-                "sourceId": "0-a3cd973c",
+                "sourceId": "p2a0c975e-a3cd973c",
                 "class": "link",
                 "html": "<a href=\"#\">Drills &amp; Programs</a>",
                 "textContent": "Drills & Programs",
@@ -909,7 +909,7 @@
                 ]
               },
               {
-                "sourceId": "0-a3c54877",
+                "sourceId": "p2a0c975e-a3c54877",
                 "class": "link",
                 "html": "<a href=\"#\">Coach Directory</a>",
                 "textContent": "Coach Directory",
@@ -936,7 +936,7 @@
                 ]
               },
               {
-                "sourceId": "0-cbc0e8bb",
+                "sourceId": "p2a0c975e-cbc0e8bb",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -964,7 +964,7 @@
                 ]
               },
               {
-                "sourceId": "0-be867e5d",
+                "sourceId": "p2a0c975e-be867e5d",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -991,7 +991,7 @@
                 ]
               },
               {
-                "sourceId": "0-fe831186",
+                "sourceId": "p2a0c975e-fe831186",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -1018,7 +1018,7 @@
                 ]
               },
               {
-                "sourceId": "0-fa80cca3",
+                "sourceId": "p2a0c975e-fa80cca3",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -1045,7 +1045,7 @@
                 ]
               },
               {
-                "sourceId": "0-ba7e294c",
+                "sourceId": "p2a0c975e-ba7e294c",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -1072,7 +1072,7 @@
                 ]
               },
               {
-                "sourceId": "0-ae31416f",
+                "sourceId": "p2a0c975e-ae31416f",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -1102,7 +1102,7 @@
                 ]
               },
               {
-                "sourceId": "0-a2edb12f",
+                "sourceId": "p2a0c975e-a2edb12f",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -1131,7 +1131,7 @@
                 ]
               },
               {
-                "sourceId": "0-fc0b9c8d",
+                "sourceId": "p2a0c975e-fc0b9c8d",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -1159,7 +1159,7 @@
                 ]
               },
               {
-                "sourceId": "0-f80dd4d8",
+                "sourceId": "p2a0c975e-f80dd4d8",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -1187,7 +1187,7 @@
                 ]
               },
               {
-                "sourceId": "0-3787f884",
+                "sourceId": "p2a0c975e-3787f884",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#juniors\">Juniors <span>⌄</span></a>",
                 "textContent": "Juniors ⌄",
@@ -1217,7 +1217,7 @@
                 ]
               },
               {
-                "sourceId": "0-ebd935a0",
+                "sourceId": "p2a0c975e-ebd935a0",
                 "class": "heading",
                 "html": "<h4>Juniors</h4>",
                 "textContent": "Juniors",
@@ -1245,7 +1245,7 @@
                 ]
               },
               {
-                "sourceId": "0-e78c81b8",
+                "sourceId": "p2a0c975e-e78c81b8",
                 "class": "link",
                 "html": "<a href=\"#\">Junior Pathway</a>",
                 "textContent": "Junior Pathway",
@@ -1272,7 +1272,7 @@
                 ]
               },
               {
-                "sourceId": "0-e78432f3",
+                "sourceId": "p2a0c975e-e78432f3",
                 "class": "link",
                 "html": "<a href=\"#\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -1299,7 +1299,7 @@
                 ]
               },
               {
-                "sourceId": "0-ab87a616",
+                "sourceId": "p2a0c975e-ab87a616",
                 "class": "link",
                 "html": "<a href=\"#\">Camps</a>",
                 "textContent": "Camps",
@@ -1326,7 +1326,7 @@
                 ]
               },
               {
-                "sourceId": "0-7e53d4a1",
+                "sourceId": "p2a0c975e-7e53d4a1",
                 "class": "heading",
                 "html": "<h4>Juniors</h4>",
                 "textContent": "Juniors",
@@ -1354,7 +1354,7 @@
                 ]
               },
               {
-                "sourceId": "0-565c1287",
+                "sourceId": "p2a0c975e-565c1287",
                 "class": "link",
                 "html": "<a href=\"#\">Junior Team Tennis</a>",
                 "textContent": "Junior Team Tennis",
@@ -1381,7 +1381,7 @@
                 ]
               },
               {
-                "sourceId": "0-1663fc8c",
+                "sourceId": "p2a0c975e-1663fc8c",
                 "class": "link",
                 "html": "<a href=\"#\">Parent Guide</a>",
                 "textContent": "Parent Guide",
@@ -1408,7 +1408,7 @@
                 ]
               },
               {
-                "sourceId": "0-954fb4fe",
+                "sourceId": "p2a0c975e-954fb4fe",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -1436,7 +1436,7 @@
                 ]
               },
               {
-                "sourceId": "0-369b0bb2",
+                "sourceId": "p2a0c975e-369b0bb2",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -1463,7 +1463,7 @@
                 ]
               },
               {
-                "sourceId": "0-769daf09",
+                "sourceId": "p2a0c975e-769daf09",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -1490,7 +1490,7 @@
                 ]
               },
               {
-                "sourceId": "0-329f8294",
+                "sourceId": "p2a0c975e-329f8294",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -1517,7 +1517,7 @@
                 ]
               },
               {
-                "sourceId": "0-32a1c12b",
+                "sourceId": "p2a0c975e-32a1c12b",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -1544,7 +1544,7 @@
                 ]
               },
               {
-                "sourceId": "0-31ace028",
+                "sourceId": "p2a0c975e-31ace028",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -1574,7 +1574,7 @@
                 ]
               },
               {
-                "sourceId": "0-673028da",
+                "sourceId": "p2a0c975e-673028da",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -1603,7 +1603,7 @@
                 ]
               },
               {
-                "sourceId": "0-75bdba62",
+                "sourceId": "p2a0c975e-75bdba62",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -1631,7 +1631,7 @@
                 ]
               },
               {
-                "sourceId": "0-b1ba473f",
+                "sourceId": "p2a0c975e-b1ba473f",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -1659,7 +1659,7 @@
                 ]
               },
               {
-                "sourceId": "0-b85e294f",
+                "sourceId": "p2a0c975e-b85e294f",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#teams-leagues\">Teams &amp; Leagues <span>⌄</span></a>",
                 "textContent": "Teams & Leagues ⌄",
@@ -1689,7 +1689,7 @@
                 ]
               },
               {
-                "sourceId": "0-923f66eb",
+                "sourceId": "p2a0c975e-923f66eb",
                 "class": "heading",
                 "html": "<h4>Teams &amp; Leagues</h4>",
                 "textContent": "Teams & Leagues",
@@ -1717,7 +1717,7 @@
                 ]
               },
               {
-                "sourceId": "0-d1164fcd",
+                "sourceId": "p2a0c975e-d1164fcd",
                 "class": "link",
                 "html": "<a href=\"#\">Women’s Teams</a>",
                 "textContent": "Women’s Teams",
@@ -1744,7 +1744,7 @@
                 ]
               },
               {
-                "sourceId": "0-111475f6",
+                "sourceId": "p2a0c975e-111475f6",
                 "class": "link",
                 "html": "<a href=\"#\">Men’s Leagues</a>",
                 "textContent": "Men’s Leagues",
@@ -1771,7 +1771,7 @@
                 ]
               },
               {
-                "sourceId": "0-cd11cc53",
+                "sourceId": "p2a0c975e-cd11cc53",
                 "class": "link",
                 "html": "<a href=\"#\">Mixed Leagues</a>",
                 "textContent": "Mixed Leagues",
@@ -1798,7 +1798,7 @@
                 ]
               },
               {
-                "sourceId": "0-1be9c082",
+                "sourceId": "p2a0c975e-1be9c082",
                 "class": "heading",
                 "html": "<h4>Teams &amp; Leagues</h4>",
                 "textContent": "Teams & Leagues",
@@ -1826,7 +1826,7 @@
                 ]
               },
               {
-                "sourceId": "0-34ae15e6",
+                "sourceId": "p2a0c975e-34ae15e6",
                 "class": "link",
                 "html": "<a href=\"#\">USTA Leagues</a>",
                 "textContent": "USTA Leagues",
@@ -1853,7 +1853,7 @@
                 ]
               },
               {
-                "sourceId": "0-74b0b93d",
+                "sourceId": "p2a0c975e-74b0b93d",
                 "class": "link",
                 "html": "<a href=\"#\">Team Tryouts</a>",
                 "textContent": "Team Tryouts",
@@ -1880,7 +1880,7 @@
                 ]
               },
               {
-                "sourceId": "0-4f909405",
+                "sourceId": "p2a0c975e-4f909405",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -1908,7 +1908,7 @@
                 ]
               },
               {
-                "sourceId": "0-da273a9b",
+                "sourceId": "p2a0c975e-da273a9b",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -1935,7 +1935,7 @@
                 ]
               },
               {
-                "sourceId": "0-1a2e5b20",
+                "sourceId": "p2a0c975e-1a2e5b20",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -1962,7 +1962,7 @@
                 ]
               },
               {
-                "sourceId": "0-1e2c22d5",
+                "sourceId": "p2a0c975e-1e2c22d5",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -1989,7 +1989,7 @@
                 ]
               },
               {
-                "sourceId": "0-de1ef222",
+                "sourceId": "p2a0c975e-de1ef222",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -2016,7 +2016,7 @@
                 ]
               },
               {
-                "sourceId": "0-398c7711",
+                "sourceId": "p2a0c975e-398c7711",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -2046,7 +2046,7 @@
                 ]
               },
               {
-                "sourceId": "0-92d564a9",
+                "sourceId": "p2a0c975e-92d564a9",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -2075,7 +2075,7 @@
                 ]
               },
               {
-                "sourceId": "0-3510a8e7",
+                "sourceId": "p2a0c975e-3510a8e7",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -2103,7 +2103,7 @@
                 ]
               },
               {
-                "sourceId": "0-3912edca",
+                "sourceId": "p2a0c975e-3912edca",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -2131,7 +2131,7 @@
                 ]
               },
               {
-                "sourceId": "0-2a6b197e",
+                "sourceId": "p2a0c975e-2a6b197e",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#pickleball\">Pickleball <span>⌄</span></a>",
                 "textContent": "Pickleball ⌄",
@@ -2161,7 +2161,7 @@
                 ]
               },
               {
-                "sourceId": "0-79872196",
+                "sourceId": "p2a0c975e-79872196",
                 "class": "heading",
                 "html": "<h4>Pickleball</h4>",
                 "textContent": "Pickleball",
@@ -2189,7 +2189,7 @@
                 ]
               },
               {
-                "sourceId": "0-25d2c38a",
+                "sourceId": "p2a0c975e-25d2c38a",
                 "class": "link",
                 "html": "<a href=\"#\">Court Reservations</a>",
                 "textContent": "Court Reservations",
@@ -2216,7 +2216,7 @@
                 ]
               },
               {
-                "sourceId": "0-65d566e1",
+                "sourceId": "p2a0c975e-65d566e1",
                 "class": "link",
                 "html": "<a href=\"#\">Open Play</a>",
                 "textContent": "Open Play",
@@ -2243,7 +2243,7 @@
                 ]
               },
               {
-                "sourceId": "0-61d79f2c",
+                "sourceId": "p2a0c975e-61d79f2c",
                 "class": "link",
                 "html": "<a href=\"#\">Clinics</a>",
                 "textContent": "Clinics",
@@ -2270,7 +2270,7 @@
                 ]
               },
               {
-                "sourceId": "0-c0625c0f",
+                "sourceId": "p2a0c975e-c0625c0f",
                 "class": "heading",
                 "html": "<h4>Pickleball</h4>",
                 "textContent": "Pickleball",
@@ -2298,7 +2298,7 @@
                 ]
               },
               {
-                "sourceId": "0-52356231",
+                "sourceId": "p2a0c975e-52356231",
                 "class": "link",
                 "html": "<a href=\"#\">Lessons</a>",
                 "textContent": "Lessons",
@@ -2325,7 +2325,7 @@
                 ]
               },
               {
-                "sourceId": "0-5233239a",
+                "sourceId": "p2a0c975e-5233239a",
                 "class": "link",
                 "html": "<a href=\"#\">Leagues</a>",
                 "textContent": "Leagues",
@@ -2352,7 +2352,7 @@
                 ]
               },
               {
-                "sourceId": "0-8c47a2b8",
+                "sourceId": "p2a0c975e-8c47a2b8",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -2380,7 +2380,7 @@
                 ]
               },
               {
-                "sourceId": "0-a2eab230",
+                "sourceId": "p2a0c975e-a2eab230",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -2407,7 +2407,7 @@
                 ]
               },
               {
-                "sourceId": "0-a2e3f66b",
+                "sourceId": "p2a0c975e-a2e3f66b",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -2434,7 +2434,7 @@
                 ]
               },
               {
-                "sourceId": "0-e6e6a00e",
+                "sourceId": "p2a0c975e-e6e6a00e",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -2461,7 +2461,7 @@
                 ]
               },
               {
-                "sourceId": "0-e6de5149",
+                "sourceId": "p2a0c975e-e6de5149",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -2488,7 +2488,7 @@
                 ]
               },
               {
-                "sourceId": "0-bb62b76a",
+                "sourceId": "p2a0c975e-bb62b76a",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -2518,7 +2518,7 @@
                 ]
               },
               {
-                "sourceId": "0-c36b2344",
+                "sourceId": "p2a0c975e-c36b2344",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -2547,7 +2547,7 @@
                 ]
               },
               {
-                "sourceId": "0-5bf38564",
+                "sourceId": "p2a0c975e-5bf38564",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -2575,7 +2575,7 @@
                 ]
               },
               {
-                "sourceId": "0-9ff1b1d9",
+                "sourceId": "p2a0c975e-9ff1b1d9",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -2603,7 +2603,7 @@
                 ]
               },
               {
-                "sourceId": "0-c5572b21",
+                "sourceId": "p2a0c975e-c5572b21",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#events-stadium\">Events &amp; Stadium <span>⌄</span></a>",
                 "textContent": "Events & Stadium ⌄",
@@ -2633,7 +2633,7 @@
                 ]
               },
               {
-                "sourceId": "0-6f1b1a61",
+                "sourceId": "p2a0c975e-6f1b1a61",
                 "class": "heading",
                 "html": "<h4>Events &amp; Stadium</h4>",
                 "textContent": "Events & Stadium",
@@ -2661,7 +2661,7 @@
                 ]
               },
               {
-                "sourceId": "0-5c6ea6c7",
+                "sourceId": "p2a0c975e-5c6ea6c7",
                 "class": "link",
                 "html": "<a href=\"#\">Upcoming Events</a>",
                 "textContent": "Upcoming Events",
@@ -2688,7 +2688,7 @@
                 ]
               },
               {
-                "sourceId": "0-1c74fdcc",
+                "sourceId": "p2a0c975e-1c74fdcc",
                 "class": "link",
                 "html": "<a href=\"#\">Delray Beach Open</a>",
                 "textContent": "Delray Beach Open",
@@ -2715,7 +2715,7 @@
                 ]
               },
               {
-                "sourceId": "0-2072c581",
+                "sourceId": "p2a0c975e-2072c581",
                 "class": "link",
                 "html": "<a href=\"#\">Tournaments</a>",
                 "textContent": "Tournaments",
@@ -2742,7 +2742,7 @@
                 ]
               },
               {
-                "sourceId": "0-7168fe60",
+                "sourceId": "p2a0c975e-7168fe60",
                 "class": "heading",
                 "html": "<h4>Events &amp; Stadium</h4>",
                 "textContent": "Events & Stadium",
@@ -2770,7 +2770,7 @@
                 ]
               },
               {
-                "sourceId": "0-fe09b5f8",
+                "sourceId": "p2a0c975e-fe09b5f8",
                 "class": "link",
                 "html": "<a href=\"#\">Facility Rentals</a>",
                 "textContent": "Facility Rentals",
@@ -2797,7 +2797,7 @@
                 ]
               },
               {
-                "sourceId": "0-fe02fa33",
+                "sourceId": "p2a0c975e-fe02fa33",
                 "class": "link",
                 "html": "<a href=\"#\">News &amp; Updates</a>",
                 "textContent": "News & Updates",
@@ -2824,7 +2824,7 @@
                 ]
               },
               {
-                "sourceId": "0-50050af7",
+                "sourceId": "p2a0c975e-50050af7",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -2852,7 +2852,7 @@
                 ]
               },
               {
-                "sourceId": "0-d1c8f339",
+                "sourceId": "p2a0c975e-d1c8f339",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -2879,7 +2879,7 @@
                 ]
               },
               {
-                "sourceId": "0-d1c6b4a2",
+                "sourceId": "p2a0c975e-d1c6b4a2",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -2906,7 +2906,7 @@
                 ]
               },
               {
-                "sourceId": "0-0dc4d47f",
+                "sourceId": "p2a0c975e-0dc4d47f",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -2933,7 +2933,7 @@
                 ]
               },
               {
-                "sourceId": "0-0dd61da0",
+                "sourceId": "p2a0c975e-0dd61da0",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -2960,7 +2960,7 @@
                 ]
               },
               {
-                "sourceId": "0-a0d5828b",
+                "sourceId": "p2a0c975e-a0d5828b",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -2990,7 +2990,7 @@
                 ]
               },
               {
-                "sourceId": "0-d771b0db",
+                "sourceId": "p2a0c975e-d771b0db",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -3019,7 +3019,7 @@
                 ]
               },
               {
-                "sourceId": "0-d2a6a949",
+                "sourceId": "p2a0c975e-d2a6a949",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -3047,7 +3047,7 @@
                 ]
               },
               {
-                "sourceId": "0-8eaa0fd4",
+                "sourceId": "p2a0c975e-8eaa0fd4",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -3075,7 +3075,7 @@
                 ]
               },
               {
-                "sourceId": "0-195a2218",
+                "sourceId": "p2a0c975e-195a2218",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#visit\">Visit <span>⌄</span></a>",
                 "textContent": "Visit ⌄",
@@ -3105,7 +3105,7 @@
                 ]
               },
               {
-                "sourceId": "0-74df5abc",
+                "sourceId": "p2a0c975e-74df5abc",
                 "class": "heading",
                 "html": "<h4>Visit</h4>",
                 "textContent": "Visit",
@@ -3133,7 +3133,7 @@
                 ]
               },
               {
-                "sourceId": "0-61c2cc94",
+                "sourceId": "p2a0c975e-61c2cc94",
                 "class": "link",
                 "html": "<a href=\"#\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -3160,7 +3160,7 @@
                 ]
               },
               {
-                "sourceId": "0-61bc10cf",
+                "sourceId": "p2a0c975e-61bc10cf",
                 "class": "link",
                 "html": "<a href=\"#\">Locations</a>",
                 "textContent": "Locations",
@@ -3187,7 +3187,7 @@
                 ]
               },
               {
-                "sourceId": "0-65be55b2",
+                "sourceId": "p2a0c975e-65be55b2",
                 "class": "link",
                 "html": "<a href=\"#\">Memberships</a>",
                 "textContent": "Memberships",
@@ -3214,7 +3214,7 @@
                 ]
               },
               {
-                "sourceId": "0-70a580ad",
+                "sourceId": "p2a0c975e-70a580ad",
                 "class": "heading",
                 "html": "<h4>Visit</h4>",
                 "textContent": "Visit",
@@ -3242,7 +3242,7 @@
                 ]
               },
               {
-                "sourceId": "0-136d3663",
+                "sourceId": "p2a0c975e-136d3663",
                 "class": "link",
                 "html": "<a href=\"#\">Pro Shop</a>",
                 "textContent": "Pro Shop",
@@ -3269,7 +3269,7 @@
                 ]
               },
               {
-                "sourceId": "0-1373f228",
+                "sourceId": "p2a0c975e-1373f228",
                 "class": "link",
                 "html": "<a href=\"#\">Contact Us</a>",
                 "textContent": "Contact Us",
@@ -3296,7 +3296,7 @@
                 ]
               },
               {
-                "sourceId": "0-5c6fc08a",
+                "sourceId": "p2a0c975e-5c6fc08a",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -3324,7 +3324,7 @@
                 ]
               },
               {
-                "sourceId": "0-63f6742e",
+                "sourceId": "p2a0c975e-63f6742e",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -3351,7 +3351,7 @@
                 ]
               },
               {
-                "sourceId": "0-63f8b2c5",
+                "sourceId": "p2a0c975e-63f8b2c5",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -3378,7 +3378,7 @@
                 ]
               },
               {
-                "sourceId": "0-9ffb4fd0",
+                "sourceId": "p2a0c975e-9ffb4fd0",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -3405,7 +3405,7 @@
                 ]
               },
               {
-                "sourceId": "0-9fea06af",
+                "sourceId": "p2a0c975e-9fea06af",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -3432,7 +3432,7 @@
                 ]
               },
               {
-                "sourceId": "0-bc6abe24",
+                "sourceId": "p2a0c975e-bc6abe24",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -3462,7 +3462,7 @@
                 ]
               },
               {
-                "sourceId": "0-66285d56",
+                "sourceId": "p2a0c975e-66285d56",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -3491,7 +3491,7 @@
                 ]
               },
               {
-                "sourceId": "0-16d4903e",
+                "sourceId": "p2a0c975e-16d4903e",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -3519,7 +3519,7 @@
                 ]
               },
               {
-                "sourceId": "0-12d24b5b",
+                "sourceId": "p2a0c975e-12d24b5b",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -3547,7 +3547,7 @@
                 ]
               },
               {
-                "sourceId": "0-7ced6b03",
+                "sourceId": "p2a0c975e-7ced6b03",
                 "class": "link",
                 "html": "<a class=\"nav-link\" href=\"#about\">About <span>⌄</span></a>",
                 "textContent": "About ⌄",
@@ -3577,7 +3577,7 @@
                 ]
               },
               {
-                "sourceId": "0-eacfeb77",
+                "sourceId": "p2a0c975e-eacfeb77",
                 "class": "heading",
                 "html": "<h4>About</h4>",
                 "textContent": "About",
@@ -3605,7 +3605,7 @@
                 ]
               },
               {
-                "sourceId": "0-bc40e0b9",
+                "sourceId": "p2a0c975e-bc40e0b9",
                 "class": "link",
                 "html": "<a href=\"#\">Our Story</a>",
                 "textContent": "Our Story",
@@ -3632,7 +3632,7 @@
                 ]
               },
               {
-                "sourceId": "0-bc3ea222",
+                "sourceId": "p2a0c975e-bc3ea222",
                 "class": "link",
                 "html": "<a href=\"#\">Coaches</a>",
                 "textContent": "Coaches",
@@ -3659,7 +3659,7 @@
                 ]
               },
               {
-                "sourceId": "0-f83cc1ff",
+                "sourceId": "p2a0c975e-f83cc1ff",
                 "class": "link",
                 "html": "<a href=\"#\">Community Impact</a>",
                 "textContent": "Community Impact",
@@ -3686,7 +3686,7 @@
                 ]
               },
               {
-                "sourceId": "0-763ed63e",
+                "sourceId": "p2a0c975e-763ed63e",
                 "class": "heading",
                 "html": "<h4>About</h4>",
                 "textContent": "About",
@@ -3714,7 +3714,7 @@
                 ]
               },
               {
-                "sourceId": "0-7d1bf372",
+                "sourceId": "p2a0c975e-7d1bf372",
                 "class": "link",
                 "html": "<a href=\"#\">Partners</a>",
                 "textContent": "Partners",
@@ -3741,7 +3741,7 @@
                 ]
               },
               {
-                "sourceId": "0-bd1e96c9",
+                "sourceId": "p2a0c975e-bd1e96c9",
                 "class": "link",
                 "html": "<a href=\"#\">Media Room</a>",
                 "textContent": "Media Room",
@@ -3768,7 +3768,7 @@
                 ]
               },
               {
-                "sourceId": "0-09e5fae1",
+                "sourceId": "p2a0c975e-09e5fae1",
                 "class": "heading",
                 "html": "<h4>Popular</h4>",
                 "textContent": "Popular",
@@ -3796,7 +3796,7 @@
                 ]
               },
               {
-                "sourceId": "0-46e69447",
+                "sourceId": "p2a0c975e-46e69447",
                 "class": "link",
                 "html": "<a href=\"#schedule\">This Week</a>",
                 "textContent": "This Week",
@@ -3823,7 +3823,7 @@
                 ]
               },
               {
-                "sourceId": "0-06eceb4c",
+                "sourceId": "p2a0c975e-06eceb4c",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -3850,7 +3850,7 @@
                 ]
               },
               {
-                "sourceId": "0-0aeab301",
+                "sourceId": "p2a0c975e-0aeab301",
                 "class": "link",
                 "html": "<a href=\"#locations\">Two Locations</a>",
                 "textContent": "Two Locations",
@@ -3877,7 +3877,7 @@
                 ]
               },
               {
-                "sourceId": "0-4af1d386",
+                "sourceId": "p2a0c975e-4af1d386",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact</a>",
                 "textContent": "Contact",
@@ -3904,7 +3904,7 @@
                 ]
               },
               {
-                "sourceId": "0-0de08b5d",
+                "sourceId": "p2a0c975e-0de08b5d",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Tennis clubhouse\">",
                 "textContent": "",
@@ -3934,7 +3934,7 @@
                 ]
               },
               {
-                "sourceId": "0-1031a695",
+                "sourceId": "p2a0c975e-1031a695",
                 "class": "heading",
                 "html": "<h4>Visit Delray Tennis</h4>",
                 "textContent": "Visit Delray Tennis",
@@ -3963,7 +3963,7 @@
                 ]
               },
               {
-                "sourceId": "0-e87ae7b3",
+                "sourceId": "p2a0c975e-e87ae7b3",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -3991,7 +3991,7 @@
                 ]
               },
               {
-                "sourceId": "0-ac7cc7d6",
+                "sourceId": "p2a0c975e-ac7cc7d6",
                 "class": "link",
                 "html": "<a href=\"#visit\">Plan Your Visit</a>",
                 "textContent": "Plan Your Visit",
@@ -4019,7 +4019,7 @@
                 ]
               },
               {
-                "sourceId": "0-50ed494d",
+                "sourceId": "p2a0c975e-50ed494d",
                 "class": "button",
                 "html": "<a class=\"btn btn-outline\" href=\"#book\">Book a Court</a>",
                 "textContent": "Book a Court",
@@ -4058,7 +4058,7 @@
                 ]
               },
               {
-                "sourceId": "0-4cef8198",
+                "sourceId": "p2a0c975e-4cef8198",
                 "class": "button",
                 "html": "<a class=\"btn btn-primary\" href=\"#register\">Register</a>",
                 "textContent": "Register",
@@ -4246,12 +4246,12 @@
             }
           },
           {
-            "sourceId": "0-04c8c908",
+            "sourceId": "p2a0c975e-04c8c908",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s2.png",
             "elements": [
               {
-                "sourceId": "0-3cdc45d2",
+                "sourceId": "p2a0c975e-3cdc45d2",
                 "class": "text",
                 "html": "Delray Beach • Public Tennis • Two Locations",
                 "textContent": "Delray Beach • Public Tennis • Two Locations",
@@ -4275,7 +4275,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-4b3352b8",
+                "sourceId": "p2a0c975e-4b3352b8",
                 "class": "heading",
                 "html": "<h1>Play Where <span>Champions</span> Play</h1>",
                 "textContent": "Play Where Champions Play",
@@ -4310,7 +4310,7 @@
                 ]
               },
               {
-                "sourceId": "0-df20072a",
+                "sourceId": "p2a0c975e-df20072a",
                 "class": "text",
                 "html": "<p>Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.</p>",
                 "textContent": "Public courts, expert coaching, junior development, leagues and pickleball — all in the heart of Delray Beach.",
@@ -4333,7 +4333,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-210204f0",
+                "sourceId": "p2a0c975e-210204f0",
                 "class": "button",
                 "html": "<a class=\"btn btn-primary\" id=\"book\" href=\"#\">Book a Court</a>",
                 "textContent": "Book a Court",
@@ -4370,7 +4370,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-64fe9e65",
+                "sourceId": "p2a0c975e-64fe9e65",
                 "class": "button",
                 "html": "<a class=\"btn btn-outline\" href=\"#programs\">Find Your Program</a>",
                 "textContent": "Find Your Program",
@@ -4406,7 +4406,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-af7abbc1",
+                "sourceId": "p2a0c975e-af7abbc1",
                 "class": "text",
                 "html": "Public Courts",
                 "textContent": "Public Courts",
@@ -4428,7 +4428,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-0bfe2a26",
+                "sourceId": "p2a0c975e-0bfe2a26",
                 "class": "text",
                 "html": "Expert Coaches",
                 "textContent": "Expert Coaches",
@@ -4450,7 +4450,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-21fb8abf",
+                "sourceId": "p2a0c975e-21fb8abf",
                 "class": "text",
                 "html": "All Ages",
                 "textContent": "All Ages",
@@ -4472,7 +4472,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-1f6cf664",
+                "sourceId": "p2a0c975e-1f6cf664",
                 "class": "text",
                 "html": "Delray Beach Lifestyle",
                 "textContent": "Delray Beach Lifestyle",
@@ -4496,12 +4496,12 @@
             ]
           },
           {
-            "sourceId": "0-48c5627d",
+            "sourceId": "p2a0c975e-48c5627d",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s3.png",
             "elements": [
               {
-                "sourceId": "0-b9a2873e",
+                "sourceId": "p2a0c975e-b9a2873e",
                 "class": "text",
                 "html": "▦",
                 "textContent": "▦",
@@ -4541,7 +4541,7 @@
                 ]
               },
               {
-                "sourceId": "0-2308d6b8",
+                "sourceId": "p2a0c975e-2308d6b8",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/court.jpg\" alt=\"Court Fees\">",
                 "textContent": "",
@@ -4569,7 +4569,7 @@
                 ]
               },
               {
-                "sourceId": "0-dd76793d",
+                "sourceId": "p2a0c975e-dd76793d",
                 "class": "heading",
                 "html": "<h3>Court Fees</h3>",
                 "textContent": "Court Fees",
@@ -4598,7 +4598,7 @@
                 ]
               },
               {
-                "sourceId": "0-7e891f53",
+                "sourceId": "p2a0c975e-7e891f53",
                 "class": "text",
                 "html": "<p>View tennis court pricing, resident and guest rates, and reservation details.</p>",
                 "textContent": "View tennis court pricing, resident and guest rates, and reservation details.",
@@ -4624,7 +4624,7 @@
                 ]
               },
               {
-                "sourceId": "0-b691c5a1",
+                "sourceId": "p2a0c975e-b691c5a1",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -4651,7 +4651,7 @@
                 ]
               },
               {
-                "sourceId": "0-f48a61bb",
+                "sourceId": "p2a0c975e-f48a61bb",
                 "class": "text",
                 "html": "◉",
                 "textContent": "◉",
@@ -4691,7 +4691,7 @@
                 ]
               },
               {
-                "sourceId": "0-8bc97cbf",
+                "sourceId": "p2a0c975e-8bc97cbf",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/clinic.jpg\" alt=\"Tennis Clinics\">",
                 "textContent": "",
@@ -4719,7 +4719,7 @@
                 ]
               },
               {
-                "sourceId": "0-e7a1b3b4",
+                "sourceId": "p2a0c975e-e7a1b3b4",
                 "class": "heading",
                 "html": "<h3>Tennis Clinics</h3>",
                 "textContent": "Tennis Clinics",
@@ -4748,7 +4748,7 @@
                 ]
               },
               {
-                "sourceId": "0-f3cb5554",
+                "sourceId": "p2a0c975e-f3cb5554",
                 "class": "text",
                 "html": "<p>Browse adult tennis clinics, mixers and programs for every level.</p>",
                 "textContent": "Browse adult tennis clinics, mixers and programs for every level.",
@@ -4774,7 +4774,7 @@
                 ]
               },
               {
-                "sourceId": "0-9b9f5316",
+                "sourceId": "p2a0c975e-9b9f5316",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -4801,7 +4801,7 @@
                 ]
               },
               {
-                "sourceId": "0-85db5f14",
+                "sourceId": "p2a0c975e-85db5f14",
                 "class": "text",
                 "html": "◇",
                 "textContent": "◇",
@@ -4841,7 +4841,7 @@
                 ]
               },
               {
-                "sourceId": "0-2770a53e",
+                "sourceId": "p2a0c975e-2770a53e",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/pickleball.jpg\" alt=\"Pickleball\">",
                 "textContent": "",
@@ -4869,7 +4869,7 @@
                 ]
               },
               {
-                "sourceId": "0-bdb7d5fb",
+                "sourceId": "p2a0c975e-bdb7d5fb",
                 "class": "heading",
                 "html": "<h3>Pickleball</h3>",
                 "textContent": "Pickleball",
@@ -4898,7 +4898,7 @@
                 ]
               },
               {
-                "sourceId": "0-b4d1bdc1",
+                "sourceId": "p2a0c975e-b4d1bdc1",
                 "class": "text",
                 "html": "<p>View pickleball court rates, clinic schedules, open play times and more.</p>",
                 "textContent": "View pickleball court rates, clinic schedules, open play times and more.",
@@ -4924,7 +4924,7 @@
                 ]
               },
               {
-                "sourceId": "0-06e1077b",
+                "sourceId": "p2a0c975e-06e1077b",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -4951,7 +4951,7 @@
                 ]
               },
               {
-                "sourceId": "0-b02e20c9",
+                "sourceId": "p2a0c975e-b02e20c9",
                 "class": "text",
                 "html": "●●",
                 "textContent": "●●",
@@ -4991,7 +4991,7 @@
                 ]
               },
               {
-                "sourceId": "0-947c866d",
+                "sourceId": "p2a0c975e-947c866d",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/ladies.jpg\" alt=\"Ladies Teams &amp; Leagues\">",
                 "textContent": "",
@@ -5019,7 +5019,7 @@
                 ]
               },
               {
-                "sourceId": "0-01d4db1a",
+                "sourceId": "p2a0c975e-01d4db1a",
                 "class": "heading",
                 "html": "<h3>Ladies Teams &amp; Leagues</h3>",
                 "textContent": "Ladies Teams & Leagues",
@@ -5048,7 +5048,7 @@
                 ]
               },
               {
-                "sourceId": "0-89074c52",
+                "sourceId": "p2a0c975e-89074c52",
                 "class": "text",
                 "html": "<p>Team tryouts, league information and Palm Tennis program details.</p>",
                 "textContent": "Team tryouts, league information and Palm Tennis program details.",
@@ -5074,7 +5074,7 @@
                 ]
               },
               {
-                "sourceId": "0-9a5dffb0",
+                "sourceId": "p2a0c975e-9a5dffb0",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -5101,7 +5101,7 @@
                 ]
               },
               {
-                "sourceId": "0-69c3ec42",
+                "sourceId": "p2a0c975e-69c3ec42",
                 "class": "text",
                 "html": "★",
                 "textContent": "★",
@@ -5141,7 +5141,7 @@
                 ]
               },
               {
-                "sourceId": "0-0e9bf22c",
+                "sourceId": "p2a0c975e-0e9bf22c",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/junior.jpg\" alt=\"Junior Tennis Programs\">",
                 "textContent": "",
@@ -5169,7 +5169,7 @@
                 ]
               },
               {
-                "sourceId": "0-1eda2949",
+                "sourceId": "p2a0c975e-1eda2949",
                 "class": "heading",
                 "html": "<h3>Junior Tennis Programs</h3>",
                 "textContent": "Junior Tennis Programs",
@@ -5198,7 +5198,7 @@
                 ]
               },
               {
-                "sourceId": "0-a6046057",
+                "sourceId": "p2a0c975e-a6046057",
                 "class": "text",
                 "html": "<p>Programs, camps and lessons designed for juniors of all ages and abilities.</p>",
                 "textContent": "Programs, camps and lessons designed for juniors of all ages and abilities.",
@@ -5224,7 +5224,7 @@
                 ]
               },
               {
-                "sourceId": "0-2e19408d",
+                "sourceId": "p2a0c975e-2e19408d",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -5251,7 +5251,7 @@
                 ]
               },
               {
-                "sourceId": "0-5014f16f",
+                "sourceId": "p2a0c975e-5014f16f",
                 "class": "text",
                 "html": "◷",
                 "textContent": "◷",
@@ -5291,7 +5291,7 @@
                 ]
               },
               {
-                "sourceId": "0-285468f3",
+                "sourceId": "p2a0c975e-285468f3",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Directions &amp; Hours\">",
                 "textContent": "",
@@ -5319,7 +5319,7 @@
                 ]
               },
               {
-                "sourceId": "0-7f41af90",
+                "sourceId": "p2a0c975e-7f41af90",
                 "class": "heading",
                 "html": "<h3>Directions &amp; Hours</h3>",
                 "textContent": "Directions & Hours",
@@ -5348,7 +5348,7 @@
                 ]
               },
               {
-                "sourceId": "0-7dc1d4c8",
+                "sourceId": "p2a0c975e-7dc1d4c8",
                 "class": "text",
                 "html": "<p>Find us, know our hours and plan your visit to either location.</p>",
                 "textContent": "Find us, know our hours and plan your visit to either location.",
@@ -5374,7 +5374,7 @@
                 ]
               },
               {
-                "sourceId": "0-25d1fcb2",
+                "sourceId": "p2a0c975e-25d1fcb2",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -5633,12 +5633,12 @@
             }
           },
           {
-            "sourceId": "0-08b9c4ca",
+            "sourceId": "p2a0c975e-08b9c4ca",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s4.png",
             "elements": [
               {
-                "sourceId": "0-fceade14",
+                "sourceId": "p2a0c975e-fceade14",
                 "class": "heading",
                 "html": "<h2>This Week at Delray Tennis</h2>",
                 "textContent": "This Week at Delray Tennis",
@@ -5662,7 +5662,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-5e989383",
+                "sourceId": "p2a0c975e-5e989383",
                 "class": "text",
                 "html": "<p>A web-friendly snapshot of programs, clinics and play.</p>",
                 "textContent": "A web-friendly snapshot of programs, clinics and play.",
@@ -5684,7 +5684,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-b9a5f1fe",
+                "sourceId": "p2a0c975e-b9a5f1fe",
                 "class": "button",
                 "html": "<a class=\"btn btn-outline\" style=\"border-color:var(--navy);color:var(--navy)\" href=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/weekly-program-guide.png\">View Full Guide</a>",
                 "textContent": "View Full Guide",
@@ -5720,7 +5720,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-447d324e",
+                "sourceId": "p2a0c975e-447d324e",
                 "class": "heading",
                 "html": "<h3>Weekly Program Guide</h3>",
                 "textContent": "Weekly Program Guide",
@@ -5747,7 +5747,7 @@
                 ]
               },
               {
-                "sourceId": "0-38a24547",
+                "sourceId": "p2a0c975e-38a24547",
                 "class": "text",
                 "html": "DBTC",
                 "textContent": "DBTC",
@@ -5772,7 +5772,7 @@
                 ]
               },
               {
-                "sourceId": "0-0d69534c",
+                "sourceId": "p2a0c975e-0d69534c",
                 "class": "text",
                 "html": "DBST",
                 "textContent": "DBST",
@@ -5797,7 +5797,7 @@
                 ]
               },
               {
-                "sourceId": "0-d17c4b29",
+                "sourceId": "p2a0c975e-d17c4b29",
                 "class": "text",
                 "html": "Pickleball",
                 "textContent": "Pickleball",
@@ -5822,7 +5822,7 @@
                 ]
               },
               {
-                "sourceId": "0-ba8c3b3c",
+                "sourceId": "p2a0c975e-ba8c3b3c",
                 "class": "heading",
                 "html": "<h4>Monday</h4>",
                 "textContent": "Monday",
@@ -5850,7 +5850,7 @@
                 ]
               },
               {
-                "sourceId": "0-6cb693e9",
+                "sourceId": "p2a0c975e-6cb693e9",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -5875,7 +5875,7 @@
                 ]
               },
               {
-                "sourceId": "0-95f1df58",
+                "sourceId": "p2a0c975e-95f1df58",
                 "class": "text",
                 "html": "Drills &amp; Games I",
                 "textContent": "Drills & Games I",
@@ -5902,7 +5902,7 @@
                 ]
               },
               {
-                "sourceId": "0-3b10dbe3",
+                "sourceId": "p2a0c975e-3b10dbe3",
                 "class": "text",
                 "html": "Junior Camp",
                 "textContent": "Junior Camp",
@@ -5929,7 +5929,7 @@
                 ]
               },
               {
-                "sourceId": "0-0a9d8b6e",
+                "sourceId": "p2a0c975e-0a9d8b6e",
                 "class": "text",
                 "html": "PB 101",
                 "textContent": "PB 101",
@@ -5956,7 +5956,7 @@
                 ]
               },
               {
-                "sourceId": "0-b652612d",
+                "sourceId": "p2a0c975e-b652612d",
                 "class": "heading",
                 "html": "<h4>Tuesday</h4>",
                 "textContent": "Tuesday",
@@ -5984,7 +5984,7 @@
                 ]
               },
               {
-                "sourceId": "0-b594a9a0",
+                "sourceId": "p2a0c975e-b594a9a0",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6009,7 +6009,7 @@
                 ]
               },
               {
-                "sourceId": "0-babd16c9",
+                "sourceId": "p2a0c975e-babd16c9",
                 "class": "text",
                 "html": "Drills &amp; Games I",
                 "textContent": "Drills & Games I",
@@ -6036,7 +6036,7 @@
                 ]
               },
               {
-                "sourceId": "0-15ef4e6e",
+                "sourceId": "p2a0c975e-15ef4e6e",
                 "class": "text",
                 "html": "Elite",
                 "textContent": "Elite",
@@ -6063,7 +6063,7 @@
                 ]
               },
               {
-                "sourceId": "0-46629ee3",
+                "sourceId": "p2a0c975e-46629ee3",
                 "class": "text",
                 "html": "Beginners",
                 "textContent": "Beginners",
@@ -6090,7 +6090,7 @@
                 ]
               },
               {
-                "sourceId": "0-a21ca10a",
+                "sourceId": "p2a0c975e-a21ca10a",
                 "class": "heading",
                 "html": "<h4>Wednesday</h4>",
                 "textContent": "Wednesday",
@@ -6118,7 +6118,7 @@
                 ]
               },
               {
-                "sourceId": "0-c21d158f",
+                "sourceId": "p2a0c975e-c21d158f",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6143,7 +6143,7 @@
                 ]
               },
               {
-                "sourceId": "0-785b2922",
+                "sourceId": "p2a0c975e-785b2922",
                 "class": "text",
                 "html": "Intro to WWO",
                 "textContent": "Intro to WWO",
@@ -6170,7 +6170,7 @@
                 ]
               },
               {
-                "sourceId": "0-4f0d1aed",
+                "sourceId": "p2a0c975e-4f0d1aed",
                 "class": "text",
                 "html": "Junior Camp",
                 "textContent": "Junior Camp",
@@ -6197,7 +6197,7 @@
                 ]
               },
               {
-                "sourceId": "0-cb2468b4",
+                "sourceId": "p2a0c975e-cb2468b4",
                 "class": "text",
                 "html": "Managed Play",
                 "textContent": "Managed Play",
@@ -6224,7 +6224,7 @@
                 ]
               },
               {
-                "sourceId": "0-e7d35db3",
+                "sourceId": "p2a0c975e-e7d35db3",
                 "class": "heading",
                 "html": "<h4>Thursday</h4>",
                 "textContent": "Thursday",
@@ -6252,7 +6252,7 @@
                 ]
               },
               {
-                "sourceId": "0-b4208e26",
+                "sourceId": "p2a0c975e-b4208e26",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6277,7 +6277,7 @@
                 ]
               },
               {
-                "sourceId": "0-86cbf2d3",
+                "sourceId": "p2a0c975e-86cbf2d3",
                 "class": "text",
                 "html": "Drills &amp; Games I",
                 "textContent": "Drills & Games I",
@@ -6304,7 +6304,7 @@
                 ]
               },
               {
-                "sourceId": "0-89a0b708",
+                "sourceId": "p2a0c975e-89a0b708",
                 "class": "text",
                 "html": "Junior Camp",
                 "textContent": "Junior Camp",
@@ -6331,7 +6331,7 @@
                 ]
               },
               {
-                "sourceId": "0-3eda87b9",
+                "sourceId": "p2a0c975e-3eda87b9",
                 "class": "text",
                 "html": "WWO II",
                 "textContent": "WWO II",
@@ -6358,7 +6358,7 @@
                 ]
               },
               {
-                "sourceId": "0-65773688",
+                "sourceId": "p2a0c975e-65773688",
                 "class": "heading",
                 "html": "<h4>Friday</h4>",
                 "textContent": "Friday",
@@ -6386,7 +6386,7 @@
                 ]
               },
               {
-                "sourceId": "0-c6ba6a7d",
+                "sourceId": "p2a0c975e-c6ba6a7d",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6411,7 +6411,7 @@
                 ]
               },
               {
-                "sourceId": "0-6301a6b4",
+                "sourceId": "p2a0c975e-6301a6b4",
                 "class": "text",
                 "html": "Drills &amp; Games I",
                 "textContent": "Drills & Games I",
@@ -6438,7 +6438,7 @@
                 ]
               },
               {
-                "sourceId": "0-879fa98f",
+                "sourceId": "p2a0c975e-879fa98f",
                 "class": "text",
                 "html": "Elite",
                 "textContent": "Elite",
@@ -6465,7 +6465,7 @@
                 ]
               },
               {
-                "sourceId": "0-10386722",
+                "sourceId": "p2a0c975e-10386722",
                 "class": "text",
                 "html": "Beginners",
                 "textContent": "Beginners",
@@ -6492,7 +6492,7 @@
                 ]
               },
               {
-                "sourceId": "0-656ae689",
+                "sourceId": "p2a0c975e-656ae689",
                 "class": "heading",
                 "html": "<h4>Saturday</h4>",
                 "textContent": "Saturday",
@@ -6520,7 +6520,7 @@
                 ]
               },
               {
-                "sourceId": "0-0d845cd4",
+                "sourceId": "p2a0c975e-0d845cd4",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6545,7 +6545,7 @@
                 ]
               },
               {
-                "sourceId": "0-6a7d06b5",
+                "sourceId": "p2a0c975e-6a7d06b5",
                 "class": "text",
                 "html": "Drills &amp; Games I",
                 "textContent": "Drills & Games I",
@@ -6572,7 +6572,7 @@
                 ]
               },
               {
-                "sourceId": "0-3662b2ca",
+                "sourceId": "p2a0c975e-3662b2ca",
                 "class": "text",
                 "html": "Stroke of the Week",
                 "textContent": "Stroke of the Week",
@@ -6599,7 +6599,7 @@
                 ]
               },
               {
-                "sourceId": "0-49261037",
+                "sourceId": "p2a0c975e-49261037",
                 "class": "text",
                 "html": "Games, Games, Games",
                 "textContent": "Games, Games, Games",
@@ -6626,7 +6626,7 @@
                 ]
               },
               {
-                "sourceId": "0-3d8abf26",
+                "sourceId": "p2a0c975e-3d8abf26",
                 "class": "heading",
                 "html": "<h4>Sunday</h4>",
                 "textContent": "Sunday",
@@ -6653,7 +6653,7 @@
                 ]
               },
               {
-                "sourceId": "0-45d21f73",
+                "sourceId": "p2a0c975e-45d21f73",
                 "class": "text",
                 "html": "See full guide for times",
                 "textContent": "See full guide for times",
@@ -6677,7 +6677,7 @@
                 ]
               },
               {
-                "sourceId": "0-031cbd2e",
+                "sourceId": "p2a0c975e-031cbd2e",
                 "class": "text",
                 "html": "Sunday Morning Mixer",
                 "textContent": "Sunday Morning Mixer",
@@ -6703,7 +6703,7 @@
                 ]
               },
               {
-                "sourceId": "0-e380b889",
+                "sourceId": "p2a0c975e-e380b889",
                 "class": "text",
                 "html": "Elite",
                 "textContent": "Elite",
@@ -6729,7 +6729,7 @@
                 ]
               },
               {
-                "sourceId": "0-99456508",
+                "sourceId": "p2a0c975e-99456508",
                 "class": "link",
                 "html": "<a href=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/weekly-program-guide.png\">VIEW FULL WEEKLY PROGRAM GUIDE →</a>",
                 "textContent": "VIEW FULL WEEKLY PROGRAM GUIDE →",
@@ -6851,12 +6851,12 @@
             }
           },
           {
-            "sourceId": "0-04b77fe7",
+            "sourceId": "p2a0c975e-04b77fe7",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s5.png",
             "elements": [
               {
-                "sourceId": "0-2dea387f",
+                "sourceId": "p2a0c975e-2dea387f",
                 "class": "heading",
                 "html": "<h2>Junior Pathway</h2>",
                 "textContent": "Junior Pathway",
@@ -6883,7 +6883,7 @@
                 ]
               },
               {
-                "sourceId": "0-5fc1157a",
+                "sourceId": "p2a0c975e-5fc1157a",
                 "class": "text",
                 "html": "<p>Clear progression from first rally to high-performance competition.</p>",
                 "textContent": "Clear progression from first rally to high-performance competition.",
@@ -6908,7 +6908,7 @@
                 ]
               },
               {
-                "sourceId": "0-434974c1",
+                "sourceId": "p2a0c975e-434974c1",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/junior-program-2026-2027.png\">2026–2027 Junior Guide →</a>",
                 "textContent": "2026–2027 Junior Guide →",
@@ -6934,7 +6934,7 @@
                 ]
               },
               {
-                "sourceId": "0-ab44326e",
+                "sourceId": "p2a0c975e-ab44326e",
                 "class": "text",
                 "html": "Red Ball • Ages 5–8",
                 "textContent": "Red Ball • Ages 5–8",
@@ -6968,7 +6968,7 @@
                 ]
               },
               {
-                "sourceId": "0-787b8401",
+                "sourceId": "p2a0c975e-787b8401",
                 "class": "text",
                 "html": "<p>Confidence, coordination and fundamentals.</p>",
                 "textContent": "Confidence, coordination and fundamentals.",
@@ -6996,7 +6996,7 @@
                 ]
               },
               {
-                "sourceId": "0-fa9cfa81",
+                "sourceId": "p2a0c975e-fa9cfa81",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7024,7 +7024,7 @@
                 ]
               },
               {
-                "sourceId": "0-60b597e5",
+                "sourceId": "p2a0c975e-60b597e5",
                 "class": "text",
                 "html": "Orange Ball • Ages 7–10",
                 "textContent": "Orange Ball • Ages 7–10",
@@ -7058,7 +7058,7 @@
                 ]
               },
               {
-                "sourceId": "0-44221118",
+                "sourceId": "p2a0c975e-44221118",
                 "class": "text",
                 "html": "<p>Stroke development, rallying, footwork and match play.</p>",
                 "textContent": "Stroke development, rallying, footwork and match play.",
@@ -7086,7 +7086,7 @@
                 ]
               },
               {
-                "sourceId": "0-38305c88",
+                "sourceId": "p2a0c975e-38305c88",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7114,7 +7114,7 @@
                 ]
               },
               {
-                "sourceId": "0-161f2fd4",
+                "sourceId": "p2a0c975e-161f2fd4",
                 "class": "text",
                 "html": "Green / Yellow • Ages 10+",
                 "textContent": "Green / Yellow • Ages 10+",
@@ -7148,7 +7148,7 @@
                 ]
               },
               {
-                "sourceId": "0-97483ddf",
+                "sourceId": "p2a0c975e-97483ddf",
                 "class": "text",
                 "html": "<p>Intermediate to high-performance training and strategy.</p>",
                 "textContent": "Intermediate to high-performance training and strategy.",
@@ -7176,7 +7176,7 @@
                 ]
               },
               {
-                "sourceId": "0-c13e3487",
+                "sourceId": "p2a0c975e-c13e3487",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7204,7 +7204,7 @@
                 ]
               },
               {
-                "sourceId": "0-0f81c903",
+                "sourceId": "p2a0c975e-0f81c903",
                 "class": "text",
                 "html": "High Performance",
                 "textContent": "High Performance",
@@ -7238,7 +7238,7 @@
                 ]
               },
               {
-                "sourceId": "0-a9617266",
+                "sourceId": "p2a0c975e-a9617266",
                 "class": "text",
                 "html": "<p>Advanced development for tournament-minded players.</p>",
                 "textContent": "Advanced development for tournament-minded players.",
@@ -7266,7 +7266,7 @@
                 ]
               },
               {
-                "sourceId": "0-45925cde",
+                "sourceId": "p2a0c975e-45925cde",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7400,12 +7400,12 @@
             }
           },
           {
-            "sourceId": "0-44bea06c",
+            "sourceId": "p2a0c975e-44bea06c",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s6.png",
             "elements": [
               {
-                "sourceId": "0-e1a11fc6",
+                "sourceId": "p2a0c975e-e1a11fc6",
                 "class": "heading",
                 "html": "<h2>Two Premier Locations. One Community.</h2>",
                 "textContent": "Two Premier Locations. One Community.",
@@ -7429,7 +7429,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-bbd5deb5",
+                "sourceId": "p2a0c975e-bbd5deb5",
                 "class": "text",
                 "html": "<p>Choose the location that fits your day, program and style of play.</p>",
                 "textContent": "Choose the location that fits your day, program and style of play.",
@@ -7451,7 +7451,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-dbf341e5",
+                "sourceId": "p2a0c975e-dbf341e5",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/directions.jpg\" alt=\"Delray Beach Tennis Center\">",
                 "textContent": "",
@@ -7477,7 +7477,7 @@
                 ]
               },
               {
-                "sourceId": "0-d3a5bf8a",
+                "sourceId": "p2a0c975e-d3a5bf8a",
                 "class": "heading",
                 "html": "<h3>Delray Beach Tennis Center</h3>",
                 "textContent": "Delray Beach Tennis Center",
@@ -7504,7 +7504,7 @@
                 ]
               },
               {
-                "sourceId": "0-1f732a80",
+                "sourceId": "p2a0c975e-1f732a80",
                 "class": "text",
                 "html": "Downtown Atlantic Avenue location",
                 "textContent": "Downtown Atlantic Avenue location",
@@ -7530,7 +7530,7 @@
                 ]
               },
               {
-                "sourceId": "0-f14bfa4b",
+                "sourceId": "p2a0c975e-f14bfa4b",
                 "class": "text",
                 "html": "Stadium and tournament atmosphere",
                 "textContent": "Stadium and tournament atmosphere",
@@ -7556,7 +7556,7 @@
                 ]
               },
               {
-                "sourceId": "0-010928e2",
+                "sourceId": "p2a0c975e-010928e2",
                 "class": "text",
                 "html": "Adult &amp; junior programs",
                 "textContent": "Adult & junior programs",
@@ -7582,7 +7582,7 @@
                 ]
               },
               {
-                "sourceId": "0-69c1c6ad",
+                "sourceId": "p2a0c975e-69c1c6ad",
                 "class": "text",
                 "html": "Clinics, leagues and pickleball",
                 "textContent": "Clinics, leagues and pickleball",
@@ -7608,7 +7608,7 @@
                 ]
               },
               {
-                "sourceId": "0-7528f374",
+                "sourceId": "p2a0c975e-7528f374",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#visit\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7634,7 +7634,7 @@
                 ]
               },
               {
-                "sourceId": "0-2a08ae7a",
+                "sourceId": "p2a0c975e-2a08ae7a",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/court.jpg\" alt=\"Delray Swim and Tennis Club\">",
                 "textContent": "",
@@ -7660,7 +7660,7 @@
                 ]
               },
               {
-                "sourceId": "0-dd6b7101",
+                "sourceId": "p2a0c975e-dd6b7101",
                 "class": "heading",
                 "html": "<h3>Delray Swim &amp; Tennis Club</h3>",
                 "textContent": "Delray Swim & Tennis Club",
@@ -7687,7 +7687,7 @@
                 ]
               },
               {
-                "sourceId": "0-bea1d4a1",
+                "sourceId": "p2a0c975e-bea1d4a1",
                 "class": "text",
                 "html": "Clay-court community",
                 "textContent": "Clay-court community",
@@ -7713,7 +7713,7 @@
                 ]
               },
               {
-                "sourceId": "0-55d26b86",
+                "sourceId": "p2a0c975e-55d26b86",
                 "class": "text",
                 "html": "Junior camps and development",
                 "textContent": "Junior camps and development",
@@ -7739,7 +7739,7 @@
                 ]
               },
               {
-                "sourceId": "0-3996df9f",
+                "sourceId": "p2a0c975e-3996df9f",
                 "class": "text",
                 "html": "League and social play",
                 "textContent": "League and social play",
@@ -7765,7 +7765,7 @@
                 ]
               },
               {
-                "sourceId": "0-95196c44",
+                "sourceId": "p2a0c975e-95196c44",
                 "class": "text",
                 "html": "Family-friendly programming",
                 "textContent": "Family-friendly programming",
@@ -7791,7 +7791,7 @@
                 ]
               },
               {
-                "sourceId": "0-85602d9d",
+                "sourceId": "p2a0c975e-85602d9d",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#visit\">Learn More →</a>",
                 "textContent": "Learn More →",
@@ -7835,12 +7835,12 @@
             }
           },
           {
-            "sourceId": "0-48bc6821",
+            "sourceId": "p2a0c975e-48bc6821",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s7.png",
             "elements": [
               {
-                "sourceId": "0-667cb72c",
+                "sourceId": "p2a0c975e-667cb72c",
                 "class": "heading",
                 "html": "<h3>Championship Heritage</h3>",
                 "textContent": "Championship Heritage",
@@ -7868,7 +7868,7 @@
                 ]
               },
               {
-                "sourceId": "0-9a941344",
+                "sourceId": "p2a0c975e-9a941344",
                 "class": "text",
                 "html": "<p>Connect year-round public tennis with Delray’s professional-event energy and stadium history.</p>",
                 "textContent": "Connect year-round public tennis with Delray’s professional-event energy and stadium history.",
@@ -7895,7 +7895,7 @@
                 ]
               },
               {
-                "sourceId": "0-f9fd6322",
+                "sourceId": "p2a0c975e-f9fd6322",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Explore Our Story →</a>",
                 "textContent": "Explore Our Story →",
@@ -7922,7 +7922,7 @@
                 ]
               },
               {
-                "sourceId": "0-f2161665",
+                "sourceId": "p2a0c975e-f2161665",
                 "class": "heading",
                 "html": "<h3>What Players Say</h3>",
                 "textContent": "What Players Say",
@@ -7950,7 +7950,7 @@
                 ]
               },
               {
-                "sourceId": "0-9aa84e97",
+                "sourceId": "p2a0c975e-9aa84e97",
                 "class": "text",
                 "html": "<p class=\"quote\">Great courts, a welcoming community and a true Delray Beach tennis experience.</p>",
                 "textContent": "Great courts, a welcoming community and a true Delray Beach tennis experience.",
@@ -7978,7 +7978,7 @@
                 ]
               },
               {
-                "sourceId": "0-ffc834c2",
+                "sourceId": "p2a0c975e-ffc834c2",
                 "class": "heading",
                 "html": "<h3>Coaching Excellence</h3>",
                 "textContent": "Coaching Excellence",
@@ -8006,7 +8006,7 @@
                 ]
               },
               {
-                "sourceId": "0-85655342",
+                "sourceId": "p2a0c975e-85655342",
                 "class": "text",
                 "html": "<p>Showcase teaching pros, specialties and clear paths to private lessons or the right clinic.</p>",
                 "textContent": "Showcase teaching pros, specialties and clear paths to private lessons or the right clinic.",
@@ -8033,7 +8033,7 @@
                 ]
               },
               {
-                "sourceId": "0-44abac4c",
+                "sourceId": "p2a0c975e-44abac4c",
                 "class": "link",
                 "html": "<a class=\"learn-more\" href=\"#\">Meet Our Coaches →</a>",
                 "textContent": "Meet Our Coaches →",
@@ -8082,12 +8082,12 @@
             }
           },
           {
-            "sourceId": "0-48d6ab9e",
+            "sourceId": "p2a0c975e-48d6ab9e",
             "type": "unknown",
             "screenshot": "fixture://shots/p0.s8.png",
             "elements": [
               {
-                "sourceId": "0-141902ea",
+                "sourceId": "p2a0c975e-141902ea",
                 "class": "image",
                 "html": "<img src=\"https://www.blazefish.com/wp-content/themes/delray-tennis-lite/assets/images/logo-delray.png\" alt=\"Delray Tennis\">",
                 "textContent": "",
@@ -8113,7 +8113,7 @@
                 ]
               },
               {
-                "sourceId": "0-4ca8461a",
+                "sourceId": "p2a0c975e-4ca8461a",
                 "class": "text",
                 "html": "<p>Two premier locations. One community. Tennis, pickleball, junior development and events in the heart of Delray Beach.</p>",
                 "textContent": "Two premier locations. One community. Tennis, pickleball, junior development and events in the heart of Delray Beach.",
@@ -8139,7 +8139,7 @@
                 ]
               },
               {
-                "sourceId": "0-3d8c176e",
+                "sourceId": "p2a0c975e-3d8c176e",
                 "class": "link",
                 "html": "<a href=\"#\" aria-label=\"Instagram\">◎</a>",
                 "textContent": "◎",
@@ -8173,7 +8173,7 @@
                 ]
               },
               {
-                "sourceId": "0-798a374b",
+                "sourceId": "p2a0c975e-798a374b",
                 "class": "link",
                 "html": "<a href=\"#\" aria-label=\"Facebook\">f</a>",
                 "textContent": "f",
@@ -8207,7 +8207,7 @@
                 ]
               },
               {
-                "sourceId": "0-7990f310",
+                "sourceId": "p2a0c975e-7990f310",
                 "class": "link",
                 "html": "<a href=\"#\" aria-label=\"YouTube\">▶</a>",
                 "textContent": "▶",
@@ -8241,7 +8241,7 @@
                 ]
               },
               {
-                "sourceId": "0-30b55938",
+                "sourceId": "p2a0c975e-30b55938",
                 "class": "heading",
                 "html": "<h4>Play</h4>",
                 "textContent": "Play",
@@ -8268,7 +8268,7 @@
                 ]
               },
               {
-                "sourceId": "0-0bd231b0",
+                "sourceId": "p2a0c975e-0bd231b0",
                 "class": "link",
                 "html": "<a href=\"#book\">Book a Court</a>",
                 "textContent": "Book a Court",
@@ -8294,7 +8294,7 @@
                 ]
               },
               {
-                "sourceId": "0-0bcb75eb",
+                "sourceId": "p2a0c975e-0bcb75eb",
                 "class": "link",
                 "html": "<a href=\"#\">Court Fees</a>",
                 "textContent": "Court Fees",
@@ -8320,7 +8320,7 @@
                 ]
               },
               {
-                "sourceId": "0-4fce1f8e",
+                "sourceId": "p2a0c975e-4fce1f8e",
                 "class": "link",
                 "html": "<a href=\"#\">Open Play</a>",
                 "textContent": "Open Play",
@@ -8346,7 +8346,7 @@
                 ]
               },
               {
-                "sourceId": "0-4fc5d0c9",
+                "sourceId": "p2a0c975e-4fc5d0c9",
                 "class": "link",
                 "html": "<a href=\"#schedule\">Court Status</a>",
                 "textContent": "Court Status",
@@ -8372,7 +8372,7 @@
                 ]
               },
               {
-                "sourceId": "0-64d0128f",
+                "sourceId": "p2a0c975e-64d0128f",
                 "class": "heading",
                 "html": "<h4>Learn</h4>",
                 "textContent": "Learn",
@@ -8399,7 +8399,7 @@
                 ]
               },
               {
-                "sourceId": "0-bb1ce1b1",
+                "sourceId": "p2a0c975e-bb1ce1b1",
                 "class": "link",
                 "html": "<a href=\"#programs\">Adult Clinics</a>",
                 "textContent": "Adult Clinics",
@@ -8425,7 +8425,7 @@
                 ]
               },
               {
-                "sourceId": "0-bb1aa31a",
+                "sourceId": "p2a0c975e-bb1aa31a",
                 "class": "link",
                 "html": "<a href=\"#\">Private Lessons</a>",
                 "textContent": "Private Lessons",
@@ -8451,7 +8451,7 @@
                 ]
               },
               {
-                "sourceId": "0-7717f977",
+                "sourceId": "p2a0c975e-7717f977",
                 "class": "link",
                 "html": "<a href=\"#\">Cardio Tennis</a>",
                 "textContent": "Cardio Tennis",
@@ -8477,7 +8477,7 @@
                 ]
               },
               {
-                "sourceId": "0-77294298",
+                "sourceId": "p2a0c975e-77294298",
                 "class": "link",
                 "html": "<a href=\"#programs\">Programs</a>",
                 "textContent": "Programs",
@@ -8503,7 +8503,7 @@
                 ]
               },
               {
-                "sourceId": "0-1df4d816",
+                "sourceId": "p2a0c975e-1df4d816",
                 "class": "heading",
                 "html": "<h4>Juniors</h4>",
                 "textContent": "Juniors",
@@ -8530,7 +8530,7 @@
                 ]
               },
               {
-                "sourceId": "0-8eba430a",
+                "sourceId": "p2a0c975e-8eba430a",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Pathway</a>",
                 "textContent": "Junior Pathway",
@@ -8556,7 +8556,7 @@
                 ]
               },
               {
-                "sourceId": "0-cebce661",
+                "sourceId": "p2a0c975e-cebce661",
                 "class": "link",
                 "html": "<a href=\"#juniors\">Junior Programs</a>",
                 "textContent": "Junior Programs",
@@ -8582,7 +8582,7 @@
                 ]
               },
               {
-                "sourceId": "0-cabf1eac",
+                "sourceId": "p2a0c975e-cabf1eac",
                 "class": "link",
                 "html": "<a href=\"#\">Camps</a>",
                 "textContent": "Camps",
@@ -8608,7 +8608,7 @@
                 ]
               },
               {
-                "sourceId": "0-8ac28b83",
+                "sourceId": "p2a0c975e-8ac28b83",
                 "class": "link",
                 "html": "<a href=\"#\">Junior Team Tennis</a>",
                 "textContent": "Junior Team Tennis",
@@ -8634,7 +8634,7 @@
                 ]
               },
               {
-                "sourceId": "0-573bc75d",
+                "sourceId": "p2a0c975e-573bc75d",
                 "class": "heading",
                 "html": "<h4>Visit</h4>",
                 "textContent": "Visit",
@@ -8661,7 +8661,7 @@
                 ]
               },
               {
-                "sourceId": "0-a5fff613",
+                "sourceId": "p2a0c975e-a5fff613",
                 "class": "link",
                 "html": "<a href=\"#locations\">Directions &amp; Hours</a>",
                 "textContent": "Directions & Hours",
@@ -8687,7 +8687,7 @@
                 ]
               },
               {
-                "sourceId": "0-a60844d8",
+                "sourceId": "p2a0c975e-a60844d8",
                 "class": "link",
                 "html": "<a href=\"#\">Memberships</a>",
                 "textContent": "Memberships",
@@ -8713,7 +8713,7 @@
                 ]
               },
               {
-                "sourceId": "0-aa060c8d",
+                "sourceId": "p2a0c975e-aa060c8d",
                 "class": "link",
                 "html": "<a href=\"#\">Pro Shop</a>",
                 "textContent": "Pro Shop",
@@ -8739,7 +8739,7 @@
                 ]
               },
               {
-                "sourceId": "0-e9f9a55a",
+                "sourceId": "p2a0c975e-e9f9a55a",
                 "class": "link",
                 "html": "<a href=\"#contact\">Contact Us</a>",
                 "textContent": "Contact Us",
@@ -8765,7 +8765,7 @@
                 ]
               },
               {
-                "sourceId": "0-048d2e6c",
+                "sourceId": "p2a0c975e-048d2e6c",
                 "class": "heading",
                 "html": "<h4>Contact</h4>",
                 "textContent": "Contact",
@@ -8792,7 +8792,7 @@
                 ]
               },
               {
-                "sourceId": "0-8da3b6b9",
+                "sourceId": "p2a0c975e-8da3b6b9",
                 "class": "text",
                 "html": "<p>Delray Beach Tennis Center<br>201 W. Atlantic Ave.<br>Delray Beach, FL 33444</p>",
                 "textContent": "Delray Beach Tennis Center201 W. Atlantic Ave.Delray Beach, FL 33444",
@@ -8818,7 +8818,7 @@
                 ]
               },
               {
-                "sourceId": "0-8da17822",
+                "sourceId": "p2a0c975e-8da17822",
                 "class": "text",
                 "html": "<p>☎ 561-243-7360<br>delraytennis.com</p>",
                 "textContent": "☎ 561-243-7360delraytennis.com",
@@ -8844,7 +8844,7 @@
                 ]
               },
               {
-                "sourceId": "0-6f8a35a7",
+                "sourceId": "p2a0c975e-6f8a35a7",
                 "class": "text",
                 "html": "© 2026 Delray Beach Tennis Center &amp; Delray Swim &amp; Tennis Club.",
                 "textContent": "© 2026 Delray Beach Tennis Center & Delray Swim & Tennis Club.",
@@ -8869,7 +8869,7 @@
                 ]
               },
               {
-                "sourceId": "0-f558e12c",
+                "sourceId": "p2a0c975e-f558e12c",
                 "class": "text",
                 "html": "Phase 1 scaled-down theme concept • Privacy • Terms • Sitemap",
                 "textContent": "Phase 1 scaled-down theme concept • Privacy • Terms • Sitemap",
@@ -8933,11 +8933,11 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-2308d6b8"
+            "sourceId": "p2a0c975e-2308d6b8"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-2a08ae7a"
+            "sourceId": "p2a0c975e-2a08ae7a"
           }
         ],
         "status": "pending",
@@ -8954,11 +8954,11 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-266e8816"
+            "sourceId": "p2a0c975e-266e8816"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-141902ea"
+            "sourceId": "p2a0c975e-141902ea"
           }
         ],
         "status": "pending",
@@ -8975,43 +8975,43 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-1d3c8dce"
+            "sourceId": "p2a0c975e-1d3c8dce"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-ae31416f"
+            "sourceId": "p2a0c975e-ae31416f"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-31ace028"
+            "sourceId": "p2a0c975e-31ace028"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-398c7711"
+            "sourceId": "p2a0c975e-398c7711"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-bb62b76a"
+            "sourceId": "p2a0c975e-bb62b76a"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-a0d5828b"
+            "sourceId": "p2a0c975e-a0d5828b"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-bc6abe24"
+            "sourceId": "p2a0c975e-bc6abe24"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-0de08b5d"
+            "sourceId": "p2a0c975e-0de08b5d"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-285468f3"
+            "sourceId": "p2a0c975e-285468f3"
           },
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-dbf341e5"
+            "sourceId": "p2a0c975e-dbf341e5"
           }
         ],
         "status": "pending",
@@ -9028,7 +9028,7 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-8bc97cbf"
+            "sourceId": "p2a0c975e-8bc97cbf"
           }
         ],
         "status": "pending",
@@ -9045,7 +9045,7 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-2770a53e"
+            "sourceId": "p2a0c975e-2770a53e"
           }
         ],
         "status": "pending",
@@ -9062,7 +9062,7 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-947c866d"
+            "sourceId": "p2a0c975e-947c866d"
           }
         ],
         "status": "pending",
@@ -9079,7 +9079,7 @@
         "referencedBy": [
           {
             "pageUrl": "https://www.blazefish.com/",
-            "sourceId": "0-0e9bf22c"
+            "sourceId": "p2a0c975e-0e9bf22c"
           }
         ],
         "status": "pending",

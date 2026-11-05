@@ -8,6 +8,65 @@ its buttons, lined up with the Preview / Save buttons in the row below, and
 on a narrow screen the buttons drop onto a second line instead of spilling
 out.
 
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
+
+## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
+
+Site Import gives every section it builds a name, so that importing the same
+site again can find that section and update it instead of adding a second copy.
+The name used to begin with the page's place in the crawl ("the third page
+found"), and a second crawl finds pages in a different order. On wavecenter.com
+every section on the three pages that moved got a new name: only 24 of 42
+matched. The name now begins with the page's address, such as /sign-in, which
+doesn't change, and both wavecenter copies now match 42 of 42. Sites imported
+before this keep working too. When a re-import meets sections built under the
+old names, it recognises them and renames them in place. Without that step the
+four sites already imported would have gained 425 duplicate sections; with it
+they gain none, and any section somebody has edited stays protected. This is
+the groundwork for "Import again" updating a site rather than copying it twice.
+
+## 2026-11-04 — Site Import can read what an imported form asks (#965)
+
+When Site Import copies a site, any sign-up or contact form it finds has so
+far been kept only as a picture, plus the form's original code tucked away
+in the background. Nothing could read that code. Now something can: it works
+out each question the form asks, what kind of answer it wants (an email, a
+phone number, a pick-one list…), which ones are required, the choices, and
+what the button says — and it lists, in plain words, everything it chose to
+leave out, such as hidden spam traps and the original site's internal codes.
+Search boxes, sign-in forms and payment forms are recognised and left alone.
+On Strands Movie's home page it reads the real form as four questions — email,
+first name, last name and "What is the main skill you bring to the team?" with
+its eleven choices — under a "Join the Crew!" button. Nothing on any site
+changes yet; the next ticket uses this to put working forms where the
+pictures are.
+## 2026-11-04 — Form embed code and preview show choice questions as choices (#969)
+
+A form question set to "Choose one", "Choose several" or "Dropdown list
+(choose several)" turned into an empty text box in two places: the embed code
+a client pastes onto an outside website, and the preview beside the form
+editor. A visitor on that outside site could not pick anything. Now the embed
+writes real round buttons or tick boxes with the client's options, an ordinary
+dropdown carries its options too, and the preview shows the same choices. On
+the way we found the embed was also throwing away all but the last ticked box
+when a visitor ticked several; it now sends them all.
 ## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
 
 On the screen where you build a CRM form, the column headings, the sections

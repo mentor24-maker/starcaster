@@ -1613,6 +1613,42 @@ is ever wider than the screen.*
   name and never flattened by a later convention pass.** *(lesson of
   2026-08-09)* — **[eye]** · Registry: blog-post-list → 3 columns
   (general / Page Design / Card Appearance).
+- **S6. The admin header is ONE row, 77px tall or less at 1440.** Logo,
+  menu, name · Logout and the Projects button share one row
+  (`--admin-header-height`, 76px — raised from 56 so the logo is readable,
+  Dane 2026-11-05, task 86bcyyfex; rules in `src/css/_navigation.css`, scoped
+  to `#appShell > header`). *(UI normalization 1 of 10, task 86bcyrqau: the
+  logo band plus a separate menu bar took ~230px of every screen. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - The menu lives INSIDE `<header>` in `src/layout.html`. A new top-level
+    menu item costs ~70px of a row that has almost nothing to spare at 1440 with
+    the worst-case name and project label measured — so adding one means
+    taking width from somewhere else, or accepting a second row below
+    ~1440 (the header wraps rather than scrolling sideways, UI_RULES T0).
+  - Menu text is `--text-sm` with 0.35rem sides; the logo is 56px tall
+    (10px above and below) with the image's blank right strip cropped off; the
+    user's name is capped at 7.75rem and a project shown by name at 6rem, both
+    ending in "…". Those four numbers are what make the worst case fit.
+  - At 720px and below the menu folds behind a **Menu** button and opens as
+    a full-width stacked list under the header (opened `#topNav`: left 0,
+    width = the screen). Any rule
+    that changes the opened menu's size must name the OPEN selector
+    (`header.admin-menu-open > .top-nav`) as well, or the base layer's open
+    rule outranks it — round 1 of review found the menu squeezed into a
+    267px column beside the logo that way.
+  - **Parents keep the phone menu open.** Only a tap that goes somewhere
+    final closes it: a sub-item (`a.submenu-link`) or a top-level link with
+    no sub-menu (Channels, Campaigns). Tapping a parent (Builder, Contacts,
+    Settings…) leaves it open with its sub-items listed, or a phone can never
+    reach CRM, Site Import or any other sub-item — round 2 of review found
+    exactly that. The sub-items sit in normal flow under their parent
+    (`.submenu { position: static }` in the 720px block), never at the
+    desktop `top: 100%`, which painted them over the next items.
+  - A view that hides `#topNav` on purpose (`no-workspace-view`,
+    `project-admin-view`, `public-legal-view`) hides the Menu button too; a
+    new such view adds itself to that rule at the end of `_navigation.css`.
+  - The header is not sticky. Anything that sticks to the top of a page
+    sticks to the viewport, so nothing hides behind it.
 
 ## P — Published page (rendered module) rules
 

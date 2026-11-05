@@ -39,8 +39,8 @@ export type CaptureOptions = {
  * The provider returns a RawCapture — screenshot BINARIES, with element
  * crops keyed by domPath — because the provider knows neither the job's
  * Blob namespace nor the page index that sourceIds embed. The worker
- * uploads the PNGs, re-keys element crops via computeSourceId(pageIdx,
- * domPath), and persists the result as the CaptureResult below. (Spec §1b
+ * uploads the PNGs, re-keys element crops via computeSourceId(pageKey,
+ * domPath) — pageKey from the page's address, pageSourceKey() — and persists the result as the CaptureResult below. (Spec §1b
  * shows capture() returning CaptureResult directly; this split is the
  * implementation-discovered refinement noted in the spec's deviations.)
  */
@@ -325,8 +325,11 @@ export const ELEMENT_CLASSES: ElementClass[] = [
 
 export type ElementIR = {
   /**
-   * Stable within the job: "<pageIdx>-<domPathHash>", where domPathHash is
-   * an FNV-1a hash of the element's tag/index path from <body>. Computed by
+   * "<pageKey>-<domPathHash>": pageKey hashes the page's ADDRESS (with
+   * `~2`, `~3`… for a later capture of the same path), domPathHash is an
+   * FNV-1a hash of the element's tag/index path from <body>. Stable across
+   * captures of one site, not just within a job (task 86bcyrt21); jobs
+   * normalized before then carry "<pageIdx>-<domPathHash>" instead. Computed by
    * computeSourceId() in normalize.ts; the capture layer uses the same
    * function so element-screenshot keys match.
    */

@@ -113,12 +113,64 @@ function fnv1a(str: string): string {
 }
 
 /**
- * "<pageIdx>-<domPathHash>" per the ElementIR contract. The capture layer
+ * The page half of every sourceId: a hash of the page's ADDRESS, so the same
+ * page gets the same ids in every capture of the site (task 86bcyrt21).
+ * It used to be the page's place in the crawl order, and two wavecenter.com
+ * captures that found 10 and 7 pages gave every section on the three pages
+ * that moved a new id — 18 of 42 — so a second import could not recognise
+ * them. A later capture of the SAME path (wavecenter has "/" twice) is
+ * `~2`, `~3`…, the same occurrence rule the mapper keys pages by
+ * (map.ts pageWriteKey). The "p" keeps it apart from the old all-digit
+ * prefix, which legacySourceId() still produces for older captures.
+ */
+export function pageSourceKey(path: string, occurrence = 1): string {
+  return `p${fnv1a(path || "/")}${occurrence > 1 ? `~${occurrence}` : ""}`;
+}
+
+/** The path a page is keyed by: the URL's pathname ("/" when empty). The
+ *  same reading PageIR.path carries, so ids and page keys agree. */
+export function pagePath(url: string): string {
+  try {
+    const p = new URL(url).pathname;
+    return p === "" ? "/" : p;
+  } catch {
+    return url || "/";
+  }
+}
+
+/**
+ * Hands out page keys in capture order — the worker (keying element crops)
+ * and normalizeSite (minting ids) both walk the captured pages in that
+ * order, so both arrive at the same key for each. `peek` answers without
+ * counting, for a page that may still fail before it is kept.
+ */
+export function pageKeyCounter() {
+  const seen = new Map<string, number>();
+  const occurrence = (url: string) => (seen.get(pagePath(url)) || 0) + 1;
+  return {
+    peek: (url: string) => pageSourceKey(pagePath(url), occurrence(url)),
+    take: (url: string) => {
+      const n = occurrence(url);
+      seen.set(pagePath(url), n);
+      return pageSourceKey(pagePath(url), n);
+    },
+  };
+}
+
+/**
+ * "<pageKey>-<domPathHash>" per the ElementIR contract. The capture layer
  * uses this same function when keying per-element screenshot crops, so the
  * normalizer can join crops back onto elements. domPath is the tag/index
  * path from body, e.g. "body/div[0]/p[2]".
  */
-export function computeSourceId(pageIdx: number, domPath: string): string {
+export function computeSourceId(pageKey: string, domPath: string): string {
+  return `${pageKey}-${fnv1a(domPath)}`;
+}
+
+/** The id the same element had before 86bcyrt21: crawl position, not
+ *  address. Captures taken before then key their element crops this way,
+ *  so normalize falls back to it when joining crops back on. */
+export function legacySourceId(pageIdx: number, domPath: string): string {
   return `${pageIdx}-${fnv1a(domPath)}`;
 }
 
@@ -1516,21 +1568,12 @@ type PageBuild = {
   assetUses: { sourceId: string; assetIds: string[] }[];
 };
 
-function pagePath(url: string): string {
-  try {
-    const p = new URL(url).pathname;
-    return p === "" ? "/" : p;
-  } catch {
-    return url || "/";
-  }
-}
-
 /** The never-give-up fallback: the whole page as one "other" element with
  *  the raw HTML preserved verbatim. Coverage will show the difference as
  *  dropped counts — loud by design, because reaching this path means the
  *  normalizer itself has a bug worth seeing. */
 function degradedPage(
-  pageIdx: number,
+  pageKey: string,
   captures: NormalizePageCaptures
 ): PageBuild {
   const desktop = captures.desktop || ({} as CaptureResult);
@@ -1546,7 +1589,7 @@ function degradedPage(
     captured = { other: 1 };
   }
   const element: ElementIR = {
-    sourceId: computeSourceId(pageIdx, "body"),
+    sourceId: computeSourceId(pageKey, "body"),
     class: "other",
     html: stripScimMarkers(rawHtml),
     textContent: "",
@@ -1567,7 +1610,7 @@ function degradedPage(
       lang: meta.lang || "",
       sections: [
         {
-          sourceId: `${pageIdx}-degraded`,
+          sourceId: `${pageKey}-degraded`,
           type: "unknown",
           screenshot: desktop.fullPageScreenshot || "",
           elements: [element],
@@ -1585,6 +1628,7 @@ function degradedPage(
 }
 
 function normalizePage(
+  pageKey: string,
   pageIdx: number,
   captures: NormalizePageCaptures,
   assetLookup: AssetLookup,
@@ -1607,7 +1651,7 @@ function normalizePage(
   };
 
   const { $, body } = parseBody(desktop.html);
-  if (!body) return degradedPage(pageIdx, captures);
+  if (!body) return degradedPage(pageKey, captures);
 
   // Raw-side count: independent invocation over the same HTML ("counted
   // twice" per spec §1c — this one never sees the IR).
@@ -1665,7 +1709,8 @@ function normalizePage(
   let position = 0;
 
   walkCountables(body, (v) => {
-    let sourceId = computeSourceId(pageIdx, v.domPath);
+    const baseSourceId = computeSourceId(pageKey, v.domPath);
+    let sourceId = baseSourceId;
     if (usedIds.has(sourceId)) sourceId = `${sourceId}-${position}`;
     usedIds.add(sourceId);
 
@@ -1693,7 +1738,10 @@ function normalizePage(
       const scimKey = (v.node.attribs || {})["data-scim"] || "";
       const computedStyles = compactStyles(styles[scimKey]);
       const assetRefs = matchAssetRefs(html, computedStyles, url, assetLookup);
-      const crop = (desktop.elementScreenshots || {})[sourceId];
+      // Keyed by the new id, or — for a capture taken before 86bcyrt21 — by
+      // the crawl-position id the worker used then.
+      const crops = desktop.elementScreenshots || {};
+      const crop = crops[baseSourceId] || crops[legacySourceId(pageIdx, v.domPath)];
       el = {
         sourceId,
         class: v.cls,
@@ -1771,7 +1819,7 @@ function normalizePage(
     // already the section's band (containers), and the mapper reads it there.
     const ground = !grounds[k].ownFill && grounds[k].color !== pageBackground ? grounds[k].color : "";
     sections.push({
-      sourceId: computeSourceId(pageIdx, sectionPath),
+      sourceId: computeSourceId(pageKey, sectionPath),
       type: "unknown",
       screenshot: sectionShots[String(i)] || "",
       elements,
@@ -1783,7 +1831,7 @@ function normalizePage(
   });
   if (loose.length) {
     sections.push({
-      sourceId: `${pageIdx}-loose`,
+      sourceId: `${pageKey}-loose`,
       type: "unknown",
       screenshot: "",
       elements: loose,
@@ -1798,7 +1846,7 @@ function normalizePage(
   if (Array.isArray(desktop.decorations)) {
     const byCandidate = new Map<number, SectionIR>();
     candidates.forEach((_, i) => {
-      const sid = computeSourceId(pageIdx, `section[${i}]`);
+      const sid = computeSourceId(pageKey, `section[${i}]`);
       const section = sections.find((s) => s.sourceId === sid);
       if (section) byCandidate.set(i, section);
     });
@@ -1816,7 +1864,7 @@ function normalizePage(
       const target = node ? candidateFor(node, candidateIndex) : null;
       const section = target === null ? undefined : byCandidate.get(target);
       const deco: DecorationIR = {
-        id: computeSourceId(pageIdx, `decoration/${d.owner}::${d.pseudo}`),
+        id: computeSourceId(pageKey, `decoration/${d.owner}::${d.pseudo}`),
         pseudo: d.pseudo,
         owner: d.label || "an element",
         onSectionRoot: Boolean(node && target !== null && candidates[target] === node),
@@ -1916,14 +1964,16 @@ export function normalizeSite(input: NormalizeInput): NormalizeOutput {
   const pages: PageIR[] = [];
   const usesByAsset = new Map<string, { pageUrl: string; sourceId: string }[]>();
 
+  const pageKeys = pageKeyCounter();
   pagesIn.forEach((captures, pageIdx) => {
     if (!captures || !captures.desktop) return;
+    const pageKey = pageKeys.take(captures.desktop.finalUrl || captures.desktop.url || "");
     let build: PageBuild;
     try {
-      build = normalizePage(pageIdx, captures, assetLookup, tokens, navs, logoSink);
+      build = normalizePage(pageKey, pageIdx, captures, assetLookup, tokens, navs, logoSink);
       collectStyleEvidence(captures.desktop, evidence);
     } catch {
-      build = degradedPage(pageIdx, captures);
+      build = degradedPage(pageKey, captures);
     }
     pages.push(build.page);
     mergeCounts(captured, build.captured);
