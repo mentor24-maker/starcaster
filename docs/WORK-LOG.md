@@ -7,6 +7,7 @@ the Pages panel, which then could not be clicked. The box now grows to fit
 its buttons, lined up with the Preview / Save buttons in the row below, and
 on a narrow screen the buttons drop onto a second line instead of spilling
 out.
+
 ## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
 
 On the Profile screen every box was about 100 pixels wide, the "Primary
