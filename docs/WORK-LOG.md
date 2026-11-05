@@ -1,3 +1,13 @@
+## 2026-11-04 — Form embed code and preview show choice questions as choices (#969)
+
+A form question set to "Choose one", "Choose several" or "Dropdown list
+(choose several)" turned into an empty text box in two places: the embed code
+a client pastes onto an outside website, and the preview beside the form
+editor. A visitor on that outside site could not pick anything. Now the embed
+writes real round buttons or tick boxes with the client's options, an ordinary
+dropdown carries its options too, and the preview shows the same choices. On
+the way we found the embed was also throwing away all but the last ticked box
+when a visitor ticked several; it now sends them all.
 ## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
 
 On the screen where you build a CRM form, the column headings, the sections

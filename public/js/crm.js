@@ -1614,6 +1614,20 @@ App.crm = (function () {
     });
   }
 
+  // Choose one (`radio`), Choose several (`checkboxes`) and Dropdown list
+  // (choose several) (`multiselect`, task 86bcynpyf) are each a GROUP of
+  // choices read from the field's Options. Before task 86bcyqzhv the preview
+  // pane and the embed code knew none of them and drew a blank text box.
+  function isChoiceGroupFieldType(type) {
+    return type === 'radio' || type === 'checkboxes' || type === 'multiselect';
+  }
+
+  function configuredFieldOptions(field) {
+    return (Array.isArray(field?.options) ? field.options : [])
+      .map((opt) => String(opt ?? '').trim())
+      .filter(Boolean);
+  }
+
   function previewFieldInputMarkup(field) {
     if (field.type === 'textarea') {
       return `<textarea readonly tabindex="-1"></textarea>`;
@@ -1623,6 +1637,15 @@ App.crm = (function () {
         ? field.options.map((opt) => `<option>${escHtml(opt)}</option>`).join('')
         : '<option>Option one</option><option>Option two</option>';
       return `<select disabled tabindex="-1">${options}</select>`;
+    }
+    if (isChoiceGroupFieldType(field.type)) {
+      // Same sample the Builder canvas shows for a field with no options yet.
+      const configured = configuredFieldOptions(field);
+      const options = configured.length ? configured : ['Option one', 'Option two'];
+      const inputType = field.type === 'radio' ? 'radio' : 'checkbox';
+      return `<span class="crm-form-preview-choices">${options.map((opt) => `
+        <label class="crm-form-preview-choice"><input type="${inputType}" disabled tabindex="-1" /> <span>${escHtml(opt)}</span></label>`).join('')}
+      </span>`;
     }
     const inputType = field.type === 'boolean' ? 'checkbox' : (field.type || 'text');
     if (inputType === 'checkbox') {
@@ -1750,6 +1773,32 @@ App.crm = (function () {
     modal.open();
   }
 
+  // One field of the embed code. A choice group carries its options as real
+  // choices (task 86bcyqzhv); a choice group with no options is left out, the
+  // same rule the live Builder form follows, because a visitor could never
+  // answer it. Dropdown list (choose several) embeds as tick boxes — plain
+  // HTML has no dropdown of tick boxes, and a tick-box group is the honest
+  // equivalent.
+  function embedFieldMarkup(f) {
+    const req = f.required ? ' required' : '';
+    if (isChoiceGroupFieldType(f.type)) {
+      const options = configuredFieldOptions(f);
+      if (!options.length) return '';
+      const several = f.type !== 'radio';
+      const groupAttrs = several
+        ? ` data-crm-several="${f.key}"${f.required ? ' data-crm-needs-one="1"' : ''}`
+        : '';
+      const choices = options.map((opt, i) => `    <label class="crm-embed-choice"><input type="${several ? 'checkbox' : 'radio'}" name="${f.key}" id="crmf_${f.key}_${i}" value="${escHtml(opt)}"${req} /><span>${escHtml(opt)}</span></label>`).join('\n');
+      return `  <div class="crm-embed-field" role="${several ? 'group' : 'radiogroup'}" aria-labelledby="crmf_${f.key}_label"><span id="crmf_${f.key}_label">${escHtml(f.label)}</span>\n  <div class="crm-embed-choices"${groupAttrs}>\n${choices}\n  </div></div>`;
+    }
+    const inputEl = f.type === 'textarea'
+      ? `<textarea name="${f.key}" id="crmf_${f.key}"${req}></textarea>`
+      : f.type === 'select'
+        ? `<select name="${f.key}" id="crmf_${f.key}"${req}><option value="">Select…</option>${configuredFieldOptions(f).map((opt) => `<option value="${escHtml(opt)}">${escHtml(opt)}</option>`).join('')}</select>`
+        : `<input type="${f.type === 'boolean' ? 'checkbox' : escHtml(f.type || 'text')}" name="${f.key}" id="crmf_${f.key}"${req} />`;
+    return `  <label class="crm-embed-field" for="crmf_${f.key}"><span>${escHtml(f.label)}</span>${inputEl}</label>`;
+  }
+
   function buildEmbedCode(form) {
     if (!form?.id) return '';
     const origin = window.location.origin;
@@ -1777,14 +1826,11 @@ App.crm = (function () {
     );
     const themeVars = buildFormThemePaletteVars(formEditorThemePalette, formEditorThemeTypography);
     const themeVarCss = Object.entries(themeVars).map(([key, value]) => `${key}:${value}`).join(';');
-    const fieldHtml = fields.map((f) => {
-      const inputEl = f.type === 'textarea'
-        ? `<textarea name="${f.key}" id="crmf_${f.key}"${f.required ? ' required' : ''}></textarea>`
-        : f.type === 'select'
-          ? `<select name="${f.key}" id="crmf_${f.key}"${f.required ? ' required' : ''}><option value="">Select…</option></select>`
-          : `<input type="${f.type === 'boolean' ? 'checkbox' : escHtml(f.type || 'text')}" name="${f.key}" id="crmf_${f.key}"${f.required ? ' required' : ''} />`;
-      return `  <label class="crm-embed-field" for="crmf_${f.key}"><span>${escHtml(f.label)}</span>${inputEl}</label>`;
-    }).join('\n');
+    const fieldHtml = fields.map(embedFieldMarkup).filter(Boolean).join('\n');
+    const hasChoiceGroup = fields.some((f) => isChoiceGroupFieldType(f.type) && configuredFieldOptions(f).length);
+    const choiceCss = hasChoiceGroup
+      ? `\n.crm-embed-choices{grid-column:2;justify-self:${fieldJustify};display:flex;flex-direction:column;gap:6px;font-weight:400}\n.crm-embed-choice{display:inline-flex;align-items:center;gap:8px;cursor:pointer}\n.crm-embed-field .crm-embed-choice input{width:auto;min-height:0;margin:0;padding:0}`
+      : '';
 
     return `<!-- CRM Form: ${escHtml(form.name)} -->
 <style>
@@ -1794,7 +1840,7 @@ App.crm = (function () {
 .crm-embed-form{display:grid;grid-template-columns:minmax(120px,38%) minmax(0,1fr);column-gap:8px;row-gap:12px;background:${escHtml(backgroundColor)};border:${escHtml(styles.borderSize)} solid ${escHtml(borderColor)};padding:${escHtml(styles.padding)};border-radius:${escHtml(styles.borderRadius)};box-sizing:border-box}
 .crm-embed-field{display:contents;color:#18324a;font-weight:700}
 .crm-embed-field>span{grid-column:1;justify-self:${labelJustify};align-self:start;text-align:${escHtml(styles.labelAlign)}}
-.crm-embed-field input,.crm-embed-field textarea,.crm-embed-field select{grid-column:2;justify-self:${fieldJustify};width:100%;min-height:42px;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font:inherit}
+.crm-embed-field input,.crm-embed-field textarea,.crm-embed-field select{grid-column:2;justify-self:${fieldJustify};width:100%;min-height:42px;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;font:inherit}${choiceCss}
 .crm-embed-submit{grid-column:2;justify-self:${buttonJustify};width:${escHtml(styles.buttonWidth)};max-width:100%;white-space:nowrap;padding:0.6rem 1.5rem;border:none;border-radius:8px;background:${escHtml(buttonBackgroundColor)};color:${escHtml(buttonTextColor)};font-size:${escHtml(styles.buttonTextSize)};font-weight:${formWeightToCss(styles.buttonTextWeight)};cursor:pointer}
 </style>
 <div class="crm-embed-shell">
@@ -1813,10 +1859,22 @@ ${fieldHtml}
   var form=document.getElementById('crmForm_${form.id}');
   var msg=document.getElementById('crmMsg_${form.id}');
   if(!form)return;
+  // A required "choose several" group: every box stays required until one is
+  // ticked, so the browser blocks an empty answer and lets any single tick through.
+  var groups=form.querySelectorAll('[data-crm-needs-one]');
+  Array.prototype.forEach.call(groups,function(g){
+    var boxes=g.querySelectorAll('input[type=checkbox]');
+    var sync=function(){var any=Array.prototype.some.call(boxes,function(b){return b.checked;});Array.prototype.forEach.call(boxes,function(b){b.required=!any;});};
+    Array.prototype.forEach.call(boxes,function(b){b.addEventListener('change',sync);});
+    form.addEventListener('reset',function(){setTimeout(sync,0);});
+  });
   form.addEventListener('submit',function(e){
     e.preventDefault();
     var data={};
-    new FormData(form).forEach(function(v,k){data[k]=v;});
+    new FormData(form).forEach(function(v,k){
+      if(form.querySelector('[data-crm-several="'+k+'"]')){(data[k]=data[k]||[]).push(v);}
+      else{data[k]=v;}
+    });
     fetch('${origin}/api/crm/contact-submit',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({crmConfigId:data.crmConfigId,crm_form_id:'${escHtml(form.id)}',projectId:data.projectId,_trap:data._trap||'',email:data.email||'',data:data,source:'form',pageUrl:location.pathname+location.search})
