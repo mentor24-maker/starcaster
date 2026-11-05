@@ -8,6 +8,30 @@ writes real round buttons or tick boxes with the client's options, an ordinary
 dropdown carries its options too, and the preview shows the same choices. On
 the way we found the embed was also throwing away all but the last ticked box
 when a visitor ticked several; it now sends them all.
+## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
+
+On the screen where you build a CRM form, the column headings, the sections
+inside them and the individual settings were all about the same size, so
+everything ran together. Now there are three steps: big column titles
+(including a new "Form Actions" title over the first column), slightly
+smaller bold section names like Border and Button, and one bold size for
+every setting label, so Padding and Margin finally match Border Size. The
+three sizes are saved as named settings and written down as a rule, so the
+next editor screens in this clean-up series use exactly the same ones. To
+keep every label on one line, "Field Alignment" now reads "Field Align", and
+the "(optional …)" notes moved onto their own small line under the label.
+## 2026-11-04 — Forms get a dropdown where visitors can pick several answers (#968)
+
+Forms can now ask a question as a **Dropdown list (choose several)**. It looks
+like the ordinary dropdown, but clicking it opens a short list with a tick box
+beside each choice; the visitor ticks as many as they like, and once the list
+closes the box shows what they picked, such as "Writing, Music". It works with
+the keyboard alone, a required one will not let the form go until something is
+ticked, and the contact record saves the answer as plain text just like the
+tick-box questions added earlier today. The old dropdown is now called
+**Dropdown list (choose one)** in the list of field types so the two read as a
+pair; existing forms are unchanged. That completes the four multiple-choice
+types: dropdown (one), dropdown (several), round buttons, and tick boxes.
 
 ## 2026-11-04 — Site Import no longer copies the same site twice (#966)
 

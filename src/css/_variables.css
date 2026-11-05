@@ -168,6 +168,15 @@
   --text-2xl: 1.5rem;   /* 24px — hero/stat numbers */
   --text-3xl: 2rem;     /* 32px — largest display text */
 
+  /*
+   * Editor heading levels (UI normalization epic, operator 2026-11-04).
+   * Every editor screen uses exactly these three, so a screen reads the same
+   * way wherever you are: column title > item > sub-item. docs/UI_RULES.md R10.
+   */
+  --editor-title-size: var(--text-xl);    /* 20px — a column's title */
+  --editor-item-size: var(--text-lg);     /* ~17.6px, bold — a section inside a column */
+  --editor-subitem-size: var(--text-base);/* ~14.4px, bold — every setting label */
+
   --leading-tight: 1.25; /* headings, single-line UI */
   --leading-normal: 1.5; /* body copy */
 

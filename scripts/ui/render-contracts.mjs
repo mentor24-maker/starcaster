@@ -1080,6 +1080,72 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'crm-form-choose-several-dropdown-keeps-two-choices-and-shows-both-when-closed',
+    why:
+      'A "Dropdown list (choose several)" question (task 86bcynpyf) is a button that opens a list of ' +
+      'tick boxes. Ticking two and clicking away must leave BOTH chosen and the closed box must name ' +
+      'both ("Writing, Music"). Ways it fails unseen: the list closing on the first tick (so a second ' +
+      'cannot be reached — the click below then fails), the second tick replacing the first, the ' +
+      'closed box still saying "Select…", or the list never closing. The form is served from a ' +
+      'fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_multiselect' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_multiselect/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_multiselect',
+          heading: 'Join the crew',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          fields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'enjoys', label: 'Also enjoys', type: 'multiselect', required: true, options: ['Writing', 'Music', 'Film'] },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true },
+    // Open it, tick the first two, then click the heading — outside the list.
+    click: [
+      '.builder-crm-form-multiselect-button',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(1) input',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(2) input',
+      '.builder-contact-form-heading',
+    ],
+    selector: '.builder-crm-form-multiselect-button',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['aria-expanded'],
+      selectors: {
+        button: '.builder-crm-form-multiselect-button',
+        list: '.builder-crm-form-multiselect-list',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no "choose several" dropdown rendered — the field was dropped or drawn as something else.';
+      const f = sample.series?.[0];
+      if (!f || !f.button) return 'no series frame was taken — the contract measured nothing.';
+      if (f.list) return 'the list of tick boxes is still open after clicking outside it.';
+      if (f.button['aria-expanded'] !== 'false') return `the closed button says aria-expanded="${f.button['aria-expanded']}" — it must report itself closed.`;
+      if (sample.text !== 'Writing, Music') {
+        return `the closed box reads "${sample.text}" after ticking Writing and Music — expected "Writing, Music" (both kept, in option order).`;
+      }
+      if (sample.box.height < 30 || sample.box.width < 120) {
+        return `the closed box is ${sample.box.width}×${sample.box.height}px — it should be drawn like the single dropdown, filling the field column.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:
       'A Button set to Centered sat at the left edge of every page (task 86bcg6j0z, operator ' +

@@ -116,6 +116,7 @@
         </div>
         <div class="crm-form-editor-layout">
           <div class="crm-form-editor-col crm-form-editor-col-settings">
+            <h3 class="crm-form-editor-col-title">Form Actions</h3>
             <form id="crmFormEditorForm">
               <label class="field crm-form-editor-setting">
                 <span>Form Name</span>
@@ -168,11 +169,13 @@
               <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorAlertsTitle">
                 <h3 class="crm-form-editor-section-title" id="crmFormEditorAlertsTitle">Team alerts</h3>
                 <label class="field crm-form-editor-setting">
-                  <span>Alert these addresses <span class="meta">(optional — separate with commas)</span></span>
+                  <span>Alert these addresses</span>
+                  <span class="meta crm-form-editor-setting-hint">Optional — separate with commas</span>
                   <input type="text" id="crmFormEditorAlertEmails" placeholder="Blank: the Contact Alert Email from Settings" />
                 </label>
                 <label class="field crm-form-editor-setting">
-                  <span>Alert subject <span class="meta">(optional — {{first_name}} works)</span></span>
+                  <span>Alert subject</span>
+                  <span class="meta crm-form-editor-setting-hint">Optional — {{first_name}} works</span>
                   <input type="text" id="crmFormEditorAlertSubject" placeholder="New contact form submission — your site" />
                 </label>
               </section>
@@ -181,8 +184,9 @@
                 <h3 class="crm-form-editor-section-title" id="crmFormEditorConfirmTitle">Confirmation email</h3>
                 <label class="checkbox-row">
                   <input type="checkbox" id="crmFormEditorConfirmEnabled" class="standard-form-checkbox" />
-                  <span>Email the visitor a confirmation <span class="meta">(needs an Email field)</span></span>
+                  <span>Email the visitor a confirmation</span>
                 </label>
+                <p class="meta crm-form-editor-setting-hint">Needs an Email field on the form.</p>
                 <div id="crmFormEditorConfirmFields" class="hidden">
                   <label class="field crm-form-editor-setting">
                     <span>Subject</span>
@@ -298,7 +302,7 @@
                   </select>
                 </label>
                 <label class="field crm-form-editor-setting">
-                  <span>Field Alignment</span>
+                  <span>Field Align</span>
                   <select id="crmFormEditorFieldAlign" class="crm-form-editor-select">
                     <option value="left" selected>Left</option>
                     <option value="center">Center</option>
