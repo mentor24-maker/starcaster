@@ -1,3 +1,16 @@
+## 2026-11-05 — Section headings look the same on every editor screen (#978)
+
+Headings that do the same job came in four different looks: small spaced-out
+capitals on Builder › Themes, rounded pill badges on the Builder's page editor
+panels, plain bold on the CRM form editor, and big card titles on Settings. Now
+every one uses one of the three sizes the CRM form editor set yesterday — a
+card or panel's title, a group inside it, and one setting's label — in the same
+weight and the same dark ink, on Themes, the page editor, Settings › Profile
+and Projects, and Engage › Outreach. The pill style is kept where it belongs:
+the same style also draws poll and player-card headers on clients' websites,
+and those are untouched. The rule is written up as R11 in `docs/UI_RULES.md`
+so the next screens in the series reuse it.
+
 ## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
 
 Site Import gives every section it builds a name, so that importing the same
