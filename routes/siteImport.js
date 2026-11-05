@@ -95,7 +95,8 @@ async function handle(req, res, pathname, method) {
       return sendErr(
         res, 409,
         `${sameSite.displayAddress(complete.sourceUrl)} was already imported for this project on ` +
-          `${sameSite.formatDay(complete.finishedAt)}. Import it again to take a fresh copy of the site?`,
+          `${sameSite.formatDay(complete.finishedAt)}. Import it again? Building from the new copy updates the pages that ` +
+          'import made. Sections you have edited are kept.',
         { code: 'DUPLICATE_COMPLETE', details: [earlierDetail(complete)] }
       ), true;
     }
