@@ -159,7 +159,11 @@ header {
    those. The rule for every later screen is written up in docs/UI_RULES.md
    ("The admin header"). */
 #appShell > header {
-  --admin-header-height: 56px;
+  /* 76px, not 56: at 22px the logo was too small to read (Dane, 2026-11-05,
+     task 86bcyyfex — "reduce the top and bottom margin on that logo to 10px,
+     and increase the height of the banner by about 20px"). */
+  --admin-header-height: 76px;
+  --admin-logo-margin: 10px;
   min-height: var(--admin-header-height);
   padding: 0 0.75rem;
   gap: 0.75rem;
@@ -171,10 +175,17 @@ header {
 }
 
 #appShell > header > .brand-wordmark {
-  /* 1200x180 image at 22px tall = ~147px wide. */
-  width: auto;
-  height: 22px;
-  max-width: 40vw;
+  /* The header height less 10px above and below: 56px tall. The 1200x180
+     image is blank right of x≈750, so the box is 750 wide in image terms and
+     the blank strip is cropped off (cover + left) — 233px wide instead of
+     373px of mostly nothing. */
+  --admin-logo-height: calc(var(--admin-header-height) - 2 * var(--admin-logo-margin));
+  height: var(--admin-logo-height);
+  width: calc(var(--admin-logo-height) * 750 / 180);
+  max-width: none;
+  margin: var(--admin-logo-margin) 0;
+  object-fit: cover;
+  object-position: left center;
   align-self: center;
   flex: 0 0 auto;
 }
@@ -207,9 +218,11 @@ header {
 #appShell > header .menu-root > .menu-item > .menu-link {
   display: flex;
   align-items: center;
-  /* --text-sm and 0.4rem sides: measured at 1440, --text-base with 0.6rem
-     made the menu ~1090px and pushed name / Logout onto a second row. */
-  padding: 0 0.4rem;
+  /* --text-sm and 0.35rem sides: measured at 1440, --text-base with 0.6rem
+     made the menu ~1090px and pushed name / Logout onto a second row, and
+     0.4rem pushed the Projects button off once the logo grew to 56px tall
+     (task 86bcyyfex). */
+  padding: 0 0.35rem;
   font-size: var(--text-sm);
   white-space: nowrap;
 }
@@ -294,6 +307,14 @@ header {
   }
   #appShell > header > .admin-menu-toggle {
     display: inline-flex;
+  }
+  /* A 233px logo beside the Menu button and account block overflows a 390px
+     phone, so here it is 40% of the screen wide and as tall as that allows
+     (~37px at 390). */
+  #appShell > header > .brand-wordmark {
+    width: 40vw;
+    height: calc(40vw * 180 / 750);
+    margin: 0;
   }
   #appShell > header > .top-nav {
     display: none;
