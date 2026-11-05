@@ -1,3 +1,17 @@
+## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
+
+Sites copied in before today's form fix (#974) still show a picture of each
+sign-up form. The import tool now has a "forms only" pass that goes back over
+pages an import already built and swaps just those pictures for working forms,
+without re-copying the site or touching anything else on the page. If somebody
+has changed or removed one of those pictures, it is left alone and named. Each
+page is backed up first and checked after it is saved. Afterwards it puts back
+live only the pages that were already live and had no other unpublished
+changes, so nobody's half-finished edits go public by accident. A practice run
+on a copy of the live data found the Strands sign-up form on two pages, built
+it, and reported "nothing to change" when run a second time. Strands' home page
+already had unpublished edits, so that one waits for Dane to publish.
+
 ## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
 
 When Site Import copied a site, any sign-up or contact form came across as a
