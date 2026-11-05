@@ -169,7 +169,7 @@ test('POST /jobs: a finished site is refused with DUPLICATE_COMPLETE unless conf
   assert.equal(res.statusCode, 409);
   const err = res.json().error;
   assert.equal(err.code, 'DUPLICATE_COMPLETE');
-  assert.match(err.message, /www\.wavecenter\.com was already imported for this project on Nov 4, 2026\. Import it again to take a fresh copy of the site\?/);
+  assert.match(err.message, /www\.wavecenter\.com was already imported for this project on Nov 4, 2026\. Import it again\? Building from the new copy updates the pages that import made\. Sections you have edited are kept\./);
   assert.equal(calls.some(([n]) => n === 'createJob'), false);
 });
 
