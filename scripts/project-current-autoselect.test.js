@@ -85,6 +85,33 @@ async function run() {
   assert.equal(pinned.data.project?.id, 'proj_default_x');
   assert.equal(pinned.data.resolvedFrom, 'session');
 
+  // The tab's header beats a pin that disagrees with it. The pin is one value
+  // per login; the header is what THIS tab's banner shows. Pin winning is how
+  // Builder › Pages listed the previous project's pages after a switch
+  // (task 86bcybyy3). Both the middleware and the boot call must agree.
+  for (const autoSelectFirst of [false, true]) {
+    const tabWins = await resolveCurrentProject({
+      userId: USER,
+      requestedProjectId: 'proj_real',
+      sessionActiveProjectId: 'proj_default_x',
+      autoCreateDefault: false,
+      autoSelectFirst,
+    });
+    assert.equal(tabWins.data.project?.id, 'proj_real', `header lost to the pin (autoSelectFirst=${autoSelectFirst})`);
+    assert.equal(tabWins.data.resolvedFrom, 'header');
+  }
+
+  // A header naming a project the user is NOT in is never honoured — the pin
+  // still decides. The header is a choice among the user's projects, not a key.
+  const foreignHeader = await resolveCurrentProject({
+    userId: USER,
+    requestedProjectId: 'proj_someone_elses',
+    sessionActiveProjectId: 'proj_default_x',
+    autoCreateDefault: false,
+  });
+  assert.equal(foreignHeader.data.project?.id, 'proj_default_x');
+  assert.equal(foreignHeader.data.resolvedFrom, 'session');
+
   // Only a default project exists — take it rather than stranding the user.
   seed([
     { id: 'proj_default_x', name: 'Default Project', slug: 'default-x', created_at: '2026-01-01T00:00:00.000Z' },
