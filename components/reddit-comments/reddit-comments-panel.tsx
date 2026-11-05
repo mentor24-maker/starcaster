@@ -347,7 +347,7 @@ function ReadingCard({ item, busy, error, onPaste, onReadAgain, onReject }: {
         {line?.offerPaste ? (
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-save"
             disabled={Boolean(busy) || !(title.trim() || body.trim())}
             onClick={() => onPaste({ postTitle: title.trim(), postBody: body.trim(), parentCommentText: comment.trim() })}
           >

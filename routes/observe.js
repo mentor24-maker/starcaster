@@ -206,6 +206,29 @@ async function handle(req, res, pathname, method) {
       : []
   };
 
+  // GET|POST /api/observe/usage-logs/prune — the scheduled retention pass
+  // (ClickUp 86bcy80hd, lib/usageLogRetention.js). Deletes per-request counter
+  // rows older than 30 days, never the AI-spend rows in the same table.
+  // CRON ONLY: `req.cronPublish` is true only for a CRON_PATHS path carrying
+  // Vercel's header or the CRON_SECRET token. Vercel's scheduler sends GET.
+  if (pathname === '/api/observe/usage-logs/prune' && (method === 'GET' || method === 'POST')) {
+    if (!req.cronPublish) {
+      return sendErr(res, 403, 'This cleanup runs on a schedule only', { code: 'CRON_ONLY' }), true;
+    }
+    const { pruneRequestLogs } = require('../lib/usageLogRetention');
+    const result = await pruneRequestLogs();
+    const d = result.data || {};
+    // Logged on every run, quiet ones included: "nothing to do" and "never
+    // ran" are indistinguishable in an empty log.
+    const line = `[observe.usage-logs] prune cutoff=${d.cutoff} deleted=${d.deleted} batches=${d.batches} complete=${d.complete} stopped=${d.stoppedBecause}`;
+    if (!result.ok) {
+      console.error(`${line} FAILED: ${result.error}`);
+      return sendErr(res, 502, result.error, { code: 'PRUNE_FAILED' }), true;
+    }
+    console.log(line);
+    return sendOk(res, 200, d), true;
+  }
+
   if (method === 'GET') {
      if (pathname === '/api/observe/usage-reports') {
         const payload = await getUsageAnalytics(scope);

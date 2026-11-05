@@ -42,6 +42,40 @@ button:hover, .btn:hover {
   color: var(--btn-flat-ink);
   opacity: 1;
 }
+/*
+ * Save = flat GREEN, "commit this work" (operator, 2026-11-04, task 86bcyjag0).
+ * The ONE class every Save button on the admin screens wears — markup, JS
+ * templates, React panels, and Modal/Card actions via `save: true`. The
+ * Builder's own toolbar keeps `.admin-save-button.submit-button` (same tokens,
+ * _builder-react-overrides.css) because its rules sit at a higher specificity.
+ *
+ * `.btn.btn-save` rather than `.btn-save`: legacy.css loads after this file and
+ * redefines `.btn` and `.btn-primary`, so a single class would lose to them.
+ * Sized to its label, never full-width (docs/MODULE_UI_DOCTRINE.md §2).
+ * Admin chrome only — a module that renders on a client's published site keeps
+ * the client's theme colours, so never put this class on one.
+ */
+.btn.btn-save {
+  background: var(--btn-green);
+  border-color: var(--btn-green);
+  color: var(--btn-flat-ink);
+  width: fit-content;
+  max-width: 100%;
+  white-space: nowrap;
+  justify-self: start;
+}
+.btn.btn-save:hover:not(:disabled) {
+  background: var(--btn-green-hover);
+  border-color: var(--btn-green-hover);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
+.btn.btn-save:disabled {
+  background: var(--btn-green-disabled);
+  border-color: var(--btn-green-disabled);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
 .btn-ghost {
   background: transparent;
   color: var(--ink-primary);

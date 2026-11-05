@@ -521,7 +521,7 @@ function AddFontForm({ onSaved, onCancel }: {
       {error ? <p className="fonts-manager-error" role="alert">{error}</p> : null}
       <div className="fonts-manager-actions">
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -1039,7 +1039,7 @@ export default function FontsManager(): React.ReactElement {
                             onChange={(e) => setSampleDraft(e.target.value)}
                             placeholder={DEFAULT_SAMPLE}
                           />
-                          <button type="submit" className="btn btn-primary tiny-btn" disabled={savingSample}>
+                          <button type="submit" className="btn btn-save tiny-btn" disabled={savingSample}>
                             {savingSample ? 'Saving…' : 'Save'}
                           </button>
                           <button type="button" className="btn tiny-btn" disabled={savingSample} onClick={() => setEditingSample('')}>Cancel</button>

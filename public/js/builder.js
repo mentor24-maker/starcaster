@@ -2160,6 +2160,7 @@ App.builder = (function () {
         { label: 'Cancel', onClick: () => modal.close() },
         {
           label: 'Save Contents',
+          save: true,
           onClick: () => {
             setValue(JSON.stringify(cells));
             afterChange(cells);
@@ -11045,7 +11046,7 @@ App.builder = (function () {
             <button type="button" id="builderPageModuleEditorRemoveBtn" class="btn btn-danger">Remove Module</button>
             <div class="builder-module-editor-modal__footer-actions">
               <button type="button" id="builderPageModuleEditorCancelBtn" class="btn btn-ghost">Cancel</button>
-              <button type="button" id="builderPageModuleEditorSaveBtn" class="btn btn-primary">Save Module</button>
+              <button type="button" id="builderPageModuleEditorSaveBtn" class="btn btn-save">Save Module</button>
             </div>
           </div>
         </div>
@@ -11220,7 +11221,7 @@ App.builder = (function () {
           <button type="button" id="builderRowSettingsResetBtn" class="btn">Reset</button>
           <div class="builder-module-editor-modal__footer-actions">
             <button type="button" id="builderRowSettingsCancelBtn" class="btn">Cancel</button>
-            <button type="button" id="builderRowSettingsSaveBtn" class="btn btn-primary">Save Row</button>
+            <button type="button" id="builderRowSettingsSaveBtn" class="btn btn-save">Save Row</button>
           </div>
         </div>
       </div>
@@ -11435,7 +11436,7 @@ App.builder = (function () {
           <button type="button" id="builderContainerSettingsResetBtn" class="btn">Reset</button>
           <div class="builder-module-editor-modal__footer-actions">
             <button type="button" id="builderContainerSettingsCancelBtn" class="btn">Cancel</button>
-            <button type="button" id="builderContainerSettingsSaveBtn" class="btn btn-primary">Save Container</button>
+            <button type="button" id="builderContainerSettingsSaveBtn" class="btn btn-save">Save Container</button>
           </div>
         </div>
       </div>
@@ -12086,7 +12087,6 @@ App.builder = (function () {
     button.disabled = state === 'saving';
     button.classList.toggle('is-saving', state === 'saving');
     button.classList.toggle('is-success', state === 'success');
-    button.classList.toggle('btn-primary', modularPageEditorMode === 'page' && state !== 'success');
     button.textContent = labels[state] || defaultLabel;
     if (state === 'success') {
       window.setTimeout(() => {

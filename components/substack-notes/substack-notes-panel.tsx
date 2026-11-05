@@ -595,7 +595,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
       </div>
       {error ? <p className="substack-notes-error" role="alert">{error}</p> : null}
       <div className="substack-notes-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -619,7 +619,7 @@ function TextEditor({ id, label, initial, busy, onSave, onCancel }: {
       <textarea id={id} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="substack-notes-actions">
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );

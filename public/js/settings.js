@@ -118,6 +118,9 @@ App.settings = (function () {
   // Project the Projects table shows as active while a switch is still reloading
   // the app (App.refresh takes seconds); cleared when the switch settles.
   let pendingActiveProjectId = '';
+  // Project whose editor is still opening from the Projects table (the same
+  // switch + reload); its Edit button spins until the editor opens or fails.
+  let pendingEditProjectId = '';
 
   function openProjectsPage() {
     // Re-entrancy guard: the render calls below can indirectly navigate, and a
@@ -685,16 +688,15 @@ App.settings = (function () {
       const name = String(project?.name || project?.slug || id || 'Untitled');
       const logoDataUrl = getProjectLogoDataUrl(project);
       const row = document.createElement('tr');
-      const isSwitching = Boolean(pendingActiveProjectId);
+      const isSwitching = Boolean(pendingActiveProjectId || pendingEditProjectId);
+      const isOpening = Boolean(id) && id === pendingEditProjectId;
       const isActive = id && id === String(pendingActiveProjectId || state.currentProjectId || '');
 
       const projectCell = document.createElement('td');
       const projectLink = document.createElement('button');
       projectLink.type = 'button';
       projectLink.className = 'settings-project-table-link';
-      projectLink.addEventListener('click', () => {
-        openProjectEditor(id).catch((err) => notify(err.message || 'Could not open project', true));
-      });
+      projectLink.addEventListener('click', () => openProjectEditorFromTable(id));
 
       if (logoDataUrl) {
         const logo = document.createElement('img');
@@ -735,14 +737,21 @@ App.settings = (function () {
       const actionsCell = document.createElement('td');
       actionsCell.className = 'settings-projects-actions-cell actions-col';
       if (actionsCell) {
-        const editBtn = App.makeIconButton('edit', 'Edit', () => {
-          openProjectEditor(id).catch((err) => notify(err.message || 'Could not open project', true));
-        });
+        const editBtn = App.makeIconButton(
+          'edit',
+          isOpening ? 'Opening…' : 'Edit',
+          () => openProjectEditorFromTable(id),
+          { disabled: isSwitching }
+        );
+        if (isOpening) {
+          editBtn.classList.add('is-switching');
+          editBtn.setAttribute('aria-busy', 'true');
+        }
         const activateBtn = App.makeIconButton(
           'approve',
-          isActive ? (isSwitching ? 'Switching…' : 'Active') : 'Set Active',
+          isActive ? (pendingActiveProjectId ? 'Switching…' : 'Active') : 'Set Active',
           () => {
-            if (pendingActiveProjectId) return;
+            if (pendingActiveProjectId || pendingEditProjectId) return;
             pendingActiveProjectId = id;
             renderProjectsTable();
             selectProjectForSession(id, { keepView: false })
@@ -765,7 +774,7 @@ App.settings = (function () {
           { disabled: isActive || isSwitching }
         );
         if (isActive) activateBtn.classList.add('settings-project-active-btn');
-        if (isActive && isSwitching) {
+        if (isActive && pendingActiveProjectId) {
           activateBtn.classList.add('is-switching');
           activateBtn.setAttribute('aria-busy', 'true');
         }
@@ -785,6 +794,22 @@ App.settings = (function () {
       row.appendChild(actionsCell);
       body.appendChild(row);
     });
+  }
+
+  function openProjectEditorFromTable(id) {
+    if (pendingActiveProjectId || pendingEditProjectId) return;
+    pendingEditProjectId = id;
+    renderProjectsTable();
+    const settle = () => {
+      pendingEditProjectId = '';
+      renderProjectsTable();
+    };
+    openProjectEditor(id)
+      .then(settle)
+      .catch((err) => {
+        settle();
+        notify(err?.message || 'Could not open project', true);
+      });
   }
 
   function ensureProjectTimezoneSelectOptions() {
@@ -2631,7 +2656,7 @@ App.settings = (function () {
           await refreshProjectContext();
           renderProjectDetails();
           applyProjectToHeader();
-          notify('Project saved');
+          App.components.SavedNotice.show('Project saved', { page: byId('settingsProjectDetailPage') });
         } catch (err) {
           notify(err.message, true);
         }

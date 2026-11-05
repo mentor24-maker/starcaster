@@ -827,7 +827,7 @@ App.campaigns = (function () {
 
     const saveHashtagBtn = document.createElement('button');
     saveHashtagBtn.type = 'button';
-    saveHashtagBtn.className = 'btn btn-primary';
+    saveHashtagBtn.className = 'btn btn-save';
     saveHashtagBtn.textContent = 'Save Hashtag';
     saveHashtagBtn.disabled = true;
 
