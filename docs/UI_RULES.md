@@ -1402,7 +1402,14 @@ Advanced — is the follow-on pass the operator sequenced after this.
   0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
   `<button>`s without `.btn`, so that fade still reaches them; the Builder
   block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
-  admin-only, so a client's published buttons are untouched.) **Two sizes:** normal, `--btn-height` (36px), and small,
+  admin-only, so a client's published buttons are untouched. The same trap
+  hides inside the system: a kind written at two classes, like
+  `.btn.btn-ghost`, outranks the shared one-class outlined hover and
+  disabled, so it needs its own — without them the ghost buttons had no
+  hover and no disabled colour at all. And the old `.tiny-btn:disabled`
+  fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
+  A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (36px), and small,
   `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
   (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
   height, padding or colour: a rule like `.page-heading-row button

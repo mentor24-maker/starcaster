@@ -13,8 +13,12 @@ the other screens in the UI normalization series reuse it.
 A review caught one thing before it merged: every button had started fading
 to 80% when you pointed at it, which undid the solid blue hover asked for on
 2026-08-30. A second review found the Builder's own buttons on Themes (Theme
-Wizard, New, Create, Choose Image) still faded. Buttons now change colour on
-hover and never fade, on every admin screen.
+Wizard, New, Create, Choose Image) still faded, and a third found the older
+"ghost" buttons (Cancel, Close, Clear, Choose From Gallery) had stopped
+reacting to the pointer at all. Those now darken on hover and grey out when
+unavailable, small buttons grey out instead of fading, and an Upload button
+that sat 2px taller than its neighbours is the same height. Buttons now change
+colour on hover and never fade, on every admin screen.
 ## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
 
 Sites copied in before today's form fix (#974) still show a picture of each

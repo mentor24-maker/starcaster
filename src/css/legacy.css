@@ -8631,7 +8631,12 @@ button.builder-inline-asset-status-btn:focus-visible {
   font-weight: 600;
 }
 
-.tiny-btn:disabled {
+/* The fade stays only where the button system does not reach: square icon
+   buttons and a `tiny-btn` without `.btn`. A small `.btn` of any kind has a
+   disabled COLOUR, never a fade (docs/UI_RULES.md C9) — this rule used to
+   fade small blue, red and outlined buttons to 45% (86bcyrqb9, round-3
+   rework). `:where` keeps it at the 0,2,0 it always had. */
+.tiny-btn:where(:not(.btn), .icon-btn):disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -9409,6 +9414,10 @@ table {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+  /* A <button> is border-box by default; a <label> or <a> wearing `.btn` is
+     not, and came out 2px taller than its neighbours (Upload To Gallery on
+     Settings › Projects measured 38px beside 36px buttons). */
+  box-sizing: border-box;
   min-height: var(--btn-height);
   padding: 0 var(--btn-pad-x);
   border-width: 1px;
@@ -9459,6 +9468,22 @@ table {
   background: var(--btn-secondary-bg);
   color: var(--btn-secondary-ink);
   border-color: var(--btn-secondary-border);
+}
+/* Its own hover and disabled, at its own two-class strength. The block above
+   is 0,2,0, so the shared outlined hover and disabled in _buttons.css
+   (`.btn:where(...)`, 0,1,0) lose to it — the ghost buttons had no hover and
+   no disabled colour at all (round-3 review, 86bcyrqb9). */
+.btn.btn-ghost:hover:not(:disabled) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border);
+  color: var(--btn-secondary-ink);
+  opacity: 1;
+}
+.btn.btn-ghost:disabled {
+  background: var(--btn-secondary-bg);
+  border-color: var(--btn-secondary-disabled-border);
+  color: var(--btn-secondary-disabled-ink);
+  opacity: 1;
 }
 
 /* RED — delete / remove. */
