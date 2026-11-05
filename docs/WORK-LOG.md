@@ -1,3 +1,16 @@
+## 2026-11-04 — Site Import no longer copies the same site twice (#966)
+
+One project ended up with two imports of wavecenter.com — one typed with
+"www." and one without — and when the import worker came back on it copied the
+whole site a second time while another import waited 31 hours behind it.
+Nothing noticed they were the same site. Now the Site Import screen refuses a
+site that is already waiting or being imported in the same project, and says
+so in plain words. A site that was already imported and finished gets a
+question instead — "already imported on Nov 4, import it again?" — with an
+Import again button, because a site can change. The worker also checks before
+it starts anything, so a duplicate that was already in the line is marked as
+not started, with the reason, instead of being copied again.
+
 ## 2026-11-04 — The request log no longer grows forever (#959)
 
 Every time anyone used the app, the database wrote down "a request happened"
