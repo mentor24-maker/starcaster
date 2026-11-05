@@ -1,3 +1,17 @@
+## 2026-11-04 — Forms can show multiple-choice questions as visible choices (#964)
+
+Until now a form could only ask a multiple-choice question as a dropdown menu,
+where the visitor has to click to see the choices. There are now two more
+question types: **Choose one**, which shows round buttons where picking one
+un-picks the others, and **Choose several**, which shows tick boxes. Both use
+the same Options box a dropdown does (choices separated by commas). When
+someone ticks several boxes, the contact record, the alert email and the
+visitor's confirmation all show the answer as plain text, like "Writing,
+Music". A question left with no choices is not shown on the live site, so
+visitors never see an empty question. This is the first step towards imported
+sites (Strands Movie's sign-up form first) getting real, working forms instead
+of a picture of one.
+
 ## 2026-11-04 — The request log no longer grows forever (#959)
 
 Every time anyone used the app, the database wrote down "a request happened"
