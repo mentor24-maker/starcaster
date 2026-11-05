@@ -5,9 +5,9 @@
  * Pure, no I/O. The runner (scripts/site_import_map.mjs) supplies context
  * (project id, existing slugs, prior run state) and performs every write.
  * COMPLETENESS OVER FIDELITY carries over from Phase 1: every ElementIR
- * must end in exactly one disposition — mapped, placeholder, navConsumed,
- * or skipped-with-reason — and the report must reconcile
- * (total === mapped + placeholder + navConsumed + humanModified + skipped)
+ * must end in exactly one disposition — mapped, placeholder, form,
+ * navConsumed, or skipped-with-reason — and the report must reconcile
+ * (total === mapped + placeholder + form + navConsumed + humanModified + skipped)
  * before the runner will ever --apply. humanModified is the runner's
  * bucket (it owns the section-hash clobber guard); the engine emits 0.
  *
@@ -19,6 +19,11 @@
  *   image              → `image` module
  *   button             → `button` module
  *   video (direct src) → `video` module; otherwise placeholder
+ *   form that collects something (forms.ts says data-capture) → form: a
+ *                        `crm-form` module carrying an import key; the
+ *                        runner builds the Starcaster form and fills its id
+ *                        in (task 86bcynjx2). Search/sign-in/payment forms
+ *                        stay placeholders, captioned with the reason.
  *   form/table/embed/other → placeholder: `code` module carrying the
  *                        element's screenshot crop; source HTML in
  *                        settings.importSourceHtml (overflow → runner
@@ -28,6 +33,7 @@
 import * as cheerio from "cheerio";
 import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
+import { readSourceForm, type DataCaptureForm, type FormField } from "./forms";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind, type Lockup } from "./columns";
 import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
@@ -104,7 +110,7 @@ export type MappedSection = {
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
    *  to humanModified when the hash guard protects the section. */
-  dispositions: { mapped: number; placeholder: number; deduped: number };
+  dispositions: { mapped: number; placeholder: number; deduped: number; form: number };
 };
 
 export type MappedPage = {
@@ -222,6 +228,8 @@ export type MapReport = {
     total: number;
     mapped: number;
     placeholder: number;
+    /** Source forms rebuilt as a working Form module (task 86bcynjx2). */
+    form: number;
     navConsumed: number;
     /** Slideshow clone-slides and interior-page chrome runs represented by
      *  the homepage slideshow (ratified amendment, task 86bb9xt0y). */
@@ -260,6 +268,26 @@ export type MapReport = {
    * written — that is exactly how image-only tables were found.
    */
   placeholderPatterns: { signature: string; count: number; sampleSourceId: string }[];
+  /**
+   * Every form on the source site and what became of it (task 86bcynjx2):
+   * rebuilt as a Starcaster form, or left as a picture with the reason.
+   * `kept`/`dropped`/`notes` are the reader's (forms.ts) in plain words.
+   * The runner fills `outcome` on --apply.
+   */
+  forms: {
+    rebuilt: {
+      key: string;
+      name: string;
+      questions: number;
+      pages: string[];
+      kept: string[];
+      dropped: string[];
+      notes: string[];
+      outcome?: string;
+      formId?: string;
+    }[];
+    pictures: { pagePath: string; sourceId: string; reason: string }[];
+  };
   /**
    * The menus --apply will build, in counts and plain words, so the dry run
    * and the Imports screen can say what is coming — and, when a part is
@@ -330,8 +358,31 @@ export type CardGridPlan = {
   absorbedIds: string[];
 };
 
+/**
+ * One source form to rebuild as a Starcaster form (task 86bcynjx2). A form
+ * that appears on several pages — a footer sign-up — is ONE plan used on
+ * each, because its key is read from what it asks, not where it sits.
+ */
+export type ImportFormPlan = {
+  /** "impform_<hash of the questions and button>" — stable across runs. */
+  key: string;
+  /** "<page title> form (<source host>)", from the first page it is on. */
+  name: string;
+  heading: string;
+  submitLabel: string;
+  fields: FormField[];
+  kept: DataCaptureForm["kept"];
+  dropped: DataCaptureForm["dropped"];
+  notes: DataCaptureForm["notes"];
+  /** Button looks read off the source, only where it said: CRM form style keys. */
+  styles: { buttonBackgroundColor?: string; buttonTextColor?: string; buttonTextSize?: string };
+  uses: { pageKey: string; pagePath: string; moduleId: string; sourceId: string }[];
+};
+
 export type MapOutput = {
   pages: MappedPage[];
+  /** Source forms the runner rebuilds before it writes pages. */
+  forms: ImportFormPlan[];
   /** Slideshows this run will create (empty when vetoed). */
   slideshows: SlideshowPlan[];
   /** Card grids this run will create (empty when none qualify). */
@@ -1088,6 +1139,63 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
 }
 
 const PLACEHOLDER_CLASSES = new Set(["form", "table", "embed", "other"]);
+
+/** FNV-1a 32-bit, hex — the same tiny stable hash normalize.ts uses. */
+function fnv1aHex(str: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * A source form's identity: what it asks and what its button says. Two
+ * copies of one footer sign-up hash alike wherever they sit; the markup's own
+ * ids (which plugins number per page) play no part (task 86bcynjx2).
+ */
+export function importFormKey(reading: DataCaptureForm): string {
+  const shape = reading.fields.map((f) => [f.key, f.type, f.required ? 1 : 0, f.label, f.options.join("|")].join("~")).join("\n");
+  return `impform_${fnv1aHex(`${shape}\n${reading.submitLabel}`)}`;
+}
+
+/** A colour the CRM form styles accept (#rrggbb); "" for anything else. */
+function formColor(raw: string): string {
+  return toHex(raw);
+}
+
+/** The submit button's own inline look, where the source wrote one. */
+export function submitButtonLook(html: string): ImportFormPlan["styles"] {
+  const $ = cheerio.load(html || "");
+  const btn = $("input[type=submit], button[type=submit], button:not([type])").first();
+  const style = String(btn.attr("style") || "");
+  const decl = (name: string): string => {
+    const m = new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`, "i").exec(style);
+    return m ? m[1].replace(/!important/i, "").trim() : "";
+  };
+  const out: ImportFormPlan["styles"] = {};
+  const bg = formColor(decl("background-color")) || formColor(decl("background"));
+  if (bg) out.buttonBackgroundColor = bg;
+  const fg = formColor(decl("color"));
+  if (fg) out.buttonTextColor = fg;
+  const size = decl("font-size");
+  if (/^\d+(\.\d+)?(px|rem|em)$/.test(size)) out.buttonTextSize = size;
+  return out;
+}
+
+/** The site's most common button look ("fill|text colour|radius px"), as a fallback. */
+function siteButtonLook(ir: SiteIR): ImportFormPlan["styles"] {
+  const top = ir.styleSummary?.buttons?.[0]?.value;
+  if (!top) return {};
+  const [fill, text] = top.split("|");
+  const out: ImportFormPlan["styles"] = {};
+  const bg = formColor(fill);
+  if (bg) out.buttonBackgroundColor = bg;
+  const fg = formColor(text);
+  if (fg) out.buttonTextColor = fg;
+  return out;
+}
 const PROSE_CLASSES = new Set(["heading", "text", "link"]);
 
 /** An element as the column planner's lockup rule sees it (columns.ts). */
@@ -1105,7 +1213,7 @@ const DIRECT_MEDIA_RE = /\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i;
  *  single full-width column, or the module would be squeezed into a cell. */
 const SELF_COLUMNED_TYPES = new Set(["feature-cards", "carousel"]);
 
-type Dispositions = { mapped: number; placeholder: number; deduped: number };
+type Dispositions = { mapped: number; placeholder: number; deduped: number; form: number };
 
 /**
  * A band onto each Builder row of the run it became (planBands decides each
@@ -1302,6 +1410,7 @@ function splitIntoRows(args: {
     first.dispositions.mapped += d.mapped;
     first.dispositions.placeholder += d.placeholder;
     first.dispositions.deduped += d.deduped;
+    first.dispositions.form += d.form;
   }
   return out;
 }
@@ -1366,12 +1475,13 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
 
   const report: MapReport = {
-    elements: { total: 0, mapped: 0, placeholder: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
+    elements: { total: 0, mapped: 0, placeholder: 0, form: 0, navConsumed: 0, deduped: 0, humanModified: 0, skipped: 0 },
     skipped: [],
     pages: [],
     assets: { promoted: 0, unplaced: 0, cropsCopied: 0, leftInNamespace: 0 },
     repeatCaptures,
     placeholderPatterns: [],
+    forms: { rebuilt: [], pictures: [] },
     menus: { top: null, footer: null, notes: [] },
   };
   for (const repeat of repeatCaptures) {
@@ -1387,6 +1497,31 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   let moduleSeq = 0;
   const nextModuleId = (sourceId: string) =>
     `impm_${String(sourceId).replace(/[^a-zA-Z0-9]+/g, "")}_${moduleSeq++}`;
+
+  // Source forms → one plan per distinct form (task 86bcynjx2).
+  const formPlans = new Map<string, ImportFormPlan>();
+  const sourceHost = menuSiteLabel(ir.sourceUrl || "");
+  const siteButton = siteButtonLook(ir);
+  const planFor = (reading: DataCaptureForm, el: ElementIR, page: PageIR): ImportFormPlan => {
+    const key = importFormKey(reading);
+    const found = formPlans.get(key);
+    if (found) return found;
+    const title = collapse(page.title || "") || (page.path === "/" ? "Home" : page.path);
+    const plan: ImportFormPlan = {
+      key,
+      name: `${title} form (${sourceHost})`,
+      heading: reading.heading || "",
+      submitLabel: reading.submitLabel || "Submit",
+      fields: reading.fields,
+      kept: reading.kept,
+      dropped: reading.dropped,
+      notes: reading.notes,
+      styles: { ...siteButton, ...submitButtonLook(el.html) },
+      uses: [],
+    };
+    formPlans.set(key, plan);
+    return plan;
+  };
 
   const promoteAsset = (assetId: string): AssetRef | null => {
     const asset = assetsById.get(assetId);
@@ -1796,11 +1931,11 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         return Math.max(sectionSpanPx, siteContentPx);
       };
       const moduleCells: Cell[] = [];
-      const bandDispositions = new Map<number, { mapped: number; placeholder: number; deduped: number }>();
+      const bandDispositions = new Map<number, Dispositions>();
       const dispositionsFor = (band: number) => {
         const found = bandDispositions.get(band);
         if (found) return found;
-        const fresh = { mapped: 0, placeholder: 0, deduped: 0 };
+        const fresh = { mapped: 0, placeholder: 0, deduped: 0, form: 0 };
         bandDispositions.set(band, fresh);
         return fresh;
       };
@@ -2164,6 +2299,36 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           continue;
         }
 
+        if (el.class === "form") {
+          flushProse();
+          const reading = readSourceForm(el.html);
+          if (reading.kind === "data-capture" && reading.fields.length) {
+            const plan = planFor(reading, el, page);
+            const moduleId = nextModuleId(el.sourceId);
+            modules.push({
+              id: moduleId,
+              type: "crm-form",
+              column: "main",
+              name: "Imported form",
+              text: "",
+              // crmFormId is filled by the runner once the form exists (link
+              // by id, landmine 19); importFormKey is how it finds which one.
+              settings: { crmFormId: "", importFormKey: plan.key, importSourceId: el.sourceId },
+            });
+            plan.uses.push({ pageKey: key, pagePath: page.path, moduleId, sourceId: el.sourceId });
+            report.elements.form += 1;
+            dispositions.form += 1;
+            continue;
+          }
+          const why = reading.kind === "not-data-capture"
+            ? reading.reason
+            : "no question in it could be read";
+          report.forms.pictures.push({ pagePath: page.path, sourceId: el.sourceId, reason: why });
+          const search = /search box/.test(why) ? "; rebuild it with the Site Search module" : "";
+          pushPlaceholder(el, `Imported form left as a picture — ${why}${search}.`);
+          continue;
+        }
+
         if (PLACEHOLDER_CLASSES.has(el.class)) {
           flushProse();
           pushPlaceholder(el);
@@ -2415,8 +2580,19 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   report.assets.cropsCopied = crops.length;
   report.assets.leftInNamespace = Math.max(0, (ir.assets || []).length - promotions.size - unplaced.length);
 
+  report.forms.rebuilt = Array.from(formPlans.values()).map((plan) => ({
+    key: plan.key,
+    name: plan.name,
+    questions: plan.fields.length,
+    pages: Array.from(new Set(plan.uses.map((u) => u.pagePath))),
+    kept: plan.kept.map((k) => `kept "${k.name}" = "${k.value}" — ${k.why}`),
+    dropped: plan.dropped.map((d) => `dropped ${d.what} — ${d.why}`),
+    notes: plan.notes.map((n) => `${n.what} — ${n.why}`),
+  }));
+
   return {
     pages,
+    forms: Array.from(formPlans.values()),
     slideshows: slideshowPlans,
     cardGrids: cardGridPlans,
     navItems,
@@ -2581,7 +2757,7 @@ export function attachMenuInstances<S extends { id?: string; savedSectionId?: st
 export function reportReconciles(report: MapReport): boolean {
   const e = report.elements;
   return (
-    e.total === e.mapped + e.placeholder + e.navConsumed + e.deduped + e.humanModified + e.skipped &&
+    e.total === e.mapped + e.placeholder + (e.form || 0) + e.navConsumed + e.deduped + e.humanModified + e.skipped &&
     report.skipped.length === e.skipped &&
     report.skipped.every((s) => Boolean(s.reason))
   );
