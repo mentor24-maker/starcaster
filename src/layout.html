@@ -138,10 +138,13 @@
       <!-- The menu sits INSIDE the header so logo, menu and account share one
            row (task 86bcyrqau): the logo band plus a separate menu bar took
            ~230px of every screen. `#topNav` keeps its id for App.els.
-           Its onclick closes the phone menu when a menu link is tapped, so
-           the next screen does not load under an open menu. -->
+           Its onclick closes the phone menu when a tap goes somewhere final
+           (a sub-item, or a top-level link with no sub-menu), so the next
+           screen does not load under an open menu. A parent with sub-items
+           (Builder, Contacts…) leaves it open so its sub-items can be tapped
+           (review round 2 of task 86bcyrqau). -->
       <nav class="top-nav" id="topNav"
-        onclick="var h=this.parentNode,b;if(event.target.closest('a.menu-link')&&h.classList.contains('admin-menu-open')){h.classList.remove('admin-menu-open');b=h.querySelector('.admin-menu-toggle');if(b){b.setAttribute('aria-expanded','false');b.textContent='Menu';}}">
+        onclick="var h=this.parentNode,a=event.target.closest('a.menu-link'),b;if(a&&h.classList.contains('admin-menu-open')&&(a.classList.contains('submenu-link')||!a.parentNode.classList.contains('has-submenu'))){h.classList.remove('admin-menu-open');b=h.querySelector('.admin-menu-toggle');if(b){b.setAttribute('aria-expanded','false');b.textContent='Menu';}}">
         <ul class="menu-root">
           <li class="menu-item has-submenu">
             <a href="#" class="menu-link" data-page="acquirePage">Acquire</a>

@@ -1629,11 +1629,19 @@ is ever wider than the screen.*
     ending in "…". Those four numbers are what make the worst case fit.
   - At 720px and below the menu folds behind a **Menu** button and opens as
     a full-width stacked list under the header (opened `#topNav`: left 0,
-    width = the screen). Tapping any menu link closes it again. Any rule
+    width = the screen). Any rule
     that changes the opened menu's size must name the OPEN selector
     (`header.admin-menu-open > .top-nav`) as well, or the base layer's open
     rule outranks it — round 1 of review found the menu squeezed into a
     267px column beside the logo that way.
+  - **Parents keep the phone menu open.** Only a tap that goes somewhere
+    final closes it: a sub-item (`a.submenu-link`) or a top-level link with
+    no sub-menu (Channels, Campaigns). Tapping a parent (Builder, Contacts,
+    Settings…) leaves it open with its sub-items listed, or a phone can never
+    reach CRM, Site Import or any other sub-item — round 2 of review found
+    exactly that. The sub-items sit in normal flow under their parent
+    (`.submenu { position: static }` in the 720px block), never at the
+    desktop `top: 100%`, which painted them over the next items.
   - A view that hides `#topNav` on purpose (`no-workspace-view`,
     `project-admin-view`, `public-legal-view`) hides the Menu button too; a
     new such view adds itself to that rule at the end of `_navigation.css`.

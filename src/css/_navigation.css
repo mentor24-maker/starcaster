@@ -214,6 +214,13 @@ header {
   white-space: nowrap;
 }
 
+/* Desktop: the sub-menu drops below its item. Declared here so the 720px
+   block only switches it to normal flow (UI_RULES R1). */
+#appShell > header .menu-root .submenu {
+  position: absolute;
+  top: 100%;
+}
+
 #appShell > header .submenu .submenu-link {
   font-size: var(--text-base);
   padding: 0.7rem 0.85rem;
@@ -323,6 +330,14 @@ header {
   }
   #appShell > header .menu-root > .menu-item > .menu-link {
     padding: 0.75rem 1rem;
+  }
+  /* Sub-items in normal flow under their parent. legacy.css leaves the phone
+     sub-menu `position: relative` with the desktop `top: 100%`; once the row
+     has a definite height that resolved to ~368px, leaving a black gap under
+     Builder and painting Themes… over Campaigns (review round 2). */
+  #appShell > header .menu-root .submenu {
+    position: static;
+    top: auto;
   }
 }
 
