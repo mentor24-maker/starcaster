@@ -1,3 +1,15 @@
+## 2026-11-05 — Short values get short boxes (#983)
+
+Several admin screens stretched a box across the whole screen even when it only
+ever holds a couple of characters. On Training › Rules/Guides the three
+reply-mix percentages ("50", "40", "10") each ran about 1,180 pixels wide on
+rows of their own; now they sit side by side on one row, each about six
+characters wide, with the Total beside them. The Theme name box on Builder ›
+Themes and the Keywords box on Engage › Outreach are now sized for what goes in
+them too. The rule is written down for the next screen to reuse: three box
+sizes — a number, a short name, a longer list or sentence — and short boxes
+share a row. None of them can overflow a phone screen.
+
 ## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
 
 When Site Import copied a site, any sign-up or contact form came across as a
