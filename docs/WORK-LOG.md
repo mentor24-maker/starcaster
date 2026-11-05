@@ -1,3 +1,16 @@
+## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
+
+On the screen where you build a CRM form, the column headings, the sections
+inside them and the individual settings were all about the same size, so
+everything ran together. Now there are three steps: big column titles
+(including a new "Form Actions" title over the first column), slightly
+smaller bold section names like Border and Button, and one bold size for
+every setting label, so Padding and Margin finally match Border Size. The
+three sizes are saved as named settings and written down as a rule, so the
+next editor screens in this clean-up series use exactly the same ones. To
+keep every label on one line, "Field Alignment" now reads "Field Align", and
+the "(optional …)" notes moved onto their own small line under the label.
+
 ## 2026-11-04 — The request log no longer grows forever (#959)
 
 Every time anyone used the app, the database wrote down "a request happened"
