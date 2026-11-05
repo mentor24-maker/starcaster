@@ -171,6 +171,33 @@
   border: 2px solid #18324a !important;
 }
 
+/* A Builder panel's own heading (Pages, Page Details, Workspace, Publish,
+   Page History, Templates…) is a column title, not a pill badge
+   (UI normalization 3, UI_RULES R11). Scoped to the admin toolbar shells:
+   `.panel-label` also styles poll and player-card headers on CLIENT sites,
+   which keep their pill. Out-specifies the !important border above. */
+.builder-react-root .builder-toolbar-shell .panel-label {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* A collapsed panel's label used to sit in a white pill; with the padding
+   gone that became a white box hugging the words. An open panel keeps its
+   white-on-blue header bar, whose colour the generated rules set. */
+.builder-react-root .builder-toolbar-shell .builder-panel-toggle[aria-expanded="false"] .panel-label {
+  background: transparent;
+}
+
 /* ============================================================== */
 /* THEME · TYPOGRAPHY PANEL (document-level theme editor chrome)   */
 /* ============================================================== */
@@ -193,13 +220,13 @@
   margin-bottom: 12px;
 }
 
+/* Fonts / Colors / Type scale inside the Typography pod — the item level. */
 .builder-react-root .builder-theme-typography-heading {
   margin: 0 0 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #44627e;
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--ink-primary);
 }
 
 .builder-react-root .builder-theme-color-control {
@@ -417,15 +444,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
 }
 
-/* Pod section heading (h3) */
+/* Pod heading (h3) — the column-title level (UI_RULES R10/R11). It used to
+   be small spaced capitals, one of four heading looks across the editors. */
 .builder-react-root .builder-themes-col-heading {
   margin: 0 0 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-light);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
   color: var(--ink-primary);
 }
 
@@ -480,11 +507,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin-bottom: 0;
 }
 
+/* Logo — Wide, Feature Image… : one setting's label — the sub-item level. */
 .builder-react-root .builder-themes-asset-label {
   margin: 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-secondary);
+  font-size: var(--editor-subitem-size);
+  font-weight: 700;
+  color: var(--ink-primary);
 }
 
 .builder-react-root .builder-themes-asset-group input[type="text"] {
