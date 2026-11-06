@@ -6,7 +6,9 @@
  * original markup; readSourceForm works out what the form actually asks.
  *
  * strands-mailpoet.html is saved verbatim from https://strandsmovie.com/
- * (2026-11-04). The others are representative markup for each plugin.
+ * (2026-11-04); strands-wp-comment.html verbatim from the production import's
+ * IR for /2025/05/28/five-plot-holes-in-the-strands-screenplay/ (2026-11-05).
+ * The others are representative markup for each plugin.
  */
 
 const test = require('node:test');
@@ -61,6 +63,28 @@ test('Strands MailPoet form reads as 4 questions', () => {
   assert.match(r.dropped.find((d) => d.name === 'data[email]').why, /spam trap/);
   assert.match(r.dropped.find((d) => d.name === 'token').why, /security token/);
   for (const d of r.dropped) assert.ok(d.what && d.why, 'every dropped item says what and why');
+});
+
+test('a WordPress comment box is not data capture, and says why (task 86bcz5g7a)', () => {
+  const r = read('strands-wp-comment.html');
+  assert.equal(r.kind, 'not-data-capture');
+  assert.equal(r.reason, 'a blog comment box — Starcaster blog posts have their own comments');
+  // Each signal is enough on its own — a theme can drop the id or rewrite the action.
+  const byAction = readSourceForm('<form action="https://x.test/wp-comments-post.php"><textarea name="comment"></textarea><input name="author"></form>');
+  assert.equal(byAction.kind, 'not-data-capture');
+  const byPostId = readSourceForm('<form action="/c"><textarea name="comment"></textarea><input type="hidden" name="comment_post_ID" value="9"></form>');
+  assert.equal(byPostId.kind, 'not-data-capture');
+});
+
+test('a visible box whose label the theme hid is a question, not a spam trap (task 86bcz5g7a)', () => {
+  // Divi hides every comment-box label and shows the placeholder instead; the
+  // reader used to drop all four real boxes as spam traps because of it.
+  const r = readSourceForm('<form action="/join"><label for="n" style="display: none;">Name <span>*</span></label><input id="n" name="author" type="text" required>'
+    + '<label for="e" style="display:none">Email</label><input id="e" name="email" type="email"><button>Join</button></form>');
+  assert.equal(r.kind, 'data-capture');
+  assert.deepEqual(shape(r), [['name', 'text', true], ['email', 'email', false]]);
+  assert.equal(r.fields[0].label, 'Name');
+  assert.deepEqual(r.dropped, []);
 });
 
 test('search and login forms are not data capture, and say why', () => {
