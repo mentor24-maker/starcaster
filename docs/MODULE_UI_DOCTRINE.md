@@ -651,8 +651,8 @@ They are reproduced here with honest tags.
   `scripts/check_ui_doctrine.cjs` fails any new dialog selector that caps
   itself in px, and any `minWidth`/`maxWidth` number handed to a modal
   component at a call site.
-- **Feedback `[eye]`** — transient → `App.components.Toast` (`.c-toast`
-  variants); sticky status → `App.notify(text, isError)`. After a form's Save
+- **Feedback `[eye]`** — messages → `App.components.Toast` or `App.notify(text, isError)` — both land in the ONE message strip (`.c-message-strip`, UI_RULES S9);
+  never a second floating bar. After a form's Save
   succeeds → `App.components.SavedNotice.show(text, { page })`: back to the
   top, focus on the page heading, a confirmation card at the top that fades by
   itself after 3s — no toast, nothing to close (operator, 2026-11-04). Errors

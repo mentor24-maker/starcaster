@@ -41,6 +41,16 @@ test('app.starcaster.pro, localhost and Vercel previews are system hosts', () =>
   }
 });
 
+test('a Mac on the home network (mac-mini.local) is a system host, not a client domain', () => {
+  // Task 86bcz932m: the review lane gives Dane http://mac-mini.local:<port>
+  // to test signed-in screens. Without this the admin app answered
+  // "No published site for this domain" there.
+  for (const host of ['mac-mini.local', 'mac-mini.local:3071', 'MacBook-Pro.local']) {
+    assert.equal(hosts.isSystemHost(host), true, host);
+  }
+  assert.equal(hosts.isSystemHost('local.delraytennis.com'), false);
+});
+
 test('starcaster.pro (apex and www), its subdomains and client domains are tenant hosts', () => {
   for (const host of ['starcaster.pro', 'www.starcaster.pro', 'delraytennis.starcaster.pro', 'delraytennis.com', 'www.brandonmarinoff.com']) {
     assert.equal(hosts.isSystemHost(host), false, host);

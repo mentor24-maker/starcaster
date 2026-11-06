@@ -7,14 +7,14 @@
           </div>
         </div>
         <p class="page-heading-desc">A live visualization of the Agent Knowledge Items (KIs) currently governing system behavior.</p>
-        <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
-          <table class="data-table" style="width: 100%; border-collapse: collapse;">
-            <thead style="background: var(--bg-hover);">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
               <tr>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">TITLE</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">SUMMARY</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">UPDATED</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">PATH</th>
+                <th>Title</th>
+                <th>Summary</th>
+                <th>Updated</th>
+                <th>Path</th>
               </tr>
             </thead>
             <tbody id="trainingKnowledgebaseTable">
@@ -22,7 +22,7 @@
               <tr><td colspan="4" style="text-align:center; padding:2rem; opacity:0.6;">Loading Knowledge Items...</td></tr>
             </tbody>
           </table>
-        </section>
+        </div>
       </section>
 
       <section id="trainingContextPage" class="app-page hidden training-page">
@@ -31,9 +31,9 @@
         </div>
         <p class="page-heading-desc">Define the shared project narrative, positioning, and reference context used across channels.</p>
         
-        <form class="standard-form-grid" style="margin-bottom: 2rem;">
+        <form class="form-field-above" style="margin-bottom: 2rem;">
             <label for="youtubeMinerResponseContext">
-              Direct Reply Prompt Modifier (project themes, positioning, references)
+              Direct Reply Prompt Modifier <span class="meta">(project themes, positioning, references)</span>
             </label>
             <textarea
               id="youtubeMinerResponseContext"
@@ -52,7 +52,7 @@
           <button id="refreshTrainingCorpusBtn" class="secondary-btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem;">⟳ Refresh Knowledge</button>
         </section>
 
-        <form id="trainingCorpusFilters" class="standard-form-grid" style="margin-bottom: 1rem; background: var(--bg-hover); padding: 1rem; border-radius: 6px;">
+        <form id="trainingCorpusFilters" class="standard-form-grid form-grid-beside" style="margin-bottom: 1rem; background: var(--bg-hover); padding: 1rem; border-radius: 6px;">
             <label for="filterTrainingFileType">File Type</label>
             <select id="filterTrainingFileType">
               <option value="">All</option>
@@ -82,15 +82,15 @@
             <input type="date" id="filterTrainingEndDate" />
         </form>
 
-        <section class="table-container" style="border: 1px solid var(--border-light); border-radius: 6px; overflow: hidden; background: var(--bg-card);">
-          <table class="data-table" style="width: 100%; border-collapse: collapse;">
-            <thead style="background: var(--bg-hover);">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
               <tr>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">TITLE</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">DOMAIN</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">CATEGORY</th>
-                <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; color: var(--text-color-secondary);">INGESTED</th>
-                <th style="padding: 0.75rem 1rem; text-align: right; font-size: 0.8rem; color: var(--text-color-secondary);">ACTIONS</th>
+                <th>Title</th>
+                <th>Domain</th>
+                <th>Category</th>
+                <th>Ingested</th>
+                <th class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="trainingContextRepoTable">
@@ -98,7 +98,7 @@
               <tr><td colspan="5" style="text-align:center; padding:2rem; opacity:0.6;">Loading Knowledge Base vectors...</td></tr>
             </tbody>
           </table>
-        </section>
+        </div>
       </section>
       <section id="trainingCategoriesPage" class="app-page hidden training-page">
         <div class="page-heading-row">

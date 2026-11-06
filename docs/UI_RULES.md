@@ -887,6 +887,41 @@ as a rule first, then gets a checker where one is possible.
   stacked with it, so there is no shared edge to hold it to. The check names
   that skip on every run rather than dropping it in silence.
 
+- **L9.** **A short setting keeps its label BESIDE the control; a text box
+  takes its label ABOVE** — UI normalization screen 7 (task 86bcyrqbp).
+  A **colour, toggle (checkbox or switch), number or dropdown** is one row:
+  label on the left, control on the right. A **text box or text area** puts
+  its label on the line above, because the box wants the full width and a
+  long label beside it squeezes both. Before this, CRM put a label line over
+  even a single dropdown, Training right-aligned labels that wrapped onto
+  three to five lines, and Themes' underline toggles carried a second
+  caption that wrapped beside the box.
+
+  - **No label wraps onto more than two lines at 1440 wide.** If it would,
+    shorten it (L3) or move the explanation into a `.meta` hint.
+  - **Never a second caption that repeats the row's label** next to a
+    checkbox ("Link underline ☑ Underline links"). The row label is the
+    label; give the input an `aria-label` if it has no `<label for>`.
+  - **Plain admin markup:** add `.form-grid-beside` to a
+    `.standard-form-grid` — labels left-aligned (L1) in a column as wide as
+    the longest label (capped at 16rem), dropdowns and numbers sized to
+    their content rather than stretched across the screen. A text box with
+    its label above uses `.form-field-above`. Both live in `_forms.css`.
+  - **CRM form editor:** `.crm-form-editor-setting-beside` puts a dropdown
+    or slider on one row with an 8.5rem label track, matching the colour
+    rows (`.crm-form-editor-setting-color`) that already worked this way.
+  - **Never crop to get it on one row — L4 outranks this rule.** A dropdown
+    whose choices are phrases ("Show the success message") in a column too
+    narrow to show them whole beside a label keeps its label above, as the
+    CRM form editor's "When a visitor submits" does — and so does Settings ›
+    Projects' "Active Project", whose choices are project names of any
+    length in a 360px card.
+  - **Builder (React):** `BuilderSettingRow` is already label-beside; a
+    checkbox goes in it bare, as Themes' "Cards overlap photo" does.
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
@@ -1613,6 +1648,28 @@ is ever wider than the screen.*
   at T7 rung 12 — they scroll inside their own container — which is legal
   but means the earlier rungs were skipped; they are the next candidates
   for the ladder.
+
+- **T11. One table look, and the column headings never scroll away.**
+  Every admin table uses the canonical `_tables.css` treatment and nothing
+  else: a black column-heading row with bold white text, a light-blue filter
+  row above it where the table has filters, and data rows padded `0.5rem`
+  top and bottom (the heading row keeps its own padding). Wrap the table in
+  `.table-wrap` — that is what makes the heading row **sticky**: the wrap
+  scrolls in both directions and stops at `max(20rem, 100vh - 10rem)`, and
+  the heading row (not the filter row) sticks to its top, so on a long list
+  the headings stay on screen however far down you go. Never put inline
+  `style=""` padding, colours or sizes on a `<table>`, `<thead>`, `<th>` or
+  `<td>`: an inline style beats the shared rule, and that is exactly how
+  Training's tables ended up with **black headings on the black bar** —
+  invisible — and taller rows than every other table. *(2026-11-05,
+  UI normalization 8 of 10, task 86bcyrqbr: Builder › Pages ran about
+  5,000px tall with its headings long gone off the top; it now caps at the
+  screen with the headings pinned.)* Why the cap leaves 10rem free: the
+  heading sticks to the top of the WRAP, so the wrap must fit on the screen
+  along with whatever sits under it at the end of the page, or the page's
+  last scroll position carries the headings off the top with it. —
+  **[eye]**; measured with `getComputedStyle` and `elementFromPoint` at
+  1280/1440/1920 when it shipped.
 - **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
   grid or flex child defaults to `min-content` and will happily push its
   container past the viewport — this is the most common cause of a CRUD
@@ -1824,6 +1881,47 @@ is ever wider than the screen.*
     new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
+- **S9. Messages appear ONCE, in one strip that never covers the work.**
+  Every admin message — `App.notify(text, isError)` and
+  `App.components.Toast.*` — lands in `#appMessageStrip`, the strip between
+  the header and `<main>` in `src/layout.html`. It is in the page's normal
+  flow, so it pushes the page down rather than floating over it: no table row
+  or button can ever sit underneath it. Empty, it takes no space.
+  *(UI normalization 9 of 10, task 86bcyrqbu: every error showed twice, as a
+  floating box AND a pink bar pinned over the bottom 40–60px of the screen,
+  covering the last table rows on Pages, Training and Themes. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - One message at a time; a new one replaces the old.
+  - Errors stay until dismissed with ×; success and info close by themselves
+    after 4 seconds and can be dismissed sooner.
+  - If the strip is scrolled out of view when a message arrives, the page
+    scrolls just far enough to show it — a message nobody sees is the same
+    defect as no message.
+  - Never add a second message surface (a fixed-position bar, a corner
+    toast). The one exception is `App.components.SavedNotice`, the
+    confirmation card after a form's Save, which fades on its own and has no
+    close button by design (task 86bcyjag0).
+  - Styles: `.c-message-strip*` in `src/css/legacy.css`; behaviour:
+    `App.components.Toast` in `public/js/components.js`.
 
 ## P — Published page (rendered module) rules
 

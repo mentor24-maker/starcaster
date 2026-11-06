@@ -22,6 +22,7 @@ const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/siteImportStore');
 const importTheme = require('../lib/siteImportTheme');
 const sameSite = require('../lib/siteImportSameSite');
+const importBuild = require('../lib/siteImportBuild');
 
 const PREFIX = '/api/site-import';
 
@@ -125,7 +126,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { jobs: listed.data }), true;
   }
 
-  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel|/theme)?$`));
+  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel|/theme|/build)?$`));
   if (!jobMatch) return sendErr(res, 404, 'Unknown Site Import endpoint', { code: 'NOT_FOUND' }), true;
   const jobId = decodeURIComponent(jobMatch[1]);
   const tail = jobMatch[2] || '';
@@ -160,6 +161,29 @@ async function handle(req, res, pathname, method) {
     });
     if (!updated.ok) return sendErr(res, updated.status || 500, updated.error), true;
     return sendOk(res, 200, { job: updated.data }), true;
+  }
+
+  // POST /api/site-import/jobs/:id/build — queue the build step for the Mac
+  // Mini import worker (task 86bcz9wcx). Body { mode: 'preview' | 'apply',
+  // noTheme?: boolean }. The website cannot run the build itself (it backs up
+  // pages to local files and runs long), so this only records the request;
+  // the worker runs it within about five minutes and writes the result back.
+  // 'apply' refuses until a preview exists that still matches the job.
+  // Never publishes: the build makes draft pages only.
+  if (tail === '/build' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'siteImport.build')) return true;
+    const body = await parseJsonBody(req);
+    const plan = importBuild.planBuildRequest(job, {
+      mode: body.mode,
+      noTheme: body.noTheme === true,
+      userId: scope.userId,
+    });
+    if (!plan.ok) return sendErr(res, plan.status, plan.message, { code: plan.code }), true;
+    const updated = await store.updateJob(job.id, {
+      checkpoints: { ...job.checkpoints, build: plan.request },
+    });
+    if (!updated.ok) return sendErr(res, updated.status || 500, updated.error), true;
+    return sendOk(res, 202, { job: updated.data }), true;
   }
 
   // GET  /api/site-import/jobs/:id/theme — the theme this import WOULD make
