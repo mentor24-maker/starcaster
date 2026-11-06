@@ -89,8 +89,8 @@ the doctrine wins.**
   containers.
 - **Modals:** no scrollbars in form modals, especially horizontal — widen
   the modal instead.
-- **Feedback:** transient → `App.components.Toast` (`.c-toast` variants);
-  sticky status → `App.notify(text, isError)`; a form's successful Save →
+- **Feedback:** `App.components.Toast` or `App.notify(text, isError)` — one
+  message strip (`.c-message-strip`, UI_RULES S7); a form's successful Save →
   `App.components.SavedNotice` (top of page, fades after 3s, no toast).
 - **Accordions:** toggle `aria-expanded` only — never rewrite button
   `innerHTML` for chevrons.
