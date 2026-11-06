@@ -68,6 +68,8 @@ const RENDER_FILES = [
   'components/builder-template-preview.tsx',
   'components/builder-preview-page.tsx',
   'components/BuilderPublicSitePage.tsx',
+  // A module renderer in its own file reaches tenant pages too (86bczt5t4).
+  'components/builder/builder-spirality-tasks-module.tsx',
 ];
 
 const ADVICE =

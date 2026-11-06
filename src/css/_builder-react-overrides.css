@@ -12677,8 +12677,13 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-spirality-tasks__thread {
   display: grid;
   gap: 0.85rem;
-  max-width: 46rem;
   min-width: 0;
+}
+
+/* A form or a thread stays a readable width; the task groups use the row. */
+.builder-spirality-tasks__form,
+.builder-spirality-tasks__thread {
+  max-width: 46rem;
 }
 
 .builder-spirality-tasks__field {
@@ -12733,6 +12738,7 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-spirality-tasks__button:disabled { opacity: 0.55; cursor: default; }
 
 .builder-spirality-tasks__link-button {
+  justify-self: start;
   padding: 0;
   border: 0;
   background: none;
@@ -12788,6 +12794,15 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   text-align: left;
   overflow-wrap: anywhere;
   cursor: pointer;
+  /* A button centres its contents; a task reads from the left edge. */
+  justify-items: start;
+  justify-content: stretch;
+}
+
+.builder-spirality-tasks__task > span {
+  display: block;
+  width: 100%;
+  text-align: left;
 }
 
 .builder-spirality-tasks.is-sample .builder-spirality-tasks__task { cursor: default; }
