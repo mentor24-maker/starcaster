@@ -19,7 +19,7 @@ import { resolveSiteRedirect } from './lib/siteRedirects.mjs';
 // is the company's own Builder-built site. Keep in sync with
 // lib/publicSiteHosts.js; scripts/builder/publicSiteHosts.test.js fails if
 // the two drift.
-const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.vercel\.app|app\.starcaster\.pro)$/;
+const SYSTEM_HOST_RE = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|.*\.local|.*\.vercel\.app|app\.starcaster\.pro)$/;
 
 function normalizeHost(value) {
   const text = String(value || '').split(',')[0].trim();

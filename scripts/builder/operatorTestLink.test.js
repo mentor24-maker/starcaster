@@ -63,7 +63,18 @@ test('loop-review requires a clickable link on a Ready-to-launch card', async (t
   await t.test('it ranks the three link sources', () => {
     assert.match(rule, /Vercel preview URL/i, 'the preview is first — it already exists');
     assert.match(rule, /Artifact page/i);
-    assert.match(rule, /localhost URL with the command that starts the server/i);
+    assert.match(rule, /The local link, started as above/i);
+  });
+
+  await t.test('a screen behind the sign-in never gets a Vercel preview link', () => {
+    // Task 86bcz932m: previews have no database, so every sign-in there says
+    // "Invalid email or password" and Dane read it as his own password being
+    // wrong. The card gives the local link, the sign-in, and the clicks.
+    assert.match(rule, /Behind the sign-in → never a Vercel preview link/);
+    assert.match(rule, /mac-mini\.local:<port>/);
+    assert.match(rule, /mentor24@gmail\.com` \/ `localdev123`/);
+    assert.match(rule, /exact clicks and what he should see/i);
+    assert.match(rule, /must print 200 before you hand it over/i, 'the pass proves the link answers');
   });
 
   await t.test('it insists on the PAGE, not the site root', () => {
