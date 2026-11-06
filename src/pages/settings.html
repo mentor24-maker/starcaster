@@ -51,11 +51,8 @@
           <h2>Settings: Profile</h2>
         </div>
         <p class="page-heading-desc">Set the core identity for your account, including account contact details and profile branding.</p>
-        <div class="card settings-project-card">
-          <h3 class="editor-title">My Projects</h3>
-          <p class="meta">Projects associated with this account.</p>
-          <div id="settingsProfileProjectsList" class="settings-project-inline-list"></div>
-        </div>
+        <!-- The projects are listed once, on Settings › Projects (UI_RULES S7). -->
+        <p class="meta settings-profile-projects-link">Your projects are listed on <a href="#" onclick="App.settings.openProjectsPage(); return false;">Settings: Projects</a>.</p>
         <form id="settingsProfileForm" class="profile-form">
           <div class="media-edit-layout">
             <div class="media-edit-primary standard-form-grid profile-form-fields">
@@ -106,8 +103,7 @@
         <div class="page-heading-row">
           <h2>Settings: Projects</h2>
           <div class="page-heading-actions">
-            <button id="settingsOpenCreateProjectBtn" type="button" onclick="App.settings.openProjectsCreate(); return false;" class="btn">Create Project</button>
-            <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
+            <button id="settingsOpenCreateProjectBtn" type="button" onclick="App.settings.openProjectsCreate(); return false;" class="btn btn-primary">Create Project</button>
             <button type="button" onclick="App.setActivePage('settingsPage')" class="btn">Back To Settings</button>
           </div>
         </div>
@@ -127,8 +123,8 @@
           </div>
           <div class="page-heading-actions" style="justify-content:flex-start;">
             <button id="settingsCreateProjectBtn" type="button" class="btn btn-save">Save Project</button>
-            <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Back To Projects</button>
-            <button type="button" onclick="App.setActivePage('settingsPage')" class="btn">Back To Settings</button>
+            <!-- Closes this panel. It used to read "Back To Projects" while you were on Projects. -->
+            <button type="button" onclick="App.settings.openProjectsPage(); return false;" class="btn">Cancel</button>
           </div>
         </div>
         <div class="table-wrap" style="margin-bottom: 1rem;">
@@ -146,17 +142,10 @@
             <tbody id="settingsProjectsTableBody"></tbody>
           </table>
         </div>
-        <div class="settings-projects-layout">
-          <div class="card settings-project-column">
-            <h3 class="editor-title" style="margin-top: 0;">Your Projects</h3>
-            <div class="form-row">
-              <label for="settingsProjectSelector">Active Project</label>
-              <select id="settingsProjectSelector"></select>
-            </div>
-            <div id="settingsProjectsList" class="settings-project-list"></div>
-          </div>
-        </div>
-        <p class="meta">If no project is selected in your session, the top-right banner shows a Projects link. When active, its logo/name entry links here. Edit opens the project editor and sets that project as your active workspace.</p>
+        <!-- This table is the one list of projects (UI_RULES S7). A second
+             "Your Projects" card with an Active Project picker used to sit here;
+             each row's Set Active button does the same job. -->
+        <p class="meta">Set Active makes a project your working project. Edit opens the project editor and also makes it your working project.</p>
       </section>
       <section id="settingsProjectDetailPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -324,7 +313,7 @@
           <h2>Settings: Database</h2>
         </div>
         <h3>Database Connection</h3>
-        <form id="dbConnectionForm" class="standard-form-grid">
+        <form id="dbConnectionForm" class="standard-form-grid form-grid-beside">
           
             <label for="dbSupabaseUrl">Supabase Project URL</label>
             <input id="dbSupabaseUrl" name="url" required />
@@ -355,7 +344,7 @@
 
         <h3>Field Management</h3>
         <p>Use the form below to define custom fields for the selected database table.</p>
-        <form id="databaseFieldForm" class="standard-form-grid">
+        <form id="databaseFieldForm" class="standard-form-grid form-grid-beside">
           
             <label for="databaseTableSelect">Table</label>
             <select id="databaseTableSelect" name="table" required></select>
@@ -399,12 +388,12 @@
             />
           
           
-            <label>Required</label>
-            <label class="checkbox-row"><input name="required" type="checkbox" /> Required field</label>
+            <label for="databaseFieldRequired">Required</label>
+            <span class="checkbox-row"><input id="databaseFieldRequired" name="required" type="checkbox" /></span>
           
           
-            <label>Active</label>
-            <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Active field</label>
+            <label for="databaseFieldActive">Active</label>
+            <span class="checkbox-row"><input id="databaseFieldActive" name="is_active" type="checkbox" checked /></span>
           
           <div></div>
               <button type="submit" class="btn btn-primary">Create Field</button>
@@ -431,7 +420,7 @@
           <h2 id="settingsApisHeading">Settings: APIs</h2>
           <div class="page-heading-actions">
             <button id="apiSettingsAllBtn" type="button" class="btn">All APIs</button>
-            <button id="apiSettingsToggleBtn" type="button" class="btn">Add API</button>
+            <button id="apiSettingsToggleBtn" type="button" class="btn btn-primary">Add API</button>
           </div>
         </div>
         <!-- AI keys: which account each AI key bills, and whether it works. React island. Mounted by react-entry.js; see components/settings/ai-keys-panel.tsx. -->
@@ -488,7 +477,7 @@
   </span>
 </button>
                 <div id="connectionOpsAttemptsLogBody" class="connection-ops-section-body">
-                  <form id="connectionOpsAttemptForm" class="standard-form-grid">
+                  <form id="connectionOpsAttemptForm" class="standard-form-grid form-grid-beside">
                     
                       <label for="connectionOpsAttemptStatus">Status</label>
                       <select id="connectionOpsAttemptStatus" name="status">

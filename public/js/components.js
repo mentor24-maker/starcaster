@@ -488,60 +488,85 @@ App.components.Card = function Card(opts) {
 };
 
 // ---------------------------------------------------------------------------
-// 4. Toast — notification manager (replaces the message bar)
+// 4. Toast — the ONE message strip (task 86bcyrqbu)
 // ---------------------------------------------------------------------------
 
 /**
- * Toast notification manager.
- *
  * App.components.Toast.show(message, options)
- *   options.type    — 'success' | 'error' | 'info'  (default: 'info')
- *   options.duration — ms before auto-dismiss        (default: 4000)
+ *   options.type     — 'success' | 'error' | 'info'  (default: 'info')
+ *   options.duration — ms before it closes by itself (default: 4000 for
+ *                      success/info; errors stay until dismissed)
+ *   A plain string as the second argument is read as the type.
  *
  * App.components.Toast.success(message)
  * App.components.Toast.error(message)
  * App.components.Toast.info(message)
  *
- * The toast container is appended to document.body automatically on first use.
+ * Messages land in #appMessageStrip (src/layout.html), which sits in the
+ * page's normal flow under the header: it pushes the page down rather than
+ * floating over it, so it can never cover a table row or a button. One
+ * message at a time — a new one replaces the old. If the strip is scrolled
+ * out of view, the page scrolls just far enough to show it.
+ * Rules: docs/UI_RULES.md S9.
  */
 App.components.Toast = (function () {
-  let container = null;
+  let current = null;
+  let timer = null;
 
-  function getContainer() {
-    if (!container) {
-      container = h('div', { class: 'c-toast__container', 'aria-live': 'polite' });
-      document.body.appendChild(container);
+  function getStrip() {
+    let strip = document.getElementById('appMessageStrip');
+    if (!strip) {
+      strip = h('div', { id: 'appMessageStrip', class: 'c-message-strip', 'aria-live': 'polite' });
+      document.body.insertBefore(strip, document.body.firstChild);
     }
-    return container;
+    return strip;
   }
 
-  function show(message, { type = 'info', duration = 4000 } = {}) {
-    const toast = h('div', { class: `c-toast c-toast--${type}` },
-      h('span', { class: 'c-toast__message' }, String(message)),
-      h('button', { class: 'c-toast__close', 'aria-label': 'Dismiss',
-                    onclick: () => dismiss(toast) }, '×')
+  function show(message, opts) {
+    const options = typeof opts === 'string' ? { type: opts } : (opts || {});
+    const type = ['success', 'error', 'info'].includes(options.type) ? options.type : 'info';
+    const duration = options.duration !== undefined
+      ? options.duration
+      : (type === 'error' ? 0 : 4000);
+
+    const strip = getStrip();
+    if (timer) { clearTimeout(timer); timer = null; }
+    strip.textContent = '';
+
+    const item = h('div', {
+      class: `c-message-strip__item c-message-strip__item--${type}`,
+      role: type === 'error' ? 'alert' : 'status',
+    },
+      h('span', { class: 'c-message-strip__text' }, String(message)),
+      h('button', { type: 'button', class: 'c-message-strip__close', 'aria-label': 'Dismiss',
+                    onclick: () => dismiss(item) }, '×')
     );
+    strip.appendChild(item);
+    current = item;
 
-    getContainer().appendChild(toast);
-
-    // Animate in
-    requestAnimationFrame(() => toast.classList.add('c-toast--visible'));
-
-    // Auto-dismiss
-    if (duration > 0) {
-      setTimeout(() => dismiss(toast), duration);
+    const top = strip.getBoundingClientRect().top;
+    if (top < 0 || top > window.innerHeight) {
+      strip.scrollIntoView({ block: 'nearest' });
     }
 
-    return toast;
+    if (duration > 0) {
+      timer = setTimeout(() => dismiss(item), duration);
+    }
+    return item;
   }
 
-  function dismiss(toast) {
-    toast.classList.remove('c-toast--visible');
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  function dismiss(item) {
+    if (!item) return;
+    item.remove();
+    if (current === item) {
+      current = null;
+      if (timer) { clearTimeout(timer); timer = null; }
+    }
   }
 
   return {
     show,
+    dismiss: () => dismiss(current),
     success: (msg, opts) => show(msg, { ...opts, type: 'success' }),
     error:   (msg, opts) => show(msg, { ...opts, type: 'error' }),
     info:    (msg, opts) => show(msg, { ...opts, type: 'info' }),
@@ -609,15 +634,11 @@ App.components.SavedNotice = (function () {
 }());
 
 // ---------------------------------------------------------------------------
-// Patch App.notify to use Toast (drop-in replacement for the message bar)
+// App.notify → the message strip
 // ---------------------------------------------------------------------------
-// The original App.notify updates a static #message element.
-// We keep that working AND show a toast so both old and new code works.
+// App.notify used to write the old #message bar AND show a toast, so every
+// message appeared twice (task 86bcyrqbu). It now shows exactly one.
 
-const _originalNotify = App.notify;
 App.notify = function notify(text, isError = false) {
-  // Keep legacy message bar working (some pages may still reference it)
-  if (_originalNotify) _originalNotify(text, isError);
-  // Also show a toast
   App.components.Toast.show(text, { type: isError ? 'error' : 'success' });
 };

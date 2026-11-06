@@ -161,8 +161,8 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
               type="checkbox"
               checked={colors.linkUnderline !== false}
               onChange={(event) => updateColorFlag("linkUnderline", event.target.checked)}
+              aria-label="Underline links"
             />
-            <span>Underline links</span>
           </label>
         </BuilderSettingRow>
         <BuilderSettingRow label="Hover underline">
@@ -171,8 +171,8 @@ export function BuilderThemeTypographySettings({ theme, onChange }: BuilderTheme
               type="checkbox"
               checked={colors.linkHoverUnderline !== false}
               onChange={(event) => updateColorFlag("linkHoverUnderline", event.target.checked)}
+              aria-label="Underline on hover"
             />
-            <span>Underline on hover</span>
           </label>
         </BuilderSettingRow>
       </div>

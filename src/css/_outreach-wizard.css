@@ -414,8 +414,12 @@
   min-width: 0;
 }
 
+/* Keywords is a comma-separated list, so it gets the long-text width
+   (docs/UI_RULES.md W7) rather than the whole row. */
 .yt-creators-keywords {
-  flex: 1 1 20rem;
+  flex: 0 1 auto;
+  width: calc(var(--field-w-long) + 2rem);
+  max-width: 100%;
   min-width: 0;
 }
 
