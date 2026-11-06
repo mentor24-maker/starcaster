@@ -26,6 +26,14 @@ import { BuilderRichTextEditor } from "@/components/builder-rich-text-editor";
 // environment says so. Without this the real output is buried in noise.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// A toolbar button runs `focus()`, which scrolls the caret into view a moment
+// later by measuring a Range — and jsdom has no layout, so Range has neither
+// measuring method. Without these the scroll throws after the test has already
+// passed, and vitest fails the run on that stray error, depending on timing.
+const emptyRect = () => new DOMRect(0, 0, 0, 0);
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= emptyRect;
+
 const mounted: Array<{ root: Root; container: HTMLElement }> = [];
 
 async function mountEditor(value: string, onChange: (next: string) => void = () => {}) {
