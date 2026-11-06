@@ -313,7 +313,7 @@
           <h2>Settings: Database</h2>
         </div>
         <h3>Database Connection</h3>
-        <form id="dbConnectionForm" class="standard-form-grid">
+        <form id="dbConnectionForm" class="standard-form-grid form-grid-beside">
           
             <label for="dbSupabaseUrl">Supabase Project URL</label>
             <input id="dbSupabaseUrl" name="url" required />
@@ -344,7 +344,7 @@
 
         <h3>Field Management</h3>
         <p>Use the form below to define custom fields for the selected database table.</p>
-        <form id="databaseFieldForm" class="standard-form-grid">
+        <form id="databaseFieldForm" class="standard-form-grid form-grid-beside">
           
             <label for="databaseTableSelect">Table</label>
             <select id="databaseTableSelect" name="table" required></select>
@@ -388,12 +388,12 @@
             />
           
           
-            <label>Required</label>
-            <label class="checkbox-row"><input name="required" type="checkbox" /> Required field</label>
+            <label for="databaseFieldRequired">Required</label>
+            <span class="checkbox-row"><input id="databaseFieldRequired" name="required" type="checkbox" /></span>
           
           
-            <label>Active</label>
-            <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Active field</label>
+            <label for="databaseFieldActive">Active</label>
+            <span class="checkbox-row"><input id="databaseFieldActive" name="is_active" type="checkbox" checked /></span>
           
           <div></div>
               <button type="submit" class="btn btn-primary">Create Field</button>
@@ -477,7 +477,7 @@
   </span>
 </button>
                 <div id="connectionOpsAttemptsLogBody" class="connection-ops-section-body">
-                  <form id="connectionOpsAttemptForm" class="standard-form-grid">
+                  <form id="connectionOpsAttemptForm" class="standard-form-grid form-grid-beside">
                     
                       <label for="connectionOpsAttemptStatus">Status</label>
                       <select id="connectionOpsAttemptStatus" name="status">
