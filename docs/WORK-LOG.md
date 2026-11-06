@@ -1,3 +1,15 @@
+## 2026-11-05 — Test links for signed-in screens now actually let Dane sign in (#985)
+
+Every test link the review lane handed Dane was a Vercel preview, and none of
+them could be signed into — previews have no database, so every sign-in said
+"Invalid email or password" and looked like a wrong password. Now, when a test
+needs anything behind the sign-in, the review lane starts the branch on the
+Mac Mini against its own local copy of the data and gives him a link like
+`http://mac-mini.local:3071`, the local sign-in (`mentor24@gmail.com` /
+`localdev123`), and the exact clicks. Public pages can still use the preview.
+The app also used to mistake `mac-mini.local` for a client's website address
+and refuse to show the admin app there; it now treats it like `localhost`.
+
 ## 2026-11-05 — Section headings look the same on every editor screen (#978)
 
 Headings that do the same job came in four different looks: small spaced-out
