@@ -36,7 +36,6 @@ const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const TICKET_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 const SIGNED_OUT = 'Your Spirality sign-in has ended. Sign in again.';
-const REGISTER_UNAVAILABLE = 'Registering from this page is not available yet.';
 
 function cookieName(projectId) {
   return `sc_spirality_${String(projectId).replace(/[^A-Za-z0-9_-]/g, '')}`;
@@ -107,7 +106,7 @@ function createSpiralityRoutes({
     if (pathname !== PREFIX && !pathname.startsWith(`${PREFIX}/`)) return false;
     const rest = pathname.slice(PREFIX.length).split('/').filter(Boolean);
     const isAccount = method === 'POST' && rest.length === 1
-      && ['signin', 'register', 'forgot', 'link', 'set-password'].includes(rest[0]);
+      && ['signin', 'forgot', 'link', 'set-password'].includes(rest[0]);
 
     if (limit(req, res, isAccount ? 'spirality.account' : 'spirality')) return true;
 
@@ -187,28 +186,10 @@ function createSpiralityRoutes({
         return true;
       }
 
-      if (rest[0] === 'register' && isAccount) {
-        // SP-151: POST /account/register {email,name}, the site token as a bearer.
-        // Without the token there is nothing to send it with; a tracker
-        // without the call (SP-151 not built) answers 404 no-such-call.
-        if (!tracker.hasSiteToken && tracker.configured) {
-          sendErr(res, 501, REGISTER_UNAVAILABLE, { code: 'REGISTER_UNAVAILABLE' });
-          return true;
-        }
-        const body = await parseJsonBody(req);
-        const r = await tracker.call('POST', '/account/register', {
-          site: true, body: { email: text(body.email), name: text(body.name) },
-        });
-        if (!r.ok && r.code === 'no-such-call') {
-          sendErr(res, 501, REGISTER_UNAVAILABLE, { code: 'REGISTER_UNAVAILABLE' });
-        } else if (!r.ok) {
-          fail(r);
-        } else {
-          sendOk(res, 200, { sent: r.data.sent || 'Check your email for a link to set your password.' });
-        }
-        return true;
-      }
-
+      // Spirality is invite-only (SP-153; Dane, 2026-11-06: "My team only"):
+      // there is no register call. A teammate arrives with ?link= from an
+      // invite email and finishes joining through link + set-password below.
+      // The site token rides only here, so the reset link opens this page.
       if (rest[0] === 'forgot' && isAccount) {
         const body = await parseJsonBody(req);
         const r = await tracker.call('POST', '/account/forgot', { site: true, body: { email: text(body.email) } });

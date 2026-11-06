@@ -38,7 +38,7 @@ function readBody(req) {
 }
 
 /** A tracker in the tracker's own shapes; `seen` records every request it got. */
-async function fakeTracker({ registerExists = true } = {}) {
+async function fakeTracker() {
   const seen = [];
   let failures = 0;
   const server = await listen(async (req, res) => {
@@ -61,16 +61,12 @@ async function fakeTracker({ registerExists = true } = {}) {
     }
     if (req.url === '/signout') return send(200, { signedOut: true }, { 'set-cookie': 'tracker_session=; Max-Age=0' });
     if (req.url === '/account/forgot') return send(200, { sent: 'If that email has an account, a link to set a new password is on its way. It works for 1 hour.' });
-    if (req.url === '/account/register') {
-      if (!registerExists) return send(404, { error: 'no-such-call', message: 'no call POST /account/register.' });
-      return send(200, { sent: 'Check your email.' });
-    }
     if (req.url === '/account/link') {
       if (body.link === 'used') return send(400, { error: 'used-link', message: 'That link has been used.' });
-      return send(200, { purpose: 'reset', email: 'pat@example.com', expiresAt: '2026-11-07T00:00:00Z' });
+      return send(200, { purpose: body.link === 'invite' ? 'invite' : 'reset', email: 'pat@example.com', expiresAt: '2026-11-07T00:00:00Z' });
     }
     if (req.url === '/account/set-password') {
-      return send(200, { purpose: 'reset', name: 'Pat', email: 'pat@example.com' });
+      return send(200, { purpose: body.link === 'invite' ? 'invite' : 'reset', name: body.name || 'Pat', email: 'pat@example.com' });
     }
     if (!signedIn) return send(401, { error: 'unauthorized', message: 'sign in, or send a valid token.' });
     if (req.url === '/me') return send(200, { id: 7, kind: 'human', name: 'Pat' });
@@ -187,7 +183,7 @@ test('later calls forward the session as the tracker cookie with a JSON content-
   const call = tracker.seen.find((s) => s.url === '/projects');
   assert.equal(call.headers.cookie, `tracker_session=${TOKEN}`);
   assert.equal(call.headers['content-type'], 'application/json');
-  assert.equal(call.headers.authorization, undefined, 'the site token rides only on register and forgot');
+  assert.equal(call.headers.authorization, undefined, 'the site token rides only on forgot');
 });
 
 test('the tasks come from the board: grouped and named in the tracker\'s own order', async (t) => {
@@ -285,29 +281,22 @@ test('signing out ends the tracker session and clears the cookie', async (t) => 
   assert.deepEqual(me.json.data, { signedIn: false });
 });
 
-test('register and forgot carry the site token as a bearer; register before SP-151 says not available yet', async (t) => {
+test('forgot carries the site token as a bearer, and there is no register call (invite-only)', async (t) => {
   const { b, tracker, close } = await setup();
   t.after(close);
-  const reg = await b.call('POST', '/api/spirality/register', { name: 'Pat', email: 'pat@example.com' });
-  assert.equal(reg.status, 200);
-  const regCall = tracker.seen.find((s) => s.url === '/account/register');
-  assert.equal(regCall.headers.authorization, `Bearer ${SITE_TOKEN}`);
-  assert.deepEqual(regCall.body, { email: 'pat@example.com', name: 'Pat' });
   const forgot = await b.call('POST', '/api/spirality/forgot', { email: 'pat@example.com' });
   assert.match(forgot.json.data.sent, /^If that email has an account/);
   assert.equal(tracker.seen.find((s) => s.url === '/account/forgot').headers.authorization, `Bearer ${SITE_TOKEN}`);
+  const reg = await b.call('POST', '/api/spirality/register', { name: 'Pat', email: 'pat@example.com' });
+  assert.equal(reg.status, 404);
+  assert.equal(tracker.seen.some((s) => s.url === '/account/register'), false, 'nothing is ever asked to register');
+});
 
-  const old = await setup({ registerExists: false });
-  t.after(old.close);
-  const notYet = await old.b.call('POST', '/api/spirality/register', { name: 'Pat', email: 'pat@example.com' });
-  assert.equal(notYet.status, 501);
-  assert.equal(notYet.json.error.code, 'REGISTER_UNAVAILABLE');
-
-  const noToken = await setup({}, { siteToken: () => '' });
-  t.after(noToken.close);
-  const none = await noToken.b.call('POST', '/api/spirality/register', { name: 'Pat', email: 'pat@example.com' });
-  assert.equal(none.status, 501);
-  assert.equal(noToken.tracker.seen.length, 0, 'with no site token, register asks the tracker nothing');
+test('with no site token set, forgot still works and sends no authorization', async (t) => {
+  const { b, tracker, close } = await setup({}, { siteToken: () => '' });
+  t.after(close);
+  await b.call('POST', '/api/spirality/forgot', { email: 'pat@example.com' });
+  assert.equal(tracker.seen.find((s) => s.url === '/account/forgot').headers.authorization, undefined);
 });
 
 test('an emailed link sets the password and signs the person straight in', async (t) => {
@@ -320,6 +309,16 @@ test('an emailed link sets the password and signs the person straight in', async
   assert.ok(!set.text.includes(TOKEN));
   assert.ok(b.jar.startsWith(cookieName(PROJECT_ID)));
   assert.deepEqual(tracker.seen.find((s) => s.url === '/signin').body, { email: 'pat@example.com', password: 'right' });
+});
+
+test('an invite link finishes joining with the name typed, then signs in', async (t) => {
+  const { b, tracker, close } = await setup();
+  t.after(close);
+  const what = await b.call('POST', '/api/spirality/link', { link: 'invite' });
+  assert.equal(what.json.data.purpose, 'invite');
+  const set = await b.call('POST', '/api/spirality/set-password', { link: 'invite', password: 'right', name: 'Pat Smith' });
+  assert.equal(set.json.data.signedIn, true);
+  assert.deepEqual(tracker.seen.find((s) => s.url === '/account/set-password').body, { link: 'invite', password: 'right', name: 'Pat Smith' });
 });
 
 test('a page on a host bound to another project is refused before the tracker is asked', async (t) => {
