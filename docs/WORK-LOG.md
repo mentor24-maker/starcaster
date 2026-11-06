@@ -1,3 +1,12 @@
+## 2026-11-05 — Messages show once and no longer cover the screen (#988)
+
+Every message in the admin app used to appear twice — a floating box and a pink
+bar stuck to the bottom of the screen — and that bottom bar sat over the last
+rows of tables on Pages, Training and Themes even when it was empty. Now there
+is one message strip just under the top menu. It is part of the page, so it
+pushes things down instead of covering them; errors stay until you close them
+with ×, and "saved"-type messages close by themselves after four seconds. The
+rule is written down so later screens use the same strip.
 ## 2026-11-05 — Short values get short boxes (#983)
 
 Several admin screens stretched a box across the whole screen even when it only
