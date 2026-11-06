@@ -395,3 +395,33 @@
     width: 100%;
   }
 }
+
+/* "Preview build" / "Build draft pages" (task 86bcz9wcx) */
+.site-import-build-controls { margin-top: 14px; }
+.site-import-build-state {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: var(--text-sm);
+  background: var(--status-warn-bg);
+  color: var(--status-warn-ink);
+}
+.site-import-build-state.is-done { background: var(--status-ok-bg); color: var(--status-ok-ink); }
+.site-import-build-preview {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-light, #e5e7eb);
+  border-radius: 6px;
+}
+.site-import-build-preview.is-stale { opacity: 0.6; }
+.site-import-build-preview-pages,
+.site-import-build-warnings {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+.site-import-build-warnings { color: var(--warn-notice-text, #92400e); }
+.site-import-build-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.site-import-build-actions .site-import-theme-default { margin: 0; }
+.site-import-build-preview p { margin: 6px 0; font-size: var(--text-sm); }

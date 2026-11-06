@@ -83,6 +83,9 @@
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
+ *   ... --result-file <path>   write what the run planned / did as JSON (the
+ *       import worker passes this when the Site Import screen's Preview build
+ *       / Build draft pages buttons queued the run — task 86bcz9wcx)
  */
 
 import path from 'node:path';
@@ -201,12 +204,28 @@ const NO_CARDS_ALL = flag('--no-cards') && NO_CARDS_PATHS.length === 0;
 const NO_SLIDESHOW_PATHS = flagValues('--no-slideshow');
 const NO_SLIDESHOW_ALL = flag('--no-slideshow') && NO_SLIDESHOW_PATHS.length === 0;
 const JOB_ID = flagValue('--job');
+const RESULT_FILE = flagValue('--result-file');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 const log = (...parts) => console.log(...parts);
 function must(res, what) {
   if (!res || res.ok === false) throw new Error(`${what}: ${res?.error || `status ${res?.status}`}`);
   return res.data;
+}
+/**
+ * What this run planned and did, for the Site Import screen (task 86bcz9wcx).
+ * Written to --result-file at the end, success or failure. Plain words only —
+ * the operator reads these lines as they are.
+ */
+const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '' };
+const warn = (line) => { RESULT.warnings.push(String(line)); };
+function writeResult(extra = {}) {
+  if (!RESULT_FILE) return;
+  try {
+    writeFileSync(RESULT_FILE, JSON.stringify({ ...RESULT, ...extra }, null, 2));
+  } catch (err) {
+    console.error(`could not write --result-file ${RESULT_FILE}: ${err.message || err}`);
+  }
 }
 const sha256 = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -366,6 +385,21 @@ async function main() {
 
   // ---- Report ------------------------------------------------------------
   if (refreshLine) log(`\n${refreshLine}`);
+  RESULT.refresh = refreshLine;
+  {
+    const existingIds = new Set(existingPages.map((p) => String(p.id)));
+    const nameByKey = new Map(out.pages.map((p) => [p.key, p.name]));
+    RESULT.pages = out.report.pages.map((p) => ({
+      path: p.path,
+      slug: p.slug,
+      name: nameByKey.get(p.key) || p.slug,
+      action: priorPageIds[p.key] && existingIds.has(String(priorPageIds[p.key])) ? 'update' : 'create',
+      modules: p.modules,
+      placeholders: p.placeholders,
+    }));
+  }
+  if (out.report.skipped.length) warn(`${out.report.skipped.length} part(s) of the old site could not be placed on any page.`);
+  if (protectedIds.size) warn(`${protectedIds.size} section(s) were edited by a person since the last build and will be left exactly as they are.`);
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
@@ -437,6 +471,7 @@ async function main() {
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'upload report').location;
   log(`Report: ${reportUrl}`);
+  RESULT.reportUrl = reportUrl;
 
   // Dry-run nav preview only. On --apply the nav step runs LAST (below):
   // it mutates pages (attaching the master instance), and any page write
@@ -457,8 +492,15 @@ async function main() {
       ? `\nImport theme "${themePlan.name}" (becomes the project default on --apply):`
       : `\nImport theme "${themePlan.name}" (made on --apply, NOT made the default — this is a refresh; the current default stays):`);
     for (const note of themePlan.notes) log(`  ${note}`);
+    RESULT.theme = {
+      name: themePlan.name,
+      palette: themePlan.theme?.palette && typeof themePlan.theme.palette === 'object' ? themePlan.theme.palette : {},
+      notes: themePlan.notes || [],
+      makesDefault: makeThemeDefault,
+    };
   } else {
     log('\nImport theme: skipped (--no-theme).');
+    RESULT.theme = { skipped: true };
   }
 
   if (!APPLY) {
@@ -495,6 +537,7 @@ async function main() {
   if (uncopyable.length) {
     log(`${uncopyable.length} image(s) could not be copied — the original site refused them; they keep their original address:`);
     for (const s of uncopyable) log(`  ${s.fromUrl}  (${s.reason})`);
+    warn(`${uncopyable.length} picture(s) could not be copied because the old site refused them; they still point at the old site.`);
   }
   const overflowUrls = new Map();
   for (const overflow of out.copyPlan.sourceOverflows) {
@@ -567,6 +610,7 @@ async function main() {
     if (untenanted.length) {
       console.error(`\nERROR: ${untenanted.length} new Assets row(s) did not read back with both project_id and owner_user_id:`);
       for (const loc of untenanted) console.error(`  ${loc}`);
+      warn(`${untenanted.length} new picture(s) in Assets did not save against this project.`);
       process.exitCode = 1;
     } else {
       log(`  read back: all ${createdLocations.length} carry project_id and owner_user_id.`);
@@ -650,6 +694,7 @@ async function main() {
     // must still record them so a re-run finds them. But the run fails.
     console.error('\nERROR: what was written does not match the report:');
     for (const problem of writeSummary.problems) console.error(`  ${problem}`);
+    for (const problem of writeSummary.problems) warn(problem);
     process.exitCode = 1;
   }
 
@@ -666,6 +711,7 @@ async function main() {
     if (links.problems.length) {
       console.error('\nERROR: a Form module does not hold its form\'s id:');
       for (const problem of links.problems) console.error(`  ${problem}`);
+      warn(`${links.problems.length} form(s) on the new pages are not linked to their rebuilt form.`);
       process.exitCode = 1;
     } else {
       log(`Forms: read back ${links.checked} Form module(s) — each holds its form's id.`);
@@ -711,6 +757,14 @@ async function main() {
     mimeType: 'application/json',
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'update report');
+  RESULT.applied = {
+    created: writeSummary.created,
+    updated: writeSummary.updated,
+    pages: writeSummary.distinctPages,
+    snapshotId: snapshot.id,
+    backup: path.relative(ROOT, backupPath),
+    theme: themeCheckpoint ? { name: themeCheckpoint.name, madeDefault: themeCheckpoint.madeDefault } : null,
+  };
   log(`\nAPPLY complete: ${writeSummary.distinctPages} draft page(s) (${writeSummary.created} created, ${writeSummary.updated} updated). Nothing was published.`);
   if (refreshLine) log(refreshLine);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
@@ -1209,7 +1263,10 @@ async function runNav(job, scope, out) {
   log(`--nav: attached to ${pageIds.length} page(s); propagation updated ${prop.updated}/${prop.total}.`);
 }
 
-main().catch((err) => {
+main().then(() => {
+  writeResult({ ok: !process.exitCode });
+}).catch((err) => {
   console.error('\nMAPPER FAILED:', err.message || err);
+  writeResult({ ok: false, error: String(err.message || err) });
   process.exit(1);
 });
