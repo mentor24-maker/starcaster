@@ -1,3 +1,15 @@
+## 2026-11-05 — Imported blog posts no longer turn the old site's comment box into a one-checkbox form (#991)
+
+When Site Import met a WordPress "Leave a Reply" box on a blog post, it rebuilt
+it as a form with a single "save my name" checkbox and a Submit Comment button
+that collected nothing. The cause: the old site's theme hides the box labels and
+shows grey hint text instead, and the importer took a hidden label as the mark
+of a robot trap, so it threw away the real Name, Email, Website and Comment
+boxes. That rule is gone, and a comment box is now recognised for what it is and
+left as a picture captioned "a blog comment box — Starcaster blog posts have
+their own comments". Checked against all 197 forms in recent imports: only the
+16 comment boxes (Strands and Dane of Earth posts) read differently.
+
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 
 Buttons used to be black on most screens, white or blue on the Builder, green
