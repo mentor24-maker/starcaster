@@ -12,6 +12,7 @@
       if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
       var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
+        || h.endsWith('.local')
         || h.endsWith('.vercel.app')
         || h === 'app.starcaster.pro';
       if (sys) return;

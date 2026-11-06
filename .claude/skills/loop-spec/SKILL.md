@@ -99,6 +99,11 @@ write any code here. You produce well-formed tasks.
      like. "Open the page in a browser" is not a step. Neither is "run the
      generator and open the SVG" — that is a developer's instruction wearing
      a test's clothes.
+   - **A screen behind the sign-in is tested on the local copy, never on a
+     Vercel preview** — no preview can be signed into (task 86bcz932m). Write
+     the step as `http://localhost:3001/<page>` (the review lane swaps in the
+     address and port it actually started), sign in as `mentor24@gmail.com` /
+     `localdev123`, then the clicks. Public pages may still use the preview.
 
    ## Risk
    low | medium | high — and one line on the blast radius.
