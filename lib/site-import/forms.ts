@@ -295,8 +295,11 @@ export function readSourceForm(html: string): SourceFormReading {
 
   const isTrap = (c: El): boolean => {
     if (styleHides(c)) return true;
-    const forLabel = attr(c, "id") ? labelFor.get(attr(c, "id")) : undefined;
-    if (forLabel && styleHides(forLabel)) return true;
+    // A hidden LABEL is not a trap on its own: themes hide labels and show the
+    // placeholder instead (Divi does it to every WordPress comment box, which
+    // made Name, Email, Website and Comment read as spam traps — task
+    // 86bcz5g7a). A honeypot hides the box itself or what holds it; both are
+    // caught here and in the ancestor walk below.
     if (attr(c, "tabindex") === "-1" && /off|nope/.test(attr(c, "autocomplete"))) return true;
     if (/^b_[a-f0-9]+_[a-f0-9]+$/i.test(attr(c, "name"))) return true; // Mailchimp honeypot
     for (const a of ancestors(c, root)) {
@@ -454,6 +457,9 @@ function classifyNonCapture($: CheerioApi, root: El, fillable: El[]): string | n
   if (selfAndUp.some((e) => attr(e, "role") === "search") || $(root as never).find("[role=search]").length) {
     return "a site search box (marked role=search) — it searches the old site, it does not collect anything";
   }
+  if (isWordPressCommentForm(root, fillable)) {
+    return "a blog comment box — Starcaster blog posts have their own comments";
+  }
   if (fillable.some((c) => attr(c, "type").toLowerCase() === "password")) {
     return "a sign-in form (it has a password box) — Starcaster has its own sign-in, so this stays as it was imported";
   }
@@ -476,6 +482,17 @@ function classifyNonCapture($: CheerioApi, root: El, fillable: El[]): string | n
   }
   if (!visible.length) return "it has no boxes a visitor fills in";
   return null;
+}
+
+/**
+ * WordPress's reply box ("Leave a Reply" — comment, name, email, website):
+ * it posts to wp-comments-post.php and carries comment_post_ID. It is a
+ * comment thread, not a signup, so it is not rebuilt as a form (task 86bcz5g7a).
+ */
+function isWordPressCommentForm(root: El, fillable: El[]): boolean {
+  if (/wp-comments-post\.php/i.test(attr(root, "action"))) return true;
+  if (fillable.some((c) => attr(c, "name") === "comment_post_ID")) return true;
+  return attr(root, "id") === "commentform" && /(^|\s)comment-form(\s|$)/.test(attr(root, "class"));
 }
 
 function readHeading($: CheerioApi, root: El): string | undefined {
