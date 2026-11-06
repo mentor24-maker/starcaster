@@ -1,3 +1,14 @@
+## 2026-11-06 — AI-made videos are saved as files, not inside the database (#999)
+
+Every video made with Assets › Video › Create used to be stored inside the
+database as a long block of text, about 30 MB a clip. Twelve of them made the
+assets table thirty times its proper size, and one look at them restarted the
+live database this morning, briefly taking client sites down. Now a finished
+video is uploaded to file storage and the database keeps only its address. If
+the video cannot be saved, the job says "failed" and why, instead of claiming
+success with a stand-in clip. The database also now refuses any asset whose
+address is really a whole file, whichever screen sends it, and the asset list
+and the "is my video ready?" check read far less on every load.
 ## 2026-11-06 — A plan for the text editor: keep it, and make it match the theme (#998)
 
 Two text-editor bugs in one morning raised the question of whether to keep
