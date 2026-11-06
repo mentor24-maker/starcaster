@@ -1167,6 +1167,34 @@ A rendered module has the same obligation as a panel: on a real tenant page a
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
+- **W7. Outside a settings panel, a box is sized by what goes in it —
+  three sizes, picked by content.** *(UI normalization 6 of 10, task
+  86bcyrqbh, 2026-11-05: Training › Rules/Guides stretched three
+  percentage boxes holding "50", "40" and "10" across about 1,180px; Themes'
+  Theme name was about 400px; Outreach's Keywords ran the full width.)*
+  This is W3 made concrete, with names you can reuse:
+
+  | Box holds | Class | Token (`src/css/_variables.css`) | Room for |
+  |---|---|---|---|
+  | a number or percentage | `field-w-number` | `--field-w-number` | 6 characters |
+  | a name or title | `field-w-short` | `--field-w-short` | 24 characters |
+  | a list, a sentence, a web address | `field-w-long` | `--field-w-long` | 48 characters |
+
+  The classes live in `src/css/_forms.css` and add the box's own padding,
+  border and number arrows on top of the token, so the token reads as "room
+  for the text". Every size also caps at `max-width: 100%`, so nothing
+  overflows a phone. A component with its own stylesheet that cannot take
+  the class (Themes, Outreach) uses the token in its own rule —
+  `width: calc(var(--field-w-short) + 2rem)` — rather than a new number.
+
+  **Several short boxes share one row.** Wrap each label and its box in
+  `.short-field` and the group in `.short-fields-row`: the label sits beside
+  its box, the pairs run left to right and wrap onto the next line only when
+  the screen is too narrow. A short box never gets a row of its own just
+  because the form grid gave it one.
+
+  Inside a settings panel, W0's lattice still decides widths; W7 does not
+  apply there. — **[eye]**
 
 ## A — Overriding the theme
 
@@ -1384,6 +1412,49 @@ Advanced — is the follow-on pass the operator sequenced after this.
   something the renderer honors; duplicates are removed, not kept "just in
   case". *(7/1 "'content' field that doesn't do anything … remove it";
   6/28; 7/29; doctrine E7)* — **[eye]**
+- **C9. Buttons: four kinds, two sizes.** The colour says what the button
+  does, on every admin screen (UI normalization 4 of 10, task 86bcyrqb9):
+
+  | Kind | Looks | Admin app (vanilla) | Builder (React) |
+  |---|---|---|---|
+  | Secondary | outlined, white | `btn` (the default) — `btn-ghost` is the same | `secondary-button` |
+  | Main action | blue | `btn btn-primary` | `submit-button` |
+  | Save | green | `btn btn-save` | `submit-button admin-save-button` |
+  | Delete | red | `btn btn-danger` | `danger-button` |
+
+  **One main action per screen**, and it is the "Create …"/"Add …" button
+  in the heading row; Back, Cancel, Refresh, Import, Archives and the like
+  are secondary. Every kind has a **hover colour** and a **disabled colour**
+  — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
+  `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
+  0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
+  `<button>`s without `.btn`, so that fade still reaches them; the Builder
+  block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
+  admin-only, so a client's published buttons are untouched. The same trap
+  hides inside the system: a kind written at two classes, like
+  `.btn.btn-ghost`, outranks the shared one-class outlined hover and
+  disabled, so it needs its own — without them the ghost buttons had no
+  hover and no disabled colour at all. And the old `.tiny-btn:disabled`
+  fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
+  A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (36px), and small,
+  `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
+  (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
+  height, padding or colour: a rule like `.page-heading-row button
+  { min-height: 42px }` is how one job ended up 29px on one screen and 50px
+  on another. Tokens in `_variables.css`; rules in `_buttons.css` (default
+  colours, loads first) and `legacy.css` "THE BUTTON SYSTEM" (sizes and
+  kinds, loads last); the Builder's admin-only block is in
+  `_builder-react-overrides.css`. A client's published site keeps its own
+  theme's buttons. *(operator 2026-11-05, approving the UI review: "I like
+  all of them.")* — **[eye]**, sizes and colours are tokens
+
+  **Deliberately not in the four kinds:** square table icon buttons
+  (`icon-btn` — a glyph, its own 36px square, already the same height as
+  a normal button); the Builder and Docs diagram tiles; accordion headers
+  and the Builder's panel-label pills; tab switchers (UI normalization 5
+  owns those); colour swatches, font pickers and image pickers that show a
+  value; and buttons a module renders on a client's site.
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …
@@ -1751,6 +1822,47 @@ is ever wider than the screen.*
     new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
+- **S9. Messages appear ONCE, in one strip that never covers the work.**
+  Every admin message — `App.notify(text, isError)` and
+  `App.components.Toast.*` — lands in `#appMessageStrip`, the strip between
+  the header and `<main>` in `src/layout.html`. It is in the page's normal
+  flow, so it pushes the page down rather than floating over it: no table row
+  or button can ever sit underneath it. Empty, it takes no space.
+  *(UI normalization 9 of 10, task 86bcyrqbu: every error showed twice, as a
+  floating box AND a pink bar pinned over the bottom 40–60px of the screen,
+  covering the last table rows on Pages, Training and Themes. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - One message at a time; a new one replaces the old.
+  - Errors stay until dismissed with ×; success and info close by themselves
+    after 4 seconds and can be dismissed sooner.
+  - If the strip is scrolled out of view when a message arrives, the page
+    scrolls just far enough to show it — a message nobody sees is the same
+    defect as no message.
+  - Never add a second message surface (a fixed-position bar, a corner
+    toast). The one exception is `App.components.SavedNotice`, the
+    confirmation card after a form's Save, which fades on its own and has no
+    close button by design (task 86bcyjag0).
+  - Styles: `.c-message-strip*` in `src/css/legacy.css`; behaviour:
+    `App.components.Toast` in `public/js/components.js`.
 
 ## P — Published page (rendered module) rules
 
