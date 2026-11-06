@@ -9,6 +9,30 @@ Themes and the Keywords box on Engage › Outreach are now sized for what goes i
 them too. The rule is written down for the next screen to reuse: three box
 sizes — a number, a short name, a longer list or sentence — and short boxes
 share a row. None of them can overflow a phone screen.
+## 2026-11-05 — Section headings look the same on every editor screen (#978)
+
+Headings that do the same job came in four different looks: small spaced-out
+capitals on Builder › Themes, rounded pill badges on the Builder's page editor
+panels, plain bold on the CRM form editor, and big card titles on Settings. Now
+every one uses one of the three sizes the CRM form editor set yesterday — a
+card or panel's title, a group inside it, and one setting's label — in the same
+weight and the same dark ink, on Themes, the page editor, Settings › Profile
+and Projects, and Engage › Outreach. The pill style is kept where it belongs:
+the same style also draws poll and player-card headers on clients' websites,
+and those are untouched. The rule is written up as R12 in `docs/UI_RULES.md`
+so the next screens in the series reuse it.
+## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
+
+Changing view used to look like three different controls: CRM had
+underlined text tabs, Outreach had faded grey pills, and the Builder
+Workspace's Templates / Modules / Pages looked exactly like Save and Cancel
+buttons, so picking a view felt like pressing an action. Now every one of
+them — plus the tabs on the Substack, Reddit and YouTube outreach screens,
+whose selected tab was a big blue action button — is the same plain text on
+an underline, with the selected one in blue. Tab reaches each one and Enter
+picks it. The rule is written down as C9 in the UI rules so new screens use
+it too.
+
 ## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
 
 Sites copied in before today's form fix (#974) still show a picture of each

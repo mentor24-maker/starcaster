@@ -457,13 +457,13 @@ export default function OutreachWizardPanel(): React.ReactElement {
       {overview ? <MiniLimitBanner version={overview.generatedAt} /> : null}
       {!overview && !error ? <p className="outreach-wizard-muted">{loading ? 'Reading where each channel stands…' : ''}</p> : null}
       {channels.length ? (
-        <div className="outreach-wizard-tabs" role="tablist" aria-label="Channel">
+        <div className="tab-bar outreach-wizard-tabs" role="tablist" aria-label="Channel">
           {channels.map((c) => (
             <button
               key={c.key}
               type="button"
               role="tab"
-              className={`btn outreach-wizard-tab${current?.key === c.key ? ' outreach-wizard-tab--active' : ''}`}
+              className="tab-btn"
               aria-selected={current?.key === c.key}
               onClick={() => pick(c.key)}
             >

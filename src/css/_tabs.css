@@ -1,0 +1,62 @@
+/* ── Tabs: the ONE way to switch views (UI rule C9) ─────────────────────
+   UI normalization 5 of 10 (task 86bcyrqbb). Before this there were three
+   looks for the same job: CRM's underlined text, Outreach's dimmed grey
+   pills, and the Workspace's Templates / Modules / Pages, which were the
+   app's own Save and Cancel buttons — so a view switch read as an action.
+
+   A tab is text on a shared baseline with an underline under the selected
+   one. It is never a filled or outlined button, and never btn-primary: the
+   screen's one primary belongs to an action.
+
+   Markup:
+     <div class="tab-bar" role="tablist" aria-label="…">
+       <button type="button" class="tab-btn" role="tab" aria-selected="true">…</button>
+     </div>
+   The selected state is `aria-selected="true"` (React) or `.active` (the
+   frozen vanilla CRM screen toggles that class). Both read the same.
+   The `.tab-bar .tab-btn` pair outranks `button, .btn` in _buttons.css. */
+
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0;
+  min-width: 0;
+  border-bottom: 2px solid var(--border-strong);
+  margin-bottom: var(--space-5);
+}
+
+.tab-bar .tab-btn {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 3px solid transparent;
+  margin: 0 0 -2px;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 1;
+  box-shadow: none;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-bar .tab-btn:hover {
+  color: var(--ink-primary);
+  border-bottom-color: var(--border-strong);
+  opacity: 1;
+}
+
+.tab-bar .tab-btn.active,
+.tab-bar .tab-btn[aria-selected="true"] {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: 700;
+}
+
+.tab-bar .tab-btn:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
+}

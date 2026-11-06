@@ -1420,6 +1420,20 @@ Advanced — is the follow-on pass the operator sequenced after this.
   background picker, one color field, one margin pair, across all modules.
   *(7/1 "The backgrond selector on this is an older style. Upgrade the
   background selector in this module."; doctrine E1/E6)* — **[auto]**
+- **C9.** **Switching views is a tab, and every tab looks alike.** A row
+  of views (CRM's Contacts / Forms / Field Config, Outreach's channels, the
+  Workspace's Templates / Modules / Pages) is `.tab-bar` holding
+  `.tab-btn`s, from `src/css/_tabs.css`: plain text on one underline, the
+  selected tab in the accent colour with a thick underline. A tab is
+  **never** styled as a button — no `btn`, no `btn-primary`, no
+  `submit-button` — because a filled box reads as an action, and the
+  screen's one primary belongs to an action. In React mark it
+  `role="tablist"` / `role="tab"` with `aria-selected`; the selected look
+  keys off `aria-selected="true"` (or `.active`, which the frozen vanilla
+  CRM screen toggles). Tab reaches each tab, Enter selects it. Tabs sit on
+  their own row under the title, not among the title row's buttons.
+  *(UI normalization 5 of 10, task 86bcyrqbb, 2026-11-05: "Switching views
+  looks like three different controls across the app")* — **[eye]**
 
 ## T — Tables, lists, and CRUDs
 
@@ -1654,6 +1668,35 @@ is ever wider than the screen.*
 
   *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
   — **[eye]**, sizes are tokens
+
+- **R12.** **A section heading looks like one of R10's three levels, and
+  nothing else** — UI normalization screen 3 (task 86bcyrqaz). Before it,
+  the editors had four heading looks: small spaced capitals (Themes
+  "PALETTE"), outlined pill badges (the Builder's "PAGES", "PAGE DETAILS"),
+  plain bold (the CRM form editor), and big 24px card titles (Settings
+  "Your Projects"). Now:
+
+  - **No spaced capitals and no pill badge as a section heading.** Not
+    `text-transform: uppercase` + `letter-spacing`, not a rounded tinted
+    chip. A heading is the R10 size, its weight, and `--ink-primary`.
+  - **Which level:** the heading of a card, pod or Builder panel is a
+    **column title** (Palette, Page Details, Workspace, Your Projects,
+    Admin Team). A group inside one is an **item** (Fonts, Colors,
+    Project Logo, an Outreach stage name). One setting's label is a
+    **sub-item** (Logo — Wide).
+  - **Plain admin markup** (`src/pages/*.html`) uses the classes
+    `.editor-title`, `.editor-item`, `.editor-subitem` from
+    `_typography.css` instead of a bare `<h3>`, which is 1.5em by default.
+    A component with its own heading class sets the token on that class.
+  - **`.panel-label` is two things.** Inside a Builder admin panel
+    (`.builder-toolbar-shell`) it is a column title; on a CLIENT site
+    (poll and player-card headers) it is still a styled pill, and must stay
+    one — so the heading rule is scoped to the toolbar shell, never to
+    `.panel-label` alone. An open Builder panel keeps its white-on-blue
+    header bar: there the heading is white, for contrast (R9's purpose).
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**, sizes are tokens
 
 ## S — System and structure
 
