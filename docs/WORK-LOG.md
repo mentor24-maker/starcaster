@@ -1,3 +1,13 @@
+## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
+
+In the Builder page editor, on a phone-width browser window, the Preview, Save
+as Template and Save Page buttons were drawn on top of the blue Page Details
+bar, hiding its title and the ▼ that collapses the panel — so the panel could
+not be closed. The bar now always keeps room for its title and ▼, and the
+buttons sit beside it, stacking onto extra lines when space runs out. On a
+normal desktop window nothing changes. Same fix the Pages bar just above it got
+in #972.
+
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 
 Buttons used to be black on most screens, white or blue on the Builder, green
