@@ -1,3 +1,13 @@
+## 2026-11-06 — Page editor arrows wait for the page before they can be clicked (#996)
+
+When a page opened in the Builder page editor, the round green arrows on
+Page Details, Publish, Page History and Workspace could be clicked before the
+page had arrived, and opening Workspace early showed an empty or half-filled
+workspace. Now each of those four shows a small turning ring in place of the
+arrow until the page is in, and the bar ignores clicks; then the arrows come
+back exactly as they were. If the page fails to load, the rings stop and the
+arrows return, so nothing can spin forever. With "reduce motion" turned on,
+the ring shows but holds still. No other arrow in the Builder changed.
 ## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
 
 Dane asked for 2px less padding at the top and bottom of every form box,
