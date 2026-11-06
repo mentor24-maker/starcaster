@@ -12624,3 +12624,216 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   margin-inline: 0;
   white-space: nowrap;
 }
+
+/* ==================================================================== */
+/* Spirality Tasks (ticket 86bczt5t4).                                  */
+/* Rendered by components/builder/builder-spirality-tasks-module.tsx.   */
+/*                                                                      */
+/* It renders inside ARBITRARY tenant themes (DOCTRINE §5.28), so it    */
+/* inherits the theme's font and colour and only draws its own lines,   */
+/* using currentColor. Layout is base rules only (Standard 3): the      */
+/* status groups are an auto-fill grid that drops to one column on a    */
+/* phone without a breakpoint. Long names wrap, never truncate (T-1).   */
+/* ==================================================================== */
+.builder-spirality-tasks {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.builder-spirality-tasks__header,
+.builder-spirality-tasks__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.builder-spirality-tasks__heading,
+.builder-spirality-tasks__title,
+.builder-spirality-tasks__status,
+.builder-spirality-tasks__project-name {
+  margin: 0;
+}
+
+.builder-spirality-tasks__title { font-size: 1.15em; }
+.builder-spirality-tasks__project-name { font-weight: 600; }
+
+.builder-spirality-tasks__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9em;
+}
+
+.builder-spirality-tasks__form,
+.builder-spirality-tasks__page,
+.builder-spirality-tasks__thread {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 46rem;
+  min-width: 0;
+}
+
+.builder-spirality-tasks__field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.builder-spirality-tasks__field--inline {
+  grid-template-columns: max-content minmax(0, 18rem);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.builder-spirality-tasks__field label { font-weight: 600; }
+
+.builder-spirality-tasks__field input,
+.builder-spirality-tasks__field textarea,
+.builder-spirality-tasks__field select {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.builder-spirality-tasks__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.builder-spirality-tasks__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.builder-spirality-tasks__button:disabled { opacity: 0.55; cursor: default; }
+
+.builder-spirality-tasks__link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.builder-spirality-tasks__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+.builder-spirality-tasks__group {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 8px;
+}
+
+.builder-spirality-tasks__status { font-size: 1em; }
+
+.builder-spirality-tasks__count {
+  font-weight: 400;
+  opacity: 0.65;
+}
+
+.builder-spirality-tasks__list,
+.builder-spirality-tasks__comments {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.builder-spirality-tasks__task {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.builder-spirality-tasks.is-sample .builder-spirality-tasks__task { cursor: default; }
+
+.builder-spirality-tasks__task-id {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+.builder-spirality-tasks__description,
+.builder-spirality-tasks__comment-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.builder-spirality-tasks__comment {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.builder-spirality-tasks__comment.is-machine { opacity: 0.85; }
+
+.builder-spirality-tasks__comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.builder-spirality-tasks__badge {
+  padding: 0 0.4rem;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  font-size: 0.75em;
+}
+
+.builder-spirality-tasks__muted { margin: 0; opacity: 0.7; }
+.builder-spirality-tasks__notice { margin: 0; }
+.builder-spirality-tasks__error { margin: 0; font-weight: 600; color: var(--danger, #b42318); }
+
+.builder-spirality-tasks__builder-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85em;
+  opacity: 0.75;
+}
