@@ -20,52 +20,16 @@
 
 
 
-.settings-projects-layout {
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  gap: 1rem;
-  align-items: start;
+/* Settings › Projects lists projects once, in its table; Profile links there
+   instead of repeating them (UI_RULES S7). The "Your Projects" card styles
+   that used to sit here went with the card. */
+.settings-profile-projects-link {
+  margin: 0 0 var(--space-5);
 }
 
-.settings-project-column {
-  min-height: 320px;
-}
-
-.settings-project-list {
-  display: grid;
-  gap: 0.4rem;
-  margin: 0.6rem 0 0.8rem;
-}
-
-.settings-project-inline-list {
-  display: grid;
-  gap: 0.3rem;
-  margin-top: 0.35rem;
-  color: #20384f;
-}
-
-.settings-project-list-item {
-  border: 1px solid #b8d7f0;
-  border-radius: 8px;
-  background: #f7fbff;
-  padding: 0.55rem 0.7rem;
-  cursor: pointer;
-  text-align: left;
-}
-
-.settings-project-list-item.is-active {
-  border-color: #0b82d4;
-  background: #e7f4ff;
-}
-
-.settings-project-list-item-name {
-  font-weight: 700;
-  color: #0f2f4c;
-}
-
-.settings-project-list-item-meta {
-  font-size: 0.82rem;
-  color: #3d5870;
+.builder-landing-actions {
+  justify-content: flex-start;
+  margin-top: var(--space-5);
 }
 
 .settings-project-table-link {
@@ -284,7 +248,11 @@ h2 {
   font-weight: 800;
 }
 
-.page-heading-row button {
+/* `:not(.btn)` — a labelled `.btn` in a heading row takes the one normal
+   button height (--btn-height) like every other button; this 42px only ever
+   applied there because `.page-heading-row button` outranks `.btn` (task
+   86bcyrqb9). */
+.page-heading-row button:not(.btn) {
   width: auto;
   min-height: 42px;
   box-sizing: border-box;
@@ -310,7 +278,10 @@ h2 {
   flex-wrap: nowrap;
 }
 
-.page-heading-actions button {
+/* `:not(.btn)`: a `.btn` takes the one normal height, --btn-height (task
+   86bcyrqb9). This fixed 42px made header buttons taller than the same
+   button anywhere else. */
+.page-heading-actions button:not(.btn) {
   height: 42px;
   line-height: normal;
   display: inline-flex;
@@ -933,20 +904,19 @@ button[type="submit"] {
   background: linear-gradient(180deg, rgba(232, 245, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
+/* Builder landing: a compact row of link tiles (UI_RULES S8). It used to be a
+   560px-tall bordered diagram with five tiles placed absolutely inside it,
+   which left most of the box empty (UI normalization 10 of 10). */
 .builder-flow-map {
-  position: relative;
-  min-height: 560px;
-  margin-top: 1.15rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-container);
-  background: var(--bg-surface);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 210px));
+  gap: var(--space-4);
+  margin-top: var(--space-5);
 }
 
 .builder-flow-node {
-  position: absolute;
-  width: 220px;
-  min-height: 126px;
-  padding: 1rem 1.1rem;
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-container);
   background: var(--bg-card);
@@ -955,20 +925,20 @@ button[type="submit"] {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   box-shadow: none;
   cursor: pointer;
-  transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 
 .builder-flow-node:hover {
   background: var(--bg-hover);
-  border-color: var(--border-hover);
+  border-color: var(--accent);
   box-shadow: none;
 }
 
 .builder-flow-node-kicker {
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -976,39 +946,9 @@ button[type="submit"] {
 }
 
 .builder-flow-node-title {
-  font-size: 1.35rem;
-  font-weight: 800;
+  font-size: var(--editor-item-size);
+  font-weight: 700;
   line-height: 1.15;
-}
-
-.builder-flow-node-top {
-  top: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.builder-flow-node-top:hover {
-  transform: translateX(-50%) translateY(-3px);
-}
-
-.builder-flow-node-upper-right {
-  top: 160px;
-  right: 16%;
-}
-
-.builder-flow-node-lower-right {
-  right: 23%;
-  bottom: 54px;
-}
-
-.builder-flow-node-lower-left {
-  left: 23%;
-  bottom: 54px;
-}
-
-.builder-flow-node-upper-left {
-  top: 160px;
-  left: 16%;
 }
 
 .messaging-content-filter {
@@ -8624,7 +8564,12 @@ button.builder-inline-asset-status-btn:focus-visible {
   font-weight: 600;
 }
 
-.tiny-btn:disabled {
+/* The fade stays only where the button system does not reach: square icon
+   buttons and a `tiny-btn` without `.btn`. A small `.btn` of any kind has a
+   disabled COLOUR, never a fade (docs/UI_RULES.md C9) — this rule used to
+   fade small blue, red and outlined buttons to 45% (86bcyrqb9, round-3
+   rework). `:where` keeps it at the 0,2,0 it always had. */
+.tiny-btn:where(:not(.btn), .icon-btn):disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -9368,67 +9313,193 @@ table {
 }
 
 /* ---------------------------------------------------------------------------
-   Shared button utilities (if not already in styles.css)
+   THE BUTTON SYSTEM — four kinds, two sizes (UI normalization 4 of 10,
+   task 86bcyrqb9; the rules are written up in docs/UI_RULES.md, "Buttons:
+   four kinds, two sizes").
+
+   The colour says what the button does:
+     .btn                 outlined — SECONDARY (the default; no kind needed)
+     .btn.btn-ghost       the same outlined kind, kept as an alias
+     .btn.btn-primary     blue    — the screen's MAIN action
+     .btn.btn-save        green   — SAVE (defined in _buttons.css, PR 962)
+     .btn.btn-danger      red     — DELETE / remove
+   Two sizes: normal (--btn-height) and small (.btn-sm / .btn-xs / .tiny-btn,
+   --btn-height-sm). Every kind has a hover and a disabled state, and
+   disabled is a COLOUR, never a fade — a half-transparent bright button
+   still reads as a live one (task 86bbq5jvz).
+
+   Why it lives HERE and not in _buttons.css: this file loads after every
+   partial and used to redefine `.btn` from scratch, so a rule in
+   _buttons.css lost to it. Before this block a plain `.btn` was painted
+   BLACK by `button, .btn` in _buttons.css, which is why most header actions
+   were black while the same job elsewhere was white or blue.
+
+   `:where(:not(...))` keeps the specificity at one class while leaving the
+   two diagram tiles alone — they wear `.btn` for the keyboard behaviour,
+   not the look (Builder and Docs flow maps).
+
+   The kinds below are written `.btn.btn-<kind>` (two classes) so they beat
+   both the outlined default in _buttons.css and any one-class screen rule.
    --------------------------------------------------------------------------- */
 
-.btn {
+.btn:where(:not(.builder-flow-node, .docs-flow-node)) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 7px 14px;
-  border: 1px solid transparent;
-  border-radius: var(--c-radius);
-  font-size: 13px;
-  font-weight: 500;
+  gap: 0.35rem;
+  /* A <button> is border-box by default; a <label> or <a> wearing `.btn` is
+     not, and came out 2px taller than its neighbours (Upload To Gallery on
+     Settings › Projects measured 38px beside 36px buttons). */
+  box-sizing: border-box;
+  min-height: var(--btn-height);
+  padding: 0 var(--btn-pad-x);
+  border-width: 1px;
+  border-style: solid;
+  border-radius: var(--radius-btn);
+  font-size: var(--btn-font-size);
+  font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
-  line-height: 1;
 }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* The diagram tiles keep the borderless look they had: the old `.btn` rule
+   here painted their border transparent, hiding the outline their own rule
+   declares. Changing the tiles is not this ticket's job. */
+.btn:where(.builder-flow-node, .docs-flow-node) {
+  border-color: transparent;
+}
+/* Except the Builder landing tiles, which are now a compact grid and need
+   their outline to read as clickable tiles rather than loose words (UI_RULES
+   S8, task 86bcyrqbv). Two classes so it beats the line above. */
+.btn.builder-flow-node {
+  border-color: var(--border);
+  align-items: flex-start;
+}
+.btn.builder-flow-node:hover {
+  border-color: var(--accent);
+}
+/* The outlined colours themselves are in _buttons.css, which loads FIRST, so
+   a screen's own one-class button rule (a red table delete icon, a colour
+   swatch) still wins over them. Sizes live here so they win everywhere. */
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+.btn:disabled { cursor: not-allowed; }
 
-/*
- * Flat blue primary, and a disabled state that is a COLOUR rather than a
- * fade (operator, 2026-08-30, task 86bbq5jvz). `--c-primary` is left alone
- * on purpose: it also paints the info toast, focus borders and links, and
- * this ticket is about buttons only.
- *
- * `opacity: 1` on the disabled rule is load-bearing — the `.btn:disabled`
- * rule directly above fades every disabled button to 0.5, and a
- * half-transparent bright blue still reads as a live button. That
- * "is it clickable or not?" ambiguity is what kept getting Publish missed.
- */
-.btn-primary {
+/* BLUE — the screen's main action. */
+.btn.btn-primary {
   background: var(--btn-blue);
   color: var(--btn-flat-ink);
   border-color: var(--btn-blue);
 }
-.btn-primary:hover:not(:disabled) { background: var(--btn-blue-hover); border-color: var(--btn-blue-hover); }
-.btn-primary:disabled {
-  background: var(--btn-blue-disabled);
-  border-color: var(--btn-blue-disabled);
+.btn.btn-primary:hover:not(:disabled) {
+  background: var(--btn-blue-hover);
+  border-color: var(--btn-blue-hover);
   color: var(--btn-flat-ink);
   opacity: 1;
 }
-
-.btn-ghost {
-  background: transparent;
-  color: var(--c-text);
-  border-color: var(--c-border);
+.btn.btn-primary:disabled {
+  background: var(--btn-blue-disabled);
+  border-color: var(--btn-blue-disabled);
+  color: var(--btn-flat-ink);
 }
-.btn-ghost:hover:not(:disabled) { background: var(--c-bg-subtle); }
 
-.btn-danger {
-  background: var(--c-error);
-  color: #fff;
-  border-color: var(--c-error);
+/* OUTLINED — `.btn-ghost` is the secondary kind under its older name. */
+.btn.btn-ghost {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-ink);
+  border-color: var(--btn-secondary-border);
 }
-.btn-danger:hover:not(:disabled) { background: #c53030; border-color: #c53030; }
+/* Its own hover and disabled, at its own two-class strength. The block above
+   is 0,2,0, so the shared outlined hover and disabled in _buttons.css
+   (`.btn:where(...)`, 0,1,0) lose to it — the ghost buttons had no hover and
+   no disabled colour at all (round-3 review, 86bcyrqb9). */
+.btn.btn-ghost:hover:not(:disabled) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border);
+  color: var(--btn-secondary-ink);
+  opacity: 1;
+}
+.btn.btn-ghost:disabled {
+  background: var(--btn-secondary-bg);
+  border-color: var(--btn-secondary-disabled-border);
+  color: var(--btn-secondary-disabled-ink);
+  opacity: 1;
+}
 
-.btn-sm {
-  padding: 4px 10px;
-  font-size: 12px;
+/* RED — delete / remove. */
+.btn.btn-danger {
+  background: var(--btn-danger-flat);
+  color: var(--btn-flat-ink);
+  border-color: var(--btn-danger-flat);
+}
+.btn.btn-danger:hover:not(:disabled) {
+  background: var(--btn-danger-flat-hover);
+  border-color: var(--btn-danger-flat-hover);
+  color: var(--btn-flat-ink);
+  opacity: 1;
+}
+.btn.btn-danger:disabled {
+  background: var(--btn-danger-flat-disabled);
+  border-color: var(--btn-danger-flat-disabled);
+  color: var(--btn-flat-ink);
+}
+
+/* SMALL — the second and last size. `.tiny-btn` and `.btn-xs` were two more
+   spellings of "small" that each picked their own padding; they all land on
+   one height now. A square icon button keeps its own 36px box (`.icon-btn`). */
+.btn.btn-sm,
+.btn.btn-xs,
+.btn.tiny-btn:not(.icon-btn) {
+  min-height: var(--btn-height-sm);
+  padding: 0 var(--btn-pad-x-sm);
+  font-size: var(--btn-font-size-sm);
+}
+
+/* Older class names for the same jobs, outside `.btn`. Same look, so a
+   screen that still wears one does not stand out from its neighbours. */
+.secondary-btn,
+.white-btn,
+.standard-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--btn-height);
+  padding: 0 var(--btn-pad-x);
+  border: 1px solid var(--btn-secondary-border);
+  border-radius: var(--radius-btn);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-ink);
+  font-size: var(--btn-font-size);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: none;
+}
+.secondary-btn:hover:not(:disabled),
+.secondary-btn:focus:not(:disabled),
+.white-btn:hover:not(:disabled),
+.standard-btn:hover:not(:disabled) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border);
+  color: var(--btn-secondary-ink);
+  box-shadow: none;
+  opacity: 1;
+}
+.secondary-btn:disabled,
+.white-btn:disabled,
+.standard-btn:disabled {
+  border-color: var(--btn-secondary-disabled-border);
+  color: var(--btn-secondary-disabled-ink);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.white-btn.tiny-btn {
+  min-height: var(--btn-height-sm);
+  padding: 0 var(--btn-pad-x-sm);
+  font-size: var(--btn-font-size-sm);
 }
 
 .api-actions-col {
@@ -9791,30 +9862,6 @@ table {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .builder-flow-map {
-    min-height: 520px;
-  }
-
-  .builder-flow-node {
-    width: 190px;
-    min-height: 114px;
-  }
-
-  .builder-flow-node-upper-left {
-    left: 10%;
-  }
-
-  .builder-flow-node-upper-right {
-    right: 10%;
-  }
-
-  .builder-flow-node-lower-left {
-    left: 17%;
-  }
-
-  .builder-flow-node-lower-right {
-    right: 17%;
-  }
 }
 
 @media (max-width: 800px) {
@@ -9825,25 +9872,6 @@ table {
 
   #messagingPage .messaging-category-map.messaging-content-map {
     grid-template-columns: 1fr;
-  }
-
-  .builder-flow-map {
-    min-height: 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.8rem;
-    padding: 0.8rem;
-  }
-
-  .builder-flow-node {
-    position: static;
-    width: 100%;
-    min-height: 0;
-  }
-
-  .builder-flow-node-top,
-  .builder-flow-node-top:hover {
-    transform: none;
   }
 
   .builder-visual-editor-grid {
@@ -9857,10 +9885,6 @@ table {
   }
 
   .asset-launcher-map {
-    grid-template-columns: 1fr;
-  }
-
-  .builder-flow-map {
     grid-template-columns: 1fr;
   }
 }
