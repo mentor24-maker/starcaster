@@ -60,12 +60,29 @@
    * labelled admin button is one of these two heights, whatever screen it is
    * on — before this they ran from 29px to 50px for the same job. Normal is
    * the default; small (`.btn-sm`, and `.tiny-btn` / `.btn-xs`, which mean
-   * the same thing) is for table rows and dense toolbars. 36px matches the
-   * square table icon buttons, so a row of icons and a labelled button line
-   * up. Rules: docs/UI_RULES.md, "Buttons: four kinds, two sizes".
+   * the same thing) is for table rows and dense toolbars. Rules:
+   * docs/UI_RULES.md, "Buttons: four kinds, two sizes".
+   *
+   * UI normalization 11 (task 86bcz85k9, Dane 2026-11-05: "reduce vertical
+   * padding in each form field, button, and CRUD header bar by 2px") took
+   * 2px off the top and bottom of each — 4px off the height. A `.btn` has no
+   * vertical padding (its label is centred in `min-height`), so for buttons
+   * the 2px comes off these two heights: 36→32 and 28→24. The square icon
+   * buttons (`.icon-btn`) keep their own 36px box and are not touched.
+   *
+   * The same three cuts apply to the admin app only: `.builder-public-site`
+   * below puts the old values back, so a client's live site, and the
+   * Builder's preview of it, render exactly as before.
    */
-  --btn-height: 2.25rem;     /* 36px */
-  --btn-height-sm: 1.75rem;  /* 28px */
+  --btn-height: 2rem;        /* 32px */
+  --btn-height-sm: 1.5rem;   /* 24px */
+  /* Form boxes (input, select, textarea): the top/bottom padding of the one
+     shared rule in legacy.css, which is the rule every admin form box and
+     every Builder settings-panel box takes its height from. */
+  --field-pad-y: calc(0.55rem - 2px);
+  /* Table column-heading rows, and the filter/bulk-action row in the same
+     <thead> (_tables.css). Body rows keep 0.65rem. */
+  --table-head-pad-y: calc(0.65rem - 2px);
   --btn-pad-x: 0.875rem;
   --btn-pad-x-sm: 0.625rem;
   --btn-font-size: var(--text-sm);
@@ -337,4 +354,14 @@
 
   /* The one gap every drill-down level keeps around the level inside it. */
   --builder-depth-gap: 10px;
+}
+
+/* Clients' live sites keep the sizes they had before UI normalization 11:
+   these four tokens are admin chrome, and a published page (and the Builder's
+   device preview, which renders the same markup) is the client's design. */
+.builder-public-site {
+  --btn-height: 2.25rem;
+  --btn-height-sm: 1.75rem;
+  --field-pad-y: 0.55rem;
+  --table-head-pad-y: 0.65rem;
 }
