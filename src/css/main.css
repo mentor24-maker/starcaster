@@ -159,12 +159,13 @@
 .project-details-right .card:last-child {
   margin-bottom: 0;
 }
+/* Admin Team / Modules on Settings › Projects › Edit — a column title
+   (UI_RULES R12); it was muted spaced capitals. */
 .project-details-section-heading {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-muted, #64748b);
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  color: var(--ink-primary);
   margin: 0 0 1rem;
 }
 @media (max-width: 900px) {

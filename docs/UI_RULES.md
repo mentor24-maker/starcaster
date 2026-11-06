@@ -1641,6 +1641,35 @@ is ever wider than the screen.*
   *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
   — **[eye]**, sizes are tokens
 
+- **R12.** **A section heading looks like one of R10's three levels, and
+  nothing else** — UI normalization screen 3 (task 86bcyrqaz). Before it,
+  the editors had four heading looks: small spaced capitals (Themes
+  "PALETTE"), outlined pill badges (the Builder's "PAGES", "PAGE DETAILS"),
+  plain bold (the CRM form editor), and big 24px card titles (Settings
+  "Your Projects"). Now:
+
+  - **No spaced capitals and no pill badge as a section heading.** Not
+    `text-transform: uppercase` + `letter-spacing`, not a rounded tinted
+    chip. A heading is the R10 size, its weight, and `--ink-primary`.
+  - **Which level:** the heading of a card, pod or Builder panel is a
+    **column title** (Palette, Page Details, Workspace, Your Projects,
+    Admin Team). A group inside one is an **item** (Fonts, Colors,
+    Project Logo, an Outreach stage name). One setting's label is a
+    **sub-item** (Logo — Wide).
+  - **Plain admin markup** (`src/pages/*.html`) uses the classes
+    `.editor-title`, `.editor-item`, `.editor-subitem` from
+    `_typography.css` instead of a bare `<h3>`, which is 1.5em by default.
+    A component with its own heading class sets the token on that class.
+  - **`.panel-label` is two things.** Inside a Builder admin panel
+    (`.builder-toolbar-shell`) it is a column title; on a CLIENT site
+    (poll and player-card headers) it is still a styled pill, and must stay
+    one — so the heading rule is scoped to the toolbar shell, never to
+    `.panel-label` alone. An open Builder panel keeps its white-on-blue
+    header bar: there the heading is white, for contrast (R9's purpose).
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**, sizes are tokens
+
 ## S — System and structure
 
 *Umbrella: every module familiar; nothing hand-rolled; nothing stale.*

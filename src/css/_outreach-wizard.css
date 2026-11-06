@@ -98,6 +98,15 @@
   min-width: 0;
 }
 
+/* A stage's name (Connect, Find creators…) is an item heading: the shared
+   size and the same dark ink as every editor heading (UI_RULES R12) — it
+   was the card's grey body colour. */
+.outreach-wizard-stage-head > strong {
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
 .outreach-wizard-stage-state {
   font-size: var(--text-base);
   opacity: 0.75;
