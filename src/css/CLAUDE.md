@@ -65,8 +65,11 @@ honest enforcement tag on each one, and the mechanical ones run in
 reference for anyone editing CSS — **if it disagrees with the doctrine,
 the doctrine wins.**
 
-- **Buttons:** utility classes only — `btn btn-primary`, `btn btn-ghost`,
-  `btn btn-danger`, table micro-actions `btn tiny-btn icon-btn`. **Every Save
+- **Buttons:** four kinds, two sizes — `docs/UI_RULES.md` C9. Plain `btn`
+  is outlined (secondary), `btn btn-primary` blue (the screen's one main
+  action), `btn btn-save` green, `btn btn-danger` red; `btn-sm` is the
+  small size. Never give a button its own height or colour. Table
+  micro-actions `btn tiny-btn icon-btn`. **Every Save
   is `btn btn-save`** (green, sized to its label; `save: true` on a Modal/Card
   action) — never on a module that renders on a client's site. B1 enforces it. Labels in
   Title Case, `white-space: nowrap`, `width: fit-content` (not full-width
@@ -90,7 +93,7 @@ the doctrine wins.**
 - **Modals:** no scrollbars in form modals, especially horizontal — widen
   the modal instead.
 - **Feedback:** `App.components.Toast` or `App.notify(text, isError)` — one
-  message strip (`.c-message-strip`, UI_RULES S7); a form's successful Save →
+  message strip (`.c-message-strip`, UI_RULES S9); a form's successful Save →
   `App.components.SavedNotice` (top of page, fades after 3s, no toast).
 - **Accordions:** toggle `aria-expanded` only — never rewrite button
   `innerHTML` for chevrons.

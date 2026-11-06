@@ -1412,6 +1412,49 @@ Advanced — is the follow-on pass the operator sequenced after this.
   something the renderer honors; duplicates are removed, not kept "just in
   case". *(7/1 "'content' field that doesn't do anything … remove it";
   6/28; 7/29; doctrine E7)* — **[eye]**
+- **C9. Buttons: four kinds, two sizes.** The colour says what the button
+  does, on every admin screen (UI normalization 4 of 10, task 86bcyrqb9):
+
+  | Kind | Looks | Admin app (vanilla) | Builder (React) |
+  |---|---|---|---|
+  | Secondary | outlined, white | `btn` (the default) — `btn-ghost` is the same | `secondary-button` |
+  | Main action | blue | `btn btn-primary` | `submit-button` |
+  | Save | green | `btn btn-save` | `submit-button admin-save-button` |
+  | Delete | red | `btn btn-danger` | `danger-button` |
+
+  **One main action per screen**, and it is the "Create …"/"Add …" button
+  in the heading row; Back, Cancel, Refresh, Import, Archives and the like
+  are secondary. Every kind has a **hover colour** and a **disabled colour**
+  — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
+  `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
+  0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
+  `<button>`s without `.btn`, so that fade still reaches them; the Builder
+  block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
+  admin-only, so a client's published buttons are untouched. The same trap
+  hides inside the system: a kind written at two classes, like
+  `.btn.btn-ghost`, outranks the shared one-class outlined hover and
+  disabled, so it needs its own — without them the ghost buttons had no
+  hover and no disabled colour at all. And the old `.tiny-btn:disabled`
+  fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
+  A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (36px), and small,
+  `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
+  (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
+  height, padding or colour: a rule like `.page-heading-row button
+  { min-height: 42px }` is how one job ended up 29px on one screen and 50px
+  on another. Tokens in `_variables.css`; rules in `_buttons.css` (default
+  colours, loads first) and `legacy.css` "THE BUTTON SYSTEM" (sizes and
+  kinds, loads last); the Builder's admin-only block is in
+  `_builder-react-overrides.css`. A client's published site keeps its own
+  theme's buttons. *(operator 2026-11-05, approving the UI review: "I like
+  all of them.")* — **[eye]**, sizes and colours are tokens
+
+  **Deliberately not in the four kinds:** square table icon buttons
+  (`icon-btn` — a glyph, its own 36px square, already the same height as
+  a normal button); the Builder and Docs diagram tiles; accordion headers
+  and the Builder's panel-label pills; tab switchers (UI normalization 5
+  owns those); colour swatches, font pickers and image pickers that show a
+  value; and buttons a module renders on a client's site.
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …
@@ -1757,7 +1800,26 @@ is ever wider than the screen.*
     new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
-- **S7. Messages appear ONCE, in one strip that never covers the work.**
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
+- **S9. Messages appear ONCE, in one strip that never covers the work.**
   Every admin message — `App.notify(text, isError)` and
   `App.components.Toast.*` — lands in `#appMessageStrip`, the strip between
   the header and `<main>` in `src/layout.html`. It is in the page's normal

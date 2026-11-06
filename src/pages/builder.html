@@ -5,28 +5,28 @@
         </div>
         <p class="page-heading-desc">Build the reusable infrastructure layer: templates, forms, pages, extension tools, and agents.</p>
         <div class="builder-flow-map">
-          <button class="btn builder-flow-node builder-flow-node-top" type="button" onclick="App.setActivePage('builderTemplatesPage')">
+          <button class="btn builder-flow-node" type="button" onclick="App.setActivePage('builderTemplatesPage')">
             <span class="builder-flow-node-kicker">Structure</span>
             <span class="builder-flow-node-title">Templates</span>
           </button>
-          <button class="btn builder-flow-node builder-flow-node-upper-right" type="button" onclick="App.builder.openFormsPage()">
+          <button class="btn builder-flow-node" type="button" onclick="App.builder.openFormsPage()">
             <span class="builder-flow-node-kicker">Capture</span>
             <span class="builder-flow-node-title">Forms</span>
           </button>
-          <button class="btn builder-flow-node builder-flow-node-lower-right" type="button" onclick="App.setActivePage('builderManagePagesPage')">
+          <button class="btn builder-flow-node" type="button" onclick="App.setActivePage('builderManagePagesPage')">
             <span class="builder-flow-node-kicker">Publish</span>
             <span class="builder-flow-node-title">Pages</span>
           </button>
-          <button class="btn builder-flow-node builder-flow-node-lower-left" type="button" onclick="App.setActivePage('builderToolsPage')">
+          <button class="btn builder-flow-node" type="button" onclick="App.setActivePage('builderToolsPage')">
             <span class="builder-flow-node-kicker">Extend</span>
             <span class="builder-flow-node-title">Extensions</span>
           </button>
-          <button class="btn builder-flow-node builder-flow-node-upper-left" type="button" onclick="App.builder.openAgentsPage()">
+          <button class="btn builder-flow-node" type="button" onclick="App.builder.openAgentsPage()">
             <span class="builder-flow-node-kicker">Automate</span>
             <span class="builder-flow-node-title">Agents</span>
           </button>
         </div>
-        <div class="page-heading-actions" style="justify-content:center; margin-top:1rem;">
+        <div class="page-heading-actions builder-landing-actions">
           <button type="button" onclick="App.setActivePage('builderBuilderWorkspacePage')" class="btn btn-primary">Open Builder Workspace</button>
           <button type="button" onclick="App.setActivePage('builderModulesPage')" class="btn">Open Modules Library</button>
         </div>
@@ -40,7 +40,7 @@
         <div class="page-heading-row">
           <h2>Builder: Modules</h2>
           <div class="page-heading-actions">
-            <button id="builderModulesCreateBtn" type="button" class="btn">Create Module</button>
+            <button id="builderModulesCreateBtn" type="button" class="btn btn-primary">Create Module</button>
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>
@@ -156,7 +156,7 @@
         <div class="page-heading-row">
           <h2>Builder: Pages</h2>
           <div class="page-heading-actions">
-            <button id="builderOpenCreateLandingPageBtn" type="button" class="btn">Create Page</button>
+            <button id="builderOpenCreateLandingPageBtn" type="button" class="btn btn-primary">Create Page</button>
             <button type="button" onclick="App.builder.openBulkCreateFromManagePage();" class="btn">Bulk Create</button>
             <button type="button" onclick="App.builder.openPopulateFromWebPage();" class="btn">Populate from Web</button>
             <button type="button" onclick="App.setActivePage('builderPageArchivesPage')" class="btn">Archives</button>
@@ -725,7 +725,7 @@
         <div class="page-heading-row">
           <h2>Builder: Templates</h2>
           <div class="page-heading-actions">
-            <button id="builderCreatePageTemplateBtn" type="button" class="btn">Create Template</button>
+            <button id="builderCreatePageTemplateBtn" type="button" class="btn btn-primary">Create Template</button>
             <button type="button" onclick="App.setActivePage('builderPage')" class="btn">Back To Builder</button>
           </div>
         </div>

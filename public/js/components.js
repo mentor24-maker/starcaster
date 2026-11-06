@@ -507,7 +507,7 @@ App.components.Card = function Card(opts) {
  * floating over it, so it can never cover a table row or a button. One
  * message at a time — a new one replaces the old. If the strip is scrolled
  * out of view, the page scrolls just far enough to show it.
- * Rules: docs/UI_RULES.md S7.
+ * Rules: docs/UI_RULES.md S9.
  */
 App.components.Toast = (function () {
   let current = null;

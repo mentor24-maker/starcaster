@@ -7,6 +7,41 @@ is one message strip just under the top menu. It is part of the page, so it
 pushes things down instead of covering them; errors stay until you close them
 with ×, and "saved"-type messages close by themselves after four seconds. The
 rule is written down so later screens use the same strip.
+## 2026-11-05 — Each thing is shown once: one projects list, no buttons back to the same screen, a compact Builder landing (#989)
+
+Your projects used to be listed three times — the table on Settings › Projects,
+a "Your Projects" card under that same table, and "My Projects" on Profile.
+Now the table is the only list; Profile has a link to it, and the card's
+"Active Project" picker went too, since each row's Set Active button already
+did that job. Settings › Projects also lost its "Back To Projects" button
+(you were already there); in the Create Project panel the same button now
+says Cancel, which is what it does. A search for any other button that leads
+to its own screen found one more — the Docs page's "Docs" tile — and removed
+it. The Builder landing page was a 560px-tall box with five link words
+scattered in it; it is now one row of five outlined tiles. The two rules are
+written down (UI_RULES S7 and S8) so later screens follow them.
+
+## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
+
+Buttons used to be black on most screens, white or blue on the Builder, green
+on Themes, and small black or grey on Training — for the same jobs — and they
+ran from 29px to 50px tall. Now the colour tells you what a button does:
+outlined white for an ordinary action (Back, Cancel, Refresh), blue for the
+screen's one main action (Create Page, Create Project, Add Contact), green for
+Save, red for Delete. There are two heights only, normal and small. On the way,
+Training's per-row Edit and Delete buttons, which had been white text on a white
+row and so invisible, became visible. The rule is written down (UI_RULES C9) so
+the other screens in the UI normalization series reuse it.
+
+A review caught one thing before it merged: every button had started fading
+to 80% when you pointed at it, which undid the solid blue hover asked for on
+2026-08-30. A second review found the Builder's own buttons on Themes (Theme
+Wizard, New, Create, Choose Image) still faded, and a third found the older
+"ghost" buttons (Cancel, Close, Clear, Choose From Gallery) had stopped
+reacting to the pointer at all. Those now darken on hover and grey out when
+unavailable, small buttons grey out instead of fading, and an Upload button
+that sat 2px taller than its neighbours is the same height. Buttons now change
+colour on hover and never fade, on every admin screen.
 ## 2026-11-05 — Short values get short boxes (#983)
 
 Several admin screens stretched a box across the whole screen even when it only
