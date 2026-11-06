@@ -195,7 +195,6 @@ App.els = {
   assetCategoriesPage: document.getElementById('assetCategoriesPage'),
   createAssetCategoryPage: document.getElementById('createAssetCategoryPage'),
   editAssetCategoryPage: document.getElementById('editAssetCategoryPage'),
-  message: document.getElementById('message'),
   assetsTable: document.getElementById('assetsTable'),
   assetUploadPanel: document.getElementById('assetUploadPanel'),
   assetUploadForm: document.getElementById('assetUploadForm'),
@@ -464,9 +463,12 @@ const els = App.els;
 // Core UI functions
 // ---------------------------------------------------------------------------
 
+// Fallback only: components.js replaces this with the message strip
+// (App.components.Toast). The old #message bar at the bottom of the screen
+// is gone (task 86bcyrqbu) — it covered the last table rows and repeated
+// every message the toast already showed.
 App.notify = function notify(text, isError = false) {
-  els.message.textContent = text;
-  els.message.style.background = isError ? '#f7c6c6' : '#fcebc8';
+  if (isError) console.error(text); else console.log(text);
 };
 
 App.PUBLIC_LEGAL_PAGE_IDS = ['privacyPolicyPage', 'termsOfServicePage'];
