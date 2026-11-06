@@ -329,6 +329,16 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--bx-text, #18324a);
   font-family: var(--bx-font-body, inherit);
   line-height: var(--bx-line-base, 1.65);
+  /* The theme's Base size, so the editor shows body copy at the size the page
+     will (task 86bczr7x7; the page rule is in _builder-theme.css). `1em` is
+     what it inherits today, so an editor with no theme vars is unchanged. */
+  font-size: var(--bx-size-base, 1em);
+}
+
+/* The <p> needs its own: the admin-wide `p` rule (1.1rem, `--text-lg`) pins every
+   paragraph, so the container size above reaches lists and quotes only. */
+.builder-react-root .builder-rich-text-content .ProseMirror p {
+  font-size: var(--bx-size-base, var(--text-lg));
 }
 
 /* RTE headings — size, color, font from theme.

@@ -138,6 +138,14 @@ function documentForSection({
   // The theme's role palette (surface / inverse / button pairs …), for
   // rendering that depends on which ground a module sits on (86bctakk0).
   themeRolePalette,
+  /*
+   * The page's DOCUMENT theme — Builder › Themes typography (fonts, type
+   * scale, text colours), which is a different object from the palette above:
+   * it rides the page as `theme` and reaches the shell as `--bx-*` variables
+   * (getThemeRootVars). Without it no contract can ask what a typography
+   * setting does on a page (task 86bczr7x7, Base size).
+   */
+  documentTheme,
   // Tablet/phone row settings and the desktop top padding they differ from
   // (device styles, task 86bc13a6v).
   paddingTop,
@@ -281,6 +289,7 @@ function documentForSection({
      * did not exist until a page could wear a video.
      */
     ...(pageBackground ? { pageBackground } : {}),
+    ...(documentTheme ? { theme: documentTheme } : {}),
     ...theme,
   };
 }
