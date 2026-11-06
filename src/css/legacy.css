@@ -933,7 +933,7 @@ button[type="submit"] {
 
 .builder-flow-node:hover {
   background: var(--bg-hover);
-  border-color: var(--border-hover);
+  border-color: var(--accent);
   box-shadow: none;
 }
 
@@ -9377,7 +9377,7 @@ table {
   align-items: flex-start;
 }
 .btn.builder-flow-node:hover {
-  border-color: var(--border-hover);
+  border-color: var(--accent);
 }
 /* The outlined colours themselves are in _buttons.css, which loads FIRST, so
    a screen's own one-class button rule (a red table delete icon, a colour
