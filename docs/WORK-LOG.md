@@ -13,6 +13,16 @@ connecting it properly to the theme, in five slices. The first takes a day: one
 shared set of text rules, plus a browser check that fails if the two ever
 drift apart again. Nothing is built until Dane picks.
 
+## 2026-11-06 — Page editor arrows wait for the page before they can be clicked (#996)
+
+When a page opened in the Builder page editor, the round green arrows on
+Page Details, Publish, Page History and Workspace could be clicked before the
+page had arrived, and opening Workspace early showed an empty or half-filled
+workspace. Now each of those four shows a small turning ring in place of the
+arrow until the page is in, and the bar ignores clicks; then the arrows come
+back exactly as they were. If the page fails to load, the rings stop and the
+arrows return, so nothing can spin forever. With "reduce motion" turned on,
+the ring shows but holds still. No other arrow in the Builder changed.
 ## 2026-11-06 — Every editor listed against the new look, with what is still different (#993)
 
 The clean-up of how StarCaster's screens look has been done one theme at a

@@ -101,7 +101,7 @@ import {
   type BuilderModuleEditorFocus,
   type CreatedModuleSource
 } from "./builder/builder-module-repository-list";
-import { BuilderCollapseIcon } from "./builder/builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps, isBuilderPageLoading } from "./builder/builder-collapse-icon";
 import {
   BuilderFloatingSaveRail,
   type BuilderFloatingSaveAction
@@ -212,6 +212,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  // State mirrors of the two "has the page arrived?" facts the refs hold, so
+  // the four panel bars re-render when they change (task 86bczp0zy).
+  const [pagesLoaded, setPagesLoaded] = useState(false);
+  const [hydratedPageId, setHydratedPageId] = useState("");
+  const [initialSelectionApplied, setInitialSelectionApplied] = useState(false);
   // The page's updatedAt as of the version currently on the canvas. Sent with
   // every save so the server can refuse to write over somebody else's change
   // (see isStaleEdit in lib/builderPagesStore.js). It MUST be refreshed from
@@ -492,6 +497,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load pages.");
       setPages([]);
+    } finally {
+      // Come back either way: a failed load must stop the spinners, and the
+      // error banner already says what went wrong.
+      setPagesLoaded(true);
     }
   }
 
@@ -702,6 +711,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    setHydratedPageId(selectedPageId);
     loadedUpdatedAtRef.current = page?.updatedAt ?? "";
     setSaveConflict(null);
     pageThemeDirtyRef.current = false;
@@ -729,6 +739,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       const match = pages.find((entry) => String(entry.id) === String(initialRecordId));
       if (!match) return;
       appliedInitialSelectionRef.current = true;
+      setInitialSelectionApplied(true);
       setSelectedPageId(match.id);
       return;
     }
@@ -823,6 +834,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           : c.name
     }));
   }
+
+  // Page Details, Publish, Page History and Workspace show a spinner and
+  // refuse clicks until this is false — opening Workspace before the page has
+  // arrived showed an empty or half-filled workspace (task 86bczp0zy).
+  const pageLoading = isBuilderPageLoading({
+    builderMode,
+    pagesLoaded,
+    pageIds: pages.map((page) => page.id),
+    initialPageId: initialMode === "pages" ? initialRecordId : undefined,
+    initialSelectionApplied,
+    selectedPageId,
+    hydratedPageId,
+  });
 
   function toggleBuilderPanel(panel: keyof typeof collapsedBuilderPanels) {
     setCollapsedBuilderPanels((current) => {
@@ -3253,6 +3277,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           pages={pages}
           templates={pageLayoutTemplates}
           themes={builderThemes}
+          pageLoading={pageLoading}
           selectedPageId={selectedPageId}
           draftName={draft.name}
           pageBackground={draft.pageBackground}
@@ -3301,6 +3326,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           page happens to be open. A step you can forget is worse than no step. */}
       {builderMode === "pages" ? (
         <BuilderPublishPanel
+          loading={pageLoading}
           focusRequestKey={publishFocusKey}
           onPublished={onPublished}
           refreshKey={publishRefreshKey}
@@ -3309,6 +3335,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
 
       {builderMode === "pages" && selectedPageId ? (
         <BuilderPageHistory
+          loading={pageLoading}
           pageId={selectedPageId}
           pageName={draft.name || "this page"}
           onRestored={() => {
@@ -3329,9 +3356,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
               className="builder-panel-toggle"
               onClick={() => toggleBuilderPanel("workspace")}
               type="button"
+              {...builderPanelToggleLoadingProps(
+                pageLoading,
+                collapsedBuilderPanels.workspace ? "Expand Workspace" : "Collapse Workspace",
+              )}
             >
               <span className="panel-label">Workspace</span>
-              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.workspace} /></span>
+              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.workspace} loading={pageLoading} /></span>
             </button>
             {!collapsedBuilderPanels.workspace ? (
               <div className="builder-workspace-pods">

@@ -242,6 +242,26 @@ already gone wrong.
    bundle coerces the new type to `"text"` on every load (silent data loss)
 3. `npm run build:builder`
 
+## Rich text editor — two traps, both 2026-11-06
+
+`builder-rich-text-editor.tsx` (and the heading module's
+`builder/builder-inline-rich-text-editor.tsx`) is TipTap on ProseMirror,
+mounted in ten places. Before touching it or anything around it:
+
+- **Never put it inside a `<label>`.** A label presses its first button — the
+  toolbar's P — on every click, so headings turned into paragraphs
+  (`docs/DOCTRINE.md` §5.35).
+- **Chrome styles leak into its text.** `.field span` made every coloured
+  heading 15px. Spans in `.builder-rich-text-content .ProseMirror` now inherit
+  from their block; keep it that way, and reset any new chrome rule that
+  reaches in (§5.36).
+- **jsdom cannot see either bug.** Reproduce editor behaviour in Chromium — a
+  tiny esbuild bundle of the component plus `public/styles.css` in Playwright
+  needs no app, login or fixture.
+
+Whether to connect it fully to the theme builder or replace it is the
+planning ticket 86bczqh0f.
+
 ## Rendering user content
 
 All rich-text/embed HTML must pass through the DOMPurify helpers in
