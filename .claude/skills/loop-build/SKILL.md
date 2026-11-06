@@ -517,7 +517,9 @@ npm run clickup -- loop-heartbeat --in-line <queued count> --next "<next task na
      include: **the ClickUp task URL** (`https://app.clickup.com/t/<id>`, on a
      line of its own — this is not optional), a plain-language summary, the
      task's "How to test" steps, and a note that a Vercel preview will be
-     attached. End with the Generated-with trailer.
+     attached — or, for a screen behind the sign-in, that the review lane will
+     give a local link instead, because no preview can be signed into (task
+     86bcz932m). End with the Generated-with trailer.
    - **Then check the PR actually has checks, and do not push in the seconds
      right after opening it.** A push landing ~15 seconds after `gh pr create`
      makes GitHub drop BOTH the `opened` run and that push's run, and nothing
