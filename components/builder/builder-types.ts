@@ -129,6 +129,7 @@ export const modulePaletteGroups: Array<{
   { value: "contact-form", label: "Contact Forms", icon: "CF", description: "Lead capture forms with simple presets." },
   { value: "crm-form", label: "CRM", icon: "CRM", description: "CRM lead-capture forms linked to the project's contact table." },
   { value: "bug-report", label: "Bug Report", icon: "🐞", description: "A small floating icon visitors click to report a problem on the page." },
+  { value: "spirality-tasks", label: "Spirality Tasks", icon: "✓", description: "Your team signs in to Spirality here to see a project's tasks, reply, and submit new ones." },
   { value: "player-portal", label: "Player Portal", icon: "PP", description: "Player login and registration on any page." },
   { value: "previous-results", label: "Previous Results", icon: "PR", description: "Only the live previous-poll results panel." },
   { value: "current-poll", label: "Polls", icon: "P?", description: "The current live poll with vote actions." },
@@ -1264,6 +1265,17 @@ export const modulePaletteItems: ModulePaletteItem[] = [
     label: "Bug Report",
     icon: "🐞",
     description: "Floats a small bug icon in a page corner; clicking opens a popup where a visitor describes the problem and attaches screenshots. Visibility can be limited to signed-in clients or staff.",
+    name: "",
+    text: "",
+    settings: {}
+  },
+  {
+    id: "spirality-tasks-default",
+    type: "spirality-tasks",
+    group: "spirality-tasks",
+    label: "Spirality Tasks",
+    icon: "✓",
+    description: "A sign-in to Spirality for your team, then a project's tasks grouped by status. Open a task to read and reply, or submit a new one. Joining is by invite email only.",
     name: "",
     text: "",
     settings: {}
