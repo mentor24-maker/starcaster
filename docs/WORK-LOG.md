@@ -1,3 +1,12 @@
+## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
+
+In the Builder page editor, on a phone-width browser window, the Preview, Save
+as Template and Save Page buttons were drawn on top of the blue Page Details
+bar, hiding its title and the ▼ that collapses the panel — so the panel could
+not be closed. The bar now always keeps room for its title and ▼, and the
+buttons sit beside it, stacking onto extra lines when space runs out. On a
+normal desktop window nothing changes. Same fix the Pages bar just above it got
+in #972.
 ## 2026-11-05 — Messages show once and no longer cover the screen (#988)
 
 Every message in the admin app used to appear twice — a floating box and a pink
