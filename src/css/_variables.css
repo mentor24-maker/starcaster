@@ -56,6 +56,30 @@
   --btn-flat-ink: #ffffff;
 
   /*
+   * THE TWO BUTTON SIZES (UI normalization 4 of 10, task 86bcyrqb9). Every
+   * labelled admin button is one of these two heights, whatever screen it is
+   * on — before this they ran from 29px to 50px for the same job. Normal is
+   * the default; small (`.btn-sm`, and `.tiny-btn` / `.btn-xs`, which mean
+   * the same thing) is for table rows and dense toolbars. 36px matches the
+   * square table icon buttons, so a row of icons and a labelled button line
+   * up. Rules: docs/UI_RULES.md, "Buttons: four kinds, two sizes".
+   */
+  --btn-height: 2.25rem;     /* 36px */
+  --btn-height-sm: 1.75rem;  /* 28px */
+  --btn-pad-x: 0.875rem;
+  --btn-pad-x-sm: 0.625rem;
+  --btn-font-size: var(--text-sm);
+  --btn-font-size-sm: var(--text-xs);
+  /* The outlined SECONDARY kind — the default for any `.btn` with no kind. */
+  --btn-secondary-bg: var(--bg-surface);
+  --btn-secondary-ink: var(--ink-primary);
+  --btn-secondary-border: var(--border-strong);
+  --btn-secondary-hover-bg: var(--bg-hover);
+  --btn-secondary-hover-border: var(--ink-secondary);
+  --btn-secondary-disabled-ink: var(--ink-muted);
+  --btn-secondary-disabled-border: var(--border-light);
+
+  /*
    * Type that sits on top of a photograph, and the scrim under it.
    *
    * Deliberately NOT theme-following, which is the one exception R3 allows
@@ -184,6 +208,17 @@
    */
   --page-title-size: var(--text-2xl);     /* 24px — the one title a screen has */
   --page-desc-size: var(--text-sm);       /* ~13px — the optional line under it */
+
+  /*
+   * Box widths outside a settings panel (UI normalization 6 of 10, task
+   * 86bcyrqbh): a box is as wide as what normally goes in it, never as wide
+   * as the screen. Three sizes, chosen by what the box holds — never a width
+   * on one field. Every one also caps at 100% so nothing overflows a phone.
+   * docs/UI_RULES.md W7. (Settings panels follow W0's lattice instead.)
+   */
+  --field-w-number: 6ch;   /* a number or percentage: "50", "100", "2026" */
+  --field-w-short: 24ch;   /* a name or title: "Theme name", a first name */
+  --field-w-long: 48ch;    /* a list, a sentence, a web address: "Keywords" */
 
   --leading-tight: 1.25; /* headings, single-line UI */
   --leading-normal: 1.5; /* body copy */

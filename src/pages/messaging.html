@@ -19,7 +19,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="messagingPage">Messaging</a>: Content</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn">Create Content</button>
+            <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn btn-primary">Create Content</button>
             <button type="button" onclick="App.messaging.openManageContentLanding(); return false;" class="btn">Formats</button>
           </div>
         </div>
@@ -309,7 +309,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Articles</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'article' }); return false;">Import Other Formats</button>
-            <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
+            <button id="messagingArticlesToggleFormBtn" type="button" class="btn btn-primary">Add Article</button>
           </div>
         </div>
         <form id="messagingArticlesForm">
@@ -404,7 +404,7 @@
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tweet' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tweet' }); return false;">Import from Web Pages</button>
-            <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
+            <button id="messagingTweetsToggleFormBtn" type="button" class="btn btn-primary">Add Tweet</button>
           </div>
         </div>
         <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
@@ -782,7 +782,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'pitch' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'pitch' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
-            <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
+            <button id="messagingPitchesToggleFormBtn" type="button" class="btn btn-primary">Create Pitches</button>
           </div>
         </div>
         <p class="page-heading-desc">Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
@@ -939,7 +939,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Hashtags</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'hashtag' }); return false;">Import Other Formats</button>
-            <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
+            <button id="messagingHashtagsToggleFormBtn" type="button" class="btn btn-primary">Add Hashtags</button>
           </div>
         </div>
         <form id="messagingHashtagsForm" class="standard-form-grid">
@@ -1169,7 +1169,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Topics</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
           </div>
         </div>
         <div class="messaging-topics-ai-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
@@ -1238,7 +1238,7 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
             <button type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
           </div>
         </div>
@@ -1254,7 +1254,7 @@
         <div class="page-heading-row">
           <h2>Edit Messaging Topic</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
             <button id="backFromEditMessagingTopicBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
@@ -1273,7 +1273,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tag' }); return false;">Import from Web Pages</button>
           </div>
         </div>
@@ -1386,7 +1386,7 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
           </div>
         </div>
@@ -1402,7 +1402,7 @@
         <div class="page-heading-row">
           <h2>Edit Messaging Tag</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
@@ -1439,7 +1439,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'subheading' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'subheading' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
-            <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
+            <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn btn-primary">Create Sub-headings</button>
           </div>
         </div>
         <p class="page-heading-desc">Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1588,7 +1588,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tagline' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tagline' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
-            <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
+            <button id="messagingTaglinesToggleFormBtn" type="button" class="btn btn-primary">Create Taglines</button>
           </div>
         </div>
         <p class="page-heading-desc">Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
@@ -1735,7 +1735,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Reports</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'report' }); return false;">Import Other Formats</button>
-            <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
+            <button id="messagingReportsToggleFormBtn" type="button" class="btn btn-primary">Add Report</button>
           </div>
         </div>
         <form id="messagingReportsForm">
@@ -1837,7 +1837,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: White Papers</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'white-paper' }); return false;">Import Other Formats</button>
-            <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
+            <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn btn-primary">Add White Paper</button>
           </div>
         </div>
         <form id="messagingWhitePapersForm">
@@ -1939,7 +1939,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: eBooks</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'ebook' }); return false;">Import Other Formats</button>
-            <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
+            <button id="messagingEbooksToggleFormBtn" type="button" class="btn btn-primary">Add eBook</button>
           </div>
         </div>
         <form id="messagingEbooksForm">

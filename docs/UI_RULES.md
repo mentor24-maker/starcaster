@@ -1202,6 +1202,34 @@ A rendered module has the same obligation as a panel: on a real tenant page a
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
+- **W7. Outside a settings panel, a box is sized by what goes in it —
+  three sizes, picked by content.** *(UI normalization 6 of 10, task
+  86bcyrqbh, 2026-11-05: Training › Rules/Guides stretched three
+  percentage boxes holding "50", "40" and "10" across about 1,180px; Themes'
+  Theme name was about 400px; Outreach's Keywords ran the full width.)*
+  This is W3 made concrete, with names you can reuse:
+
+  | Box holds | Class | Token (`src/css/_variables.css`) | Room for |
+  |---|---|---|---|
+  | a number or percentage | `field-w-number` | `--field-w-number` | 6 characters |
+  | a name or title | `field-w-short` | `--field-w-short` | 24 characters |
+  | a list, a sentence, a web address | `field-w-long` | `--field-w-long` | 48 characters |
+
+  The classes live in `src/css/_forms.css` and add the box's own padding,
+  border and number arrows on top of the token, so the token reads as "room
+  for the text". Every size also caps at `max-width: 100%`, so nothing
+  overflows a phone. A component with its own stylesheet that cannot take
+  the class (Themes, Outreach) uses the token in its own rule —
+  `width: calc(var(--field-w-short) + 2rem)` — rather than a new number.
+
+  **Several short boxes share one row.** Wrap each label and its box in
+  `.short-field` and the group in `.short-fields-row`: the label sits beside
+  its box, the pairs run left to right and wrap onto the next line only when
+  the screen is too narrow. A short box never gets a row of its own just
+  because the form grid gave it one.
+
+  Inside a settings panel, W0's lattice still decides widths; W7 does not
+  apply there. — **[eye]**
 
 ## A — Overriding the theme
 
@@ -1419,6 +1447,49 @@ Advanced — is the follow-on pass the operator sequenced after this.
   something the renderer honors; duplicates are removed, not kept "just in
   case". *(7/1 "'content' field that doesn't do anything … remove it";
   6/28; 7/29; doctrine E7)* — **[eye]**
+- **C9. Buttons: four kinds, two sizes.** The colour says what the button
+  does, on every admin screen (UI normalization 4 of 10, task 86bcyrqb9):
+
+  | Kind | Looks | Admin app (vanilla) | Builder (React) |
+  |---|---|---|---|
+  | Secondary | outlined, white | `btn` (the default) — `btn-ghost` is the same | `secondary-button` |
+  | Main action | blue | `btn btn-primary` | `submit-button` |
+  | Save | green | `btn btn-save` | `submit-button admin-save-button` |
+  | Delete | red | `btn btn-danger` | `danger-button` |
+
+  **One main action per screen**, and it is the "Create …"/"Add …" button
+  in the heading row; Back, Cancel, Refresh, Import, Archives and the like
+  are secondary. Every kind has a **hover colour** and a **disabled colour**
+  — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
+  `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
+  0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
+  `<button>`s without `.btn`, so that fade still reaches them; the Builder
+  block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
+  admin-only, so a client's published buttons are untouched. The same trap
+  hides inside the system: a kind written at two classes, like
+  `.btn.btn-ghost`, outranks the shared one-class outlined hover and
+  disabled, so it needs its own — without them the ghost buttons had no
+  hover and no disabled colour at all. And the old `.tiny-btn:disabled`
+  fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
+  A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (36px), and small,
+  `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
+  (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
+  height, padding or colour: a rule like `.page-heading-row button
+  { min-height: 42px }` is how one job ended up 29px on one screen and 50px
+  on another. Tokens in `_variables.css`; rules in `_buttons.css` (default
+  colours, loads first) and `legacy.css` "THE BUTTON SYSTEM" (sizes and
+  kinds, loads last); the Builder's admin-only block is in
+  `_builder-react-overrides.css`. A client's published site keeps its own
+  theme's buttons. *(operator 2026-11-05, approving the UI review: "I like
+  all of them.")* — **[eye]**, sizes and colours are tokens
+
+  **Deliberately not in the four kinds:** square table icon buttons
+  (`icon-btn` — a glyph, its own 36px square, already the same height as
+  a normal button); the Builder and Docs diagram tiles; accordion headers
+  and the Builder's panel-label pills; tab switchers (UI normalization 5
+  owns those); colour swatches, font pickers and image pickers that show a
+  value; and buttons a module renders on a client's site.
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …
