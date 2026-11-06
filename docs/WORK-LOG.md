@@ -1,3 +1,29 @@
+## 2026-11-06 — AI-made videos are saved as files, not inside the database (#999)
+
+Every video made with Assets › Video › Create used to be stored inside the
+database as a long block of text, about 30 MB a clip. Twelve of them made the
+assets table thirty times its proper size, and one look at them restarted the
+live database this morning, briefly taking client sites down. Now a finished
+video is uploaded to file storage and the database keeps only its address. If
+the video cannot be saved, the job says "failed" and why, instead of claiming
+success with a stand-in clip. The database also now refuses any asset whose
+address is really a whole file, whichever screen sends it, and the asset list
+and the "is my video ready?" check read far less on every load.
+## 2026-11-06 — A plan for the text editor: keep it, and make it match the theme (#998)
+
+Two text-editor bugs in one morning raised the question of whether to keep
+the editor StarCaster uses (TipTap, a free editing kit) or build our own. A new
+page, `docs/RICH_TEXT_EDITOR_PLAN.md`, answers it with measurements rather than
+opinion. The real editor and the real live page were put side by side in a
+browser with the same theme and the same text, and they disagreed in 14 places:
+body text shows grey while you type but the theme's colour on the site, links
+look like plain text, and headings and lists are spaced differently. Every
+difference came from our own stylesheets, which keep two hand-maintained copies
+of "how text looks", and none came from TipTap. So the plan recommends keeping the editor and
+connecting it properly to the theme, in five slices. The first takes a day: one
+shared set of text rules, plus a browser check that fails if the two ever
+drift apart again. Nothing is built until Dane picks.
+
 ## 2026-11-06 — Page editor arrows wait for the page before they can be clicked (#996)
 
 When a page opened in the Builder page editor, the round green arrows on
