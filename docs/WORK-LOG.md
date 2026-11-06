@@ -7,8 +7,11 @@ had gone screen by screen to see what is still left. A new page,
 and the Builder: one line each saying what still differs and how big the fix
 is. It also names five shared causes that would fix most screens at once if
 changed in one place (for example, a plain heading is the same 24px as the
-page title). It ends with nine questions only Dane can answer, such as where
-Save belongs on a screen with one column. Nothing on screen changed.
+page title). It was measured after all ten normalization changes had landed, including
+the three newest ones (labels beside short settings, one table look with
+headings that stay put, and messages in one strip). It ends with ten
+questions only Dane can answer, such as where Save belongs on a screen with
+one column. Nothing on screen changed.
 
 ## 2026-11-05 — Short settings keep their label on the same row (#984)
 

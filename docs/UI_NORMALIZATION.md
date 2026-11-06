@@ -1,6 +1,6 @@
 # UI normalization — where every editor stands
 
-*Surveyed 2026-11-06 against `main` at `96ccefd`, task 86bcypx0u. Read from
+*Surveyed 2026-11-06 against `main` at `49f904e`, task 86bcypx0u. Read from
 the source code; nothing was rendered, so a size marked "undetermined" means
 the code alone could not settle it.*
 
@@ -8,13 +8,12 @@ The UI normalization epic began with the CRM form editor (Dane, 2026-11-04:
 *"These are just some of the normalizations we need to make on this page, and
 we need to get all the other editors in Starcaster normalized with each
 other"*). It was then built as cross-screen tickets rather than one per
-editor. As of this survey, seven are merged (1–6 and 10: #976, #977, #978,
-#979, #981, #983, #989) and four are open pull requests not yet counted here:
-7 (labels beside a single toggle, #984), 8 (Builder › Pages height, #986),
-9 (errors shown twice, #988) and 11 (form boxes and buttons too tall, #992).
+editor. As of this survey all ten are merged (1–10: #976, #977, #978, #979,
+#981, #983, #984, #986, #988, #989). One more, 11 (form boxes, buttons and
+table heading rows 2px shorter, #992), is still an open pull request and is
+not counted here; it changes padding only, so it should not move any row.
 This page answers the question that comes next: **editor by editor, what
-still does not match the merged rules?** Where an open PR is about to change
-a row, the row may already be out of date when it merges.
+still does not match the merged rules?**
 
 ## The rules (as merged in `docs/UI_RULES.md`)
 
@@ -29,6 +28,9 @@ a row, the row may already be out of date when it merges.
 | 7 | **Switching views is a tab** | C9 (tabs) | `.tab-bar` / `.tab-btn`, never a button. |
 | 8 | **Boxes sized by what goes in them** | W7 | `field-w-number` / `field-w-short` / `field-w-long` outside settings panels. |
 | 9 | **Say each thing once** | S7 | No list shown on two screens, and no button that leads back to the screen it is on. |
+| 10 | **A short setting keeps its label beside the control** | L9 (#984) | A colour, toggle, number or dropdown is one row, label left; a text box takes its label above. Plain admin markup: `.standard-form-grid.form-grid-beside` (and `.form-field-above` for a text box); CRM form editor: `.crm-form-editor-setting-beside`; Builder: `BuilderSettingRow`. No label wraps past two lines at 1440 wide, and no second caption beside a checkbox repeating its label. |
+| 11 | **One table look, headings that stay put** | T11 (#986) | The `_tables.css` look — black heading bar with bold white text, light-blue filter row, data rows 0.5rem top and bottom — inside `.table-wrap`, which caps the table at the screen's height and pins the heading row. No inline `style=""` on a `<table>`, `<thead>`, `<th>` or `<td>`. |
+| 12 | **Messages once, in one strip** | S9 (#988) | Every admin message goes through `App.notify` / `App.components.Toast` into `#appMessageStrip`, under the header. No second message surface; the one exception is `App.components.SavedNotice`. |
 
 **Sizes in the tables:** *none* — already conforms · *small* — a class or two ·
 *medium* — several elements in one file · *large* — restructuring, or React
@@ -44,18 +46,25 @@ or *none*:
    (dozens, on nearly every screen) breaks rules 1 and 5 at once.
 2. **Form labels are 15.2px at weight 600, not the sub-item size.**
    `.standard-form-grid > label` is 0.95rem/600 (`src/css/legacy.css:548`).
+   L9 (#984) moved labels to the left on the four forms that now carry
+   `.form-grid-beside` (Settings › Database ×2, Settings › APIs attempt log,
+   Training › Context filters) but left their size alone, so this cause is
+   still open everywhere.
    Other label rules vary too: `.form-group label` 1.25rem (`_forms.css:53`),
    Training labels 1.15rem/800 (`legacy.css:246`), the Builder's `.field > span`
    0.94rem in muted grey (`_builder-react.css:2029`).
-3. **Every box is full width.** `legacy.css:555` gives every form input
+3. **Every box is full width.** `legacy.css:560` gives every form input
    `width: 100%`. The W7 classes are used on one screen only (Training ›
-   Rules/Guides) plus the Themes name box.
+   Rules/Guides) plus the Themes name box. **Partly fixed by L9:** on a
+   `.form-grid-beside` form, dropdowns and number boxes now size to their
+   content (`_forms.css`), but text boxes still stretch, and only the four
+   forms named under cause 2 use it.
 4. **"Update …" buttons are blue.** Roughly twenty edit screens submit with
    `btn-primary` "Update X". Under rule 6 a button that saves is green, so
    each of those screens shows a second blue button.
 5. **The Builder's "add" buttons are green.** `admin-blog-add-button` makes
-   Archive, Bulk Create and New Page on Builder › Pages all green
-   (`components/builder/builder-page-list.tsx:591–605`), so green there does
+   Archive, Bulk Create and New Page in the Builder workspace's Pages list all
+   green (`components/builder/builder-page-list.tsx:590–606`), so green there does
    not mean "save".
 
 ## Admin screens
@@ -64,9 +73,9 @@ or *none*:
 
 | Editor | What differs | Size |
 |---|---|---|
-| Form editor `#crmFormEditorPage` | The reference screen; conforms. (The Form Fields row labels are weight 600, but they are list rows rather than settings.) | none |
+| Form editor `#crmFormEditorPage` | The reference screen; conforms, including L9 since #984 (dropdowns and the width slider are on their label's row). (The Form Fields row labels are weight 600, but they are list rows rather than settings.) | none |
 | Contacts / Forms tab panels | "+ Add Contact" and "+ New Form" sit inside each panel with inline margins, not in the title row. | small |
-| Field Config `#crmFieldsPanel` | No section title; table header is a black bar at a hand-picked 0.9rem; Save Field Config is green but at the bottom-left with an inline style. | small |
+| Field Config `#crmFieldsPanel` | No section title. Its header bar already matches T11's black heading look, but it is a grid of `<div>`s rather than a `<table>`, so its own 0.9rem text size and the sticky heading do not come from `_tables.css`. Save Field Config is green but at the bottom-left with an inline style. | small |
 | Set Up CRM `#crmSetupPage` | CRM Name width is an inline `max-width:320px` rather than `field-w-short`; "Generate CRM" is blue at the bottom-left. | small |
 | Add/Edit Contact `#crmAddEditContactPage` | Inline `max-width:480px`; labels have no sub-item class; Save is at the bottom-left. | small |
 
@@ -133,8 +142,8 @@ or *none*:
 | Profile | Two columns, neither titled; labels carry inline explanations "(defaults to account)" that belong on a `.meta` line; Phone and Website are full width. | small–medium |
 | Projects: create panel | Title uses `.editor-title` with an inline margin; Name and URL full width. | small |
 | Project detail | Left column untitled while Admin Team and Modules are; "Clusters" uses the column-title class although it sits inside Modules (should be an item); three blue buttons (Add Admin User, cluster Add, WordPress Download); two green Saves (form, Share panel); Share-panel legends are 14px/600. | medium |
-| Database | Three bare 24px `<h3>`; no description line; "Create Field" is blue inside the form; Display Order number box full width. | medium |
-| APIs | Bare `<h3>`s ("Connection", "Credentials", the dialog title) in nested title rows; Log Attempt and Connect Page are blue alongside Add API. | medium |
+| Database | Three bare 24px `<h3>`; no description line; "Create Field" is blue inside the form. Since #984 both forms are `.form-grid-beside`: labels left-aligned, the dropdowns and the Display Order number box sized to their content, and Required / Active are bare checkboxes with no repeated caption — all L9-conforming. The text boxes (Supabase Project URL, Custom Field Name, Field Label, Options) are still full width with no W7 class. | medium |
+| APIs | Bare `<h3>`s ("Connection", "Credentials", the dialog title) in nested title rows; Log Attempt and Connect Page are blue alongside Add API. The attempt-log form is `.form-grid-beside` since #984 and conforms to L9; the Credentials form is not. | medium |
 | Invitations (React) | "Invite someone" and "Invitations" are bare `<h3>`; boxes full width. | small–medium |
 | Connections (React) | "Your accounts" is a bare `<h3>`; card names are `h4` at weight 600; every card has its own blue button. | medium |
 
@@ -142,9 +151,10 @@ or *none*:
 
 | Editor | What differs | Size |
 |---|---|---|
-| Context | `<h3>` with an inline 1.1rem and an inline pill badge; Refresh buttons use a legacy `secondary-btn` with inline size; filter boxes full width; no Save on the prompt box (undetermined how it saves). | medium |
+| Context | `<h3>` with an inline 1.1rem and an inline pill badge; Refresh buttons use a legacy `secondary-btn` with inline size; no Save on the prompt box (undetermined how it saves). Fixed since survey base: the prompt box's label sits above it with its explanation in a `.meta` span (L9, #984); the filter dropdowns sit beside their labels at their own width, though the two date boxes still stretch (L9); and the table is a `.table-wrap` with no inline styles (T11, #986). The filter panel still carries an inline background and padding. | small–medium |
 | Categories / Attributes / Approaches | The section heading is a `<label>` "Training Configuration: X" at 1.15rem/800 that repeats the page title; "Add X" is a plain button in the body instead of the blue one in the title row. | small (all three together) |
 | Rules/Guides | The percentage boxes already follow W7; headings are `<label>`s as above; no Save (undetermined how it saves). | small |
+| Knowledgebase (the Training landing table) | Not an editor. Conforms to T11 since #986: `.table-wrap`, no inline styles, headings readable (they were black on the black bar). The "Loading…" row still carries an inline style. | none–small |
 
 ### Assets — `src/pages/assets.html`
 
@@ -188,8 +198,9 @@ or *none*:
 | Editor | What differs | Size |
 |---|---|---|
 | Module / section / page settings panel (one shared system) | Group titles are the right size but weight 700, not 800; **sub-section headings are uppercase with letter spacing** (`.builder-schema-group-subtitle`, `_builder-react-overrides.css:657`); the popup title is an inline 1rem; labels are the right size but written as `--text-base` rather than the sub-item token. Colour pickers appear to be on the label's line. | medium |
-| Workspace shell and tabs | Tabs conform; one title only. The title row is the Builder's own `.admin-toolbar` rather than `.page-heading-row`, at the right size. | small |
-| Pages list | Archive, Bulk Create and New Page are all green (cause 5); Restore All is green too; the archive sub-heading has no CSS. | medium |
+| Workspace shell and tabs | Tabs conform; one title only. The title row is the Builder's own `.admin-toolbar` rather than `.page-heading-row`, at the right size. **S9:** the editor reports saves and errors in its own `.notice.admin-notice` boxes (`components/admin-builder-editor.tsx:3065–3066`) and never calls `App.notify`, so Builder messages appear in a second place from every other screen's strip. | small–medium |
+| Builder › Pages (`#builderManagePagesPage`, `src/pages/builder.html`) | Conforms to T11 since #986: `.table-wrap`, headings pinned, Published and Actions columns fit their headings. The title row conforms to C9: one blue Create Page, with Bulk Create, Populate from Web and Archives as plain buttons. | none |
+| Pages list inside the Builder workspace (React, `components/builder/builder-page-list.tsx`) | Archive, Bulk Create and New Page are all green (cause 5, lines 590–606); Restore All is green too; the archive sub-heading has no CSS. **T11:** its tables sit in the Builder's own `.table-shell` (28px-radius card, `overflow-x` only), not `.table-wrap`, so #986's sticky headings and height cap do not reach them. | medium |
 | Page Details | Two green buttons (Save as Template, Save Page); field labels are 0.94rem in muted grey, against R9 and the sub-item size. | medium |
 | Templates / Template Details | Same muted 0.94rem labels as Page Details. | small |
 | Publish panel | Conforms. | none |
@@ -216,7 +227,10 @@ or *none*:
 
 Tabs on every screen surveyed except Footage. The CRM form editor. The Builder
 panel headers after R12. The Publish panel. Themes. Training's percentage
-boxes. Every title row except those named above.
+boxes. Every title row except those named above. Every admin `<table>` inside
+`.table-wrap` (T11), including Builder › Pages and both Training tables. The
+four `.form-grid-beside` forms (L9). Every `App.notify` message on the
+vanilla screens, which #988 routed into the one strip (S9).
 
 ## Questions for Dane
 
@@ -236,10 +250,14 @@ tickets touch.
    or smaller" (Environment Configuration was made item size), but R12 says a
    card's heading is a column title. One of the two needs a line saying which
    wins.
-4. **Two rules are both numbered C9** (buttons and tabs). May the tabs rule
-   become C10? The number is how tickets cite it.
-5. **The Builder's green "add" buttons.** Builder › Pages shows Archive, Bulk
-   Create and New Page all in green. Under the button rule they would become
+4. **Two pairs of rules share a number.** C9 is both buttons
+   (`UI_RULES.md` ~line 1450) and tabs (~1501); W7 is both box widths
+   (~1205) and four-sided spacing (~1337). May the second of each be
+   renumbered (tabs → C10, spacing → the next free W number)? The number is
+   how tickets cite a rule, and "W7" in this page means box widths.
+5. **The Builder's green "add" buttons.** The Pages list inside the Builder
+   workspace shows Archive, Bulk Create and New Page all in green (the
+   `Builder: Pages` screen itself already uses plain and blue buttons). Under the button rule they would become
    outlined, outlined and blue. Was the green deliberate?
 6. **The blog post editor is a module on the published page.** Should it follow
    the admin editor rules here, or the published-page rules (`docs/MODULE_UI_DOCTRINE.md`)?
@@ -254,3 +272,7 @@ tickets touch.
    same id, `campaigns.html:384` and `:403`). That is a bug, not a style
    question. This ticket says not to file tickets, so it is noted here.
    Should it be filed?
+10. **Should the Builder's messages move into the one strip (S9)?** The
+   Builder's React editor shows its own green and red notice boxes inside the
+   workspace. S9 names only `SavedNotice` as an exception. Either the Builder
+   joins the strip, or S9 gains a second exception for it.
