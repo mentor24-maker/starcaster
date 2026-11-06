@@ -1,3 +1,16 @@
+## 2026-11-05 — Site Import pages can be built from the screen (#987)
+
+Until now, a site copied by Site Import sat at "Captured — pages not built yet"
+until an agent session ran the build script by hand. PressPlay was stuck there.
+The import screen now has two buttons. **Preview Build** asks the Mac Mini's
+import worker (which already checks every five minutes) to rehearse the build.
+The screen then shows which pages it will create or update, the theme it will
+make with its colours as swatches, and any warnings. **Build Draft Pages** only
+works once a preview exists and the import has not changed since; it makes the
+pages as drafts, with an optional "Skip the theme" box. The status line says
+waiting, building or built, and a failure says why in words. Nothing is ever
+published.
+
 ## 2026-11-05 — Section headings look the same on every editor screen (#978)
 
 Headings that do the same job came in four different looks: small spaced-out
