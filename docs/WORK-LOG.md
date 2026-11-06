@@ -1,3 +1,17 @@
+## 2026-11-05 — Each thing is shown once: one projects list, no buttons back to the same screen, a compact Builder landing (#989)
+
+Your projects used to be listed three times — the table on Settings › Projects,
+a "Your Projects" card under that same table, and "My Projects" on Profile.
+Now the table is the only list; Profile has a link to it, and the card's
+"Active Project" picker went too, since each row's Set Active button already
+did that job. Settings › Projects also lost its "Back To Projects" button
+(you were already there); in the Create Project panel the same button now
+says Cancel, which is what it does. A search for any other button that leads
+to its own screen found one more — the Docs page's "Docs" tile — and removed
+it. The Builder landing page was a 560px-tall box with five link words
+scattered in it; it is now one row of five outlined tiles. The two rules are
+written down (UI_RULES S7 and S8) so later screens follow them.
+
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 
 Buttons used to be black on most screens, white or blue on the Builder, green

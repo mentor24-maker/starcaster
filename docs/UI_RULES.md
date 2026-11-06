@@ -1800,6 +1800,25 @@ is ever wider than the screen.*
     new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
 
 ## P — Published page (rendered module) rules
 
