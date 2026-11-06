@@ -19,6 +19,29 @@ reacting to the pointer at all. Those now darken on hover and grey out when
 unavailable, small buttons grey out instead of fading, and an Upload button
 that sat 2px taller than its neighbours is the same height. Buttons now change
 colour on hover and never fade, on every admin screen.
+## 2026-11-05 — Short values get short boxes (#983)
+
+Several admin screens stretched a box across the whole screen even when it only
+ever holds a couple of characters. On Training › Rules/Guides the three
+reply-mix percentages ("50", "40", "10") each ran about 1,180 pixels wide on
+rows of their own; now they sit side by side on one row, each about six
+characters wide, with the Total beside them. The Theme name box on Builder ›
+Themes and the Keywords box on Engage › Outreach are now sized for what goes in
+them too. The rule is written down for the next screen to reuse: three box
+sizes — a number, a short name, a longer list or sentence — and short boxes
+share a row. None of them can overflow a phone screen.
+## 2026-11-05 — Section headings look the same on every editor screen (#978)
+
+Headings that do the same job came in four different looks: small spaced-out
+capitals on Builder › Themes, rounded pill badges on the Builder's page editor
+panels, plain bold on the CRM form editor, and big card titles on Settings. Now
+every one uses one of the three sizes the CRM form editor set yesterday — a
+card or panel's title, a group inside it, and one setting's label — in the same
+weight and the same dark ink, on Themes, the page editor, Settings › Profile
+and Projects, and Engage › Outreach. The pill style is kept where it belongs:
+the same style also draws poll and player-card headers on clients' websites,
+and those are untouched. The rule is written up as R12 in `docs/UI_RULES.md`
+so the next screens in the series reuse it.
 ## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
 
 Changing view used to look like three different controls: CRM had

@@ -1167,6 +1167,34 @@ A rendered module has the same obligation as a panel: on a real tenant page a
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
+- **W7. Outside a settings panel, a box is sized by what goes in it —
+  three sizes, picked by content.** *(UI normalization 6 of 10, task
+  86bcyrqbh, 2026-11-05: Training › Rules/Guides stretched three
+  percentage boxes holding "50", "40" and "10" across about 1,180px; Themes'
+  Theme name was about 400px; Outreach's Keywords ran the full width.)*
+  This is W3 made concrete, with names you can reuse:
+
+  | Box holds | Class | Token (`src/css/_variables.css`) | Room for |
+  |---|---|---|---|
+  | a number or percentage | `field-w-number` | `--field-w-number` | 6 characters |
+  | a name or title | `field-w-short` | `--field-w-short` | 24 characters |
+  | a list, a sentence, a web address | `field-w-long` | `--field-w-long` | 48 characters |
+
+  The classes live in `src/css/_forms.css` and add the box's own padding,
+  border and number arrows on top of the token, so the token reads as "room
+  for the text". Every size also caps at `max-width: 100%`, so nothing
+  overflows a phone. A component with its own stylesheet that cannot take
+  the class (Themes, Outreach) uses the token in its own rule —
+  `width: calc(var(--field-w-short) + 2rem)` — rather than a new number.
+
+  **Several short boxes share one row.** Wrap each label and its box in
+  `.short-field` and the group in `.short-fields-row`: the label sits beside
+  its box, the pairs run left to right and wrap onto the next line only when
+  the screen is too narrow. A short box never gets a row of its own just
+  because the form grid gave it one.
+
+  Inside a settings panel, W0's lattice still decides widths; W7 does not
+  apply there. — **[eye]**
 
 ## A — Overriding the theme
 
@@ -1683,6 +1711,35 @@ is ever wider than the screen.*
 
   *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
   — **[eye]**, sizes are tokens
+
+- **R12.** **A section heading looks like one of R10's three levels, and
+  nothing else** — UI normalization screen 3 (task 86bcyrqaz). Before it,
+  the editors had four heading looks: small spaced capitals (Themes
+  "PALETTE"), outlined pill badges (the Builder's "PAGES", "PAGE DETAILS"),
+  plain bold (the CRM form editor), and big 24px card titles (Settings
+  "Your Projects"). Now:
+
+  - **No spaced capitals and no pill badge as a section heading.** Not
+    `text-transform: uppercase` + `letter-spacing`, not a rounded tinted
+    chip. A heading is the R10 size, its weight, and `--ink-primary`.
+  - **Which level:** the heading of a card, pod or Builder panel is a
+    **column title** (Palette, Page Details, Workspace, Your Projects,
+    Admin Team). A group inside one is an **item** (Fonts, Colors,
+    Project Logo, an Outreach stage name). One setting's label is a
+    **sub-item** (Logo — Wide).
+  - **Plain admin markup** (`src/pages/*.html`) uses the classes
+    `.editor-title`, `.editor-item`, `.editor-subitem` from
+    `_typography.css` instead of a bare `<h3>`, which is 1.5em by default.
+    A component with its own heading class sets the token on that class.
+  - **`.panel-label` is two things.** Inside a Builder admin panel
+    (`.builder-toolbar-shell`) it is a column title; on a CLIENT site
+    (poll and player-card headers) it is still a styled pill, and must stay
+    one — so the heading rule is scoped to the toolbar shell, never to
+    `.panel-label` alone. An open Builder panel keeps its white-on-blue
+    header bar: there the heading is white, for contrast (R9's purpose).
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**, sizes are tokens
 
 ## S — System and structure
 

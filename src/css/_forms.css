@@ -68,6 +68,58 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
 }
 
+/*
+ * Box widths by what the box holds — docs/UI_RULES.md W7 (task 86bcyrqbh).
+ * The token is the room for the text; the 2rem on top is the box's own
+ * padding, border and (on a number) its up/down arrows. max-width keeps
+ * every one inside a phone screen. Pick by content, never set a width on a
+ * single field.
+ */
+input.field-w-number,
+input.field-w-short,
+input.field-w-long,
+select.field-w-short,
+select.field-w-long,
+textarea.field-w-long {
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+input.field-w-number { width: calc(var(--field-w-number) + 2rem); }
+input.field-w-short,
+select.field-w-short { width: calc(var(--field-w-short) + 2rem); }
+input.field-w-long,
+select.field-w-long,
+textarea.field-w-long { width: calc(var(--field-w-long) + 2rem); }
+
+/*
+ * Several short boxes on one row (W7): each label sits beside its box, the
+ * pairs flow left to right and wrap onto the next line when the screen is
+ * too narrow — so a row of three percentages never becomes three rows the
+ * width of the screen.
+ */
+.short-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  min-width: 0;
+}
+.short-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+.short-field > label {
+  margin: 0;
+  font-weight: 600;
+}
+.short-field > input,
+.short-field > .readonly-metric {
+  margin: 0;
+}
+
 /* Settings > APIs — channel credential fields */
 .api-fields-stack {
   display: flex;

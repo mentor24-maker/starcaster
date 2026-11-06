@@ -98,6 +98,15 @@
   min-width: 0;
 }
 
+/* A stage's name (Connect, Find creators…) is an item heading: the shared
+   size and the same dark ink as every editor heading (UI_RULES R12) — it
+   was the card's grey body colour. */
+.outreach-wizard-stage-head > strong {
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
 .outreach-wizard-stage-state {
   font-size: var(--text-base);
   opacity: 0.75;
@@ -405,8 +414,12 @@
   min-width: 0;
 }
 
+/* Keywords is a comma-separated list, so it gets the long-text width
+   (docs/UI_RULES.md W7) rather than the whole row. */
 .yt-creators-keywords {
-  flex: 1 1 20rem;
+  flex: 0 1 auto;
+  width: calc(var(--field-w-long) + 2rem);
+  max-width: 100%;
   min-width: 0;
 }
 

@@ -168,7 +168,7 @@
 
 .project-branding-block-title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--editor-item-size); /* item level, UI_RULES R12 */
   font-weight: 700;
   color: var(--ink-primary, #16324c);
 }
