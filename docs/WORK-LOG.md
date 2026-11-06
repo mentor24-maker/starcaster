@@ -1,3 +1,17 @@
+## 2026-11-06 — Every editor listed against the new look, with what is still different (#993)
+
+The clean-up of how StarCaster's screens look has been done one theme at a
+time — heading sizes, one title row, button colours, tabs, box widths. Nobody
+had gone screen by screen to see what is still left. A new page,
+`docs/UI_NORMALIZATION.md`, now does that for every editor in the admin app
+and the Builder: one line each saying what still differs and how big the fix
+is. It also names five shared causes that would fix most screens at once if
+changed in one place (for example, a plain heading is the same 24px as the
+page title). It was measured after all ten normalization changes had landed, including
+the three newest ones (labels beside short settings, one table look with
+headings that stay put, and messages in one strip). It ends with ten
+questions only Dane can answer, such as where Save belongs on a screen with
+one column. Nothing on screen changed.
 ## 2026-11-05 — Imported blog posts no longer turn the old site's comment box into a one-checkbox form (#991)
 
 When Site Import met a WordPress "Leave a Reply" box on a blog post, it rebuilt
