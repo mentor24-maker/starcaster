@@ -1,3 +1,15 @@
+## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
+
+Dane asked for 2px less padding at the top and bottom of every form box,
+button and table heading row on the admin screens, because together they were
+costing a lot of scrolling. Each one is now 4px shorter: buttons go from 36px
+to 32px (small ones 28px to 24px), form boxes lose 4px, and the black heading
+row at the top of every table (plus the filter and bulk-action row above it)
+loses 4px. Each size is now one setting in one place, so the next adjustment is
+a single edit. Clients' live sites use the same stylesheet, so they are
+deliberately set back to the old sizes: nothing a visitor sees has changed.
+The square icon buttons in tables stay the size they were.
+
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 
 Buttons used to be black on most screens, white or blue on the Builder, green
