@@ -8,6 +8,31 @@ arrow until the page is in, and the bar ignores clicks; then the arrows come
 back exactly as they were. If the page fails to load, the rings stop and the
 arrows return, so nothing can spin forever. With "reduce motion" turned on,
 the ring shows but holds still. No other arrow in the Builder changed.
+## 2026-11-06 — Every editor listed against the new look, with what is still different (#993)
+
+The clean-up of how StarCaster's screens look has been done one theme at a
+time — heading sizes, one title row, button colours, tabs, box widths. Nobody
+had gone screen by screen to see what is still left. A new page,
+`docs/UI_NORMALIZATION.md`, now does that for every editor in the admin app
+and the Builder: one line each saying what still differs and how big the fix
+is. It also names five shared causes that would fix most screens at once if
+changed in one place (for example, a plain heading is the same 24px as the
+page title). It was measured after all ten normalization changes had landed, including
+the three newest ones (labels beside short settings, one table look with
+headings that stay put, and messages in one strip). It ends with ten
+questions only Dane can answer, such as where Save belongs on a screen with
+one column. Nothing on screen changed.
+## 2026-11-05 — Imported blog posts no longer turn the old site's comment box into a one-checkbox form (#991)
+
+When Site Import met a WordPress "Leave a Reply" box on a blog post, it rebuilt
+it as a form with a single "save my name" checkbox and a Submit Comment button
+that collected nothing. The cause: the old site's theme hides the box labels and
+shows grey hint text instead, and the importer took a hidden label as the mark
+of a robot trap, so it threw away the real Name, Email, Website and Comment
+boxes. That rule is gone, and a comment box is now recognised for what it is and
+left as a picture captioned "a blog comment box — Starcaster blog posts have
+their own comments". Checked against all 197 forms in recent imports: only the
+16 comment boxes (Strands and Dane of Earth posts) read differently.
 ## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
 
 Dane asked for 2px less padding at the top and bottom of every form box,
