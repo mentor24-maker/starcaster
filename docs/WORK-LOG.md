@@ -1,3 +1,15 @@
+## 2026-11-06 — Every editor listed against the new look, with what is still different (#993)
+
+The clean-up of how StarCaster's screens look has been done one theme at a
+time — heading sizes, one title row, button colours, tabs, box widths. Nobody
+had gone screen by screen to see what is still left. A new page,
+`docs/UI_NORMALIZATION.md`, now does that for every editor in the admin app
+and the Builder: one line each saying what still differs and how big the fix
+is. It also names five shared causes that would fix most screens at once if
+changed in one place (for example, a plain heading is the same 24px as the
+page title). It ends with nine questions only Dane can answer, such as where
+Save belongs on a screen with one column. Nothing on screen changed.
+
 ## 2026-11-05 — Site Import pages can be built from the screen (#987)
 
 Until now, a site copied by Site Import sat at "Captured — pages not built yet"
