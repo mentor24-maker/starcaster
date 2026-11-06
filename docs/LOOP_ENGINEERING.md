@@ -813,7 +813,11 @@ the `Rework` pile and then the `Queued` pile into PRs; review drains the
 Your day:
 1. **Morning:** run `loop-spec`, answer its questions, approve the task list.
 2. **During the day:** the loops build and review. You get a message per
-   `Ready to launch` PR with a preview link and test steps.
+   `Ready to launch` PR with a test link and test steps. For a screen behind
+   the sign-in that link is the reviewing machine's local copy
+   (`http://mac-mini.local:<port>`, sign in as `mentor24@gmail.com` /
+   `localdev123`), never a Vercel preview — no preview can be signed into
+   (task 86bcz932m). Public pages may still use the preview.
 3. **When you're ready:** reply **`merge`** on the ticket — just that word.
    Within one bus-relay cycle (every 10 minutes) it is merged and the ticket
    closes as `Live`, provided the PR is still open, green and conflict-free. Telling a

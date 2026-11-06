@@ -116,15 +116,58 @@ before anything is sent:
 ### A `Ready to launch` card must carry a link he can click
 
 If the work has **any visible surface**, the card names a URL he can open and
-says what he should see there. One of these, in order of preference:
+says what he should see there. **First ask one question: is the screen behind
+the sign-in?** Anything in the admin app, the Builder, or a tenant's admin
+pages is. A public tenant page, `builder-preview.html` and the About / Site /
+Explore pages are not.
+
+**Behind the sign-in → never a Vercel preview link.** No preview can be signed
+into. The database settings (`SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_KEY`) exist in Vercel for Production only and Doppler `stg`
+has no database, so a preview starts with the strip *"Unknown database — no
+SUPABASE_URL is set"* and answers every sign-in with *"Invalid email or
+password"* — which reads to him as his own password being wrong. On
+2026-11-05 he could not test "UI normalization 6 of 10" (86bcyrqbh) from its
+preview and said he had never been able to test from those links. A second
+database for previews is not affordable yet (Dane, 2026-11-05), and pointing
+previews at the live one is ruled out: test code would touch the live client
+sites. So the review pass **runs the branch itself, against this machine's
+local database, and leaves it running**, from the worktree it verified in:
+
+```bash
+npm ci && npm run env:local && npm run build     # a new folder has no lib/builder/template.js until a build runs;
+                                                 # `npm run dev` alone fails with "Cannot find module './template'"
+npm run doctor                                   # read DATABASE CONTENTS — see below
+PORT=<free port, e.g. 3061> nohup node server.js > /tmp/review-<port>.log 2>&1 &
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/   # must print 200 before you hand it over
+```
+
+Pick a port nothing else is on (`lsof -i :<port>` prints nothing) — 3001 is
+usually another worktree's, and a link to it would show him another thread's
+code. On the Mini do **not** run `npm run db:refresh` even if the doctor asks:
+that job belongs to the MacBook (`lib/nodeRoles.js` says which machine owns
+`db-refresh`), and an old
+copy still has his sign-in. Then the card gives him all three of:
+
+- **the link** — `http://mac-mini.local:<port>/<the exact page>` when the pass
+  ran on the Mini (he tests from the MacBook, on the same network), or
+  `http://localhost:<port>/<page>` when it ran on the MacBook;
+- **the sign-in that works there** — `mentor24@gmail.com` / `localdev123`
+  (set by `npm run db:refresh`; every other account is scrubbed);
+- **the exact clicks and what he should see** after each.
+
+Add one line saying the server is running from the review folder and stops
+when the machine restarts — if the link does not open, a reply of *"start it"*
+on the ticket is enough for the next session to bring it back.
+
+**Not behind the sign-in → one of these, in order of preference:**
 
 1. **The Vercel preview URL** for the PR — every PR gets one, it is already
    built, and it is the real thing rather than a description of it. Name the
    exact page: not the site root, the page the change is on.
 2. **A published Artifact page** — for work with no page of its own (a
    generated diagram, a report, a before/after pair).
-3. **The exact localhost URL with the command that starts the server**, both
-   copy-pasteable, when neither of the above can exist.
+3. **The local link, started as above**, when neither of those can exist.
 
 Then two or three lines of **what to look for**, in his words, not the
 ticket's: *"the chip on each block header should say Following, Changed or
@@ -327,7 +370,9 @@ finding instead of filing it".
    - **Pass** → `ask --status "Ready to launch"`. `@@ASKED` carries the
      instruction the ticket came from; `@@CONTEXT` says in 50-100 words what
      changed and what he will see; `@@NEEDED` is the merge approval, with the
-     PR link, the Vercel preview link, the exact address and clicks to check it,
+     PR link, the test link (the local link and its sign-in for any screen
+     behind the sign-in — never a Vercel preview there; see "A `Ready to
+     launch` card must carry a link he can click"), the exact clicks to check it,
      and the line **"Tell me to merge when you're ready."** Put the full "How to
      test" walkthrough in the description with `describe` if it runs long.
      Also post the compact version to the bus channel.

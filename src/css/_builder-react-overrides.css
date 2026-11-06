@@ -350,6 +350,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-family: var(--bx-font-heading, inherit);
 }
 
+/* RTE spans — the text's own block decides how it looks. The editor sits
+   inside a `.field`, and `.field span` (the grey field-title style in
+   _builder-react.css) matched every span in the document: colouring a heading
+   wraps it in a span, which pinned it at 0.94rem whatever its level, and a
+   span with no colour of its own came out bold and grey (task 86bcznkeh).
+   A span's own inline style (colour, size from the toolbar) still wins. */
+.builder-react-root .builder-rich-text-content .ProseMirror span {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
 /* Editor canvas: link decoration from theme (--bx-link-decoration is set on
    .builder-section-card via getSectionStyle → themeStyle merge). */
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a,

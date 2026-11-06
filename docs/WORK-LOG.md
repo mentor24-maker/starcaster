@@ -12,6 +12,39 @@ the three newest ones (labels beside short settings, one table look with
 headings that stay put, and messages in one strip). It ends with ten
 questions only Dane can answer, such as where Save belongs on a screen with
 one column. Nothing on screen changed.
+## 2026-11-05 — Imported blog posts no longer turn the old site's comment box into a one-checkbox form (#991)
+
+When Site Import met a WordPress "Leave a Reply" box on a blog post, it rebuilt
+it as a form with a single "save my name" checkbox and a Submit Comment button
+that collected nothing. The cause: the old site's theme hides the box labels and
+shows grey hint text instead, and the importer took a hidden label as the mark
+of a robot trap, so it threw away the real Name, Email, Website and Comment
+boxes. That rule is gone, and a comment box is now recognised for what it is and
+left as a picture captioned "a blog comment box — Starcaster blog posts have
+their own comments". Checked against all 197 forms in recent imports: only the
+16 comment boxes (Strands and Dane of Earth posts) read differently.
+## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
+
+Dane asked for 2px less padding at the top and bottom of every form box,
+button and table heading row on the admin screens, because together they were
+costing a lot of scrolling. Each one is now 4px shorter: buttons go from 36px
+to 32px (small ones 28px to 24px), form boxes lose 4px, and the black heading
+row at the top of every table (plus the filter and bulk-action row above it)
+loses 4px. Each size is now one setting in one place, so the next adjustment is
+a single edit. Clients' live sites use the same stylesheet, so they are
+deliberately set back to the old sizes: nothing a visitor sees has changed.
+The square icon buttons in tables stay the size they were.
+## 2026-11-05 — Test links for signed-in screens now actually let Dane sign in (#985)
+
+Every test link the review lane handed Dane was a Vercel preview, and none of
+them could be signed into — previews have no database, so every sign-in said
+"Invalid email or password" and looked like a wrong password. Now, when a test
+needs anything behind the sign-in, the review lane starts the branch on the
+Mac Mini against its own local copy of the data and gives him a link like
+`http://mac-mini.local:3071`, the local sign-in (`mentor24@gmail.com` /
+`localdev123`), and the exact clicks. Public pages can still use the preview.
+The app also used to mistake `mac-mini.local` for a client's website address
+and refuse to show the admin app there; it now treats it like `localhost`.
 
 ## 2026-11-05 — Short settings keep their label on the same row (#984)
 

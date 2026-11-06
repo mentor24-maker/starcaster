@@ -377,7 +377,9 @@ textarea,
 select {
   width: 100%;
   margin: 0.3rem 0;
-  padding: 0.55rem 0.65rem;
+  /* --field-pad-y: 2px under the old 0.55rem in the admin app (UI
+     normalization 11); a client's live site keeps 0.55rem. */
+  padding: var(--field-pad-y) 0.65rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   font: inherit;
