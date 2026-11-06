@@ -5,7 +5,6 @@
   "C3 | src/css/legacy.css | background var(--c-surface)": 1,
   "C3 | src/css/legacy.css | border var(--border-color)": 1,
   "C3 | src/css/legacy.css | border-bottom var(--border-color)": 1,
-  "C3 | src/css/legacy.css | border-color var(--border-hover)": 1,
   "C3 | src/css/legacy.css | border-radius var(--radius-sm)": 4,
   "C3 | src/css/legacy.css | border-top var(--accent-warning)": 1,
   "C3 | src/css/legacy.css | box-shadow var(--primary-color-rgb)": 1,

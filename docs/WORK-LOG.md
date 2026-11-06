@@ -7,6 +7,41 @@ not be closed. The bar now always keeps room for its title and ▼, and the
 buttons sit beside it, stacking onto extra lines when space runs out. On a
 normal desktop window nothing changes. Same fix the Pages bar just above it got
 in #972.
+## 2026-11-05 — Messages show once and no longer cover the screen (#988)
+
+Every message in the admin app used to appear twice — a floating box and a pink
+bar stuck to the bottom of the screen — and that bottom bar sat over the last
+rows of tables on Pages, Training and Themes even when it was empty. Now there
+is one message strip just under the top menu. It is part of the page, so it
+pushes things down instead of covering them; errors stay until you close them
+with ×, and "saved"-type messages close by themselves after four seconds. The
+rule is written down so later screens use the same strip.
+## 2026-11-05 — Site Import pages can be built from the screen (#987)
+
+Until now, a site copied by Site Import sat at "Captured — pages not built yet"
+until an agent session ran the build script by hand. PressPlay was stuck there.
+The import screen now has two buttons. **Preview Build** asks the Mac Mini's
+import worker (which already checks every five minutes) to rehearse the build.
+The screen then shows which pages it will create or update, the theme it will
+make with its colours as swatches, and any warnings. **Build Draft Pages** only
+works once a preview exists and the import has not changed since; it makes the
+pages as drafts, with an optional "Skip the theme" box. The status line says
+waiting, building or built, and a failure says why in words. Nothing is ever
+published.
+
+## 2026-11-05 — Each thing is shown once: one projects list, no buttons back to the same screen, a compact Builder landing (#989)
+
+Your projects used to be listed three times — the table on Settings › Projects,
+a "Your Projects" card under that same table, and "My Projects" on Profile.
+Now the table is the only list; Profile has a link to it, and the card's
+"Active Project" picker went too, since each row's Set Active button already
+did that job. Settings › Projects also lost its "Back To Projects" button
+(you were already there); in the Create Project panel the same button now
+says Cancel, which is what it does. A search for any other button that leads
+to its own screen found one more — the Docs page's "Docs" tile — and removed
+it. The Builder landing page was a 560px-tall box with five link words
+scattered in it; it is now one row of five outlined tiles. The two rules are
+written down (UI_RULES S7 and S8) so later screens follow them.
 
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 

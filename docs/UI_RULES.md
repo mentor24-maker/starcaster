@@ -1800,6 +1800,47 @@ is ever wider than the screen.*
     new such view adds itself to that rule at the end of `_navigation.css`.
   - The header is not sticky. Anything that sticks to the top of a page
     sticks to the viewport, so nothing hides behind it.
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
+- **S9. Messages appear ONCE, in one strip that never covers the work.**
+  Every admin message — `App.notify(text, isError)` and
+  `App.components.Toast.*` — lands in `#appMessageStrip`, the strip between
+  the header and `<main>` in `src/layout.html`. It is in the page's normal
+  flow, so it pushes the page down rather than floating over it: no table row
+  or button can ever sit underneath it. Empty, it takes no space.
+  *(UI normalization 9 of 10, task 86bcyrqbu: every error showed twice, as a
+  floating box AND a pink bar pinned over the bottom 40–60px of the screen,
+  covering the last table rows on Pages, Training and Themes. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - One message at a time; a new one replaces the old.
+  - Errors stay until dismissed with ×; success and info close by themselves
+    after 4 seconds and can be dismissed sooner.
+  - If the strip is scrolled out of view when a message arrives, the page
+    scrolls just far enough to show it — a message nobody sees is the same
+    defect as no message.
+  - Never add a second message surface (a fixed-position bar, a corner
+    toast). The one exception is `App.components.SavedNotice`, the
+    confirmation card after a form's Save, which fades on its own and has no
+    close button by design (task 86bcyjag0).
+  - Styles: `.c-message-strip*` in `src/css/legacy.css`; behaviour:
+    `App.components.Toast` in `public/js/components.js`.
 
 ## P — Published page (rendered module) rules
 
