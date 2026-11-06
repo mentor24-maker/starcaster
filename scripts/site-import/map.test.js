@@ -205,10 +205,12 @@ test('completeness fixture: every disposition, reconciled', () => {
   // standalone hero image the slideshow already shows (1).
   assert.equal(r.deduped, 6);
   assert.equal(r.navConsumed, 1); // the About link
-  // Placeholders: form, table, embed, svg, no-src video, unsplittable atom.
-  assert.equal(r.placeholder, 6);
+  // Placeholders: table, embed, svg, no-src video, unsplittable atom. The
+  // email sign-up form is rebuilt as a real form (task 86bcynjx2).
+  assert.equal(r.placeholder, 5);
+  assert.equal(r.form, 1);
   assert.equal(r.skipped, 0);
-  assert.equal(r.mapped, r.total - r.placeholder - r.navConsumed - r.deduped);
+  assert.equal(r.mapped, r.total - r.placeholder - r.form - r.navConsumed - r.deduped);
 
   // Slugs: home special-cased, collision suffixed, admin trap dodged.
   assert.deepEqual(out.pages.map((p) => p.slug),
@@ -250,15 +252,19 @@ test('completeness fixture: every disposition, reconciled', () => {
     .every((m) => m.text.length <= TEXT_MODULE_CHAR_BUDGET));
 
   // Placeholder contracts: crop copy plan, source HTML inline vs overflow.
+  // A form that collects something becomes a Form module awaiting its id.
   const form = allModules.find((m) => m.settings.importSourceId === '0-form');
-  assert.ok(form.text.includes('form.png'));
-  assert.ok(form.settings.importSourceHtml.includes('<form>'));
+  assert.equal(form.type, 'crm-form');
+  assert.equal(form.settings.crmFormId, '');
+  assert.equal(form.settings.importFormKey, out.forms[0].key);
   const tablePh = allModules.find((m) => m.settings.importSourceId === '0-table');
   assert.equal(tablePh.settings.importSourceHtml, undefined); // overflowed
   // Overflows: the giant table AND the unsplittable atom (its 9.7k source
   // also exceeds the inline settings budget).
   assert.deepEqual(out.copyPlan.sourceOverflows.map((o) => o.sourceId), ['0-table', '0-atom']);
-  assert.ok(out.copyPlan.crops.length >= 4);
+  // table, svg, no-src video (the rebuilt form needs no picture).
+  assert.ok(out.copyPlan.crops.length >= 3);
+  assert.ok(!out.copyPlan.crops.some((c) => c.sourceId === "0-form"));
 
   // Section provenance markers for the runner's hash guard.
   for (const section of out.pages.flatMap((p) => p.sections)) {
@@ -584,7 +590,7 @@ test('a placeholder carries its rebuild caption as a setting, never as page text
   const placeholders = out.pages
     .flatMap((p) => p.sections.flatMap((s) => s.modules))
     .filter((m) => m.type === 'code' && m.settings.importClass);
-  assert.equal(placeholders.length, 6);
+  assert.equal(placeholders.length, 5);
   for (const m of placeholders) {
     assert.doesNotMatch(m.text, /rebuild/i, `${m.id} stored text still carries the caption`);
     assert.match(m.settings.importPlaceholder, /rebuild/i, `${m.id} lost its caption`);

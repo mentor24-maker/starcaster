@@ -8,8 +8,114 @@ card or panel's title, a group inside it, and one setting's label — in the sam
 weight and the same dark ink, on Themes, the page editor, Settings › Profile
 and Projects, and Engage › Outreach. The pill style is kept where it belongs:
 the same style also draws poll and player-card headers on clients' websites,
-and those are untouched. The rule is written up as R11 in `docs/UI_RULES.md`
+and those are untouched. The rule is written up as R12 in `docs/UI_RULES.md`
 so the next screens in the series reuse it.
+## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
+
+Changing view used to look like three different controls: CRM had
+underlined text tabs, Outreach had faded grey pills, and the Builder
+Workspace's Templates / Modules / Pages looked exactly like Save and Cancel
+buttons, so picking a view felt like pressing an action. Now every one of
+them — plus the tabs on the Substack, Reddit and YouTube outreach screens,
+whose selected tab was a big blue action button — is the same plain text on
+an underline, with the selected one in blue. Tab reaches each one and Enter
+picks it. The rule is written down as C9 in the UI rules so new screens use
+it too.
+
+## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
+
+Sites copied in before today's form fix (#974) still show a picture of each
+sign-up form. The import tool now has a "forms only" pass that goes back over
+pages an import already built and swaps just those pictures for working forms,
+without re-copying the site or touching anything else on the page. If somebody
+has changed or removed one of those pictures, it is left alone and named. Each
+page is backed up first and checked after it is saved. Afterwards it puts back
+live only the pages that were already live and had no other unpublished
+changes, so nobody's half-finished edits go public by accident. A practice run
+on a copy of the live data found the Strands sign-up form on two pages, built
+it, and reported "nothing to change" when run a second time. Strands' home page
+already had unpublished edits, so that one waits for Dane to publish.
+
+## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
+
+When Site Import copied a site, any sign-up or contact form came across as a
+screenshot: it looked right but nobody could type into it. Now the import
+rebuilds each form as a real Starcaster form under Contacts › Forms and puts a
+working Form on the draft page where the picture used to be. It is careful with
+the client's existing setup. It only ever adds questions their contact list is
+missing and never changes ones already there. A sign-up that appears on several
+pages becomes one form used on all of them. Importing again updates that form
+rather than making a second copy, and if somebody has edited the form by hand
+since — even just its button colour — the import leaves it alone. A site search box or a sign-in form still
+comes across as a picture, with a note saying why. The import report now has a
+Forms section listing what was rebuilt and what was left out, such as spam traps
+and the old plugin's internal fields. Strands Movie gets its form in the next
+ticket.
+## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
+
+Before this, importing a site a second time and building pages from it made a
+whole second copy of the site beside the first: every page again at a "-2"
+address, plus a second Top Menu. Now building from the new copy updates the
+pages the first import made. A section you changed after the first import is
+left alone and listed as one you edited. Menus are updated rather than doubled,
+and the new import theme is made without replacing the site's current default
+look. Every run now opens with one line saying what it will do: "Refreshing N
+pages built by the import of <site> on <date>; M sections you edited will be
+kept; K new pages." The Import again prompt on the Site Import screen says the
+same. Tried against a copy of the Delray site: 59 pages refreshed, none
+duplicated, and the 116 sections edited by hand all kept.
+## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
+
+In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
+buttons had been squeezed into a box too small for them, so they hung off
+the right edge of the bar and sat on top of the green ▶ button that opens
+the Pages panel, which then could not be clicked. The box now grows to fit
+its buttons, lined up with the Preview / Save buttons in the row below, and
+on a narrow screen the buttons drop onto a second line instead of spilling
+out.
+
+## 2026-11-05 — Every admin screen now starts with one title row (#977)
+
+Admin screens each began a little differently: some had a sentence under the
+title and some didn't, two used their own bigger title size, and Builder ›
+Workspace stacked two titles ("Builder: Workspace" with "Page Builder" under
+it). Now every screen starts the same way: one title, that screen's buttons on
+the same row, and at most one short line of small grey text saying what the
+screen is for. The Workspace has a single title beside its buttons. Four long
+explanations were split so only their first sentence sits under the title; the
+rest is still there, just below. This is item 2 of the 10 UI normalization
+changes, and the rule is written down (R11 in docs/UI_RULES.md) so the
+remaining screens follow it.
+## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
+
+On the Profile screen every box was about 100 pixels wide, the "Primary
+Contact Name (defaults to account)" label was stacked on five lines, and the
+profile picture sat on top of the fields. The cause was one misplaced style:
+the "label on the left, box on the right" layout was applied to the whole form
+instead of just the column of fields, so the entire form — fields and picture
+together — was squeezed into the narrow label column. Now the fields column
+gets that layout, the boxes are about 640 pixels wide on a laptop screen, the
+long labels fit on two lines, the picture sits to the right, and on a narrow
+window it drops neatly below the fields.
+
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
 
 ## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
 

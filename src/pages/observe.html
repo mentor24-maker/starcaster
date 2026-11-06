@@ -1,15 +1,19 @@
 
       <section id="observePage" class="app-page hidden">
-        <h2>Observe</h2>
-        <p>Review outcomes, monitor activity, and analyze performance after campaigns go live.</p>
+        <div class="page-heading-row">
+          <h2>Observe</h2>
+        </div>
+        <p class="page-heading-desc">Review outcomes, monitor activity, and analyze performance after campaigns go live.</p>
       </section>
       <section id="observeDashboardPage" class="app-page hidden">
-        <div style="display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink-primary); padding-bottom: 0.5rem; margin-bottom: 1.5rem;">
+        <div class="page-heading-row">
           <h2>Observe: Cost & Burn-Rate Analytics</h2>
-          <button class="standard-btn" onclick="App.loadObserveReports()">
+          <div class="page-heading-actions">
+          <button class="btn" type="button" onclick="App.loadObserveReports()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px; vertical-align: text-bottom;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
             Refresh Estimates
           </button>
+          </div>
         </div>
         
         <!-- React island: one line of AI spend, linking to Settings › AI Quota
@@ -22,16 +26,22 @@
         </div>
       </section>
       <section id="observeReportsPage" class="app-page hidden">
-        <h2>Observe: Reports</h2>
-        <p>Reports module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Observe: Reports</h2>
+        </div>
+        <p class="page-heading-desc">Reports module placeholder.</p>
       </section>
       <section id="observeAnalysisPage" class="app-page hidden">
-        <h2>Observe: Analysis</h2>
-        <p>Analysis module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Observe: Analysis</h2>
+        </div>
+        <p class="page-heading-desc">Analysis module placeholder.</p>
       </section>
       <section id="observeQuotasPage" class="app-page hidden">
-        <h2>Observe: API Quotas</h2>
-        <p>Monitor your active API integrations, test health status, and track limits.</p>
+        <div class="page-heading-row">
+          <h2>Observe: API Quotas</h2>
+        </div>
+        <p class="page-heading-desc">Monitor your active API integrations, test health status, and track limits.</p>
         
         <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
           <!-- YouTube Data API -->
@@ -108,7 +118,9 @@
         </div>
       </section>
       <section id="activityLogPage" class="app-page hidden">
-        <h2>Activity Log</h2>
+        <div class="page-heading-row">
+          <h2>Activity Log</h2>
+        </div>
 
         <div class="section-toolbar" style="margin-top:0; margin-bottom:1rem;">
           <span>

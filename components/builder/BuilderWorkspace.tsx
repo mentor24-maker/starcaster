@@ -20,6 +20,23 @@ type BuilderWorkspaceProps = {
   onSaved?: (record: unknown) => void;
 };
 
+// Builder › Workspace has ONE title, in the editor's own title row beside its
+// buttons; src/pages/builder.html no longer prints a second one above it
+// (UI normalization 2 of 10, task 86bcyrqaw — it used to stack
+// "Builder: Workspace" over "Page Builder").
+const hubTitleRow = {
+  title: 'Builder: Workspace',
+  headerActions: (
+    <button
+      className="secondary-button"
+      onClick={() => (window as unknown as { App?: { setActivePage?: (id: string) => void } }).App?.setActivePage?.('builderPage')}
+      type="button"
+    >
+      Back To Builder
+    </button>
+  ),
+};
+
 export default function BuilderWorkspace({ surface = 'hub', editorMode, record, onClose }: BuilderWorkspaceProps) {
   // The legacy app mounts this island to edit a specific record (page or
   // template). Translate that mount contract into the editor's own mode +
@@ -60,6 +77,7 @@ export default function BuilderWorkspace({ surface = 'hub', editorMode, record, 
         initialRecordId={initialRecordId}
         autoNewPage={autoNewPage}
         onPublished={() => revealAndFocus(closeButtonRef.current)}
+        {...(surface === 'hub' ? hubTitleRow : {})}
       />
     </div>
   );

@@ -19,7 +19,7 @@ p {
 }
 
 /*
- * Editor heading levels as classes (UI normalization 3, docs/UI_RULES.md R11).
+ * Editor heading levels as classes (UI normalization 3, docs/UI_RULES.md R12).
  * For a heading in plain admin markup (src/pages/*.html) that has no class of
  * its own: put one of these on it instead of letting the bare h3's 1.5em
  * card-title size apply. Sizes are the R10 tokens in _variables.css.

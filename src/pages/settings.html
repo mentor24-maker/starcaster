@@ -1,21 +1,20 @@
 
       <section id="settingsPage" class="app-page hidden">
-        <h2>Settings</h2>
-        <p>Settings page placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Settings</h2>
+        </div>
+        <p class="page-heading-desc">Settings page placeholder.</p>
       </section>
       <section id="envConfigPage" class="app-page hidden">
-        <div class="page-header">
-          <h1>Environment Configuration</h1>
-          <p class="page-subtitle">
-            One source of truth for all infrastructure credentials.
-            Secrets are masked. Changes update <code>process.env</code> immediately
-            and write to Vercel's environment variables for the next deployment.
-          </p>
+        <div class="page-heading-row">
+          <h2>Settings: Environment Configuration</h2>
         </div>
+        <p class="page-heading-desc">One source of truth for all infrastructure credentials. Secrets are masked.</p>
+        <p>Changes update <code>process.env</code> immediately and write to Vercel's environment variables for the next deployment.</p>
 
         <div class="card">
           <div class="card-header">
-            <h2>Environment Variables</h2>
+            <h3>Environment Variables</h3>
             <span class="env-legend">
               <span class="env-dot env-dot--set"></span> Set &nbsp;
               <span class="env-dot env-dot--missing"></span> Not set
@@ -48,16 +47,18 @@
         </div>
       </section>
       <section id="settingsProfilePage" class="app-page hidden">
-        <h2>Settings: Profile</h2>
-        <p>Set the core identity for your account, including account contact details and profile branding.</p>
+        <div class="page-heading-row">
+          <h2>Settings: Profile</h2>
+        </div>
+        <p class="page-heading-desc">Set the core identity for your account, including account contact details and profile branding.</p>
         <div class="card settings-project-card">
           <h3 class="editor-title">My Projects</h3>
           <p class="meta">Projects associated with this account.</p>
           <div id="settingsProfileProjectsList" class="settings-project-inline-list"></div>
         </div>
-        <form id="settingsProfileForm" class="standard-form-grid">
+        <form id="settingsProfileForm" class="profile-form">
           <div class="media-edit-layout">
-            <div class="media-edit-primary">
+            <div class="media-edit-primary standard-form-grid profile-form-fields">
               
                 <label for="settingsAccountName">User Name</label>
                 <input id="settingsAccountName" readonly />
@@ -87,8 +88,7 @@
                 <input id="settingsProfileLogoFile" name="logo_file" type="file" accept="image/*" />
               
               <div class="profile-save-row">
-                <div></div>
-              <button type="submit" class="btn btn-save">Save Profile</button>
+                <button type="submit" class="btn btn-save">Save Profile</button>
               </div>
             </div>
             <div class="media-edit-sidebar">
@@ -314,11 +314,15 @@
         </div>
       </section>
       <section id="settingsAgentsPage" class="app-page hidden">
-        <h2>Settings: Agents</h2>
-        <p>Agents settings placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Settings: Agents</h2>
+        </div>
+        <p class="page-heading-desc">Agents settings placeholder.</p>
       </section>
       <section id="settingsDatabasePage" class="app-page hidden">
-        <h2>Settings: Database</h2>
+        <div class="page-heading-row">
+          <h2>Settings: Database</h2>
+        </div>
         <h3>Database Connection</h3>
         <form id="dbConnectionForm" class="standard-form-grid">
           
