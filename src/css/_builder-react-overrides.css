@@ -12557,3 +12557,33 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root .builder-publish-shell .builder-panel-toggle[aria-expanded="true"]:hover {
   background: transparent;
 }
+
+/* ==================================================================== */
+/* BUILDER › PAGE DETAILS BAR — the buttons wrap instead of covering ▼  */
+/* (task 86bcytb6q, 2026-11-05)                                         */
+/*                                                                      */
+/* The generated rules give the Page Details heading an `auto` button   */
+/* column with `min-width: min-content` and `flex-wrap: nowrap`, so     */
+/* Preview + Save as Template + Save Page (~400px) can never shrink.    */
+/* On a ~480px window the title column collapsed to nothing and the     */
+/* buttons were drawn over the blue bar, covering "PAGE DETAILS" and    */
+/* its ▼ collapse button.                                               */
+/*                                                                      */
+/* Same shape as the Pages bar above it (86bcyrqan): the title column   */
+/* keeps at least 10rem so the ▼ stays clickable, and the button box    */
+/* may shrink below its buttons' width, in which case they wrap onto    */
+/* further lines inside their own column rather than overflowing.       */
+/* ==================================================================== */
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
+  grid-template-columns: minmax(10rem, 1fr) minmax(0, max-content);
+}
+
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions .builder-panel-heading-button {
+  margin-inline: 0;
+  white-space: nowrap;
+}

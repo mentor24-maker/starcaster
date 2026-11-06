@@ -21,7 +21,7 @@
 
 
 /* Settings › Projects lists projects once, in its table; Profile links there
-   instead of repeating them (UI_RULES S7). The "Your Projects" card styles
+   instead of repeating them (UI_RULES S9). The "Your Projects" card styles
    that used to sit here went with the card. */
 .settings-profile-projects-link {
   margin: 0 0 var(--space-5);
@@ -7132,8 +7132,11 @@ button.builder-inline-asset-status-btn:focus-visible {
 }
 
 /* Holds a single checkbox; the heading is what sets the floor. */
+/* Sized to its heading. At 4.25rem "Published" spilled into the Updated
+   column; once the heading row became sticky (T11, 86bcyrqbr) each heading
+   cell paints over the one before it, and the spill showed as "Publishe". */
 #builderManagePagesPage .builder-pages-col-published {
-  width: 4.25rem;
+  width: 6.75rem;
   text-align: center;
 }
 
@@ -7143,10 +7146,11 @@ button.builder-inline-asset-status-btn:focus-visible {
   width: 6.25rem;
 }
 
-/* Four icon buttons plus their gaps need ~150px; at 7.5rem the fourth was
-   clipped and the table scrolled 54px to hide it (harness, 2026-08-10). */
+/* Four icon buttons plus their gaps. They were ~28px when this was 9.5rem;
+   they are 36px now, and the Delete button hung off the table's right edge
+   (measured at 1440, 2026-11-05). 4 × 36 + gaps + cell padding ≈ 12.75rem. */
 #builderManagePagesPage .builder-pages-col-actions {
-  width: 9.5rem;
+  width: 12.75rem;
 }
 
 #builderManagePagesPage .builder-pages-col-published .standard-form-checkbox {
@@ -8636,16 +8640,6 @@ button.builder-inline-asset-status-btn:focus-visible {
   font-size: 0.9rem;
 }
 
-#message {
-  position: sticky;
-  bottom: 0;
-  margin: 0;
-  padding: 0.7rem 1rem;
-  background: #ffffff;
-  border-top: 1px solid var(--border);
-  min-height: 2.5rem;
-}
-
 @media (max-width: 720px) {
   .menu-root {
     flex-direction: column;
@@ -9210,39 +9204,50 @@ table {
    4. Toast
    --------------------------------------------------------------------------- */
 
-.c-toast__container {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 2000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
+/* The one message strip (task 86bcyrqbu, docs/UI_RULES.md S9).
+   #appMessageStrip sits in the page's normal flow between the header and
+   <main>, so a message pushes the page down and never covers a row or a
+   button. Empty, it takes no space at all. One message at a time. */
+.c-message-strip {
+  margin: 0;
 }
-
-.c-toast {
+.c-message-strip:empty {
+  display: none;
+}
+.c-message-strip__item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 11px 16px;
+  gap: var(--space-4);
+  margin: var(--space-3) var(--space-5) 0;
+  padding: var(--space-3) var(--space-5);
   border-radius: var(--c-radius);
-  box-shadow: var(--c-shadow-md);
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  width: 380px;
-  max-width: calc(100vw - 48px);
-  pointer-events: all;
-  opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  color: #fff;
+  line-height: 1.4;
+  color: var(--btn-flat-ink);
 }
-
-.c-toast--visible {
+.c-message-strip__item--success { background: var(--c-success); }
+.c-message-strip__item--error   { background: var(--c-error);   }
+.c-message-strip__item--info    { background: var(--c-primary); }
+.c-message-strip__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.c-message-strip__close {
+  flex-shrink: 0;
+  padding: 0 var(--space-1);
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.c-message-strip__close:hover,
+.c-message-strip__close:focus-visible {
   opacity: 1;
-  transform: translateY(0);
 }
 
 /* SavedNotice — the confirmation card at the top of the screen after a Save.
@@ -9287,30 +9292,6 @@ table {
   font-size: var(--text-base);
 }
 
-.c-toast--success { background: var(--c-success); }
-.c-toast--error   { background: var(--c-error);   }
-.c-toast--info    { background: var(--c-primary);  }
-
-.c-toast__message {
-  flex: 1;
-  line-height: 1.4;
-}
-
-.c-toast__close {
-  background: none;
-  border: none;
-  position: relative;
-  color: rgba(255,255,255,0.8);
-  font-size: 16px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0 2px;
-  flex-shrink: 0;
-  transition: color 0.15s;
-}
-.c-toast__close:hover {
-  color: #fff;
-}
 
 /* ---------------------------------------------------------------------------
    THE BUTTON SYSTEM — four kinds, two sizes (UI normalization 4 of 10,

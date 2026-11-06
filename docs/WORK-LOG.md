@@ -10,6 +10,51 @@ changed in one place (for example, a plain heading is the same 24px as the
 page title). It ends with nine questions only Dane can answer, such as where
 Save belongs on a screen with one column. Nothing on screen changed.
 
+## 2026-11-05 — Short settings keep their label on the same row (#984)
+
+A setting you change with a dropdown, a tick box, a number or a colour now sits
+on one row with its label beside it, instead of a label line stacked over the
+control. A text box still takes its label on the line above, because it needs
+the width. On the CRM form editor that puts Label Align, Field Align and the
+Button choices on one row each, lined up like the colour rows. On Training, a
+label that ran five lines down beside its box now sits above it on one line,
+and percentage boxes are sized like numbers instead of stretching across the
+screen. Settings › Database gets the same tidy label column, and Builder ›
+Themes drops a second caption on its underline tick boxes that repeated the
+label and wrapped. Two dropdowns whose choices are long phrases keep their
+label above, because squeezing them beside it cut the words off. The rule is
+written up as L9 in `docs/UI_RULES.md`.
+## 2026-11-05 — Long tables keep their column headings on screen (#986)
+
+Builder › Pages ran to about 5,000 pixels tall for a site with 83 pages, and
+by the time you scrolled down to the page you wanted, the Name / Slug /
+Published headings had long gone off the top. Now every admin table stops at
+the height of the screen: the rows scroll inside it and the black heading bar
+stays pinned at the top. Short tables look exactly as before. Rows are also a
+little tighter on every table. Training's two tables were drawing their
+headings in black on the black bar, so nobody could read them; they now use
+the same table style as everything else. On Pages, the "Published" heading
+was cut off and the red Delete button hung off the right edge, and both now
+fit. The rule is written up as T11 in `docs/UI_RULES.md`.
+
+## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
+
+In the Builder page editor, on a phone-width browser window, the Preview, Save
+as Template and Save Page buttons were drawn on top of the blue Page Details
+bar, hiding its title and the ▼ that collapses the panel — so the panel could
+not be closed. The bar now always keeps room for its title and ▼, and the
+buttons sit beside it, stacking onto extra lines when space runs out. On a
+normal desktop window nothing changes. Same fix the Pages bar just above it got
+in #972.
+## 2026-11-05 — Messages show once and no longer cover the screen (#988)
+
+Every message in the admin app used to appear twice — a floating box and a pink
+bar stuck to the bottom of the screen — and that bottom bar sat over the last
+rows of tables on Pages, Training and Themes even when it was empty. Now there
+is one message strip just under the top menu. It is part of the page, so it
+pushes things down instead of covering them; errors stay until you close them
+with ×, and "saved"-type messages close by themselves after four seconds. The
+rule is written down so later screens use the same strip.
 ## 2026-11-05 — Site Import pages can be built from the screen (#987)
 
 Until now, a site copied by Site Import sat at "Captured — pages not built yet"
