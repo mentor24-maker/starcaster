@@ -279,6 +279,29 @@
   margin: 0;
 }
 
+/* A dropdown or slider is ONE line too (UI_RULES L9): its label in a fixed
+   left track so every such row lines up, the control filling the rest.
+   Text boxes (Padding, Field Width, ...) keep their label above. The label
+   may take a second line in a narrow column, never a third. */
+.crm-form-editor-col-settings .crm-form-editor-setting.crm-form-editor-setting-beside,
+.crm-form-editor-col-styles .crm-form-editor-setting.crm-form-editor-setting-beside {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.65rem;
+}
+
+.crm-form-editor-col-settings .crm-form-editor-setting-beside > span:first-child,
+.crm-form-editor-col-styles .crm-form-editor-setting-beside > span:first-child {
+  white-space: normal;
+}
+
+.crm-form-editor-setting-beside > select,
+.crm-form-editor-setting-beside > .crm-form-width-control {
+  min-width: 0;
+  margin: 0;
+}
+
 .crm-form-color-control {
   margin-top: 0.35rem;
   min-width: 0;

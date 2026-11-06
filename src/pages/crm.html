@@ -292,8 +292,7 @@
 
             <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleLabelsFields">
               <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleLabelsFields">Labels and Fields</h3>
-              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-3">
-                <label class="field crm-form-editor-setting">
+              <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
                   <span>Label Align</span>
                   <select id="crmFormEditorLabelAlign" class="crm-form-editor-select">
                     <option value="left" selected>Left</option>
@@ -301,7 +300,7 @@
                     <option value="right">Right</option>
                   </select>
                 </label>
-                <label class="field crm-form-editor-setting">
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
                   <span>Field Align</span>
                   <select id="crmFormEditorFieldAlign" class="crm-form-editor-select">
                     <option value="left" selected>Left</option>
@@ -309,6 +308,7 @@
                     <option value="right">Right</option>
                   </select>
                 </label>
+              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
                 <label class="field crm-form-editor-setting">
                   <span>Field Width</span>
                   <input type="text" id="crmFormEditorFieldWidth" placeholder="75%" />
@@ -357,7 +357,8 @@
                   <span>Button Text Size</span>
                   <input type="text" id="crmFormEditorButtonTextSize" placeholder="1.05rem" />
                 </label>
-                <label class="field crm-form-editor-setting">
+              </div>
+              <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
                   <span>Button Text Weight</span>
                   <select id="crmFormEditorButtonTextWeight" class="crm-form-editor-select">
                     <option value="1">1</option>
@@ -372,9 +373,7 @@
                     <option value="10">10</option>
                   </select>
                 </label>
-              </div>
-              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
-                <label class="field crm-form-editor-setting">
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
                   <span>Button Align</span>
                   <select id="crmFormEditorButtonAlign" class="crm-form-editor-select">
                     <option value="left" selected>Left</option>
@@ -382,14 +381,13 @@
                     <option value="right">Right</option>
                   </select>
                 </label>
-                <label class="field crm-form-editor-setting">
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
                   <span>Button Width</span>
                   <div class="crm-form-width-control">
                     <input type="range" id="crmFormEditorButtonWidth" min="50" max="100" step="1" value="100" />
                     <span class="crm-form-width-value" data-crm-width-display="crmFormEditorButtonWidth">100%</span>
                   </div>
                 </label>
-              </div>
             </section>
           </div>
           <div class="crm-form-editor-col crm-form-editor-col-preview">

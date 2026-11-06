@@ -887,6 +887,41 @@ as a rule first, then gets a checker where one is possible.
   stacked with it, so there is no shared edge to hold it to. The check names
   that skip on every run rather than dropping it in silence.
 
+- **L9.** **A short setting keeps its label BESIDE the control; a text box
+  takes its label ABOVE** — UI normalization screen 7 (task 86bcyrqbp).
+  A **colour, toggle (checkbox or switch), number or dropdown** is one row:
+  label on the left, control on the right. A **text box or text area** puts
+  its label on the line above, because the box wants the full width and a
+  long label beside it squeezes both. Before this, CRM put a label line over
+  even a single dropdown, Training right-aligned labels that wrapped onto
+  three to five lines, and Themes' underline toggles carried a second
+  caption that wrapped beside the box.
+
+  - **No label wraps onto more than two lines at 1440 wide.** If it would,
+    shorten it (L3) or move the explanation into a `.meta` hint.
+  - **Never a second caption that repeats the row's label** next to a
+    checkbox ("Link underline ☑ Underline links"). The row label is the
+    label; give the input an `aria-label` if it has no `<label for>`.
+  - **Plain admin markup:** add `.form-grid-beside` to a
+    `.standard-form-grid` — labels left-aligned (L1) in a column as wide as
+    the longest label (capped at 16rem), dropdowns and numbers sized to
+    their content rather than stretched across the screen. A text box with
+    its label above uses `.form-field-above`. Both live in `_forms.css`.
+  - **CRM form editor:** `.crm-form-editor-setting-beside` puts a dropdown
+    or slider on one row with an 8.5rem label track, matching the colour
+    rows (`.crm-form-editor-setting-color`) that already worked this way.
+  - **Never crop to get it on one row — L4 outranks this rule.** A dropdown
+    whose choices are phrases ("Show the success message") in a column too
+    narrow to show them whole beside a label keeps its label above, as the
+    CRM form editor's "When a visitor submits" does — and so does Settings ›
+    Projects' "Active Project", whose choices are project names of any
+    length in a 360px card.
+  - **Builder (React):** `BuilderSettingRow` is already label-beside; a
+    checkbox goes in it bare, as Themes' "Cards overlap photo" does.
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
