@@ -1078,6 +1078,31 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   stroke: var(--collapse-collapse-border);
 }
 
+/* A panel bar whose page is still loading (task 86bczp0zy): the triangle is
+   swapped for a turning ring in the same circle, and the bar reads as busy
+   rather than broken — no greyed-out fade, a progress cursor. */
+.builder-react-root .builder-panel-toggle[aria-busy="true"],
+.builder-react-root .builder-panel-toggle[aria-busy="true"]:disabled {
+  cursor: progress;
+  opacity: 1;
+}
+
+.builder-react-root .builder-collapse-icon-spinner {
+  animation: builder-collapse-icon-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes builder-collapse-icon-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: the ring stays, so "loading" still reads; it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .builder-collapse-icon-spinner {
+    animation: none;
+  }
+}
+
 /* ============================================================== */
 /* ADMIN NAV LINK — visible to logged-in admin users on public site */
 /* JS in BuilderPublicSitePage positions it just above the language icon. */

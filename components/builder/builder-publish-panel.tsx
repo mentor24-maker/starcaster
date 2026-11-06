@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
-import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps } from "./builder-collapse-icon";
 
 type PendingPage = { id: string; slug: string; name: string };
 
@@ -48,6 +48,11 @@ type BuilderPublishPanelProps = {
    */
   focusRequestKey?: number;
   onPublished?: () => void;
+  /**
+   * The page editor is still waiting for its page: the bar shows a spinner
+   * and refuses clicks (task 86bczp0zy).
+   */
+  loading?: boolean;
 };
 
 async function publishFetch(path: string, init: RequestInit = {}) {
@@ -98,7 +103,7 @@ export function revealAndFocus(element: HTMLElement | null): boolean {
   return true;
 }
 
-export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPublished }: BuilderPublishPanelProps) {
+export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPublished, loading = false }: BuilderPublishPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState<PublishStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -213,10 +218,10 @@ export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPub
         <div className="builder-pages-crud-heading-primary">
           <button
             aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand Publish" : "Collapse Publish"}
             className="builder-panel-toggle"
             onClick={() => setCollapsed((current) => !current)}
             type="button"
+            {...builderPanelToggleLoadingProps(loading, collapsed ? "Expand Publish" : "Collapse Publish")}
           >
             {/* Label and count are ONE flex child: the toggle spreads its
                 children apart, so a loose badge drifts into the middle of the
@@ -225,7 +230,7 @@ export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPub
               <span className="panel-label">Publish</span>
               {hasPending ? <span className="builder-publish-count">{pending}</span> : null}
             </span>
-            <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} /></span>
+            <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} loading={loading} /></span>
           </button>
         </div>
         <div className="builder-pages-crud-heading-actions">

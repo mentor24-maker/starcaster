@@ -1,7 +1,7 @@
 import type { BackgroundSettings, BuilderPageRecord, BuilderPageSnapshotSummary, BuilderTemplateRecord, BuilderTheme, BuilderThemeSummary } from "@/lib/builder-template";
 import { useEffect, useMemo, useRef, useState, type FocusEvent } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
-import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps } from "./builder-collapse-icon";
 import { BuilderPreviewDeviceMenu } from "./builder-device-preview";
 import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import { PAGE_SEARCH_PRIORITIES } from "@/lib/page-search-priority";
@@ -54,6 +54,11 @@ type ActiveArchive = {
 
 type BuilderPageListProps = {
   pages: BuilderPageRecord[];
+  /**
+   * The page editor is still waiting for its page: the Page Details bar shows
+   * a spinner and refuses clicks (task 86bczp0zy).
+   */
+  pageLoading?: boolean;
   templates: BuilderTemplateRecord[];
   selectedPageId: string;
   draftName: string;
@@ -101,6 +106,7 @@ type BuilderPageListProps = {
 
 export function BuilderPageList({
   pages,
+  pageLoading = false,
   templates,
   themes,
   selectedPageId,
@@ -843,14 +849,17 @@ export function BuilderPageList({
           <div className="builder-pages-crud-heading-primary">
             <button
               aria-expanded={!collapsedPanels.details}
-              aria-label={collapsedPanels.details ? "Expand Page Details" : "Collapse Page Details"}
               className="builder-panel-toggle"
               onClick={() => togglePanel("details")}
-              title={collapsedPanels.details ? "Expand Page Details" : "Collapse Page Details"}
               type="button"
+              {...builderPanelToggleLoadingProps(
+                pageLoading,
+                collapsedPanels.details ? "Expand Page Details" : "Collapse Page Details",
+                collapsedPanels.details ? "Expand Page Details" : "Collapse Page Details",
+              )}
             >
               <span className="panel-label">Page Details</span>
-              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedPanels.details} /></span>
+              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedPanels.details} loading={pageLoading} /></span>
             </button>
           </div>
           <div className="builder-pages-crud-heading-actions">
