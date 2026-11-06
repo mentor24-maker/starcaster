@@ -1437,8 +1437,8 @@ Advanced — is the follow-on pass the operator sequenced after this.
   hover and no disabled colour at all. And the old `.tiny-btn:disabled`
   fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
   A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
-  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (36px), and small,
-  `--btn-height-sm` (28px) — `btn-sm`, for table rows and dense toolbars
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (32px), and small,
+  `--btn-height-sm` (24px) — `btn-sm`, for table rows and dense toolbars
   (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
   height, padding or colour: a rule like `.page-heading-row button
   { min-height: 42px }` is how one job ended up 29px on one screen and 50px
@@ -1450,11 +1450,35 @@ Advanced — is the follow-on pass the operator sequenced after this.
   all of them.")* — **[eye]**, sizes and colours are tokens
 
   **Deliberately not in the four kinds:** square table icon buttons
-  (`icon-btn` — a glyph, its own 36px square, already the same height as
-  a normal button); the Builder and Docs diagram tiles; accordion headers
+  (`icon-btn` — a glyph, its own 36px square; it was the same height as a
+  normal button until UI normalization 11 took normal to 32px, and it was
+  deliberately left square and unchanged); the Builder and Docs diagram tiles; accordion headers
   and the Builder's panel-label pills; tab switchers (UI normalization 5
   owns those); colour swatches, font pickers and image pickers that show a
   value; and buttons a module renders on a client's site.
+
+  **How tall boxes, buttons and table headings are (UI normalization 11,
+  task 86bcz85k9).** Dane, 2026-11-05: *"reduce vertical padding in each
+  form field, button, and CRUD header bar by 2px."* Each lost 2px at the top
+  and 2px at the bottom, so 4px of height, and each is ONE token in
+  `_variables.css` — change it there, never screen by screen:
+
+  | What | Token | Admin app | Was |
+  |---|---|---|---|
+  | Form box (input, select, textarea) top/bottom padding | `--field-pad-y` | 0.55rem − 2px (6.8px) | 0.55rem (8.8px) |
+  | Normal button height | `--btn-height` | 32px | 36px |
+  | Small button height (`btn-sm`, `tiny-btn`, `btn-xs`) | `--btn-height-sm` | 24px | 28px |
+  | Table heading row and filter/bulk-action row, top/bottom padding | `--table-head-pad-y` | 0.65rem − 2px (8.4px) | 0.65rem (10.4px) |
+
+  A `.btn` has no vertical padding — its label is centred in a fixed height
+  — so for buttons the 2px comes off the height. Table body rows keep
+  0.65rem. **A client's live site keeps the old values:** `.builder-public-site`
+  sets all four back, so published pages and the Builder's device preview
+  are untouched. Screens that set their own box padding in a per-screen rule
+  (Acquire's miner panels, the Campaigns combobox and a few others in
+  `legacy.css`) still carry their own numbers; `_forms.css`'s
+  `0.8rem 1rem` on `input` loses to `legacy.css` everywhere and sets nothing.
+  — **[eye]**, measured with getComputedStyle at 1440
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …

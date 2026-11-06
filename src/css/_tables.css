@@ -52,6 +52,15 @@ table:not(.builder-module-preview-table):not(.builder-preview-table) td {
   vertical-align: middle;
 }
 
+/* --- Header rows: 2px less top and bottom than body rows ---
+   Covers the column-heading row and the filter / bulk-action row above it
+   (UI normalization 11, task 86bcz85k9). The token lives in _variables.css
+   and a client's live site gets the old 0.65rem back. */
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead th {
+  padding-top: var(--table-head-pad-y);
+  padding-bottom: var(--table-head-pad-y);
+}
+
 /* --- Column headers ---
    Black background, bold white text, left-aligned.
    Clickable for sorting; cursor indicates interactivity.
