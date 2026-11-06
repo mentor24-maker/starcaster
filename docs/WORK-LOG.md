@@ -9,6 +9,100 @@ boxes. That rule is gone, and a comment box is now recognised for what it is and
 left as a picture captioned "a blog comment box — Starcaster blog posts have
 their own comments". Checked against all 197 forms in recent imports: only the
 16 comment boxes (Strands and Dane of Earth posts) read differently.
+## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
+
+Dane asked for 2px less padding at the top and bottom of every form box,
+button and table heading row on the admin screens, because together they were
+costing a lot of scrolling. Each one is now 4px shorter: buttons go from 36px
+to 32px (small ones 28px to 24px), form boxes lose 4px, and the black heading
+row at the top of every table (plus the filter and bulk-action row above it)
+loses 4px. Each size is now one setting in one place, so the next adjustment is
+a single edit. Clients' live sites use the same stylesheet, so they are
+deliberately set back to the old sizes: nothing a visitor sees has changed.
+The square icon buttons in tables stay the size they were.
+## 2026-11-05 — Test links for signed-in screens now actually let Dane sign in (#985)
+
+Every test link the review lane handed Dane was a Vercel preview, and none of
+them could be signed into — previews have no database, so every sign-in said
+"Invalid email or password" and looked like a wrong password. Now, when a test
+needs anything behind the sign-in, the review lane starts the branch on the
+Mac Mini against its own local copy of the data and gives him a link like
+`http://mac-mini.local:3071`, the local sign-in (`mentor24@gmail.com` /
+`localdev123`), and the exact clicks. Public pages can still use the preview.
+The app also used to mistake `mac-mini.local` for a client's website address
+and refuse to show the admin app there; it now treats it like `localhost`.
+
+## 2026-11-05 — Short settings keep their label on the same row (#984)
+
+A setting you change with a dropdown, a tick box, a number or a colour now sits
+on one row with its label beside it, instead of a label line stacked over the
+control. A text box still takes its label on the line above, because it needs
+the width. On the CRM form editor that puts Label Align, Field Align and the
+Button choices on one row each, lined up like the colour rows. On Training, a
+label that ran five lines down beside its box now sits above it on one line,
+and percentage boxes are sized like numbers instead of stretching across the
+screen. Settings › Database gets the same tidy label column, and Builder ›
+Themes drops a second caption on its underline tick boxes that repeated the
+label and wrapped. Two dropdowns whose choices are long phrases keep their
+label above, because squeezing them beside it cut the words off. The rule is
+written up as L9 in `docs/UI_RULES.md`.
+## 2026-11-05 — Long tables keep their column headings on screen (#986)
+
+Builder › Pages ran to about 5,000 pixels tall for a site with 83 pages, and
+by the time you scrolled down to the page you wanted, the Name / Slug /
+Published headings had long gone off the top. Now every admin table stops at
+the height of the screen: the rows scroll inside it and the black heading bar
+stays pinned at the top. Short tables look exactly as before. Rows are also a
+little tighter on every table. Training's two tables were drawing their
+headings in black on the black bar, so nobody could read them; they now use
+the same table style as everything else. On Pages, the "Published" heading
+was cut off and the red Delete button hung off the right edge, and both now
+fit. The rule is written up as T11 in `docs/UI_RULES.md`.
+
+## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
+
+In the Builder page editor, on a phone-width browser window, the Preview, Save
+as Template and Save Page buttons were drawn on top of the blue Page Details
+bar, hiding its title and the ▼ that collapses the panel — so the panel could
+not be closed. The bar now always keeps room for its title and ▼, and the
+buttons sit beside it, stacking onto extra lines when space runs out. On a
+normal desktop window nothing changes. Same fix the Pages bar just above it got
+in #972.
+## 2026-11-05 — Messages show once and no longer cover the screen (#988)
+
+Every message in the admin app used to appear twice — a floating box and a pink
+bar stuck to the bottom of the screen — and that bottom bar sat over the last
+rows of tables on Pages, Training and Themes even when it was empty. Now there
+is one message strip just under the top menu. It is part of the page, so it
+pushes things down instead of covering them; errors stay until you close them
+with ×, and "saved"-type messages close by themselves after four seconds. The
+rule is written down so later screens use the same strip.
+## 2026-11-05 — Site Import pages can be built from the screen (#987)
+
+Until now, a site copied by Site Import sat at "Captured — pages not built yet"
+until an agent session ran the build script by hand. PressPlay was stuck there.
+The import screen now has two buttons. **Preview Build** asks the Mac Mini's
+import worker (which already checks every five minutes) to rehearse the build.
+The screen then shows which pages it will create or update, the theme it will
+make with its colours as swatches, and any warnings. **Build Draft Pages** only
+works once a preview exists and the import has not changed since; it makes the
+pages as drafts, with an optional "Skip the theme" box. The status line says
+waiting, building or built, and a failure says why in words. Nothing is ever
+published.
+
+## 2026-11-05 — Each thing is shown once: one projects list, no buttons back to the same screen, a compact Builder landing (#989)
+
+Your projects used to be listed three times — the table on Settings › Projects,
+a "Your Projects" card under that same table, and "My Projects" on Profile.
+Now the table is the only list; Profile has a link to it, and the card's
+"Active Project" picker went too, since each row's Set Active button already
+did that job. Settings › Projects also lost its "Back To Projects" button
+(you were already there); in the Create Project panel the same button now
+says Cancel, which is what it does. A search for any other button that leads
+to its own screen found one more — the Docs page's "Docs" tile — and removed
+it. The Builder landing page was a 560px-tall box with five link words
+scattered in it; it is now one row of five outlined tiles. The two rules are
+written down (UI_RULES S7 and S8) so later screens follow them.
 
 ## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
 

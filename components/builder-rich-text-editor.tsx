@@ -245,7 +245,19 @@ export function BuilderRichTextEditor({
       // carries a blank line between every paragraph as a bare <br> between
       // the <p>s; left alone each one becomes an empty paragraph and the live
       // page shows double spacing (task 86bcg88kk). Typing is never touched.
-      transformPastedHTML: cleanPastedRichTextHtml
+      transformPastedHTML: cleanPastedRichTextHtml,
+      // A click in the text must never reach a <label> around the editor. A
+      // browser forwards a label's click to the first button inside it — the
+      // toolbar's P — so every click in a heading turned it into a paragraph
+      // (task 86bczmnra). The caret is placed on mousedown, so cancelling the
+      // click's default costs the editor nothing; returning false still lets
+      // ProseMirror handle the event.
+      handleDOMEvents: {
+        click: (_view, event) => {
+          event.preventDefault();
+          return false;
+        }
+      }
     },
     onUpdate: ({ editor: currentEditor }) => {
       const storageHtml = prepareRichTextHtmlForStorage(currentEditor.getHTML());

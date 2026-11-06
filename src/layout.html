@@ -12,6 +12,7 @@
       if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
       var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
+        || h.endsWith('.local')
         || h.endsWith('.vercel.app')
         || h === 'app.starcaster.pro';
       if (sys) return;
@@ -327,11 +328,15 @@
         onclick="var h=this.parentNode,o=h.classList.toggle('admin-menu-open');this.setAttribute('aria-expanded',String(o));this.textContent=o?'Close':'Menu';">Menu</button>
     </header>
 
+    <!-- The one message strip (UI normalization 9 of 10, task 86bcyrqbu).
+         Every App.notify / Toast message lands here, one at a time, in the
+         page's normal flow — so it pushes the page down instead of covering
+         it. Errors stay until dismissed. Rules: docs/UI_RULES.md S9. -->
+    <div id="appMessageStrip" class="c-message-strip" aria-live="polite"></div>
+
     <main>
       <!-- INJECT_PAGES -->
     </main>
-
-    <p id="message"></p>
   </div>
 
   <div id="assetFieldImportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetFieldImportModalTitle">

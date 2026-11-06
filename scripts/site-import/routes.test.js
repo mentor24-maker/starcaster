@@ -202,3 +202,54 @@ test('POST /jobs: if the project\'s imports cannot be read, nothing is created',
   assert.equal(res.statusCode, 503);
   assert.equal(calls.some(([n]) => n === 'createJob'), false);
 });
+
+// ---- POST /jobs/:id/build (task 86bcz9wcx) --------------------------------
+
+const CAPTURED_JOB = {
+  ...JOB,
+  status: 'complete',
+  checkpoints: { normalize: { at: '2026-11-05T10:00:00.000Z', blobPath: 'https://blob/ir.json' } },
+};
+
+async function postBuild(job, body) {
+  const { route, calls } = loadRoute({ getJob: async () => ({ ok: true, status: 200, data: structuredClone(job) }) });
+  const res = makeRes();
+  await route.handle(makeReq({ body }), res, '/api/site-import/jobs/simp_1/build', 'POST');
+  return { res, calls };
+}
+
+test('POST /build: a preview is queued on the job for the worker, nothing else written', async () => {
+  const { res, calls } = await postBuild(CAPTURED_JOB, { mode: 'preview' });
+  assert.equal(res.statusCode, 202);
+  const update = calls.find(([n]) => n === 'updateJob');
+  assert.equal(update[2].checkpoints.build.status, 'queued');
+  assert.equal(update[2].checkpoints.build.mode, 'preview');
+  assert.equal(update[2].checkpoints.normalize.blobPath, 'https://blob/ir.json', 'other checkpoints kept');
+  assert.deepEqual(Object.keys(update[2]), ['checkpoints']);
+});
+
+test('POST /build: build without a preview is refused and writes nothing', async () => {
+  const { res, calls } = await postBuild(CAPTURED_JOB, { mode: 'apply' });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error.code, 'PREVIEW_REQUIRED');
+  assert.equal(calls.some(([n]) => n === 'updateJob'), false);
+});
+
+test('POST /build: build after a matching preview is queued with the theme choice', async () => {
+  const { buildFingerprint } = require('../../lib/siteImportBuild.js');
+  const job = {
+    ...CAPTURED_JOB,
+    checkpoints: { ...CAPTURED_JOB.checkpoints, buildPreview: { at: 'x', fingerprint: buildFingerprint(CAPTURED_JOB) } },
+  };
+  const { res, calls } = await postBuild(job, { mode: 'apply', noTheme: true });
+  assert.equal(res.statusCode, 202);
+  const build = calls.find(([n]) => n === 'updateJob')[2].checkpoints.build;
+  assert.equal(build.mode, 'apply');
+  assert.equal(build.noTheme, true);
+});
+
+test('POST /build: a job that has not finished copying is refused', async () => {
+  const { res } = await postBuild({ ...JOB }, { mode: 'preview' });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error.code, 'NOT_CAPTURED');
+});
