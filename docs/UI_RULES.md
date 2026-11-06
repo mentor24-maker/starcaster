@@ -1589,6 +1589,28 @@ is ever wider than the screen.*
   at T7 rung 12 — they scroll inside their own container — which is legal
   but means the earlier rungs were skipped; they are the next candidates
   for the ladder.
+
+- **T11. One table look, and the column headings never scroll away.**
+  Every admin table uses the canonical `_tables.css` treatment and nothing
+  else: a black column-heading row with bold white text, a light-blue filter
+  row above it where the table has filters, and data rows padded `0.5rem`
+  top and bottom (the heading row keeps its own padding). Wrap the table in
+  `.table-wrap` — that is what makes the heading row **sticky**: the wrap
+  scrolls in both directions and stops at `max(20rem, 100vh - 10rem)`, and
+  the heading row (not the filter row) sticks to its top, so on a long list
+  the headings stay on screen however far down you go. Never put inline
+  `style=""` padding, colours or sizes on a `<table>`, `<thead>`, `<th>` or
+  `<td>`: an inline style beats the shared rule, and that is exactly how
+  Training's tables ended up with **black headings on the black bar** —
+  invisible — and taller rows than every other table. *(2026-11-05,
+  UI normalization 8 of 10, task 86bcyrqbr: Builder › Pages ran about
+  5,000px tall with its headings long gone off the top; it now caps at the
+  screen with the headings pinned.)* Why the cap leaves 10rem free: the
+  heading sticks to the top of the WRAP, so the wrap must fit on the screen
+  along with whatever sits under it at the end of the page, or the page's
+  last scroll position carries the headings off the top with it. —
+  **[eye]**; measured with `getComputedStyle` and `elementFromPoint` at
+  1280/1440/1920 when it shipped.
 - **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
   grid or flex child defaults to `min-content` and will happily push its
   container past the viewport — this is the most common cause of a CRUD

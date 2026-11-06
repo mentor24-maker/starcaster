@@ -7132,8 +7132,11 @@ button.builder-inline-asset-status-btn:focus-visible {
 }
 
 /* Holds a single checkbox; the heading is what sets the floor. */
+/* Sized to its heading. At 4.25rem "Published" spilled into the Updated
+   column; once the heading row became sticky (T11, 86bcyrqbr) each heading
+   cell paints over the one before it, and the spill showed as "Publishe". */
 #builderManagePagesPage .builder-pages-col-published {
-  width: 4.25rem;
+  width: 6.75rem;
   text-align: center;
 }
 
@@ -7143,10 +7146,11 @@ button.builder-inline-asset-status-btn:focus-visible {
   width: 6.25rem;
 }
 
-/* Four icon buttons plus their gaps need ~150px; at 7.5rem the fourth was
-   clipped and the table scrolled 54px to hide it (harness, 2026-08-10). */
+/* Four icon buttons plus their gaps. They were ~28px when this was 9.5rem;
+   they are 36px now, and the Delete button hung off the table's right edge
+   (measured at 1440, 2026-11-05). 4 × 36 + gaps + cell padding ≈ 12.75rem. */
 #builderManagePagesPage .builder-pages-col-actions {
-  width: 9.5rem;
+  width: 12.75rem;
 }
 
 #builderManagePagesPage .builder-pages-col-published .standard-form-checkbox {

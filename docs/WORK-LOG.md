@@ -1,3 +1,16 @@
+## 2026-11-05 — Long tables keep their column headings on screen (#986)
+
+Builder › Pages ran to about 5,000 pixels tall for a site with 83 pages, and
+by the time you scrolled down to the page you wanted, the Name / Slug /
+Published headings had long gone off the top. Now every admin table stops at
+the height of the screen: the rows scroll inside it and the black heading bar
+stays pinned at the top. Short tables look exactly as before. Rows are also a
+little tighter on every table. Training's two tables were drawing their
+headings in black on the black bar, so nobody could read them; they now use
+the same table style as everything else. On Pages, the "Published" heading
+was cut off and the red Delete button hung off the right edge, and both now
+fit. The rule is written up as T11 in `docs/UI_RULES.md`.
+
 ## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
 
 In the Builder page editor, on a phone-width browser window, the Preview, Save
