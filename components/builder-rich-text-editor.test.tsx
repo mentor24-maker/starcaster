@@ -307,3 +307,65 @@ describe("BuilderRichTextEditor pasting from a Google Doc", () => {
     expect(saved).toMatch(/<p><\/p>/);
   });
 });
+
+describe("BuilderRichTextEditor inside a <label>", () => {
+  /**
+   * Task 86bczmnra (Dane, 2026-11-06): clicking a heading's text turned it back
+   * into a paragraph. The module card mounted the editor inside a
+   * `<label className="field">`, and a browser forwards any click inside a
+   * label to the first button in it — the toolbar's P, which runs
+   * setParagraph(). So every click in the text pressed P.
+   */
+  async function mountInLabel(initialValue: string, onValue: (next: string) => void) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+
+    await act(async () => {
+      root.render(
+        <label className="field">
+          <span>Content</span>
+          <ControlledEditor initialValue={initialValue} onValue={onValue} />
+        </label>
+      );
+    });
+
+    return container;
+  }
+
+  // jsdom does not forward a label's click to its button (measured — a real
+  // Chromium does, jsdom does not), so this cannot watch P get pressed. It
+  // pins the guard instead: a click in the text arrives at the label already
+  // cancelled, and a cancelled click is one a browser does not forward.
+  it("cancels a click in the text before it reaches the label", async () => {
+    const { emitted, onValue } = track();
+    const container = await mountInLabel("<h2>Big headline</h2>", onValue);
+    const heading = container.querySelector<HTMLElement>(".ProseMirror h2");
+    const label = container.querySelector("label");
+    let cancelledAtLabel: boolean | null = null;
+
+    label?.addEventListener("click", (event) => {
+      cancelledAtLabel = event.defaultPrevented;
+    });
+
+    expect(heading).not.toBeNull();
+    await act(async () => {
+      heading?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    expect(cancelledAtLabel).toBe(true);
+    expect(container.querySelector(".ProseMirror h2")?.textContent).toBe("Big headline");
+    expect(emitted.some((html) => !html.includes("<h2"))).toBe(false);
+  });
+
+  it("still turns a heading into a paragraph when P itself is pressed", async () => {
+    const { emitted, onValue } = track();
+    const container = await mountInLabel("<h2>Big headline</h2>", onValue);
+    const paragraphButton = container.querySelector<HTMLButtonElement>('button[title="Paragraph"]');
+
+    await click(paragraphButton as HTMLButtonElement);
+
+    expect(emitted.at(-1)).toContain("<p>Big headline</p>");
+  });
+});
