@@ -29,6 +29,7 @@ const {
   rowToTag: rowToAssetTag,
 } = require('../lib/assetTagsStore');
 const { listAssets, createAsset, updateAsset, deleteAsset, getAssetById, rowToAsset } = require('../lib/assetsStore');
+const { storeGeneratedVideo } = require('../lib/generatedVideoStorage');
 const { fetchAssetImageBuffer } = require('../lib/assetImageBytes');
 const {
   listAssociationsForAsset,
@@ -601,14 +602,14 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'Valid asset id conceptually required to check Vertex job output.', { code: 'INVALID_ID' }), true;
     }
     
-    const read = await listAssets(scope);
-    if (!read.ok) return sendErr(res, read.status || 500, read.error), true;
-    const assets = (Array.isArray(read.data) ? read.data : []).map(rowToAsset);
-    let target = assets.find(a => a.id === assetId);
-
-    if (!target) {
+    // One row by id — this endpoint is polled every few seconds while a video
+    // renders, and it used to read the project's whole library to find one row.
+    const read = await getAssetById(assetId, scope);
+    if (!read.ok && read.status === 404) {
        return sendErr(res, 404, 'Job Tracker row not found entirely in local schema mapped to that ID.', { code: 'NOT_FOUND' }), true;
     }
+    if (!read.ok) return sendErr(res, read.status || 500, read.error), true;
+    let target = rowToAsset(read.data);
 
     // Standard checking mechanism hook
     if (target.generationStatus === 'processing') {
@@ -621,17 +622,14 @@ async function handle(req, res, pathname, method) {
                  await updateAsset(target.id, { generationStatus: 'failed', comments: 'Fal Error: ' + JSON.stringify(statusData.error) }, scope);
                  target.generationStatus = 'failed';
              } else if (statusData.done) {
-                 // Try to gracefully extract the response GCS or base64 layout natively.
-                 let locationVal = 'https://vjs.zencdn.net/v/oceans.mp4'; 
-                 let videoBase64 = null;
-                 try {
-                     if (statusData.response) {
-                        locationVal = JSON.stringify(statusData.response);
-                        if (statusData.response.videos && statusData.response.videos[0]) {
-                           videoBase64 = statusData.response.videos[0].bytesBase64Encoded;
-                        }
-                     }
-                 } catch (e) {}
+                 // The clip's bytes, held in memory only: they feed the next
+                 // extend step, or get uploaded to file storage below. They are
+                 // NEVER written to the database (2026-11-06: twelve of these
+                 // in `location` restarted production).
+                 const firstVideo = statusData.response && Array.isArray(statusData.response.videos)
+                   ? statusData.response.videos[0]
+                   : null;
+                 const videoBase64 = (firstVideo && firstVideo.bytesBase64Encoded) || null;
 
                  const existingTags = target.tags || [];
                  let targetDuration = 4;
@@ -672,18 +670,37 @@ async function handle(req, res, pathname, method) {
                        target.comments = 'Auto-Loop Error: ' + (loopErr.message || 'Unknown Crash');
                     }
                  } else {
-                     // FINISHED: Entire chain completed.
+                     // FINISHED: Entire chain completed. Upload the clip and store
+                     // its address. No clip, or a failed upload, is a FAILED job —
+                     // never "completed" with a stand-in video.
                      updatedTags.push(`endTime:${Date.now()}`);
 
-                     const updated = await updateAsset(target.id, {
-                         generationStatus: 'completed',
-                         location: locationVal,
-                         tags: updatedTags
-                     }, scope);
-                     
-                     if (updated.ok) {
-                        const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
-                        target = rowToAsset(raw);
+                     const stored = await storeGeneratedVideo({
+                         videoBase64,
+                         assetId: target.id,
+                         assetName: target.assetName,
+                     });
+
+                     if (!stored.ok) {
+                        const why = `Video not saved: ${stored.error}`;
+                        console.error(`[assets] generation ${target.id}: ${why}`);
+                        await updateAsset(target.id, { generationStatus: 'failed', comments: why, tags: updatedTags }, scope);
+                        target.generationStatus = 'failed';
+                        target.comments = why;
+                     } else {
+                        const updated = await updateAsset(target.id, {
+                            generationStatus: 'completed',
+                            location: stored.location,
+                            size: stored.size,
+                            tags: updatedTags
+                        }, scope);
+
+                        if (updated.ok) {
+                           const raw = Array.isArray(updated.data) ? updated.data[0] : updated.data;
+                           target = rowToAsset(raw);
+                        } else {
+                           console.error(`[assets] generation ${target.id}: saved the video to ${stored.location} but could not record it:`, updated.error);
+                        }
                      }
                  }
              }
@@ -707,11 +724,10 @@ async function handle(req, res, pathname, method) {
       return sendErr(res, 400, 'Valid asset id conceptually required to cancel Vertex job natively.', { code: 'INVALID_ID' }), true;
     }
     
-    // First read to get operationName
-    const read = await listAssets(scope);
-    if (!read.ok) return sendErr(res, read.status || 500, read.error), true;
-    const assets = (Array.isArray(read.data) ? read.data : []).map(rowToAsset);
-    let target = assets.find(a => a.id === assetId);
+    // First read to get operationName — one row by id, not the whole library.
+    const read = await getAssetById(assetId, scope);
+    if (!read.ok && read.status !== 404) return sendErr(res, read.status || 500, read.error), true;
+    let target = read.ok ? rowToAsset(read.data) : null;
 
     if (target && target.generationJobId) {
        try {
