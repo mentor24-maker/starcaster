@@ -185,6 +185,17 @@
   --page-title-size: var(--text-2xl);     /* 24px — the one title a screen has */
   --page-desc-size: var(--text-sm);       /* ~13px — the optional line under it */
 
+  /*
+   * Box widths outside a settings panel (UI normalization 6 of 10, task
+   * 86bcyrqbh): a box is as wide as what normally goes in it, never as wide
+   * as the screen. Three sizes, chosen by what the box holds — never a width
+   * on one field. Every one also caps at 100% so nothing overflows a phone.
+   * docs/UI_RULES.md W7. (Settings panels follow W0's lattice instead.)
+   */
+  --field-w-number: 6ch;   /* a number or percentage: "50", "100", "2026" */
+  --field-w-short: 24ch;   /* a name or title: "Theme name", a first name */
+  --field-w-long: 48ch;    /* a list, a sentence, a web address: "Keywords" */
+
   --leading-tight: 1.25; /* headings, single-line UI */
   --leading-normal: 1.5; /* body copy */
 

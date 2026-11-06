@@ -1167,6 +1167,34 @@ A rendered module has the same obligation as a panel: on a real tenant page a
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
+- **W7. Outside a settings panel, a box is sized by what goes in it —
+  three sizes, picked by content.** *(UI normalization 6 of 10, task
+  86bcyrqbh, 2026-11-05: Training › Rules/Guides stretched three
+  percentage boxes holding "50", "40" and "10" across about 1,180px; Themes'
+  Theme name was about 400px; Outreach's Keywords ran the full width.)*
+  This is W3 made concrete, with names you can reuse:
+
+  | Box holds | Class | Token (`src/css/_variables.css`) | Room for |
+  |---|---|---|---|
+  | a number or percentage | `field-w-number` | `--field-w-number` | 6 characters |
+  | a name or title | `field-w-short` | `--field-w-short` | 24 characters |
+  | a list, a sentence, a web address | `field-w-long` | `--field-w-long` | 48 characters |
+
+  The classes live in `src/css/_forms.css` and add the box's own padding,
+  border and number arrows on top of the token, so the token reads as "room
+  for the text". Every size also caps at `max-width: 100%`, so nothing
+  overflows a phone. A component with its own stylesheet that cannot take
+  the class (Themes, Outreach) uses the token in its own rule —
+  `width: calc(var(--field-w-short) + 2rem)` — rather than a new number.
+
+  **Several short boxes share one row.** Wrap each label and its box in
+  `.short-field` and the group in `.short-fields-row`: the label sits beside
+  its box, the pairs run left to right and wrap onto the next line only when
+  the screen is too narrow. A short box never gets a row of its own just
+  because the form grid gave it one.
+
+  Inside a settings panel, W0's lattice still decides widths; W7 does not
+  apply there. — **[eye]**
 
 ## A — Overriding the theme
 
