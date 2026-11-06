@@ -88,6 +88,29 @@ guard, dry-run default, JSON backup of every page it will touch to
 - `locked` sections are never touched (content-fill convention, Phase 0
   §3b) — relevant when re-running onto existing imported pages.
 
+### Starting the build from the screen (task 86bcz9wcx, 2026-11-05)
+
+Builder › Site Import has **Preview Build** and **Build Draft Pages** buttons
+on a captured job; no agent session is needed. The website cannot run the
+mapper itself (backups go to local files, and the run outlives a request), so:
+
+1. The button calls `POST /api/site-import/jobs/:id/build` with
+   `{ mode: 'preview' | 'apply', noTheme }`, which only records
+   `checkpoints.build = { status: 'queued', … }`. Build refuses until a
+   preview exists whose fingerprint still matches the job (same captured IR,
+   no build since) — `lib/siteImportBuild.js`, `planBuildRequest`.
+2. The Mac Mini import worker's `--drain` (every 5 minutes) claims the request
+   with a compare-and-set on `checkpoints->build->>status`, runs
+   `scripts/site_import_map.mjs --job <id> [--apply] [--no-theme]
+   --result-file <tmp>` as a child process, and writes `status: done | failed`
+   with the result (pages, theme palette, warnings, what was applied) back.
+   A successful preview is also kept as `checkpoints.buildPreview`.
+3. A request still `running` after two hours is marked failed in words (the
+   worker stopped partway).
+
+Never publishes — the mapper's own guarantee, unchanged. By hand, the script
+still works exactly as before.
+
 ### Idempotent re-runs — and never clobbering human work
 
 The job row gains `checkpoints.map.pageIds` — `{ <writeKey>: <builderPageId> }`.
