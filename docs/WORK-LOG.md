@@ -1,3 +1,17 @@
+## 2026-11-05 — Short settings keep their label on the same row (#984)
+
+A setting you change with a dropdown, a tick box, a number or a colour now sits
+on one row with its label beside it, instead of a label line stacked over the
+control. A text box still takes its label on the line above, because it needs
+the width. On the CRM form editor that puts Label Align, Field Align and the
+Button choices on one row each, lined up like the colour rows. On Training, a
+label that ran five lines down beside its box now sits above it on one line,
+and percentage boxes are sized like numbers instead of stretching across the
+screen. Settings › Database gets the same tidy label column, and Builder ›
+Themes drops a second caption on its underline tick boxes that repeated the
+label and wrapped. Two dropdowns whose choices are long phrases keep their
+label above, because squeezing them beside it cut the words off. The rule is
+written up as L9 in `docs/UI_RULES.md`.
 ## 2026-11-05 — Section headings look the same on every editor screen (#978)
 
 Headings that do the same job came in four different looks: small spaced-out
