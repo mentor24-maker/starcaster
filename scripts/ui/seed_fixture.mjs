@@ -958,6 +958,12 @@ const buildTuned = (ids) => ({
       showForgotPassword: 'true', successRedirect: '/admin',
     },
   },
+  // Spirality Tasks (86bczt5t4): every setting non-default — a long heading
+  // sets the Content track, a named project, Submit Task OFF.
+  'spirality-tasks': {
+    name: 'Spirality Tasks (team page)',
+    settings: { heading: LONG, defaultProject: 'spirality', showSubmitTask: 'false' },
+  },
   'admin-nav-link': {
     name: 'Admin Link',
     settings: { linkText: LONG, linkHref: '/admin' },

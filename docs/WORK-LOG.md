@@ -11,6 +11,20 @@ without a Base size, so this cannot quietly break again.
 The text editor follows the same rule as the page: while you edit an Intro
 Copy or Caption module it no longer shows Base size either, so what you see
 while editing is what the live page shows.
+## 2026-11-08 — Spirality Tasks: a page for the team to sign in and work their Spirality tasks (#1002)
+
+A new Builder module for StarCaster's Spirality page. A teammate signs in
+with their Spirality account, joins from an invite email, sees a project's
+tasks grouped by status, opens one to read and reply, and files a new task.
+The review found four ways it could mislead someone, now fixed. Signing out
+only shows "signed out" if it really worked, so a shared computer is not left
+signed in. A board that will not load keeps the project picker and offers
+"Try again". An expired or used invite link says plainly to ask for a new
+invite — and only when Spirality itself says the link is spent, so a hiccup on
+our side no longer throws a good invite away, and someone already signed in
+is not nagged about it over their tasks. And a task or reply that was saved but could not be shown straight
+back no longer looks like a failure, which had invited filing it twice. It
+is not on any live page yet; it waits on Spirality's public address.
 ## 2026-11-08 — Saved modules can now be put into a table cell (#940)
 
 Inside a Table, the ⊕ "Add module to this cell" button opened the Module

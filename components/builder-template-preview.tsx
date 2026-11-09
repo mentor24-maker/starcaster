@@ -92,6 +92,7 @@ import {
   type CrmFormStylesEventDetail
 } from "./builder/builder-crm-form-module-settings";
 import { BugReportModule } from "./builder/builder-bug-report-module";
+import { SpiralityTasksModule } from "./builder/builder-spirality-tasks-module";
 import { parseBreadcrumbItems } from "./builder/builder-breadcrumb-module-settings";
 import {
   ADMIN_LOGIN_PATH,
@@ -3403,6 +3404,21 @@ function BuilderModulePreviewBody({
 
   if (module.type === "admin-nav-link") {
     return <AdminNavLinkPreview settings={module.settings} />;
+  }
+
+  if (module.type === "spirality-tasks") {
+    // Live: the real sign-in and tasks. Anywhere else: a still sample, which
+    // asks Spirality nothing (86bczt5t4). `liveSite` alone decides, not Bug
+    // Report's `&& !previewMode`: the preview's ?live=1 is meant to render
+    // exactly as a published page, and this module floats over nothing.
+    return (
+      <>
+        <SpiralityTasksModule settings={module.settings} liveSite={liveSite} projectId={projectId} />
+        <BuilderOnlyNote liveSite={liveSite}>
+          Sample tasks. On the live page your team signs in to Spirality here and sees their own.
+        </BuilderOnlyNote>
+      </>
+    );
   }
 
   if (module.type === "bug-report") {

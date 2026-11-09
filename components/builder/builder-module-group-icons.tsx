@@ -141,6 +141,13 @@ export const MODULE_GROUP_ICONS: Partial<Record<ModulePaletteGroup, ReactNode>> 
       <path d="M9.5 8.5a2.5 2.5 0 0 1 5 0" />
     </Icon>
   ),
+  // A task list: a ticked box over two lines.
+  "spirality-tasks": (
+    <Icon>
+      <rect x="3.5" y="4" width="17" height="16" rx="2" />
+      <path d="M7 9.5l1.6 1.6L11.5 8M13.5 9.5H17M7 15h10" />
+    </Icon>
+  ),
   // A contact record: person on a card.
   "crm-form": (
     <Icon>

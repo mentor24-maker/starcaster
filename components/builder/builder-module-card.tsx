@@ -137,6 +137,8 @@ import { BuilderAdminModulesModuleSettings } from "./builder-admin-modules-modul
 import { BuilderAdminLoginModuleSettings } from "./builder-admin-login-module-settings";
 import { BuilderAdminNavLinkModuleSettings } from "./builder-admin-nav-link-module-settings";
 import { BuilderBugReportModuleSettings } from "./builder-bug-report-module-settings";
+import { BuilderSpiralityTasksModuleSettings } from "./builder-spirality-tasks-module-settings";
+import { SpiralityTasksSample } from "./builder-spirality-tasks-module";
 import { BuilderAdminSiteSettingsModuleSettings } from "./builder-admin-site-settings-module-settings";
 import { BuilderAdminBlogLinksModuleSettings } from "./builder-admin-blog-links-module-settings";
 import { BuilderAdminRelatedArticlesModuleSettings } from "./builder-admin-related-articles-module-settings";
@@ -2565,6 +2567,18 @@ function renderModulePreview(module: BuilderTemplateModule) {
     );
   }
 
+  if (module.type === "spirality-tasks") {
+    // A still sample of the signed-in Tasks page: the canvas never asks Spirality anything.
+    return (
+      <div className="builder-module-preview-copy">
+        <SpiralityTasksSample settings={module.settings} />
+        <p className="builder-spirality-tasks__builder-note">
+          Sample tasks. On the live page your team signs in to Spirality here and sees their own.
+        </p>
+      </div>
+    );
+  }
+
   if (module.type === "bug-report") {
     const label = module.settings.labelText || "";
     const who = module.settings.visibility === "staff" ? "staff only" : module.settings.visibility === "clients" ? "signed-in clients" : "everyone";
@@ -3371,6 +3385,7 @@ export function BuilderModuleCard({
     const isAdminLoginModule = module.type === "admin-login";
     const isAdminNavLinkModule = module.type === "admin-nav-link";
     const isBugReportModule = module.type === "bug-report";
+    const isSpiralityTasksModule = module.type === "spirality-tasks";
     const isAdminSiteSettingsModule = module.type === "admin-site-settings";
     const isAdminSupportFormModule = module.type === "admin-support-form";
     const isAdminBlogLinksModule = module.type === "admin-blog-links";
@@ -3437,6 +3452,7 @@ export function BuilderModuleCard({
       isAdminTeamUsersModule ||
       isAdminModulesModule ||
       isAdminLoginModule ||
+      isSpiralityTasksModule ||
       isAdminNavLinkModule ||
       isAdminSiteSettingsModule ||
       isAdminSupportFormModule ||
@@ -3724,6 +3740,8 @@ export function BuilderModuleCard({
               <BuilderAdminLoginModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isBugReportModule ? (
               <BuilderBugReportModuleSettings module={module} onUpdateModule={onUpdateModule} />
+            ) : isSpiralityTasksModule ? (
+              <BuilderSpiralityTasksModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminNavLinkModule ? (
               <BuilderAdminNavLinkModuleSettings module={module} onUpdateModule={onUpdateModule} />
             ) : isAdminBlogLinksModule ? (
@@ -4335,6 +4353,8 @@ export function BuilderModuleCard({
           module.type !== "contact-form" &&
           module.type !== "crm-form" &&
           module.type !== "bug-report" &&
+          // Nothing reads `module.text` on Spirality Tasks; it draws from settings alone (E7).
+          module.type !== "spirality-tasks" &&
           module.type !== "player-portal" &&
           module.type !== "table" &&
           module.type !== "social" &&

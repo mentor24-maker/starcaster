@@ -38,7 +38,7 @@ function readBody(req) {
 }
 
 /** A tracker in the tracker's own shapes; `seen` records every request it got. */
-async function fakeTracker() {
+async function fakeTracker({ threadFails = false } = {}) {
   const seen = [];
   let failures = 0;
   const server = await listen(async (req, res) => {
@@ -63,6 +63,9 @@ async function fakeTracker() {
     if (req.url === '/account/forgot') return send(200, { sent: 'If that email has an account, a link to set a new password is on its way. It works for 1 hour.' });
     if (req.url === '/account/link') {
       if (body.link === 'used') return send(400, { error: 'used-link', message: 'That link has been used.' });
+      if (body.link === 'expired') return send(400, { error: 'expired-link', message: 'That link has expired.' });
+      if (body.link === 'unknown') return send(400, { error: 'unknown-link', message: 'That link is not one we sent.' });
+      if (body.link === 'garbled') return send(400, { error: 'bad-json', message: 'that body was not JSON.' });
       return send(200, { purpose: body.link === 'invite' ? 'invite' : 'reset', email: 'pat@example.com', expiresAt: '2026-11-07T00:00:00Z' });
     }
     if (req.url === '/account/set-password') {
@@ -84,6 +87,7 @@ async function fakeTracker() {
     if (req.url === '/projects/nope/board') return send(404, { error: 'unknown-project', message: 'no project "nope".' });
     if (req.url === '/projects/spirality/tickets' && req.method === 'POST') return send(201, { id: 'SP-10', name: body.name, status: 'requested' });
     if (/^\/tickets\/SP-\d+\/thread$/.test(req.url)) {
+      if (threadFails) return send(503, { error: 'busy', message: 'try again.' });
       return send(200, {
         id: req.url.split('/')[2], name: 'A new one', description: 'Words', project: 'spirality', projectName: 'Spirality',
         operator: { id: 1, name: 'Dane' }, mergePhrase: 'merge',
@@ -206,6 +210,25 @@ test('Submit Task files as Requested and answers with the new task\'s thread', a
   assert.deepEqual(filed.body, { name: 'Fix it', description: 'Please', status: 'Requested' });
 });
 
+test('a filed task whose read-back fails still answers 201 with its id, so the page never invites a duplicate', async (t) => {
+  const { b, tracker, close } = await setup({ threadFails: true });
+  t.after(close);
+  await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
+  const r = await b.call('POST', '/api/spirality/projects/spirality/tasks', { name: 'Fix it', description: 'Please' });
+  assert.equal(r.status, 201);
+  assert.deepEqual(r.json.data, { id: 'SP-10', threadUnavailable: true });
+  assert.equal(tracker.seen.filter((s) => s.url === '/projects/spirality/tickets').length, 1);
+});
+
+test('a posted reply whose read-back fails still answers 201, flagged so the page reloads the thread', async (t) => {
+  const { b, close } = await setup({ threadFails: true });
+  t.after(close);
+  await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
+  const r = await b.call('POST', '/api/spirality/tasks/SP-9/comments', { body: 'Thanks' });
+  assert.equal(r.status, 201);
+  assert.deepEqual(r.json.data, { id: 'SP-9', threadUnavailable: true });
+});
+
 test('a task opens its thread with each author named, and a reply posts as the person', async (t) => {
   const { b, tracker, close } = await setup();
   t.after(close);
@@ -232,6 +255,17 @@ test('tracker refusals pass through as their own plain message', async (t) => {
   assert.equal(locked.json.error.message, 'Too many tries for that email. Wait 15 minutes, then try again.');
   const link = await b.call('POST', '/api/spirality/link', { link: 'used' });
   assert.equal(link.json.error.message, 'That link has been used.');
+  // The tracker's three refusals of the link itself are one code to the page, LINK_SPENT.
+  assert.deepEqual(link.json.error, { message: 'That link has been used.', code: 'LINK_SPENT' });
+  for (const spent of ['expired', 'unknown']) {
+    const r = await b.call('POST', '/api/spirality/link', { link: spent });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.error.code, 'LINK_SPENT', spent);
+  }
+  // Any other 4xx from the tracker is NOT a spent link: the page must keep it.
+  const garbled = await b.call('POST', '/api/spirality/link', { link: 'garbled' });
+  assert.equal(garbled.status, 400);
+  assert.equal(garbled.json.error.code, 'bad-json');
   await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
   const unknown = await b.call('GET', '/api/spirality/projects/nope/tasks');
   assert.equal(unknown.status, 404);

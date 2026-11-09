@@ -155,7 +155,8 @@ export const BUILDER_MODULE_TYPES = [
   "admin-support-form",
   "admin-blog-links",
   "admin-related-articles",
-  "bug-report"
+  "bug-report",
+  "spirality-tasks"
 ] as const;
 
 export type BuilderTemplateModuleType = (typeof BUILDER_MODULE_TYPES)[number];
@@ -2651,7 +2652,8 @@ export function normalizeModuleType(value: unknown): BuilderTemplateModuleType {
     type === "admin-support-form" ||
     type === "admin-blog-links" ||
     type === "admin-related-articles" ||
-    type === "bug-report"
+    type === "bug-report" ||
+    type === "spirality-tasks"
   ) {
     return type;
   }
@@ -4578,6 +4580,14 @@ export function createEmptyModule(
                             popupTitle: "Report a problem",
                             promptPlaceholder: "What went wrong? What did you expect to happen?",
                             thankYouMessage: "Thanks — we got it."
+                          }
+                      : type === "spirality-tasks"
+                        ? {
+                            // Read by SpiralityTasksModule (builder-spirality-tasks-module.tsx),
+                            // edited by builder-spirality-tasks-module-settings.tsx (86bczt5t4).
+                            heading: "Tasks",
+                            defaultProject: "",
+                            showSubmitTask: "true"
                           }
           : {};
 
