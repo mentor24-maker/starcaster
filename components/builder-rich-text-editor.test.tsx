@@ -377,3 +377,24 @@ describe("BuilderRichTextEditor inside a <label>", () => {
     expect(emitted.at(-1)).toContain("<p>Big headline</p>");
   });
 });
+
+describe("BuilderRichTextEditor and the theme's Base size (86bczr7x7)", () => {
+  // The Base-size CSS reaches only an editor marked `-theme-body`; without the
+  // mark (Intro Copy, Caption, every other module's text) it must stay off.
+  async function mountWith(followsThemeBaseSize?: boolean) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+    await act(async () => {
+      root.render(<BuilderRichTextEditor value="<p>Body</p>" onChange={() => {}} followsThemeBaseSize={followsThemeBaseSize} />);
+    });
+    return container.querySelector(".builder-rich-text-content");
+  }
+
+  it("marks the editor as body copy only when asked to", async () => {
+    expect((await mountWith(true))?.classList.contains("builder-rich-text-content-theme-body")).toBe(true);
+    expect((await mountWith(false))?.classList.contains("builder-rich-text-content-theme-body")).toBe(false);
+    expect((await mountWith())?.classList.contains("builder-rich-text-content-theme-body")).toBe(false);
+  });
+});

@@ -40,6 +40,7 @@ import type {
   BuilderTemplateModule,
   BuilderTemplateModuleType
 } from "@/lib/builder-template";
+import { textModuleFollowsThemeBaseSize } from "@/lib/text-body-size";
 import {
   getBuilderBackgroundStyle,
   describeModuleTextOverflow,
@@ -4396,6 +4397,7 @@ export function BuilderModuleCard({
                   onChange={(value) => onUpdateModule((current) => ({ ...current, text: value }))}
                   themeColors={themeColors}
                   themeStyle={themeStyle}
+                  followsThemeBaseSize={textModuleFollowsThemeBaseSize(module.settings)}
                   {...richTextGalleryProps}
                 />
               ) : (

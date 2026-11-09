@@ -543,6 +543,70 @@ export const RENDER_DIFFERENTIALS = [
 export const RENDER_CONTRACTS = [
 
   /*
+   * THE THEME'S BASE SIZE REACHES BODY COPY (task 86bczr7x7).
+   *
+   * `--bx-size-base` was emitted onto the page from the day themes shipped and
+   * no stylesheet read it, so "Base size (px)" only ever moved the headings.
+   * Paragraphs are the half that is easy to miss: the admin-wide
+   * `p { font-size: 1.1rem }` pins every <p>, so a rule on the text container
+   * alone moves the list and the quote and leaves the paragraph where it was.
+   * The contract reads all three, and its partner pins the no-theme sizes so a
+   * theme with no Base size stays exactly what every client site renders now.
+   */
+  ...[
+    { label: 'follows-the-theme-base-size', baseSize: 20, want: '20px' },
+    { label: 'is-unchanged-with-no-base-size', baseSize: 0, want: null },
+  ].map(({ label, baseSize, want }) => ({
+    id: `paragraph-text-${label}`,
+    why:
+      'Builder › Themes "Base size (px)" did nothing to paragraph text on client sites — only the ' +
+      'headings changed (86bczr7x7). Set, it must size the paragraph, the list and the quote; unset, ' +
+      'body copy must render exactly as it did before the fix.',
+    section: {
+      layout: 'single',
+      documentTheme: {
+        typography: {
+          fonts: { heading: '', body: '', mono: '' },
+          scale: { baseSize, ratio: 0, baseLineHeight: 0 },
+          colors: { text: '', heading: '', muted: '', link: '', linkHover: '', selection: '' },
+          elements: {},
+        },
+      },
+      modules: [{
+        type: 'text',
+        text: '<p>Body copy paragraph.</p><ul><li>A list item.</li></ul><blockquote>A quoted line.</blockquote>',
+        settings: { variant: 'paragraph' },
+      }],
+    },
+    selector: '.builder-preview-text p',
+    read: ['fontSize'],
+    series: {
+      count: 1, everyMs: 0, read: ['fontSize'],
+      selectors: { li: '.builder-preview-text li', quote: '.builder-preview-text blockquote' },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0] || {};
+      const sizes = { paragraph: sample.styles.fontSize, 'list item': frame.li?.fontSize, quote: frame.quote?.fontSize };
+      const missing = Object.entries(sizes).filter(([, v]) => !v).map(([k]) => k);
+      if (missing.length) return `the ${missing.join(' and ')} did not render, so its size could not be read.`;
+      if (want) {
+        const wrong = Object.entries(sizes).filter(([, v]) => v !== want);
+        return wrong.length
+          ? `with Base size ${baseSize}px the ${wrong.map(([k, v]) => `${k} is ${v}`).join(', ')} — not the theme's ${want}.`
+          : null;
+      }
+      // No Base size: the sizes every client site renders today — the global
+      // 1.1rem paragraph and the 16px the list and quote inherit.
+      const before = { paragraph: '17.6px', 'list item': '16px', quote: '16px' };
+      const wrong = Object.entries(sizes).filter(([k, v]) => v !== before[k]);
+      return wrong.length
+        ? `with no Base size set, body copy changed size: ${wrong.map(([k, v]) => `${k} is ${v}, was ${before[k]}`).join('; ')}.`
+        : null;
+    },
+  })),
+
+
+  /*
    * A PADDED COLUMN IN A STACKED ROW FITS THE SCREEN (task 86bc3y0ue).
    *
    * Stacked columns get `width: 100%` below 1024px. As content-box, the

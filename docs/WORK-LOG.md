@@ -1,3 +1,16 @@
+## 2026-11-06 — A theme's "Base size" now changes paragraph text, not just headings (#1001)
+
+On Builder › Themes, the "Base size (px)" box only ever changed the headings:
+the theme passed the number to the page, but nothing on the page used it, so
+setting it to 18 to make body text bigger did nothing. Now paragraphs, bullet
+lists and quotes in Paragraph text take that size, on the live site and in the
+text editor. A theme with Base size left empty looks exactly as it did — no
+client site changes size — and Intro Copy, Caption and Simple Text keep their
+own sizes. An automatic browser check now measures paragraph text with and
+without a Base size, so this cannot quietly break again.
+The text editor follows the same rule as the page: while you edit an Intro
+Copy or Caption module it no longer shows Base size either, so what you see
+while editing is what the live page shows.
 ## 2026-11-08 — Spirality Tasks: a page for the team to sign in and work their Spirality tasks (#1002)
 
 A new Builder module for StarCaster's Spirality page. A teammate signs in

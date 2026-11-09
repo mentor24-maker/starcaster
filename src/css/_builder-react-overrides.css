@@ -331,6 +331,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   line-height: var(--bx-line-base, 1.65);
 }
 
+/* The theme's Base size, so the editor shows body copy at the size the page
+   will (task 86bczr7x7; the page rule is in _builder-theme.css). ONLY on an
+   editor marked `-theme-body` — a Paragraph text module or a blog post body —
+   because the page sizes nothing else with it: an Intro Copy or Caption editor
+   that took the Base size showed a size its live page never would (review
+   round 1 on this task). Which editors carry the class is
+   `textModuleFollowsThemeBaseSize` (lib/builder-client/text-body-size.ts).
+   `1em` is what it inherits today, so an editor with no theme vars is unchanged. */
+.builder-react-root .builder-rich-text-content-theme-body .ProseMirror {
+  font-size: var(--bx-size-base, 1em);
+}
+
+/* The <p> needs its own: the admin-wide `p` rule (1.1rem, `--text-lg`) pins every
+   paragraph, so the container size above reaches lists and quotes only. */
+.builder-react-root .builder-rich-text-content-theme-body .ProseMirror p {
+  font-size: var(--bx-size-base, var(--text-lg));
+}
+
 /* RTE headings — size, color, font from theme.
    Selectors match Normie's .ProseMirror h* specificity so source-order wins.
    Fallbacks provide visual hierarchy even when no theme scale is configured. */

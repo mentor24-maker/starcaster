@@ -32,6 +32,35 @@
   line-height: var(--bx-line-base, 1.6);
 }
 
+/* THE THEME'S BASE SIZE (Builder › Themes › "Base size (px)") — body copy.
+ *
+ * `getThemeRootVars` has emitted `--bx-size-base` since the theme shipped, and
+ * until 2026-11-06 nothing read it: the box only fed the heading scale, so a
+ * theme set to 18 left every paragraph exactly where it was (task 86bczr7x7).
+ *
+ * Two rules because there are two sizes in play. Lists and quotes inherit the
+ * container. Paragraphs do NOT — the admin-wide `p` rule (1.1rem, `--text-lg`)
+ * (_typography.css) pins every <p> regardless of its parent, so a container
+ * size alone changes lists and leaves paragraphs untouched. Each fallback is
+ * what renders today (container: its inherited size, `1em`; p: that global
+ * `--text-lg`), so a theme with no Base size set changes nothing.
+ *
+ * Paragraph text only (the `paragraph` variant, the legacy unset one, and the
+ * blog post body). Intro Copy and Caption are deliberately larger / smaller
+ * than body copy and keep their own sizes; Simple Text takes its section's.
+ * A size picked in the toolbar is an inline style on a span and still wins.
+ *
+ * The three exclusions are TEXT_VARIANTS_WITH_OWN_SIZE
+ * (lib/builder-client/text-body-size.ts), which also decides which editors
+ * show the Base size; its test fails if the two lists part ways. */
+.builder-react-root .builder-preview-shell .builder-preview-text:not(.builder-preview-text-intro):not(.builder-preview-text-caption):not(.builder-preview-text-plain) {
+  font-size: var(--bx-size-base, 1em);
+}
+
+.builder-react-root .builder-preview-shell .builder-preview-text:not(.builder-preview-text-intro):not(.builder-preview-text-caption):not(.builder-preview-text-plain) p {
+  font-size: var(--bx-size-base, var(--text-lg));
+}
+
 /* THE GAP BETWEEN PARAGRAPHS, which is a different quantity from the gap
  * between the lines inside one — and on a stack of one-line paragraphs (a
  * footer link column) it is the only gap there is, so no line-height can
