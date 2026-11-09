@@ -86,6 +86,7 @@ const themeUsage  = require('./themeUsage');
 const builderPageLinks = require('./builderPageLinks');
 const fonts       = require('./fonts');
 const publicSite  = require('./publicSite');
+const spirality   = require('./spirality');
 
 // Route modules are tried in order — first match wins.
 // Put more specific / higher-traffic modules first.
@@ -162,6 +163,7 @@ const ROUTE_MODULES = [
   eventCategories,
   eventHarvest,
   publicSite,
+  spirality,
 ];
 
 function maskSecret(value) {
@@ -313,6 +315,12 @@ async function handleRequest(req, res) {
   const isPublicCrmRoute = isPublicCrmRouteForAuth(pathname, method);
   const isPublicTenantReadRoute = isPublicTenantContentReadRoute(pathname, method, req);
   const isPublicSiteRoute = pathname.startsWith('/api/public/');
+  // SECURITY EXEMPTION: the Spirality Tasks module runs on a client's public
+  // site, where a visitor has no StarCaster login. routes/spirality.js grants
+  // nothing by itself: every call but sign-in and the emailed-link calls
+  // forwards the visitor's own Spirality session, and the tracker checks it.
+  // The project comes from the site's host binding, never the page alone.
+  const isSpiralityRoute = pathname === '/api/spirality' || pathname.startsWith('/api/spirality/');
   // SECURITY EXEMPTION: an invited person has no account yet, so checking
   // their invitation link cannot require a session. Read-only, token-keyed,
   // and answers only with the invited email and project name — the same
@@ -401,6 +409,7 @@ async function handleRequest(req, res) {
     && !isPublicContactSubmit
     && !isPublicCrmRoute
     && !isPublicSiteRoute
+    && !isSpiralityRoute
     && !isInviteVerifyRoute
     && !hasPublicTenantReadAccess
     && !authUser
