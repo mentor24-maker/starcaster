@@ -116,7 +116,8 @@ const buildTuned = (ids) => ({
         { id: 'home', label: 'Home', href: '/' },
         { id: 'play', label: 'Play', href: '/play' },
         { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
-        { id: 'about', label: 'About', href: '/about' },
+        // One New tab row, so the Opens In column holds both choices (86bcxur55).
+        { id: 'about', label: 'About', href: '/about', target: '_blank' },
       ]),
       navDirection: 'horizontal', navDropdownStyle: 'list', navLevels: '2',
       navItemSizing: 'auto', menuName: 'Main Menu', menuLocation: 'primary',
@@ -788,6 +789,17 @@ const buildTuned = (ids) => ({
       verticalAlignment: 'center',
       dropShadow: 'true', dropShadowColor: '#0b2a4a',
       dropShadowX: '2', dropShadowY: '2', dropShadowBlur: '4',
+      // The editor reads `settings.headlines`, not `text` — without this the
+      // panel showed "No headlines yet" and check:panels never saw the table
+      // (task 86bcxu518, review round 1). One headline links to the fixture's
+      // longest-named page (does the name squeeze the Headline column?), one
+      // to a short page, and one is a typed address, so the Custom… box is on
+      // screen.
+      headlines: JSON.stringify([
+        { id: 'hl-long', label: LONG, href: '/meet-brent-wellman-junior-tennis-director-of-delray-champions-junior-tennis-high-performance-in-delray', color: '#0b2a4a' },
+        { id: 'hl-page', label: 'Eight clay courts, open to the public', href: '/course-fees', color: '#0b2a4a' },
+        { id: 'hl-typed', label: 'Junior camps all summer', href: 'https://shop.example.com/summer-camps', color: '#0b2a4a' },
+      ]),
     },
   },
 
@@ -829,7 +841,9 @@ const buildTuned = (ids) => ({
   },
   merch: { name: 'Merch', text: LONG },
   'contact-form': { name: 'Contact Form (legacy)', text: LONG },
-  'player-portal': { name: 'Player Portal', text: LONG },
+  // A typed Redirect path (the default, which no page has), so the picker's
+  // Custom… box is on screen (task 86bcxu518, review round 1).
+  'player-portal': { name: 'Player Portal', text: LONG, settings: { redirectPath: '/portal/dashboard' } },
   'previous-results': { name: 'Previous Results', text: LONG },
   'current-poll': {
     name: 'Current Poll',
@@ -1172,7 +1186,7 @@ const buildPanelCheckSection = (ids) => {
             { id: 'home', label: 'Home', href: '/', width: '25' },
             { id: 'play', label: 'Play', href: '/play', width: '25' },
             { id: 'book', label: 'Book a Court', href: '/book', parentId: 'play' },
-            { id: 'about', label: 'About', href: '/about', width: '25' },
+            { id: 'about', label: 'About', href: '/about', width: '25', target: '_blank' },
           ]),
         },
       };

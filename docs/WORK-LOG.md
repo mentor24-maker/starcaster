@@ -1,3 +1,621 @@
+## 2026-11-06 — AI-made videos are saved as files, not inside the database (#999)
+
+Every video made with Assets › Video › Create used to be stored inside the
+database as a long block of text, about 30 MB a clip. Twelve of them made the
+assets table thirty times its proper size, and one look at them restarted the
+live database this morning, briefly taking client sites down. Now a finished
+video is uploaded to file storage and the database keeps only its address. If
+the video cannot be saved, the job says "failed" and why, instead of claiming
+success with a stand-in clip. The database also now refuses any asset whose
+address is really a whole file, whichever screen sends it, and the asset list
+and the "is my video ready?" check read far less on every load.
+## 2026-11-06 — A plan for the text editor: keep it, and make it match the theme (#998)
+
+Two text-editor bugs in one morning raised the question of whether to keep
+the editor StarCaster uses (TipTap, a free editing kit) or build our own. A new
+page, `docs/RICH_TEXT_EDITOR_PLAN.md`, answers it with measurements rather than
+opinion. The real editor and the real live page were put side by side in a
+browser with the same theme and the same text, and they disagreed in 14 places:
+body text shows grey while you type but the theme's colour on the site, links
+look like plain text, and headings and lists are spaced differently. Every
+difference came from our own stylesheets, which keep two hand-maintained copies
+of "how text looks", and none came from TipTap. So the plan recommends keeping the editor and
+connecting it properly to the theme, in five slices. The first takes a day: one
+shared set of text rules, plus a browser check that fails if the two ever
+drift apart again. Nothing is built until Dane picks.
+
+## 2026-11-06 — Page editor arrows wait for the page before they can be clicked (#996)
+
+When a page opened in the Builder page editor, the round green arrows on
+Page Details, Publish, Page History and Workspace could be clicked before the
+page had arrived, and opening Workspace early showed an empty or half-filled
+workspace. Now each of those four shows a small turning ring in place of the
+arrow until the page is in, and the bar ignores clicks; then the arrows come
+back exactly as they were. If the page fails to load, the rings stop and the
+arrows return, so nothing can spin forever. With "reduce motion" turned on,
+the ring shows but holds still. No other arrow in the Builder changed.
+## 2026-11-06 — Every editor listed against the new look, with what is still different (#993)
+
+The clean-up of how StarCaster's screens look has been done one theme at a
+time — heading sizes, one title row, button colours, tabs, box widths. Nobody
+had gone screen by screen to see what is still left. A new page,
+`docs/UI_NORMALIZATION.md`, now does that for every editor in the admin app
+and the Builder: one line each saying what still differs and how big the fix
+is. It also names five shared causes that would fix most screens at once if
+changed in one place (for example, a plain heading is the same 24px as the
+page title). It was measured after all ten normalization changes had landed, including
+the three newest ones (labels beside short settings, one table look with
+headings that stay put, and messages in one strip). It ends with ten
+questions only Dane can answer, such as where Save belongs on a screen with
+one column. Nothing on screen changed.
+## 2026-11-05 — Imported blog posts no longer turn the old site's comment box into a one-checkbox form (#991)
+
+When Site Import met a WordPress "Leave a Reply" box on a blog post, it rebuilt
+it as a form with a single "save my name" checkbox and a Submit Comment button
+that collected nothing. The cause: the old site's theme hides the box labels and
+shows grey hint text instead, and the importer took a hidden label as the mark
+of a robot trap, so it threw away the real Name, Email, Website and Comment
+boxes. That rule is gone, and a comment box is now recognised for what it is and
+left as a picture captioned "a blog comment box — Starcaster blog posts have
+their own comments". Checked against all 197 forms in recent imports: only the
+16 comment boxes (Strands and Dane of Earth posts) read differently.
+## 2026-11-05 — Form boxes, buttons and table headings are a little shorter (#992)
+
+Dane asked for 2px less padding at the top and bottom of every form box,
+button and table heading row on the admin screens, because together they were
+costing a lot of scrolling. Each one is now 4px shorter: buttons go from 36px
+to 32px (small ones 28px to 24px), form boxes lose 4px, and the black heading
+row at the top of every table (plus the filter and bulk-action row above it)
+loses 4px. Each size is now one setting in one place, so the next adjustment is
+a single edit. Clients' live sites use the same stylesheet, so they are
+deliberately set back to the old sizes: nothing a visitor sees has changed.
+The square icon buttons in tables stay the size they were.
+## 2026-11-05 — Test links for signed-in screens now actually let Dane sign in (#985)
+
+Every test link the review lane handed Dane was a Vercel preview, and none of
+them could be signed into — previews have no database, so every sign-in said
+"Invalid email or password" and looked like a wrong password. Now, when a test
+needs anything behind the sign-in, the review lane starts the branch on the
+Mac Mini against its own local copy of the data and gives him a link like
+`http://mac-mini.local:3071`, the local sign-in (`mentor24@gmail.com` /
+`localdev123`), and the exact clicks. Public pages can still use the preview.
+The app also used to mistake `mac-mini.local` for a client's website address
+and refuse to show the admin app there; it now treats it like `localhost`.
+
+## 2026-11-05 — Short settings keep their label on the same row (#984)
+
+A setting you change with a dropdown, a tick box, a number or a colour now sits
+on one row with its label beside it, instead of a label line stacked over the
+control. A text box still takes its label on the line above, because it needs
+the width. On the CRM form editor that puts Label Align, Field Align and the
+Button choices on one row each, lined up like the colour rows. On Training, a
+label that ran five lines down beside its box now sits above it on one line,
+and percentage boxes are sized like numbers instead of stretching across the
+screen. Settings › Database gets the same tidy label column, and Builder ›
+Themes drops a second caption on its underline tick boxes that repeated the
+label and wrapped. Two dropdowns whose choices are long phrases keep their
+label above, because squeezing them beside it cut the words off. The rule is
+written up as L9 in `docs/UI_RULES.md`.
+## 2026-11-05 — Long tables keep their column headings on screen (#986)
+
+Builder › Pages ran to about 5,000 pixels tall for a site with 83 pages, and
+by the time you scrolled down to the page you wanted, the Name / Slug /
+Published headings had long gone off the top. Now every admin table stops at
+the height of the screen: the rows scroll inside it and the black heading bar
+stays pinned at the top. Short tables look exactly as before. Rows are also a
+little tighter on every table. Training's two tables were drawing their
+headings in black on the black bar, so nobody could read them; they now use
+the same table style as everything else. On Pages, the "Published" heading
+was cut off and the red Delete button hung off the right edge, and both now
+fit. The rule is written up as T11 in `docs/UI_RULES.md`.
+
+## 2026-11-05 — Page Details buttons no longer cover the bar's ▼ on a narrow window (#990)
+
+In the Builder page editor, on a phone-width browser window, the Preview, Save
+as Template and Save Page buttons were drawn on top of the blue Page Details
+bar, hiding its title and the ▼ that collapses the panel — so the panel could
+not be closed. The bar now always keeps room for its title and ▼, and the
+buttons sit beside it, stacking onto extra lines when space runs out. On a
+normal desktop window nothing changes. Same fix the Pages bar just above it got
+in #972.
+## 2026-11-05 — Messages show once and no longer cover the screen (#988)
+
+Every message in the admin app used to appear twice — a floating box and a pink
+bar stuck to the bottom of the screen — and that bottom bar sat over the last
+rows of tables on Pages, Training and Themes even when it was empty. Now there
+is one message strip just under the top menu. It is part of the page, so it
+pushes things down instead of covering them; errors stay until you close them
+with ×, and "saved"-type messages close by themselves after four seconds. The
+rule is written down so later screens use the same strip.
+## 2026-11-05 — Site Import pages can be built from the screen (#987)
+
+Until now, a site copied by Site Import sat at "Captured — pages not built yet"
+until an agent session ran the build script by hand. PressPlay was stuck there.
+The import screen now has two buttons. **Preview Build** asks the Mac Mini's
+import worker (which already checks every five minutes) to rehearse the build.
+The screen then shows which pages it will create or update, the theme it will
+make with its colours as swatches, and any warnings. **Build Draft Pages** only
+works once a preview exists and the import has not changed since; it makes the
+pages as drafts, with an optional "Skip the theme" box. The status line says
+waiting, building or built, and a failure says why in words. Nothing is ever
+published.
+
+## 2026-11-05 — Each thing is shown once: one projects list, no buttons back to the same screen, a compact Builder landing (#989)
+
+Your projects used to be listed three times — the table on Settings › Projects,
+a "Your Projects" card under that same table, and "My Projects" on Profile.
+Now the table is the only list; Profile has a link to it, and the card's
+"Active Project" picker went too, since each row's Set Active button already
+did that job. Settings › Projects also lost its "Back To Projects" button
+(you were already there); in the Create Project panel the same button now
+says Cancel, which is what it does. A search for any other button that leads
+to its own screen found one more — the Docs page's "Docs" tile — and removed
+it. The Builder landing page was a 560px-tall box with five link words
+scattered in it; it is now one row of five outlined tiles. The two rules are
+written down (UI_RULES S7 and S8) so later screens follow them.
+
+## 2026-11-05 — Buttons that do the same job now look the same on every admin screen (#979)
+
+Buttons used to be black on most screens, white or blue on the Builder, green
+on Themes, and small black or grey on Training — for the same jobs — and they
+ran from 29px to 50px tall. Now the colour tells you what a button does:
+outlined white for an ordinary action (Back, Cancel, Refresh), blue for the
+screen's one main action (Create Page, Create Project, Add Contact), green for
+Save, red for Delete. There are two heights only, normal and small. On the way,
+Training's per-row Edit and Delete buttons, which had been white text on a white
+row and so invisible, became visible. The rule is written down (UI_RULES C9) so
+the other screens in the UI normalization series reuse it.
+
+A review caught one thing before it merged: every button had started fading
+to 80% when you pointed at it, which undid the solid blue hover asked for on
+2026-08-30. A second review found the Builder's own buttons on Themes (Theme
+Wizard, New, Create, Choose Image) still faded, and a third found the older
+"ghost" buttons (Cancel, Close, Clear, Choose From Gallery) had stopped
+reacting to the pointer at all. Those now darken on hover and grey out when
+unavailable, small buttons grey out instead of fading, and an Upload button
+that sat 2px taller than its neighbours is the same height. Buttons now change
+colour on hover and never fade, on every admin screen.
+## 2026-11-05 — Short values get short boxes (#983)
+
+Several admin screens stretched a box across the whole screen even when it only
+ever holds a couple of characters. On Training › Rules/Guides the three
+reply-mix percentages ("50", "40", "10") each ran about 1,180 pixels wide on
+rows of their own; now they sit side by side on one row, each about six
+characters wide, with the Total beside them. The Theme name box on Builder ›
+Themes and the Keywords box on Engage › Outreach are now sized for what goes in
+them too. The rule is written down for the next screen to reuse: three box
+sizes — a number, a short name, a longer list or sentence — and short boxes
+share a row. None of them can overflow a phone screen.
+## 2026-11-05 — Section headings look the same on every editor screen (#978)
+
+Headings that do the same job came in four different looks: small spaced-out
+capitals on Builder › Themes, rounded pill badges on the Builder's page editor
+panels, plain bold on the CRM form editor, and big card titles on Settings. Now
+every one uses one of the three sizes the CRM form editor set yesterday — a
+card or panel's title, a group inside it, and one setting's label — in the same
+weight and the same dark ink, on Themes, the page editor, Settings › Profile
+and Projects, and Engage › Outreach. The pill style is kept where it belongs:
+the same style also draws poll and player-card headers on clients' websites,
+and those are untouched. The rule is written up as R12 in `docs/UI_RULES.md`
+so the next screens in the series reuse it.
+## 2026-11-05 — Switching views looks the same everywhere: one tab style (#981)
+
+Changing view used to look like three different controls: CRM had
+underlined text tabs, Outreach had faded grey pills, and the Builder
+Workspace's Templates / Modules / Pages looked exactly like Save and Cancel
+buttons, so picking a view felt like pressing an action. Now every one of
+them — plus the tabs on the Substack, Reddit and YouTube outreach screens,
+whose selected tab was a big blue action button — is the same plain text on
+an underline, with the selected one in blue. Tab reaches each one and Enter
+picks it. The rule is written down as C9 in the UI rules so new screens use
+it too.
+
+## 2026-11-05 — Sites imported before the form fix can get their working forms too (#982)
+
+Sites copied in before today's form fix (#974) still show a picture of each
+sign-up form. The import tool now has a "forms only" pass that goes back over
+pages an import already built and swaps just those pictures for working forms,
+without re-copying the site or touching anything else on the page. If somebody
+has changed or removed one of those pictures, it is left alone and named. Each
+page is backed up first and checked after it is saved. Afterwards it puts back
+live only the pages that were already live and had no other unpublished
+changes, so nobody's half-finished edits go public by accident. A practice run
+on a copy of the live data found the Strands sign-up form on two pages, built
+it, and reported "nothing to change" when run a second time. Strands' home page
+already had unpublished edits, so that one waits for Dane to publish.
+
+## 2026-11-05 — Imported sites get working sign-up forms instead of a picture of one (#974)
+
+When Site Import copied a site, any sign-up or contact form came across as a
+screenshot: it looked right but nobody could type into it. Now the import
+rebuilds each form as a real Starcaster form under Contacts › Forms and puts a
+working Form on the draft page where the picture used to be. It is careful with
+the client's existing setup. It only ever adds questions their contact list is
+missing and never changes ones already there. A sign-up that appears on several
+pages becomes one form used on all of them. Importing again updates that form
+rather than making a second copy, and if somebody has edited the form by hand
+since — even just its button colour — the import leaves it alone. A site search box or a sign-in form still
+comes across as a picture, with a note saying why. The import report now has a
+Forms section listing what was rebuilt and what was left out, such as spam traps
+and the old plugin's internal fields. Strands Movie gets its form in the next
+ticket.
+## 2026-11-05 — Importing a site again updates the pages it made the first time, instead of adding a second set (#975)
+
+Before this, importing a site a second time and building pages from it made a
+whole second copy of the site beside the first: every page again at a "-2"
+address, plus a second Top Menu. Now building from the new copy updates the
+pages the first import made. A section you changed after the first import is
+left alone and listed as one you edited. Menus are updated rather than doubled,
+and the new import theme is made without replacing the site's current default
+look. Every run now opens with one line saying what it will do: "Refreshing N
+pages built by the import of <site> on <date>; M sections you edited will be
+kept; K new pages." The Import again prompt on the Site Import screen says the
+same. Tried against a copy of the Delray site: 59 pages refreshed, none
+duplicated, and the 116 sections edited by hand all kept.
+## 2026-11-05 — The Workspace's Pages buttons stay inside their bar again (#972)
+
+In Builder › Workspace, the Pages bar's Archive, Bulk Create and New Page
+buttons had been squeezed into a box too small for them, so they hung off
+the right edge of the bar and sat on top of the green ▶ button that opens
+the Pages panel, which then could not be clicked. The box now grows to fit
+its buttons, lined up with the Preview / Save buttons in the row below, and
+on a narrow screen the buttons drop onto a second line instead of spilling
+out.
+
+## 2026-11-05 — Every admin screen now starts with one title row (#977)
+
+Admin screens each began a little differently: some had a sentence under the
+title and some didn't, two used their own bigger title size, and Builder ›
+Workspace stacked two titles ("Builder: Workspace" with "Page Builder" under
+it). Now every screen starts the same way: one title, that screen's buttons on
+the same row, and at most one short line of small grey text saying what the
+screen is for. The Workspace has a single title beside its buttons. Four long
+explanations were split so only their first sentence sits under the title; the
+rest is still there, just below. This is item 2 of the 10 UI normalization
+changes, and the rule is written down (R11 in docs/UI_RULES.md) so the
+remaining screens follow it.
+## 2026-11-05 — Settings › Profile shows its boxes at full width again (#971)
+
+On the Profile screen every box was about 100 pixels wide, the "Primary
+Contact Name (defaults to account)" label was stacked on five lines, and the
+profile picture sat on top of the fields. The cause was one misplaced style:
+the "label on the left, box on the right" layout was applied to the whole form
+instead of just the column of fields, so the entire form — fields and picture
+together — was squeezed into the narrow label column. Now the fields column
+gets that layout, the boxes are about 640 pixels wide on a laptop screen, the
+long labels fit on two lines, the picture sits to the right, and on a narrow
+window it drops neatly below the fields.
+
+## 2026-11-05 — Publish box in the Builder: Check no longer covers the open/close arrow (#973)
+
+In the Builder's Pages workspace, the Publish box's header had room for one
+button but holds two, so the Check button slid left and sat on top of the
+small round pale-red arrow that opens and closes the box. The blue strip
+across the top also stopped short of the right edge. The button area now
+grows to fit both buttons and the blue strip runs the full width, with the
+arrow, Check and Publish side by side on it.
+## 2026-11-05 — The admin header is one thin row now, giving every screen back about 140px (#976)
+
+Every admin screen used to open with a large StarCaster logo band and a separate
+menu bar beneath it: 199px of black at the top of a laptop window before any
+work appeared. The logo, the menu, your name with Logout, and the Projects button
+now share one 57px row. Every dropdown still opens, and a very long name or a
+project without a logo ends in "…" instead of pushing the row onto two lines.
+On a phone the menu folds behind a Menu button rather than stacking fourteen
+items down the screen. The rule is written down (UI_RULES S6) so the other
+nine screens in the UI normalization series build on it.
+
+## 2026-11-05 — Importing a site again now recognises every section, whatever order the pages are found in (#970)
+
+Site Import gives every section it builds a name, so that importing the same
+site again can find that section and update it instead of adding a second copy.
+The name used to begin with the page's place in the crawl ("the third page
+found"), and a second crawl finds pages in a different order. On wavecenter.com
+every section on the three pages that moved got a new name: only 24 of 42
+matched. The name now begins with the page's address, such as /sign-in, which
+doesn't change, and both wavecenter copies now match 42 of 42. Sites imported
+before this keep working too. When a re-import meets sections built under the
+old names, it recognises them and renames them in place. Without that step the
+four sites already imported would have gained 425 duplicate sections; with it
+they gain none, and any section somebody has edited stays protected. This is
+the groundwork for "Import again" updating a site rather than copying it twice.
+
+## 2026-11-04 — Site Import can read what an imported form asks (#965)
+
+When Site Import copies a site, any sign-up or contact form it finds has so
+far been kept only as a picture, plus the form's original code tucked away
+in the background. Nothing could read that code. Now something can: it works
+out each question the form asks, what kind of answer it wants (an email, a
+phone number, a pick-one list…), which ones are required, the choices, and
+what the button says — and it lists, in plain words, everything it chose to
+leave out, such as hidden spam traps and the original site's internal codes.
+Search boxes, sign-in forms and payment forms are recognised and left alone.
+On Strands Movie's home page it reads the real form as four questions — email,
+first name, last name and "What is the main skill you bring to the team?" with
+its eleven choices — under a "Join the Crew!" button. Nothing on any site
+changes yet; the next ticket uses this to put working forms where the
+pictures are.
+## 2026-11-04 — Form embed code and preview show choice questions as choices (#969)
+
+A form question set to "Choose one", "Choose several" or "Dropdown list
+(choose several)" turned into an empty text box in two places: the embed code
+a client pastes onto an outside website, and the preview beside the form
+editor. A visitor on that outside site could not pick anything. Now the embed
+writes real round buttons or tick boxes with the client's options, an ordinary
+dropdown carries its options too, and the preview shows the same choices. On
+the way we found the embed was also throwing away all but the last ticked box
+when a visitor ticked several; it now sends them all.
+## 2026-11-04 — The CRM form editor's headings now come in three clear sizes (#967)
+
+On the screen where you build a CRM form, the column headings, the sections
+inside them and the individual settings were all about the same size, so
+everything ran together. Now there are three steps: big column titles
+(including a new "Form Actions" title over the first column), slightly
+smaller bold section names like Border and Button, and one bold size for
+every setting label, so Padding and Margin finally match Border Size. The
+three sizes are saved as named settings and written down as a rule, so the
+next editor screens in this clean-up series use exactly the same ones. To
+keep every label on one line, "Field Alignment" now reads "Field Align", and
+the "(optional …)" notes moved onto their own small line under the label.
+## 2026-11-04 — Forms get a dropdown where visitors can pick several answers (#968)
+
+Forms can now ask a question as a **Dropdown list (choose several)**. It looks
+like the ordinary dropdown, but clicking it opens a short list with a tick box
+beside each choice; the visitor ticks as many as they like, and once the list
+closes the box shows what they picked, such as "Writing, Music". It works with
+the keyboard alone, a required one will not let the form go until something is
+ticked, and the contact record saves the answer as plain text just like the
+tick-box questions added earlier today. The old dropdown is now called
+**Dropdown list (choose one)** in the list of field types so the two read as a
+pair; existing forms are unchanged. That completes the four multiple-choice
+types: dropdown (one), dropdown (several), round buttons, and tick boxes.
+
+## 2026-11-04 — Site Import no longer copies the same site twice (#966)
+
+One project ended up with two imports of wavecenter.com — one typed with
+"www." and one without — and when the import worker came back on it copied the
+whole site a second time while another import waited 31 hours behind it.
+Nothing noticed they were the same site. Now the Site Import screen refuses a
+site that is already waiting or being imported in the same project, and says
+so in plain words. A site that was already imported and finished gets a
+question instead — "already imported on Nov 4, import it again?" — with an
+Import again button, because a site can change. The worker also checks before
+it starts anything, so a duplicate that was already in the line is marked as
+not started, with the reason, instead of being copied again.
+## 2026-11-04 — Forms can show multiple-choice questions as visible choices (#964)
+
+Until now a form could only ask a multiple-choice question as a dropdown menu,
+where the visitor has to click to see the choices. There are now two more
+question types: **Choose one**, which shows round buttons where picking one
+un-picks the others, and **Choose several**, which shows tick boxes. Both use
+the same Options box a dropdown does (choices separated by commas). When
+someone ticks several boxes, the contact record, the alert email and the
+visitor's confirmation all show the answer as plain text, like "Writing,
+Music". A question left with no choices is not shown on the live site, so
+visitors never see an empty question. This is the first step towards imported
+sites (Strands Movie's sign-up form first) getting real, working forms instead
+of a picture of one.
+
+## 2026-11-04 — The request log no longer grows forever (#959)
+
+Every time anyone used the app, the database wrote down "a request happened"
+in a log table, and nothing ever cleared it. By today it held 652,161 rows,
+which made it the biggest table and the one doing the most disk reading on the
+smallest database size Supabase offers. That size gets a small daily allowance
+of disk reading, and running out of it is what makes the admin app and client
+sites time out. Now an hourly cleanup deletes those request rows once they are
+more than 30 days old. It takes small bites, so working through the backlog
+takes a few days and does not use up the allowance itself. The AI-spend
+records kept in the same table are never touched. Whether to move up from the
+smallest database size is still Dane's call, on Supabase's billing screen.
+
+## 2026-11-03 — Renaming a page no longer breaks breadcrumbs, rotating headlines, the sign-in redirect or blog-manager links (#956)
+
+Five more settings only had a box to type a page's address into: a
+Breadcrumb's crumbs, a Headline Rotator's headline links, the Player Portal
+sign-in's "Redirect path", and the Blog Links Manager's "Blog Manager page"
+and "Post view page". Rename the page and those links broke. Each now has the
+same page list the Button and the site menu got: pick a page and the link
+follows it when its address changes, while "Custom…" still takes any typed
+address and old links keep working as they were. The weekly broken-link check
+and the page-delete warning now look at these too. Building it turned up that
+the Breadcrumb module never actually shows on a live site at all; that has
+its own ticket. Review sent it back once: in the Headline Rotator, choosing
+"Custom…" drew the typed-address box as a large empty square, and the Player
+Portal's Redirect path sat out of line with its row. Both now look like every
+other field, and the test page used to check settings panels now carries
+headlines, so that check can see this table.
+## 2026-11-04 — Menu links can now open in a new tab (#957)
+
+Each link in a site's menu has a new "Opens In" choice in the Builder: Same
+tab or New tab. Pick New tab and that menu item opens its page in a new
+browser tab on the live site — in the top bar, in drop-down and mega menus,
+and in the phone menu alike. Every menu that already exists stays on Same tab
+and behaves exactly as before. "New window" is not offered, because browsers
+open these links as tabs anyway and forcing a separate window gets stopped by
+pop-up blockers.
+## 2026-11-04 — The Breadcrumb module now shows up on the live site (#958)
+
+The Breadcrumb module — the little "Home › Programs › Court Fees" trail that
+tells a visitor where they are — could be added and set up in the Builder, but
+the page itself never drew it, so a published page had an empty gap where the
+trail should be. It now appears on the live site and in Preview: every crumb
+but the last is a link, the last one is the page you are on, and the size,
+bold, colours, separator and alignment you choose in the panel all apply. A
+crumb picked from your page list follows that page if it is renamed. An empty
+Breadcrumb shows nothing to visitors, and tells whoever is building the page
+to add items. No live page used this module yet, so nothing on any client's
+site changes until someone adds one.
+## 2026-11-03 — The floating Save Page button no longer follows you to other screens (#949)
+
+After you left Builder > Pages for another screen — Contacts, a CRM form — the
+green floating Save Page button could stay on screen, hovering mid-right, even
+several screens later. The editor is kept open in the background when you
+switch screens, and the button had no way to tell its screen was gone. It now
+checks whether its own screen is showing and hides the moment you leave; back
+on Builder > Pages it works exactly as before, and the saved-section editor's
+Save Section button still appears. A first version of this fix left 18px of
+blank space under the page editor; that is gone too.
+
+## 2026-11-03 — Renaming a page no longer breaks links typed inside a text block (#955)
+
+The Link button in a text block or heading used to pop up a box asking for an
+address, so a link to one of your own pages was a copy of its address — and
+renaming that page broke it. The Link button now opens a small panel with two
+choices: "A page on this site", picked from your page list, or "A web
+address", typed as before. A picked page is remembered by the page itself, so
+the link follows the page when its address changes; if the page is deleted,
+the link keeps the address it was saved with and the panel says so. Every link
+saved before this keeps working exactly as it did. Links typed into text
+before today stay ordinary addresses: the one-time upgrade script had already
+run and been removed (#954), so they start following their page once someone
+re-picks them in the new panel. While building this, a hidden fault in the menu/card change
+(#948) turned up: a list setting holding text with one of these links would
+have been garbled when shown. That is fixed here, before anything could
+trigger it.
+## 2026-11-03 — The form editor's styling settings get their own column beside the preview (#952)
+
+On CRM: Edit Form, the Settings column held both the form's own settings and
+every styling control (background, border, heading, labels and fields,
+button), so it was a long scroll and the colours you were changing sat far
+from the preview showing them. The page now has four columns — Settings, Form
+Fields, Styles, Preview — with all the styling in the new Styles column right
+beside the preview. Nothing about what a setting does or how a form saves
+changed. On a medium-width window the columns sit two per row, and on a narrow
+one, one per row.
+
+## 2026-11-03 — Deleting a page now warns you about links still pointing to it, and client sites are checked weekly (#951)
+
+Renaming a page can no longer break a link to it, but deleting one still could,
+with no warning. Now, when you delete a page on Builder › Pages and any button,
+menu item or form still points to it, the confirm box lists each one by name
+(for example *Header › Menu item "About", shown on 12 pages*) and the button
+says Delete Anyway. A page nothing links to asks exactly what it always did.
+As a backstop, a weekly check reads every client site (it never changes
+anything) and rewrites one ClickUp ticket, "Broken links on client sites",
+listing every link that goes to a page that doesn't exist. Dane is assigned
+only while it lists something. Its first dry run found 40 such links on six
+sites, mostly menu items typed as addresses like /projects or /blog that no
+page has.
+
+## 2026-11-03 — Renaming a page no longer breaks the site menu, cards, slides or image links (#948)
+
+A site's menu, its feature cards, carousel slides, an image's link, a galaxy's
+link, a blog post card and "redirect after create" only had a box to type an
+address into. Rename the page that address pointed at and the menu link broke
+on every page of the site. Each of them now has the same page list the Button
+got in #947: pick one of your pages and the link remembers the page itself, so
+it follows the page when its address changes. "Custom…" still takes any typed
+address, and every link saved before this keeps working exactly as it did.
+Two things are not done yet and each has its own ticket: links typed inside a
+text block, and the one-time upgrade of links saved before these changes,
+which has to wait until this is live and needs a machine that can reach the
+live database.
+Two more fixes came out of review: a site exported to WordPress now gets the
+page's current address for a menu link picked this way (it used to write the
+internal page code instead), and the "create pages from a menu" screen reads
+those links correctly too. Breadcrumbs, rotating headlines, the player sign-in
+redirect and the Blog Links Manager's links are next, on their own ticket.
+## 2026-11-03 — Renaming a page no longer breaks the buttons and links that point to it (#947)
+
+When you pick one of your own pages in a Builder setting — a Button's Link,
+the "target page" of a search, blog or event module, the page an admin is sent
+to after signing in, a table cell image's link — the setting used to save a
+copy of that page's address. Rename the page or change its address and every
+one of those copies kept pointing at the old address, so the button broke on
+the live site and the picker showed it as "Custom…". Now the setting remembers
+the page itself, and the live site looks up the page's current address every
+time it is shown. If the page is deleted, the link falls back to the address
+it was saved with, and the picker says the page no longer exists. Links saved
+before this keep working exactly as they did; a one-time upgrade for those
+runs once this is live. Menus and links typed into text are the next ticket.
+## 2026-11-03 — A form's "after submit" page now follows the page when it is renamed (#946)
+
+When a website form was set to send visitors to a page after they submit, it
+quietly saved a copy of that page's address. Rename the page and the form kept
+sending people to the old, dead address. The form editor also had a page list
+and an address box that could disagree, and could refuse to save when Dane
+switched DEO's "Request White Paper" form over to a page. Now "After submit"
+has three plain choices — show the message, go to a page on this site, or go
+to a web address — and choosing a page stores the page itself, not its
+address; the address is looked up fresh every time someone submits. If the
+page is deleted, the editor says so and visitors see the success message
+instead of an error page. The rule — link to our own records by reference,
+never by a copied address — is now written into the project's doctrine.
+
+## 2026-11-03 — Each website form can alert its own team addresses, with its own subject (#944)
+
+Every form on a client's site used to alert the same people — the one Contact
+Alert Email in Settings — with the same subject line. Now each form's editor
+(CRM › Forms › Edit) has a "Team alerts" section: a list of addresses to alert
+for that form, and an optional subject that can include what the visitor typed,
+like their first name. Leave it blank and the form alerts the Settings address
+exactly as before, so nothing changes on existing sites. Every alert now says
+which form it came from, and the alert addresses are never shown to the public.
+## 2026-11-03 — Website forms can email the visitor a "we got your message" confirmation (#945)
+
+Each CRM form now has a "Confirmation email" section in its editor. Switch it
+on, write a subject and a message, and the visitor gets that email after they
+submit — with their own details filled in where the message says
+`{{first_name}}` or `{{email}}`. Replies go to the team's Contact Alert Email.
+It only sends when the visitor gave an email address, a form without an Email
+field cannot have it switched on, and a mail problem never stops the
+submission from being saved. Forms nobody changes send nothing, as before.
+Because anyone on the internet can submit a form, the confirmation is also
+rationed: one per email address an hour and five per visitor's connection an
+hour. Past that the email is quietly skipped but the submission still goes
+through, so nobody can use a form to have our sending domain spam strangers.
+The confirmation also only goes to ONE ordinary email address: if the Email
+box holds a list of addresses, or a name with an address in angle brackets,
+no confirmation is sent (the submission is still saved), so the ration
+cannot be dodged by typing forty strangers into one box.
+## 2026-11-02 — Studio: the Mac Mini deletes a video's downloaded original once it is ready (#939)
+
+Every uploaded video is downloaded onto the Mini so the Studio can measure it
+and make a smaller working copy. Until now the original was never deleted
+afterwards, so the Mini's disk filled until new uploads stopped downloading.
+Now the Mini deletes the original once the video is ready. The working copy
+stays, and the original is still in Google Drive. If a later step ever needs
+the original again, the Mini downloads it from Drive again instead of
+marking the video as failed. A half-hourly sweep clears the originals that
+were already there: about 7 GB of the 9.6 GB on the Mini today. The rest are
+small clips whose original is their working copy, so they stay. The same
+change fixes a crash in the path that handles a video replaced in Drive.
+## 2026-11-02 — Website forms keep every submission, and each form lists its own (#943)
+
+When someone filled in a website form with an email that was already in the
+contact list, their message used to be thrown away — only the alert email ever
+saw it. Now every submission is kept, including a returning visitor's second
+and third messages, along with which form and which page it came from. The
+contact list still shows that person once, and their contact now says which
+form brought them in. In CRM › Forms each form shows how many submissions it
+has, and a new Submissions button lists them, newest first. This needs one new
+database table, which has to be added on the live site before the change goes
+out.
+
+## 2026-11-02 — Website forms show their own thank-you message, and can send visitors to a thank-you page (#941)
+
+The "Success Message" typed in a CRM form's editor now actually shows on the
+live site; before, every visitor saw the same fixed sentence whatever the editor
+said. A failed submit now shows the form's own "Error Message" instead of a
+technical error. And each form has a new "After submit" choice: keep showing the
+message, or send the visitor to a page such as a Thank You page, picked from the
+site's pages or typed as an address. The setting is kept inside what a form
+already stores, so no database change was needed. Forms nobody changes behave as
+before. Keeping every submission, per-form team alerts and a confirmation email
+to the visitor are their own tickets now.
+## 2026-11-02 — Reel Spinner: one recording that will not save no longer ties up the Mini (#942)
+
+The Mini's video worker had been stuck on one 106-minute recording for two
+days: the transcript would not save, so it tried again every 15 minutes, and
+each try redid a 14-minute transcription first. Everything else waited behind
+it. Now the error says the actual reason instead of just "fetch failed". When
+only the save fails, the finished transcription is kept, so the next try just
+saves it. And if one recording's save fails four times in a row while other
+recordings save fine, that recording is set aside with the reason and the queue
+moves on. If every save is failing, which is a real outage, no recording is
+blamed and they all simply wait. The cut-finding step got the same treatment.
+
 ## 2026-11-02 — Reel Spinner: the Mac Mini now finds what to cut in every recording by itself (#938)
 
 The rules from the last step now run on real footage, with nobody starting

@@ -186,7 +186,7 @@ export function BuilderModuleClassesPanel() {
                       <>
                         <button
                           type="button"
-                          className="btn btn-primary btn-sm"
+                          className="btn btn-save btn-sm"
                           onClick={() => handleUpdate(cls.id)}
                         >
                           Save

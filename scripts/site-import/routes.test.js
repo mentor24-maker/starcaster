@@ -137,3 +137,119 @@ test('unknown subpath 404s; foreign prefix is not handled', async () => {
   const untouched = await route.handle(makeReq(), makeRes(), '/api/other', 'GET');
   assert.equal(untouched, false);
 });
+
+// --- Same site already in this project (task 86bcynqrt) -------------------
+
+const WAVE_DONE = {
+  ...JOB, id: 'simp_wave', sourceUrl: 'https://www.wavecenter.com/', status: 'complete',
+  checkpoints: {}, createdAt: '2026-10-13T12:00:00Z', finishedAt: '2026-11-05T00:51:00Z',
+};
+
+function postJob(listed, body) {
+  const { route, calls } = loadRoute({
+    listJobs: async (projectId) => { calls.push(['listJobs', projectId]); return { ok: true, status: 200, data: listed }; },
+  });
+  const res = makeRes();
+  return route.handle(makeReq({ body }), res, '/api/site-import/jobs', 'POST').then(() => ({ res, calls }));
+}
+
+test('POST /jobs: a site still waiting is refused with DUPLICATE_ACTIVE and no row is created', async () => {
+  const waiting = { ...WAVE_DONE, status: 'queued', finishedAt: null, createdAt: '2026-11-02T12:00:00Z' };
+  const { res, calls } = await postJob([waiting], { sourceUrl: 'wavecenter.com', confirmReimport: true });
+  assert.equal(res.statusCode, 409);
+  const err = res.json().error;
+  assert.equal(err.code, 'DUPLICATE_ACTIVE');
+  assert.match(err.message, /www\.wavecenter\.com is already being imported for this project \(waiting since Nov 2, 2026\)\. Nothing new was started\./);
+  assert.equal(err.details[0].jobId, 'simp_wave');
+  assert.equal(calls.some(([n]) => n === 'createJob'), false);
+});
+
+test('POST /jobs: a finished site is refused with DUPLICATE_COMPLETE unless confirmed', async () => {
+  const { res, calls } = await postJob([WAVE_DONE], { sourceUrl: 'https://wavecenter.com' });
+  assert.equal(res.statusCode, 409);
+  const err = res.json().error;
+  assert.equal(err.code, 'DUPLICATE_COMPLETE');
+  assert.match(err.message, /www\.wavecenter\.com was already imported for this project on Nov 4, 2026\. Import it again\? Building from the new copy updates the pages that import made\. Sections you have edited are kept\./);
+  assert.equal(calls.some(([n]) => n === 'createJob'), false);
+});
+
+test('POST /jobs: a confirmed re-import is created and records reimportOf', async () => {
+  const { res, calls } = await postJob([WAVE_DONE], { sourceUrl: 'https://wavecenter.com', confirmReimport: true });
+  assert.equal(res.statusCode, 201);
+  const created = calls.find(([n]) => n === 'createJob');
+  assert.deepEqual(created[1].checkpoints, { reimportOf: 'simp_wave' });
+});
+
+test('POST /jobs: an earlier failed or cancelled import does not block', async () => {
+  const failed = { ...WAVE_DONE, status: 'failed' };
+  const cancelling = { ...WAVE_DONE, id: 'simp_c', status: 'queued', finishedAt: null, checkpoints: { cancelRequested: true } };
+  const { res, calls } = await postJob([failed, cancelling], { sourceUrl: 'wavecenter.com' });
+  assert.equal(res.statusCode, 201);
+  assert.equal(calls.find(([n]) => n === 'createJob')[1].checkpoints, undefined);
+});
+
+test('POST /jobs: the same site in another path is not a duplicate', async () => {
+  const { res } = await postJob([WAVE_DONE], { sourceUrl: 'https://wavecenter.com/blog' });
+  assert.equal(res.statusCode, 201);
+});
+
+test('POST /jobs: if the project\'s imports cannot be read, nothing is created', async () => {
+  const { route, calls } = loadRoute({
+    listJobs: async () => ({ ok: false, status: 503, error: 'down' }),
+  });
+  const res = makeRes();
+  await route.handle(makeReq({ body: { sourceUrl: 'wavecenter.com' } }), res, '/api/site-import/jobs', 'POST');
+  assert.equal(res.statusCode, 503);
+  assert.equal(calls.some(([n]) => n === 'createJob'), false);
+});
+
+// ---- POST /jobs/:id/build (task 86bcz9wcx) --------------------------------
+
+const CAPTURED_JOB = {
+  ...JOB,
+  status: 'complete',
+  checkpoints: { normalize: { at: '2026-11-05T10:00:00.000Z', blobPath: 'https://blob/ir.json' } },
+};
+
+async function postBuild(job, body) {
+  const { route, calls } = loadRoute({ getJob: async () => ({ ok: true, status: 200, data: structuredClone(job) }) });
+  const res = makeRes();
+  await route.handle(makeReq({ body }), res, '/api/site-import/jobs/simp_1/build', 'POST');
+  return { res, calls };
+}
+
+test('POST /build: a preview is queued on the job for the worker, nothing else written', async () => {
+  const { res, calls } = await postBuild(CAPTURED_JOB, { mode: 'preview' });
+  assert.equal(res.statusCode, 202);
+  const update = calls.find(([n]) => n === 'updateJob');
+  assert.equal(update[2].checkpoints.build.status, 'queued');
+  assert.equal(update[2].checkpoints.build.mode, 'preview');
+  assert.equal(update[2].checkpoints.normalize.blobPath, 'https://blob/ir.json', 'other checkpoints kept');
+  assert.deepEqual(Object.keys(update[2]), ['checkpoints']);
+});
+
+test('POST /build: build without a preview is refused and writes nothing', async () => {
+  const { res, calls } = await postBuild(CAPTURED_JOB, { mode: 'apply' });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error.code, 'PREVIEW_REQUIRED');
+  assert.equal(calls.some(([n]) => n === 'updateJob'), false);
+});
+
+test('POST /build: build after a matching preview is queued with the theme choice', async () => {
+  const { buildFingerprint } = require('../../lib/siteImportBuild.js');
+  const job = {
+    ...CAPTURED_JOB,
+    checkpoints: { ...CAPTURED_JOB.checkpoints, buildPreview: { at: 'x', fingerprint: buildFingerprint(CAPTURED_JOB) } },
+  };
+  const { res, calls } = await postBuild(job, { mode: 'apply', noTheme: true });
+  assert.equal(res.statusCode, 202);
+  const build = calls.find(([n]) => n === 'updateJob')[2].checkpoints.build;
+  assert.equal(build.mode, 'apply');
+  assert.equal(build.noTheme, true);
+});
+
+test('POST /build: a job that has not finished copying is refused', async () => {
+  const { res } = await postBuild({ ...JOB }, { mode: 'preview' });
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error.code, 'NOT_CAPTURED');
+});

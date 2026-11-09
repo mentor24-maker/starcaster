@@ -81,6 +81,29 @@ const NAV_SUBMENU_ITEMS = JSON.stringify([
   { id: 'p2', label: 'Normie', href: '/normie', parentId: 'proj' },
 ]);
 
+/**
+ * Judge for the Opens In contracts (86bcxur55): each named link either opens
+ * in a new tab (target="_blank" AND rel="noopener noreferrer") or carries no
+ * target at all. A link that did not render is a failure, never a pass.
+ */
+function expectMenuTargets(want) {
+  return (sample) => {
+    const frame = sample.series?.[0] || {};
+    const wrong = [];
+    for (const [name, newTab] of Object.entries(want)) {
+      const link = frame[name];
+      if (!link) { wrong.push(`the "${name}" link did not render, so how it opens could not be read`); continue; }
+      if (newTab) {
+        if (link.target !== '_blank') wrong.push(`the "${name}" item is set to New tab but its link has target=${JSON.stringify(link.target)}`);
+        else if (link.rel !== 'noopener noreferrer') wrong.push(`the "${name}" item opens a new tab without rel="noopener noreferrer" (rel=${JSON.stringify(link.rel)})`);
+      } else if (link.target != null || link.rel != null) {
+        wrong.push(`the "${name}" item is Same tab but its link carries target=${JSON.stringify(link.target)} rel=${JSON.stringify(link.rel)}`);
+      }
+    }
+    return wrong.length ? `${wrong.join('; ')}.` : null;
+  };
+}
+
 /** A theme with a button pair per ground (86bctakk0). The plain pair is navy,
  *  which vanishes on a dark row — so only the per-ground pair can pass there. */
 const SURFACE_BUTTON_PALETTE = {
@@ -982,6 +1005,147 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
+    why:
+      'A "Choose one" question (task 86bcynjv7) shows every choice on the page as a round button, ' +
+      'so an imported form looks like the original instead of hiding 11 choices in a dropdown. ' +
+      'Three ways it fails unseen: an option missing, the buttons not sharing one `name` (then ' +
+      'several can be picked and the answer is whichever posted last), or the generic form rule ' +
+      'that makes every input 100% wide and 42px tall stretching each button across the column. ' +
+      'The form is served from a fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_choices' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_choices/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_choices',
+          heading: 'Join the crew',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          fields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'skill', label: 'Main skill', type: 'radio', required: true, options: ['Acting', 'Writing', 'Music', 'Camera'] },
+            // After the radio group on purpose: every selector below takes the FIRST match.
+            { key: 'enjoys', label: 'Also enjoys', type: 'checkboxes', required: false, options: ['Writing', 'Music', 'Film'] },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true },
+    // The fieldset itself is `display: contents` (it joins the form's grid), so
+    // it has no box; the choices container is what occupies the page.
+    selector: '.builder-crm-form-choice-field .builder-crm-form-choices',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['type', 'name', 'value'],
+      selectors: {
+        legend: '.builder-crm-form-choice-field > legend',
+        choices: '.builder-crm-form-choice-field .builder-crm-form-choices',
+        o1: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(1) input',
+        o2: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(2) input',
+        o3: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(3) input',
+        o4: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(4) input',
+        o5: '.builder-crm-form-choices > .builder-crm-form-choice:nth-child(5) input',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no "Choose one" fieldset rendered — the radio field was dropped or drawn as something else.';
+      const f = sample.series?.[0];
+      if (!f) return 'no series frame was taken — the contract measured nothing.';
+      if (!f.legend) return 'the question has no <legend> — its label is missing, or it is not a fieldset.';
+      const opts = [f.o1, f.o2, f.o3, f.o4];
+      const missing = opts.findIndex((o) => !o);
+      if (missing !== -1) return `option ${missing + 1} of 4 rendered no input — every configured choice must be on the page.`;
+      if (f.o5) return 'a fifth input rendered for a question with four options — something is adding choices.';
+      const types = opts.map((o) => o.type);
+      if (types.some((t) => t !== 'radio')) return `the choices rendered as ${types.join(', ')} — expected four radio buttons.`;
+      const names = new Set(opts.map((o) => o.name));
+      if (names.size !== 1 || !names.has('skill')) {
+        return `the four buttons carry names ${[...names].join(', ')} — they must share the field's one name ("skill") or more than one can be picked.`;
+      }
+      const values = opts.map((o) => o.value).join(', ');
+      if (values !== 'Acting, Writing, Music, Camera') return `the buttons answer ${values} — expected the options in order.`;
+      const wide = opts.find((o) => o.width > 40 || o.height > 40);
+      if (wide) return `a radio button is ${Math.round(wide.width)}×${Math.round(wide.height)}px — the generic "every input fills its column" rule is stretching it.`;
+      return null;
+    },
+  },
+  {
+    id: 'crm-form-choose-several-dropdown-keeps-two-choices-and-shows-both-when-closed',
+    why:
+      'A "Dropdown list (choose several)" question (task 86bcynpyf) is a button that opens a list of ' +
+      'tick boxes. Ticking two and clicking away must leave BOTH chosen and the closed box must name ' +
+      'both ("Writing, Music"). Ways it fails unseen: the list closing on the first tick (so a second ' +
+      'cannot be reached — the click below then fails), the second tick replacing the first, the ' +
+      'closed box still saying "Select…", or the list never closing. The form is served from a ' +
+      'fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_multiselect' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_multiselect/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_multiselect',
+          heading: 'Join the crew',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          fields: [
+            { key: 'email', label: 'Email', type: 'email', required: true },
+            { key: 'enjoys', label: 'Also enjoys', type: 'multiselect', required: true, options: ['Writing', 'Music', 'Film'] },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true },
+    // Open it, tick the first two, then click the heading — outside the list.
+    click: [
+      '.builder-crm-form-multiselect-button',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(1) input',
+      '.builder-crm-form-multiselect-list > .builder-crm-form-choice:nth-child(2) input',
+      '.builder-contact-form-heading',
+    ],
+    selector: '.builder-crm-form-multiselect-button',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['aria-expanded'],
+      selectors: {
+        button: '.builder-crm-form-multiselect-button',
+        list: '.builder-crm-form-multiselect-list',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no "choose several" dropdown rendered — the field was dropped or drawn as something else.';
+      const f = sample.series?.[0];
+      if (!f || !f.button) return 'no series frame was taken — the contract measured nothing.';
+      if (f.list) return 'the list of tick boxes is still open after clicking outside it.';
+      if (f.button['aria-expanded'] !== 'false') return `the closed button says aria-expanded="${f.button['aria-expanded']}" — it must report itself closed.`;
+      if (sample.text !== 'Writing, Music') {
+        return `the closed box reads "${sample.text}" after ticking Writing and Music — expected "Writing, Music" (both kept, in option order).`;
+      }
+      if (sample.box.height < 30 || sample.box.width < 120) {
+        return `the closed box is ${sample.box.width}×${sample.box.height}px — it should be drawn like the single dropdown, filling the field column.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-centered-sits-in-the-middle-of-its-column',
     why:
       'A Button set to Centered sat at the left edge of every page (task 86bcg6j0z, operator ' +
@@ -1016,6 +1180,269 @@ export const RENDER_CONTRACTS = [
       return Math.abs(offset) <= 2
         ? null
         : `a button set to Centered sits ${Math.round(offset)}px off the middle of its column (button ${Math.round(sb.left)}-${Math.round(sb.right)}, column ${Math.round(ab.left)}-${Math.round(ab.right)}) — its Alignment is not reaching the wrapper.`;
+    },
+  },
+  {
+    id: 'button-linked-to-a-renamed-page-follows-it',
+    why:
+      'A Button whose Link was picked from the page list saved a COPY of the page\'s address, so ' +
+      'renaming the page left the button pointing at the old address — a 404 on the live site, and ' +
+      '"Custom…" in the picker (task 86bcxmrw2, operator 2026-11-03). The picker now stores the page ' +
+      'by id. This stores a reference whose saved address is the OLD one and says the page now lives ' +
+      'at a new address: the link must go to the new one.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'See the menu', settings: { href: 'page:4242|/old-menu' } }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-button',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { button: 'a.builder-preview-button' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.button;
+      if (!frame) return 'the button did not render as a link at all, so where it points could not be read.';
+      if (frame.href === '/menu-v2') return null;
+      if (frame.href === '/old-menu') return 'the button still points at the page\'s OLD address (/old-menu) — the reference was not resolved to where the page lives now.';
+      return `the button points at ${JSON.stringify(frame.href)}, expected "/menu-v2" (the renamed page's current address).`;
+    },
+  },
+  {
+    id: 'button-linked-to-a-deleted-page-uses-its-saved-address',
+    why:
+      'The other half of the same rule: when the page a button linked to is gone, the button keeps ' +
+      'the address it was saved with rather than going nowhere (task 86bcxmrw2).',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'button', text: 'Old page', settings: { href: 'page:777|/was-here' } }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-button',
+    read: ['display'],
+    series: { count: 1, everyMs: 0, read: ['display'], attrs: ['href'], selectors: { button: 'a.builder-preview-button' } },
+    expect(sample) {
+      const frame = sample.series?.[0]?.button;
+      if (!frame) return 'the button did not render as a link at all, so where it points could not be read.';
+      return frame.href === '/was-here'
+        ? null
+        : `a button whose page was deleted points at ${JSON.stringify(frame.href)}, expected its saved address "/was-here".`;
+    },
+  },
+  {
+    id: 'menu-item-linked-to-a-renamed-page-follows-it',
+    why:
+      'A navigation menu item had only a typed address box, so renaming a page broke the site menu ' +
+      'on every page (task 86bcxmt5x). Menu items now store a picked page by id, inside the menu\'s ' +
+      'list of items. This saves a reference whose address is the OLD one, a typed address and an ' +
+      'external link, and says the page now lives somewhere new: the picked item must follow the ' +
+      'page, and the other two must be left exactly as typed.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'navigation',
+        settings: {
+          navItems: JSON.stringify([
+            { id: 'picked', label: 'Menu', href: 'page:4242|/old-menu' },
+            { id: 'typed', label: 'Typed', href: '/typed-path' },
+            { id: 'gone', label: 'Gone', href: 'page:777|/was-here' },
+            { id: 'ext', label: 'Shop', href: 'https://shop.example.com/' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.site-nav-link',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: '.site-nav a.site-nav-link:nth-of-type(1)',
+        typed: '.site-nav a.site-nav-link:nth-of-type(2)',
+        gone: '.site-nav a.site-nav-link:nth-of-type(3)',
+        ext: '.site-nav a.site-nav-link:nth-of-type(4)',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the menu did not render a link at all, so where it points could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      // The preview page serves internal links as static files ("/x.html"),
+      // so the suffix is not part of what this measures.
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} item points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (frame.picked.href === '/old-menu') wrong.unshift('the picked menu item still points at the page\'s OLD address — the reference inside the menu was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  /*
+   * MENU ITEMS THAT OPEN IN A NEW TAB — 86bcxur55.
+   *
+   * Dane, 2026-11-03: "Each menu item in the menu module needs a target
+   * setting." Every link a menu draws — a plain top-level link, a drop-down
+   * trigger, a drop-down child, a mega panel's heading and links — reads the
+   * one helper, navLinkTargetProps. These read the attributes off the real
+   * links: New tab items must carry target="_blank" WITH rel (or the opened
+   * page can reach back into the client's site), and Same tab items — which
+   * is every menu saved before the setting existed — must carry neither.
+   */
+  ...[
+    { id: 'menu-item-new-tab-opens-in-a-new-tab', emulate: undefined, where: 'at desktop width', anchor: '.site-nav-link' },
+    // On a phone the links sit folded behind the hamburger until it is
+    // tapped, so the contract stands on the hamburger and reads the links
+    // (attributes need no box) out of the same DOM the tap reveals.
+    { id: 'menu-item-new-tab-opens-in-a-new-tab-on-a-phone', emulate: { viewport: { width: 390, height: 900 } }, where: 'in the phone menu', anchor: '.site-nav-toggle' },
+  ].map(({ id, emulate, where, anchor }) => ({
+    id,
+    why:
+      `A menu item set to Opens In: New tab must open in a new tab ${where}, for a top-level link, a ` +
+      'drop-down trigger and a drop-down child, and an item left on Same tab must not (task 86bcxur55). ' +
+      'This reads target and rel off each rendered link.',
+    ...(emulate ? { emulate } : {}),
+    module: {
+      type: 'navigation',
+      settings: {
+        navItems: JSON.stringify([
+          { id: 'same', label: 'Home', href: '/' },
+          { id: 'ext', label: 'Shop', href: 'https://shop.example.com/', target: '_blank' },
+          { id: 'proj', label: 'Projects', href: '/projects', target: '_blank' },
+          { id: 'kid-new', label: 'Store', href: 'https://store.example.com/', parentId: 'proj', target: '_blank' },
+          { id: 'kid-same', label: 'Normie', href: '/normie', parentId: 'proj' },
+        ]),
+      },
+    },
+    selector: anchor,
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        same: '.site-nav-items > a.site-nav-link:nth-of-type(1)',
+        ext: '.site-nav-items > a.site-nav-link:nth-of-type(2)',
+        trigger: '.site-nav-dropdown > .site-nav-dropdown-trigger',
+        kidNew: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(1)',
+        kidSame: '.site-nav-dropdown-menu .site-nav-dropdown-item:nth-of-type(2)',
+      },
+    },
+    expect: expectMenuTargets({ same: false, ext: true, trigger: true, kidNew: true, kidSame: false }),
+  })),
+  {
+    id: 'menu-item-new-tab-opens-in-a-new-tab-in-a-mega-panel',
+    why:
+      'A mega menu draws its links through a different component from the plain drop-down — its ' +
+      'trigger, column headings and column links — so the Opens In setting has to reach those too ' +
+      '(task 86bcxur55).',
+    module: {
+      type: 'navigation',
+      settings: {
+        navDropdownStyle: 'mega',
+        navItems: JSON.stringify([
+          { id: 'play', label: 'Play', href: '/play', target: '_blank' },
+          { id: 'col', label: 'Courts', href: '/courts', parentId: 'play' },
+          { id: 'book', label: 'Book', href: 'https://book.example.com/', parentId: 'col', target: '_blank' },
+          { id: 'fees', label: 'Fees', href: '/fees', parentId: 'col' },
+        ]),
+      },
+    },
+    selector: '.site-nav-mega',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['target', 'rel'],
+      selectors: {
+        trigger: '.site-nav-mega-trigger > a.site-nav-link',
+        heading: 'a.site-nav-mega-heading',
+        book: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(2)',
+        fees: '.site-nav-mega-column a.site-nav-mega-link:nth-of-type(3)',
+      },
+    },
+    expect: expectMenuTargets({ trigger: true, heading: false, book: true, fees: false }),
+  },
+  {
+    id: 'headline-rotator-link-to-a-renamed-page-follows-it',
+    why:
+      'A Headline Rotator headline had only a typed link box, so renaming the page it pointed at ' +
+      'broke the link on the live site (task 86bcxu518). A picked page is now stored by id inside ' +
+      'the rotator\'s list of headlines. This saves a reference whose address is the OLD one, a ' +
+      'typed address, a deleted page and an external link, and says the page now lives somewhere ' +
+      'new: the picked headline must follow the page, and the other three must be left as saved.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'headline-rotator',
+        settings: {
+          headlines: JSON.stringify([
+            { id: 'picked', label: 'Picked', href: 'page:4242|/old-menu' },
+            { id: 'typed', label: 'Typed', href: '/typed-path' },
+            { id: 'gone', label: 'Gone', href: 'page:777|/was-here' },
+            { id: 'ext', label: 'Shop', href: 'https://shop.example.com/' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: '.builder-preview-headline-rotator',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: '.builder-preview-headline-rotator > a:nth-of-type(1)',
+        typed: '.builder-preview-headline-rotator > a:nth-of-type(2)',
+        gone: '.builder-preview-headline-rotator > a:nth-of-type(3)',
+        ext: '.builder-preview-headline-rotator > a:nth-of-type(4)',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the rotator did not render its headlines as links, so where they point could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      // The preview page serves internal links as static files ("/x.html").
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} headline points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (seen('picked') === '/old-menu') wrong.unshift('the picked headline still points at the page\'s OLD address — the reference inside the rotator was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
+    id: 'text-block-link-to-a-renamed-page-follows-it',
+    why:
+      'A link typed inside a text block was a copied address, so renaming the page broke it — the ' +
+      'last place a page link was still a copy (task 86bcxthq5). The Link dialog now stores a picked ' +
+      'page by id in a data-page-link attribute beside the href. This saves a picked link whose href ' +
+      'is the OLD address, a typed internal address, a picked link to a deleted page and an external ' +
+      'link, and says the page now lives somewhere new: the picked link must follow the page, and the ' +
+      'other three must render exactly as they were saved.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'text',
+        text:
+          '<p><a class="rt-picked" href="/old-menu" data-page-link="page:4242|/old-menu">Menu</a> ' +
+          '<a class="rt-typed" href="/typed-path">Typed</a> ' +
+          '<a class="rt-gone" href="/was-here" data-page-link="page:777|/was-here">Gone</a> ' +
+          '<a class="rt-ext" href="https://shop.example.com/">Shop</a></p>',
+        settings: {},
+      }],
+    },
+    pageAddresses: { 4242: 'menu-v2' },
+    selector: 'a.rt-picked',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: { picked: 'a.rt-picked', typed: 'a.rt-typed', gone: 'a.rt-gone', ext: 'a.rt-ext' },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the text block did not render the picked link at all, so where it points could not be read.';
+      const want = { picked: '/menu-v2', typed: '/typed-path', gone: '/was-here', ext: 'https://shop.example.com/' };
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => frame[name]?.href !== href)
+        .map(([name, href]) => `${name} link points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (frame.picked.href === '/old-menu') wrong.unshift('the picked link still points at the page\'s OLD address — the reference inside the text was not resolved');
+      return `${wrong.join('; ')}.`;
     },
   },
   {
@@ -5866,5 +6293,137 @@ export const RENDER_CONTRACTS = [
     module: { type: 'galaxy', settings: { placement: 'window', intro: 'none', linkUrl: '/about' } },
     selector: 'a[data-galaxy-link]',
     absent: true,
+  },
+  /*
+   * Breadcrumb (task 86bcxwe6z). The module had a settings panel and an
+   * editor card but no renderer at all, so a published trail was an empty
+   * gap. One trail serves three contracts: what it draws, where a picked
+   * page's crumb points after that page is renamed, and the empty case.
+   */
+  {
+    id: 'breadcrumb-trail-renders-links-separators-and-current',
+    why:
+      'A Breadcrumb rendered NOTHING on a live page — no case for it in the page renderer — while its ' +
+      'editor card showed the trail, so a tenant saw it in the Builder and an empty gap after publishing ' +
+      '(task 86bcxwe6z). Three items must give three labels and two separators inside a ' +
+      'nav labelled "Breadcrumb"; the first two are links, the last is the current page as plain text.',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+          separator: '›',
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href', 'aria-label', 'aria-current'],
+      selectors: {
+        nav: 'nav.builder-preview-breadcrumb',
+        first: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        second: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+        lastLink: 'nav.builder-preview-breadcrumb li:nth-child(3) > a',
+        current: 'nav.builder-preview-breadcrumb li:nth-child(3) > [aria-current="page"]',
+        thirdSep: 'nav.builder-preview-breadcrumb li:nth-child(3) .builder-preview-breadcrumb-sep',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.nav) return 'no breadcrumb trail rendered at all.';
+      const wrong = [];
+      if (frame.nav['aria-label'] !== 'Breadcrumb') wrong.push(`the nav is labelled ${JSON.stringify(frame.nav['aria-label'])}, not "Breadcrumb"`);
+      if (sample.text !== 'Home›Programs›Court Fees') wrong.push(`the trail reads ${JSON.stringify(sample.text)}, expected "Home›Programs›Court Fees" (three labels, two separators)`);
+      if (!frame.first) wrong.push('the first crumb is not a link');
+      if (!frame.second) wrong.push('the second crumb is not a link');
+      if (frame.lastLink) wrong.push('the last crumb (the current page) is a link');
+      if (!frame.current) wrong.push('the last crumb is not marked as the current page');
+      if (frame.thirdSep) wrong.push('a separator follows the last crumb');
+      return wrong.length ? `${wrong.join('; ')}.` : null;
+    },
+  },
+  {
+    id: 'breadcrumb-crumb-to-a-renamed-page-follows-it',
+    why:
+      'A crumb picked from the page list is stored by the page\'s id (task 86bcxu518). This saves a ' +
+      'reference whose address is the OLD one beside a typed address and says the page now lives ' +
+      'somewhere new: the picked crumb must follow the page, the typed one must be left as saved ' +
+      '(task 86bcxwe6z).',
+    section: {
+      layout: 'single',
+      modules: [{
+        type: 'breadcrumb',
+        settings: {
+          items: JSON.stringify([
+            { id: 'home', label: 'Home', url: 'page:4242|/old-home' },
+            { id: 'programs', label: 'Programs', url: '/programs' },
+            { id: 'fees', label: 'Court Fees', url: '' },
+          ]),
+        },
+      }],
+    },
+    pageAddresses: { 4242: 'home-v2' },
+    selector: 'nav.builder-preview-breadcrumb',
+    read: ['display'],
+    series: {
+      count: 1, everyMs: 0, read: ['display'], attrs: ['href'],
+      selectors: {
+        picked: 'nav.builder-preview-breadcrumb li:nth-child(1) > a',
+        typed: 'nav.builder-preview-breadcrumb li:nth-child(2) > a',
+      },
+    },
+    expect(sample) {
+      const frame = sample.series?.[0];
+      if (!frame?.picked) return 'the first crumb did not render as a link, so where it points could not be read.';
+      const want = { picked: '/home-v2', typed: '/programs' };
+      // The preview page serves internal links as static files ("/x.html").
+      const seen = (name) => String(frame[name]?.href ?? '').replace(/^(\/[^:]*?)\.html$/, '$1');
+      const wrong = Object.entries(want)
+        .filter(([name, href]) => seen(name) !== href)
+        .map(([name, href]) => `${name} crumb points at ${JSON.stringify(frame[name]?.href ?? null)}, expected ${JSON.stringify(href)}`);
+      if (!wrong.length) return null;
+      if (seen('picked') === '/old-home') wrong.unshift('the picked crumb still points at the page\'s OLD address — the reference inside the trail was not resolved');
+      return `${wrong.join('; ')}.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-a-note-in-the-builder',
+    why:
+      'An empty Breadcrumb tells whoever is building the page why it is empty. Paired with the two ' +
+      'absence contracts below, which on their own would pass if nothing ever rendered (task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    expect(sample) {
+      return /no trail items/.test(sample.text || '')
+        ? null
+        : `an empty breadcrumb in the Builder rendered ${JSON.stringify(sample.text)}, not its "no trail items" note.`;
+    },
+  },
+  {
+    id: 'breadcrumb-empty-shows-no-note-on-a-live-site',
+    why:
+      'The "add them in module settings" note is for the builder; a visitor has no module settings ' +
+      '(landmine 16, DOCTRINE §5.29).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: '.builder-contact-form-stub',
+    absent: true,
+    emulate: { liveSite: true },
+  },
+  {
+    id: 'breadcrumb-empty-renders-no-trail-on-a-live-site',
+    why:
+      'An empty Breadcrumb on a published page renders nothing at all — not an empty nav landmark a ' +
+      'screen reader would announce (landmine 16, task 86bcxwe6z).',
+    section: { layout: 'single', modules: [{ type: 'breadcrumb', settings: { items: '[]' } }] },
+    selector: 'nav.builder-preview-breadcrumb',
+    absent: true,
+    emulate: { liveSite: true },
   },
 ];

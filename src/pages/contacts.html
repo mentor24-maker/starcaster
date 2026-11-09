@@ -2,12 +2,12 @@
         <div class="page-heading-row">
           <h2>Contacts</h2>
           <div class="page-heading-actions">
-            <button id="openAddContactPageBtn" type="button" class="btn">Add Contact</button>
+            <button id="openAddContactPageBtn" type="button" class="btn btn-primary">Add Contact</button>
             <button id="importContactsToggleBtn" type="button" class="btn">Import Contacts</button>
             <button id="exploreContactsBtn" type="button" class="btn">Explore Contacts</button>
           </div>
         </div>
-        <p>Capture, import, and maintain the contact database that you will later segment and target.</p>
+        <p class="page-heading-desc">Capture, import, and maintain the contact database that you will later segment and target.</p>
 
         <section id="csvMapperSection" class="hidden">
           <h3>CSV Upload + Field Mapper</h3>
@@ -53,7 +53,7 @@
           <label>Segment Name</label>
           <input id="contactsCreateSegmentName" name="name" required />
           <div></div>
-          <button type="submit" class="btn btn-primary">Save Segment</button>
+          <button type="submit" class="btn btn-save">Save Segment</button>
         </form>
 
       </section>
@@ -75,7 +75,7 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content:center; margin-top: 0.75rem;">
                   <div></div>
-              <button type="submit" class="btn btn-primary">Save Default Columns</button>
+              <button type="submit" class="btn btn-save">Save Default Columns</button>
                 </div>
               </form>
             </section>
@@ -174,7 +174,7 @@
           
           <div></div>
           <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 0.75rem;">
-            <button id="contactsPeerSiteSaveBtn" type="submit" class="btn btn-primary">Save Peer Site</button>
+            <button id="contactsPeerSiteSaveBtn" type="submit" class="btn btn-save">Save Peer Site</button>
             <button id="contactsPeerSiteCancelBtn" type="button" class="btn">Cancel</button>
             <button id="contactsPeerSitesAcquireBtn" type="button" style="margin-left:auto;" class="btn">Acquire Peer Sites</button>
           </div>
@@ -192,7 +192,7 @@
                 <input id="contactsPeerSitesDiscoverySelectAll" type="checkbox" />
                 <span>Check All</span>
               </label>
-              <button id="contactsPeerSitesSaveSelectedBtn" type="button" class="btn">Save Selected Peer Sites</button>
+              <button id="contactsPeerSitesSaveSelectedBtn" type="button" class="btn btn-save">Save Selected Peer Sites</button>
             </div>
           </div>
           <div id="contactsPeerSitesDiscoveryMeta" class="meta" style="margin-bottom: 0.75rem;">No peer site candidates loaded yet.</div>
@@ -332,7 +332,7 @@
         <div class="page-heading-row">
           <h2>Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button id="openCreateContactPersonaFromLandingBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn btn-primary">Create Persona</button>
             <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
             <button type="button" onclick="App.setActivePage('contactsPage')" class="btn">Back To Contacts</button>
           </div>
@@ -358,7 +358,7 @@
             <textarea id="contactPersonaDescription" name="description" rows="5"></textarea>
             
             <div></div>
-            <button type="submit" class="btn btn-primary">Save Persona</button>
+            <button type="submit" class="btn btn-save">Save Persona</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
@@ -380,23 +380,23 @@
         <div class="page-heading-row">
           <h2>Manage Contact Personas</h2>
           <div class="page-heading-actions">
-            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button id="openCreateContactPersonaPageBtn" type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn btn-primary">Create Persona</button>
             <button type="button" onclick="App.contactPersonas.openPersonasPage(); return false;" class="btn">Back To Personas</button>
           </div>
         </div>
-        <p>The Personas editor now lives on the main Personas page.</p>
+        <p class="page-heading-desc">The Personas editor now lives on the main Personas page.</p>
       </section>
       <section id="createContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="contactPersonas.openPersonasPage">Contacts: Personas</a>: Create</h2>
         </div>
-        <p>The create form now opens inline on the main Personas page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Personas page.</p>
       </section>
       <section id="editContactPersonaPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="contactPersonas.openPersonasPage">Contacts: Personas</a>: Edit</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn">Create Persona</button>
+            <button type="button" onclick="App.contactPersonas.openCreatePage(); return false;" class="btn btn-primary">Create Persona</button>
           </div>
         </div>
         <form id="contactPersonaEditForm" class="standard-form-grid" onsubmit="App.contactPersonas.submitEditForm(event); return false;">
@@ -471,7 +471,7 @@
               <input name="linkedin" />
               
               <div></div>
-              <button type="submit" class="btn btn-primary">Save Contact</button>
+              <button type="submit" class="btn btn-save">Save Contact</button>
             </form>
           </div>
           <div class="add-contact-split-col add-contact-split-col--from-project">
@@ -651,7 +651,7 @@
           <textarea name="notes" rows="5"></textarea>
 
           <div></div>
-          <button type="submit" class="btn btn-primary">Save Cloned Contact</button>
+          <button type="submit" class="btn btn-save">Save Cloned Contact</button>
         </form>
       </section>
       <section id="contactsExplorePage" class="app-page hidden">
@@ -661,7 +661,7 @@
             <button id="viewSegmentsBtn" type="button" class="btn">View Segments</button>
           </div>
         </div>
-        <p>Filter contacts by any visible field, sort by any column, then save a segment definition.</p>
+        <p class="page-heading-desc">Filter contacts by any visible field, sort by any column, then save a segment definition.</p>
         <div id="exploreContactsFilters" class="explore-filters-shell"></div>
         <div id="segmentsLeadFilters" class="filters"></div>
         <div id="exploreContactsCount" style="margin-top: 40px; font-weight: 700;">Record Count: 0</div>
@@ -688,7 +688,7 @@
             <button id="returnToSegmentsBtn" type="button" class="btn hidden">Close Preview</button>
           </div>
         </div>
-        <p>View, edit, and manage all saved segments.</p>
+        <p class="page-heading-desc">View, edit, and manage all saved segments.</p>
         <h3>Segment Editor</h3>
         <div class="table-wrap">
           <table>
@@ -711,10 +711,10 @@
           <h2 id="segmentEditorHeading">Create Segment</h2>
           <div class="page-heading-actions">
             <button id="cancelSegmentEditBtn" type="button" class="btn">Cancel</button>
-            <button id="saveSegmentEditBtn" type="button" class="btn btn-primary">Save Segment</button>
+            <button id="saveSegmentEditBtn" type="button" class="btn btn-save">Save Segment</button>
           </div>
         </div>
-        <p>Define an audience boundary by configuring parameters specific to the segment type.</p>
+        <p class="page-heading-desc">Define an audience boundary by configuring parameters specific to the segment type.</p>
         
         <form id="segmentEditorForm" class="standard-form-grid" style="margin-top: 1rem; max-width: 800px;">
           <h3 class="standard-form-grid-full">Segment Details</h3>

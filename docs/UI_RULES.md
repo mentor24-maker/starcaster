@@ -887,6 +887,41 @@ as a rule first, then gets a checker where one is possible.
   stacked with it, so there is no shared edge to hold it to. The check names
   that skip on every run rather than dropping it in silence.
 
+- **L9.** **A short setting keeps its label BESIDE the control; a text box
+  takes its label ABOVE** — UI normalization screen 7 (task 86bcyrqbp).
+  A **colour, toggle (checkbox or switch), number or dropdown** is one row:
+  label on the left, control on the right. A **text box or text area** puts
+  its label on the line above, because the box wants the full width and a
+  long label beside it squeezes both. Before this, CRM put a label line over
+  even a single dropdown, Training right-aligned labels that wrapped onto
+  three to five lines, and Themes' underline toggles carried a second
+  caption that wrapped beside the box.
+
+  - **No label wraps onto more than two lines at 1440 wide.** If it would,
+    shorten it (L3) or move the explanation into a `.meta` hint.
+  - **Never a second caption that repeats the row's label** next to a
+    checkbox ("Link underline ☑ Underline links"). The row label is the
+    label; give the input an `aria-label` if it has no `<label for>`.
+  - **Plain admin markup:** add `.form-grid-beside` to a
+    `.standard-form-grid` — labels left-aligned (L1) in a column as wide as
+    the longest label (capped at 16rem), dropdowns and numbers sized to
+    their content rather than stretched across the screen. A text box with
+    its label above uses `.form-field-above`. Both live in `_forms.css`.
+  - **CRM form editor:** `.crm-form-editor-setting-beside` puts a dropdown
+    or slider on one row with an 8.5rem label track, matching the colour
+    rows (`.crm-form-editor-setting-color`) that already worked this way.
+  - **Never crop to get it on one row — L4 outranks this rule.** A dropdown
+    whose choices are phrases ("Show the success message") in a column too
+    narrow to show them whole beside a label keeps its label above, as the
+    CRM form editor's "When a visitor submits" does — and so does Settings ›
+    Projects' "Active Project", whose choices are project names of any
+    length in a 360px card.
+  - **Builder (React):** `BuilderSettingRow` is already label-beside; a
+    checkbox goes in it bare, as Themes' "Cards overlap photo" does.
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
@@ -1167,6 +1202,34 @@ A rendered module has the same obligation as a panel: on a real tenant page a
 - **W6.** A field must never push another field out of view. *(7/1 "Page
   Title, Slug, and Template fields are so wide that they knock the
   Background field off the end so it is invisible")* — **[eye]**
+- **W7. Outside a settings panel, a box is sized by what goes in it —
+  three sizes, picked by content.** *(UI normalization 6 of 10, task
+  86bcyrqbh, 2026-11-05: Training › Rules/Guides stretched three
+  percentage boxes holding "50", "40" and "10" across about 1,180px; Themes'
+  Theme name was about 400px; Outreach's Keywords ran the full width.)*
+  This is W3 made concrete, with names you can reuse:
+
+  | Box holds | Class | Token (`src/css/_variables.css`) | Room for |
+  |---|---|---|---|
+  | a number or percentage | `field-w-number` | `--field-w-number` | 6 characters |
+  | a name or title | `field-w-short` | `--field-w-short` | 24 characters |
+  | a list, a sentence, a web address | `field-w-long` | `--field-w-long` | 48 characters |
+
+  The classes live in `src/css/_forms.css` and add the box's own padding,
+  border and number arrows on top of the token, so the token reads as "room
+  for the text". Every size also caps at `max-width: 100%`, so nothing
+  overflows a phone. A component with its own stylesheet that cannot take
+  the class (Themes, Outreach) uses the token in its own rule —
+  `width: calc(var(--field-w-short) + 2rem)` — rather than a new number.
+
+  **Several short boxes share one row.** Wrap each label and its box in
+  `.short-field` and the group in `.short-fields-row`: the label sits beside
+  its box, the pairs run left to right and wrap onto the next line only when
+  the screen is too narrow. A short box never gets a row of its own just
+  because the form grid gave it one.
+
+  Inside a settings panel, W0's lattice still decides widths; W7 does not
+  apply there. — **[eye]**
 
 ## A — Overriding the theme
 
@@ -1384,6 +1447,73 @@ Advanced — is the follow-on pass the operator sequenced after this.
   something the renderer honors; duplicates are removed, not kept "just in
   case". *(7/1 "'content' field that doesn't do anything … remove it";
   6/28; 7/29; doctrine E7)* — **[eye]**
+- **C9. Buttons: four kinds, two sizes.** The colour says what the button
+  does, on every admin screen (UI normalization 4 of 10, task 86bcyrqb9):
+
+  | Kind | Looks | Admin app (vanilla) | Builder (React) |
+  |---|---|---|---|
+  | Secondary | outlined, white | `btn` (the default) — `btn-ghost` is the same | `secondary-button` |
+  | Main action | blue | `btn btn-primary` | `submit-button` |
+  | Save | green | `btn btn-save` | `submit-button admin-save-button` |
+  | Delete | red | `btn btn-danger` | `danger-button` |
+
+  **One main action per screen**, and it is the "Create …"/"Add …" button
+  in the heading row; Back, Cancel, Refresh, Import, Archives and the like
+  are secondary. Every kind has a **hover colour** and a **disabled colour**
+  — never a fade, on either. (The bare `button:hover { opacity: 0.8 }` in
+  `_buttons.css` is scoped to `button:not(.btn)` for exactly this reason: at
+  0,1,1 it outranked every `.btn` hover rule. The Builder kinds are plain
+  `<button>`s without `.btn`, so that fade still reaches them; the Builder
+  block in `_builder-react-overrides.css` sets `opacity: 1` on their hover,
+  admin-only, so a client's published buttons are untouched. The same trap
+  hides inside the system: a kind written at two classes, like
+  `.btn.btn-ghost`, outranks the shared one-class outlined hover and
+  disabled, so it needs its own — without them the ghost buttons had no
+  hover and no disabled colour at all. And the old `.tiny-btn:disabled`
+  fade now reaches only icon buttons and a `tiny-btn` without `.btn`.)
+  A `<label>` or `<a>` wearing `.btn` is `box-sizing: border-box` like a
+  real button, so it is the same height. **Two sizes:** normal, `--btn-height` (32px), and small,
+  `--btn-height-sm` (24px) — `btn-sm`, for table rows and dense toolbars
+  (`tiny-btn` and `btn-xs` mean the same). Never give a button its own
+  height, padding or colour: a rule like `.page-heading-row button
+  { min-height: 42px }` is how one job ended up 29px on one screen and 50px
+  on another. Tokens in `_variables.css`; rules in `_buttons.css` (default
+  colours, loads first) and `legacy.css` "THE BUTTON SYSTEM" (sizes and
+  kinds, loads last); the Builder's admin-only block is in
+  `_builder-react-overrides.css`. A client's published site keeps its own
+  theme's buttons. *(operator 2026-11-05, approving the UI review: "I like
+  all of them.")* — **[eye]**, sizes and colours are tokens
+
+  **Deliberately not in the four kinds:** square table icon buttons
+  (`icon-btn` — a glyph, its own 36px square; it was the same height as a
+  normal button until UI normalization 11 took normal to 32px, and it was
+  deliberately left square and unchanged); the Builder and Docs diagram tiles; accordion headers
+  and the Builder's panel-label pills; tab switchers (UI normalization 5
+  owns those); colour swatches, font pickers and image pickers that show a
+  value; and buttons a module renders on a client's site.
+
+  **How tall boxes, buttons and table headings are (UI normalization 11,
+  task 86bcz85k9).** Dane, 2026-11-05: *"reduce vertical padding in each
+  form field, button, and CRUD header bar by 2px."* Each lost 2px at the top
+  and 2px at the bottom, so 4px of height, and each is ONE token in
+  `_variables.css` — change it there, never screen by screen:
+
+  | What | Token | Admin app | Was |
+  |---|---|---|---|
+  | Form box (input, select, textarea) top/bottom padding | `--field-pad-y` | 0.55rem − 2px (6.8px) | 0.55rem (8.8px) |
+  | Normal button height | `--btn-height` | 32px | 36px |
+  | Small button height (`btn-sm`, `tiny-btn`, `btn-xs`) | `--btn-height-sm` | 24px | 28px |
+  | Table heading row and filter/bulk-action row, top/bottom padding | `--table-head-pad-y` | 0.65rem − 2px (8.4px) | 0.65rem (10.4px) |
+
+  A `.btn` has no vertical padding — its label is centred in a fixed height
+  — so for buttons the 2px comes off the height. Table body rows keep
+  0.65rem. **A client's live site keeps the old values:** `.builder-public-site`
+  sets all four back, so published pages and the Builder's device preview
+  are untouched. Screens that set their own box padding in a per-screen rule
+  (Acquire's miner panels, the Campaigns combobox and a few others in
+  `legacy.css`) still carry their own numbers; `_forms.css`'s
+  `0.8rem 1rem` on `input` loses to `legacy.css` everywhere and sets nothing.
+  — **[eye]**, measured with getComputedStyle at 1440
 - **C7.** The reverse of C6: **every setting the renderer honors is
   reachable in the editor.** A missing control is a bug, not a gap.
   *(7/24 "I don't see a Horizontal Margin or a Section Width setting …
@@ -1392,6 +1522,20 @@ Advanced — is the follow-on pass the operator sequenced after this.
   background picker, one color field, one margin pair, across all modules.
   *(7/1 "The backgrond selector on this is an older style. Upgrade the
   background selector in this module."; doctrine E1/E6)* — **[auto]**
+- **C9.** **Switching views is a tab, and every tab looks alike.** A row
+  of views (CRM's Contacts / Forms / Field Config, Outreach's channels, the
+  Workspace's Templates / Modules / Pages) is `.tab-bar` holding
+  `.tab-btn`s, from `src/css/_tabs.css`: plain text on one underline, the
+  selected tab in the accent colour with a thick underline. A tab is
+  **never** styled as a button — no `btn`, no `btn-primary`, no
+  `submit-button` — because a filled box reads as an action, and the
+  screen's one primary belongs to an action. In React mark it
+  `role="tablist"` / `role="tab"` with `aria-selected`; the selected look
+  keys off `aria-selected="true"` (or `.active`, which the frozen vanilla
+  CRM screen toggles). Tab reaches each tab, Enter selects it. Tabs sit on
+  their own row under the title, not among the title row's buttons.
+  *(UI normalization 5 of 10, task 86bcyrqbb, 2026-11-05: "Switching views
+  looks like three different controls across the app")* — **[eye]**
 
 ## T — Tables, lists, and CRUDs
 
@@ -1504,6 +1648,28 @@ is ever wider than the screen.*
   at T7 rung 12 — they scroll inside their own container — which is legal
   but means the earlier rungs were skipped; they are the next candidates
   for the ladder.
+
+- **T11. One table look, and the column headings never scroll away.**
+  Every admin table uses the canonical `_tables.css` treatment and nothing
+  else: a black column-heading row with bold white text, a light-blue filter
+  row above it where the table has filters, and data rows padded `0.5rem`
+  top and bottom (the heading row keeps its own padding). Wrap the table in
+  `.table-wrap` — that is what makes the heading row **sticky**: the wrap
+  scrolls in both directions and stops at `max(20rem, 100vh - 10rem)`, and
+  the heading row (not the filter row) sticks to its top, so on a long list
+  the headings stay on screen however far down you go. Never put inline
+  `style=""` padding, colours or sizes on a `<table>`, `<thead>`, `<th>` or
+  `<td>`: an inline style beats the shared rule, and that is exactly how
+  Training's tables ended up with **black headings on the black bar** —
+  invisible — and taller rows than every other table. *(2026-11-05,
+  UI normalization 8 of 10, task 86bcyrqbr: Builder › Pages ran about
+  5,000px tall with its headings long gone off the top; it now caps at the
+  screen with the headings pinned.)* Why the cap leaves 10rem free: the
+  heading sticks to the top of the WRAP, so the wrap must fit on the screen
+  along with whatever sits under it at the end of the page, or the page's
+  last scroll position carries the headings off the top with it. —
+  **[eye]**; measured with `getComputedStyle` and `elementFromPoint` at
+  1280/1440/1920 when it shipped.
 - **T8.** Every flex/grid ancestor of a table sets **`min-width: 0`**. A
   grid or flex child defaults to `min-content` and will happily push its
   container past the viewport — this is the most common cause of a CRUD
@@ -1569,6 +1735,93 @@ is ever wider than the screen.*
   blue color")* — **[eye]**, tokens are **[type]**-adjacent (named in
   `_variables.css`, so a drift is visible in one place)
 
+- **R10.** **Every editor screen has the same three heading levels, one
+  size each** — the UI normalization epic (tag `ui-normalization`), screen 1
+  being the CRM form editor (task 86bcyny0m). Use the named sizes in
+  `_variables.css`; never pick a size by hand for one of these:
+
+  | Level | What it is | Token | Size | Weight |
+  |---|---|---|---|---|
+  | Column title | the heading over a column (Form Actions, Styles, Preview) | `--editor-title-size` | 20px (`--text-xl`) | 800 |
+  | Item | a section inside a column (Border, Button, Team alerts) | `--editor-item-size` | ~17.6px (`--text-lg`) | 700 |
+  | Sub-item | every setting's label under an item (Border Size, Form Name) | `--editor-subitem-size` | ~14.4px (`--text-base`) | 700 |
+
+  A setting that stands alone with no sub-items of its own (Background
+  Color, a colour box beside it) is an **item**. Every sub-item is the same
+  size — no label is made smaller to fit a narrow row: if one would wrap,
+  shorten its wording (L2, L3; "Field Alignment" became "Field Align").
+  An explanation that made a label wrap ("optional — separate with commas")
+  moves to its own small `.meta` line under the label. *(operator
+  2026-11-04: "the font size of the items need to be a couple points bigger
+  to distinguish them. Then the top-level headings … need to be a few points
+  bigger")* — **[eye]**, sizes are tokens
+
+- **R11.** **Every admin screen starts the same way: one title, its
+  buttons on the same row, and at most one short grey line under it** —
+  UI normalization 2 of 10 (task 86bcyrqaw). Markup, in `src/pages/*.html`:
+
+  ```html
+  <div class="page-heading-row">
+    <h2>Section: Screen</h2>
+    <div class="page-heading-actions">…buttons…</div>   <!-- optional -->
+  </div>
+  <p class="page-heading-desc">One sentence saying what this screen is for.</p>  <!-- optional -->
+  ```
+
+  - **Never two titles.** A React island that draws its own title row (the
+    Builder editor on Builder › Workspace) takes the screen's title as a prop,
+    and the shell prints none above it — it used to stack "Builder: Workspace"
+    over "Page Builder".
+  - The title is `--page-title-size` (24px); the description is
+    `--page-desc-size` (~13px) in `--muted`. No screen sets its own title
+    size — the per-screen overrides on Training and Messaging › Content are
+    gone.
+  - The description is **one sentence that fits one line** at desktop width
+    (aim for 150 characters or fewer). At phone width it may wrap to two and is
+    cut off after that. Anything longer is an explanation, not a description:
+    it goes in an ordinary paragraph below.
+  - Status lines that change (`No pages selected.`) are not descriptions and
+    keep their own element.
+  - **Nothing below the title may be bigger than it.** A card or section
+    heading under the title row is an `h3` at `--editor-item-size` or smaller
+    — Settings › Environment Configuration's 40px "Environment Variables"
+    card heading read as the real title once the page title became 24px.
+  - Shared content that opens with its own `<h1>` (the legal bodies, which are
+    also the standalone `/privacy-policy` page) keeps it for the standalone
+    page and hides it inside the admin app, where the title row is the title.
+
+  *(operator 2026-11-05, on review ticket 86bcyp009: "I like all of them.")*
+  — **[eye]**, sizes are tokens
+
+- **R12.** **A section heading looks like one of R10's three levels, and
+  nothing else** — UI normalization screen 3 (task 86bcyrqaz). Before it,
+  the editors had four heading looks: small spaced capitals (Themes
+  "PALETTE"), outlined pill badges (the Builder's "PAGES", "PAGE DETAILS"),
+  plain bold (the CRM form editor), and big 24px card titles (Settings
+  "Your Projects"). Now:
+
+  - **No spaced capitals and no pill badge as a section heading.** Not
+    `text-transform: uppercase` + `letter-spacing`, not a rounded tinted
+    chip. A heading is the R10 size, its weight, and `--ink-primary`.
+  - **Which level:** the heading of a card, pod or Builder panel is a
+    **column title** (Palette, Page Details, Workspace, Your Projects,
+    Admin Team). A group inside one is an **item** (Fonts, Colors,
+    Project Logo, an Outreach stage name). One setting's label is a
+    **sub-item** (Logo — Wide).
+  - **Plain admin markup** (`src/pages/*.html`) uses the classes
+    `.editor-title`, `.editor-item`, `.editor-subitem` from
+    `_typography.css` instead of a bare `<h3>`, which is 1.5em by default.
+    A component with its own heading class sets the token on that class.
+  - **`.panel-label` is two things.** Inside a Builder admin panel
+    (`.builder-toolbar-shell`) it is a column title; on a CLIENT site
+    (poll and player-card headers) it is still a styled pill, and must stay
+    one — so the heading rule is scoped to the toolbar shell, never to
+    `.panel-label` alone. An open Builder panel keeps its white-on-blue
+    header bar: there the heading is white, for contrast (R9's purpose).
+
+  *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
+  **[eye]**, sizes are tokens
+
 ## S — System and structure
 
 *Umbrella: every module familiar; nothing hand-rolled; nothing stale.*
@@ -1592,6 +1845,83 @@ is ever wider than the screen.*
   name and never flattened by a later convention pass.** *(lesson of
   2026-08-09)* — **[eye]** · Registry: blog-post-list → 3 columns
   (general / Page Design / Card Appearance).
+- **S6. The admin header is ONE row, 77px tall or less at 1440.** Logo,
+  menu, name · Logout and the Projects button share one row
+  (`--admin-header-height`, 76px — raised from 56 so the logo is readable,
+  Dane 2026-11-05, task 86bcyyfex; rules in `src/css/_navigation.css`, scoped
+  to `#appShell > header`). *(UI normalization 1 of 10, task 86bcyrqau: the
+  logo band plus a separate menu bar took ~230px of every screen. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - The menu lives INSIDE `<header>` in `src/layout.html`. A new top-level
+    menu item costs ~70px of a row that has almost nothing to spare at 1440 with
+    the worst-case name and project label measured — so adding one means
+    taking width from somewhere else, or accepting a second row below
+    ~1440 (the header wraps rather than scrolling sideways, UI_RULES T0).
+  - Menu text is `--text-sm` with 0.35rem sides; the logo is 56px tall
+    (10px above and below) with the image's blank right strip cropped off; the
+    user's name is capped at 7.75rem and a project shown by name at 6rem, both
+    ending in "…". Those four numbers are what make the worst case fit.
+  - At 720px and below the menu folds behind a **Menu** button and opens as
+    a full-width stacked list under the header (opened `#topNav`: left 0,
+    width = the screen). Any rule
+    that changes the opened menu's size must name the OPEN selector
+    (`header.admin-menu-open > .top-nav`) as well, or the base layer's open
+    rule outranks it — round 1 of review found the menu squeezed into a
+    267px column beside the logo that way.
+  - **Parents keep the phone menu open.** Only a tap that goes somewhere
+    final closes it: a sub-item (`a.submenu-link`) or a top-level link with
+    no sub-menu (Channels, Campaigns). Tapping a parent (Builder, Contacts,
+    Settings…) leaves it open with its sub-items listed, or a phone can never
+    reach CRM, Site Import or any other sub-item — round 2 of review found
+    exactly that. The sub-items sit in normal flow under their parent
+    (`.submenu { position: static }` in the 720px block), never at the
+    desktop `top: 100%`, which painted them over the next items.
+  - A view that hides `#topNav` on purpose (`no-workspace-view`,
+    `project-admin-view`, `public-legal-view`) hides the Menu button too; a
+    new such view adds itself to that rule at the end of `_navigation.css`.
+  - The header is not sticky. Anything that sticks to the top of a page
+    sticks to the viewport, so nothing hides behind it.
+- **S7. Say each thing once.** A list of records lives on ONE screen; any
+  other screen that wants to mention it links there instead of repeating it.
+  And **no screen carries a button that leads to itself** — a "Back To X"
+  on screen X, or a hub tile pointing at the hub. A button that closes a
+  panel on the same screen says what it does (**Cancel**), not where it goes.
+  *(UI normalization 10 of 10, task 86bcyrqbv: projects were listed three
+  times — the Settings › Projects table, a "Your Projects" card under it, and
+  "My Projects" on Profile — and Settings › Projects had "Back To Projects".
+  The table keeps the list, its Set Active button replaces the card's
+  Active Project picker, and Profile links to it. Docs' "Docs" tile, which
+  opened Docs, went the same way. Dane, 2026-11-05: "I like all of them.")* —
+  **[eye]** · Check: `src/pages/*.html` — no `setActivePage('X')` inside
+  `<section id="X">`.
+- **S8. A landing page of links is compact.** Link tiles sit in a grid that
+  is as tall as its tiles (`.builder-flow-map`: `auto-fill`, 170–210px tiles,
+  `--space-4` gap, title at `--editor-item-size`), never inside a big
+  bordered box with the tiles placed absolutely in it. *(Same ticket: the
+  Builder landing was a 560px-tall card holding five link words.)* —
+  **[eye]**
+- **S9. Messages appear ONCE, in one strip that never covers the work.**
+  Every admin message — `App.notify(text, isError)` and
+  `App.components.Toast.*` — lands in `#appMessageStrip`, the strip between
+  the header and `<main>` in `src/layout.html`. It is in the page's normal
+  flow, so it pushes the page down rather than floating over it: no table row
+  or button can ever sit underneath it. Empty, it takes no space.
+  *(UI normalization 9 of 10, task 86bcyrqbu: every error showed twice, as a
+  floating box AND a pink bar pinned over the bottom 40–60px of the screen,
+  covering the last table rows on Pages, Training and Themes. Dane,
+  2026-11-05: "I like all of them.")* — **[eye]**
+  - One message at a time; a new one replaces the old.
+  - Errors stay until dismissed with ×; success and info close by themselves
+    after 4 seconds and can be dismissed sooner.
+  - If the strip is scrolled out of view when a message arrives, the page
+    scrolls just far enough to show it — a message nobody sees is the same
+    defect as no message.
+  - Never add a second message surface (a fixed-position bar, a corner
+    toast). The one exception is `App.components.SavedNotice`, the
+    confirmation card after a form's Save, which fades on its own and has no
+    close button by design (task 86bcyjag0).
+  - Styles: `.c-message-strip*` in `src/css/legacy.css`; behaviour:
+    `App.components.Toast` in `public/js/components.js`.
 
 ## P — Published page (rendered module) rules
 

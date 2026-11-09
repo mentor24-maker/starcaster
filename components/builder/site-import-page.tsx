@@ -10,6 +10,8 @@ import {
   type MapReportData,
 } from "./site-import-build-report";
 import { SiteImportThemePanel, importThemeRecordOf } from "./site-import-theme-panel";
+import { SiteImportBuildControls } from "./site-import-build-controls";
+import { buildIsActive, buildRequestOf } from "./site-import-build-controls-model";
 
 /**
  * Site Import (staff-only) — queue a site-capture job and review its
@@ -176,8 +178,9 @@ const MOUNTAIN_DAY = new Intl.DateTimeFormat("en-US", {
 
 /**
  * An import is two steps: the worker COPIES the site (capture, assets,
- * normalize — after which it sets status "complete"), and an agent session
- * BUILDS the Builder pages from the copy. The raw status only knows about the
+ * normalize — after which it sets status "complete"), and the build step
+ * makes the Builder pages from the copy (the operator starts it with the
+ * Preview / Build buttons, task 86bcz9wcx). The raw status only knows about the
  * first, so showing it read "COMPLETE" over an empty Pages list (Strands
  * Movie, 2026-10-12). Running and failed jobs keep their status word; a
  * finished copy says which of the two steps it has reached.
@@ -289,6 +292,9 @@ export default function SiteImportPage() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [status, setStatus] = useState<{ message: string; isError: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when the server said this site was already imported (409
+  // DUPLICATE_COMPLETE): the address to resend with confirmReimport.
+  const [reimportUrl, setReimportUrl] = useState<string | null>(null);
   // The project's Builder pages, read once a job has built some, to name the
   // pages it built. null = not read (or the read failed — see builderPagesError).
   const [builderPages, setBuilderPages] = useState<Array<{ id: string; name?: string; slug?: string }> | null>(null);
@@ -316,8 +322,11 @@ export default function SiteImportPage() {
       // Once a run has capture output, fetch the page list (screenshots)
       // and — after normalize — assets + IR, one time per job.
       const captureCp = checkpointOf(fresh, "capture");
-      if (captureCp?.blobPath && detailFetchedFor.current !== id + fresh.status) {
-        detailFetchedFor.current = id + fresh.status;
+      // The build step's finish time is part of the key, so a preview or build
+      // finishing re-reads the report and the built pages.
+      const fetchKey = `${id}|${fresh.status}|${buildRequestOf(fresh.checkpoints)?.finishedAt ?? ""}`;
+      if (captureCp?.blobPath && detailFetchedFor.current !== fetchKey) {
+        detailFetchedFor.current = fetchKey;
         try {
           const index = await fetch(captureCp.blobPath).then((r) => r.json());
           setPages(Array.isArray(index?.pages) ? index.pages : []);
@@ -410,22 +419,24 @@ export default function SiteImportPage() {
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       setJob((current) => {
-        if (!current || ACTIVE_STATUSES.has(current.status)) void loadJobDetail(selectedId);
+        if (!current || ACTIVE_STATUSES.has(current.status) || buildIsActive(buildRequestOf(current.checkpoints))) {
+          void loadJobDetail(selectedId);
+        }
         return current;
       });
     }, POLL_MS);
     return () => window.clearInterval(timer);
   }, [selectedId, loadJobDetail]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!sourceUrl.trim() || submitting) return;
+  async function submitImport(url: string, confirmReimport: boolean) {
+    if (!url.trim() || submitting) return;
     setSubmitting(true);
     setStatus(null);
+    setReimportUrl(null);
     try {
       const body = await appApi("/api/site-import/jobs", {
         method: "POST",
-        body: JSON.stringify({ sourceUrl }),
+        body: JSON.stringify(confirmReimport ? { sourceUrl: url, confirmReimport: true } : { sourceUrl: url }),
       });
       const created = readEnvelopeObject<Job>(body, "job");
       setSourceUrl("");
@@ -436,10 +447,18 @@ export default function SiteImportPage() {
       await loadJobs();
       if (created) setSelectedId(created.id);
     } catch (err) {
+      // The server names the earlier import in plain words; a finished one
+      // can be imported again on purpose (task 86bcynqrt), a running one cannot.
+      if ((err as { code?: string }).code === "DUPLICATE_COMPLETE") setReimportUrl(url);
       setStatus({ message: (err as Error).message, isError: true });
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    void submitImport(sourceUrl, false);
   }
 
   async function handleCancel(id: string) {
@@ -490,6 +509,18 @@ export default function SiteImportPage() {
       </p>
       {status ? (
         <p className={`site-import-status${status.isError ? " is-error" : ""}`}>{status.message}</p>
+      ) : null}
+      {reimportUrl ? (
+        <p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={submitting}
+            onClick={() => void submitImport(reimportUrl, true)}
+          >
+            {submitting ? "Queuing…" : "Import again"}
+          </button>
+        </p>
       ) : null}
 
       <div className="site-import-columns">
@@ -556,10 +587,15 @@ export default function SiteImportPage() {
               </div>
               {job.status === "complete" && !mapCp ? (
                 <p className="meta site-import-build-note">
-                  The site has been copied but no Builder pages exist yet. An agent session builds them
-                  (Claude Code: &lsquo;build the pages for import {job.id}&rsquo;). It runs a rehearsal first
-                  and creates drafts only. Nothing is published.
+                  The site has been copied but no Builder pages exist yet.
                 </p>
+              ) : null}
+              {job.status === "complete" && checkpointOf(job, "normalize")?.blobPath ? (
+                <SiteImportBuildControls
+                  jobId={job.id}
+                  checkpoints={job.checkpoints as Record<string, unknown>}
+                  onQueued={() => void loadJobDetail(job.id)}
+                />
               ) : null}
               {mapCp ? (
                 <div className="site-import-built">
@@ -711,7 +747,7 @@ export default function SiteImportPage() {
 /**
  * What the build step (scripts/site_import_map.mjs) will create — or did
  * create, once its `--apply` run has recorded the map checkpoint. Read-only;
- * running the mapper stays a terminal step (task 86bch6e2q non-goal).
+ * the build is started from SiteImportBuildControls (task 86bcz9wcx).
  */
 function BuildReportPanel({
   report,
@@ -735,7 +771,7 @@ function BuildReportPanel({
     return (
       <div className="site-import-build-report">
         <h4>{title}</h4>
-        <p className="meta">No rehearsal has been run for this import yet, so there is nothing to show here.</p>
+        <p className="meta">No preview has been run for this import yet. Press Preview Build above to see one.</p>
       </div>
     );
   }
@@ -759,7 +795,7 @@ function BuildReportPanel({
           ? `Import theme: ${summary.theme.name ?? "unnamed"}${
               summary.theme.notes?.length ? ` — ${summary.theme.notes.join("; ")}` : ""
             }`
-          : "This report does not say which theme the build step makes the default; that is only printed in the terminal today."}
+          : "The theme the build makes is shown with the preview, above."}
       </p>
       <MenusBlock report={report} builtMenus={built ? builtMenus : null} />
       <table className="site-import-build-pages">

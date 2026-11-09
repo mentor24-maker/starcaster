@@ -170,7 +170,7 @@ App.training = {
         tr.style.borderBottom = '1px solid var(--border-light)';
         
         const tdTitle = document.createElement('td');
-        tdTitle.style.cssText = 'padding: 0.75rem 1rem; font-weight: 500;';
+        tdTitle.style.cssText = 'font-weight: 500;';
         const aTitle = document.createElement('a');
         aTitle.href = '#';
         aTitle.style.cssText = 'color: var(--link-color, #3b82f6); text-decoration: underline;';
@@ -197,16 +197,16 @@ App.training = {
         tdTitle.appendChild(aTitle);
         
         const tdSummary = document.createElement('td');
-        tdSummary.style.cssText = 'padding: 0.75rem 1rem; color: var(--text-color-secondary);';
+        tdSummary.style.cssText = 'color: var(--text-color-secondary);';
         tdSummary.textContent = item.summary;
         
         const tdUpdated = document.createElement('td');
-        tdUpdated.style.cssText = 'padding: 0.75rem 1rem; font-size: 0.85rem;';
+        tdUpdated.style.cssText = 'font-size: 0.85rem;';
         const dateObj = item.timestamp ? new Date(item.timestamp) : new Date();
         tdUpdated.textContent = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
         const tdPath = document.createElement('td');
-        tdPath.style.cssText = 'padding: 0.75rem 1rem; font-size: 0.75rem; font-family: monospace; color: var(--muted);';
+        tdPath.style.cssText = 'font-size: 0.75rem; font-family: monospace; color: var(--muted);';
         tdPath.textContent = item.path;
         
         tr.appendChild(tdTitle);
@@ -301,7 +301,7 @@ App.training = {
         const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const tdTitle = document.createElement('td');
-        tdTitle.style.cssText = 'padding: 0.75rem 1rem; font-weight: 500;';
+        tdTitle.style.cssText = 'font-weight: 500;';
         const aTitle = document.createElement('a');
         aTitle.href = '#';
         aTitle.className = 'view-corpus-btn';
@@ -311,7 +311,7 @@ App.training = {
         tr.appendChild(tdTitle);
 
         const tdDomain = document.createElement('td');
-        tdDomain.style.cssText = 'padding: 0.75rem 1rem;';
+        tdDomain.style.cssText = '';
         const spanDomain = document.createElement('span');
         spanDomain.style.cssText = 'background:var(--bg-input); padding:0.15rem 0.5rem; border-radius:10px; font-size:0.75rem;';
         spanDomain.textContent = item.source_type || '';
@@ -319,17 +319,17 @@ App.training = {
         tr.appendChild(tdDomain);
 
         const tdCategory = document.createElement('td');
-        tdCategory.style.cssText = 'padding: 0.75rem 1rem;';
+        tdCategory.style.cssText = '';
         tdCategory.textContent = item.category || '-';
         tr.appendChild(tdCategory);
 
         const tdDate = document.createElement('td');
-        tdDate.style.cssText = 'padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-color-secondary);';
+        tdDate.style.cssText = 'font-size: 0.85rem; color: var(--text-color-secondary);';
         tdDate.textContent = dateStr;
         tr.appendChild(tdDate);
 
         const tdAction = document.createElement('td');
-        tdAction.style.cssText = 'padding: 0.75rem 1rem; text-align: right;';
+        tdAction.className = 'actions-col';
         const btnDelete = document.createElement('button');
         btnDelete.className = 'danger-btn tiny-btn delete-btn';
         btnDelete.dataset.id = item.id;

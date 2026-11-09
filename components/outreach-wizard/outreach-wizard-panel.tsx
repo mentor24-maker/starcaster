@@ -295,7 +295,7 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
           <input id="outreach-reddit-per-day" type="number" min={1} max={50} className="outreach-wizard-number" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
           <label htmlFor="outreach-reddit-gap">Minutes apart, at least</label>
           <input id="outreach-reddit-gap" type="number" min={0} max={1440} className="outreach-wizard-number" value={gap} onChange={(e) => setGap(e.target.value)} />
-          <button type="submit" className="btn" disabled={!!busy}>Save pace</button>
+          <button type="submit" className="btn btn-save" disabled={!!busy}>Save pace</button>
         </form>
       ) : null}
       {notice ? <p className="outreach-wizard-notice" role="status">{notice}</p> : null}
@@ -457,13 +457,13 @@ export default function OutreachWizardPanel(): React.ReactElement {
       {overview ? <MiniLimitBanner version={overview.generatedAt} /> : null}
       {!overview && !error ? <p className="outreach-wizard-muted">{loading ? 'Reading where each channel stands…' : ''}</p> : null}
       {channels.length ? (
-        <div className="outreach-wizard-tabs" role="tablist" aria-label="Channel">
+        <div className="tab-bar outreach-wizard-tabs" role="tablist" aria-label="Channel">
           {channels.map((c) => (
             <button
               key={c.key}
               type="button"
               role="tab"
-              className={`btn outreach-wizard-tab${current?.key === c.key ? ' outreach-wizard-tab--active' : ''}`}
+              className="tab-btn"
               aria-selected={current?.key === c.key}
               onClick={() => pick(c.key)}
             >

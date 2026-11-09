@@ -5,11 +5,11 @@
           <div class="page-heading-actions">
             <button id="openCreateVideoToolBtn" type="button" class="btn btn-primary hidden" onclick="App.assetsVideo.openCreateVideoTool(); return false;">Create Video</button>
             <button id="openAssetFieldImportBtn" type="button" class="btn assets-header-action-btn hidden" onclick="App.assetFieldImport.openModal({ fromType: 'image', toType: 'tweet' }); return false;">Import from Assets</button>
-            <button id="uploadAssetsBtn" type="button" class="btn">Add Assets</button>
+            <button id="uploadAssetsBtn" type="button" class="btn btn-primary">Add Assets</button>
             <button type="button" onclick="App.setActivePage('manageAssetCategoriesPage')" class="btn">Manage Categories</button>
           </div>
         </div>
-        <p>Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
+        <p class="page-heading-desc">Manage the reusable media and PDFs that support campaigns, pages, and publishing.</p>
         <!-- React island: the scaled-copies sweep. Renders nothing when every
              image in the project already has its smaller copies. -->
         <div id="assetRenditionsRoot"></div>
@@ -209,7 +209,7 @@
                   <div id="assetsBulkActionRow" class="crud-bulk-actions-row assets-bulk-action-row hidden">
                     <button id="assetsBulkEditBtn" type="button" class="btn" disabled>Edit All</button>
                     <button id="assetsBulkResizeBtn" type="button" class="btn" disabled>Resize Images</button>
-                    <button id="assetsBulkDeleteBtn" type="button" class="btn" disabled>Delete All</button>
+                    <button id="assetsBulkDeleteBtn" type="button" class="btn btn-danger" disabled>Delete All</button>
                   </div>
                 </th>
               </tr>
@@ -351,7 +351,7 @@
               <input id="assetTagsInput" name="tags" />
             
             <div></div>
-              <button id="assetFormSubmitBtn" type="submit" class="btn btn-primary">Save Asset</button>
+              <button id="assetFormSubmitBtn" type="submit" class="btn btn-save">Save Asset</button>
           </form>
           <aside class="asset-preview-panel">
             <div class="asset-preview-header">
@@ -412,7 +412,7 @@
               <div class="asset-image-editor-crop-meta" id="assetImageEditorCropMeta">Crop: full image</div>
               <div class="asset-image-editor-actions">
                 <button type="button" id="assetImageEditorResetBtn" class="btn btn-ghost">Reset Crop &amp; Mirror</button>
-                <button type="button" id="assetImageEditorSaveBtn" class="btn btn-primary">Save Edited Image</button>
+                <button type="button" id="assetImageEditorSaveBtn" class="btn btn-save">Save Edited Image</button>
               </div>
             </div>
           </aside>
@@ -422,7 +422,7 @@
         <div class="page-heading-row">
           <h2>Assets: Categories</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
@@ -454,7 +454,7 @@
               </select>
             
             <div></div>
-              <button type="submit" class="btn btn-primary">Save Category</button>
+              <button type="submit" class="btn btn-save">Save Category</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
@@ -490,23 +490,23 @@
         <div class="page-heading-row">
           <h2>Manage Asset Categories</h2>
           <div class="page-heading-actions">
-            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button id="openCreateAssetCategoryPageBtn" type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
           </div>
         </div>
-        <p>The Categories editor now lives on the main Categories page.</p>
+        <p class="page-heading-desc">The Categories editor now lives on the main Categories page.</p>
       </section>
       <section id="createAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="assetCategories.openCategoriesPage">Assets: Categories</a>: Create</h2>
         </div>
-        <p>The create form now opens inline on the main Categories page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Categories page.</p>
       </section>
       <section id="editAssetCategoryPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="assetCategories.openCategoriesPage">Assets: Categories</a>: Edit</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn">Create Category</button>
+            <button type="button" onclick="App.assetCategories.openCategoriesCreate(); return false;" class="btn btn-primary">Create Category</button>
             <button id="backFromEditAssetCategoryBtn" type="button" onclick="App.assetCategories.openCategoriesPage(); return false;" class="btn">Back To Categories</button>
             <button type="button" onclick="App.assets.openAssetsLanding()" class="btn">Back To Assets</button>
           </div>
@@ -538,8 +538,10 @@
         </form>
       </section>
       <section id="assetsImagesPage" class="app-page hidden">
-        <h2>Assets: Images</h2>
-        <p>Images module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Images</h2>
+        </div>
+        <p class="page-heading-desc">Images module placeholder.</p>
       </section>
       <section id="assetsVideoPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -549,7 +551,7 @@
             <button type="button" onclick="App.assets.openAssetsManager('Video'); return false;" class="btn">Manage Videos</button>
           </div>
         </div>
-        <p>Manage your video assets here. Click <strong>Create Video</strong> to open the Video Production Factory.</p>
+        <p class="page-heading-desc">Manage your video assets here. Click <strong>Create Video</strong> to open the Video Production Factory.</p>
       </section>
       <section id="assetsCreateVideoToolPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -684,7 +686,7 @@
 
               <!-- ROW 5 -->
               <div class="form-group full-width" style="grid-column: 1 / -1; margin-top: 1rem;">
-                <button type="button" class="btn btn-primary full-width" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
+                <button type="button" class="btn btn-save" onclick="App.assetsVideo.saveFeedback()">Save Feedback</button>
               </div>
             </div>
 
@@ -819,7 +821,7 @@
                   <input id="generationHistorySelectAll" type="checkbox" aria-label="Select all jobs" onchange="App.assetsVideo.toggleAllGenerations(this)" />
                 </div>
                 <div class="crud-bulk-actions-row youtube-comment-bulk-actions">
-                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn">Delete Selected</button>
+                  <button id="generationHistoryDeleteBtn" type="button" disabled onclick="App.assetsVideo.deleteSelectedGenerations()" class="btn btn-danger">Delete Selected</button>
                   &nbsp;&nbsp;|&nbsp;&nbsp;
                   <select id="generationHistoryAssignTopicSelect" class="form-input" style="max-width: 150px; display: inline-block;">
                     <option value="">-- Topic --</option>
@@ -849,14 +851,16 @@
 
       </section>
       <section id="assetsMusicPage" class="app-page hidden">
-        <h2>Assets: Audio</h2>
-        <p>Audio module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Assets: Audio</h2>
+        </div>
+        <p class="page-heading-desc">Audio module placeholder.</p>
       </section>
       <section id="assetsFootagePage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Assets: Footage</h2>
         </div>
-        <p>Every video file the Studio pipeline has picked up from Google Drive, grouped by recording session, newest first.</p>
+        <p class="page-heading-desc">Every video file the Studio pipeline has picked up from Google Drive, grouped by recording session, newest first.</p>
         <!-- React island. Mounted by react-entry.js; see components/studio/footage-panel.tsx. -->
         <div id="studioFootageReactRoot"></div>
       </section>
@@ -864,7 +868,7 @@
         <div class="page-heading-row">
           <h2>Assets: Fonts</h2>
         </div>
-        <p>Fonts that are not Google Fonts, each name drawn in its own lettering. Only fonts a business website may use are accepted.</p>
+        <p class="page-heading-desc">Fonts that are not Google Fonts, each name drawn in its own lettering. Only fonts a business website may use are accepted.</p>
         <!-- React island. Mounted by react-entry.js; see components/fonts/fonts-manager.tsx. -->
         <div id="assetsFontsReactRoot"></div>
       </section>

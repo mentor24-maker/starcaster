@@ -1691,6 +1691,9 @@ App.youtube = (function () {
 
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
+      // A bare <button> inherits white text from `button, .btn` and vanished
+      // on the white table (task 86bcyrqb9): give each one its kind.
+      editBtn.className = editing ? 'btn btn-sm btn-save' : 'btn btn-sm';
       editBtn.textContent = editing ? 'Save' : 'Edit';
       editBtn.addEventListener('click', function() {
         if (!editing) {
@@ -1709,6 +1712,7 @@ App.youtube = (function () {
       if (editing) {
         var cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-sm';
         cancelBtn.textContent = 'Cancel';
         cancelBtn.addEventListener('click', function() {
           editingIds.delete(rowId);
@@ -1719,6 +1723,7 @@ App.youtube = (function () {
 
       var deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-sm btn-danger';
       deleteBtn.textContent = 'Delete';
       deleteBtn.addEventListener('click', function() {
         if (!window.confirm('Delete ' + bundle.entityLabel + ' "' + (safeText(row && row.name) || rowId) + '"?')) return;
@@ -1956,6 +1961,9 @@ App.youtube = (function () {
 
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
+      // A bare <button> inherits white text from `button, .btn` and vanished
+      // on the white table (task 86bcyrqb9): give each one its kind.
+      editBtn.className = editing ? 'btn btn-sm btn-save' : 'btn btn-sm';
       editBtn.textContent = editing ? 'Save' : 'Edit';
       editBtn.addEventListener('click', function() {
         if (!editing) {
@@ -1974,6 +1982,7 @@ App.youtube = (function () {
       if (editing) {
         var cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-sm';
         cancelBtn.textContent = 'Cancel';
         cancelBtn.addEventListener('click', function() {
           youtubeMinerRuleGuideEditingIds.delete(rowId);
@@ -1984,6 +1993,7 @@ App.youtube = (function () {
 
       var deleteBtn = document.createElement('button');
       deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-sm btn-danger';
       deleteBtn.textContent = 'Delete';
       deleteBtn.addEventListener('click', function() {
         if (!window.confirm('Delete this rules/guides row?')) return;
@@ -4422,7 +4432,7 @@ App.youtube = (function () {
         { label: 'Cancel', onClick: function() { modal.close(); } },
         {
           label: 'Save Ban',
-          primary: true,
+          save: true,
           onClick: function() {
             var reason = safeText(select.value);
             if (!reason) {

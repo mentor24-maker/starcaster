@@ -7,7 +7,9 @@
         <div id="acquireHubBody" class="grid-2-col" style="margin-top: 2rem;"></div>
       </section>
       <section id="acquireWebPage" class="app-page hidden">
-        <h2>Acquire: Web</h2>
+        <div class="page-heading-row">
+          <h2>Acquire: Web</h2>
+        </div>
         <form id="directAcquireForm" class="acquire-web-form">
           <div class="acquire-web-setup-shell">
             <div class="acquire-web-url-row acquire-youtube-hero-row">
@@ -151,7 +153,7 @@
 
                 <div></div>
                 <div class="page-heading-actions" style="justify-content: flex-start;">
-                  <button id="directAcquireWebsiteDetailsSaveBtn" type="submit" class="btn btn-primary">Save Website Details</button>
+                  <button id="directAcquireWebsiteDetailsSaveBtn" type="submit" class="btn btn-save">Save Website Details</button>
                 </div>
               </form>
             </div>
@@ -161,7 +163,7 @@
                 <summary class="acquire-web-expandable-summary">
                   <span>Social</span>
                   <span class="page-heading-actions" style="padding: 0;">
-                    <button id="directAcquireSaveContactBtn" type="button" class="btn" disabled>Save To Contacts</button>
+                    <button id="directAcquireSaveContactBtn" type="button" class="btn btn-save" disabled>Save To Contacts</button>
                   </span>
                 </summary>
                 <div class="acquire-web-expandable-body">
@@ -204,7 +206,7 @@
                     <option value="legal">Legal</option>
                   </select>
                 </span>
-                <button id="directAcquireSaveKeywordsBtn" type="button" class="btn" disabled>Save Selected</button>
+                <button id="directAcquireSaveKeywordsBtn" type="button" class="btn btn-save" disabled>Save Selected</button>
               </span>
             </summary>
             <div class="acquire-web-expandable-body">
@@ -234,7 +236,7 @@
                   <input id="directAcquireHashtagSelectAll" type="checkbox" />
                   Check All
                 </label>
-                <button id="directAcquireSaveHashtagsBtn" type="button" class="btn" disabled>Save Selected</button>
+                <button id="directAcquireSaveHashtagsBtn" type="button" class="btn btn-save" disabled>Save Selected</button>
               </span>
             </summary>
             <div class="acquire-web-expandable-body">
@@ -295,7 +297,7 @@
                 <option value="">Select Image Category</option>
               </select>
               <button id="directAcquireApplyImageCategoryBtn" type="button" class="btn">Apply To Checked</button>
-              <button id="directAcquireSaveImagesBtn" type="button" class="btn" disabled>Save Selected To Assets</button>
+              <button id="directAcquireSaveImagesBtn" type="button" class="btn btn-save" disabled>Save Selected To Assets</button>
             </span>
           </summary>
           <div class="acquire-web-expandable-body">
@@ -502,7 +504,7 @@
               <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: center; margin-top: 0.75rem;">
                 <div></div>
-                <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-primary">Save Website</button>
+                <button id="directAcquireWebsitePeerSaveBtn" type="submit" class="btn btn-save">Save Website</button>
                 <button id="directAcquireWebsitePeerCancelBtn" type="button" class="btn">Cancel</button>
               </div>
             </form>
@@ -638,7 +640,7 @@
             <button type="button" id="acquireSettingsBackBtn" class="btn">Return to Acquire</button>
           </div>
         </div>
-        <p>Manage settings that apply across Acquire workflows. These are section-level controls, separate from app-wide settings.</p>
+        <p class="page-heading-desc">Manage settings that apply across Acquire workflows. These are section-level controls, separate from app-wide settings.</p>
         <div class="section-settings-shell">
           <div class="section-settings-main">
             <section class="card">
@@ -720,7 +722,7 @@
                 <div></div>
                 <div class="page-heading-actions standard-form-grid-full" style="justify-content:center; margin-top: 0.75rem;">
                   <div></div>
-                  <button type="submit" class="btn btn-primary">Save Website Defaults</button>
+                  <button type="submit" class="btn btn-save">Save Website Defaults</button>
                 </div>
               </form>
             </section>
@@ -942,7 +944,7 @@
                           <button id="youtubeMinerSendToTargetsBtn" type="button" class="btn btn-primary" disabled>Send Selected to Targets</button>
                           <button id="youtubeRunsAugmentBtn" type="button" disabled class="btn">Augment Selected</button>
                           <button id="youtubeRunsDiagnoseBtn" type="button" disabled class="btn">Diagnose Selected</button>
-                          <button id="youtubeRunsDeleteBtn" type="button" disabled class="btn">Delete Selected</button>
+                          <button id="youtubeRunsDeleteBtn" type="button" disabled class="btn btn-danger">Delete Selected</button>
                         </div>
                       </th>
                     </tr>
@@ -1059,7 +1061,7 @@
                           </div>
                           <div class="crud-bulk-actions-row youtube-comment-bulk-actions">
                           <button id="youtubeCommentMinerEditSelectedBtn" type="button" disabled class="btn">Edit Selected</button>
-                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled class="btn">Delete Selected</button>
+                          <button id="youtubeCommentMinerDeleteSelectedBtn" type="button" disabled class="btn btn-danger">Delete Selected</button>
                           <button id="youtubeCommentMinerAddContactBtn" type="button" disabled class="btn">Add Contact</button>
                           &nbsp;&nbsp;|&nbsp;&nbsp;
                           <select id="youtubeCommentMinerAssignSelect" class="form-input" style="max-width: 150px; display: inline-block;">
@@ -1100,7 +1102,7 @@
         <div class="page-heading-row">
           <h2>Ask Izzy</h2>
         </div>
-        <p>Ask Izzy is the guided help and support area for navigating the platform, workflows, and setup decisions.</p>
+        <p class="page-heading-desc">Ask Izzy is the guided help and support area for navigating the platform, workflows, and setup decisions.</p>
         <section class="youtube-miner-panel">
           <p>Use this area as the launching point for assisted help experiences. For now, the platform documentation remains available under <strong>Help &gt; Docs</strong>.</p>
           <div class="page-heading-actions" style="justify-content: flex-start;">
@@ -1142,7 +1144,7 @@
             <div></div>
               <div class="page-heading-actions standard-form-grid-full">
               <div></div>
-              <button type="submit" class="btn btn-primary">Save Changes</button>
+              <button type="submit" class="btn btn-save">Save Changes</button>
               <button id="youtubeRunEditTranscriptBtn" type="button" class="btn hidden">Acquire Transcript</button>
             </div>
           </form>
@@ -1343,7 +1345,7 @@
                 <div class="youtube-comments-schedule-summary">Scheduling runs automatically inside the selected date window. Scheduled send time may vary by plus or minus 10 hours when cadence spacing allows.</div>
                 <div id="commentsPostingStatus" class="youtube-comments-schedule-summary">Posting setup has not been checked yet.</div>
                 <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                  <button type="button" id="commentsSaveAgentBtn" class="btn">Save & Enable Schedule</button>
+                  <button type="button" id="commentsSaveAgentBtn" class="btn btn-save">Save & Enable Schedule</button>
                   <button type="button" id="commentsCheckSetupBtn" class="btn">Check Posting Setup</button>
                   <button type="button" id="commentsRunDueBtn" class="btn">Run Due Agents Now</button>
                   <button type="button" id="commentsPostNowBtn" class="btn">Post On Demand</button>
@@ -1380,7 +1382,7 @@
         <div class="page-heading-row">
           <h2>YouTube Topics</h2>
           <div class="page-heading-actions">
-            <button id="openCreateYoutubeTopicPageBtn" type="button" class="btn">Create Topic</button>
+            <button id="openCreateYoutubeTopicPageBtn" type="button" class="btn btn-primary">Create Topic</button>
             <button id="backToYoutubePageBtn" type="button" class="btn">Back To YouTube</button>
           </div>
         </div>
@@ -1407,7 +1409,7 @@
             <input id="youtubeTopicName" name="topic" required />
           
           <div></div>
-              <button type="submit" class="btn btn-primary">Save Category</button>
+              <button type="submit" class="btn btn-save">Save Category</button>
         </form>
       </section>
       <section id="editYoutubeTopicPage" class="app-page hidden">
@@ -1426,16 +1428,22 @@
         </form>
       </section>
       <section id="acquireInstagramPage" class="app-page hidden">
-        <h2>Acquire: Instagram</h2>
-        <p>Instagram acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Instagram</h2>
+        </div>
+        <p class="page-heading-desc">Instagram acquire module placeholder.</p>
       </section>
       <section id="acquireTiktokPage" class="app-page hidden">
-        <h2>Acquire: Tiktok</h2>
-        <p>Tiktok acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Tiktok</h2>
+        </div>
+        <p class="page-heading-desc">Tiktok acquire module placeholder.</p>
       </section>
       <section id="acquireFacebookPage" class="app-page hidden">
-        <h2>Acquire: Facebook</h2>
-        <p>Facebook acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Facebook</h2>
+        </div>
+        <p class="page-heading-desc">Facebook acquire module placeholder.</p>
       </section>
       <section id="acquireXPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -1444,7 +1452,7 @@
             <button id="xAcquireRefreshBtn" type="button" class="btn">Refresh Runs</button>
           </div>
         </div>
-        <p>Acquire recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
+        <p class="page-heading-desc">Acquire recent X posts by query/hashtags, optionally include replies, and store runs for later analysis.</p>
 
         <form id="xAcquireForm"  style="max-width: 980px;">
           
@@ -1745,7 +1753,7 @@
             <button id="blueskyRefreshBtn" type="button" class="btn">Refresh</button>
           </div>
         </div>
-        <p>Discover BlueSky posts, draft reply candidates, and stage posting workflows from a page that mirrors the Reddit acquisition flow.</p>
+        <p class="page-heading-desc">Discover BlueSky posts, draft reply candidates, and stage posting workflows from a page that mirrors the Reddit acquisition flow.</p>
 
         <div id="blueskyPostingPanel" class="settings-card bluesky-posting-panel hidden" style="margin-bottom: 1rem;">
           <div class="page-heading-row" style="margin-bottom: 0.75rem;">
@@ -1910,18 +1918,23 @@
 
       </section>
       <section id="acquireQuoraPage" class="app-page hidden">
-        <h2>Acquire: Quora</h2>
-        <p>Quora acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Quora</h2>
+        </div>
+        <p class="page-heading-desc">Quora acquire module placeholder.</p>
       </section>
       <section id="acquireSubstackPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Acquire: Substack Miner</h2>
         </div>
-        <p>The Substack writers Starcaster has found for this project. Approve the ones worth knowing and they are added to Contacts; reject the rest. Paste an article or profile link below to add a writer yourself; the Run tab searches the web for more and reads who your approved writers recommend.</p>
+        <p class="page-heading-desc">The Substack writers Starcaster has found for this project.</p>
+        <p>Approve the ones worth knowing and they are added to Contacts; reject the rest. Paste an article or profile link below to add a writer yourself; the Run tab searches the web for more and reads who your approved writers recommend.</p>
         <!-- React island. Mounted by react-entry.js; see components/substack-miner/substack-miner-panel.tsx. -->
         <div id="substackMinerReactRoot"></div>
       </section>
       <section id="acquireMediumPage" class="app-page hidden">
-        <h2>Acquire: Medium</h2>
-        <p>Medium acquire module placeholder.</p>
+        <div class="page-heading-row">
+          <h2>Acquire: Medium</h2>
+        </div>
+        <p class="page-heading-desc">Medium acquire module placeholder.</p>
       </section>

@@ -1,3 +1,4 @@
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { type CSSProperties, useState } from "react";
 import { eligibleNavParents, navDepthOf } from "@/lib/builder-nav-mega";
 import {
@@ -97,6 +98,12 @@ type NavItem = {
   parentId?: string;
   width?: string;
   /**
+   * "Opens in" (task 86bcxur55). Stored only as `"_blank"` — a Same tab item
+   * carries no key at all, so every menu saved before this setting existed
+   * reads, saves and renders exactly as it did.
+   */
+  target?: "_blank";
+  /**
    * The mega panel's extra column — top-level items only. See ClickUp 86bbafg38.
    *
    * `featureModule` is the general form: any module the palette offers, stored
@@ -140,6 +147,7 @@ function parseNavItems(settings: Record<string, string>): NavItem[] {
         href: String(raw.href || raw.url || ""),
         ...(raw.parentId ? { parentId: String(raw.parentId) } : {}),
         ...(raw.width ? { width: String(raw.width) } : {}),
+        ...(raw.target === "_blank" ? { target: "_blank" as const } : {}),
         ...(featureModule ? { featureModule } : {}),
         ...(raw.featureImage ? { featureImage: normalizeBuilderAssetUrl(raw.featureImage) } : {}),
         ...(raw.featureHeading ? { featureHeading: String(raw.featureHeading) } : {})
@@ -1438,14 +1446,15 @@ export function BuilderNavigationModuleSettings({
            */
           <div
             className="builder-nav-items-manager"
-            data-lattice-columns={module.settings.navItemSizing === "custom" ? "5" : "4"}
+            data-lattice-columns={module.settings.navItemSizing === "custom" ? "6" : "5"}
             data-nav-width-col={module.settings.navItemSizing === "custom" ? "true" : "false"}
           >
             <div className="builder-nav-items-header builder-nav-item-row">
               <div className="builder-nav-item-fields">
                 <span>Parent Page</span>
                 <span>Page Name</span>
-                <span>Slug</span>
+                <span>Link</span>
+                <span>Opens In</span>
                 {module.settings.navItemSizing === "custom" && <span className="builder-nav-item-width-wrap">Width</span>}
               </div>
               <span className="builder-nav-items-header-action">Action</span>
@@ -1474,7 +1483,27 @@ export function BuilderNavigationModuleSettings({
                         ))}
                       </select>
                       <input type="text" className="builder-nav-item-label" value={item.label} onChange={(e) => updateItem(item.id, { label: e.target.value })} placeholder={`Link ${index + 1}`} />
-                      <input type="text" className="builder-nav-item-href" value={item.href} onChange={(e) => updateItem(item.id, { href: e.target.value })} placeholder="/path-or-url" />
+                      {/* A page is stored by reference, so renaming it cannot break the menu (task 86bcxmt5x). */}
+                      <span className="builder-nav-item-href">
+                        <BuilderProjectDataPicker
+                          source="pages"
+                          valueKind="path"
+                          value={item.href}
+                          onChange={(href) => updateItem(item.id, { href })}
+                          noneLabel="— No link —"
+                          placeholder="/path-or-url"
+                          ariaLabel={`${item.label || `Link ${index + 1}`} link`}
+                        />
+                      </span>
+                      <select
+                        className="builder-nav-item-target"
+                        value={item.target ?? ""}
+                        onChange={(e) => updateItem(item.id, { target: e.target.value === "_blank" ? "_blank" : undefined })}
+                        aria-label={`${item.label || `Link ${index + 1}`} opens in`}
+                      >
+                        <option value="">Same tab</option>
+                        <option value="_blank">New tab</option>
+                      </select>
                       {isCustomSizing && (
                         <div className="builder-nav-item-width-wrap">
                           <input

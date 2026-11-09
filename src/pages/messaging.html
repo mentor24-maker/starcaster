@@ -1,7 +1,9 @@
 
       <section id="messagingPage" class="app-page hidden">
-        <h2>Messaging</h2>
-        <p>Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
+        <div class="page-heading-row">
+          <h2>Messaging</h2>
+        </div>
+        <p class="page-heading-desc">Messaging organizes reusable copy into shared topics and a structured content library for campaigns, pages, and engagement.</p>
         <div class="cards">
           <article class="card">
             <h3>Topics</h3>
@@ -17,7 +19,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-page="messagingPage">Messaging</a>: Content</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn">Create Content</button>
+            <button type="button" onclick="App.messaging.openCreateContent(); return false;" class="btn btn-primary">Create Content</button>
             <button type="button" onclick="App.messaging.openManageContentLanding(); return false;" class="btn">Formats</button>
           </div>
         </div>
@@ -157,9 +159,9 @@
               </div>
               <div id="messagingCreateContentActionsRow" class="page-heading-actions hidden" style="justify-content: flex-start; margin-top: 10px;">
                 <button id="messagingCreateContentGenerateBtn" type="button" class="btn">Generate with AI</button>
-                <button id="messagingCreateContentSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                <button id="messagingCreateContentSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                 <div></div>
-              <button id="messagingCreateContentSubmitBtn" type="submit" class="btn btn-primary hidden">Save Content</button>
+              <button id="messagingCreateContentSubmitBtn" type="submit" class="btn btn-save hidden">Save Content</button>
               </div>
             </form>
           </div>
@@ -186,7 +188,7 @@
                 </table>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                <button id="messagingCreateContentSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
               </div>
             </div>
             <div id="messagingCreateContentLongSuggestions" class="hidden">
@@ -214,7 +216,7 @@
                 </div>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingCreateContentSaveGeneratedBtn" type="button" class="btn">Save Generated Draft</button>
+                <button id="messagingCreateContentSaveGeneratedBtn" type="button" class="btn btn-save">Save Generated Draft</button>
               </div>
               <div id="messagingCreateContentFeedbackWrap" class="stack-form labeled-form hidden" style="margin-top: 12px;">
                 <div class="form-row">
@@ -264,7 +266,7 @@
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
         </div>
-        <p>Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
+        <p class="page-heading-desc">Create a content format by name and family. The app will generate its editor table and add it to Messaging Content automatically.</p>
 
         <form id="messagingContentTypeForm">
           <input type="hidden" name="id" />
@@ -307,7 +309,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Articles</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'article' }); return false;">Import Other Formats</button>
-            <button id="messagingArticlesToggleFormBtn" type="button" class="btn">Add Article</button>
+            <button id="messagingArticlesToggleFormBtn" type="button" class="btn btn-primary">Add Article</button>
           </div>
         </div>
         <form id="messagingArticlesForm">
@@ -335,7 +337,7 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit" class="btn btn-primary">Save Article</button>
+              <button type="submit" class="btn btn-save">Save Article</button>
         </form>
 
         <form id="messagingArticlesEditForm">
@@ -402,7 +404,7 @@
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tweet' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tweet' }); return false;">Import from Web Pages</button>
-            <button id="messagingTweetsToggleFormBtn" type="button" class="btn">Add Tweet</button>
+            <button id="messagingTweetsToggleFormBtn" type="button" class="btn btn-primary">Add Tweet</button>
           </div>
         </div>
         <div id="messagingTweetsWorkspace" class="messaging-create-content-layout hidden" style="margin-bottom: 18px;">
@@ -450,9 +452,9 @@
               <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                 <button id="messagingTweetsGenerateBtn" type="button" class="btn">Generate with AI</button>
-                <button id="messagingTweetsSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                <button id="messagingTweetsSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                 <div></div>
-              <button id="messagingTweetsSubmitBtn" type="submit" class="btn btn-primary">Save Tweet</button>
+              <button id="messagingTweetsSubmitBtn" type="submit" class="btn btn-save">Save Tweet</button>
               </div>
             </form>
           </div>
@@ -488,7 +490,7 @@
                 </table>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingTweetsSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                <button id="messagingTweetsSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
               </div>
             </div>
           </div>
@@ -637,9 +639,9 @@
               <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                 <button id="messagingPostsGenerateBtn" type="button" class="btn">Generate with AI</button>
-                <button id="messagingPostsSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                <button id="messagingPostsSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                 <div></div>
-                <button id="messagingPostsSubmitBtn" type="submit" class="btn btn-primary">Save Post</button>
+                <button id="messagingPostsSubmitBtn" type="submit" class="btn btn-save">Save Post</button>
               </div>
             </form>
           </div>
@@ -675,7 +677,7 @@
                 </table>
               </div>
               <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
-                <button id="messagingPostsSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                <button id="messagingPostsSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
               </div>
             </div>
           </div>
@@ -771,7 +773,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'email' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Email writing workspace placeholder.</p>
+        <p class="page-heading-desc">Email writing workspace placeholder.</p>
       </section>
       <section id="messagingPitchesPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -780,10 +782,10 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'pitch' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'pitch' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromPitchesBtn" type="button" class="btn">Topics</button>
-            <button id="messagingPitchesToggleFormBtn" type="button" class="btn">Create Pitches</button>
+            <button id="messagingPitchesToggleFormBtn" type="button" class="btn btn-primary">Create Pitches</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable pitches that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingPitchesCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -808,9 +810,9 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                   <button id="messagingPitchesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
-                  <button id="messagingPitchesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                  <button id="messagingPitchesCreatorSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                   <div></div>
-              <button id="messagingPitchesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Pitch</button>
+              <button id="messagingPitchesCreatorSubmitBtn" type="submit" class="btn btn-save">Save Pitch</button>
                 </div>
               </form>
             </div>
@@ -827,7 +829,7 @@
                     <option value="5">5</option>
                   </select>
                   <button id="messagingPitchesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
-                  <button id="messagingPitchesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                  <button id="messagingPitchesCreatorSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
                 </div>
               </div>
               <p id="messagingPitchesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review pitch options here.</p>
@@ -929,7 +931,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'comment' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Comment writing workspace placeholder.</p>
+        <p class="page-heading-desc">Comment writing workspace placeholder.</p>
       </section>
       <section id="messagingKeywordsPage" class="app-page hidden"></section>
       <section id="messagingHashtagsPage" class="app-page hidden">
@@ -937,7 +939,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Hashtags</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'hashtag' }); return false;">Import Other Formats</button>
-            <button id="messagingHashtagsToggleFormBtn" type="button" class="btn">Add Hashtags</button>
+            <button id="messagingHashtagsToggleFormBtn" type="button" class="btn btn-primary">Add Hashtags</button>
           </div>
         </div>
         <form id="messagingHashtagsForm" class="standard-form-grid">
@@ -946,7 +948,7 @@
             <option value="">Campaign (placeholder until campaigns are created)</option>
           </select>
           <div></div>
-              <button type="submit" class="btn btn-primary">Save Hashtags</button>
+              <button type="submit" class="btn btn-save">Save Hashtags</button>
         </form>
 
         <h3>Hashtags By Campaign</h3>
@@ -1006,9 +1008,9 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                   <button id="messagingHeadlinesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
-                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                  <button id="messagingHeadlinesCreatorSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                   <div></div>
-              <button id="messagingHeadlinesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Headline</button>
+              <button id="messagingHeadlinesCreatorSubmitBtn" type="submit" class="btn btn-save">Save Headline</button>
                 </div>
               </form>
             </div>
@@ -1025,7 +1027,7 @@
                     <option value="5">5</option>
                   </select>
                   <button id="messagingHeadlinesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
-                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                  <button id="messagingHeadlinesCreatorSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
                 </div>
               </div>
               <p id="messagingHeadlinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review headline options here.</p>
@@ -1167,7 +1169,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Topics</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
           </div>
         </div>
         <div class="messaging-topics-ai-toolbar" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
@@ -1191,7 +1193,7 @@
                 <input id="messagingTopicsSelectAllSuggestions" type="checkbox" />
                 Check All
               </label>
-              <button id="messagingTopicsSaveSelectedBtn" type="button" class="btn">Save Selected Topics</button>
+              <button id="messagingTopicsSaveSelectedBtn" type="button" class="btn btn-save">Save Selected Topics</button>
             </div>
           </div>
           <div id="messagingTopicsSuggestionsMeta" class="meta" style="margin-bottom: 0.8rem;"></div>
@@ -1208,7 +1210,7 @@
               <input id="messagingTopicName" name="topic" required />
             
             <div></div>
-              <button type="submit" class="btn btn-primary">Save Topic</button>
+              <button type="submit" class="btn btn-save">Save Topic</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
@@ -1236,23 +1238,23 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Topics</h2>
           <div class="page-heading-actions">
-            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button id="openCreateMessagingTopicPageBtn" type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
             <button type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
           </div>
         </div>
-        <p>The Topics editor now lives on the main Topics page.</p>
+        <p class="page-heading-desc">The Topics editor now lives on the main Topics page.</p>
       </section>
       <section id="createMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTopicsPage">Messaging Topics</a></h2>
         </div>
-        <p>The create form now opens inline on the main Topics page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Topics page.</p>
       </section>
       <section id="editMessagingTopicPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Messaging Topic</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn">Create Topic</button>
+            <button type="button" onclick="App.messaging.openTopicsCreate(); return false;" class="btn btn-primary">Create Topic</button>
             <button id="backFromEditMessagingTopicBtn" type="button" onclick="App.messaging.openTopicsPage(); return false;" class="btn">Back To Topics</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
@@ -1271,7 +1273,7 @@
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tag' }); return false;">Import from Web Pages</button>
           </div>
         </div>
@@ -1301,7 +1303,7 @@
               </select>
             
             <div></div>
-              <button type="submit" class="btn btn-primary">Save Tag</button>
+              <button type="submit" class="btn btn-save">Save Tag</button>
           </form>
         </section>
         <div class="table-wrap" style="margin-top: 1rem;">
@@ -1384,23 +1386,23 @@
         <div class="page-heading-row">
           <h2>Manage Messaging Tags</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
           </div>
         </div>
-        <p>The Tags editor now lives on the main Tags page.</p>
+        <p class="page-heading-desc">The Tags editor now lives on the main Tags page.</p>
       </section>
       <section id="createMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openTagsPage">Messaging Tags</a></h2>
         </div>
-        <p>The create form now opens inline on the main Tags page.</p>
+        <p class="page-heading-desc">The create form now opens inline on the main Tags page.</p>
       </section>
       <section id="editMessagingTagPage" class="app-page hidden">
         <div class="page-heading-row">
           <h2>Edit Messaging Tag</h2>
           <div class="page-heading-actions">
-            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn">Create Tag</button>
+            <button type="button" onclick="App.messaging.openTagsCreate(); return false;" class="btn btn-primary">Create Tag</button>
             <button type="button" onclick="App.messaging.openTagsPage(); return false;" class="btn">Back To Tags</button>
             <button type="button" onclick="App.messaging.openContentLanding(); return false;" class="btn">Back To Messaging</button>
           </div>
@@ -1437,10 +1439,10 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'subheading' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'subheading' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromSubheadingsBtn" type="button" class="btn">Topics</button>
-            <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn">Create Sub-headings</button>
+            <button id="messagingSubheadingsToggleFormBtn" type="button" class="btn btn-primary">Create Sub-headings</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable sub-headings that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingSubheadingsCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -1465,9 +1467,9 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                   <button id="messagingSubheadingsCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
-                  <button id="messagingSubheadingsCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                  <button id="messagingSubheadingsCreatorSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                   <div></div>
-              <button id="messagingSubheadingsCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Sub-heading</button>
+              <button id="messagingSubheadingsCreatorSubmitBtn" type="submit" class="btn btn-save">Save Sub-heading</button>
                 </div>
               </form>
             </div>
@@ -1484,7 +1486,7 @@
                     <option value="5">5</option>
                   </select>
                   <button id="messagingSubheadingsCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
-                  <button id="messagingSubheadingsCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                  <button id="messagingSubheadingsCreatorSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
                 </div>
               </div>
               <p id="messagingSubheadingsCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review sub-heading options here.</p>
@@ -1586,10 +1588,10 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'headline', toType: 'tagline' }); return false;">Import Other Formats</button>
             <button type="button" class="btn btn-primary" onclick="App.assetFieldImport.openModal({ fromType: 'web-page', toType: 'tagline' }); return false;">Import from Web Pages</button>
             <button id="openMessagingTopicsFromTaglinesBtn" type="button" class="btn">Topics</button>
-            <button id="messagingTaglinesToggleFormBtn" type="button" class="btn">Create Taglines</button>
+            <button id="messagingTaglinesToggleFormBtn" type="button" class="btn btn-primary">Create Taglines</button>
           </div>
         </div>
-        <p>Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
+        <p class="page-heading-desc">Create, import, edit, and organize reusable taglines that can later be assigned to campaigns and other messaging workflows.</p>
 
         <section id="messagingTaglinesCreateWrap" class="hidden">
           <div class="messaging-create-content-layout" style="margin-bottom: 18px;">
@@ -1614,9 +1616,9 @@
                 <div></div>
               <div class="page-heading-actions standard-form-grid-full" style="justify-content: flex-start; margin-top: 10px;">
                   <button id="messagingTaglinesCreatorGenerateBtn" type="button" class="btn">Generate with AI</button>
-                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button" class="btn">Save Prompt</button>
+                  <button id="messagingTaglinesCreatorSavePromptBtn" type="button" class="btn btn-save">Save Prompt</button>
                   <div></div>
-              <button id="messagingTaglinesCreatorSubmitBtn" type="submit" class="btn btn-primary">Save Tagline</button>
+              <button id="messagingTaglinesCreatorSubmitBtn" type="submit" class="btn btn-save">Save Tagline</button>
                 </div>
               </form>
             </div>
@@ -1633,7 +1635,7 @@
                     <option value="5">5</option>
                   </select>
                   <button id="messagingTaglinesCreatorClearSuggestionsBtn" type="button" class="btn">Clear</button>
-                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button" class="btn">Save Selected</button>
+                  <button id="messagingTaglinesCreatorSaveSelectedBtn" type="button" class="btn btn-save">Save Selected</button>
                 </div>
               </div>
               <p id="messagingTaglinesCreatorSuggestionsEmpty" style="margin-top: 0;">Generate with AI to review tagline options here.</p>
@@ -1733,7 +1735,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: Reports</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'report' }); return false;">Import Other Formats</button>
-            <button id="messagingReportsToggleFormBtn" type="button" class="btn">Add Report</button>
+            <button id="messagingReportsToggleFormBtn" type="button" class="btn btn-primary">Add Report</button>
           </div>
         </div>
         <form id="messagingReportsForm">
@@ -1764,7 +1766,7 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit" class="btn btn-primary">Save Report</button>
+              <button type="submit" class="btn btn-save">Save Report</button>
         </form>
 
         <form id="messagingReportsEditForm">
@@ -1835,7 +1837,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: White Papers</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'white-paper' }); return false;">Import Other Formats</button>
-            <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn">Add White Paper</button>
+            <button id="messagingWhitePapersToggleFormBtn" type="button" class="btn btn-primary">Add White Paper</button>
           </div>
         </div>
         <form id="messagingWhitePapersForm">
@@ -1866,7 +1868,7 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit" class="btn btn-primary">Save White Paper</button>
+              <button type="submit" class="btn btn-save">Save White Paper</button>
         </form>
 
         <form id="messagingWhitePapersEditForm">
@@ -1937,7 +1939,7 @@
           <h2><a href="#" class="page-heading-back-link" data-back-click="messaging.openContentLanding">Messaging</a>: eBooks</h2>
           <div class="page-heading-actions">
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'ebook' }); return false;">Import Other Formats</button>
-            <button id="messagingEbooksToggleFormBtn" type="button" class="btn">Add eBook</button>
+            <button id="messagingEbooksToggleFormBtn" type="button" class="btn btn-primary">Add eBook</button>
           </div>
         </div>
         <form id="messagingEbooksForm">
@@ -1968,7 +1970,7 @@
           <textarea name="content" rows="8" placeholder="Content" required></textarea>
           <textarea name="feedback" rows="4" placeholder="Feedback / Training (optional)"></textarea>
           <div></div>
-              <button type="submit" class="btn btn-primary">Save eBook</button>
+              <button type="submit" class="btn btn-save">Save eBook</button>
         </form>
 
         <form id="messagingEbooksEditForm">
@@ -2041,7 +2043,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'post', toType: 'description' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Description writing workspace placeholder.</p>
+        <p class="page-heading-desc">Description writing workspace placeholder.</p>
       </section>
       <section id="messagingTranscriptsPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -2050,7 +2052,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'article', toType: 'transcript' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>Transcript writing workspace placeholder.</p>
+        <p class="page-heading-desc">Transcript writing workspace placeholder.</p>
       </section>
       <section id="messagingCtasPage" class="app-page hidden">
         <div class="page-heading-row">
@@ -2059,7 +2061,7 @@
             <button type="button" class="btn" onclick="App.assetFieldImport.openModal({ fromType: 'tweet', toType: 'cta' }); return false;">Import Other Formats</button>
           </div>
         </div>
-        <p>CTA writing workspace placeholder.</p>
+        <p class="page-heading-desc">CTA writing workspace placeholder.</p>
       </section>
 
 <dialog id="messagingFormatImportModal" class="c-modal">

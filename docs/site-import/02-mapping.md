@@ -46,7 +46,7 @@ sections untouchable, nav to the master).
 
 | # | Proposed decision | Why |
 |---|---|---|
-| 1 | **Placeholder = `code` module carrying the element's screenshot crop.** `module.text` = an `<img>` of the crop; the one-line caption ("Imported form — rebuild with a real module") rides in `settings.importPlaceholder` and renders through `BuilderOnlyNote`, in the Builder only (it was written into `text` until task 86bcgdm83, and visitors read it on 24 live pages); the original source HTML rides in `settings.importSourceHtml` (capped) with overflow to Blob. Applies to the sanitizer-stripped classes: `form`, `video`*, `table`, `embed`, `other`. | The sanitizer strips these tags (Phase 0 §5), so the crop IS the content until a human rebuilds it. This is exactly why Phase 1 captured per-element crops. No new module type, no sanitizer widening. |
+| 1 | **Placeholder = `code` module carrying the element's screenshot crop.** `module.text` = an `<img>` of the crop; the one-line caption ("Imported form — rebuild with a real module") rides in `settings.importPlaceholder` and renders through `BuilderOnlyNote`, in the Builder only (it was written into `text` until task 86bcgdm83, and visitors read it on 24 live pages); the original source HTML rides in `settings.importSourceHtml` (capped) with overflow to Blob. Applies to the sanitizer-stripped classes: `form`, `video`*, `table`, `embed`, `other`. **Forms are now rebuilt, not screenshotted** (task 86bcynjx2, Dane 2026-11-04: *"Replace it automatically"*): a form that collects something (`lib/site-import/forms.ts` reads it as `data-capture`) becomes a working **Form** (`crm-form`) module, and `--apply` builds the matching form under Contacts › Forms first — add-only on the project's CRM, one form per distinct source form however many pages carry it, ids kept in the map checkpoint so a re-run updates rather than duplicates, and a form changed by hand since — any question, wording, message or style, button colour included — left alone (`lib/siteImportForms.js`). Only a search box, sign-in or payment form stays a picture, its caption naming the reason. | The sanitizer strips these tags (Phase 0 §5), so the crop IS the content until a human rebuilds it. This is exactly why Phase 1 captured per-element crops. No new module type, no sanitizer widening. |
 | 2 | **Prose maps to `text` modules, merged then split.** Consecutive `heading`/`text`/`link` elements within one IR section merge into one rich-text module (their original HTML, which the rich-text allowlist accepts: h1–h6, p, lists, a, img…), split at 9,500 chars on element boundaries. **A single element over 9,500 chars** splits at its own top-level child boundaries, recursively; a still-atomic text run hard-splits at the nearest whitespace (a seam may break inline formatting mid-run — recorded, acceptable); only content with no split point at all demotes to placeholder. | Matches how Builder pages are actually built (headings live inside rich-text modules). Merging avoids a 400-module page; the margin below 10k keeps normalizer truncation impossible; the oversize ladder means no element ever silently truncates OR silently disappears. |
 | 3 | `image` → `image` module; `button` (incl. `a[role=button]`) → `button` module (label + href); direct-file `video` src → `video` module, otherwise placeholder per #1. | Mechanical, unambiguous. |
 | 4 | **Slugs: normalized original path, suffixed on collision; home lands as `imported-home`.** Builder slugs are single-segment (middleware rewrites `/{slug}`) and lowercase, so the mapper ships a slug normalizer: flatten path separators to dashes (`/about/team` → `about-team`), lowercase, ascii-fold, strip non-alphanumerics. **Never emit `admin`, `admin-*`, or the private-exact slugs** (`lib/builder-client/public-site-page-slugs.js` makes those auto-private — an imported `/admin-office` page would silently vanish from the public list); such paths get an `imported-` prefix. Existing pages always win collisions. | The operator promotes slugs deliberately at review time. An import must never shadow a live page — or fall into the auto-private trap. |
@@ -88,6 +88,29 @@ guard, dry-run default, JSON backup of every page it will touch to
 - `locked` sections are never touched (content-fill convention, Phase 0
   §3b) — relevant when re-running onto existing imported pages.
 
+### Starting the build from the screen (task 86bcz9wcx, 2026-11-05)
+
+Builder › Site Import has **Preview Build** and **Build Draft Pages** buttons
+on a captured job; no agent session is needed. The website cannot run the
+mapper itself (backups go to local files, and the run outlives a request), so:
+
+1. The button calls `POST /api/site-import/jobs/:id/build` with
+   `{ mode: 'preview' | 'apply', noTheme }`, which only records
+   `checkpoints.build = { status: 'queued', … }`. Build refuses until a
+   preview exists whose fingerprint still matches the job (same captured IR,
+   no build since) — `lib/siteImportBuild.js`, `planBuildRequest`.
+2. The Mac Mini import worker's `--drain` (every 5 minutes) claims the request
+   with a compare-and-set on `checkpoints->build->>status`, runs
+   `scripts/site_import_map.mjs --job <id> [--apply] [--no-theme]
+   --result-file <tmp>` as a child process, and writes `status: done | failed`
+   with the result (pages, theme palette, warnings, what was applied) back.
+   A successful preview is also kept as `checkpoints.buildPreview`.
+3. A request still `running` after two hours is marked failed in words (the
+   worker stopped partway).
+
+Never publishes — the mapper's own guarantee, unchanged. By hand, the script
+still works exactly as before.
+
 ### Idempotent re-runs — and never clobbering human work
 
 The job row gains `checkpoints.map.pageIds` — `{ <writeKey>: <builderPageId> }`.
@@ -121,7 +144,7 @@ anything (the dry run produces the identical report):
 
 ```json
 {
-  "elements": { "total": 0, "mapped": 0, "placeholder": 0,
+  "elements": { "total": 0, "mapped": 0, "placeholder": 0, "form": 0,
                  "navConsumed": 0, "humanModified": 0, "skipped": 0 },
   "skipped": [ { "sourceId": "…", "class": "…", "reason": "…" } ],
   "pages": [ { "path": "/", "slug": "imported-home", "modules": 0,
@@ -131,7 +154,7 @@ anything (the dry run produces the identical report):
 ```
 
 (Shape sketch — counts filled by real runs.) Rule:
-`total === mapped + placeholder + navConsumed + humanModified + skipped`,
+`total === mapped + placeholder + form + navConsumed + deduped + humanModified + skipped`,
 `skipped` entries must each carry a reason, and `humanModified` counts
 elements whose target section was hash-protected on a re-run. A dry run
 whose numbers don't reconcile refuses to `--apply`. The UI's job page

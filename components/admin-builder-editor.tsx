@@ -1,6 +1,7 @@
 "use client";
 
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
+import { buildPageAddressMap } from "@/lib/page-link";
 import { useGoogleFontLinks } from "./builder/use-google-font-links";
 import { useLibraryFontFaces } from "./builder/use-library-font-faces";
 import { resolveSessionProjectId } from "@/lib/adapters/starcaster-app";
@@ -12,7 +13,7 @@ import {
   fetchPropagationRunScope,
   performPropagationUndo,
 } from "@/lib/propagation-undo";
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AdminMediaItem } from "@/lib/admin-media";
 import {
@@ -100,7 +101,7 @@ import {
   type BuilderModuleEditorFocus,
   type CreatedModuleSource
 } from "./builder/builder-module-repository-list";
-import { BuilderCollapseIcon } from "./builder/builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps, isBuilderPageLoading } from "./builder/builder-collapse-icon";
 import {
   BuilderFloatingSaveRail,
   type BuilderFloatingSaveAction
@@ -109,6 +110,7 @@ import { BuilderSaveDebugPanel } from "./builder/builder-save-debug-panel";
 import { BuilderSectionCard } from "./builder/builder-section-card";
 import { BuilderCenteredModal } from "./builder/builder-centered-modal";
 import { BuilderSaveConflictModal } from "./builder/builder-save-conflict-modal";
+import { confirmPageDelete as askBeforePageDelete } from "./builder/confirm-page-delete";
 import { BuilderSectionSaveModal } from "./builder/builder-section-save-modal";
 import {
   BuilderSharedBlockSaveModal,
@@ -173,9 +175,17 @@ type AdminBuilderEditorProps = {
   autoNewPage?: boolean;
   /** Called after a Publish succeeds — the shell moves focus to Close Builder. */
   onPublished?: () => void;
+  /**
+   * The screen's one title. Builder › Workspace passes "Builder: Workspace"
+   * and drops its own heading row, so the screen has a single title with its
+   * buttons on the same row (UI normalization 2 of 10, task 86bcyrqaw).
+   */
+  title?: string;
+  /** Extra buttons for the title row, after the mode switch (Workspace: Back To Builder). */
+  headerActions?: ReactNode;
 };
 
-export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, onPublished }: AdminBuilderEditorProps = {}) {
+export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, onPublished, title = "Page Builder", headerActions }: AdminBuilderEditorProps = {}) {
   const [builderMode, setBuilderMode] = useState<"templates" | "modules" | "pages">(initialMode ?? "templates");
   const [previewModalDevice, setPreviewModalDevice] = useState<BuilderPreviewFrameDevice | null>(null);
   const [pageTemplates, setPageTemplates] = useState<BuilderTemplateRecord[]>([]);
@@ -202,6 +212,11 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   const [repositorySaveActive, setRepositorySaveActive] = useState(false);
   const repositorySaveRef = useRef<BuilderModuleEditorFocus | null>(null);
   const hydratedPageSelectionRef = useRef("");
+  // State mirrors of the two "has the page arrived?" facts the refs hold, so
+  // the four panel bars re-render when they change (task 86bczp0zy).
+  const [pagesLoaded, setPagesLoaded] = useState(false);
+  const [hydratedPageId, setHydratedPageId] = useState("");
+  const [initialSelectionApplied, setInitialSelectionApplied] = useState(false);
   // The page's updatedAt as of the version currently on the canvas. Sent with
   // every save so the server can refuse to write over somebody else's change
   // (see isStaleEdit in lib/builderPagesStore.js). It MUST be refreshed from
@@ -482,6 +497,10 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load pages.");
       setPages([]);
+    } finally {
+      // Come back either way: a failed load must stop the spinners, and the
+      // error banner already says what went wrong.
+      setPagesLoaded(true);
     }
   }
 
@@ -692,6 +711,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     }
 
     hydratedPageSelectionRef.current = selectionKey;
+    setHydratedPageId(selectedPageId);
     loadedUpdatedAtRef.current = page?.updatedAt ?? "";
     setSaveConflict(null);
     pageThemeDirtyRef.current = false;
@@ -719,6 +739,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       const match = pages.find((entry) => String(entry.id) === String(initialRecordId));
       if (!match) return;
       appliedInitialSelectionRef.current = true;
+      setInitialSelectionApplied(true);
       setSelectedPageId(match.id);
       return;
     }
@@ -813,6 +834,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           : c.name
     }));
   }
+
+  // Page Details, Publish, Page History and Workspace show a spinner and
+  // refuse clicks until this is false — opening Workspace before the page has
+  // arrived showed an empty or half-filled workspace (task 86bczp0zy).
+  const pageLoading = isBuilderPageLoading({
+    builderMode,
+    pagesLoaded,
+    pageIds: pages.map((page) => page.id),
+    initialPageId: initialMode === "pages" ? initialRecordId : undefined,
+    initialSelectionApplied,
+    selectedPageId,
+    hydratedPageId,
+  });
 
   function toggleBuilderPanel(panel: keyof typeof collapsedBuilderPanels) {
     setCollapsedBuilderPanels((current) => {
@@ -2688,9 +2722,19 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     finally { setIsSaving(false); }
   }
 
+  /**
+   * Ask before deleting, naming every button, menu item and form that would be
+   * left pointing at a deleted page (task 86bcxn69z). Nothing linking → the
+   * same `window.confirm` as always. One function for both Pages screens:
+   * components/builder/confirm-page-delete.tsx.
+   */
+  function confirmPageDelete(pageIds: string[], question: string): Promise<boolean> {
+    return askBeforePageDelete(pageIds, question, (id) => pages.find((page) => page.id === id)?.name || "");
+  }
+
   async function deletePageById(pageId: string, pageName: string) {
     if (!pageId) { startNewPage(); return; }
-    if (!window.confirm(`Delete page "${pageName}"? This cannot be undone.`)) return;
+    if (!(await confirmPageDelete([pageId], `Delete page "${pageName}"? This cannot be undone.`))) return;
     setError(null); setMessage(null);
     try {
       const response = await builderAdminFetch(`/api/admin/pages/${pageId}`, { method: "DELETE" });
@@ -2704,7 +2748,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   async function deletePagesByIds(pageIds: string[]) {
     if (pageIds.length === 0) return;
     const n = pageIds.length;
-    if (!window.confirm(`Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    if (!(await confirmPageDelete(pageIds, `Delete ${n} page${n !== 1 ? "s" : ""}? This cannot be undone.`))) return;
     setError(null); setMessage(null); setIsSaving(true);
     let failed = 0;
     for (const id of pageIds) {
@@ -2779,6 +2823,8 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       themePalette: builderThemeToCrmPalette(paletteSource),
       themeStyles: buildBuilderThemeStyles(paletteSource),
       themeShellBackground: paletteSource,
+      // So a link stored by reference previews at the page's current address.
+      pageAddresses: buildPageAddressMap(pages),
     };
   }
 
@@ -3017,12 +3063,27 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       <div className="builder-editor-layout">
         <div className="builder-editor-layout-main">
       <div className="admin-toolbar">
-        <h2 className="admin-section-heading">Page Builder</h2>
+        <h2 className="admin-section-heading">{title}</h2>
         <div className="admin-actions builder-header-actions">
-          <button className={builderMode === "templates" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("templates")} type="button">Templates</button>
-          <button className={builderMode === "modules" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("modules")} type="button">Modules</button>
-          <button className={builderMode === "pages" ? "submit-button" : "secondary-button"} onClick={() => setBuilderMode("pages")} type="button">Pages</button>
+          {headerActions}
         </div>
+      </div>
+      {/* Templates / Modules / Pages switch the VIEW, so they are tabs, not
+          buttons beside the screen's actions (UI rule C9, task 86bcyrqbb —
+          they used to be the app's own Save and Cancel styles). */}
+      <div className="tab-bar builder-mode-tabs" role="tablist" aria-label="Builder workspace views">
+        {([["templates", "Templates"], ["modules", "Modules"], ["pages", "Pages"]] as const).map(([mode, label]) => (
+          <button
+            aria-selected={builderMode === mode}
+            className="tab-btn"
+            key={mode}
+            onClick={() => setBuilderMode(mode)}
+            role="tab"
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {message ? <div className="notice success admin-notice">{message}</div> : null}
@@ -3216,6 +3277,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           pages={pages}
           templates={pageLayoutTemplates}
           themes={builderThemes}
+          pageLoading={pageLoading}
           selectedPageId={selectedPageId}
           draftName={draft.name}
           pageBackground={draft.pageBackground}
@@ -3264,6 +3326,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           page happens to be open. A step you can forget is worse than no step. */}
       {builderMode === "pages" ? (
         <BuilderPublishPanel
+          loading={pageLoading}
           focusRequestKey={publishFocusKey}
           onPublished={onPublished}
           refreshKey={publishRefreshKey}
@@ -3272,6 +3335,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
 
       {builderMode === "pages" && selectedPageId ? (
         <BuilderPageHistory
+          loading={pageLoading}
           pageId={selectedPageId}
           pageName={draft.name || "this page"}
           onRestored={() => {
@@ -3292,9 +3356,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
               className="builder-panel-toggle"
               onClick={() => toggleBuilderPanel("workspace")}
               type="button"
+              {...builderPanelToggleLoadingProps(
+                pageLoading,
+                collapsedBuilderPanels.workspace ? "Expand Workspace" : "Collapse Workspace",
+              )}
             >
               <span className="panel-label">Workspace</span>
-              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.workspace} /></span>
+              <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsedBuilderPanels.workspace} loading={pageLoading} /></span>
             </button>
             {!collapsedBuilderPanels.workspace ? (
               <div className="builder-workspace-pods">

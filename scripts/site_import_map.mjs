@@ -49,6 +49,25 @@
  *   pages were built without a theme (Alphire), which used to mean
  *   re-running the whole import. The Site Import screen's "Create theme
  *   from this import" does the same (lib/siteImportTheme.js, shared).
+ * - REFRESH (task 86bcynzn5, Dane 2026-11-04: "real refresh"): a confirmed
+ *   re-import (checkpoints.reimportOf) has no map checkpoint of its own, so
+ *   it builds against the earlier job's — the most recent one up the chain
+ *   that built pages (lib/siteImportRefresh.js). Its pages are UPDATED in
+ *   place, not added beside; sections edited since the first import are kept
+ *   by the clobber guard; the earlier menus are updated, not twinned. The
+ *   import theme is made but NOT made the default. The run opens with
+ *   "Refreshing N pages built by the import of <site> on <date>; …".
+ * - FORMS ONLY (task 86bcynk0e, 2026-11-05): --forms-only swaps the form
+ *   SCREENSHOTS on pages an import already built for working Form modules —
+ *   for sites imported before forms were rebuilt (Strands Movie). It maps the
+ *   saved IR with the same mapper, writes the forms with the same functions
+ *   (lib/siteImportForms.js), and touches only the placeholder modules: a
+ *   placeholder a person changed is left alone and named. Backs up each page,
+ *   writes drafts, reads each back, and then republishes ONLY the pages it
+ *   changed that were live and had no unpublished edits before it ran.
+ *   Dry run unless --apply; the dry run writes nothing at all (no report).
+ *   --skip-form <key> (repeatable) leaves one form as its picture — the
+ *   dry run prints each form's key beside it.
  * - Rollback: restore the snapshot id printed at apply time
  *   (POST /api/builder/page-snapshots/:id/restore) and/or the JSON backup.
  *
@@ -59,9 +78,14 @@
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
  *   ... --no-theme   skip the import theme (see below)
  *   ... --theme-only [--apply]   ONLY the import theme; touches no page
+ *   ... --forms-only [--apply]   ONLY the form screenshots → Form modules
+ *   ... --skip-form <key>   (with --forms-only, repeatable) keep that form a picture
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
+ *   ... --result-file <path>   write what the run planned / did as JSON (the
+ *       import worker passes this when the Site Import screen's Preview build
+ *       / Build draft pages buttons queued the run — task 86bcz9wcx)
  */
 
 import path from 'node:path';
@@ -127,7 +151,7 @@ if (/localhost|127\.0\.0\.1/.test(process.env.SUPABASE_URL) && !flag('--allow-lo
   console.error('Refusing a localhost database (--allow-local overrides for local testing).');
   process.exit(1);
 }
-if (!process.env.BLOB_READ_WRITE_TOKEN && !flag('--theme-only')) {
+if (!process.env.BLOB_READ_WRITE_TOKEN && !flag('--theme-only') && !flag('--forms-only')) {
   console.error('BLOB_READ_WRITE_TOKEN is missing — crops/assets copy to Vercel Blob on apply.');
   process.exit(1);
 }
@@ -148,17 +172,28 @@ const savedSectionsStore = require('./lib/builderSavedSectionsStore.js');
 const assetsStore = require('./lib/assetsStore.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
 const {
-  mapSite, reportReconciles, mergeMappedSections,
+  mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
   writeMappedPages, summarizePageWrites,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
 } = require('./lib/site-import/dist/map.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
+const crmConfigStore = require('./lib/crmConfigStore.js');
+const crmFormsStore = require('./lib/crmFormsStore.js');
+const {
+  applyImportForms, fillFormIds, checkFormLinks, planFormsOnly, replaceFormPlaceholders, formsOnlyLinkPlans,
+} = require('./lib/siteImportForms.js');
+const publishStore = require('./lib/builderPublishStore.js');
+const {
+  resolveRefreshSource, planRefresh, refreshSummaryLine, findHumanModifiedSections, themeMakesDefault,
+} = require('./lib/siteImportRefresh.js');
 
 const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const NO_THEME = flag('--no-theme');
 const THEME_ONLY = flag('--theme-only');
+const FORMS_ONLY = flag('--forms-only');
+const SKIP_FORMS = new Set(flagValues('--skip-form'));
 // --nav writes the project's own header master instead; doing both would
 // put two menus on every imported page.
 const NO_MENUS = flag('--no-menus') || NAV;
@@ -169,12 +204,28 @@ const NO_CARDS_ALL = flag('--no-cards') && NO_CARDS_PATHS.length === 0;
 const NO_SLIDESHOW_PATHS = flagValues('--no-slideshow');
 const NO_SLIDESHOW_ALL = flag('--no-slideshow') && NO_SLIDESHOW_PATHS.length === 0;
 const JOB_ID = flagValue('--job');
+const RESULT_FILE = flagValue('--result-file');
 const BACKUP_DIR = path.join(ROOT, 'docs', 'SQL', 'backups');
 
 const log = (...parts) => console.log(...parts);
 function must(res, what) {
   if (!res || res.ok === false) throw new Error(`${what}: ${res?.error || `status ${res?.status}`}`);
   return res.data;
+}
+/**
+ * What this run planned and did, for the Site Import screen (task 86bcz9wcx).
+ * Written to --result-file at the end, success or failure. Plain words only —
+ * the operator reads these lines as they are.
+ */
+const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '' };
+const warn = (line) => { RESULT.warnings.push(String(line)); };
+function writeResult(extra = {}) {
+  if (!RESULT_FILE) return;
+  try {
+    writeFileSync(RESULT_FILE, JSON.stringify({ ...RESULT, ...extra }, null, 2));
+  } catch (err) {
+    console.error(`could not write --result-file ${RESULT_FILE}: ${err.message || err}`);
+  }
 }
 const sha256 = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
@@ -238,15 +289,30 @@ async function main() {
   }
   let job = must(await store.getJob(JOB_ID), 'load job');
   const scope = { projectId: job.projectId, userId: job.ownerUserId || '' };
-  if (!THEME_ONLY) log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}${NO_MENUS ? ' (no menus)' : ''}`);
+  if (THEME_ONLY && FORMS_ONLY) throw new Error('--theme-only and --forms-only are separate passes — run one at a time.');
+  if (!THEME_ONLY && !FORMS_ONLY) log(`Mode:    ${APPLY ? 'APPLY (writes drafts)' : 'DRY RUN (no writes)'}${NAV ? ' + NAV' : ''}${NO_MENUS ? ' (no menus)' : ''}`);
   log(`Job:     ${job.id} (${job.sourceUrl})`);
   log(`Project: ${job.projectId}`);
   if (THEME_ONLY) return runThemeOnly(job, scope);
+  if (FORMS_ONLY) return runFormsOnly(job, scope);
   const irUrl = job.checkpoints?.normalize?.blobPath;
   if (!irUrl) throw new Error('Job has no normalize checkpoint — run the import worker first.');
   const ir = await fetchJson(irUrl);
 
-  const prior = job.checkpoints?.map || {};
+  // A confirmed re-import has no map checkpoint of its own: it REFRESHES the
+  // pages the earlier import built (task 86bcynzn5), so it starts from that
+  // job's page ids, section fingerprints and menu sections. Without this every
+  // earlier page counted as a taken address and a second set landed beside it.
+  const { prior, refresh, unbuiltChain } = await resolveRefreshSource(job, async (id) => {
+    const res = await store.getJob(id);
+    if (res && res.ok === false && res.status === 404) return null;
+    return must(res, `load earlier import ${id}`);
+  });
+  if (refresh) {
+    log(`Refresh: this is a re-import — building against the pages job ${refresh.job.id} (${refresh.job.sourceUrl}) built.`);
+  } else if (unbuiltChain?.length) {
+    log(`Re-import of ${unbuiltChain.map((j) => j.id).join(' → ')}, none of which had pages built — this is a first build.`);
+  }
   const priorPageIds = prior.pageIds || {};
   const priorHashes = prior.sectionHashes || {};
 
@@ -264,29 +330,76 @@ async function main() {
     menus: !NO_MENUS,
   });
 
-  // ---- Clobber guard (dry run computes it too, so reports are identical) --
-  const protectedSections = [];
+  // ---- Old section names (task 86bcyrt21) ---------------------------------
+  // Section ids used to start with the page's crawl position and now start
+  // with its address. A page this job built under the old names keeps its
+  // sections: each is renamed to its new id, and its fingerprint carried
+  // across, so the guard below still knows which ones somebody edited. An
+  // untouched section is fingerprinted as renamed (the mapper refreshes it);
+  // an edited one keeps its old fingerprint, which no longer matches, so it
+  // stays protected.
+  const sectionHashesIn = { ...priorHashes };
+  const pageForId = new Map();
+  let adoptedCount = 0;
   for (const page of out.pages) {
     const existingId = priorPageIds[page.key];
     if (!existingId) continue;
+    pageForId.set(String(existingId), page);
     const current = existingPages.find((p) => String(p.id) === String(existingId));
     if (!current) continue;
-    for (const section of page.sections) {
-      const priorHash = priorHashes[section.id];
-      if (!priorHash) continue;
-      const live = (current.layoutSections || []).find((s) => s.id === section.id);
-      if (!live) continue; // human deleted it — re-run recreates, by design
-      if (sha256(live) !== priorHash && !FORCED_SECTIONS.has(section.id)) {
-        protectedSections.push({ page, section, live });
-        out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder;
-        out.report.elements.mapped -= section.dispositions.mapped;
-        out.report.elements.placeholder -= section.dispositions.placeholder;
-      }
+    const before = current.layoutSections || [];
+    const { sections, renames } = adoptLegacySectionIds(before, page.sections);
+    if (!renames.size) continue;
+    for (const [oldId, newId] of renames) {
+      const oldHash = priorHashes[oldId];
+      if (!oldHash) continue;
+      const was = before.find((sec) => sec.id === oldId);
+      const now = sections.find((sec) => sec.id === newId);
+      sectionHashesIn[newId] = sha256(was) === oldHash ? sha256(now) : oldHash;
     }
+    current.layoutSections = sections;
+    adoptedCount += renames.size;
+  }
+  if (adoptedCount) log(`Old section names: ${adoptedCount} section(s) built under crawl-order ids recognised and renamed — none added twice.`);
+  const adoptOldNames = (fresh) => {
+    const page = pageForId.get(String(fresh.id));
+    if (!page) return fresh;
+    return { ...fresh, layoutSections: adoptLegacySectionIds(fresh.layoutSections || [], page.sections).sections };
+  };
+
+  // ---- Clobber guard (dry run computes it too, so reports are identical) --
+  const protectedSections = findHumanModifiedSections(out.pages, {
+    priorPageIds, sectionHashes: sectionHashesIn, existingPages, forced: FORCED_SECTIONS, fingerprint: sha256,
+  });
+  for (const { section } of protectedSections) {
+    const form = section.dispositions.form || 0;
+    out.report.elements.humanModified += section.dispositions.mapped + section.dispositions.placeholder + form;
+    out.report.elements.mapped -= section.dispositions.mapped;
+    out.report.elements.placeholder -= section.dispositions.placeholder;
+    out.report.elements.form -= form;
   }
   const protectedIds = new Set(protectedSections.map((p) => p.section.id));
+  const refreshLine = refresh
+    ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size)
+    : '';
 
   // ---- Report ------------------------------------------------------------
+  if (refreshLine) log(`\n${refreshLine}`);
+  RESULT.refresh = refreshLine;
+  {
+    const existingIds = new Set(existingPages.map((p) => String(p.id)));
+    const nameByKey = new Map(out.pages.map((p) => [p.key, p.name]));
+    RESULT.pages = out.report.pages.map((p) => ({
+      path: p.path,
+      slug: p.slug,
+      name: nameByKey.get(p.key) || p.slug,
+      action: priorPageIds[p.key] && existingIds.has(String(priorPageIds[p.key])) ? 'update' : 'create',
+      modules: p.modules,
+      placeholders: p.placeholders,
+    }));
+  }
+  if (out.report.skipped.length) warn(`${out.report.skipped.length} part(s) of the old site could not be placed on any page.`);
+  if (protectedIds.size) warn(`${protectedIds.size} section(s) were edited by a person since the last build and will be left exactly as they are.`);
   log('\nReconciliation:', JSON.stringify(out.report.elements));
   if (out.report.skipped.length) log('Skipped:', JSON.stringify(out.report.skipped, null, 2));
   for (const p of out.report.pages) {
@@ -347,6 +460,7 @@ async function main() {
   }
   log(`Assets: promote ${out.report.assets.promoted}, not placed but kept ${out.report.assets.unplaced}, crops ${out.report.assets.cropsCopied}, left in namespace ${out.report.assets.leftInNamespace}`);
   logMenuPlan(job, out, prior);
+  logFormsPlan(out, prior);
 
   if (!reportReconciles(out.report)) {
     throw new Error('Report does not reconcile — refusing to proceed. This is a mapper bug; file it.');
@@ -357,6 +471,7 @@ async function main() {
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'upload report').location;
   log(`Report: ${reportUrl}`);
+  RESULT.reportUrl = reportUrl;
 
   // Dry-run nav preview only. On --apply the nav step runs LAST (below):
   // it mutates pages (attaching the master instance), and any page write
@@ -368,11 +483,24 @@ async function main() {
   // The import theme: derived now so the dry run shows exactly what --apply
   // would save. Named against the project's CURRENT themes.
   const themePlan = NO_THEME ? null : await planImportTheme(job, scope, { ir });
+  // A refresh makes its theme but leaves the project's default alone: the
+  // site has been running on whatever default it has since the first import,
+  // possibly one Dane chose, and a refresh is not a new look.
+  const makeThemeDefault = themeMakesDefault(refresh);
   if (themePlan) {
-    log(`\nImport theme "${themePlan.name}" (becomes the project default on --apply):`);
+    log(makeThemeDefault
+      ? `\nImport theme "${themePlan.name}" (becomes the project default on --apply):`
+      : `\nImport theme "${themePlan.name}" (made on --apply, NOT made the default — this is a refresh; the current default stays):`);
     for (const note of themePlan.notes) log(`  ${note}`);
+    RESULT.theme = {
+      name: themePlan.name,
+      palette: themePlan.theme?.palette && typeof themePlan.theme.palette === 'object' ? themePlan.theme.palette : {},
+      notes: themePlan.notes || [],
+      makesDefault: makeThemeDefault,
+    };
   } else {
     log('\nImport theme: skipped (--no-theme).');
+    RESULT.theme = { skipped: true };
   }
 
   if (!APPLY) {
@@ -409,6 +537,7 @@ async function main() {
   if (uncopyable.length) {
     log(`${uncopyable.length} image(s) could not be copied — the original site refused them; they keep their original address:`);
     for (const s of uncopyable) log(`  ${s.fromUrl}  (${s.reason})`);
+    warn(`${uncopyable.length} picture(s) could not be copied because the old site refused them; they still point at the old site.`);
   }
   const overflowUrls = new Map();
   for (const overflow of out.copyPlan.sourceOverflows) {
@@ -481,15 +610,45 @@ async function main() {
     if (untenanted.length) {
       console.error(`\nERROR: ${untenanted.length} new Assets row(s) did not read back with both project_id and owner_user_id:`);
       for (const loc of untenanted) console.error(`  ${loc}`);
+      warn(`${untenanted.length} new picture(s) in Assets did not save against this project.`);
       process.exitCode = 1;
     } else {
       log(`  read back: all ${createdLocations.length} carry project_id and owner_user_id.`);
     }
   }
 
+  // 3c. Forms (task 86bcynjx2): rebuild each source form as a Starcaster
+  //     form BEFORE the pages, so each page's Form module is written with
+  //     its form's id already in it. Add-only on the CRM; a re-run updates
+  //     the forms recorded in the checkpoint instead of making twins.
+  let formIds = {};
+  let formCheckpoint = { ...(prior.forms || {}) };
+  if (out.forms.length) {
+    log(`\nForms: rebuilding ${out.forms.length} form(s) under Contacts › Forms`);
+    const applied = await applyImportForms(out.forms, {
+      configStore: crmConfigStore,
+      formsStore: crmFormsStore,
+      scope,
+      prior: prior.forms || {},
+      log,
+    });
+    formIds = applied.formIds;
+    formCheckpoint = { ...formCheckpoint, ...applied.checkpoint };
+    for (const r of applied.results) {
+      const entry = out.report.forms.rebuilt.find((f) => f.key === r.key);
+      if (entry) { entry.outcome = r.outcome; entry.formId = r.formId; }
+      log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+    }
+    // Recorded NOW, not with the rest of the checkpoint: if a page write
+    // below fails, the next run must still find these forms, not make twins.
+    job = must(await store.updateJob(job.id, {
+      checkpoints: { ...(job.checkpoints || {}), map: { ...(job.checkpoints?.map || {}), forms: formCheckpoint } },
+    }), 'record form ids');
+  }
+
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
-  const sectionHashes = { ...priorHashes };
+  const sectionHashes = { ...sectionHashesIn };
   /** pageId -> section ids this run owns; hashed at the very end. */
   const ownedSectionIds = new Map();
   // Keyed by page.key, never by source path: two captures of "/" keyed by
@@ -498,6 +657,7 @@ async function main() {
     priorPageIds,
     prepareSections: (page) => page.sections.map(({ sourceElementIds, dispositions, ...section }) => {
       const clean = rewriteUrls(section, urlMap);
+      fillFormIds([clean], formIds);
       for (const module of clean.modules) {
         const overflowUrl = overflowUrls.get(module.id);
         if (overflowUrl) module.settings.importSourceHtmlUrl = overflowUrl;
@@ -506,7 +666,7 @@ async function main() {
     }),
     getPage: async (id) => {
       const fresh = await pagesStore.getPage(id, scope);
-      return fresh.ok ? fresh.data : null;
+      return fresh.ok && fresh.data ? adoptOldNames(fresh.data) : null;
     },
     createPage: async (page, sections) => must(await pagesStore.createPage({
       name: page.name,
@@ -534,16 +694,42 @@ async function main() {
     // must still record them so a re-run finds them. But the run fails.
     console.error('\nERROR: what was written does not match the report:');
     for (const problem of writeSummary.problems) console.error(`  ${problem}`);
+    for (const problem of writeSummary.problems) warn(problem);
     process.exitCode = 1;
+  }
+
+  // 4a. Read the Form modules back: each must hold its form's id.
+  if (out.forms.length) {
+    const pagesByKey = new Map();
+    for (const page of out.pages) {
+      const id = pageIds[page.key];
+      if (!id) continue;
+      const fresh = await pagesStore.getPage(id, scope);
+      if (fresh.ok && fresh.data) pagesByKey.set(page.key, fresh.data);
+    }
+    const links = checkFormLinks(out.forms, formIds, pagesByKey, protectedIds);
+    if (links.problems.length) {
+      console.error('\nERROR: a Form module does not hold its form\'s id:');
+      for (const problem of links.problems) console.error(`  ${problem}`);
+      warn(`${links.problems.length} form(s) on the new pages are not linked to their rebuilt form.`);
+      process.exitCode = 1;
+    } else {
+      log(`Forms: read back ${links.checked} Form module(s) — each holds its form's id.`);
+    }
+    if (links.skipped.length) log(`  not rewritten (section edited by a person, so protected): ${links.skipped.join(', ')}`);
   }
 
   // 4b. The import theme: create, make default, READ BACK (landmine 12 —
   //     an insert that "succeeds" can still land without its tenant).
   let themeCheckpoint = null;
   if (themePlan) {
-    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: true });
-    log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
-    log(`  ${undoLine(themeCheckpoint)}`);
+    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: makeThemeDefault });
+    if (makeThemeDefault) {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
+      log(`  ${undoLine(themeCheckpoint)}`);
+    } else {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}); the project default is unchanged (refresh).`);
+    }
   }
 
   // 5. Checkpoint + final report (now carrying page ids).
@@ -556,7 +742,10 @@ async function main() {
       pageIds,
       sectionHashes,
       appliedNamespace: applied,
+      ...(refresh ? { refreshedFrom: refresh.job.id } : {}),
       ...(themeCheckpoint ? { theme: themeCheckpoint } : {}),
+      // How a re-run finds the forms it made (task 86bcynjx2).
+      ...(Object.keys(formCheckpoint).length ? { forms: formCheckpoint } : {}),
       // Carried over until the menu step below replaces it: these ids are
       // how a re-run finds the sections it made instead of minting twins.
       ...(prior.menus ? { menus: prior.menus } : {}),
@@ -568,7 +757,16 @@ async function main() {
     mimeType: 'application/json',
     fileBuffer: Buffer.from(JSON.stringify(out.report, null, 2)),
   }), 'update report');
+  RESULT.applied = {
+    created: writeSummary.created,
+    updated: writeSummary.updated,
+    pages: writeSummary.distinctPages,
+    snapshotId: snapshot.id,
+    backup: path.relative(ROOT, backupPath),
+    theme: themeCheckpoint ? { name: themeCheckpoint.name, madeDefault: themeCheckpoint.madeDefault } : null,
+  };
   log(`\nAPPLY complete: ${writeSummary.distinctPages} draft page(s) (${writeSummary.created} created, ${writeSummary.updated} updated). Nothing was published.`);
+  if (refreshLine) log(refreshLine);
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
 
   // Menus and nav LAST: nothing may write pages after the master instances
@@ -630,6 +828,226 @@ async function runThemeOnly(job, scope) {
     return;
   }
   log(`Pages untouched: all ${after.size} page(s) read back with the same updated_at as before.`);
+}
+
+/**
+ * --forms-only (task 86bcynk0e): the form screenshots on pages this import
+ * already built become working Form modules. Nothing else on any page moves.
+ */
+async function runFormsOnly(job, scope) {
+  log(`Mode:    FORMS ONLY — ${APPLY ? 'swaps form screenshots for working forms' : 'dry run, writes nothing'}; only form placeholders are touched`);
+  const irUrl = job.checkpoints?.normalize?.blobPath;
+  if (!irUrl) throw new Error('Job has no normalize checkpoint — run the import worker first.');
+
+  // The pages THIS import created live in the map checkpoint — its own, or
+  // (for a confirmed re-import) the earlier job's that built them.
+  const { prior, refresh } = await resolveRefreshSource(job, async (id) => {
+    const res = await store.getJob(id);
+    if (res && res.ok === false && res.status === 404) return null;
+    return must(res, `load earlier import ${id}`);
+  });
+  const owner = refresh ? refresh.job : job;
+  const ownedIds = new Set(Object.values(prior.pageIds || {}).map(String));
+  if (!ownedIds.size) {
+    log('\nForms: this import built no pages, so there is nothing to swap. Nothing was written.');
+    return;
+  }
+  if (refresh) log(`Pages:   built by job ${owner.id} (this job re-imports it).`);
+
+  const ir = await fetchJson(irUrl);
+  const sourceHtml = new Map();
+  for (const page of ir.pages || []) {
+    for (const section of page.sections || []) {
+      for (const el of section.elements || []) sourceHtml.set(String(el.sourceId), String(el.html || ''));
+    }
+  }
+  // The same mapper as a full import, so a form gets the same plan, key and
+  // name either way — and a later full re-import finds the forms made here.
+  const mapOut = mapSite(ir, { existingSlugs: [], menus: false });
+
+  const allPages = must(await pagesStore.listPages(5000, scope), 'list pages');
+  const owned = allPages.filter((p) => ownedIds.has(String(p.id)));
+  const gone = ownedIds.size - owned.length;
+  const plan = planFormsOnly(owned, mapOut, sourceHtml, { skip: SKIP_FORMS });
+  const unknownSkips = [...SKIP_FORMS].filter((key) => !(mapOut.forms || []).some((f) => f.key === key));
+  if (unknownSkips.length) throw new Error(`--skip-form names no form this import read: ${unknownSkips.join(', ')} — check the key in the dry run.`);
+
+  log(`\nPages built by this import: ${owned.length}${gone ? ` (${gone} since deleted)` : ''} — no other page is read for changes.`);
+  const ownedNow = new Set(owned.map((p) => String(p.id)));
+  for (const m of plan.missing) m.pageDeleted = !ownedNow.has(String((prior.pageIds || {})[m.pageKey] || ''));
+  logFormsOnlyPlan(plan, prior);
+
+  // Which touched pages go live again afterwards: only those that were live
+  // AND had no unpublished edits before this pass. Anything else would put a
+  // person's half-finished draft in front of visitors (landmine 16).
+  const touchedIds = [...new Set(plan.replacements.map((r) => r.pageId))];
+  const pending = must(await publishStore.listPendingPublish(job.projectId), 'read which pages have unpublished edits');
+  const pendingIds = new Set(pending.map((p) => String(p.id)));
+  const republish = [];
+  const notRepublished = [];
+  for (const id of touchedIds) {
+    const page = owned.find((p) => String(p.id) === id);
+    if (!page.isPublished) notRepublished.push({ page, why: 'it is not published — it stays a draft' });
+    else if (pendingIds.has(id)) notRepublished.push({ page, why: 'it already had unpublished edits before this pass — publish it yourself when they are ready' });
+    else republish.push(page);
+  }
+  if (touchedIds.length) {
+    log('\nPublishing after the swap:');
+    for (const page of republish) log(`  republish /${page.slug} — it is live with no other unpublished edits`);
+    for (const { page, why } of notRepublished) log(`  leave /${page.slug} unpublished: ${why}`);
+  }
+
+  if (!APPLY) {
+    log(plan.replacements.length
+      ? '\nDry run complete — nothing was written. Re-run with --forms-only --apply to swap them.'
+      : '\nDry run complete — nothing to swap, nothing was written.');
+    return;
+  }
+  if (!plan.replacements.length) {
+    log('\nNothing to change: no form screenshot on this import\'s pages is waiting to be swapped. Nothing was written.');
+    return;
+  }
+
+  // ---- APPLY -------------------------------------------------------------
+  // 1. Back up every page this pass will touch, before anything is written.
+  const touchedPages = owned.filter((p) => touchedIds.includes(String(p.id)));
+  const snapshot = must(await snapshotsStore.createPageSnapshot(
+    { label: `pre-site-import-forms-only ${job.id}`, pages: touchedPages }, scope
+  ), 'create snapshot');
+  mkdirSync(BACKUP_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(BACKUP_DIR, `site_import_forms_${job.id}_${stamp}.json`);
+  writeFileSync(backupPath, JSON.stringify({ jobId: job.id, snapshotId: snapshot.id, pages: touchedPages }, null, 2));
+  log(`\nSnapshot: ${snapshot.id}  Backup: ${path.relative(ROOT, backupPath)}`);
+
+  // 2. The forms — the same writer as a full import; recorded at once on the
+  //    job that holds the pages, so a failure below cannot lead to twins.
+  log(`Forms: building ${plan.plans.length} form(s) under Contacts › Forms`);
+  const applied = await applyImportForms(plan.plans, {
+    configStore: crmConfigStore, formsStore: crmFormsStore, scope, prior: prior.forms || {}, log,
+  });
+  for (const r of applied.results) log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+  const formCheckpoint = { ...(prior.forms || {}), ...applied.checkpoint };
+  const ownerNow = must(await store.getJob(owner.id), 'reload the job that built the pages');
+  must(await store.updateJob(owner.id, {
+    checkpoints: { ...(ownerNow.checkpoints || {}), map: { ...(ownerNow.checkpoints?.map || {}), forms: formCheckpoint } },
+  }), 'record form ids');
+
+  // 3. Each page: re-read, re-check, swap, write, READ BACK before the next.
+  const sectionHashes = { ...(prior.sectionHashes || {}) };
+  const written = [];
+  for (const id of touchedIds) {
+    const fresh = must(await pagesStore.getPage(id, scope), `re-read page ${id}`);
+    // Re-planned on the page as it is NOW: an edit made since the dry-run
+    // read is caught here, not overwritten.
+    const now = planFormsOnly([fresh], mapOut, sourceHtml, { skip: SKIP_FORMS });
+    for (const left of now.leftAlone) log(`  /${fresh.slug}: left ${left.moduleId} alone — ${left.reason}`);
+    if (!now.replacements.length) { log(`  /${fresh.slug}: nothing left to swap (changed since it was read)`); continue; }
+    const before = fresh.layoutSections || [];
+    const next = replaceFormPlaceholders(before, now.replacements, applied.formIds);
+    must(await pagesStore.updatePage(fresh.id, { ...fresh, layoutSections: next }, scope), `update /${fresh.slug}`);
+    const back = must(await pagesStore.getPage(id, scope), `read back /${fresh.slug}`);
+    const links = checkFormLinks(formsOnlyLinkPlans(now.plans, now.replacements), applied.formIds, new Map([[String(id), back]]));
+    if (links.problems.length || (back.layoutSections || []).length !== before.length) {
+      console.error(`\nERROR: /${fresh.slug} did not read back as written — stopping before any other page.`);
+      for (const problem of links.problems) console.error(`  ${problem}`);
+      if ((back.layoutSections || []).length !== before.length) console.error(`  it had ${before.length} section(s) and now has ${(back.layoutSections || []).length}`);
+      console.error(`  Restore it from snapshot ${snapshot.id} or ${path.relative(ROOT, backupPath)}`);
+      process.exitCode = 1;
+      return;
+    }
+    // A section the import still owned (fingerprint matched) gets its new
+    // fingerprint, so a later full re-import does not treat the swap as a
+    // person's edit. A section somebody changed keeps the old one — still theirs.
+    for (const sectionId of new Set(now.replacements.map((r) => r.sectionId))) {
+      const was = before.find((s) => s.id === sectionId);
+      const is = (back.layoutSections || []).find((s) => s.id === sectionId);
+      if (was && is && sectionHashes[sectionId] && sectionHashes[sectionId] === sha256(was)) sectionHashes[sectionId] = sha256(is);
+    }
+    written.push({ page: back, count: now.replacements.length });
+    log(`  /${back.slug} (page ${back.id}): ${now.replacements.length} form screenshot(s) → Form module; read back, each holds its form's id (draft)`);
+  }
+  const ownerAfter = must(await store.getJob(owner.id), 'reload the job that built the pages');
+  must(await store.updateJob(owner.id, {
+    checkpoints: { ...(ownerAfter.checkpoints || {}), map: { ...(ownerAfter.checkpoints?.map || {}), forms: formCheckpoint, sectionHashes } },
+  }), 'record section fingerprints');
+
+  // 4. Republish ONLY the pages named above — never a bare publish, and an
+  //    empty list publishes nothing (selectPagesToPublish).
+  const writtenIds = new Set(written.map((w) => String(w.page.id)));
+  const pageIds = republish.map((p) => String(p.id)).filter((id) => writtenIds.has(id));
+  const published = [];
+  if (pageIds.length) {
+    let buildId;
+    for (let round = 0; round < 20; round += 1) {
+      const res = must(await publishStore.publishPages(job.projectId, { pageIds, buildId }), 'republish the swapped pages');
+      buildId = res.buildId;
+      published.push(...res.pages);
+      if (res.done) break;
+    }
+  }
+  log(`\nAPPLY complete: ${written.length} page(s) changed, ${written.reduce((n, w) => n + w.count, 0)} form screenshot(s) swapped.`);
+  log(published.length
+    ? `Republished: ${published.map((p) => `/${p.slug}`).join(', ')} — nothing else was published.`
+    : 'Republished: none — nothing was published.');
+  for (const { page, why } of notRepublished) log(`  /${page.slug} not republished: ${why}`);
+  log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
+}
+
+/** The forms-only dry run's promise, in plain words — --apply prints it too. */
+function logFormsOnlyPlan(plan, prior) {
+  const pagesWith = new Set(plan.replacements.map((r) => r.slug));
+  log(`\nForms: ${plan.replacements.length} form screenshot(s) to swap on ${pagesWith.size} page(s), ${plan.plans.length} distinct form(s)`);
+  for (const f of plan.plans) {
+    const on = plan.replacements.filter((r) => r.planKey === f.key).map((r) => `/${r.slug}`);
+    const again = prior.forms?.[f.key]?.formId ? ` — updates the form made before (${prior.forms[f.key].formId})` : ' — new form';
+    log(`  "${f.name}", ${f.fields.length} question(s), on ${on.join(', ')}${again}`);
+    log(`     key: ${f.key}   (keep it a picture with: --skip-form ${f.key})`);
+    for (const q of f.fields) log(`     question: ${q.label} (${q.type}${q.required ? ', required' : ''}${q.options.length ? `, ${q.options.length} choices` : ''})`);
+    log(`     button: "${f.submitLabel}"`);
+    for (const k of f.kept) log(`     kept "${k.name}" = "${k.value}" — ${k.why}`);
+    for (const d of f.dropped) log(`     dropped ${d.what} — ${d.why}`);
+    for (const n of f.notes) log(`     ${n.what} — ${n.why}`);
+  }
+  for (const key of new Set(plan.vetoed.map((v) => v.planKey))) {
+    const on = plan.vetoed.filter((v) => v.planKey === key).map((v) => `/${v.slug}`);
+    log(`  kept as a picture (--skip-form ${key}): ${on.join(', ')}`);
+  }
+  if (plan.alreadyForms.length) log(`  already a working form: ${plan.alreadyForms.length} (${[...new Set(plan.alreadyForms.map((a) => `/${a.slug}`))].join(', ')})`);
+  for (const l of plan.leftAlone) log(`  left alone on /${l.slug} (${l.moduleId}): ${l.reason}`);
+  for (const m of plan.missing) {
+    log(m.pageDeleted
+      ? `  not swapped on ${m.pagePath} (${m.sourceId}): that page has been deleted`
+      : `  no longer on ${m.pagePath} (${m.sourceId}): the screenshot was removed or replaced — not put back`);
+  }
+  const pics = new Map();
+  for (const p of plan.pictures) {
+    const entry = pics.get(p.reason) || [];
+    entry.push(`/${p.slug}`);
+    pics.set(p.reason, entry);
+  }
+  for (const [reason, slugs] of pics) log(`  stays a picture on ${slugs.length} page(s): ${reason}`);
+}
+
+/**
+ * The Forms section of the report (task 86bcynjx2): every form on the source
+ * site — rebuilt (with its question count, and whether a re-run will update
+ * the one it made) or left as a picture (with the reason) — plus everything
+ * the form reader kept or dropped, in plain words.
+ */
+function logFormsPlan(out, prior) {
+  const { rebuilt, pictures } = out.report.forms;
+  if (!rebuilt.length && !pictures.length) {
+    log('\nForms: none on the source site.');
+    return;
+  }
+  log(`\nForms: ${rebuilt.length} rebuilt as working forms, ${pictures.length} left as a picture`);
+  for (const f of rebuilt) {
+    const again = prior.forms?.[f.key]?.formId ? ` — updates the form made last time (${prior.forms[f.key].formId})` : '';
+    log(`  rebuilt, ${f.questions} question(s): "${f.name}" on ${f.pages.join(', ')}${again}`);
+    for (const line of [...f.kept, ...f.dropped, ...f.notes]) log(`     ${line}`);
+  }
+  for (const p of pictures) log(`  left as a picture on ${p.pagePath}: ${p.reason}`);
 }
 
 /** What the menu step will build — the dry run's promise, and --apply's. */
@@ -845,7 +1263,10 @@ async function runNav(job, scope, out) {
   log(`--nav: attached to ${pageIds.length} page(s); propagation updated ${prop.updated}/${prop.total}.`);
 }
 
-main().catch((err) => {
+main().then(() => {
+  writeResult({ ok: !process.exitCode });
+}).catch((err) => {
   console.error('\nMAPPER FAILED:', err.message || err);
+  writeResult({ ok: false, error: String(err.message || err) });
   process.exit(1);
 });

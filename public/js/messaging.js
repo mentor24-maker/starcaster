@@ -525,8 +525,8 @@ App.messaging = (function () {
                 </div>
                 <div class="page-heading-actions" style="justify-content: flex-start; margin-top: 10px;">
                   <button id="${ids.creatorGenerateBtnId}" type="button" class="btn">Generate with AI</button>
-                  <button id="${ids.creatorSavePromptBtnId}" type="button" class="btn">Save Prompt</button>
-                  <button id="${ids.creatorSubmitBtnId}" type="submit" class="btn btn-primary">Save ${config.singularLabel}</button>
+                  <button id="${ids.creatorSavePromptBtnId}" type="button" class="btn btn-save">Save Prompt</button>
+                  <button id="${ids.creatorSubmitBtnId}" type="submit" class="btn btn-save">Save ${config.singularLabel}</button>
                 </div>
               </form>
             </div>
@@ -543,7 +543,7 @@ App.messaging = (function () {
                     <option value="5">5</option>
                   </select>
                   <button id="${ids.creatorClearSuggestionsBtnId}" type="button" class="btn">Clear</button>
-                  <button id="${ids.creatorSaveSelectedBtnId}" type="button" class="btn">Save Selected</button>
+                  <button id="${ids.creatorSaveSelectedBtnId}" type="button" class="btn btn-save">Save Selected</button>
                 </div>
               </div>
               <p id="${ids.creatorSuggestionsEmptyId}" style="margin-top: 0;">Generate with AI to review ${config.singularLower} options here.</p>

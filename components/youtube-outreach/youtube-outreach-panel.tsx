@@ -797,7 +797,7 @@ function TargetEditor({ target, busy, error, onSave, onCancel }: {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       <div className="yt-outreach-actions">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -865,7 +865,7 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       <div className="yt-outreach-actions">
         <button type="button" className="btn" onClick={onCancel} disabled={busy}>Close</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -1260,11 +1260,11 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
       {error ? <p className="yt-outreach-error" role="alert">{error}</p> : null}
       {notice ? <p className="yt-outreach-notice" role="status">{notice}</p> : null}
 
-      <div className="yt-outreach-tabs" role="tablist" aria-label="YouTube Outreach">
+      <div className="tab-bar yt-outreach-tabs" role="tablist" aria-label="YouTube Outreach">
         <button
           type="button"
           role="tab"
-          className={`btn${tab === 'targets' ? ' btn-primary' : ''}`}
+          className="tab-btn"
           aria-selected={tab === 'targets'}
           onClick={() => setTab('targets')}
         >
@@ -1273,7 +1273,7 @@ export default function YoutubeOutreachPanel(): React.ReactElement {
         <button
           type="button"
           role="tab"
-          className={`btn${tab === 'approvals' ? ' btn-primary' : ''}`}
+          className="tab-btn"
           aria-selected={tab === 'approvals'}
           onClick={() => setTab('approvals')}
         >

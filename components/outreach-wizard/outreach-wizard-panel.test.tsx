@@ -187,6 +187,20 @@ describe("OutreachWizardPanel", () => {
     expect(container!.querySelectorAll(".btn-primary")).toHaveLength(1);
   });
 
+  it("the channel switch is the shared tab style, never a button (UI rule C9, 86bcyrqbb)", async () => {
+    await mount();
+    const bar = container!.querySelector('[role="tablist"]')!;
+    expect(bar.classList.contains("tab-bar")).toBe(true);
+    const tabs = Array.from(bar.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs.length).toBeGreaterThan(1);
+    for (const t of tabs) {
+      expect(t.className).toBe("tab-btn");
+    }
+    await act(async () => tab("Substack").click());
+    expect(tab("Substack").getAttribute("aria-selected")).toBe("true");
+    expect(tab("YouTube").getAttribute("aria-selected")).toBe("false");
+  });
+
   it("the button opens the screen for that step", async () => {
     await mount();
     const button = container!.querySelector<HTMLAnchorElement>(".btn-primary")!;

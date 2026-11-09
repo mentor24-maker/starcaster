@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment } from "react";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import type { BuilderTemplateModule } from "@/lib/builder-template";
 import {
   BuilderSchemaModuleSettings,
@@ -115,14 +116,18 @@ function BreadcrumbItemsManager({ settings, set }: BuilderSchemaFieldContext) {
               aria-label={`Item ${index + 1} label`}
               data-lattice-row={index}
             />
-            <input
-              type="text"
-              value={item.url}
-              onChange={(e) => updateItem(item.id, "url", e.target.value)}
-              placeholder={index === items.length - 1 ? "current page — leave blank" : "/path-or-url"}
-              aria-label={`Item ${index + 1} URL`}
-              data-lattice-row={index}
-            />
+            {/* A page is stored by reference, so renaming it cannot break the trail (task 86bcxu518). */}
+            <span className="builder-item-grid-picker" data-lattice-row={index}>
+              <BuilderProjectDataPicker
+                source="pages"
+                valueKind="path"
+                value={item.url}
+                onChange={(url) => updateItem(item.id, "url", url)}
+                noneLabel={index === items.length - 1 ? "— Current page (no link) —" : "— No link —"}
+                placeholder="/path-or-url"
+                ariaLabel={`Item ${index + 1} URL`}
+              />
+            </span>
             <div className="builder-item-grid-actions" data-lattice-row={index}>
               <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, -1)} aria-label="Move Up" title="Move up">↑</button>
               <button type="button" className="builder-icon-button" onClick={() => moveItem(item.id, 1)} aria-label="Move Down" title="Move down">↓</button>

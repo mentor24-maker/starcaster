@@ -209,7 +209,7 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
                           <button type="button" className="btn tiny-btn" disabled={Boolean(busy) || commentReplyLabel(m) === 'Replied'} onClick={() => void writeReplies(c, m)}>
                             {isBusy && busy?.action === `reply:${m.id}` ? 'Writing…' : commentReplyLabel(m)}
                           </button>
-                          <button type="button" className="btn tiny-btn" disabled={Boolean(busy)} onClick={() => void saveContact(c, m.author)}>
+                          <button type="button" className="btn btn-save tiny-btn" disabled={Boolean(busy)} onClick={() => void saveContact(c, m.author)}>
                             {isBusy && busy?.action === `contact:${m.author}` ? 'Saving…' : 'Save as contact'}
                           </button>
                         </div>
@@ -225,7 +225,7 @@ export default function RedditConversations({ onChanged, version }: Props = {}):
                     Skip
                   </button>
                   {c.author ? (
-                    <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void saveContact(c, c.author)}>
+                    <button type="button" className="btn btn-save" disabled={Boolean(busy)} onClick={() => void saveContact(c, c.author)}>
                       {isBusy && busy?.action === `contact:${c.author}` ? 'Saving…' : 'Save author as contact'}
                     </button>
                   ) : null}

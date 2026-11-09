@@ -293,6 +293,12 @@ these edits now, and `check_conventions.cjs` blocks the commit behind it.
     "You Might Also Like" module, whose default `matchBy` is `categories`,
     render nothing everywhere. Match by **tags** works.
 
+19. **Link to one of our records by its id, never by a copy of its name or
+    address.** A copied slug works the day it is saved and breaks silently the
+    day the page is renamed — a form's "After submit" page did exactly that
+    until 2026-11-03. Store the id; resolve it when shown or used.
+    `docs/DOCTRINE.md` §5.34.
+
 ## Working locally
 
 Production is not where you find out whether something works. Full guide:
@@ -320,6 +326,15 @@ never reaches him (task 86bcwam1k). Give every new docs/SQL file a
 `-- FEATURE: <what breaks without it, in plain words>` header line — that is
 what the ticket tells him — and a `-- RUN AFTER docs/SQL/<file>` line when it
 needs another file first.
+
+`npm run broken-links` is the same shape for client sites (task 86bcxn69z): a
+read-only pass over every project's pages, saved sections and forms that names
+each link pointing at a page that no longer exists. Once a week on the relay's
+wake it rewrites the ticket **Broken links on client sites**, Dane assigned only
+while it lists something; a project it could not read is named, never counted
+as clean. The scan is `lib/pageInboundLinks.js`, and the delete warning on
+Builder › Pages calls the same one — a setting that starts holding page links
+is one entry in its `LINK_SETTINGS` / `LIST_LINK_SETTINGS`.
 
 The admin app carries a strip across the top saying which database it is
 talking to, `npm run dev` refuses to start against the live one without

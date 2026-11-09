@@ -3,8 +3,22 @@
    ========================================================================== */
 
 /* --- Wrapper --- */
+/* The wrap scrolls in BOTH directions and stops at the screen's height, so
+   a long table keeps its column headings in sight (UI_RULES T11). Before
+   2026-11-05 it set only `overflow-x: auto`, which still makes the wrap a
+   scroll container — so a sticky heading inside it could only stick to the
+   wrap, which never scrolled vertically, and the headings went off the top
+   of the screen with the rows. Builder › Pages ran about 5,000px tall that
+   way (86bcyrqbr). A short table never reaches the cap and is unchanged.
+   The cap leaves 10rem of the screen free on purpose: the heading sticks to
+   the top of the WRAP, so the wrap itself must fit on screen with whatever
+   sits below it at the end of the page (the status strip, the section's
+   padding). At `100vh - 2rem` the page's last scroll position pushed the
+   wrap's top — headings and all — 73px off the screen (measured at 1440 ×
+   1000). The 20rem floor keeps a short window from getting a sliver. */
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: max(20rem, calc(100vh - 10rem));
   width: 100%;
   margin-top: 1rem;
   border: 1px solid var(--border-light);
@@ -17,6 +31,7 @@
    Styling the bar makes Chrome and Safari draw it all the time; it only
    appears when the table actually overflows. */
 .table-wrap::-webkit-scrollbar {
+  width: 10px;
   height: 10px;
 }
 
@@ -52,6 +67,15 @@ table:not(.builder-module-preview-table):not(.builder-preview-table) td {
   vertical-align: middle;
 }
 
+/* --- Header rows: 2px less top and bottom than body rows ---
+   Covers the column-heading row and the filter / bulk-action row above it
+   (UI normalization 11, task 86bcz85k9). The token lives in _variables.css
+   and a client's live site gets the old 0.65rem back. */
+table:not(.builder-module-preview-table):not(.builder-preview-table) thead th {
+  padding-top: var(--table-head-pad-y);
+  padding-bottom: var(--table-head-pad-y);
+}
+
 /* --- Column headers ---
    Black background, bold white text, left-aligned.
    Clickable for sorting; cursor indicates interactivity.
@@ -65,6 +89,17 @@ table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:no
   user-select: none;
   border-bottom: none;
   transition: background-color 0.15s, color 0.15s;
+}
+
+/* The column-heading row stays at the top of its wrap while the rows scroll
+   under it (T11). Only the heading row: a filter row above it scrolls away,
+   which is what lets one `top: 0` serve every table whatever height its
+   filter row wraps to. z-index keeps it above row hover backgrounds and
+   the checkboxes in the cells. */
+.table-wrap > table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:not(.table-filter-row) th:hover {
@@ -86,7 +121,15 @@ table:not(.builder-module-preview-table):not(.builder-preview-table) thead tr:no
   cursor: default;
 }
 
-/* --- Data rows --- */
+/* --- Data rows ---
+   Rows are a little tighter than the heading row: 0.5rem top and bottom
+   instead of 0.65rem (T11). The heading row's padding is left alone here on
+   purpose — the 2px heading trim is its own ticket (86bcz85k9). */
+table:not(.builder-module-preview-table):not(.builder-preview-table) tbody td {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 table:not(.builder-module-preview-table):not(.builder-preview-table) tbody tr {
   transition: background-color 0.15s ease;
 }

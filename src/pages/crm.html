@@ -10,7 +10,7 @@
         </div>
 
         <div id="crmActiveState" class="hidden">
-          <div class="tab-bar" style="margin-bottom:1rem;">
+          <div class="tab-bar" aria-label="CRM views">
             <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="contacts">Contacts</button>
             <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="forms">Forms</button>
             <button type="button" class="crm-tab-btn tab-btn" data-crm-tab="fields">Field Config</button>
@@ -33,6 +33,13 @@
               <button type="button" id="crmCreateFormBtn" class="btn btn-primary">+ New Form</button>
             </div>
             <div id="crmFormsList"></div>
+            <div id="crmFormSubmissionsView" class="hidden">
+              <div class="page-heading-actions" style="justify-content:flex-start; margin-bottom:0.75rem;">
+                <button type="button" id="crmFormSubmissionsBackBtn" class="btn">← All forms</button>
+              </div>
+              <h3 id="crmFormSubmissionsTitle" class="crm-form-editor-col-title">Submissions</h3>
+              <div id="crmFormSubmissionsBody"></div>
+            </div>
           </div>
 
           <div id="crmFieldsPanel" class="hidden">
@@ -48,7 +55,7 @@
               </div>
               <div class="page-heading-actions" style="justify-content:flex-start; gap:0.5rem; margin-top:0.5rem;">
                 <button type="button" id="crmAddCustomFieldBtn" class="btn">Add Custom Field</button>
-                <button type="submit" class="btn btn-primary">Save Field Config</button>
+                <button type="submit" class="btn btn-save">Save Field Config</button>
               </div>
             </form>
           </div>
@@ -94,7 +101,7 @@
         <form id="crmContactForm" style="max-width:480px;">
           <div id="crmContactFormFields"></div>
           <div style="margin-top:1rem;">
-            <button type="submit" class="btn btn-primary">Save Contact</button>
+            <button type="submit" class="btn btn-save">Save Contact</button>
           </div>
         </form>
       </section>
@@ -109,6 +116,7 @@
         </div>
         <div class="crm-form-editor-layout">
           <div class="crm-form-editor-col crm-form-editor-col-settings">
+            <h3 class="crm-form-editor-col-title">Form Actions</h3>
             <form id="crmFormEditorForm">
               <label class="field crm-form-editor-setting">
                 <span>Form Name</span>
@@ -131,192 +139,66 @@
                 <input type="text" id="crmFormEditorErrorMsg" placeholder="Something went wrong. Please try again." />
               </label>
 
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBackground">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleBackground">Background</h3>
-                <div class="field crm-form-editor-setting">
-                  <span>Background Color</span>
-                  <input type="hidden" id="crmFormEditorBackgroundColor" value="theme:background" />
-                  <div class="crm-form-color-control" data-crm-color-input="crmFormEditorBackgroundColor" data-crm-color-opacity-input="crmFormEditorBackgroundColorOpacity">
-                    <div class="crm-form-color-row">
-                      <div class="crm-form-color-options" role="group" aria-label="Background Color">
-                        <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
-                        <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
-                      </div>
-                      <label class="crm-form-color-opacity">
-                        <span class="crm-form-color-opacity-label">Opacity</span>
-                        <input type="range" id="crmFormEditorBackgroundColorOpacity" min="0" max="100" step="1" value="100" />
-                        <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorBackgroundColorOpacity">100%</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
+              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorAfterSubmitTitle">
+                <h3 class="crm-form-editor-section-title" id="crmFormEditorAfterSubmitTitle">After submit</h3>
+                <label class="field crm-form-editor-setting">
+                  <span>When a visitor submits</span>
+                  <select id="crmFormEditorAfterSubmit" class="crm-form-editor-select">
+                    <option value="message" selected>Show the success message</option>
+                    <option value="page">Go to a page on this site</option>
+                    <option value="url">Go to a web address</option>
+                  </select>
+                </label>
+                <div id="crmFormEditorRedirectPageFields" class="hidden">
                   <label class="field crm-form-editor-setting">
-                    <span>Padding</span>
-                    <input type="text" id="crmFormEditorPadding" placeholder="18px" />
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Margin</span>
-                    <input type="text" id="crmFormEditorMargin" placeholder="0" />
-                  </label>
-                </div>
-              </section>
-
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBorder">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleBorder">Border</h3>
-                <div class="field crm-form-editor-setting">
-                  <span>Border Color</span>
-                  <input type="hidden" id="crmFormEditorBorderColor" value="theme:primary" />
-                  <div class="crm-form-color-control" data-crm-color-input="crmFormEditorBorderColor" data-crm-color-opacity-input="crmFormEditorBorderColorOpacity">
-                    <div class="crm-form-color-row">
-                      <div class="crm-form-color-options" role="group" aria-label="Border Color">
-                        <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
-                        <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
-                      </div>
-                      <label class="crm-form-color-opacity">
-                        <span class="crm-form-color-opacity-label">Opacity</span>
-                        <input type="range" id="crmFormEditorBorderColorOpacity" min="0" max="100" step="1" value="100" />
-                        <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorBorderColorOpacity">100%</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
-                  <label class="field crm-form-editor-setting">
-                    <span>Border Size</span>
-                    <input type="text" id="crmFormEditorBorderSize" placeholder="0" />
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Border Radius</span>
-                    <input type="text" id="crmFormEditorBorderRadius" placeholder="10px" />
-                  </label>
-                </div>
-              </section>
-
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleHeading">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleHeading">Heading</h3>
-                <div class="field crm-form-editor-setting">
-                  <span>Heading Color</span>
-                  <input type="hidden" id="crmFormEditorHeadingColor" value="theme:heading" />
-                  <div class="crm-form-color-control" data-crm-color-input="crmFormEditorHeadingColor" data-crm-color-opacity-input="crmFormEditorHeadingColorOpacity">
-                    <div class="crm-form-color-row">
-                      <div class="crm-form-color-options" role="group" aria-label="Heading Color">
-                        <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
-                        <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
-                      </div>
-                      <label class="crm-form-color-opacity">
-                        <span class="crm-form-color-opacity-label">Opacity</span>
-                        <input type="range" id="crmFormEditorHeadingColorOpacity" min="0" max="100" step="1" value="100" />
-                        <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorHeadingColorOpacity">100%</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleLabelsFields">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleLabelsFields">Labels and Fields</h3>
-                <div class="crm-form-editor-setting-row crm-form-editor-setting-row-3">
-                  <label class="field crm-form-editor-setting">
-                    <span>Label Align</span>
-                    <select id="crmFormEditorLabelAlign" class="crm-form-editor-select">
-                      <option value="left" selected>Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
+                    <span>Page</span>
+                    <select id="crmFormEditorRedirectPage" class="crm-form-editor-select">
+                      <option value="">Choose a page…</option>
                     </select>
                   </label>
+                  <p id="crmFormEditorRedirectPageMissing" class="crm-form-editor-missing-page hidden" role="alert">The page this form sent visitors to no longer exists — choose another. Until you do, visitors see the success message.</p>
+                </div>
+                <div id="crmFormEditorRedirectUrlFields" class="hidden">
                   <label class="field crm-form-editor-setting">
-                    <span>Field Alignment</span>
-                    <select id="crmFormEditorFieldAlign" class="crm-form-editor-select">
-                      <option value="left" selected>Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Field Width</span>
-                    <input type="text" id="crmFormEditorFieldWidth" placeholder="75%" />
+                    <span>Address</span>
+                    <input type="text" id="crmFormEditorRedirectUrl" placeholder="/thank-you or https://…" />
                   </label>
                 </div>
               </section>
 
-              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleButton">
-                <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleButton">Button</h3>
-                <div class="field crm-form-editor-setting">
-                  <span>Button Background Color</span>
-                  <input type="hidden" id="crmFormEditorButtonBgColor" value="theme:accent" />
-                  <div class="crm-form-color-control" data-crm-color-input="crmFormEditorButtonBgColor" data-crm-color-opacity-input="crmFormEditorButtonBgColorOpacity">
-                    <div class="crm-form-color-row">
-                      <div class="crm-form-color-options" role="group" aria-label="Button Background Color">
-                        <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
-                        <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
-                      </div>
-                      <label class="crm-form-color-opacity">
-                        <span class="crm-form-color-opacity-label">Opacity</span>
-                        <input type="range" id="crmFormEditorButtonBgColorOpacity" min="0" max="100" step="1" value="100" />
-                        <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorButtonBgColorOpacity">100%</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div class="field crm-form-editor-setting">
-                  <span>Button Text Color</span>
-                  <input type="hidden" id="crmFormEditorButtonTextColor" value="theme:background" />
-                  <div class="crm-form-color-control" data-crm-color-input="crmFormEditorButtonTextColor" data-crm-color-opacity-input="crmFormEditorButtonTextColorOpacity">
-                    <div class="crm-form-color-row">
-                      <div class="crm-form-color-options" role="group" aria-label="Button Text Color">
-                        <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
-                        <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
-                      </div>
-                      <label class="crm-form-color-opacity">
-                        <span class="crm-form-color-opacity-label">Opacity</span>
-                        <input type="range" id="crmFormEditorButtonTextColorOpacity" min="0" max="100" step="1" value="100" />
-                        <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorButtonTextColorOpacity">100%</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
-                  <label class="field crm-form-editor-setting">
-                    <span>Button Text Size</span>
-                    <input type="text" id="crmFormEditorButtonTextSize" placeholder="1.05rem" />
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Button Text Weight</span>
-                    <select id="crmFormEditorButtonTextWeight" class="crm-form-editor-select">
-                      <option value="1">1</option>
-                      <option value="2">2</option>
-                      <option value="3">3</option>
-                      <option value="4">4</option>
-                      <option value="5">5</option>
-                      <option value="6">6</option>
-                      <option value="7" selected>7</option>
-                      <option value="8">8</option>
-                      <option value="9">9</option>
-                      <option value="10">10</option>
-                    </select>
-                  </label>
-                </div>
-                <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
-                  <label class="field crm-form-editor-setting">
-                    <span>Button Align</span>
-                    <select id="crmFormEditorButtonAlign" class="crm-form-editor-select">
-                      <option value="left" selected>Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </label>
-                  <label class="field crm-form-editor-setting">
-                    <span>Button Width</span>
-                    <div class="crm-form-width-control">
-                      <input type="range" id="crmFormEditorButtonWidth" min="50" max="100" step="1" value="100" />
-                      <span class="crm-form-width-value" data-crm-width-display="crmFormEditorButtonWidth">100%</span>
-                    </div>
-                  </label>
-                </div>
+              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorAlertsTitle">
+                <h3 class="crm-form-editor-section-title" id="crmFormEditorAlertsTitle">Team alerts</h3>
+                <label class="field crm-form-editor-setting">
+                  <span>Alert these addresses</span>
+                  <span class="meta crm-form-editor-setting-hint">Optional — separate with commas</span>
+                  <input type="text" id="crmFormEditorAlertEmails" placeholder="Blank: the Contact Alert Email from Settings" />
+                </label>
+                <label class="field crm-form-editor-setting">
+                  <span>Alert subject</span>
+                  <span class="meta crm-form-editor-setting-hint">Optional — {{first_name}} works</span>
+                  <input type="text" id="crmFormEditorAlertSubject" placeholder="New contact form submission — your site" />
+                </label>
               </section>
 
-              <button type="submit" class="btn btn-primary">Save Form</button>
+              <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorConfirmTitle">
+                <h3 class="crm-form-editor-section-title" id="crmFormEditorConfirmTitle">Confirmation email</h3>
+                <label class="checkbox-row">
+                  <input type="checkbox" id="crmFormEditorConfirmEnabled" class="standard-form-checkbox" />
+                  <span>Email the visitor a confirmation</span>
+                </label>
+                <p class="meta crm-form-editor-setting-hint">Needs an Email field on the form.</p>
+                <div id="crmFormEditorConfirmFields" class="hidden">
+                  <label class="field crm-form-editor-setting">
+                    <span>Subject</span>
+                    <input type="text" id="crmFormEditorConfirmSubject" placeholder="We got your message" />
+                  </label>
+                  <label class="field crm-form-editor-setting">
+                    <span>Message</span>
+                    <textarea id="crmFormEditorConfirmBody" rows="5" placeholder="Hi {{first_name}}, thanks for getting in touch — we'll reply within a day."></textarea>
+                  </label>
+                  <p class="meta">Use <code>{{first_name}}</code>, <code>{{email}}</code> or any field's key to fill in what the visitor typed. Replies go to your Contact Alert Email.</p>
+                </div>
+              </section>
             </form>
           </div>
           <div class="crm-form-editor-col crm-form-editor-col-fields">
@@ -324,9 +206,195 @@
             <p class="meta crm-form-editor-col-hint">Choose which fields appear on this form and drag to reorder.</p>
             <div id="crmFormEditorFields" class="crm-form-editor-field-list"></div>
           </div>
+          <div class="crm-form-editor-col crm-form-editor-col-styles">
+            <h3 class="crm-form-editor-col-title">Styles</h3>
+            <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBackground">
+              <div class="field crm-form-editor-setting crm-form-editor-setting-color">
+                <span class="crm-form-editor-section-title" id="crmFormEditorStyleBackground">Background Color</span>
+                <input type="hidden" id="crmFormEditorBackgroundColor" value="theme:background" />
+                <div class="crm-form-color-control" data-crm-color-input="crmFormEditorBackgroundColor" data-crm-color-opacity-input="crmFormEditorBackgroundColorOpacity">
+                  <div class="crm-form-color-row">
+                    <div class="crm-form-color-options" role="group" aria-label="Background Color">
+                      <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
+                      <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
+                    </div>
+                    <label class="crm-form-color-opacity">
+                      <span class="crm-form-color-opacity-label">Opacity</span>
+                      <input type="range" id="crmFormEditorBackgroundColorOpacity" min="0" max="100" step="1" value="100" />
+                      <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorBackgroundColorOpacity">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
+                <label class="field crm-form-editor-setting">
+                  <span>Padding</span>
+                  <input type="text" id="crmFormEditorPadding" placeholder="18px" />
+                </label>
+                <label class="field crm-form-editor-setting">
+                  <span>Margin</span>
+                  <input type="text" id="crmFormEditorMargin" placeholder="0" />
+                </label>
+              </div>
+            </section>
+
+            <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleBorder">
+              <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleBorder">Border</h3>
+              <div class="field crm-form-editor-setting crm-form-editor-setting-color">
+                <span>Border Color</span>
+                <input type="hidden" id="crmFormEditorBorderColor" value="theme:primary" />
+                <div class="crm-form-color-control" data-crm-color-input="crmFormEditorBorderColor" data-crm-color-opacity-input="crmFormEditorBorderColorOpacity">
+                  <div class="crm-form-color-row">
+                    <div class="crm-form-color-options" role="group" aria-label="Border Color">
+                      <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
+                      <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
+                    </div>
+                    <label class="crm-form-color-opacity">
+                      <span class="crm-form-color-opacity-label">Opacity</span>
+                      <input type="range" id="crmFormEditorBorderColorOpacity" min="0" max="100" step="1" value="100" />
+                      <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorBorderColorOpacity">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
+                <label class="field crm-form-editor-setting">
+                  <span>Border Size</span>
+                  <input type="text" id="crmFormEditorBorderSize" placeholder="0" />
+                </label>
+                <label class="field crm-form-editor-setting">
+                  <span>Border Radius</span>
+                  <input type="text" id="crmFormEditorBorderRadius" placeholder="10px" />
+                </label>
+              </div>
+            </section>
+
+            <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleHeading">
+              <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleHeading">Heading</h3>
+              <div class="field crm-form-editor-setting crm-form-editor-setting-color">
+                <span>Heading Color</span>
+                <input type="hidden" id="crmFormEditorHeadingColor" value="theme:heading" />
+                <div class="crm-form-color-control" data-crm-color-input="crmFormEditorHeadingColor" data-crm-color-opacity-input="crmFormEditorHeadingColorOpacity">
+                  <div class="crm-form-color-row">
+                    <div class="crm-form-color-options" role="group" aria-label="Heading Color">
+                      <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
+                      <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
+                    </div>
+                    <label class="crm-form-color-opacity">
+                      <span class="crm-form-color-opacity-label">Opacity</span>
+                      <input type="range" id="crmFormEditorHeadingColorOpacity" min="0" max="100" step="1" value="100" />
+                      <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorHeadingColorOpacity">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleLabelsFields">
+              <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleLabelsFields">Labels and Fields</h3>
+              <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
+                  <span>Label Align</span>
+                  <select id="crmFormEditorLabelAlign" class="crm-form-editor-select">
+                    <option value="left" selected>Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
+                  <span>Field Align</span>
+                  <select id="crmFormEditorFieldAlign" class="crm-form-editor-select">
+                    <option value="left" selected>Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
+                <label class="field crm-form-editor-setting">
+                  <span>Field Width</span>
+                  <input type="text" id="crmFormEditorFieldWidth" placeholder="75%" />
+                </label>
+              </div>
+            </section>
+
+            <section class="crm-form-editor-style-section" aria-labelledby="crmFormEditorStyleButton">
+              <h3 class="crm-form-editor-section-title" id="crmFormEditorStyleButton">Button</h3>
+              <div class="field crm-form-editor-setting crm-form-editor-setting-color">
+                <span>Button Background Color</span>
+                <input type="hidden" id="crmFormEditorButtonBgColor" value="theme:accent" />
+                <div class="crm-form-color-control" data-crm-color-input="crmFormEditorButtonBgColor" data-crm-color-opacity-input="crmFormEditorButtonBgColorOpacity">
+                  <div class="crm-form-color-row">
+                    <div class="crm-form-color-options" role="group" aria-label="Button Background Color">
+                      <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
+                      <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
+                    </div>
+                    <label class="crm-form-color-opacity">
+                      <span class="crm-form-color-opacity-label">Opacity</span>
+                      <input type="range" id="crmFormEditorButtonBgColorOpacity" min="0" max="100" step="1" value="100" />
+                      <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorButtonBgColorOpacity">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="field crm-form-editor-setting crm-form-editor-setting-color">
+                <span>Button Text Color</span>
+                <input type="hidden" id="crmFormEditorButtonTextColor" value="theme:background" />
+                <div class="crm-form-color-control" data-crm-color-input="crmFormEditorButtonTextColor" data-crm-color-opacity-input="crmFormEditorButtonTextColorOpacity">
+                  <div class="crm-form-color-row">
+                    <div class="crm-form-color-options" role="group" aria-label="Button Text Color">
+                      <button type="button" class="crm-form-color-swatch crm-form-color-swatch-none" data-color="none" title="None" aria-label="None"></button>
+                      <span class="crm-form-theme-swatches" data-crm-theme-swatches></span>
+                    </div>
+                    <label class="crm-form-color-opacity">
+                      <span class="crm-form-color-opacity-label">Opacity</span>
+                      <input type="range" id="crmFormEditorButtonTextColorOpacity" min="0" max="100" step="1" value="100" />
+                      <span class="crm-form-color-opacity-value" data-crm-opacity-display="crmFormEditorButtonTextColorOpacity">100%</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div class="crm-form-editor-setting-row crm-form-editor-setting-row-2">
+                <label class="field crm-form-editor-setting">
+                  <span>Button Text Size</span>
+                  <input type="text" id="crmFormEditorButtonTextSize" placeholder="1.05rem" />
+                </label>
+              </div>
+              <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
+                  <span>Button Text Weight</span>
+                  <select id="crmFormEditorButtonTextWeight" class="crm-form-editor-select">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7" selected>7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                  </select>
+                </label>
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
+                  <span>Button Align</span>
+                  <select id="crmFormEditorButtonAlign" class="crm-form-editor-select">
+                    <option value="left" selected>Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <label class="field crm-form-editor-setting crm-form-editor-setting-beside">
+                  <span>Button Width</span>
+                  <div class="crm-form-width-control">
+                    <input type="range" id="crmFormEditorButtonWidth" min="50" max="100" step="1" value="100" />
+                    <span class="crm-form-width-value" data-crm-width-display="crmFormEditorButtonWidth">100%</span>
+                  </div>
+                </label>
+            </section>
+          </div>
           <div class="crm-form-editor-col crm-form-editor-col-preview">
             <h3 class="crm-form-editor-col-title">Preview</h3>
             <div id="crmFormEditorPreview" class="crm-form-editor-preview" aria-live="polite"></div>
+            <!-- Outside the <form> so it can sit under the preview; form= keeps it its submit button. -->
+            <button type="submit" form="crmFormEditorForm" class="btn btn-save crm-form-editor-save-btn">Save Form</button>
           </div>
         </div>
       </section>

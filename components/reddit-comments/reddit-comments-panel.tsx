@@ -347,7 +347,7 @@ function ReadingCard({ item, busy, error, onPaste, onReadAgain, onReject }: {
         {line?.offerPaste ? (
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-save"
             disabled={Boolean(busy) || !(title.trim() || body.trim())}
             onClick={() => onPaste({ postTitle: title.trim(), postBody: body.trim(), parentCommentText: comment.trim() })}
           >
@@ -671,7 +671,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
     <button
       type="button"
       role="tab"
-      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      className="tab-btn"
       aria-selected={tab === value}
       onClick={() => { setTab(value); setNotice(''); }}
     >
@@ -734,7 +734,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
       </form>
 
       <div className="reddit-comments-toolbar">
-        <div className="reddit-comments-tabs" role="tablist" aria-label="Reddit comments">
+        <div className="tab-bar reddit-comments-tabs" role="tablist" aria-label="Reddit comments">
           {tabButton('write', toWrite.length ? `To write (${toWrite.length})` : 'To write')}
           {tabButton('approvals', approvals.length ? `Approvals (${approvals.length})` : 'Approvals')}
           {tabButton('posted', posted.length ? `Posted (${posted.length})` : 'Posted')}

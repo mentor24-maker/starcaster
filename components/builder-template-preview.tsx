@@ -4,7 +4,8 @@ import Image from "next/image";
 import { isVideoFile, MEDIA_DIRECT_UPLOAD_MAX_BYTES, uploadFileToBlob } from "@/lib/media-blob-upload";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createElement, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type FormEvent, type MouseEvent, Suspense, createContext, createElement, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type PageAddressMap, resolvePageLinksInHtml, resolvePageLinksInSettings } from "@/lib/page-link";
 import {
   EMPTY_MEDIA_FILTERS,
   MEDIA_ASPECTS,
@@ -70,7 +71,8 @@ import {
   tagFontSize,
   tagHref
 } from "@/lib/blog-tag-cloud";
-import { buildMegaColumns, type NavMegaColumn } from "@/lib/builder-nav-mega";
+import { crmSubmitErrorOutcome, crmSubmitSuccessOutcome } from "@/lib/crm-form-submit-outcome";
+import { buildMegaColumns, navLinkTargetProps, type NavMegaColumn } from "@/lib/builder-nav-mega";
 import { parsePrograms, formatSessionHours } from "@/lib/builder-program-list";
 import {
   getNavMegaColumnCount,
@@ -90,6 +92,7 @@ import {
   type CrmFormStylesEventDetail
 } from "./builder/builder-crm-form-module-settings";
 import { BugReportModule } from "./builder/builder-bug-report-module";
+import { parseBreadcrumbItems } from "./builder/builder-breadcrumb-module-settings";
 import {
   ADMIN_LOGIN_PATH,
   getAdminAuthHeaders,
@@ -256,7 +259,22 @@ type BuilderTemplatePreviewProps = {
   applyThemePageMargins?: boolean;
   /** When true, shell background is rendered by BuilderViewportShellLayout (or similar). */
   suppressShellBackground?: boolean;
+  /**
+   * Page id → that page's CURRENT slug, for links stored by reference
+   * (lib/builder-client/page-link.js, task 86bcxmrw2). The live site gets it
+   * from /api/public/page; the Builder preview builds it from the page list.
+   * Without it a reference renders its saved fallback address — exactly what
+   * the link showed before references existed.
+   */
+  pageAddresses?: PageAddressMap | null;
 };
+
+/**
+ * The page-address map, for every module at any depth (a table cell's modules
+ * render through BuilderModulePreview too). One context so no module has to be
+ * handed it, and no module can forget to resolve.
+ */
+const PageAddressContext = createContext<PageAddressMap | null>(null);
 
 type ContactFormField = {
   id: string;
@@ -441,28 +459,274 @@ function crmConfiguredSelectOptions(field: CrmFormField): string[] {
 }
 
 /**
- * A `select` field the tenant never gave any options to — a dropdown with
- * nothing in it to choose.
+ * The field types whose answer is picked from the field's Options list:
+ * Dropdown (`select`), Dropdown choose-several (`multiselect`, task
+ * 86bcynpyf), Choose one (`radio`) and Choose several (`checkboxes`, task
+ * 86bcynjv7). All four read the same `options` array.
+ */
+const CRM_CHOICE_FIELD_TYPES = new Set(["select", "multiselect", "radio", "checkboxes"]);
+
+/**
+ * A choice field the tenant never gave any options to — a dropdown, a set of
+ * round buttons or a set of tick boxes with nothing in it to choose.
  *
- * This is the DEFAULT state of a newly added dropdown, not a misconfiguration:
- * `select` is a field type any tenant can add (public/js/crm.js), its Options
- * box is free text with no validation, and lib/crmConfigStore.js defaults
- * `options` to []. Leave the box blank and the field arrives here.
+ * This is the DEFAULT state of a newly added choice field, not a
+ * misconfiguration: each is a field type any tenant can add
+ * (public/js/crm.js), its Options box is free text with no validation, and
+ * lib/crmConfigStore.js defaults `options` to []. Leave the box blank and the
+ * field arrives here.
  */
 function crmSelectHasNothingToChoose(field: CrmFormField): boolean {
-  return field.type === "select" && crmConfiguredSelectOptions(field).length === 0;
+  return CRM_CHOICE_FIELD_TYPES.has(field.type) && crmConfiguredSelectOptions(field).length === 0;
+}
+
+/** A field whose control is a GROUP of inputs, labelled by a fieldset legend. */
+function crmIsChoiceGroupField(field: CrmFormField): boolean {
+  return field.type === "radio" || field.type === "checkboxes";
+}
+
+/** The answer as the API stores it: a "Choose several" list joined into text. */
+function crmAnswerText(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value.join(", ");
+  return value ?? "";
+}
+
+/**
+ * "Dropdown list (choose several)" (`multiselect`, task 86bcynpyf).
+ *
+ * A plain `<select multiple>` is a box you must hold Ctrl or ⌘ in to pick a
+ * second answer, which most visitors never discover. This is a button that
+ * looks like the single dropdown and opens a list of tick boxes; the closed
+ * button names what is chosen ("Writing, Music").
+ *
+ * Keyboard: Tab reaches the button, Enter/Space (or ↓) opens it, Tab moves
+ * through the tick boxes, Space or Enter toggles one, Escape closes the list
+ * and returns to the button. Clicking outside or tabbing away closes it.
+ *
+ * Required = at least one ticked. The tick boxes are not in the page while the
+ * list is closed, so they cannot carry `required` themselves; a hidden proxy
+ * input holding the joined answer does, and hands focus to the button when the
+ * browser points the visitor at it.
+ */
+function CrmMultiSelectDropdown({
+  field,
+  options,
+  chosen,
+  labelId,
+  onChange
+}: {
+  field: CrmFormField;
+  options: string[];
+  chosen: string[];
+  labelId?: string;
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const focusFirstOnOpen = useRef(false);
+  const baseId = useId();
+  const buttonId = `${baseId}-button`;
+  const listId = `${baseId}-list`;
+
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return;
+    const onPointerDown = (event: Event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !focusFirstOnOpen.current) return;
+    focusFirstOnOpen.current = false;
+    listRef.current?.querySelector<HTMLInputElement>("input[type=checkbox]")?.focus();
+  }, [open]);
+
+  function toggle(option: string) {
+    const next = chosen.includes(option)
+      ? chosen.filter((o) => o !== option)
+      : options.filter((o) => o === option || chosen.includes(o));
+    onChange(next);
+  }
+
+  function close(returnFocus: boolean) {
+    setOpen(false);
+    if (returnFocus) buttonRef.current?.focus();
+  }
+
+  const summary = chosen.join(", ");
+
+  return (
+    <div
+      className="builder-crm-form-multiselect"
+      ref={wrapRef}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          event.stopPropagation();
+          close(true);
+        }
+      }}
+      onBlur={(event) => {
+        const next = event.relatedTarget as Node | null;
+        if (open && next && wrapRef.current && !wrapRef.current.contains(next)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        id={buttonId}
+        ref={buttonRef}
+        className="builder-crm-form-multiselect-button"
+        aria-haspopup="true"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-labelledby={labelId ? `${labelId} ${buttonId}` : undefined}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            focusFirstOnOpen.current = true;
+            if (open) listRef.current?.querySelector<HTMLInputElement>("input[type=checkbox]")?.focus();
+            else setOpen(true);
+          }
+        }}
+      >
+        <span className={summary ? "builder-crm-form-multiselect-summary" : "builder-crm-form-multiselect-summary is-placeholder"}>
+          {summary || "Select…"}
+        </span>
+      </button>
+      <input
+        className="builder-crm-form-multiselect-proxy"
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        required={field.required}
+        value={summary}
+        onChange={() => {}}
+        onFocus={() => buttonRef.current?.focus()}
+      />
+      {open ? (
+        <div
+          className="builder-crm-form-multiselect-list"
+          id={listId}
+          ref={listRef}
+          role="group"
+          aria-labelledby={labelId}
+        >
+          {options.map((option) => (
+            <label className="builder-crm-form-choice" key={option}>
+              <input
+                type="checkbox"
+                name={field.key}
+                value={option}
+                checked={chosen.includes(option)}
+                onChange={() => toggle(option)}
+                onKeyDown={(event) => {
+                  // Enter on a tick box would otherwise submit the whole form.
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    toggle(option);
+                  }
+                }}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function CrmFormFieldControl({
   field,
   value,
-  onChange
+  onChange,
+  labelId
 }: {
   field: CrmFormField;
-  value: string;
-  onChange: (key: string, nextValue: string) => void;
+  value: string | string[];
+  onChange: (key: string, nextValue: string | string[]) => void;
+  /** The id of the question's label, for controls that are not a <label>'s own input. */
+  labelId?: string;
 }) {
   const inputType = crmPreviewInputType(field.type);
+  const textValue = Array.isArray(value) ? value.join(", ") : value;
+
+  if (field.type === "multiselect") {
+    // Same rule as the dropdown: a live page never reaches the sample —
+    // CrmFormPreview drops an option-less multiselect from a published form.
+    const configured = crmConfiguredSelectOptions(field);
+    return (
+      <CrmMultiSelectDropdown
+        field={field}
+        options={configured.length ? configured : CRM_SELECT_CANVAS_SAMPLE}
+        chosen={Array.isArray(value) ? value : []}
+        labelId={labelId}
+        onChange={(next) => onChange(field.key, next)}
+      />
+    );
+  }
+
+  if (field.type === "radio" || field.type === "checkboxes") {
+    // Same rule as the dropdown below: a live page never reaches the sample —
+    // CrmFormPreview drops an option-less choice field from a published form.
+    const configured = crmConfiguredSelectOptions(field);
+    const options = configured.length ? configured : CRM_SELECT_CANVAS_SAMPLE;
+    if (field.type === "radio") {
+      return (
+        <div className="builder-crm-form-choices" role="radiogroup">
+          {options.map((option) => (
+            <label className="builder-crm-form-choice" key={option}>
+              <input
+                type="radio"
+                name={field.key}
+                value={option}
+                required={field.required}
+                checked={textValue === option}
+                onChange={() => onChange(field.key, option)}
+              />
+              <span>{option}</span>
+            </label>
+          ))}
+        </div>
+      );
+    }
+    const chosen = Array.isArray(value) ? value : [];
+    // HTML has no "tick at least one" rule for a group, so every box carries
+    // `required` until one is ticked — the browser then blocks an empty submit
+    // and lets any single tick through.
+    const needsOne = field.required && chosen.length === 0;
+    return (
+      <div className="builder-crm-form-choices">
+        {options.map((option) => (
+          <label className="builder-crm-form-choice" key={option}>
+            <input
+              type="checkbox"
+              name={field.key}
+              value={option}
+              required={needsOne}
+              checked={chosen.includes(option)}
+              onChange={(event) => {
+                const next = event.target.checked
+                  ? options.filter((o) => o === option || chosen.includes(o))
+                  : chosen.filter((o) => o !== option);
+                onChange(field.key, next);
+              }}
+            />
+            <span>{option}</span>
+          </label>
+        ))}
+      </div>
+    );
+  }
 
   if (field.type === "textarea") {
     return (
@@ -470,7 +734,7 @@ function CrmFormFieldControl({
         name={field.key}
         required={field.required}
         rows={4}
-        value={value}
+        value={textValue}
         onChange={(event) => onChange(field.key, event.target.value)}
       />
     );
@@ -487,7 +751,7 @@ function CrmFormFieldControl({
       <select
         name={field.key}
         required={field.required}
-        value={value}
+        value={textValue}
         onChange={(event) => onChange(field.key, event.target.value)}
       >
         <option value="">Select…</option>
@@ -503,7 +767,7 @@ function CrmFormFieldControl({
       <input
         type="checkbox"
         name={field.key}
-        checked={value === "true"}
+        checked={textValue === "true"}
         onChange={(event) => onChange(field.key, event.target.checked ? "true" : "")}
       />
     );
@@ -591,7 +855,9 @@ function CrmFormPreview({
 }) {
   const crmFormId = settings.crmFormId ?? "";
   const [form, setForm] = useState<CrmFormData | null>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string | string[]>>({});
+  // Two copies of one form on a page must not share label ids.
+  const formUid = useId();
   const [honeypot, setHoneypot] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -632,26 +898,41 @@ function CrmFormPreview({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: values.email ?? "",
-          data: Object.fromEntries(Object.entries(values).filter(([k]) => k !== "email")),
+          email: crmAnswerText(values.email),
+          // A "Choose several" answer goes as readable text ("Writing, Music");
+          // the route joins any list it is sent the same way.
+          data: Object.fromEntries(
+            Object.entries(values).filter(([k]) => k !== "email").map(([k, v]) => [k, crmAnswerText(v)])
+          ),
           crmConfigId: form?.crmConfigId ?? "",
           crm_form_id: crmFormId,
           projectId,
+          pageUrl: typeof window !== "undefined" ? window.location.pathname + window.location.search : "",
           _trap: honeypot
         })
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(readApiErrorMessage(data, "Failed to submit the form."));
       }
 
-      const success = data as { message?: string };
-      setMessage(success.message ?? form?.successMessage ?? "Thank you!");
+      // The form's own Success Message, and its redirect on a live site —
+      // lib/builder-client/crm-form-submit-outcome.ts (task 86bcwy44f).
+      const outcome = crmSubmitSuccessOutcome(form, data, liveSite);
       setValues({});
       setHoneypot("");
+      if (outcome.kind === "redirect") {
+        window.location.assign(outcome.url);
+        return;
+      }
+      setMessage(outcome.message);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : form?.errorMessage ?? "Something went wrong. Please try again.");
+      // The visitor sees the form's Error Message; the technical reason goes
+      // to the console, where whoever is debugging the site can find it.
+      const outcome = crmSubmitErrorOutcome(form, submitError);
+      if (outcome.kind === "error" && outcome.detail) console.warn("[crm form] submit failed:", outcome.detail);
+      setError(outcome.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -727,16 +1008,44 @@ function CrmFormPreview({
         {message ? <div className="builder-contact-form-message">{message}</div> : null}
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
         <div className="builder-contact-form-fields">
-          {visibleFields.map((field) => (
-            <label className="builder-contact-form-field" key={field.key}>
-              <span style={labelStyle}>{field.label}</span>
+          {visibleFields.map((field) => {
+            const labelId = `${formUid}-label-${field.key}`;
+            const control = (
               <CrmFormFieldControl
                 field={field}
                 value={values[field.key] ?? ""}
+                labelId={labelId}
                 onChange={(key, nextValue) => setValues((prev) => ({ ...prev, [key]: nextValue }))}
               />
-            </label>
-          ))}
+            );
+            // A dropdown of tick boxes holds a button AND several inputs, so it
+            // cannot sit inside a <label> either; its label is named by id.
+            if (field.type === "multiselect") {
+              return (
+                <div className="builder-contact-form-field builder-crm-form-multiselect-field" key={field.key}>
+                  <span id={labelId} style={labelStyle}>{field.label}</span>
+                  {control}
+                </div>
+              );
+            }
+            // A group of round buttons or tick boxes is one question with many
+            // inputs, so it is a fieldset named by its legend — a <label> may
+            // hold only one control.
+            if (crmIsChoiceGroupField(field)) {
+              return (
+                <fieldset className="builder-contact-form-field builder-crm-form-choice-field" key={field.key}>
+                  <legend style={labelStyle}>{field.label}</legend>
+                  {control}
+                </fieldset>
+              );
+            }
+            return (
+              <label className="builder-contact-form-field" key={field.key}>
+                <span style={labelStyle}>{field.label}</span>
+                {control}
+              </label>
+            );
+          })}
         </div>
         <button className="builder-contact-form-submit" disabled={isSubmitting} style={buttonStyle} type="submit">
           {isSubmitting ? "Submitting…" : form.submitLabel || "Submit"}
@@ -1423,6 +1732,78 @@ function CrmContactsTablePreview({
   );
 }
 
+/*
+ * The Breadcrumb trail as a visitor sees it (task 86bcxwe6z). The module had a
+ * full settings panel and an editor card for months while this renderer did
+ * not exist, so a published Breadcrumb was an empty gap on the live page.
+ *
+ * Links arrive already resolved: a crumb picked from the page list is stored
+ * as `page:<id>|/path` and the caller runs resolvePageLinksInSettings over the
+ * module's settings before it gets here. The defaults are the editor card's
+ * (builder-module-card.tsx), so the two draw the same trail.
+ */
+function BreadcrumbModulePreview({
+  settings,
+  liveSite = false
+}: {
+  settings: Record<string, string>;
+  /** True on a real published page — see BuilderOnlyNote. */
+  liveSite?: boolean;
+}) {
+  // A crumb with no label has nothing to show a visitor; the editor card
+  // numbers it ("Item 2") so the builder can find it, the page skips it.
+  const items = parseBreadcrumbItems(settings).filter((item) => item.label.trim());
+  if (items.length === 0) {
+    if (liveSite) return null;
+    return (
+      <BuilderOnlyNote liveSite={liveSite} className="builder-contact-form-stub">
+        This breadcrumb has no trail items yet — add them in module settings.
+      </BuilderOnlyNote>
+    );
+  }
+  const separator = settings.separator || "›";
+  const fontSize = parseInt(settings.fontSize ?? "14", 10) || 14;
+  const color = settings.color || "#587592";
+  const activeColor = settings.activeColor || "#18324a";
+  const alignment = settings.alignment === "center" || settings.alignment === "right" ? settings.alignment : "left";
+  const justify = alignment === "center" ? "center" : alignment === "right" ? "flex-end" : "flex-start";
+
+  // The fixed layout lives in _builder-react-overrides.css (`.builder-preview-
+  // breadcrumb`); only what the panel sets is inline. The list resets there
+  // matter: the trail renders inside arbitrary tenant themes, and a theme's
+  // `ol`/`li` rules would otherwise number or indent it (§5.28).
+  return (
+    <nav aria-label="Breadcrumb" className="builder-preview-breadcrumb" style={{ textAlign: alignment }}>
+      <ol style={{ justifyContent: justify, fontSize, fontWeight: settings.bold === "true" ? 700 : 400 }}>
+        {items.map((item, index) => {
+          const isLast = index === items.length - 1;
+          const url = typeof item.url === "string" ? item.url.trim() : "";
+          return (
+            <li key={item.id || index}>
+              {isLast ? (
+                <span aria-current="page" className="builder-preview-breadcrumb-current" style={{ color: activeColor }}>
+                  {item.label}
+                </span>
+              ) : url ? (
+                <Link className="builder-preview-breadcrumb-link" href={url} style={{ color }}>
+                  {item.label}
+                </Link>
+              ) : (
+                <span className="builder-preview-breadcrumb-text" style={{ color }}>{item.label}</span>
+              )}
+              {isLast ? null : (
+                <span aria-hidden="true" className="builder-preview-breadcrumb-sep" style={{ color }}>
+                  {separator}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 function MerchProductCard({
   settings,
   liveSite = false
@@ -1469,7 +1850,8 @@ export function BuilderTemplatePreview({
   liveSite = false,
   projectId = "",
   applyThemePageMargins = true,
-  suppressShellBackground = false
+  suppressShellBackground = false,
+  pageAddresses = null
 }: BuilderTemplatePreviewProps) {
   const shellBackground = suppressShellBackground
     ? {}
@@ -1648,6 +2030,7 @@ export function BuilderTemplatePreview({
   });
 
   return (
+    <PageAddressContext.Provider value={pageAddresses}>
     <div
       className={
         shellClassName
@@ -1693,6 +2076,7 @@ export function BuilderTemplatePreview({
       {shellClassName ? <GameModuleOverlayHosts /> : null}
       {shellClassName ? <BuilderReminderRuntime layoutSections={layoutSections} /> : null}
     </div>
+    </PageAddressContext.Provider>
   );
 }
 
@@ -2509,7 +2893,28 @@ function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: str
   return columnStyle;
 }
 
-function BuilderModulePreview({
+/**
+ * Every module renders through here, so this is the one place a page link
+ * stored by reference (`page:<id>|<fallback>`) becomes the page's current
+ * address. Below this line every renderer reads plain strings, exactly as it
+ * always has — none of them had to learn what a reference is.
+ */
+function BuilderModulePreview(props: BuilderModulePreviewProps) {
+  const pageAddresses = useContext(PageAddressContext);
+  const { module } = props;
+  const resolved = useMemo(() => {
+    const settings = resolvePageLinksInSettings(module.settings, pageAddresses);
+    // A text or heading module keeps its rich text on `module.text`, where a
+    // link picked from the page list carries the page's id (task 86bcxthq5).
+    const text = typeof module.text === "string" ? resolvePageLinksInHtml(module.text, pageAddresses) : module.text;
+    return settings === module.settings && text === module.text ? module : { ...module, settings, text };
+  }, [module, pageAddresses]);
+  return <BuilderModulePreviewBody {...props} module={resolved} />;
+}
+
+type BuilderModulePreviewProps = Parameters<typeof BuilderModulePreviewBody>[0];
+
+function BuilderModulePreviewBody({
   module,
   columnWidthPercent = 100,
   emailPreview = false,
@@ -2832,6 +3237,10 @@ function BuilderModulePreview({
 
   if (module.type === "tractor-nav") {
     return <TractorNavRuntime settings={module.settings} />;
+  }
+
+  if (module.type === "breadcrumb") {
+    return <BreadcrumbModulePreview settings={module.settings} liveSite={liveSite} />;
   }
 
   if (module.type === "galaxy") {
@@ -11825,6 +12234,8 @@ type NavRenderItem = {
   id?: string;
   parentId?: string;
   width?: string;
+  /** "Opens in": `"_blank"` for New tab, absent for Same tab — see navLinkTargetProps. */
+  target?: string;
   /** The mega panel's extra column — a whole module, or the tile it replaced. */
   featureModule?: import("@/lib/builder-template").BuilderTemplateModule;
   featureImage?: string;
@@ -11907,6 +12318,7 @@ function NavMegaItem({
           aria-current={isActive ? "page" : undefined}
           className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
           href={href}
+          {...navLinkTargetProps(item)}
         >
           {item.label}
         </Link>
@@ -11936,6 +12348,7 @@ function NavMegaItem({
                   <Link
                     className="site-nav-mega-heading"
                     href={previewMode ? toPreviewHref(column.heading.href) : toPublicHref(column.heading.href)}
+                    {...navLinkTargetProps(column.heading)}
                   >
                     {column.heading.label}
                   </Link>
@@ -11952,6 +12365,7 @@ function NavMegaItem({
                     className={`site-nav-mega-link${linkActive ? " site-nav-link-active" : ""}`}
                     href={linkHref}
                     aria-current={linkActive ? "page" : undefined}
+                    {...navLinkTargetProps(link)}
                   >
                     {link.label}
                   </Link>
@@ -11974,7 +12388,7 @@ function NavMegaItem({
               <BuilderModulePreview module={item.featureModule} previewMode={previewMode} liveSite={liveSite} />
             </div>
           ) : featureImage || item.featureHeading ? (
-            <Link className="site-nav-mega-feature" href={href}>
+            <Link className="site-nav-mega-feature" href={href} {...navLinkTargetProps(item)}>
               {featureImage ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img {...imageProps(featureImage, { sizes: FEATURE_CARD_SIZES })} alt="" loading="lazy" />
@@ -12113,6 +12527,7 @@ function NavigationModulePreview({
               className={`site-nav-link${isActive ? " site-nav-link-active" : ""}`}
               href={href}
               key={itemId}
+              {...navLinkTargetProps(item)}
               onClick={() => setMobileOpen(false)}
               style={itemWidth ? { flex: `0 0 ${itemWidth}`, width: itemWidth } : undefined}
             >
@@ -12147,6 +12562,7 @@ function NavigationModulePreview({
               aria-current={isActive ? "page" : undefined}
               className={`site-nav-link site-nav-dropdown-trigger${isActive ? " site-nav-link-active" : ""}`}
               href={href}
+              {...navLinkTargetProps(item)}
               onClick={() => setMobileOpen(false)}
             >
               {item.label}
@@ -12162,6 +12578,7 @@ function NavigationModulePreview({
                     href={childHref}
                     aria-current={childActive ? "page" : undefined}
                     className={`site-nav-link site-nav-dropdown-item${childActive ? " site-nav-link-active" : ""}`}
+                    {...navLinkTargetProps(child)}
                     onClick={() => setMobileOpen(false)}
                   >
                     {child.label}

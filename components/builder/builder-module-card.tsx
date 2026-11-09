@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { BuilderProjectDataPicker } from "./builder-project-data-picker";
 import { installStackedColumnAlignment } from "@/lib/builder-stacked-columns";
 import type { RichTextGalleryBinding } from "@/components/builder/builder-types";
 import type { BuilderModalAnchor } from "@/lib/builder-anchored-modal";
@@ -276,6 +277,19 @@ type ContactFormField = {
   label: string;
   type: "text" | "email" | "tel";
 };
+
+/** The Content field: a label around a textarea, a plain div around the rich-text editor. */
+function RichTextContentField({
+  isRichText,
+  className,
+  children
+}: {
+  isRichText: boolean;
+  className: string;
+  children: ReactNode;
+}) {
+  return isRichText ? <div className={className}>{children}</div> : <label className={className}>{children}</label>;
+}
 
 function getContactFormMode(settings: Record<string, string>): "squeeze" | "standard" | "custom" {
   return settings.formMode === "standard" || settings.formMode === "custom"
@@ -3090,12 +3104,15 @@ function HeadlineRotatorModuleEditor({
                   />
                 </td>
                 <td>
-                  <input
-                    aria-label={`Headline ${index + 1} link`}
-                    type="text"
+                  {/* A page is stored by reference, so renaming it cannot break the headline's link (task 86bcxu518). */}
+                  <BuilderProjectDataPicker
+                    source="pages"
+                    valueKind="path"
                     value={item.href}
-                    onChange={(e) => updateItem(item.id, { href: e.target.value })}
+                    onChange={(href) => updateItem(item.id, { href })}
+                    noneLabel="— No link —"
                     placeholder="/path-or-url"
+                    ariaLabel={`Headline ${index + 1} link`}
                   />
                 </td>
                 <td>
@@ -4346,7 +4363,12 @@ export function BuilderModuleCard({
           module.type !== "carousel" &&
           module.type !== "admin-nav-link" ? (
             <>
-            <label className="field">
+            {/* A div, not a label, around the rich-text editor: a browser
+                forwards any click inside a <label> to the first button in it,
+                which is the toolbar's P — so clicking a heading's text turned
+                it into a paragraph (task 86bczmnra). The textarea keeps its
+                label, which is what focuses it. */}
+            <RichTextContentField className="field" isRichText={module.type === "text" && !isPlainTextVariant(module.settings)}>
               <span>Content</span>
               {module.type === "text" && !isPlainTextVariant(module.settings) ? (
                 <BuilderRichTextEditor
@@ -4364,7 +4386,7 @@ export function BuilderModuleCard({
                   placeholder={module.type === "text" ? PLAIN_TEXT_PLACEHOLDER : "Enter content"}
                 />
               )}
-            </label>
+            </RichTextContentField>
             {describeModuleTextOverflow(module.text) ? (
               // Saving cuts module text at BUILDER_MODULE_TEXT_MAX_LENGTH; say so
               // before it happens rather than after the live page ends mid-sentence.

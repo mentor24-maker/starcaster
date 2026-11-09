@@ -2062,6 +2062,94 @@ documentation. It bit the `stdio: 'ignore'` assertion, then the `process.exit(2)
 one, then a `process.exit(1)` count that found two — the call, and the sentence
 saying there was only one.
 
+### 5.34 Link to a thing by its id, never by a copy of its name or address
+
+Anything the operator chooses from a list of our own records — pages, posts,
+forms, events, media — is stored as **the record's id**, and turned into its
+name or address at the moment it is shown or used. A copied slug works on the
+day it is saved and breaks silently the day the source is renamed: nothing
+errors, the save said "saved", and the only one who sees it is the visitor
+who lands on a dead address.
+
+The incident (2026-11-03, task 86bcxmq23): a CRM form's "After submit: go to a
+page" copied the chosen page's address into a text box when it was picked, and
+only that copy was read when a visitor submitted. The page's id was saved
+right beside it and nothing ever read it. Rename the page and every form
+pointing at it sent visitors to a 404. The same design produced a second
+defect: re-picking the page already shown fires no change event, so nothing
+was copied and the save refused with "pick a page or type an address" while a
+page was plainly picked. And the list and the box could disagree, because two
+fields held one choice.
+
+The rule, in three parts:
+
+- **Store the id, resolve on use.** The server turns the id into the record's
+  CURRENT address when it is needed (`redirectAddressFor`,
+  `lib/crmFormHandling.js`; the lookup is `lib/crmFormRedirectPage.js`).
+- **One choice, one field.** "A record of ours" and "a typed address" are two
+  different choices and store two different things — never both. Data saved
+  under the old shape is read as the id; the stale copy is dropped.
+- **A record that is gone is said by name.** The editor says the page no
+  longer exists; the live site falls back to something harmless (the success
+  message), never a 404, and the server logs it.
+
+Dane, verbatim: *"We need all such links to be done by reference so that if the
+source changes, all references to it change accordingly."* Other modules'
+page links (buttons, menus, cards) still store copies; that is its own ticket.
+
+### 5.35 A `<label>` presses the first button inside it — never wrap a widget in one
+
+A browser forwards a click anywhere inside a `<label>` to the label's first
+form control, and a `<button>` counts as one. Wrap a toolbar, an editor or a
+picker in a label and every click on its blank parts or its text presses that
+first button, invisibly and on every click.
+
+The incident (2026-11-06, task 86bczmnra, PR #994): the Paragraph module's
+card mounted the rich text editor inside `<label className="field">`. The
+first button in the editor's toolbar is **P** (Paragraph), so clicking a
+heading's text to edit it turned it back into a paragraph. Dane reported it
+as "really bugging me"; it had been that way since the card was written.
+
+The rule:
+
+- **A label wraps one simple control** (an input, a select, a textarea) or
+  names one by `htmlFor`. A widget that holds buttons sits in a `div` with the
+  same class — `.field` styling is by class, so nothing moves.
+- **Prove it in a real browser.** jsdom (vitest's fake browser) does NOT
+  forward label clicks: the reproducing test passed on the broken code. The
+  bug only showed in Chromium. The editor now also cancels clicks in its own
+  text, so a future label around it cannot do this again.
+- A sweep the same day (React, plain JS, HTML: about 940 labels) found no other
+  label whose first control is a button. The six theme colour pickers inside
+  labels are harmless: their popup is portalled out of the label.
+
+### 5.36 A style written for the wrapper reaches the user's content inside it
+
+A descendant selector on a container class — `.field span`, `.card p` —
+styles everything inside that container, including content the operator
+typed. When an editor is mounted inside the container, the app's own chrome
+style lands on the client's text, and an inline style or the theme cannot
+win it back unless they happen to set the same property.
+
+The incident (2026-11-06, task 86bcznkeh, PR #995): `.builder-react-root
+.field span` — the small bold grey style for field titles like "Content", in
+the regenerated `_builder-react.css` — matched every span inside the rich
+text editor. Giving a heading a colour wraps it in a `<span style="color">`,
+so the heading dropped to 15px, and H1/H2/H3 could no longer change its size.
+Text given only a size came out bold and grey. The saved HTML was always
+right; only the editor showed it wrong, which made it look like a save bug.
+
+The rule:
+
+- **Content areas reset what the chrome sets.** `.builder-rich-text-content
+  .ProseMirror span` inherits size, weight and colour from its block
+  (`_builder-react-overrides.css`); a span's own inline style still wins.
+- **When an edit "changes the wrong thing", list the matched CSS rules in a
+  real browser** before reading code: one `getComputedStyle` plus a walk of
+  `document.styleSheets` named the rule in a single run.
+- The longer answer — the editor showing exactly what the theme shows — is
+  the planning ticket 86bczqh0f.
+
 ## 6. Working in this repo
 
 ### 6.1 One worktree per thread, and trust nothing about the working directory

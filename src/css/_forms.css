@@ -68,6 +68,101 @@ input:focus, textarea:focus, select:focus {
   font-weight: 600;
 }
 
+/* UI_RULES L9 (UI normalization 7): a colour, toggle, number or dropdown
+   keeps its label BESIDE it on one row; a text box takes its label ABOVE.
+   `.form-grid-beside` is the label-beside grid: labels left-aligned (L1) in
+   a column as wide as the longest label (capped so none wraps past two
+   lines), and short controls sized to their content instead of stretched
+   across the screen. */
+.standard-form-grid.form-grid-beside {
+  grid-template-columns: minmax(140px, max-content) minmax(0, 1fr);
+  column-gap: 1rem;
+}
+
+.standard-form-grid.form-grid-beside > label {
+  max-width: 16rem;
+  text-align: left;
+}
+
+/* A box carrying a W7 width class (`field-w-*`, below) keeps that width. */
+.standard-form-grid.form-grid-beside > select:not([class*="field-w-"]),
+.standard-form-grid.form-grid-beside > input[type="number"]:not([class*="field-w-"]),
+.standard-form-grid.form-grid-beside > .readonly-metric,
+.standard-form-grid.form-grid-beside > div > input[type="number"]:not([class*="field-w-"]) {
+  justify-self: start;
+  width: auto;
+  min-width: 10rem;
+  max-width: 100%;
+}
+
+/* A text box's label sits on its own line above it (L9). */
+.form-field-above {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-field-above > label {
+  margin: 0;
+  font-weight: 600;
+}
+
+.form-field-above > label .meta {
+  font-weight: 400;
+}
+
+/*
+ * Box widths by what the box holds — docs/UI_RULES.md W7 (task 86bcyrqbh).
+ * The token is the room for the text; the 2rem on top is the box's own
+ * padding, border and (on a number) its up/down arrows. max-width keeps
+ * every one inside a phone screen. Pick by content, never set a width on a
+ * single field.
+ */
+input.field-w-number,
+input.field-w-short,
+input.field-w-long,
+select.field-w-short,
+select.field-w-long,
+textarea.field-w-long {
+  max-width: 100%;
+  flex: 0 1 auto;
+}
+input.field-w-number { width: calc(var(--field-w-number) + 2rem); }
+input.field-w-short,
+select.field-w-short { width: calc(var(--field-w-short) + 2rem); }
+input.field-w-long,
+select.field-w-long,
+textarea.field-w-long { width: calc(var(--field-w-long) + 2rem); }
+
+/*
+ * Several short boxes on one row (W7): each label sits beside its box, the
+ * pairs flow left to right and wrap onto the next line when the screen is
+ * too narrow — so a row of three percentages never becomes three rows the
+ * width of the screen.
+ */
+.short-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  min-width: 0;
+}
+.short-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+.short-field > label {
+  margin: 0;
+  font-weight: 600;
+}
+.short-field > input,
+.short-field > .readonly-metric {
+  margin: 0;
+}
+
 /* Settings > APIs — channel credential fields */
 .api-fields-stack {
   display: flex;
@@ -126,10 +221,6 @@ input:focus, textarea:focus, select:focus {
 
 .api-field-row:has(textarea) > label {
   padding-top: 0.8rem;
-}
-
-#settingsApisPage .api-settings-form > .btn-primary {
-  width: fit-content;
 }
 
 .channel-connection-col {

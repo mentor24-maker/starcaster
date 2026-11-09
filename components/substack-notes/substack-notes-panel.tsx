@@ -595,7 +595,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
       </div>
       {error ? <p className="substack-notes-error" role="alert">{error}</p> : null}
       <div className="substack-notes-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -619,7 +619,7 @@ function TextEditor({ id, label, initial, busy, onSave, onCancel }: {
       <textarea id={id} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="substack-notes-actions">
         <button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="submit" className="btn btn-save" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </form>
   );
@@ -1119,7 +1119,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
     <button
       type="button"
       role="tab"
-      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      className="tab-btn"
       aria-selected={tab === value}
       onClick={() => switchTab(value)}
     >
@@ -1144,7 +1144,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       ) : null}
 
       <div className="substack-notes-toolbar">
-        <div className="substack-notes-tabs" role="tablist" aria-label="Substack Notes">
+        <div className="tab-bar substack-notes-tabs" role="tablist" aria-label="Substack Notes">
           {tabButton('ideas', ideas.length ? `Ideas (${ideas.length})` : 'Ideas')}
           {tabButton('engage', engage.length ? `Engage (${engage.length})` : 'Engage')}
           {tabButton('approvals', waiting.length ? `Approvals (${waiting.length})` : 'Approvals')}

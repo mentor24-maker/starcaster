@@ -3,12 +3,31 @@
 const { sendOk, sendErr, parseJsonBody, getUrlObj, nextId } = require('./http');
 const { resolvePublicProjectForRequest } = require('../lib/publicSiteHostBinding');
 const { listConfigs, getConfig, createConfig, updateConfig, deleteConfig } = require('../lib/crmConfigStore');
-const { listContacts, getContact, createContact, updateContact, deleteContact } = require('../lib/crmContactsStore');
+const { listContacts, getContact, createContact, updateContact, deleteContact, findContactByEmail } = require('../lib/crmContactsStore');
 const { listForms, getForm, createForm, updateForm, deleteForm, getLastFormStoreError } = require('../lib/crmFormsStore');
 const { logActivity } = require('../lib/activityLog');
 const { getContactAlertEmails } = require('../lib/projectSiteSettingsStore');
 const { getPublicProjectById } = require('../lib/projectsStore');
 const { sendEmail } = require('../lib/mailer');
+const {
+  recordPublicSubmission,
+  listSubmissions,
+  countSubmissionsByForm,
+  formForSubmission,
+  contactSourceForForm,
+} = require('../lib/crmFormSubmissionsStore');
+const {
+  normalizeFormHandling,
+  submitSuccessResponse,
+  confirmationSettingsProblem,
+  publicFormHandling,
+  resolveAlertRecipients,
+  alertSubjectFor,
+  flattenSubmittedAnswers,
+} = require('../lib/crmFormHandling');
+const { sendVisitorConfirmation } = require('../lib/crmFormConfirmation');
+const { findFormRedirectPage } = require('../lib/crmFormRedirectPage');
+const { clientIp } = require('../lib/rateLimiter');
 
 function requestScope(req) {
   return {
@@ -35,9 +54,10 @@ function humanizeFieldKey(key) {
 }
 
 /**
- * Email the project's Contact Alert recipients about a public form
- * submission. Set on the tenant admin Settings page; an empty list means no
- * alerts.
+ * Email the team about a public form submission: the form's own alert list
+ * and subject when it has them (CRM › Forms › Edit, task 86bcx188j), otherwise
+ * the project's Contact Alert Email from the tenant admin Settings page. An
+ * empty result means no alerts.
  *
  * All recipients go on one message rather than one message each, so a reply
  * keeps the whole team on the thread.
@@ -46,15 +66,17 @@ function humanizeFieldKey(key) {
  * visitor must not see an error because the site owner's mail provider is
  * misconfigured. Failures are logged for the server logs instead.
  */
-async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) {
+async function notifyContactAlertEmail({ projectId, form, email, data, isDuplicate }) {
   try {
-    const alertTo = await getContactAlertEmails(projectId);
+    const alertTo = resolveAlertRecipients(form, await getContactAlertEmails(projectId));
     if (!alertTo.length) return;
 
     const projectResult = await getPublicProjectById(projectId);
     const siteName = String(projectResult?.data?.name || '').trim() || 'your site';
 
     const rows = [];
+    // Which form it came from, so a team with several forms knows which one.
+    if (String(form?.name || '').trim()) rows.push(['Form', String(form.name).trim()]);
     if (email) rows.push(['Email', email]);
     for (const [key, value] of Object.entries(data || {})) {
       const text = String(value ?? '').trim();
@@ -84,7 +106,7 @@ async function notifyContactAlertEmail({ projectId, email, data, isDuplicate }) 
       to: alertTo,
       fromName: siteName,
       replyTo: email || undefined,
-      subject: `New contact form submission — ${siteName}`,
+      subject: alertSubjectFor(form, { siteName, email, data }),
       text: textBody,
       html: `
         <div style="font-family: Arial, Helvetica, sans-serif; padding: 24px; color: #18324a;">
@@ -183,35 +205,66 @@ async function handle(req, res, pathname, method) {
     if (!bind.ok) return sendErr(res, bind.status || 403, bind.error, { code: bind.code }), true;
     const scopedProjectId = bind.projectId;
     const submittedEmail = String(body.email || '').trim().toLowerCase() || null;
-    const submittedData = (body.data && typeof body.data === 'object') ? body.data : {};
+    // A "Choose several" answer arrives as a list; store it as readable text.
+    const submittedData = flattenSubmittedAnswers((body.data && typeof body.data === 'object') ? body.data : {});
+    // Looked up first so the contact's source can name it (task 86bcx1858).
+    const form = await formForSubmission(body.crm_form_id || body.crmFormId, crmConfigId, scopedProjectId);
     let stored = true;
+    let contactId = '';
     try {
-      await createContact({
+      const created = await createContact({
         crmConfigId,
         email: submittedEmail,
         data: submittedData,
-        source: String(body.source || 'form').trim(),
+        source: contactSourceForForm(form, String(body.source || 'form')),
         tags: [],
       }, { projectId: scopedProjectId, userId: '' });
+      contactId = String(created?.id || '');
     } catch (err) {
       if (err.code !== 'DUPLICATE_EMAIL') throw err;
       stored = false;
+      const existing = await findContactByEmail(crmConfigId, submittedEmail, { projectId: scopedProjectId }).catch(() => null);
+      contactId = String(existing?.id || '');
     }
+    // Every submission is kept, a returning visitor's second message included.
+    // Never fails the visitor — see recordPublicSubmission.
+    await recordPublicSubmission({
+      form,
+      projectId: scopedProjectId,
+      contactId,
+      email: submittedEmail,
+      data: submittedData,
+      pageUrl: body.pageUrl,
+    });
 
-    // Notify the project's internal Contact Alert Email, if one is set on the
-    // Settings page. Awaited rather than fire-and-forget: on Vercel the lambda
+    // Notify the form's own alert list (task 86bcx188j), or else the project's
+    // internal Contact Alert Email, if one is set on the Settings page. No form
+    // id, or one that does not belong here, alerts exactly as before. Awaited
+    // rather than fire-and-forget: on Vercel the lambda
     // freezes as soon as the response is sent, which silently kills in-flight
     // work (see docs — that is what truncated Header/Footer propagation).
     // Deliberately never fails the submission — the visitor's data is already
     // saved, so a mail problem must not show them an error.
     await notifyContactAlertEmail({
       projectId: scopedProjectId,
+      form,
       email: submittedEmail,
       data: submittedData,
       isDuplicate: !stored,
     });
 
-    return sendOk(res, 200, {}, { message: 'Thank you! Your information has been saved.' }), true;
+    // The form's OWN success message, and where it sends the visitor — not a
+    // fixed sentence (task 86bcwy44f). No form id, or one that does not belong
+    // here, answers exactly as before. `form` was looked up above, scoped to
+    // this project, by formForSubmission.
+    // The visitor's confirmation, when the form has one on (task 86bcx18bg).
+    // Awaited for the same Vercel reason as the alert; never fails the submit.
+    await sendVisitorConfirmation({ projectId: scopedProjectId, form, email: submittedEmail, data: submittedData, ip: clientIp(req) });
+    // "Go to a page" is stored as the page's id and turned into its CURRENT
+    // address here, so renaming the page moves the form with it (86bcxmq23).
+    const target = await findFormRedirectPage(form, scopedProjectId);
+    const outcome = submitSuccessResponse(form, target.page);
+    return sendOk(res, 200, outcome, outcome), true;
   }
 
   if (pathname === '/api/crm/contacts' && method === 'GET') {
@@ -285,7 +338,12 @@ async function handle(req, res, pathname, method) {
       crmConfigId = configs[0]?.id || '';
     }
     if (!crmConfigId) return sendOk(res, 200, [], { forms: [] }, { total: 0 }), true;
-    const forms = await listForms(crmConfigId, scope);
+    const listed = await listForms(crmConfigId, scope);
+    // A count that could not be read is null, never 0 (CLAUDE.md landmine 17).
+    const counts = await countSubmissionsByForm(listed.map((f) => f.id), scope)
+      .catch((err) => ({ ok: false, error: err?.message }));
+    if (!counts.ok) console.error('[crm] Counting form submissions failed:', counts.error);
+    const forms = listed.map((f) => ({ ...f, submissionCount: counts.ok ? (counts.data[f.id] ?? 0) : null }));
     return sendOk(res, 200, forms, { forms }, { total: forms.length }), true;
   }
 
@@ -296,6 +354,8 @@ async function handle(req, res, pathname, method) {
     if (!crmConfigId || !name) {
       return sendErr(res, 400, 'crmConfigId and name are required', { code: 'VALIDATION_ERROR' }), true;
     }
+    const confirmProblem = confirmationSettingsProblem(body.handling, body.fields);
+    if (confirmProblem) return sendErr(res, 400, confirmProblem, { code: 'VALIDATION_ERROR' }), true;
     const created = await createForm({
       crmConfigId,
       name,
@@ -306,6 +366,7 @@ async function handle(req, res, pathname, method) {
       accentColor: String(body.accentColor || '').trim(),
       styles: body.styles && typeof body.styles === 'object' && !Array.isArray(body.styles) ? body.styles : {},
       fields: Array.isArray(body.fields) ? body.fields : [],
+      handling: body.handling !== undefined ? normalizeFormHandling(body.handling) : undefined,
     }, requestScope(req));
     if (!created) {
       const detail = getLastFormStoreError();
@@ -325,9 +386,35 @@ async function handle(req, res, pathname, method) {
   if (formMatch && method === 'GET') {
     // Public — needed to render CRM forms on public landing pages
     const id = decodeURIComponent(formMatch[1]);
-    const form = await getForm(id, { projectId: '', userId: '' });
-    if (!form) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    const found = await getForm(id, { projectId: '', userId: '' });
+    if (!found) return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    // Anyone can read a form by id — a published page has to. The team's alert
+    // addresses are not theirs to read, so a request with no signed-in user
+    // gets only where the form sends visitors (task 86bcx188j).
+    // "Go to a page" is resolved to the page's current address here too, and
+    // the editor is told when that page has been deleted (task 86bcxmq23).
+    const target = await findFormRedirectPage(found, found.projectId);
+    const form = req.authUser
+      ? { ...found, redirectPageMissing: target.missing }
+      : { ...found, handling: publicFormHandling(found.handling, target.page) };
     return sendOk(res, 200, form, { form }), true;
+  }
+
+  // GET /api/crm/forms/:id/submissions — admin only (not in the public
+  // exemptions, which match /api/crm/forms/:id alone), within this project.
+  const submissionsMatch = pathname.match(/^\/api\/crm\/forms\/([^/]+)\/submissions$/);
+  if (submissionsMatch && method === 'GET') {
+    const id = decodeURIComponent(submissionsMatch[1]);
+    const scope = requestScope(req);
+    const form = await getForm(id, scope);
+    if (!form || (form.projectId && form.projectId !== scope.projectId)) {
+      return sendErr(res, 404, 'CRM form not found', { code: 'NOT_FOUND' }), true;
+    }
+    const result = await listSubmissions(id, scope);
+    if (!result.ok) {
+      return sendErr(res, result.status || 500, `Could not read this form's submissions: ${result.error}`, { code: 'CRM_SUBMISSIONS_READ_FAILED' }), true;
+    }
+    return sendOk(res, 200, result.data, { submissions: result.data }, { total: result.data.length }), true;
   }
 
   if (formMatch && method === 'PUT') {
@@ -353,6 +440,14 @@ async function handle(req, res, pathname, method) {
       patch.stylesPatch = body.stylesPatch;
     }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
+    if (body.handling !== undefined) patch.handling = normalizeFormHandling(body.handling);
+    if (patch.handling !== undefined || patch.fields !== undefined) {
+      const confirmProblem = confirmationSettingsProblem(
+        patch.handling !== undefined ? patch.handling : existing.handling,
+        patch.fields !== undefined ? patch.fields : existing.fields
+      );
+      if (confirmProblem) return sendErr(res, 400, confirmProblem, { code: 'VALIDATION_ERROR' }), true;
+    }
     const updated = await updateForm(id, patch, scope);
     if (!updated) {
       const detail = getLastFormStoreError();

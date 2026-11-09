@@ -40,7 +40,7 @@ export function BuilderBlogPostCardModuleSettings({ module, onUpdateModule }: Pr
             { key: "date", label: "Date", width: "text-md", control: "text", placeholder: "Jun 20, 2026" }
           ],
           [{ key: "categories", label: "Categories", width: "full", control: "text", placeholder: "Tech, Design (comma-separated)" }],
-          [{ key: "url", label: "Link URL", width: "full", control: "text", placeholder: "/blog/post-slug" }],
+          [{ key: "url", label: "Link URL", width: "full", control: "picker", source: "pages", valueKind: "path", noneLabel: "— No link —", placeholder: "/blog/post-slug" }],
           [
             {
               key: "imageUrl",

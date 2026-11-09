@@ -1127,7 +1127,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
     <button
       type="button"
       role="tab"
-      className={`btn${tab === value ? ' btn-primary' : ''}`}
+      className="tab-btn"
       aria-selected={tab === value}
       onClick={() => setTab(value)}
     >
@@ -1151,7 +1151,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
 
       {!detailId ? (
         <div className="substack-miner-toolbar">
-          <div className="substack-miner-tabs" role="tablist" aria-label="Substack Miner">
+          <div className="tab-bar substack-miner-tabs" role="tablist" aria-label="Substack Miner">
             {tabButton('candidates', 'Candidates')}
             {tabButton('run', 'Run')}
           </div>
@@ -1372,7 +1372,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <textarea id="sm-keywords" rows={5} value={keywordsText} onChange={(e) => setKeywordsText(e.target.value)} disabled={!settings} />
             {keywordsMessage ? <p className="substack-miner-card-note" role="status">{keywordsMessage}</p> : null}
             <div className="substack-miner-actions">
-              <button type="submit" className="btn btn-primary" disabled={keywordsBusy || !settings || !keywordsDirty}>
+              <button type="submit" className="btn btn-save" disabled={keywordsBusy || !settings || !keywordsDirty}>
                 {keywordsBusy ? 'Saving…' : 'Save keywords'}
               </button>
             </div>

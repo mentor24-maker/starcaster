@@ -291,7 +291,7 @@ SectionIR {
 }
 
 ElementIR {
-  sourceId,                    // stable within the job: <pageIdx>-<domPath-hash>
+  sourceId,                    // stable across captures: <pageKey>-<domPath-hash> (see below)
   class: "text" | "heading" | "image" | "link" | "button" | "form"
        | "video" | "embed" | "table" | "other",
   html,                        // original outer HTML, verbatim
@@ -457,9 +457,26 @@ Recorded now so the mapping phase inherits them verbatim:
   (foundation + capture PRs). The provider knows neither the job's Blob
   namespace nor the page index that sourceIds embed, so it returns
   screenshot binaries — element crops keyed by domPath. The worker uploads
-  the PNGs, re-keys crops via `computeSourceId(pageIdx, domPath)`, and
+  the PNGs, re-keys crops via `computeSourceId(pageKey, domPath)`, and
   persists the `CaptureResult` shape exactly as specified. Downstream
   contracts unchanged.
+- **The page half of a sourceId is the page's ADDRESS, not its crawl
+  position** (task 86bcyrt21, 2026-11-05). `pageKey` is `p<hash of path>`,
+  with `~2`, `~3`… for a later capture of the same path (the occurrence rule
+  the mapper keys pages by). It used to be `<pageIdx>`, and two captures of
+  wavecenter.com that found 10 and 7 pages matched only 24 of 42 section ids
+  — every section on the three pages that moved got a new one, so a second
+  import could not recognise them. With the address: 42 of 42.
+  Older jobs keep their `<pageIdx>-…` ids until normalize is re-run
+  (`site_import_worker.mjs --stage normalize --job <id>`, no recapture):
+  normalize still joins an old capture's crops by the old key
+  (`legacySourceId`), and `site_import_map.mjs` recognises sections a page
+  was BUILT with under old ids by their element-path half
+  (`adoptLegacySectionIds`), renaming them in place and carrying their
+  fingerprints across — so a re-map adds no second copy and an edited
+  section stays protected. Measured on the four jobs that had built pages:
+  re-normalized without that matching they would have added 425 duplicate
+  sections; with it, the result is identical to re-mapping the stored IR.
 - **Counting methodology refinements** (foundation PR, encoded in
   `ir.ts`): `<li>` is a container rather than a text atom so nav links
   count as links; bare text runs directly inside descended containers

@@ -21,6 +21,8 @@ const { requestProjectScope } = require('../lib/requestProjectScope');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const store = require('../lib/siteImportStore');
 const importTheme = require('../lib/siteImportTheme');
+const sameSite = require('../lib/siteImportSameSite');
+const importBuild = require('../lib/siteImportBuild');
 
 const PREFIX = '/api/site-import';
 
@@ -66,12 +68,50 @@ async function handle(req, res, pathname, method) {
     const { url, error } = validateSourceUrl(body.sourceUrl);
     if (error) return sendErr(res, 400, error, { code: 'VALIDATION_ERROR' }), true;
 
+    // Same site already here? (task 86bcynqrt — wavecenter.com was captured
+    // twice, with and without "www.", while another import waited behind it.)
+    // Waiting or running: always refused. Finished: refused until the caller
+    // confirms, because a site can change and taking a fresh copy is legitimate.
+    const existing = await store.listJobs(scope.projectId, 200);
+    if (!existing.ok) return sendErr(res, existing.status || 500, existing.error), true;
+    const { active, complete } = sameSite.findSameSite(existing.data, url);
+    const earlierDetail = (job) => ({
+      jobId: job.id,
+      sourceUrl: job.sourceUrl,
+      address: sameSite.displayAddress(job.sourceUrl),
+      status: job.status,
+      createdAt: job.createdAt,
+      finishedAt: job.finishedAt,
+    });
+    if (active) {
+      return sendErr(
+        res, 409,
+        `${sameSite.displayAddress(active.sourceUrl)} is already being imported for this project ` +
+          `(${active.status === 'queued' ? 'waiting' : active.status} since ${sameSite.formatDay(active.createdAt)}). ` +
+          'Nothing new was started.',
+        { code: 'DUPLICATE_ACTIVE', details: [earlierDetail(active)] }
+      ), true;
+    }
+    if (complete && body.confirmReimport !== true) {
+      return sendErr(
+        res, 409,
+        `${sameSite.displayAddress(complete.sourceUrl)} was already imported for this project on ` +
+          `${sameSite.formatDay(complete.finishedAt)}. Import it again? Building from the new copy updates the pages that ` +
+          'import made. Sections you have edited are kept.',
+        { code: 'DUPLICATE_COMPLETE', details: [earlierDetail(complete)] }
+      ), true;
+    }
+
     const created = await store.createJob({
       projectId: scope.projectId,
       ownerUserId: scope.userId,
       sourceUrl: url,
       caps: body.caps,
       clientAuthorization: body.clientAuthorization,
+      // The link the worker reads to tell a confirmed re-import from an
+      // unconfirmed duplicate, and the follow-on refresh ticket reads to find
+      // the pages the earlier import built.
+      checkpoints: complete ? { reimportOf: complete.id } : undefined,
     });
     if (!created.ok) return sendErr(res, created.status || 500, created.error), true;
     return sendOk(res, 201, { job: created.data }), true;
@@ -86,7 +126,7 @@ async function handle(req, res, pathname, method) {
     return sendOk(res, 200, { jobs: listed.data }), true;
   }
 
-  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel|/theme)?$`));
+  const jobMatch = pathname.match(new RegExp(`^${PREFIX}/jobs/([^/]+)(/assets|/cancel|/theme|/build)?$`));
   if (!jobMatch) return sendErr(res, 404, 'Unknown Site Import endpoint', { code: 'NOT_FOUND' }), true;
   const jobId = decodeURIComponent(jobMatch[1]);
   const tail = jobMatch[2] || '';
@@ -121,6 +161,29 @@ async function handle(req, res, pathname, method) {
     });
     if (!updated.ok) return sendErr(res, updated.status || 500, updated.error), true;
     return sendOk(res, 200, { job: updated.data }), true;
+  }
+
+  // POST /api/site-import/jobs/:id/build — queue the build step for the Mac
+  // Mini import worker (task 86bcz9wcx). Body { mode: 'preview' | 'apply',
+  // noTheme?: boolean }. The website cannot run the build itself (it backs up
+  // pages to local files and runs long), so this only records the request;
+  // the worker runs it within about five minutes and writes the result back.
+  // 'apply' refuses until a preview exists that still matches the job.
+  // Never publishes: the build makes draft pages only.
+  if (tail === '/build' && method === 'POST') {
+    if (checkEndpointLimit(req, res, 'siteImport.build')) return true;
+    const body = await parseJsonBody(req);
+    const plan = importBuild.planBuildRequest(job, {
+      mode: body.mode,
+      noTheme: body.noTheme === true,
+      userId: scope.userId,
+    });
+    if (!plan.ok) return sendErr(res, plan.status, plan.message, { code: plan.code }), true;
+    const updated = await store.updateJob(job.id, {
+      checkpoints: { ...job.checkpoints, build: plan.request },
+    });
+    if (!updated.ok) return sendErr(res, updated.status || 500, updated.error), true;
+    return sendOk(res, 202, { job: updated.data }), true;
   }
 
   // GET  /api/site-import/jobs/:id/theme — the theme this import WOULD make

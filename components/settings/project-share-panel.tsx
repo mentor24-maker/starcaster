@@ -307,7 +307,7 @@ export function ShareWithView(props: ViewProps) {
 
           {saved.canEdit && (
             <div className="project-share-actions">
-              <button type="button" className="btn btn-primary" onClick={props.onSave} disabled={saving || !dirty}>
+              <button type="button" className="btn btn-save" onClick={props.onSave} disabled={saving || !dirty}>
                 {saving ? 'Saving…' : 'Save'}
               </button>
               {message && <span className="meta">{message}</span>}

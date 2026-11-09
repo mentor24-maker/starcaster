@@ -12,6 +12,7 @@
       if (document.getElementById('siteRoot')) return;
       var h = window.location.hostname;
       var sys = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/.test(h)
+        || h.endsWith('.local')
         || h.endsWith('.vercel.app')
         || h === 'app.starcaster.pro';
       if (sys) return;
@@ -135,6 +136,182 @@
       <img src="/images/logo_starcaster_1200x180.png" alt="StarCaster by Alphire" class="brand-wordmark"
         onerror="this.style.display='none';document.getElementById('brandFallback').style.display='block';" />
       <h1 id="brandFallback" class="brand-fallback">StarCaster by Alphire</h1>
+      <!-- The menu sits INSIDE the header so logo, menu and account share one
+           row (task 86bcyrqau): the logo band plus a separate menu bar took
+           ~230px of every screen. `#topNav` keeps its id for App.els.
+           Its onclick closes the phone menu when a tap goes somewhere final
+           (a sub-item, or a top-level link with no sub-menu), so the next
+           screen does not load under an open menu. A parent with sub-items
+           (Builder, Contacts…) leaves it open so its sub-items can be tapped
+           (review round 2 of task 86bcyrqau). -->
+      <nav class="top-nav" id="topNav"
+        onclick="var h=this.parentNode,a=event.target.closest('a.menu-link'),b;if(a&&h.classList.contains('admin-menu-open')&&(a.classList.contains('submenu-link')||!a.parentNode.classList.contains('has-submenu'))){h.classList.remove('admin-menu-open');b=h.querySelector('.admin-menu-toggle');if(b){b.setAttribute('aria-expanded','false');b.textContent='Menu';}}">
+        <ul class="menu-root">
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="acquirePage">Acquire</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="acquireWebPage">Web</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireYoutubePage">Youtube</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireBlueskyPage">BlueSky</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireInstagramPage">Instagram</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireTiktokPage">Tiktok</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireFacebookPage">Facebook</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireXPage">X</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireQuoraPage">Quora</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireSubstackPage">Substack Miner</a>
+              <a href="#" class="menu-link submenu-link" data-page="acquireMediumPage">Medium</a>
+            </div>
+          </li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" onclick="App.contacts.openPeerSitesPage(); return false;"
+                data-page="contactsPeerSitesPage">Peer Sites</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;"
+                data-page="contactsPersonasPage">Personas</a>
+              <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
+              <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
+            </div>
+          </li>
+          <li class="menu-item"><a href="#" class="menu-link" data-page="channelsPage">Channels</a></li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" onclick="App.messaging.openContentLanding(); return false;"
+              data-page="messagingContentPage">Messaging</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.messaging.openTopicsLanding(); return false;">Topics</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.messaging.openTagsPage(); return false;">Tags</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.messaging.openContentLanding(); return false;">Content</a>
+            </div>
+          </li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="assetsPage"
+              onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
+              <a href="#" class="menu-link submenu-link"
+                onclick="App.assets.openAssetsManager('Lead Magnet'); return false;">PDF</a>
+              <a href="#" class="menu-link submenu-link" data-page="assetsFootagePage">Footage</a>
+              <a href="#" class="menu-link submenu-link" data-page="assetsFontsPage">Fonts</a>
+            </div>
+          </li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="builderPage">Builder</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" onclick="App.builder.openThemesPage(); return false;"
+                data-page="builderThemesPage">Themes</a>
+              <a href="#" class="menu-link submenu-link" data-page="builderTemplatesPage">Templates</a>
+              <a href="#" class="menu-link submenu-link" data-page="builderModulesPage">Modules</a>
+              <a href="#" class="menu-link submenu-link" data-page="builderManagePagesPage">Pages</a>
+              <a href="#" class="menu-link submenu-link" data-page="builderToolsPage">Extensions</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.crm.openPage(); return false;"
+                data-page="crmPage">CRM</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.builder.openAgentsPage(); return false;"
+                data-page="builderAgentsPage">Agents</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.builder.openSiteImportPage(); return false;"
+                data-page="builderSiteImportPage">Site Import</a>
+            </div>
+          </li>
+          <li class="menu-item"><a href="#" class="menu-link" data-page="campaignsPage">Campaigns</a></li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="promotePage">Promote</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="engageEmailPage">Email</a>
+              <a href="#" class="menu-link submenu-link" data-page="promoteSocialPage">Social</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageMessagingPage">Messaging</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageCommentsPage">Comments</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageDiscussionPage">Discussion</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageStreamingPage">Streaming</a>
+              <a href="#" class="menu-link submenu-link" data-page="engagePodcastsPage">Podcasts</a>
+            </div>
+          </li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="observePage">Observe</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="observeDashboardPage">Dashboard</a>
+              <a href="#" class="menu-link submenu-link" data-page="observeReportsPage">Reports</a>
+              <a href="#" class="menu-link submenu-link" data-page="observeAnalysisPage">Analysis</a>
+              <a href="#" class="menu-link submenu-link" data-page="observeQuotasPage">API Quotas</a>
+              <a href="#" class="menu-link submenu-link" data-page="activityLogPage">Activity Log</a>
+            </div>
+          </li>
+          <li class="menu-item has-submenu">
+            <a href="#" class="menu-link" data-page="engagePage">Engage</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="engageOutreachPage">Outreach</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageInboxPage">Inbox</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageEmailResponsesPage">Email</a>
+              <a href="#" class="menu-link submenu-link" data-page="promoteSocialResponsesPage">Social</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageMessageResponsesPage">Messages</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageCommentResponsesPage">Reddit</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageYoutubeOutreachPage">YouTube</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageSubstackNotesPage">Substack</a>
+              <a href="#" class="menu-link submenu-link" data-page="engageDiscussionResponsesPage">Discussion</a>
+            </div>
+          </li>
+          <li class="menu-item menu-item-right-start has-submenu">
+            <a href="#" class="menu-link" data-page="trainingKnowledgebasePage">Training</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="trainingKnowledgebasePage">Knowledgebase</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingContextPage">Context</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingCategoriesPage">Topics</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingAttributesPage">Attributes</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingApproachesPage">Approaches</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingRulesGuidesPage">Rules/Guides</a>
+              <a href="#" class="menu-link submenu-link" data-page="trainingFilesystemPage">Filesystem</a>
+            </div>
+          </li>
+          <li class="menu-item menu-item-right has-submenu">
+            <a href="#" class="menu-link" data-page="settingsPage">Settings</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" data-page="settingsProfilePage">Profile</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.settings.openProjectsPage(); return false;"
+                data-page="settingsProjectsPage">Projects</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsInvitationsPage">Invitations</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsConnectionsPage">Connections</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsAgentsPage">Agents</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsDatabasePage">Database</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsApisPage">APIs</a>
+              <a href="#" class="menu-link submenu-link" data-page="settingsAiQuotaPage">AI Quota</a>
+              <a href="#" class="menu-link submenu-link" data-page="envConfigPage">Env Config</a>
+            </div>
+          </li>
+          <li class="menu-item menu-item-right has-submenu docs-menu-anchor">
+            <a href="#" class="menu-link" data-page="docsPage">Help</a>
+            <div class="submenu" data-submenu="help">
+              <a href="#" class="menu-link submenu-link" data-page="askIzzyPage">Ask Izzy</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsPage">Docs</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsAcquirePage">Acquire</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsContactsPage">Contacts</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsMessagingPage">Messaging</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsAssetsPage">Assets</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsChannelsPage">Channels</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsDevelopPage">Builder</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsCampaignsPage">Campaigns</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsEngagePage">Engage</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsObservePage">Observe</a>
+              <a href="#" class="menu-link submenu-link" data-page="docsSettingsPage">Settings</a>
+            </div>
+          </li>
+          <li class="menu-item menu-item-right has-submenu">
+            <a href="#" class="menu-link" data-page="adminPage">Admin</a>
+            <div class="submenu">
+              <a href="#" class="menu-link submenu-link" onclick="App.admin.openPage(); return false;" data-page="adminPage">Users</a>
+              <a href="#" class="menu-link submenu-link" onclick="App.admin.openAddUserPage(); return false;" data-page="adminAddUserPage">Add User</a>
+            </div>
+          </li>
+        </ul>
+      </nav>
       <div class="auth-header-meta">
         <a id="authWelcomeName" class="auth-welcome-name" href="#page=settingsProfilePage">Account</a>
         <span class="auth-header-sep" aria-hidden="true">·</span>
@@ -145,180 +322,21 @@
         <img id="brandProfileLogo" alt="Project logo" class="brand-profile-logo hidden" />
         <span id="brandProfileLabel">Projects</span>
       </button>
+      <!-- Phone only (CSS hides it above 720px): folds the menu away so the
+           header is one row there too. Inline because public/js is frozen. -->
+      <button class="admin-menu-toggle" type="button" aria-controls="topNav" aria-expanded="false"
+        onclick="var h=this.parentNode,o=h.classList.toggle('admin-menu-open');this.setAttribute('aria-expanded',String(o));this.textContent=o?'Close':'Menu';">Menu</button>
     </header>
-    <nav class="top-nav" id="topNav">
-      <ul class="menu-root">
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="acquirePage">Acquire</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="acquireWebPage">Web</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireYoutubePage">Youtube</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireBlueskyPage">BlueSky</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireInstagramPage">Instagram</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireTiktokPage">Tiktok</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireFacebookPage">Facebook</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireXPage">X</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireQuoraPage">Quora</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireSubstackPage">Substack Miner</a>
-            <a href="#" class="menu-link submenu-link" data-page="acquireMediumPage">Medium</a>
-          </div>
-        </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link active" data-page="contactsPage">Contacts</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.contacts.openPeerSitesPage(); return false;"
-              data-page="contactsPeerSitesPage">Peer Sites</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.contactPersonas.openPersonasPage(); return false;"
-              data-page="contactsPersonasPage">Personas</a>
-            <a href="#" class="menu-link submenu-link" data-page="contactsExplorePage">Explore</a>
-            <a href="#" class="menu-link submenu-link" data-page="segmentsPage">Segments</a>
-          </div>
-        </li>
-        <li class="menu-item"><a href="#" class="menu-link" data-page="channelsPage">Channels</a></li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" onclick="App.messaging.openContentLanding(); return false;"
-            data-page="messagingContentPage">Messaging</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.messaging.openManageContentLanding(); return false;">Formats</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.messaging.openTopicsLanding(); return false;">Topics</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.messaging.openTagsPage(); return false;">Tags</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.messaging.openContentLanding(); return false;">Content</a>
-          </div>
-        </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="assetsPage"
-            onclick="App.assets.openAssetsLanding(); return false;">Assets</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.assetCategories.openCategoriesPage(); return false;">Categories</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.assets.openAssetsManager('Image'); return false;">Images</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.assets.openAssetsManager('Video'); return false;">Video</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.assets.openAssetsManager('Audio'); return false;">Audio</a>
-            <a href="#" class="menu-link submenu-link"
-              onclick="App.assets.openAssetsManager('Lead Magnet'); return false;">PDF</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsFootagePage">Footage</a>
-            <a href="#" class="menu-link submenu-link" data-page="assetsFontsPage">Fonts</a>
-          </div>
-        </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="builderPage">Builder</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.builder.openThemesPage(); return false;"
-              data-page="builderThemesPage">Themes</a>
-            <a href="#" class="menu-link submenu-link" data-page="builderTemplatesPage">Templates</a>
-            <a href="#" class="menu-link submenu-link" data-page="builderModulesPage">Modules</a>
-            <a href="#" class="menu-link submenu-link" data-page="builderManagePagesPage">Pages</a>
-            <a href="#" class="menu-link submenu-link" data-page="builderToolsPage">Extensions</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.crm.openPage(); return false;"
-              data-page="crmPage">CRM</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.builder.openAgentsPage(); return false;"
-              data-page="builderAgentsPage">Agents</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.builder.openSiteImportPage(); return false;"
-              data-page="builderSiteImportPage">Site Import</a>
-          </div>
-        </li>
-        <li class="menu-item"><a href="#" class="menu-link" data-page="campaignsPage">Campaigns</a></li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="promotePage">Promote</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="engageEmailPage">Email</a>
-            <a href="#" class="menu-link submenu-link" data-page="promoteSocialPage">Social</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageMessagingPage">Messaging</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageCommentsPage">Comments</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageDiscussionPage">Discussion</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageStreamingPage">Streaming</a>
-            <a href="#" class="menu-link submenu-link" data-page="engagePodcastsPage">Podcasts</a>
-          </div>
-        </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="observePage">Observe</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="observeDashboardPage">Dashboard</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeReportsPage">Reports</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeAnalysisPage">Analysis</a>
-            <a href="#" class="menu-link submenu-link" data-page="observeQuotasPage">API Quotas</a>
-            <a href="#" class="menu-link submenu-link" data-page="activityLogPage">Activity Log</a>
-          </div>
-        </li>
-        <li class="menu-item has-submenu">
-          <a href="#" class="menu-link" data-page="engagePage">Engage</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="engageOutreachPage">Outreach</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageInboxPage">Inbox</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageEmailResponsesPage">Email</a>
-            <a href="#" class="menu-link submenu-link" data-page="promoteSocialResponsesPage">Social</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageMessageResponsesPage">Messages</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageCommentResponsesPage">Reddit</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageYoutubeOutreachPage">YouTube</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageSubstackNotesPage">Substack</a>
-            <a href="#" class="menu-link submenu-link" data-page="engageDiscussionResponsesPage">Discussion</a>
-          </div>
-        </li>
-        <li class="menu-item menu-item-right-start has-submenu">
-          <a href="#" class="menu-link" data-page="trainingKnowledgebasePage">Training</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="trainingKnowledgebasePage">Knowledgebase</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingContextPage">Context</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingCategoriesPage">Topics</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingAttributesPage">Attributes</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingApproachesPage">Approaches</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingRulesGuidesPage">Rules/Guides</a>
-            <a href="#" class="menu-link submenu-link" data-page="trainingFilesystemPage">Filesystem</a>
-          </div>
-        </li>
-        <li class="menu-item menu-item-right has-submenu">
-          <a href="#" class="menu-link" data-page="settingsPage">Settings</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" data-page="settingsProfilePage">Profile</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.settings.openProjectsPage(); return false;"
-              data-page="settingsProjectsPage">Projects</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsInvitationsPage">Invitations</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsConnectionsPage">Connections</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsAgentsPage">Agents</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsDatabasePage">Database</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsApisPage">APIs</a>
-            <a href="#" class="menu-link submenu-link" data-page="settingsAiQuotaPage">AI Quota</a>
-            <a href="#" class="menu-link submenu-link" data-page="envConfigPage">Env Config</a>
-          </div>
-        </li>
-        <li class="menu-item menu-item-right has-submenu docs-menu-anchor">
-          <a href="#" class="menu-link" data-page="docsPage">Help</a>
-          <div class="submenu" data-submenu="help">
-            <a href="#" class="menu-link submenu-link" data-page="askIzzyPage">Ask Izzy</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsPage">Docs</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsAcquirePage">Acquire</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsContactsPage">Contacts</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsMessagingPage">Messaging</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsAssetsPage">Assets</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsChannelsPage">Channels</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsDevelopPage">Builder</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsCampaignsPage">Campaigns</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsEngagePage">Engage</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsObservePage">Observe</a>
-            <a href="#" class="menu-link submenu-link" data-page="docsSettingsPage">Settings</a>
-          </div>
-        </li>
-        <li class="menu-item menu-item-right has-submenu">
-          <a href="#" class="menu-link" data-page="adminPage">Admin</a>
-          <div class="submenu">
-            <a href="#" class="menu-link submenu-link" onclick="App.admin.openPage(); return false;" data-page="adminPage">Users</a>
-            <a href="#" class="menu-link submenu-link" onclick="App.admin.openAddUserPage(); return false;" data-page="adminAddUserPage">Add User</a>
-          </div>
-        </li>
-      </ul>
-    </nav>
+
+    <!-- The one message strip (UI normalization 9 of 10, task 86bcyrqbu).
+         Every App.notify / Toast message lands here, one at a time, in the
+         page's normal flow — so it pushes the page down instead of covering
+         it. Errors stay until dismissed. Rules: docs/UI_RULES.md S9. -->
+    <div id="appMessageStrip" class="c-message-strip" aria-live="polite"></div>
 
     <main>
       <!-- INJECT_PAGES -->
     </main>
-
-    <p id="message"></p>
   </div>
 
   <div id="assetFieldImportModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="assetFieldImportModalTitle">

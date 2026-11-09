@@ -101,7 +101,7 @@ App.components.DataGrid = function DataGrid(opts) {
       toolbarActions.innerHTML = '';
       for (const action of bulkActions) {
         toolbarActions.appendChild(h('button', {
-          class: 'btn btn-sm' + (action.danger ? ' btn-danger' : (action.primary ? ' btn-primary' : '')),
+          class: 'btn btn-sm' + (action.danger ? ' btn-danger' : (action.save ? ' btn-save' : (action.primary ? ' btn-primary' : ''))),
           onclick: () => action.onClick(Array.from(selectedIds), clearSelection)
         }, action.label));
       }
@@ -329,8 +329,9 @@ App.components.DataGrid = function DataGrid(opts) {
  * @param {object} opts
  * @param {string}          opts.title    - Modal header title
  * @param {string|Node}     opts.body     - HTML string or DOM node for body content
- * @param {Array<{ label: string, primary?: boolean, onClick: () => void }>} [opts.actions]
- *   Footer buttons. primary=true styles as the main CTA.
+ * @param {Array<{ label: string, primary?: boolean, save?: boolean, onClick: () => void }>} [opts.actions]
+ *   Footer buttons. primary=true styles as the main CTA; save=true is the green
+ *   Save button (`.btn-save`) — use it for every action that commits work.
  * @param {() => void}      [opts.onClose] - Called when modal is dismissed
  * @param {boolean}         [opts.closeOnBackdrop] - Click backdrop to close. Default: true.
  *
@@ -359,7 +360,7 @@ App.components.Modal = function Modal(opts) {
   const footer = h('div', { class: 'c-modal__footer' });
   for (const action of actions) {
     footer.appendChild(h('button', {
-      class:   'btn' + (action.primary ? ' btn-primary' : ' btn-ghost'),
+      class:   'btn' + (action.save ? ' btn-save' : (action.primary ? ' btn-primary' : ' btn-ghost')),
       onclick: () => { action.onClick(); }
     }, action.label));
   }
@@ -423,8 +424,8 @@ App.components.Modal = function Modal(opts) {
  * @param {string}          opts.title     - Card header title
  * @param {string|Node}     [opts.body]    - Body content (HTML string or Node)
  * @param {string}          [opts.subtitle] - Subtitle shown under title
- * @param {Array<{ label: string, onClick: () => void, primary?: boolean }>} [opts.actions]
- *   Buttons shown in the card header (top right).
+ * @param {Array<{ label: string, onClick: () => void, primary?: boolean, save?: boolean }>} [opts.actions]
+ *   Buttons shown in the card header (top right). save=true is the green Save button.
  * @param {string}          [opts.class]   - Extra CSS class on the card el
  * @param {string}          [opts.status]  - Status badge text (e.g. 'sent', 'draft')
  * @param {string}          [opts.statusClass] - CSS class for the status badge
@@ -454,7 +455,7 @@ App.components.Card = function Card(opts) {
   }
   for (const action of (opts.actions || [])) {
     actionsEl.appendChild(h('button', {
-      class:   'btn btn-sm ' + (action.primary ? 'btn-primary' : 'btn-ghost'),
+      class:   'btn btn-sm ' + (action.save ? 'btn-save' : (action.primary ? 'btn-primary' : 'btn-ghost')),
       onclick: action.onClick
     }, action.label));
   }
@@ -487,60 +488,85 @@ App.components.Card = function Card(opts) {
 };
 
 // ---------------------------------------------------------------------------
-// 4. Toast — notification manager (replaces the message bar)
+// 4. Toast — the ONE message strip (task 86bcyrqbu)
 // ---------------------------------------------------------------------------
 
 /**
- * Toast notification manager.
- *
  * App.components.Toast.show(message, options)
- *   options.type    — 'success' | 'error' | 'info'  (default: 'info')
- *   options.duration — ms before auto-dismiss        (default: 4000)
+ *   options.type     — 'success' | 'error' | 'info'  (default: 'info')
+ *   options.duration — ms before it closes by itself (default: 4000 for
+ *                      success/info; errors stay until dismissed)
+ *   A plain string as the second argument is read as the type.
  *
  * App.components.Toast.success(message)
  * App.components.Toast.error(message)
  * App.components.Toast.info(message)
  *
- * The toast container is appended to document.body automatically on first use.
+ * Messages land in #appMessageStrip (src/layout.html), which sits in the
+ * page's normal flow under the header: it pushes the page down rather than
+ * floating over it, so it can never cover a table row or a button. One
+ * message at a time — a new one replaces the old. If the strip is scrolled
+ * out of view, the page scrolls just far enough to show it.
+ * Rules: docs/UI_RULES.md S9.
  */
 App.components.Toast = (function () {
-  let container = null;
+  let current = null;
+  let timer = null;
 
-  function getContainer() {
-    if (!container) {
-      container = h('div', { class: 'c-toast__container', 'aria-live': 'polite' });
-      document.body.appendChild(container);
+  function getStrip() {
+    let strip = document.getElementById('appMessageStrip');
+    if (!strip) {
+      strip = h('div', { id: 'appMessageStrip', class: 'c-message-strip', 'aria-live': 'polite' });
+      document.body.insertBefore(strip, document.body.firstChild);
     }
-    return container;
+    return strip;
   }
 
-  function show(message, { type = 'info', duration = 4000 } = {}) {
-    const toast = h('div', { class: `c-toast c-toast--${type}` },
-      h('span', { class: 'c-toast__message' }, String(message)),
-      h('button', { class: 'c-toast__close', 'aria-label': 'Dismiss',
-                    onclick: () => dismiss(toast) }, '×')
+  function show(message, opts) {
+    const options = typeof opts === 'string' ? { type: opts } : (opts || {});
+    const type = ['success', 'error', 'info'].includes(options.type) ? options.type : 'info';
+    const duration = options.duration !== undefined
+      ? options.duration
+      : (type === 'error' ? 0 : 4000);
+
+    const strip = getStrip();
+    if (timer) { clearTimeout(timer); timer = null; }
+    strip.textContent = '';
+
+    const item = h('div', {
+      class: `c-message-strip__item c-message-strip__item--${type}`,
+      role: type === 'error' ? 'alert' : 'status',
+    },
+      h('span', { class: 'c-message-strip__text' }, String(message)),
+      h('button', { type: 'button', class: 'c-message-strip__close', 'aria-label': 'Dismiss',
+                    onclick: () => dismiss(item) }, '×')
     );
+    strip.appendChild(item);
+    current = item;
 
-    getContainer().appendChild(toast);
-
-    // Animate in
-    requestAnimationFrame(() => toast.classList.add('c-toast--visible'));
-
-    // Auto-dismiss
-    if (duration > 0) {
-      setTimeout(() => dismiss(toast), duration);
+    const top = strip.getBoundingClientRect().top;
+    if (top < 0 || top > window.innerHeight) {
+      strip.scrollIntoView({ block: 'nearest' });
     }
 
-    return toast;
+    if (duration > 0) {
+      timer = setTimeout(() => dismiss(item), duration);
+    }
+    return item;
   }
 
-  function dismiss(toast) {
-    toast.classList.remove('c-toast--visible');
-    toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+  function dismiss(item) {
+    if (!item) return;
+    item.remove();
+    if (current === item) {
+      current = null;
+      if (timer) { clearTimeout(timer); timer = null; }
+    }
   }
 
   return {
     show,
+    dismiss: () => dismiss(current),
     success: (msg, opts) => show(msg, { ...opts, type: 'success' }),
     error:   (msg, opts) => show(msg, { ...opts, type: 'error' }),
     info:    (msg, opts) => show(msg, { ...opts, type: 'info' }),
@@ -548,15 +574,71 @@ App.components.Toast = (function () {
 }());
 
 // ---------------------------------------------------------------------------
-// Patch App.notify to use Toast (drop-in replacement for the message bar)
+// 5. SavedNotice — "it saved", at the top of the page, gone on its own
 // ---------------------------------------------------------------------------
-// The original App.notify updates a static #message element.
-// We keep that working AND show a toast so both old and new code works.
 
-const _originalNotify = App.notify;
+/**
+ * App.components.SavedNotice.show(message, options)
+ *   options.page     — the `.app-page` section that saved (default: the visible one)
+ *   options.duration — ms before it fades (default: 3000)
+ *
+ * Scrolls back to the top, moves keyboard focus to the page's heading, and shows
+ * a confirmation card at the top of the screen that fades by itself — nothing to
+ * close (operator, 2026-11-04, task 86bcyjag0). Use it instead of a toast after a
+ * form's Save, where the button sits at the bottom of a long form and a corner
+ * toast is easy to miss. Errors still go through App.notify.
+ */
+App.components.SavedNotice = (function () {
+  let current = null;
+
+  function scrollPageToTop(page) {
+    for (let node = page; node && node !== document.body; node = node.parentElement) {
+      if (node.scrollTop > 0) node.scrollTop = 0;
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  function focusHeading(page) {
+    const heading = page && page.querySelector('.page-heading-row h2, h2');
+    if (!heading) return;
+    if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+    heading.focus({ preventScroll: true });
+  }
+
+  function show(message, { page = null, duration = 3000 } = {}) {
+    const target = page || document.querySelector('.app-page:not(.hidden)');
+    scrollPageToTop(target);
+    focusHeading(target);
+
+    if (current) current.remove();
+    const notice = h('div', { class: 'c-saved-notice', role: 'status', 'aria-live': 'polite' },
+      h('span', { class: 'c-saved-notice__icon', 'aria-hidden': 'true' }, '✓'),
+      h('span', { class: 'c-saved-notice__message' }, String(message))
+    );
+    current = notice;
+    document.body.appendChild(notice);
+    requestAnimationFrame(() => notice.classList.add('c-saved-notice--visible'));
+
+    setTimeout(() => {
+      notice.classList.remove('c-saved-notice--visible');
+      notice.addEventListener('transitionend', () => {
+        notice.remove();
+        if (current === notice) current = null;
+      }, { once: true });
+    }, duration);
+
+    return notice;
+  }
+
+  return { show };
+}());
+
+// ---------------------------------------------------------------------------
+// App.notify → the message strip
+// ---------------------------------------------------------------------------
+// App.notify used to write the old #message bar AND show a toast, so every
+// message appeared twice (task 86bcyrqbu). It now shows exactly one.
+
 App.notify = function notify(text, isError = false) {
-  // Keep legacy message bar working (some pages may still reference it)
-  if (_originalNotify) _originalNotify(text, isError);
-  // Also show a toast
   App.components.Toast.show(text, { type: isError ? 'error' : 'success' });
 };

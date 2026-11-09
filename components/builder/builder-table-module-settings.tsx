@@ -18,6 +18,7 @@ import {
   type ParsedTableData
 } from "@/lib/builder-table-data";
 import { sortPagesByName } from "../../public/shared/pageSort.js";
+import { buildPageAddressMap, makePageLink, pageLinkHref, resolvePageLink } from "@/lib/page-link";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderButtonModuleSettings } from "./builder-button-module-settings";
@@ -121,6 +122,7 @@ function TableCellModules({
     onUpdate(cellKey, [...modules, cloneTableCellModule(copy, "saved")]);
     closePalette();
   }
+  const pageAddresses = buildPageAddressMap(pages);
 
   function addModule(item: ModulePaletteItem) {
     const mod = createEmptyModule(item.type, "");
@@ -262,22 +264,31 @@ function TableCellModules({
                             <select
                               value=""
                               onChange={(e) => {
-                                if (e.target.value) updateModuleSettings(mod.id, { linkUrl: e.target.value });
+                                // Stored by reference, so renaming the page cannot break
+                                // this link (lib/builder-client/page-link.js, 86bcxmrw2).
+                                const page = pages.find((entry) => String(entry.id) === e.target.value);
+                                if (page) updateModuleSettings(mod.id, { linkUrl: makePageLink(page.id, `/${page.slug}`) });
                               }}
                             >
                               <option value="">— Page —</option>
                               {sortPagesByName(pages).map((p: BuilderPageRecord) => (
-                                <option key={p.id} value={`/${p.slug}`}>{p.name || p.slug || p.id}</option>
+                                <option key={p.id} value={String(p.id)}>{p.name || p.slug || p.id}</option>
                               ))}
                             </select>
                           )}
+                          {/* A reference shows the page's CURRENT address; typing over it stores what was typed. */}
                           <input
                             type="text"
-                            value={mod.settings.linkUrl ?? ""}
+                            value={pageLinkHref(mod.settings.linkUrl ?? "", pageAddresses)}
                             onChange={(e) => updateModuleSettings(mod.id, { linkUrl: normalizeBuilderAssetUrl(e.target.value) })}
                             placeholder="/path-or-url"
                           />
                         </div>
+                        {resolvePageLink(mod.settings.linkUrl ?? "", pages.length ? pageAddresses : null).missing ? (
+                          <span className="builder-project-data-picker-missing" role="note">
+                            The page this linked to no longer exists; choose another page.
+                          </span>
+                        ) : null}
                       </BuilderModuleField>
                       <BuilderModuleField label="New Tab" width="check">
                         <input

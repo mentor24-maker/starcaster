@@ -18,12 +18,12 @@
         "lang": "en",
         "sections": [
           {
-            "sourceId": "0-08c2bf26",
+            "sourceId": "p2a0c975e-08c2bf26",
             "type": "unknown",
             "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s0.png",
             "elements": [
               {
-                "sourceId": "0-ad7d87b9",
+                "sourceId": "p2a0c975e-ad7d87b9",
                 "class": "link",
                 "html": "<a class=\"brand\" href=\"/\">Acme</a>",
                 "textContent": "Acme",
@@ -34,7 +34,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-e98024c4",
+                "sourceId": "p2a0c975e-e98024c4",
                 "class": "link",
                 "html": "<a href=\"/pricing\">Pricing</a>",
                 "textContent": "Pricing",
@@ -45,7 +45,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-e97968ff",
+                "sourceId": "p2a0c975e-e97968ff",
                 "class": "link",
                 "html": "<a href=\"/docs\">Docs</a>",
                 "textContent": "Docs",
@@ -56,7 +56,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-a2555773",
+                "sourceId": "p2a0c975e-a2555773",
                 "class": "button",
                 "html": "<button class=\"signin\">Sign in</button>",
                 "textContent": "Sign in",
@@ -69,12 +69,12 @@
             ]
           },
           {
-            "sourceId": "0-04c07a43",
+            "sourceId": "p2a0c975e-04c07a43",
             "type": "unknown",
             "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s1.png",
             "elements": [
               {
-                "sourceId": "0-664c1b9b",
+                "sourceId": "p2a0c975e-664c1b9b",
                 "class": "heading",
                 "html": "<h2>Ship faster with Acme</h2>",
                 "textContent": "Ship faster with Acme",
@@ -94,7 +94,7 @@
                 ]
               },
               {
-                "sourceId": "0-398d085c",
+                "sourceId": "p2a0c975e-398d085c",
                 "class": "text",
                 "html": "The deployment platform for modern teams.",
                 "textContent": "The deployment platform for modern teams.",
@@ -113,7 +113,7 @@
                 ]
               },
               {
-                "sourceId": "0-d212f824",
+                "sourceId": "p2a0c975e-d212f824",
                 "class": "button",
                 "html": "<div role=\"button\" tabindex=\"0\" class=\"cta\">Get started free</div>",
                 "textContent": "Get started free",
@@ -154,12 +154,12 @@
             }
           },
           {
-            "sourceId": "0-04c8c908",
+            "sourceId": "p2a0c975e-04c8c908",
             "type": "unknown",
             "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s2.png",
             "elements": [
               {
-                "sourceId": "0-4cccc51c",
+                "sourceId": "p2a0c975e-4cccc51c",
                 "class": "other",
                 "html": "<svg viewBox=\"0 0 24 24\"><path d=\"M12 2L2 22h20z\"></path></svg>",
                 "textContent": "",
@@ -170,7 +170,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-210abbc3",
+                "sourceId": "p2a0c975e-210abbc3",
                 "class": "embed",
                 "html": "<iframe src=\"https://www.youtube.com/embed/dQw4w9WgXcQ\" title=\"Demo video\"></iframe>",
                 "textContent": "",
@@ -183,12 +183,12 @@
             ]
           },
           {
-            "sourceId": "0-48c5627d",
+            "sourceId": "p2a0c975e-48c5627d",
             "type": "unknown",
             "screenshot": "SiteImport/job-fixture-jsx/shots/home.desktop.s3.png",
             "elements": [
               {
-                "sourceId": "0-7f0b98ee",
+                "sourceId": "p2a0c975e-7f0b98ee",
                 "class": "heading",
                 "html": "<h3>Fast</h3>",
                 "textContent": "Fast",
@@ -204,7 +204,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-939c7e94",
+                "sourceId": "p2a0c975e-939c7e94",
                 "class": "text",
                 "html": "Deploy in seconds, not hours.",
                 "textContent": "Deploy in seconds, not hours.",
@@ -220,7 +220,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-16a4060f",
+                "sourceId": "p2a0c975e-16a4060f",
                 "class": "heading",
                 "html": "<h3>Safe</h3>",
                 "textContent": "Safe",
@@ -231,7 +231,7 @@
                 "assetRefs": []
               },
               {
-                "sourceId": "0-3fbb000d",
+                "sourceId": "p2a0c975e-3fbb000d",
                 "class": "text",
                 "html": "SOC2-ready out of the box.",
                 "textContent": "SOC2-ready out of the box.",

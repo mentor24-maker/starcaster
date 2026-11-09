@@ -171,6 +171,33 @@
   border: 2px solid #18324a !important;
 }
 
+/* A Builder panel's own heading (Pages, Page Details, Workspace, Publish,
+   Page History, Templates…) is a column title, not a pill badge
+   (UI normalization 3, UI_RULES R12). Scoped to the admin toolbar shells:
+   `.panel-label` also styles poll and player-card headers on CLIENT sites,
+   which keep their pill. Out-specifies the !important border above. */
+.builder-react-root .builder-toolbar-shell .panel-label {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-primary);
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* A collapsed panel's label used to sit in a white pill; with the padding
+   gone that became a white box hugging the words. An open panel keeps its
+   white-on-blue header bar, whose colour the generated rules set. */
+.builder-react-root .builder-toolbar-shell .builder-panel-toggle[aria-expanded="false"] .panel-label {
+  background: transparent;
+}
+
 /* ============================================================== */
 /* THEME · TYPOGRAPHY PANEL (document-level theme editor chrome)   */
 /* ============================================================== */
@@ -193,13 +220,13 @@
   margin-bottom: 12px;
 }
 
+/* Fonts / Colors / Type scale inside the Typography pod — the item level. */
 .builder-react-root .builder-theme-typography-heading {
   margin: 0 0 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #44627e;
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--ink-primary);
 }
 
 .builder-react-root .builder-theme-color-control {
@@ -323,6 +350,18 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   font-family: var(--bx-font-heading, inherit);
 }
 
+/* RTE spans — the text's own block decides how it looks. The editor sits
+   inside a `.field`, and `.field span` (the grey field-title style in
+   _builder-react.css) matched every span in the document: colouring a heading
+   wraps it in a span, which pinned it at 0.94rem whatever its level, and a
+   span with no colour of its own came out bold and grey (task 86bcznkeh).
+   A span's own inline style (colour, size from the toolbar) still wins. */
+.builder-react-root .builder-rich-text-content .ProseMirror span {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
 /* Editor canvas: link decoration from theme (--bx-link-decoration is set on
    .builder-section-card via getSectionStyle → themeStyle merge). */
 .builder-react-root .builder-section-card .builder-module-preview-paragraph a,
@@ -358,13 +397,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   white-space: nowrap;
 }
 
-.builder-react-root .builder-themes-selector {
-  flex: 1 1 180px;
-  min-width: 0;
-}
-
+/* A theme's name is a short title, so the picker and the name box are
+   sized to one (docs/UI_RULES.md W7) instead of growing across the row. */
+.builder-react-root .builder-themes-selector,
 .builder-react-root .builder-themes-name-input {
-  flex: 1 1 180px;
+  flex: 0 1 auto;
+  width: calc(var(--field-w-short) + 2rem);
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -417,15 +456,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   min-width: 0;
 }
 
-/* Pod section heading (h3) */
+/* Pod heading (h3) — the column-title level (UI_RULES R10/R12). It used to
+   be small spaced capitals, one of four heading looks across the editors. */
 .builder-react-root .builder-themes-col-heading {
   margin: 0 0 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-light);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
   color: var(--ink-primary);
 }
 
@@ -480,11 +519,12 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   margin-bottom: 0;
 }
 
+/* Logo — Wide, Feature Image… : one setting's label — the sub-item level. */
 .builder-react-root .builder-themes-asset-label {
   margin: 0;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink-secondary);
+  font-size: var(--editor-subitem-size);
+  font-weight: 700;
+  color: var(--ink-primary);
 }
 
 .builder-react-root .builder-themes-asset-group input[type="text"] {
@@ -975,6 +1015,15 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   max-width: 100%;
 }
 
+/* A page link whose page was deleted (task 86bcxmrw2): the note takes its own
+   line under the select, so it never squeezes the control beside it. */
+.builder-react-root .builder-project-data-picker-missing {
+  flex: 1 1 100%;
+  color: var(--danger, #b42318);
+  font-size: 0.85em;
+  white-space: normal;
+}
+
 .builder-react-root .builder-module-background-details {
   display: flex;
   flex-wrap: wrap;
@@ -1027,6 +1076,31 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 .builder-react-root .builder-panel-toggle[aria-expanded="true"] .builder-collapse-icon-svg polygon,
 .builder-react-root .builder-table-cell-module-toggle[aria-expanded="true"] .builder-collapse-icon-svg polygon {
   stroke: var(--collapse-collapse-border);
+}
+
+/* A panel bar whose page is still loading (task 86bczp0zy): the triangle is
+   swapped for a turning ring in the same circle, and the bar reads as busy
+   rather than broken — no greyed-out fade, a progress cursor. */
+.builder-react-root .builder-panel-toggle[aria-busy="true"],
+.builder-react-root .builder-panel-toggle[aria-busy="true"]:disabled {
+  cursor: progress;
+  opacity: 1;
+}
+
+.builder-react-root .builder-collapse-icon-spinner {
+  animation: builder-collapse-icon-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes builder-collapse-icon-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Reduced motion: the ring stays, so "loading" still reads; it just holds still. */
+@media (prefers-reduced-motion: reduce) {
+  .builder-react-root .builder-collapse-icon-spinner {
+    animation: none;
+  }
 }
 
 /* ============================================================== */
@@ -2140,15 +2214,24 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    --nav-link-action-col is the three icon buttons at their fixed 26px,
    stated once so the header's title track and the row's button track
    cannot drift apart. --nav-link-width-col holds the 64px Width input
-   plus its "%" — it only appears under custom sizing. */
+   plus its "%" — it only appears under custom sizing.
+   --nav-link-target-col is the "Opens In" select (task 86bcxur55): two
+   fixed choices, "Same tab" / "New tab", so it is sized to them rather
+   than taking a share of the free space from the name and link columns,
+   which hold text of any length. */
 .builder-react-root .builder-nav-items-manager {
   --nav-link-action-col: 78px;
   --nav-link-width-col: 82px;
-  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-action-col);
+  --nav-link-target-col: 104px;
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-target-col) var(--nav-link-action-col);
 }
 
 .builder-react-root .builder-nav-items-manager[data-nav-width-col="true"] {
-  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-width-col) var(--nav-link-action-col);
+  --nav-link-cols: 1fr 1fr 1fr var(--nav-link-target-col) var(--nav-link-width-col) var(--nav-link-action-col);
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-items-header .builder-nav-item-fields > span {
+  white-space: nowrap;
 }
 
 .builder-react-root .builder-nav-items-manager .builder-nav-items-header,
@@ -2165,6 +2248,27 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    columns would be back to being decided by a nested flex box. */
 .builder-react-root .builder-nav-items-manager .builder-nav-item-fields {
   display: contents;
+}
+
+/* The Link column is the shared page picker (task 86bcxmt5x): a page is
+   stored by reference so renaming it cannot break the menu. The picker is a
+   composite — a select, plus a text input under Custom… — so it fills its
+   one track and the typed address wraps under the select rather than
+   pushing past the column into the action buttons. */
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href {
+  min-width: 0;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker {
+  display: flex;
+  width: 100%;
+}
+
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker > select,
+.builder-react-root .builder-nav-items-manager .builder-nav-item-href > .builder-project-data-picker > input[type="text"] {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
 }
 
 /* The three action buttons keep their own row, right-aligned so the ✕ sits
@@ -2983,6 +3087,81 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 .builder-react-root .builder-item-grid-picker > button {
   flex: 0 0 auto;
+}
+/* A headline's Link is the shared page picker (task 86bcxu518). The table
+   styles its bare inputs; the picker's select gets the same box, and under
+   Custom… the typed address stacks below it inside the one cell. */
+.builder-react-root .builder-headline-table .builder-project-data-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 6px);
+  min-width: 0;
+}
+.builder-react-root .builder-headline-table .builder-project-data-picker > select,
+.builder-react-root .builder-headline-table td > select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 10px 12px;
+  font: inherit;
+}
+/* The typed box under Custom…. The picker's own rule gives it
+   `flex: 1 1 200px` for a ROW; in this column-direction cell that basis is a
+   HEIGHT, and the box became a ~200px square (review round 1). Here it is one
+   line, full width, the select's height. */
+.builder-react-root .builder-headline-table .builder-project-data-picker > input[type="text"] {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: none;
+}
+/* The Link column gets a declared width, so a long page name in the select
+   cannot set the column and squeeze Headline to a sliver; Headline keeps a
+   floor of its own. */
+.builder-react-root .builder-headline-table td:nth-child(2) {
+  width: 16rem;
+}
+.builder-react-root .builder-headline-table td:first-child > input {
+  min-width: 12rem;
+}
+/* Player Portal's Redirect path sits in its own row under the four short
+   settings (review round 1), so the inline row is four tracks, not five. */
+.builder-react-root .builder-player-portal-settings-row {
+  grid-template-columns:
+    minmax(148px, 1.35fr)
+    minmax(108px, 0.9fr)
+    minmax(108px, 0.85fr)
+    minmax(124px, 0.95fr);
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-setting-row {
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 16px;
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-project-data-picker {
+  width: 100%;
+  max-width: var(--builder-field-long-max, 560px);
+}
+.builder-react-root .builder-player-portal-settings-redirect .builder-project-data-picker > select {
+  flex: 1 1 16ch;
+  min-width: 0;
+  max-width: none;
+}
+/* A crumb's URL is the shared page picker (task 86bcxu518): a select, plus a
+   typed box under Custom…. It fills its one track, and the typed box wraps
+   under the select rather than pushing the actions out of the row. */
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 6px);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker > select,
+.builder-react-root .builder-item-grid-picker > .builder-project-data-picker > input[type="text"] {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
 }
 /* ---------------------------------------------------------------------------
  * Two-column editors — Feature Cards and Slideshow (operator, 2026-08-12):
@@ -8391,6 +8570,180 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   align-items: flex-end;
 }
 
+/* ── CRM form: "Choose one" / "Choose several" questions (task 86bcynjv7) ───
+ * One question, many inputs, so it is a <fieldset> + <legend> rather than a
+ * <label>. The fieldset is `display: contents` like every other field, so the
+ * legend sits in the label column and the choices in the field column of the
+ * form's own grid. The inputs are reset explicitly: the generic field rule
+ * makes every `input` 100% wide and 42px tall, and a tenant theme's
+ * `input { width: 100% }` would do the same (DOCTRINE §5.28). */
+.builder-react-root .builder-crm-form .builder-crm-form-choice-field {
+  display: contents;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend {
+  grid-column: 1;
+  float: none;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choices {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-choice input[type="radio"],
+.builder-react-root .builder-crm-form .builder-crm-form-choice input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 0;
+  height: auto;
+  margin: 0.2em 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* The two places the form stacks to one column — the same pair the generic
+ * field rules in _builder-react.css follow, or the choices would open an
+ * implicit second track beside a one-column grid. */
+@container crmform (max-width: 420px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend,
+  .builder-react-root .builder-crm-form .builder-crm-form-choices {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-choice-field > legend,
+  .builder-react-root .builder-crm-form .builder-crm-form-choices {
+    grid-column: 1;
+  }
+}
+
+/* ── CRM form: "Dropdown list (choose several)" (task 86bcynpyf) ──────────
+ * A button drawn like the single dropdown, opening a list of tick boxes under
+ * it. The field wrapper is `display: contents` like every other field, so the
+ * label span sits in column 1 and this control in column 2. The tick boxes
+ * reuse `.builder-crm-form-choice` from the rules above; the proxy input
+ * (which carries `required`) is reset hard, because the generic field rule
+ * makes every `input` 100% wide and 42px tall. */
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect {
+  grid-column: 2;
+  position: relative;
+  min-width: 0;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(9, 16, 24, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink-primary);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-button::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 0.45em;
+  height: 0.45em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-button[aria-expanded="true"]::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-summary.is-placeholder {
+  color: var(--ink-muted);
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-proxy {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(9, 16, 24, 0.12);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  box-shadow: 0 8px 24px rgba(9, 16, 24, 0.14);
+}
+
+.builder-react-root .builder-crm-form .builder-crm-form-multiselect-list .builder-crm-form-choice input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 0;
+  height: auto;
+  margin: 0.2em 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+@container crmform (max-width: 420px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-multiselect {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-crm-form .builder-crm-form-multiselect {
+    grid-column: 1;
+  }
+}
+
 /* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────
  * The review table reuses the admin data table; what is new is a row of
  * seven day toggles and inputs sitting inside cells, which a tenant theme's
@@ -10562,8 +10915,9 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 /* Dane: the gradients read as muddy, and a disabled button is hard to   */
 /* tell from a live one — part of why the new Publish step keeps getting */
 /* missed. So: GREEN = save this draft (Save Page / Save Template /      */
-/* Save Section / Save Cell / New Page / Bulk Create), BLUE = the        */
-/* primary action of the screen (Preview, Check, Publish, Refresh, and   */
+/* Save Section / Save Cell / New Page / Bulk Create, and Publish since */
+/* 2026-11-03, task 86bcxux97), BLUE = the primary action of the screen */
+/* (Preview, Check, Refresh, and                                        */
 /* every other `.submit-button`), and disabled is a real colour change   */
 /* rather than a fade.                                                   */
 /*                                                                      */
@@ -10573,8 +10927,9 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 /* stylesheet could tell them apart. That is why the ticket's "find      */
 /* where the green comes from" had no hex to find, and why Publish       */
 /* looked like one more routine save. The four that do not save a draft  */
-/* dropped the class and fall through to the base blue; the markup       */
-/* carries the reasoning at builder-publish-panel.tsx.                    */
+/* dropped the class and fall through to the base blue — Publish then    */
+/* took it back on the operator's word (2026-11-03); the markup carries  */
+/* the reasoning at builder-publish-panel.tsx.                           */
 /*                                                                      */
 /* SCOPE — read this before adding a rule here. `.builder-react-root` is */
 /* NOT admin-only: builder-react-entry.tsx mounts a published tenant     */
@@ -10690,6 +11045,70 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 .builder-react-root:not(.builder-public-site) .danger-button:disabled {
   background: var(--btn-danger-flat-disabled) !important;
   color: var(--btn-flat-ink) !important;
+  opacity: 1 !important;
+}
+
+/* ==================================================================== */
+/* BUILDER BUTTONS JOIN THE ONE BUTTON SYSTEM — sizes and the outlined   */
+/* secondary kind (UI normalization 4 of 10, task 86bcyrqb9).            */
+/*                                                                      */
+/* The colour block above already says green = save, blue = main action, */
+/* red = delete. What it left alone was SIZE and the plain secondary: a  */
+/* `.secondary-button` measured 50px tall with a 2px navy border, a      */
+/* `.submit-button` 48px, while the same jobs on the rest of the admin   */
+/* app were 29–42px. Here they take the admin app's two tokens           */
+/* (--btn-height, --radius-btn …) and the same outlined secondary look,  */
+/* so Themes, the Workspace and Settings line up. Rules:                 */
+/* docs/UI_RULES.md, "Buttons: four kinds, two sizes".                   */
+/*                                                                      */
+/* Same guard as the block above: `:not(.builder-public-site)`, so a     */
+/* client's published buttons keep their theme. `!important` because     */
+/* the generated file reaches these elements at up to 0,5,0, and its     */
+/* "low-contrast" rule puts the 2px navy border on with !important.      */
+/* ==================================================================== */
+.builder-react-root:not(.builder-public-site) .submit-button,
+.builder-react-root:not(.builder-public-site) .secondary-button,
+.builder-react-root:not(.builder-public-site) .danger-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: var(--btn-height) !important;
+  padding: 0 var(--btn-pad-x) !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: transparent !important;
+  border-radius: var(--radius-btn) !important;
+  font-size: var(--btn-font-size) !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  box-shadow: none !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-ink);
+  border-color: var(--btn-secondary-border) !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button:hover:not(:disabled) {
+  background: var(--btn-secondary-hover-bg);
+  border-color: var(--btn-secondary-hover-border) !important;
+  transform: none !important;
+}
+.builder-react-root:not(.builder-public-site) .secondary-button:disabled {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-disabled-ink);
+  border-color: var(--btn-secondary-disabled-border) !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+  transform: none !important;
+}
+/* No Builder kind fades on hover (UI_RULES C9: a hover COLOUR, never a
+   fade). These are plain <button>s without `.btn`, so the unclassed-button
+   fade in _buttons.css (`button:not(.btn):hover { opacity: 0.8 }`) still
+   caught them — Theme Wizard, New, Create and Choose Image on Themes all
+   measured 0.8 (round-2 review, 86bcyrqb9). Client sites keep their own. */
+.builder-react-root:not(.builder-public-site) .submit-button:hover,
+.builder-react-root:not(.builder-public-site) .secondary-button:hover,
+.builder-react-root:not(.builder-public-site) .danger-button:hover {
   opacity: 1 !important;
 }
 
@@ -11977,4 +12396,231 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
 
 .builder-shared-pages-group table {
   width: 100%;
+}
+
+/* The rich-text toolbar's Link dialog: "A page on this site" or "A web
+   address" (task 86bcxthq5). It sits in flow under the toolbar rather than
+   floating, so it can never be clipped by the shell's overflow: hidden. */
+.builder-react-root .builder-rich-text-link-dialog {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(9, 16, 24, 0.08);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-modes {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-modes label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.builder-react-root .builder-rich-text-link-dialog select,
+.builder-react-root .builder-rich-text-link-dialog input[type="text"] {
+  flex: 1 1 16rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-note {
+  flex: 1 0 100%;
+  font-size: 0.85em;
+  color: var(--ink-warning);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button {
+  border: 1px solid rgba(9, 16, 24, 0.12);
+  background: var(--bg-surface);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font: inherit;
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button:first-child {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+}
+
+.builder-react-root .builder-rich-text-link-dialog-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/*
+ * Breadcrumb trail on a live page and in Preview (task 86bcxwe6z;
+ * BreadcrumbModulePreview in builder-template-preview.tsx). Colours, size,
+ * weight and alignment come inline from the panel; the layout is here. The
+ * list resets are not decoration: the trail renders inside arbitrary tenant
+ * themes, and a theme's `ol`/`li` rules would number or indent it (§5.28).
+ */
+.builder-preview-breadcrumb > ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-preview-breadcrumb > ol > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.builder-preview-breadcrumb-link,
+.builder-preview-breadcrumb-text {
+  text-decoration: none;
+}
+
+.builder-preview-breadcrumb-link:hover,
+.builder-preview-breadcrumb-link:focus-visible {
+  text-decoration: underline;
+}
+
+.builder-preview-breadcrumb-current {
+  font-weight: 600;
+}
+
+.builder-preview-breadcrumb-sep {
+  opacity: 0.5;
+}
+
+/* ==================================================================== */
+/* BUILDER › WORKSPACE PAGES BAR — the buttons size their own box       */
+/* (task 86bcyrqan, 2026-11-05)                                         */
+/*                                                                      */
+/* The generated rule pins `.builder-pages-list-heading-actions` to     */
+/* `--builder-pages-actions-width` (220px, the table's Actions column)  */
+/* and stretches each button to 100% of it. Archive + Bulk Create + New */
+/* Page measured 305px at 1440 wide, so the centred row spilled 43px    */
+/* out of BOTH sides: past the bar's right edge, and leftward over the  */
+/* Pages panel's ▶ toggle, which could not be clicked.                  */
+/*                                                                      */
+/* Now the box is as wide as its buttons — the same shape the Page      */
+/* Details row underneath uses (`.builder-pages-crud-heading-actions`,  */
+/* `auto` column, 10px gap, 14px inset) so the two rows' right edges    */
+/* line up. The title column keeps at least 10rem so the ▶ is never     */
+/* covered; when the bar is too narrow for both, the buttons wrap onto  */
+/* a second line instead of overflowing. The table's Actions column     */
+/* still reads the 220px variable — only the heading stops using it.    */
+/* ==================================================================== */
+.builder-react-root .builder-pages-list-heading-layout {
+  grid-template-columns: minmax(10rem, 1fr) minmax(0, max-content);
+}
+
+.builder-react-root .builder-pages-list-heading-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 0 14px;
+}
+
+.builder-react-root .builder-pages-list-heading-actions .builder-panel-heading-button {
+  width: fit-content;
+  white-space: nowrap;
+}
+
+/*
+ * The Builder editor's title row is the screen's one title on Builder ›
+ * Workspace (and the page editor), so it uses the same size every other admin
+ * screen's title does (UI normalization 2 of 10, task 86bcyrqaw;
+ * docs/UI_RULES.md R11). It was clamp(1.55rem, 2.1vw, 2rem).
+ */
+.builder-react-root .admin-toolbar > .admin-section-heading {
+  font-size: var(--page-title-size);
+  line-height: var(--leading-tight);
+}
+
+/*
+ * Builder › Workspace › Publish header (task 86bcyrqaq).
+ *
+ * The header borrows the Pages list's heading grid, whose button column is a
+ * fixed 112px — room for ONE button. Publish carries two (Check and Publish,
+ * about 190px together), so they spilled 75px to the left and Check sat on
+ * top of the panel's collapse button (the round pale-red arrow, the
+ * "red element"). The blue bar is the collapse toggle itself, which filled
+ * only the left column, so it stopped where that too-narrow column began.
+ *
+ * Fix: the button column sizes to its buttons, and while the panel is open
+ * the blue is painted on the whole header row rather than on the toggle, so
+ * one bar runs edge to edge with the collapse arrow and both buttons on it,
+ * none overlapping. Scoped to Publish: the other headings that use this grid
+ * hold a single button and fit.
+ */
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  border-radius: 14px;
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout > .builder-pages-crud-heading-actions {
+  width: auto;
+  min-width: min-content;
+  max-width: none;
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout:has(.builder-panel-toggle[aria-expanded="true"]) {
+  background: var(--builder-header-workspace);
+}
+
+.builder-react-root .builder-publish-shell > .builder-pages-crud-heading-layout:has(.builder-panel-toggle[aria-expanded="true"]:hover) {
+  background: var(--builder-header-workspace-hover);
+}
+
+.builder-react-root .builder-publish-shell .builder-panel-toggle[aria-expanded="true"],
+.builder-react-root .builder-publish-shell .builder-panel-toggle[aria-expanded="true"]:hover {
+  background: transparent;
+}
+
+/* ==================================================================== */
+/* BUILDER › PAGE DETAILS BAR — the buttons wrap instead of covering ▼  */
+/* (task 86bcytb6q, 2026-11-05)                                         */
+/*                                                                      */
+/* The generated rules give the Page Details heading an `auto` button   */
+/* column with `min-width: min-content` and `flex-wrap: nowrap`, so     */
+/* Preview + Save as Template + Save Page (~400px) can never shrink.    */
+/* On a ~480px window the title column collapsed to nothing and the     */
+/* buttons were drawn over the blue bar, covering "PAGE DETAILS" and    */
+/* its ▼ collapse button.                                               */
+/*                                                                      */
+/* Same shape as the Pages bar above it (86bcyrqan): the title column   */
+/* keeps at least 10rem so the ▼ stays clickable, and the button box    */
+/* may shrink below its buttons' width, in which case they wrap onto    */
+/* further lines inside their own column rather than overflowing.       */
+/* ==================================================================== */
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-layout {
+  grid-template-columns: minmax(10rem, 1fr) minmax(0, max-content);
+}
+
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.builder-react-root .builder-pages-details-shell .builder-pages-crud-heading-actions .builder-panel-heading-button {
+  margin-inline: 0;
+  white-space: nowrap;
 }

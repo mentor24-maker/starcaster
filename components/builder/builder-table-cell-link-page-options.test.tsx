@@ -94,7 +94,7 @@ function linkPageOptions(pages: BuilderPageRecord[] = PAGES): HTMLOptionElement[
 
 describe("Table cell Link dropdown — page options", () => {
   it("shows the slug for a page with no name, instead of a blank row", () => {
-    const nameless = linkPageOptions().find((o) => o.value === "/empty-name-row");
+    const nameless = linkPageOptions().find((o) => o.value === "page-nameless");
     expect(nameless).toBeDefined();
     expect(nameless!.textContent).toBe("empty-name-row");
   });
@@ -109,16 +109,17 @@ describe("Table cell Link dropdown — page options", () => {
   });
 
   it("leaves a named page reading as its name", () => {
-    const named = linkPageOptions().find((o) => o.value === "/course-fees");
+    const named = linkPageOptions().find((o) => o.value === "page-named");
     expect(named?.textContent).toBe("Court Fees");
   });
 
-  it("keeps the option value as /<slug> — this is a display fix only", () => {
-    // Acceptance criterion 2. If the fallback were ever written into the value
-    // as well, every link the operator picked for a nameless page would point
-    // at the wrong address, which is a far worse bug than the blank row.
+  it("identifies each option by the page's id, never by its label", () => {
+    // Acceptance criterion 2 of 86bbw9a8y, restated for 86bcxmrw2: the label
+    // fallback must never leak into what is stored. The option is now the
+    // page's id, and choosing it stores a REFERENCE (`page:<id>|/<slug>`) so a
+    // later rename cannot break the link — the address is only its fallback.
     expect(linkPageOptions().map((o) => o.value).sort())
-      .toEqual(["/course-fees", "/empty-name-row"]);
+      .toEqual(["page-named", "page-nameless"]);
   });
 
   it("falls back to the id when a page has neither a name nor a slug", () => {

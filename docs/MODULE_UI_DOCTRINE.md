@@ -602,6 +602,20 @@ They are reproduced here with honest tags.
   gallery-picker button in Themes → Hero & Treatments, 2026-08-09 — the
   generated `.builder-gallery-button { min-width: 0 }` let a settings row crush
   the pill smaller than "Choose From Gallery".
+- **Save buttons `[auto]`** — every Save button on the admin screens is
+  `btn btn-save`: flat green (`--btn-green`, "commit this work"), sized to its
+  label, grey-green when disabled. One class carries colour AND width, in
+  `_buttons.css`, so nothing else sizes or colours a Save. In the vanilla
+  components pass `save: true` to a Modal / Card / DataGrid action instead of
+  `primary: true`. The Builder's own toolbar keeps `.admin-save-button
+  .submit-button` (same tokens). **Never on a module that renders on a client's
+  published site** — those keep the client's theme colours. Choice dialogs
+  ("Overwrite", "Save & Publish") keep their blue on the operator's ruling of
+  2026-11-03. Incident: until 2026-11-04 the admin screens had no green class,
+  so Save was blue, black or green screen by screen, and Project Settings' Save
+  stretched the full width of the form because the one rule sizing it named a
+  class no element carried (task 86bcyjag0). Checked by `check_ui_doctrine.cjs`
+  (B1), repo-wide, `btn`-family buttons only.
 - **Page titles `[eye]`** — `<h2>` in `.page-heading-row`, format
   `Module: Subpage` (e.g. `Contacts: Personnel`) — single colon plus space.
 - **Tables `[auto]`** — canonical styles in `_tables.css`; no per-module header
@@ -637,8 +651,12 @@ They are reproduced here with honest tags.
   `scripts/check_ui_doctrine.cjs` fails any new dialog selector that caps
   itself in px, and any `minWidth`/`maxWidth` number handed to a modal
   component at a call site.
-- **Feedback `[eye]`** — transient → `App.components.Toast` (`.c-toast`
-  variants); sticky status → `App.notify(text, isError)`.
+- **Feedback `[eye]`** — messages → `App.components.Toast` or `App.notify(text, isError)` — both land in the ONE message strip (`.c-message-strip`, UI_RULES S9);
+  never a second floating bar. After a form's Save
+  succeeds → `App.components.SavedNotice.show(text, { page })`: back to the
+  top, focus on the page heading, a confirmation card at the top that fades by
+  itself after 3s — no toast, nothing to close (operator, 2026-11-04). Errors
+  still go through `App.notify`.
 - **Accordions `[eye]`** — toggle `aria-expanded` only; never rewrite a button's
   `innerHTML` to swap a chevron.
 - **Pods (hub tiles) `[eye]`** — `.pod` with `.pod-icon-col` + `.pod-content`;

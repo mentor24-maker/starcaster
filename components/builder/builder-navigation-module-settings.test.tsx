@@ -39,17 +39,18 @@ function navHtml(settings: Record<string, string> = {}) {
 describe("Navigation settings editor", () => {
   it("declares its Links list so check_panels measures it", () => {
     const html = navHtml();
-    expect(html).toContain('data-lattice-columns="4"');
+    // Parent Page, Page Name, Link, Opens In (86bcxur55), Action.
+    expect(html).toContain('data-lattice-columns="5"');
     expect(html).toContain("builder-nav-items-manager");
   });
 
-  it("declares the fifth column when custom sizing adds one", () => {
+  it("declares the extra Width column when custom sizing adds one", () => {
     // The Width column exists only under custom sizing, so the default menu
-    // renders a four-column list and says nothing at all about the
-    // five-column one. `seed_fixture.mjs` seeds a custom-sizing menu for the
+    // renders a five-column list and says nothing at all about the
+    // six-column one. `seed_fixture.mjs` seeds a custom-sizing menu for the
     // same reason.
     const html = navHtml({ navItemSizing: "custom" });
-    expect(html).toContain('data-lattice-columns="5"');
+    expect(html).toContain('data-lattice-columns="6"');
     expect(html).toContain("builder-nav-item-width-wrap");
   });
 
@@ -58,8 +59,26 @@ describe("Navigation settings editor", () => {
     // a title added without bumping it (or the reverse) fails the check for a
     // reason that reads like a layout bug. Kept honest here instead.
     const html = navHtml();
-    for (const title of ["Parent Page", "Page Name", "Slug", "Action"]) {
+    for (const title of ["Parent Page", "Page Name", "Link", "Opens In", "Action"]) {
       expect(html).toContain(`>${title}<`);
     }
+  });
+
+  it("offers Same tab / New tab on every row and keeps an old item on Same tab (86bcxur55)", () => {
+    const html = navHtml({
+      navItems: JSON.stringify([
+        { id: "old", label: "Home", href: "/" },
+        { id: "new", label: "Shop", href: "https://shop.example.com", target: "_blank" },
+        { id: "kid", label: "Kid", href: "/kid", parentId: "old", target: "_blank" }
+      ])
+    });
+    const selects = html.match(/<select class="builder-nav-item-target"[\s\S]*?<\/select>/g) ?? [];
+    expect(selects).toHaveLength(3);
+    expect(selects[0]).toContain(">Same tab<");
+    expect(selects[0]).toContain(">New tab<");
+    // React marks the chosen option `selected` in static markup.
+    expect(selects[0]).toMatch(/<option value="" selected="">Same tab/);
+    expect(selects[1]).toMatch(/<option value="_blank" selected="">New tab/);
+    expect(selects[2]).toMatch(/<option value="_blank" selected="">New tab/);
   });
 });

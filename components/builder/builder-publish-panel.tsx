@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
-import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps } from "./builder-collapse-icon";
 
 type PendingPage = { id: string; slug: string; name: string };
 
@@ -48,6 +48,11 @@ type BuilderPublishPanelProps = {
    */
   focusRequestKey?: number;
   onPublished?: () => void;
+  /**
+   * The page editor is still waiting for its page: the bar shows a spinner
+   * and refuses clicks (task 86bczp0zy).
+   */
+  loading?: boolean;
 };
 
 async function publishFetch(path: string, init: RequestInit = {}) {
@@ -98,7 +103,7 @@ export function revealAndFocus(element: HTMLElement | null): boolean {
   return true;
 }
 
-export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPublished }: BuilderPublishPanelProps) {
+export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPublished, loading = false }: BuilderPublishPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState<PublishStatus | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -213,10 +218,10 @@ export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPub
         <div className="builder-pages-crud-heading-primary">
           <button
             aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand Publish" : "Collapse Publish"}
             className="builder-panel-toggle"
             onClick={() => setCollapsed((current) => !current)}
             type="button"
+            {...builderPanelToggleLoadingProps(loading, collapsed ? "Expand Publish" : "Collapse Publish")}
           >
             {/* Label and count are ONE flex child: the toggle spreads its
                 children apart, so a loose badge drifts into the middle of the
@@ -225,18 +230,16 @@ export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPub
               <span className="panel-label">Publish</span>
               {hasPending ? <span className="builder-publish-count">{pending}</span> : null}
             </span>
-            <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} /></span>
+            <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} loading={loading} /></span>
           </button>
         </div>
         <div className="builder-pages-crud-heading-actions">
           {/*
-            Blue, not green. `admin-blog-add-button` is the GREEN face — "save
-            this draft" — and every button in the Builder header wore it, so
-            Publish was the same colour as Save Page and read as one more
-            routine save. That is a large part of why the Publish step kept
-            getting missed (operator, 2026-08-30, task 86bbq5jvz). Dropping the
-            class leaves the base `.submit-button` blue: the primary action of
-            the screen. Neither of these two saves a draft.
+            Check is blue (the base `.submit-button`). Publish wears the GREEN
+            face, `admin-blog-add-button`, the same as Save Page — the operator
+            asked for that on 2026-11-03 (task 86bcxux97), reversing the
+            2026-08-30 call (task 86bbq5jvz) that had made it blue so it would
+            not read as one more routine save.
           */}
           <button
             className="submit-button builder-panel-heading-button"
@@ -247,7 +250,7 @@ export function BuilderPublishPanel({ refreshKey = 0, focusRequestKey = 0, onPub
             {isLoading ? "Checking..." : "Check"}
           </button>
           <button
-            className="submit-button builder-panel-heading-button"
+            className="submit-button admin-blog-add-button builder-panel-heading-button"
             disabled={!hasPending || isPublishing || isLoading}
             onClick={() => void publish()}
             ref={publishButtonRef}

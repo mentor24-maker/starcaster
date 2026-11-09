@@ -22,7 +22,7 @@ import {
   fetchPropagationRunScope,
   performPropagationUndo,
 } from "@/lib/propagation-undo";
-import { BuilderCollapseIcon } from "./builder-collapse-icon";
+import { BuilderCollapseIcon, builderPanelToggleLoadingProps } from "./builder-collapse-icon";
 
 export type BuilderPageRevision = {
   id: string;
@@ -50,6 +50,11 @@ type BuilderPageHistoryProps = {
   pageId: string;
   pageName: string;
   onRestored: () => void;
+  /**
+   * The page editor is still waiting for its page: the bar shows a spinner
+   * and refuses clicks (task 86bczp0zy).
+   */
+  loading?: boolean;
 };
 
 /** What each save was doing, in the operator's words rather than the code's. */
@@ -128,7 +133,7 @@ function describeSize(revision: BuilderPageRevision): string {
   return `${sections} · ${modules}`;
 }
 
-export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPageHistoryProps) {
+export function BuilderPageHistory({ pageId, pageName, onRestored, loading = false }: BuilderPageHistoryProps) {
   const [collapsed, setCollapsed] = useState(true);
   const [revisions, setRevisions] = useState<BuilderPageRevision[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -352,14 +357,17 @@ export function BuilderPageHistory({ pageId, pageName, onRestored }: BuilderPage
       */}
       <button
         aria-expanded={!collapsed}
-        aria-label={collapsed ? "Expand Page History" : "Collapse Page History"}
         className="builder-panel-toggle"
         onClick={() => setCollapsed((current) => !current)}
-        title={collapsed ? "Expand Page History" : "Collapse Page History"}
         type="button"
+        {...builderPanelToggleLoadingProps(
+          loading,
+          collapsed ? "Expand Page History" : "Collapse Page History",
+          collapsed ? "Expand Page History" : "Collapse Page History",
+        )}
       >
         <span className="panel-label">Page History</span>
-        <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} /></span>
+        <span className="builder-panel-toggle-icon"><BuilderCollapseIcon expanded={!collapsed} loading={loading} /></span>
       </button>
 
       {!collapsed ? (

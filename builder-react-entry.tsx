@@ -14,6 +14,7 @@ import { SavedSectionEditorModal } from './components/builder/saved-section-edit
 import { BuilderThemeColorField } from './components/builder/builder-theme-color-field';
 import { BuilderSharedPageTemplatesIsland } from './components/builder/builder-shared-page-templates';
 import { BuilderSharedPagesIsland } from './components/builder/builder-shared-pages';
+import { confirmPageDelete } from './components/builder/confirm-page-delete';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -88,9 +89,11 @@ let themesHost: HTMLElement | null = null;
 let formsRoot: Root | null = null;
 let moduleClassesRoot: Root | null = null;
 let extensionsRoot: Root | null = null;
+let extensionsHost: HTMLElement | null = null;
 let extensionsOpenItemFn: ((item: unknown) => void) | null = null;
 let pendingExtensionItem: unknown = null;
 let agentsRoot: Root | null = null;
+let agentsHost: HTMLElement | null = null;
 let siteImportRoot: Root | null = null;
 let agentsSetViewFn: ((view: "list" | "builder") => void) | null = null;
 
@@ -142,6 +145,7 @@ export function unmountModuleClassesReact() {
 export function mountExtensionsReact(host: HTMLElement | null) {
   if (!host) return;
   if (extensionsRoot) return; // keep existing mount; use openExtensionItemReact to push items
+  extensionsHost = host;
   extensionsRoot = createRoot(host);
   extensionsRoot.render(
     <BuilderExtensionsPage
@@ -161,15 +165,18 @@ export function unmountExtensionsReact() {
     extensionsRoot.unmount();
     extensionsRoot = null;
   }
+  extensionsHost = null;
   extensionsOpenItemFn = null;
   pendingExtensionItem = null;
 }
 
 let populateTitlesRoot: Root | null = null;
+let populateTitlesHost: HTMLElement | null = null;
 
 export function mountPopulateTitlesReact(host: HTMLElement | null) {
   if (!host) return;
   if (populateTitlesRoot) return;
+  populateTitlesHost = host;
   populateTitlesRoot = createRoot(host);
   populateTitlesRoot.render(<BuilderPopulateTitlesPage />);
 }
@@ -179,13 +186,16 @@ export function unmountPopulateTitlesReact() {
     populateTitlesRoot.unmount();
     populateTitlesRoot = null;
   }
+  populateTitlesHost = null;
 }
 
 let seoAltTextRoot: Root | null = null;
+let seoAltTextHost: HTMLElement | null = null;
 
 export function mountSeoAltTextReact(host: HTMLElement | null) {
   if (!host) return;
   if (seoAltTextRoot) return;
+  seoAltTextHost = host;
   seoAltTextRoot = createRoot(host);
   seoAltTextRoot.render(<BuilderSeoAltTextPage />);
 }
@@ -195,6 +205,7 @@ export function unmountSeoAltTextReact() {
     seoAltTextRoot.unmount();
     seoAltTextRoot = null;
   }
+  seoAltTextHost = null;
 }
 
 export function openExtensionItemReact(item: unknown) {
@@ -211,6 +222,7 @@ export function mountAgentsReact(host: HTMLElement | null, initialView: "list" |
     agentsSetViewFn?.(initialView);
     return;
   }
+  agentsHost = host;
   agentsRoot = createRoot(host);
   agentsRoot.render(
     <BuilderAgentsPage
@@ -225,7 +237,51 @@ export function unmountAgentsReact() {
     agentsRoot.unmount();
     agentsRoot = null;
   }
+  agentsHost = null;
   agentsSetViewFn = null;
+}
+
+/*
+ * A project switch rebuilds every screen that keeps its mount between visits
+ * (task 86bcybyy3). Each loads its project's data once, when it mounts, and
+ * the keep-existing-mount guards above then hold that first project's data
+ * for the rest of the visit — the same stale-after-switch failure Builder ›
+ * Pages had. Rebuilt in place on the same host rather than just unmounted:
+ * Agents is only ever mounted by its own heading button, so an unmounted
+ * Agents screen would come back blank from the side menu. The screens that
+ * rebuild on every mount (Forms, Module Classes, Site Import, the Builder
+ * workspace) need nothing here.
+ */
+function remountKeptScreensForNewProject() {
+  if (themesRoot && themesHost) {
+    const host = themesHost;
+    unmountThemesReact();
+    mountThemesReact(host);
+  }
+  if (extensionsRoot && extensionsHost) {
+    const host = extensionsHost;
+    unmountExtensionsReact();
+    mountExtensionsReact(host);
+  }
+  if (populateTitlesRoot && populateTitlesHost) {
+    const host = populateTitlesHost;
+    unmountPopulateTitlesReact();
+    mountPopulateTitlesReact(host);
+  }
+  if (seoAltTextRoot && seoAltTextHost) {
+    const host = seoAltTextHost;
+    unmountSeoAltTextReact();
+    mountSeoAltTextReact(host);
+  }
+  if (agentsRoot && agentsHost) {
+    const host = agentsHost;
+    unmountAgentsReact();
+    mountAgentsReact(host, 'list');
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('projectContext:session-changed', remountKeptScreensForNewProject);
 }
 
 // --- Site Import (staff-only) ---
@@ -387,6 +443,9 @@ declare global {
       mount: typeof mountSiteImportReact;
       unmount: typeof unmountSiteImportReact;
     };
+    PageDeleteReact: {
+      confirm: typeof confirmPageDelete;
+    };
   }
 }
 
@@ -446,6 +505,13 @@ window.SavedSectionEditorReact = {
 window.SiteImportReact = {
   mount: mountSiteImportReact,
   unmount: unmountSiteImportReact,
+};
+
+// Builder › Pages (the frozen vanilla table) asks this before deleting, so the
+// warning about links still pointing at the page is the same one the React
+// page list shows (task 86bcxn69z).
+window.PageDeleteReact = {
+  confirm: confirmPageDelete,
 };
 
 /**

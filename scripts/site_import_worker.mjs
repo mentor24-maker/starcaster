@@ -58,9 +58,19 @@
  * stops firing shows up on the roll call; a job left queued over an hour is
  * named on the bus by `npm run site-import-watch`.
  *
+ * THE BUILD STEP (task 86bcz9wcx)
+ * After the capture queue, a drain also runs any build the Site Import screen
+ * queued ("Preview build" / "Build draft pages", recorded as
+ * checkpoints.build). Each runs scripts/site_import_map.mjs as a child
+ * process — a dry run for a preview, --apply for a build — and its result is
+ * written back on the job for the screen. The rules (what may be queued, when
+ * a preview is stale) live in lib/siteImportBuild.js. The mapper never
+ * publishes; every page it makes or updates is a draft.
+ *
  * SAFETY
- * - Writes ONLY app_site_import_* tables and the job's own Blob namespace;
- *   never touches Builder data, so there is no --apply gate.
+ * - The capture stages write ONLY app_site_import_* tables and the job's own
+ *   Blob namespace. Builder pages are written only by the build step above,
+ *   and only when the operator pressed "Build draft pages" after a preview.
  * - Refuses a localhost database unless --allow-local: imports feed the
  *   production review UI, and a local capture would silently vanish.
  * - robots.txt is honored by default; a blocked job fails naming the rule.
@@ -71,6 +81,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { readFileSync } from 'node:fs';
 import crypto from 'node:crypto';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { mainCheckoutDir } from './lib/main_checkout.mjs';
 import { createRequire } from 'node:module';
@@ -160,8 +172,9 @@ try {
 
 // Required after env so lib/supabase.js sees the credentials.
 const store = require('./lib/siteImportStore.js');
+const { processBuildRequests, mapScriptArgs, failureReason } = require('./lib/siteImportBuild.js');
 const { uploadBufferToBlobAtPath } = require('./lib/blobStorage.js');
-const { normalizeSite, computeSourceId } = require('./lib/site-import/dist/normalize.js');
+const { normalizeSite, computeSourceId, pageKeyCounter } = require('./lib/site-import/dist/normalize.js');
 const {
   parseRobots, robotsVerdict, fetchSitemapUrls, extractLinks,
   normalizeCrawlUrl, CrawlQueue, looksLikeHtmlUrl,
@@ -285,6 +298,10 @@ async function runCaptureStage(job, opts) {
   let browserMs = 0;
   const capsHit = new Set();
   if (queue.hitDepthCap) capsHit.add('maxDepth');
+  // Element crops are keyed by the page's ADDRESS (task 86bcyrt21), counted
+  // in the same order normalizeSite will walk the kept pages: a page is only
+  // counted once it is kept, so a failed or duplicate page shifts nothing.
+  const pageKeys = pageKeyCounter();
 
   try {
     for (;;) {
@@ -308,6 +325,8 @@ async function runCaptureStage(job, opts) {
         // full-page shot URLs without having to download the capture JSON.
         const entry = { url: item.url, slug, depth: item.depth, viewports: {}, screenshots: {} };
         let duplicateOf = '';
+        let pageKey = '';
+        let pageUrl = '';
         for (const label of ['desktop', 'tablet', 'mobile']) {
           const raw = await provider.capture(item.url, {
             viewport: VIEWPORTS[label],
@@ -323,6 +342,9 @@ async function runCaptureStage(job, opts) {
               duplicateOf = finalUrl;
               break;
             }
+            // The same reading normalizeSite keys the page by.
+            pageUrl = raw.finalUrl || raw.url || item.url;
+            pageKey = pageKeys.peek(pageUrl);
           }
           // Upload screenshots, then persist the CaptureResult with Blob
           // URLs in place of binaries — element crops re-keyed by sourceId.
@@ -333,7 +355,7 @@ async function runCaptureStage(job, opts) {
           }
           const elementScreenshots = {};
           for (const e of raw.screenshots.elements) {
-            const sourceId = computeSourceId(pageIdx, e.domPath);
+            const sourceId = computeSourceId(pageKey, e.domPath);
             elementScreenshots[sourceId] = await uploadPng(job.id, `shots/${slug}.${label}.e${sourceId}.png`, e.png);
           }
           const captureResult = {
@@ -372,6 +394,7 @@ async function runCaptureStage(job, opts) {
           duplicates += 1;
           log(`  duplicate: redirects to ${duplicateOf}, already captured — skipped`);
         } else {
+          pageKeys.take(pageUrl);
           pages.push(entry);
         }
       } catch (err) {
@@ -722,7 +745,49 @@ async function drainQueue(opts) {
     ran += 1;
   }
   log(`drain: queue empty — ${ran} job(s) run this pass`);
+
+  const builds = await processBuildRequests({ store, runScript: runMapScript, log });
+  if (builds.ran || builds.reclaimed) {
+    log(`drain: ${builds.ran} build step(s) run (${builds.failed} failed), ${builds.reclaimed} abandoned one(s) marked failed`);
+  }
   return 0;
+}
+
+/** How long one build step may run before it is stopped. */
+const BUILD_TIMEOUT_MS = 90 * 60 * 1000;
+
+/**
+ * Run scripts/site_import_map.mjs for one queued request and read its
+ * --result-file. Inherits this process's environment, which `doppler run`
+ * filled — the same credentials the capture uses.
+ */
+function runMapScript(jobId, request) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'site-import-build-'));
+  const resultFile = path.join(dir, 'result.json');
+  const argv = [path.join(ROOT, 'scripts', 'site_import_map.mjs'), ...mapScriptArgs(jobId, request, resultFile), ...(flag('--allow-local') ? ['--allow-local'] : [])];
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, argv, { cwd: ROOT, env: process.env, stdio: ['ignore', 'inherit', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
+      stderr = (stderr + chunk).slice(-20000);
+    });
+    const timer = setTimeout(() => child.kill('SIGTERM'), BUILD_TIMEOUT_MS);
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      let result = null;
+      try { result = JSON.parse(readFileSync(resultFile, 'utf8')); } catch { /* no result written */ }
+      rmSync(dir, { recursive: true, force: true });
+      if (code === 0 && result && result.ok !== false) return resolve({ ok: true, result });
+      const reason = (result && result.error) || failureReason(stderr, code, signal);
+      resolve({ ok: false, result, error: reason });
+    });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      rmSync(dir, { recursive: true, force: true });
+      resolve({ ok: false, error: `could not start the build script: ${err.message}` });
+    });
+  });
 }
 
 async function main() {

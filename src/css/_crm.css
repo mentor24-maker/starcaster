@@ -158,11 +158,12 @@
   font-size: 0.8rem;
 }
 
-/* CRM form editor — three-column layout */
+/* CRM form editor — four columns: Settings, Form Fields, Styles, Preview.
+   Two per row below 1400px, one per row below 1100px (further down). */
 
 .crm-form-editor-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(280px, 1.2fr);
+  grid-template-columns: minmax(240px, 0.95fr) minmax(220px, 0.85fr) minmax(240px, 0.95fr) minmax(280px, 1.2fr);
   gap: 1.25rem;
   align-items: start;
 }
@@ -171,9 +172,14 @@
   min-width: 0;
 }
 
+/* Three heading levels, one size each (UI normalization, operator
+   2026-11-04): column title > item > sub-item. The sizes are the shared
+   --editor-* tokens so every editor in the series matches this one. */
 .crm-form-editor-col-title {
-  margin: 0 0 0.35rem;
-  font-size: 1rem;
+  margin: 0 0 0.6rem;
+  font-size: var(--editor-title-size);
+  font-weight: 800;
+  line-height: var(--leading-tight);
   color: var(--ink-primary, #18324a);
 }
 
@@ -181,12 +187,14 @@
   margin: 0 0 0.75rem;
 }
 
-.crm-form-editor-col-settings .crm-form-editor-setting {
+.crm-form-editor-col-settings .crm-form-editor-setting,
+.crm-form-editor-col-styles .crm-form-editor-setting {
   display: block;
   margin-bottom: 0.75rem;
 }
 
-.crm-form-editor-col-settings input[type="color"] {
+.crm-form-editor-col-settings input[type="color"],
+.crm-form-editor-col-styles input[type="color"] {
   width: 100%;
   min-height: 42px;
   padding: 0.25rem;
@@ -194,8 +202,37 @@
 
 .crm-form-editor-section-title {
   margin: 0 0 0.65rem;
-  font-size: 1rem;
+  font-size: var(--editor-item-size);
+  font-weight: 700;
+  line-height: var(--leading-tight);
   color: var(--ink-primary, #18324a);
+}
+
+/* Sub-items: every setting's label, one font, bold, never wrapping. */
+.crm-form-editor-col-settings .crm-form-editor-setting > span:first-child,
+.crm-form-editor-col-styles .crm-form-editor-setting > span:first-child:not(.crm-form-editor-section-title),
+.crm-form-editor-col-settings .checkbox-row > span {
+  font-size: var(--editor-subitem-size);
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--ink-primary, #18324a);
+}
+
+.crm-form-editor-setting > span:first-child .meta {
+  font-weight: 400;
+}
+
+/* An explanation that used to ride inside a label, making it wrap — now its
+   own small line under the label. */
+.crm-form-editor-col-settings .crm-form-editor-setting-hint {
+  display: block;
+  margin: 0.1rem 0 0.3rem;
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.crm-form-editor-col-settings p.crm-form-editor-setting-hint {
+  margin: 0.2rem 0 0.75rem;
 }
 
 .crm-form-editor-style-section {
@@ -211,6 +248,58 @@
 
 .crm-form-editor-style-section .crm-form-editor-section-title {
   margin-top: 0;
+}
+
+/* A colour setting is ONE line: its label on the left, the colour box on the
+   right, instead of a label line over a box line (operator, 2026-11-04). */
+.crm-form-editor-col-styles .crm-form-editor-setting-color {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.crm-form-editor-setting-color > span {
+  margin: 0;
+}
+
+.crm-form-editor-setting-color .crm-form-color-control {
+  flex: 0 1 auto;
+  margin-top: 0;
+}
+
+/* The shared picker brings a top margin meant for a box on its own line. */
+.crm-form-editor-setting-color .crm-form-standard-color {
+  margin-top: 0;
+}
+
+/* "Background Color" is the Background section's heading as well as its
+   label — the two used to be separate lines saying the same thing. */
+.crm-form-editor-setting-color > .crm-form-editor-section-title {
+  margin: 0;
+}
+
+/* A dropdown or slider is ONE line too (UI_RULES L9): its label in a fixed
+   left track so every such row lines up, the control filling the rest.
+   Text boxes (Padding, Field Width, ...) keep their label above. The label
+   may take a second line in a narrow column, never a third. */
+.crm-form-editor-col-settings .crm-form-editor-setting.crm-form-editor-setting-beside,
+.crm-form-editor-col-styles .crm-form-editor-setting.crm-form-editor-setting-beside {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.65rem;
+}
+
+.crm-form-editor-col-settings .crm-form-editor-setting-beside > span:first-child,
+.crm-form-editor-col-styles .crm-form-editor-setting-beside > span:first-child {
+  white-space: normal;
+}
+
+.crm-form-editor-setting-beside > select,
+.crm-form-editor-setting-beside > .crm-form-width-control {
+  min-width: 0;
+  margin: 0;
 }
 
 .crm-form-color-control {
@@ -328,10 +417,6 @@
   min-width: 0;
 }
 
-.crm-form-editor-setting-row .field > span {
-  font-size: 0.82rem;
-}
-
 .crm-form-width-control {
   display: flex;
   align-items: center;
@@ -422,6 +507,31 @@
   padding: 1rem;
   min-height: 280px;
   text-align: left;
+}
+
+/* Save Form sits under the preview and wears the Builder's Save Page face:
+   same green, same size (measured off the floating Save Page button). The
+   hover goes LIGHTER, not darker like Save Page's — operator, 2026-11-03.
+   `.btn.` because the generic .btn sizing loads after this file. The green
+   and the grey-green disabled state come from the shared `.btn-save`
+   (_buttons.css); only the size and the lighter hover are this button's own. */
+.btn.crm-form-editor-save-btn {
+  /* Centred in the Preview column, with 40px more room above and below than
+     it had (operator, 2026-11-04). */
+  display: flex;
+  width: fit-content;
+  margin: calc(1rem + 40px) auto 40px;
+  padding: 14px 28px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 0.95rem; /* Save Page's own size, off the type scale on purpose: the ask was "the same size" */
+  font-weight: 700;
+  line-height: normal;
+}
+
+.btn.crm-form-editor-save-btn:hover:not(:disabled) {
+  background: var(--btn-green-light);
+  border-color: var(--btn-green-light);
 }
 
 .crm-form-preview-shell {
@@ -529,6 +639,32 @@
   padding: 0;
 }
 
+/* Choose one / Choose several / Dropdown (choose several) in the preview pane
+   (task 86bcyqzhv): stacked choices, input left, label right. */
+.crm-form-preview-choices {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  justify-self: var(--crm-form-field-justify, start);
+  min-width: 0;
+}
+
+.crm-form-preview-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-primary, #18324a);
+}
+
+.crm-form-preview-form .crm-form-preview-choice input {
+  grid-column: auto;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
 .crm-embed-modal-id-row {
   display: flex;
   gap: 0.5rem;
@@ -555,6 +691,12 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 1400px) {
+  .crm-form-editor-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1100px) {
   .crm-form-editor-layout {
     grid-template-columns: 1fr;
@@ -563,4 +705,14 @@
   .crm-form-editor-field-list {
     max-height: none;
   }
+}
+
+/* After submit: the chosen page was deleted (task 86bcxmq23). */
+.crm-form-editor-missing-page {
+  margin: 4px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--ink-warning);
+  border-left-width: 4px;
+  border-radius: 8px;
+  color: var(--ink-warning);
 }

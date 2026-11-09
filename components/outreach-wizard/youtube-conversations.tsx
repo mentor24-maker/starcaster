@@ -268,7 +268,7 @@ export default function YoutubeConversations({ onChanged, version }: Props = {})
                             Skip
                           </button>
                           {c.author.channelUrl ? (
-                            <button type="button" className="btn" disabled={Boolean(busy)} onClick={() => void saveContact(c)}>
+                            <button type="button" className="btn btn-save" disabled={Boolean(busy)} onClick={() => void saveContact(c)}>
                               {busy?.key === c.commentId && busy.action === 'contact' ? 'Saving…' : 'Save as contact'}
                             </button>
                           ) : null}
