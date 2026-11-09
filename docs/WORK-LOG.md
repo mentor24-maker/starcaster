@@ -1,3 +1,13 @@
+## 2026-11-08 — Saved modules can now be put into a table cell (#940)
+
+Inside a Table, the ⊕ "Add module to this cell" button opened the Module
+Library, but none of your saved modules were in it — searching for "Heading:
+WaveCenter" found nothing, so it could not be placed in a cell. The cell's
+library now loads your saved modules each time it opens (so one saved a minute
+ago is there), leaves out the ones a cell cannot hold (a table or a form), and
+drops a copy of the one you pick into the cell. It is a copy, not a linked
+version: editing the saved module later will not change the copy in the cell,
+because updates to a saved module never reach inside a table cell.
 ## 2026-11-06 — AI-made videos are saved as files, not inside the database (#999)
 
 Every video made with Assets › Video › Create used to be stored inside the
