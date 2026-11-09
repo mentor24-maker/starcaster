@@ -1,3 +1,15 @@
+## 2026-11-08 — Spirality Tasks: a page for the team to sign in and work their Spirality tasks (#1002)
+
+A new Builder module for StarCaster's Spirality page. A teammate signs in
+with their Spirality account, joins from an invite email, sees a project's
+tasks grouped by status, opens one to read and reply, and files a new task.
+The review found four ways it could mislead someone, now fixed. Signing out
+only shows "signed out" if it really worked, so a shared computer is not left
+signed in. A board that will not load keeps the project picker and offers
+"Try again". An expired or used invite link says plainly to ask for a new
+invite. And a task or reply that was saved but could not be shown straight
+back no longer looks like a failure, which had invited filing it twice. It
+is not on any live page yet; it waits on Spirality's public address.
 ## 2026-11-06 — AI-made videos are saved as files, not inside the database (#999)
 
 Every video made with Assets › Video › Create used to be stored inside the

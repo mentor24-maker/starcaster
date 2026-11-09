@@ -38,7 +38,7 @@ function readBody(req) {
 }
 
 /** A tracker in the tracker's own shapes; `seen` records every request it got. */
-async function fakeTracker() {
+async function fakeTracker({ threadFails = false } = {}) {
   const seen = [];
   let failures = 0;
   const server = await listen(async (req, res) => {
@@ -84,6 +84,7 @@ async function fakeTracker() {
     if (req.url === '/projects/nope/board') return send(404, { error: 'unknown-project', message: 'no project "nope".' });
     if (req.url === '/projects/spirality/tickets' && req.method === 'POST') return send(201, { id: 'SP-10', name: body.name, status: 'requested' });
     if (/^\/tickets\/SP-\d+\/thread$/.test(req.url)) {
+      if (threadFails) return send(503, { error: 'busy', message: 'try again.' });
       return send(200, {
         id: req.url.split('/')[2], name: 'A new one', description: 'Words', project: 'spirality', projectName: 'Spirality',
         operator: { id: 1, name: 'Dane' }, mergePhrase: 'merge',
@@ -204,6 +205,25 @@ test('Submit Task files as Requested and answers with the new task\'s thread', a
   assert.equal(r.json.data.id, 'SP-10');
   const filed = tracker.seen.find((s) => s.url === '/projects/spirality/tickets');
   assert.deepEqual(filed.body, { name: 'Fix it', description: 'Please', status: 'Requested' });
+});
+
+test('a filed task whose read-back fails still answers 201 with its id, so the page never invites a duplicate', async (t) => {
+  const { b, tracker, close } = await setup({ threadFails: true });
+  t.after(close);
+  await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
+  const r = await b.call('POST', '/api/spirality/projects/spirality/tasks', { name: 'Fix it', description: 'Please' });
+  assert.equal(r.status, 201);
+  assert.deepEqual(r.json.data, { id: 'SP-10', threadUnavailable: true });
+  assert.equal(tracker.seen.filter((s) => s.url === '/projects/spirality/tickets').length, 1);
+});
+
+test('a posted reply whose read-back fails still answers 201, flagged so the page reloads the thread', async (t) => {
+  const { b, close } = await setup({ threadFails: true });
+  t.after(close);
+  await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
+  const r = await b.call('POST', '/api/spirality/tasks/SP-9/comments', { body: 'Thanks' });
+  assert.equal(r.status, 201);
+  assert.deepEqual(r.json.data, { id: 'SP-9', threadUnavailable: true });
 });
 
 test('a task opens its thread with each author named, and a reply posts as the person', async (t) => {

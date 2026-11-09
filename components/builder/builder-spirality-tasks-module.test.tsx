@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { SpiralityTasksModule } from "./builder-spirality-tasks-module";
 import {
+  SPIRALITY_LINK_SPENT,
   SPIRALITY_NO_PROJECT,
   SPIRALITY_UNREACHABLE,
   addressWithoutLink,
@@ -242,11 +243,33 @@ describe("arriving from an emailed link", () => {
     expect(calls.some((c) => c.path === "/set-password")).toBe(false);
   });
 
-  it("a spent link shows the tracker's reason and the sign-in", async () => {
-    const { fetchImpl } = fakeApi({ "POST /link": err(400, "That link has been used.", "used-link") });
-    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where("?link=old")} />);
+  it("a spent link says what to do next, leaves the address, and still asks who is signed in", async () => {
+    const replaced: string[] = [];
+    const { fetchImpl, calls } = fakeApi({ "POST /link": err(400, "That link has been used.", "used-link"), "GET /me": ok({ signedIn: false }) });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=old"), replace: (a) => replaced.push(a) }} />);
     await flushUntil(() => view() === "signin");
-    expect(text()).toContain("That link has been used.");
+    expect(text()).toContain(SPIRALITY_LINK_SPENT);
+    expect(replaced).toEqual(["/team"]);
+    expect(calls.some((c) => c.path === "/me")).toBe(true);
+  });
+
+  it("a spent link with somebody already signed in takes them to their tasks, not to a sign-in form", async () => {
+    const { fetchImpl } = fakeApi({ ...SIGNED_IN, "POST /link": err(410, "That link has expired.", "expired-link") });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=old"), replace: () => {} }} />);
+    await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
+    expect(view()).toBe("tasks");
+    expect(text()).toContain("Signed in as Pat");
+  });
+
+  it("an unreachable tracker keeps the link in the address, so a reload can try it again", async () => {
+    const replaced: string[] = [];
+    const { fetchImpl, calls } = fakeApi({ "POST /link": err(502, "Spirality could not be reached.", "UNREACHABLE") });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=fine"), replace: (a) => replaced.push(a) }} />);
+    await flushUntil(() => view() === "signin");
+    expect(text()).toContain("Spirality could not be reached.");
+    expect(text()).not.toContain(SPIRALITY_LINK_SPENT);
+    expect(replaced).toEqual([]);
+    expect(calls.some((c) => c.path === "/me")).toBe(false);
   });
 });
 
@@ -348,5 +371,92 @@ describe("signed in", () => {
     await flushUntil(() => view() === "signin");
     expect(calls.some((c) => c.path === "/signout")).toBe(true);
     expect(text()).not.toContain("Signed in as Pat");
+  });
+
+  it("a sign out that fails keeps them signed in and says so", async () => {
+    const { fetchImpl } = fakeApi({ ...SIGNED_IN, "POST /signout": err(429, "Too many requests. Wait a minute.", "RATE_LIMITED") });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
+    await act(async () => {
+      (Array.from(container!.querySelectorAll("button")).find((b) => b.textContent === "Sign out") as HTMLElement).click();
+    });
+    await flushUntil(() => text().includes("You are still signed in"));
+    expect(view()).toBe("tasks");
+    expect(text()).toContain("Signed in as Pat");
+    expect(text()).toContain("Too many requests. Wait a minute.");
+  });
+
+  it("a board that fails keeps the picker and Submit Task, clears on a project change, and loads again on return", async () => {
+    let alphaTries = 0;
+    const { fetchImpl } = fakeApi({
+      ...SIGNED_IN,
+      "GET /projects": ok({ projects: [{ slug: "alpha", name: "Alpha" }, { slug: "spirality", name: "Spirality" }], default: "alpha" }),
+      "GET /projects/alpha/tasks": () => (++alphaTries === 1 ? err(502, "Spirality could not be reached.", "UNREACHABLE") : ok({ ...BOARD, project: "alpha", projectName: "Alpha" })),
+    });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => !!$("[role=alert]"));
+    expect($("[role=alert]")!.textContent).toBe("Spirality could not be reached.");
+    expect($("select")).not.toBeNull();
+    expect(text()).toContain("Submit Task");
+    act(() => type($("select") as HTMLSelectElement, "spirality"));
+    await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
+    expect($("[role=alert]")).toBeNull();
+    act(() => type($("select") as HTMLSelectElement, "alpha"));
+    await flushUntil(() => alphaTries >= 2 && $$(".builder-spirality-tasks__group").length > 0);
+    expect(alphaTries).toBe(2);
+    expect($("[role=alert]")).toBeNull();
+  });
+
+  it("Try again reloads a board that failed", async () => {
+    let tries = 0;
+    const { fetchImpl } = fakeApi({
+      ...SIGNED_IN,
+      "GET /projects/spirality/tasks": () => (++tries === 1 ? err(502, "Spirality could not be reached.", "UNREACHABLE") : ok(BOARD)),
+    });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => !!$("[role=alert]"));
+    click(Array.from(container!.querySelectorAll("button")).find((b) => b.textContent === "Try again") as HTMLElement);
+    await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
+    expect(tries).toBe(2);
+    expect($("[role=alert]")).toBeNull();
+  });
+
+  it("a filed task whose read-back failed still opens the new task, filed once", async () => {
+    let filed = 0;
+    const { fetchImpl } = fakeApi({
+      ...SIGNED_IN,
+      "POST /projects/spirality/tasks": () => { filed += 1; return ok({ id: "SP-10", threadUnavailable: true }, 201); },
+      "GET /tasks/SP-10": ok({ ...THREAD, id: "SP-10", name: "Fix it", comments: [] }),
+    });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
+    click(Array.from(container!.querySelectorAll("button")).find((b) => b.textContent === "Submit Task") as HTMLElement);
+    type($("input[type=text]") as HTMLInputElement, "Fix it");
+    type($("textarea") as HTMLTextAreaElement, "Please");
+    await submit($("form") as HTMLFormElement);
+    await flushUntil(() => view() === "task" && text().includes("SP-10"));
+    expect(view()).toBe("task");
+    expect(filed).toBe(1);
+    expect($("[role=alert]")).toBeNull();
+  });
+
+  it("a reply whose read-back failed clears the box and reloads the thread instead of reporting a failure", async () => {
+    let threadLoads = 0;
+    const { fetchImpl } = fakeApi({
+      ...SIGNED_IN,
+      "GET /tasks/SP-9": () => { threadLoads += 1; return ok(THREAD); },
+      "POST /tasks/SP-9/comments": ok({ id: "SP-9", threadUnavailable: true }, 201),
+    });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => $$(".builder-spirality-tasks__task").length > 0);
+    click($(".builder-spirality-tasks__task") as HTMLElement);
+    await flushUntil(() => $$(".builder-spirality-tasks__comment").length > 0);
+    type($("textarea") as HTMLTextAreaElement, "Thanks");
+    await submit($("form") as HTMLFormElement);
+    await flushUntil(() => threadLoads === 2);
+    expect(threadLoads).toBe(2);
+    expect(($("textarea") as HTMLTextAreaElement).value).toBe("");
+    expect(text()).toContain("Your reply was posted.");
+    expect($("[role=alert]")).toBeNull();
   });
 });

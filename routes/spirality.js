@@ -141,6 +141,18 @@ function createSpiralityRoutes({
       return r.data;
     }
 
+    /**
+     * The write has already happened; now read the thread back to show it.
+     * If only that read fails, the answer is still a success — saying the
+     * whole thing failed would invite a resubmit, which files a duplicate.
+     * `threadUnavailable` tells the page to load the task itself.
+     */
+    async function answerAfterWrite(taskId, threadPath) {
+      const r = await tracker.call('GET', threadPath, { session });
+      if (r.ok) return sendOk(res, 201, threadOf(r.data));
+      return sendOk(res, 201, { id: taskId, threadUnavailable: true });
+    }
+
     /** Sign in and keep the session in our cookie; the token is never in the body. */
     async function signIn(email, password) {
       const r = await tracker.call('POST', '/signin', { body: { email, password } });
@@ -265,10 +277,7 @@ function createSpiralityRoutes({
           const filed = await asPerson('POST', `/projects/${encodeURIComponent(slug)}/tickets`, {
             name, description: text(body.description), status: 'Requested',
           });
-          if (filed) {
-            const thread = await asPerson('GET', `/tickets/${encodeURIComponent(filed.id)}/thread`);
-            if (thread) sendOk(res, 201, threadOf(thread));
-          }
+          if (filed) await answerAfterWrite(filed.id, `/tickets/${encodeURIComponent(filed.id)}/thread`);
           return true;
         }
       }
@@ -293,10 +302,7 @@ function createSpiralityRoutes({
             return true;
           }
           const posted = await asPerson('POST', `/tickets/${encodeURIComponent(id)}/comments`, { body: reply });
-          if (posted) {
-            const thread = await asPerson('GET', threadPath);
-            if (thread) sendOk(res, 201, threadOf(thread));
-          }
+          if (posted) await answerAfterWrite(id, threadPath);
           return true;
         }
       }

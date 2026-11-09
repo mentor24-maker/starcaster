@@ -51,6 +51,30 @@ export type SpiralityThread = {
   createdAt?: string;
   comments: SpiralityComment[];
 };
+/**
+ * What a write (Submit Task, Post reply) answers. The write always happened;
+ * `threadUnavailable` means only the read-back of the thread failed, so the
+ * page loads the task itself rather than reporting a failure — which would
+ * invite a resubmit and file a duplicate.
+ */
+export type SpiralityWritten = SpiralityThread | { id: string; threadUnavailable: true };
+
+export function writtenThread(w: SpiralityWritten): SpiralityThread | null {
+  return "threadUnavailable" in w ? null : w;
+}
+
+/**
+ * A ?link= the tracker refused. An invite-only team: whoever lands here may
+ * have no password at all, so the answer names both ways forward.
+ */
+export const SPIRALITY_LINK_SPENT =
+  "This link has expired or was already used. Ask your team for a new invite, or use Forgot password if you already have an account.";
+
+/** Whether a failed /link means the link itself is spent (vs Spirality being unreachable). */
+export function linkIsSpent(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 429;
+}
+
 export type SpiralityLink = { purpose: string; email: string; expiresAt?: string };
 
 export type SpiralityResult<T> =
@@ -106,9 +130,9 @@ export function createSpiralityApi(projectId: string, fetchImpl?: Fetch) {
     projects: () => call<{ projects: SpiralityProject[]; default: string | null }>("GET", "/projects"),
     board: (slug: string) => call<SpiralityBoard>("GET", `/projects/${id(slug)}/tasks`),
     submit: (slug: string, name: string, description: string) =>
-      call<SpiralityThread>("POST", `/projects/${id(slug)}/tasks`, { name, description }),
+      call<SpiralityWritten>("POST", `/projects/${id(slug)}/tasks`, { name, description }),
     thread: (taskId: string) => call<SpiralityThread>("GET", `/tasks/${id(taskId)}`),
-    reply: (taskId: string, body: string) => call<SpiralityThread>("POST", `/tasks/${id(taskId)}/comments`, { body }),
+    reply: (taskId: string, body: string) => call<SpiralityWritten>("POST", `/tasks/${id(taskId)}/comments`, { body }),
   };
 }
 

@@ -17,15 +17,18 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
+  SPIRALITY_LINK_SPENT,
   SPIRALITY_NO_PROJECT,
   SPIRALITY_SAMPLE_BOARD,
   addressWithoutLink,
   chooseProject,
   createSpiralityApi,
+  linkIsSpent,
   linkPurposeTitle,
   nonEmptyColumns,
   readEmailedLink,
   readSpiralityTasksSettings,
+  writtenThread,
   type SpiralityApi,
   type SpiralityBoard,
   type SpiralityLink,
@@ -40,8 +43,11 @@ type Props = {
   projectId?: string;
   /** Test seam; defaults to window.fetch. */
   fetchImpl?: typeof fetch;
-  /** Test seam; defaults to window.location. */
-  location?: { search: string; href: string };
+  /**
+   * Test seam; defaults to window.location. `replace` stands in for
+   * history.replaceState, so a test can see ?link= leave the address.
+   */
+  location?: { search: string; href: string; replace?: (address: string) => void };
 };
 
 type View =
@@ -69,6 +75,13 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
 
   const where = location ?? (typeof window !== "undefined" ? window.location : { search: "", href: "http://localhost/" });
 
+  /** Take ?link= out of the address, so a reload does not reuse a spent or used link. */
+  const forgetLink = () => {
+    const address = addressWithoutLink(where.href);
+    if (location) location.replace?.(address);
+    else if (typeof window !== "undefined") window.history.replaceState(null, "", address);
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -76,12 +89,21 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
       if (link) {
         const r = await api.link(link);
         if (cancelled) return;
-        if (r.ok) setView({ name: "link", link, info: r.data });
-        else {
+        if (r.ok) {
+          setView({ name: "link", link, info: r.data });
+          return;
+        }
+        if (!linkIsSpent(r.status)) {
+          // Spirality could not be asked: the link may be fine, so keep it
+          // in the address for a reload to try again.
           setError(r.message);
           setView({ name: "signin" });
+          return;
         }
-        return;
+        // A spent or expired link. Forget it, say what to do next, and carry
+        // on as if it had not been there — they may already be signed in.
+        forgetLink();
+        setError(SPIRALITY_LINK_SPENT);
       }
       const r = await api.me();
       if (cancelled) return;
@@ -89,7 +111,7 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
         setPerson(r.data.person);
         setView({ name: "tasks" });
       } else {
-        if (!r.ok) setError(r.message);
+        if (!r.ok) setError((e) => (e ? `${e} ${r.message}` : r.message));
         setView({ name: "signin" });
       }
     })();
@@ -111,10 +133,24 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
     return true;
   }, []);
 
+  const [signingOut, setSigningOut] = useState(false);
+
+  /**
+   * Only show signed-out when the sign-out actually happened. If the call
+   * failed the cookie is still set, and showing the sign-in form would leave
+   * the next person at a shared computer signed in as this one.
+   */
   async function signOut() {
-    await api.signOut();
-    setPerson(null);
-    setView({ name: "signin" });
+    setSigningOut(true);
+    const r = await api.signOut();
+    setSigningOut(false);
+    if (r.ok) {
+      setPerson(null);
+      setError("");
+      setView({ name: "signin" });
+    } else {
+      setError(`You are still signed in: sign out did not finish. ${r.message}`);
+    }
   }
 
   return (
@@ -124,7 +160,7 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
         {person ? (
           <div className="builder-spirality-tasks__who">
             <span>Signed in as {person.name}</span>
-            <button type="button" className="builder-spirality-tasks__link-button" onClick={signOut}>Sign out</button>
+            <button type="button" className="builder-spirality-tasks__link-button" onClick={signOut} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>
           </div>
         ) : null}
       </div>
@@ -140,7 +176,7 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
           link={view.link}
           info={view.info}
           onDone={(p) => {
-            if (typeof window !== "undefined" && !location) window.history.replaceState(null, "", addressWithoutLink(where.href));
+            forgetLink();
             signedIn(p);
           }}
         />
@@ -165,7 +201,7 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
           api={api}
           project={project}
           onBack={() => setView({ name: "tasks" })}
-          onFiled={(t) => setView({ name: "task", taskId: t.id })}
+          onFiled={(taskId) => setView({ name: "task", taskId })}
           onSignedOut={onSignedOut}
         />
       ) : null}
@@ -316,15 +352,22 @@ function TasksPage({ api, moduleDefault, project, onProject, showSubmitTask, onO
   const [projects, setProjects] = useState<SpiralityProject[] | null>(null);
   const slug = project || null;
   const [board, setBoard] = useState<SpiralityBoard | null>(null);
-  const [error, setError] = useState("");
+  // Two errors, kept apart: a failed project list leaves nothing to pick
+  // from, but a failed board must keep the picker and Submit Task on screen
+  // so a person can switch away from the project that failed.
+  const [projectsError, setProjectsError] = useState("");
+  const [boardError, setBoardError] = useState("");
+  const [projectsTry, setProjectsTry] = useState(0);
+  const [boardTry, setBoardTry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setProjectsError("");
     (async () => {
       const r = await api.projects();
       if (cancelled) return;
       if (!r.ok) {
-        if (!onSignedOut(r.code)) setError(r.message);
+        if (!onSignedOut(r.code)) setProjectsError(r.message);
         return;
       }
       setProjects(r.data.projects);
@@ -334,22 +377,23 @@ function TasksPage({ api, moduleDefault, project, onProject, showSubmitTask, onO
     return () => { cancelled = true; };
     // `project` is read once, to keep the one already chosen; changing it reloads the board below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, moduleDefault, onSignedOut]);
+  }, [api, moduleDefault, onSignedOut, projectsTry]);
 
   useEffect(() => {
     if (!slug) return;
     let cancelled = false;
     setBoard(null);
+    setBoardError("");
     (async () => {
       const r = await api.board(slug);
       if (cancelled) return;
       if (r.ok) setBoard(r.data);
-      else if (!onSignedOut(r.code)) setError(r.message);
+      else if (!onSignedOut(r.code)) setBoardError(r.message);
     })();
     return () => { cancelled = true; };
-  }, [api, slug, onSignedOut]);
+  }, [api, slug, onSignedOut, boardTry]);
 
-  if (error) return <p className="builder-spirality-tasks__error" role="alert">{error}</p>;
+  if (projectsError) return <Failed message={projectsError} onRetry={() => setProjectsTry((n) => n + 1)} />;
   if (!projects) return <p className="builder-spirality-tasks__muted">Loading your projects…</p>;
   if (!projects.length) return <p className="builder-spirality-tasks__notice">{SPIRALITY_NO_PROJECT}</p>;
 
@@ -368,7 +412,23 @@ function TasksPage({ api, moduleDefault, project, onProject, showSubmitTask, onO
         )}
         {showSubmitTask ? <button type="button" className="builder-spirality-tasks__button" onClick={onSubmit}>Submit Task</button> : null}
       </div>
-      {board ? <TaskColumns board={board} onOpen={onOpen} /> : <p className="builder-spirality-tasks__muted">Loading tasks…</p>}
+      {boardError ? (
+        <Failed message={boardError} onRetry={() => setBoardTry((n) => n + 1)} />
+      ) : board ? (
+        <TaskColumns board={board} onOpen={onOpen} />
+      ) : (
+        <p className="builder-spirality-tasks__muted">Loading tasks…</p>
+      )}
+    </div>
+  );
+}
+
+/** A load that failed, with the reason and a way to try it again. */
+function Failed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="builder-spirality-tasks__failed">
+      <p className="builder-spirality-tasks__error" role="alert">{message}</p>
+      <button type="button" className="builder-spirality-tasks__link-button" onClick={onRetry}>Try again</button>
     </div>
   );
 }
@@ -412,9 +472,12 @@ function TaskThread({ api, taskId, onBack, onSignedOut }: { api: SpiralityApi; t
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [threadTry, setThreadTry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError("");
     (async () => {
       const r = await api.thread(taskId);
       if (cancelled) return;
@@ -422,25 +485,34 @@ function TaskThread({ api, taskId, onBack, onSignedOut }: { api: SpiralityApi; t
       else if (!onSignedOut(r.code)) setError(r.message);
     })();
     return () => { cancelled = true; };
-  }, [api, taskId, onSignedOut]);
+  }, [api, taskId, onSignedOut, threadTry]);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!reply.trim()) return;
     setBusy(true);
     setReplyError("");
+    setNotice("");
     const r = await api.reply(taskId, reply.trim());
     setBusy(false);
     if (r.ok) {
-      setThread(r.data);
+      // Posted. Clear the box either way — keeping the text would invite
+      // posting it twice — and if the thread did not come back, load it.
       setReply("");
+      const fresh = writtenThread(r.data);
+      if (fresh) setThread(fresh);
+      else {
+        setNotice("Your reply was posted.");
+        setThreadTry((n) => n + 1);
+      }
     } else if (!onSignedOut(r.code)) setReplyError(r.message);
   }
 
   return (
     <div className="builder-spirality-tasks__thread">
       <button type="button" className="builder-spirality-tasks__link-button" onClick={onBack}>← All tasks</button>
-      {error ? <p className="builder-spirality-tasks__error" role="alert">{error}</p> : null}
+      {error ? <Failed message={error} onRetry={() => setThreadTry((n) => n + 1)} /> : null}
+      {notice ? <p className="builder-spirality-tasks__notice" role="status">{notice}</p> : null}
       {!thread && !error ? <p className="builder-spirality-tasks__muted">Loading the task…</p> : null}
       {thread ? (
         <>
@@ -483,7 +555,7 @@ function TaskThread({ api, taskId, onBack, onSignedOut }: { api: SpiralityApi; t
   );
 }
 
-function SubmitTaskForm({ api, project, onBack, onFiled, onSignedOut }: { api: SpiralityApi; project: string; onBack: () => void; onFiled: (t: SpiralityThread) => void; onSignedOut: (code: string) => boolean }) {
+function SubmitTaskForm({ api, project, onBack, onFiled, onSignedOut }: { api: SpiralityApi; project: string; onBack: () => void; onFiled: (taskId: string) => void; onSignedOut: (code: string) => boolean }) {
   const id = useId();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -501,7 +573,9 @@ function SubmitTaskForm({ api, project, onBack, onFiled, onSignedOut }: { api: S
     setError("");
     const r = await api.submit(slug, name.trim(), description.trim());
     setBusy(false);
-    if (r.ok) onFiled(r.data);
+    // Filed. Open it by id: the task view loads the thread itself, so a
+    // read-back that failed on the server costs nothing here.
+    if (r.ok) onFiled(r.data.id);
     else if (!onSignedOut(r.code)) setError(r.message);
   }
 

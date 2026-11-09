@@ -12714,6 +12714,29 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font: inherit;
 }
 
+/* The native option list does not inherit a transparent background, so on a
+   dark tenant theme it drew the inherited light text on the OS's white list.
+   An explicit surface plus color-scheme keeps the list legible either way. */
+.builder-spirality-tasks__field select {
+  background-color: Canvas;
+  color: CanvasText;
+  color-scheme: light dark;
+}
+
+.builder-spirality-tasks__field select option {
+  background-color: Canvas;
+  color: CanvasText;
+}
+
+.builder-spirality-tasks__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.builder-spirality-tasks__failed .builder-spirality-tasks__error { margin: 0; }
+
 .builder-spirality-tasks__actions {
   display: flex;
   flex-wrap: wrap;
