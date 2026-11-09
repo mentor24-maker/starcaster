@@ -8,6 +8,9 @@ text editor. A theme with Base size left empty looks exactly as it did — no
 client site changes size — and Intro Copy, Caption and Simple Text keep their
 own sizes. An automatic browser check now measures paragraph text with and
 without a Base size, so this cannot quietly break again.
+The text editor follows the same rule as the page: while you edit an Intro
+Copy or Caption module it no longer shows Base size either, so what you see
+while editing is what the live page shows.
 ## 2026-11-08 — Saved modules can now be put into a table cell (#940)
 
 Inside a Table, the ⊕ "Add module to this cell" button opened the Module

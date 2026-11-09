@@ -48,7 +48,11 @@
  * Paragraph text only (the `paragraph` variant, the legacy unset one, and the
  * blog post body). Intro Copy and Caption are deliberately larger / smaller
  * than body copy and keep their own sizes; Simple Text takes its section's.
- * A size picked in the toolbar is an inline style on a span and still wins. */
+ * A size picked in the toolbar is an inline style on a span and still wins.
+ *
+ * The three exclusions are TEXT_VARIANTS_WITH_OWN_SIZE
+ * (lib/builder-client/text-body-size.ts), which also decides which editors
+ * show the Base size; its test fails if the two lists part ways. */
 .builder-react-root .builder-preview-shell .builder-preview-text:not(.builder-preview-text-intro):not(.builder-preview-text-caption):not(.builder-preview-text-plain) {
   font-size: var(--bx-size-base, 1em);
 }

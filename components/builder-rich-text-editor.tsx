@@ -50,6 +50,13 @@ type BuilderRichTextEditorProps = RichTextGalleryBinding & {
   enableEmojiPicker?: boolean;
   themeColors?: ThemeColorSwatch[];
   themeStyle?: CSSProperties;
+  /**
+   * Body copy that the theme's Base size sizes on the page (task 86bczr7x7):
+   * a Paragraph text module or a blog post body — never Intro Copy, Caption,
+   * or any other module's text. Opt-in, so an editor only shows the Base size
+   * where the published page will (`textModuleFollowsThemeBaseSize`).
+   */
+  followsThemeBaseSize?: boolean;
 };
 
 const FontSizeStyle = Extension.create({
@@ -174,7 +181,8 @@ export function BuilderRichTextEditor({
   onGalleryImageConsumed,
   onUploadGalleryImage,
   themeColors,
-  themeStyle
+  themeStyle,
+  followsThemeBaseSize = false
 }: BuilderRichTextEditorProps) {
   const fontSizeOptions = [
     "14",
@@ -897,7 +905,10 @@ export function BuilderRichTextEditor({
           }}
         />
       ) : (
-        <EditorContent className="builder-rich-text-content" editor={editor} />
+        <EditorContent
+          className={`builder-rich-text-content${followsThemeBaseSize ? " builder-rich-text-content-theme-body" : ""}`}
+          editor={editor}
+        />
       )}
       </div>
   );

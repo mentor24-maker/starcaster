@@ -160,6 +160,7 @@ export function BuilderBlogPostModuleSettings({ module, onUpdateModule, richText
                     value={s.body ?? ""}
                     onChange={setBody}
                     placeholder="Write your post here…"
+                    followsThemeBaseSize
                     {...richTextGallery}
                   />
                 </BuilderModuleField>
