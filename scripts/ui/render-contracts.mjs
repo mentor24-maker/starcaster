@@ -6426,4 +6426,95 @@ export const RENDER_CONTRACTS = [
     absent: true,
     emulate: { liveSite: true },
   },
+  // ── Spirality Tasks (86bczt5t4) ──────────────────────────────────────────
+  // Order is read off each group's data-spirality-status, first group to
+  // last: the module's whole promise is the TRACKER's order and names, so a
+  // re-sort or a renamed status is the failure these exist for.
+  {
+    id: 'spirality-tasks-builder-sample-shows-the-statuses-in-the-trackers-order',
+    why:
+      'Off the live site the module draws a still, signed-in Tasks page with sample tasks and asks ' +
+      'no server anything (86bczt5t4). If that sample stopped rendering, the editor would show an ' +
+      'empty box where a team page is meant to be.',
+    section: { layout: 'single', modules: [{ type: 'spirality-tasks', settings: {} }] },
+    selector: '.builder-spirality-tasks.is-sample .builder-spirality-tasks__groups',
+    read: ['display'],
+    series: SPIRALITY_GROUP_SERIES('.builder-spirality-tasks.is-sample'),
+    expect(sample) {
+      if (sample.styles.display !== 'grid') return `the status groups are display:${sample.styles.display}, not grid — their layout rule is gone.`;
+      return statusesInOrder(sample, ['Requested', 'Queued', 'In review', 'Live']);
+    },
+  },
+  {
+    id: 'spirality-tasks-live-page-shows-the-persons-tasks-not-the-sample',
+    why:
+      'On a published page a signed-in teammate sees THEIR project\'s tasks, grouped by status in ' +
+      'the tracker\'s own order and named as the tracker names them, with empty statuses left out ' +
+      '(86bczt5t4). StarCaster\'s /api/spirality answers are served here, so no tracker is needed. ' +
+      'The selector only matches the live Tasks view, so the sample showing instead fails it.',
+    section: { layout: 'single', modules: [{ type: 'spirality-tasks', settings: { heading: 'Team tasks' } }] },
+    serve: [
+      { url: /\/api\/spirality\/me(\?|$)/, json: { ok: true, data: { signedIn: true, person: { id: 7, name: 'Contract Person' } } } },
+      { url: /\/api\/spirality\/projects(\?|$)/, json: { ok: true, data: { projects: [{ slug: 'contract', name: 'Contract project' }], default: 'contract' } } },
+      {
+        url: /\/api\/spirality\/projects\/contract\/tasks/,
+        json: {
+          ok: true,
+          data: {
+            project: 'contract',
+            projectName: 'Contract project',
+            columns: [
+              { status: 'Requested', tasks: [{ id: 'CT-3', name: 'Newest request' }] },
+              { status: 'Rework', tasks: [] },
+              { status: 'Ready to launch', tasks: [{ id: 'CT-2', name: 'Waiting on the word' }] },
+              { status: 'Live', tasks: [{ id: 'CT-1', name: 'Shipped' }] },
+            ],
+          },
+        },
+      },
+    ],
+    emulate: { liveSite: true },
+    selector: '.builder-spirality-tasks[data-spirality-view="tasks"] .builder-spirality-tasks__groups',
+    read: ['display'],
+    series: SPIRALITY_GROUP_SERIES('.builder-spirality-tasks[data-spirality-view="tasks"]'),
+    expect(sample) {
+      if (/Sample project|Fix the menu on phones/.test(sample.text)) return 'the live page is showing the Builder sample tasks.';
+      if (!/Newest request/.test(sample.text)) return `the served task did not render: "${sample.text.slice(0, 120)}".`;
+      return statusesInOrder(sample, ['Requested', 'Ready to launch', 'Live']);
+    },
+  },
+  {
+    id: 'spirality-tasks-stacks-to-one-column-on-a-phone',
+    why:
+      'The status groups are an auto-fill grid in the base rules, so on a 390px phone they drop to ' +
+      'one column with no breakpoint and the page never scrolls sideways (Standard 3 and 7).',
+    section: { layout: 'single', modules: [{ type: 'spirality-tasks', settings: {} }] },
+    emulate: { viewport: { width: 390, height: 900 } },
+    selector: '.builder-spirality-tasks.is-sample .builder-spirality-tasks__groups',
+    read: ['gridTemplateColumns'],
+    expect(sample) {
+      const tracks = String(sample.styles.gridTemplateColumns || '').trim().split(/\s+/).filter(Boolean);
+      if (tracks.length !== 1) return `at 390px the groups render ${tracks.length} column(s) (${sample.styles.gridTemplateColumns || 'none'}), not 1.`;
+      if (sample.page.scrollWidth > sample.page.clientWidth) return `the page scrolls sideways at 390px (${sample.page.scrollWidth} > ${sample.page.clientWidth}).`;
+      return null;
+    },
+  },
 ];
+
+/** One frame reading the first six status groups' names under `root`, in page order. */
+function SPIRALITY_GROUP_SERIES(root) {
+  const selectors = {};
+  for (let n = 1; n <= 6; n += 1) selectors[`g${n}`] = `${root} .builder-spirality-tasks__group:nth-child(${n})`;
+  return { count: 1, everyMs: 0, read: [], attrs: ['data-spirality-status'], selectors };
+}
+
+/** Null when the groups are exactly `names`, in that order; else what is wrong. */
+function statusesInOrder(sample, names) {
+  const frame = sample.series?.[0];
+  if (!frame) return 'no series was taken — the contract measured nothing.';
+  const got = Object.keys(frame).filter((k) => /^g\d$/.test(k)).sort()
+    .map((k) => frame[k]?.['data-spirality-status']).filter(Boolean);
+  return got.join(' | ') === names.join(' | ')
+    ? null
+    : `the status groups read "${got.join(' | ')}", not "${names.join(' | ')}" (the tracker's order and names, empty statuses left out).`;
+}

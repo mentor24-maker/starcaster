@@ -164,7 +164,10 @@ const NEVER_INDEXED_MODULE_TYPES = new Set([
   "blog-toc",
   "social",
   "social-share",
-  "confetti"
+  "confetti",
+  // A sign-in and a person's own tasks, fetched live: nothing in its settings
+  // is page prose a visitor would search for (86bczt5t4).
+  "spirality-tasks"
 ]);
 
 /**

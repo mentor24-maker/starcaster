@@ -37,6 +37,13 @@ const TICKET_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 const SIGNED_OUT = 'Your Spirality sign-in has ended. Sign in again.';
 
+/**
+ * The tracker's refusals of an emailed link itself (Spirality
+ * docs/OUTSIDE_SITE_API.md, call 2: 400 `unknown-link`, `used-link`,
+ * `expired-link`). /link answers these as one code, LINK_SPENT.
+ */
+const SPENT_LINK_CODES = new Set(['unknown-link', 'used-link', 'expired-link']);
+
 function cookieName(projectId) {
   return `sc_spirality_${String(projectId).replace(/[^A-Za-z0-9_-]/g, '')}`;
 }
@@ -141,6 +148,18 @@ function createSpiralityRoutes({
       return r.data;
     }
 
+    /**
+     * The write has already happened; now read the thread back to show it.
+     * If only that read fails, the answer is still a success — saying the
+     * whole thing failed would invite a resubmit, which files a duplicate.
+     * `threadUnavailable` tells the page to load the task itself.
+     */
+    async function answerAfterWrite(taskId, threadPath) {
+      const r = await tracker.call('GET', threadPath, { session });
+      if (r.ok) return sendOk(res, 201, threadOf(r.data));
+      return sendOk(res, 201, { id: taskId, threadUnavailable: true });
+    }
+
     /** Sign in and keep the session in our cookie; the token is never in the body. */
     async function signIn(email, password) {
       const r = await tracker.call('POST', '/signin', { body: { email, password } });
@@ -201,7 +220,13 @@ function createSpiralityRoutes({
       if (rest[0] === 'link' && isAccount) {
         const body = await parseJsonBody(req);
         const r = await tracker.call('POST', '/account/link', { body: { link: text(body.link) } });
-        if (!r.ok) fail(r);
+        // Only the tracker's own "this link is no good" answer means the
+        // link is spent. Every other failure — ours, a wrong tracker
+        // address, an outage — leaves the link usable, so it must not read
+        // as spent: the page would throw a working invite away.
+        if (!r.ok && SPENT_LINK_CODES.has(r.code)) {
+          sendErr(res, 400, r.message, { code: 'LINK_SPENT' });
+        } else if (!r.ok) fail(r);
         else sendOk(res, 200, { purpose: r.data.purpose, email: r.data.email, expiresAt: r.data.expiresAt });
         return true;
       }
@@ -265,10 +290,7 @@ function createSpiralityRoutes({
           const filed = await asPerson('POST', `/projects/${encodeURIComponent(slug)}/tickets`, {
             name, description: text(body.description), status: 'Requested',
           });
-          if (filed) {
-            const thread = await asPerson('GET', `/tickets/${encodeURIComponent(filed.id)}/thread`);
-            if (thread) sendOk(res, 201, threadOf(thread));
-          }
+          if (filed) await answerAfterWrite(filed.id, `/tickets/${encodeURIComponent(filed.id)}/thread`);
           return true;
         }
       }
@@ -293,10 +315,7 @@ function createSpiralityRoutes({
             return true;
           }
           const posted = await asPerson('POST', `/tickets/${encodeURIComponent(id)}/comments`, { body: reply });
-          if (posted) {
-            const thread = await asPerson('GET', threadPath);
-            if (thread) sendOk(res, 201, threadOf(thread));
-          }
+          if (posted) await answerAfterWrite(id, threadPath);
           return true;
         }
       }

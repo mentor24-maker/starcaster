@@ -126,7 +126,11 @@ function renderEmailModule(module: BuilderTemplateModule): string {
     // query, so it would render its own "we could not find that event"
     // message to every reader. An event in an email wants the event's details
     // baked in at send time, which is a different renderer, not this one.
-    module.type === "event-detail"
+    module.type === "event-detail" ||
+    // Standard 11, decided 2026-11-06 (86bczt5t4): skipped. Spirality Tasks is
+    // a sign-in and a person's own task list, fetched live through their own
+    // session; an email has neither a browser nor a session to fetch with.
+    module.type === "spirality-tasks"
   ) {
     return "";
   }
