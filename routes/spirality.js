@@ -37,6 +37,13 @@ const TICKET_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
 
 const SIGNED_OUT = 'Your Spirality sign-in has ended. Sign in again.';
 
+/**
+ * The tracker's refusals of an emailed link itself (Spirality
+ * docs/OUTSIDE_SITE_API.md, call 2: 400 `unknown-link`, `used-link`,
+ * `expired-link`). /link answers these as one code, LINK_SPENT.
+ */
+const SPENT_LINK_CODES = new Set(['unknown-link', 'used-link', 'expired-link']);
+
 function cookieName(projectId) {
   return `sc_spirality_${String(projectId).replace(/[^A-Za-z0-9_-]/g, '')}`;
 }
@@ -213,7 +220,13 @@ function createSpiralityRoutes({
       if (rest[0] === 'link' && isAccount) {
         const body = await parseJsonBody(req);
         const r = await tracker.call('POST', '/account/link', { body: { link: text(body.link) } });
-        if (!r.ok) fail(r);
+        // Only the tracker's own "this link is no good" answer means the
+        // link is spent. Every other failure — ours, a wrong tracker
+        // address, an outage — leaves the link usable, so it must not read
+        // as spent: the page would throw a working invite away.
+        if (!r.ok && SPENT_LINK_CODES.has(r.code)) {
+          sendErr(res, 400, r.message, { code: 'LINK_SPENT' });
+        } else if (!r.ok) fail(r);
         else sendOk(res, 200, { purpose: r.data.purpose, email: r.data.email, expiresAt: r.data.expiresAt });
         return true;
       }

@@ -93,9 +93,9 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
           setView({ name: "link", link, info: r.data });
           return;
         }
-        if (!linkIsSpent(r.status)) {
-          // Spirality could not be asked: the link may be fine, so keep it
-          // in the address for a reload to try again.
+        if (!linkIsSpent(r.code)) {
+          // Not a refusal of the link itself (an outage, a fault of ours): the
+          // link may be fine, so keep it in the address for a reload to try again.
           setError(r.message);
           setView({ name: "signin" });
           return;
@@ -108,10 +108,13 @@ function SpiralityTasksLive({ settings, projectId, fetchImpl, location }: Requir
       const r = await api.me();
       if (cancelled) return;
       if (r.ok && r.data.signedIn && r.data.person) {
-        setPerson(r.data.person);
-        setView({ name: "tasks" });
+        // Signed in already: a spent link changes nothing for them, so no
+        // invite advice hangs over their tasks.
+        signedIn(r.data.person);
       } else {
-        if (!r.ok) setError((e) => (e ? `${e} ${r.message}` : r.message));
+        // An outage replaces the invite advice rather than joining it: until
+        // Spirality answers, "ask for a new invite" may not even be true.
+        if (!r.ok) setError(r.message);
         setView({ name: "signin" });
       }
     })();
@@ -481,8 +484,12 @@ function TaskThread({ api, taskId, onBack, onSignedOut }: { api: SpiralityApi; t
     (async () => {
       const r = await api.thread(taskId);
       if (cancelled) return;
-      if (r.ok) setThread(r.data);
-      else if (!onSignedOut(r.code)) setError(r.message);
+      if (r.ok) {
+        setThread(r.data);
+        // The fresh thread shows the reply itself. If this load fails, the
+        // notice stays beside the error, so nobody retypes a posted reply.
+        setNotice("");
+      } else if (!onSignedOut(r.code)) setError(r.message);
     })();
     return () => { cancelled = true; };
   }, [api, taskId, onSignedOut, threadTry]);

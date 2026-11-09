@@ -63,6 +63,9 @@ async function fakeTracker({ threadFails = false } = {}) {
     if (req.url === '/account/forgot') return send(200, { sent: 'If that email has an account, a link to set a new password is on its way. It works for 1 hour.' });
     if (req.url === '/account/link') {
       if (body.link === 'used') return send(400, { error: 'used-link', message: 'That link has been used.' });
+      if (body.link === 'expired') return send(400, { error: 'expired-link', message: 'That link has expired.' });
+      if (body.link === 'unknown') return send(400, { error: 'unknown-link', message: 'That link is not one we sent.' });
+      if (body.link === 'garbled') return send(400, { error: 'bad-json', message: 'that body was not JSON.' });
       return send(200, { purpose: body.link === 'invite' ? 'invite' : 'reset', email: 'pat@example.com', expiresAt: '2026-11-07T00:00:00Z' });
     }
     if (req.url === '/account/set-password') {
@@ -252,6 +255,17 @@ test('tracker refusals pass through as their own plain message', async (t) => {
   assert.equal(locked.json.error.message, 'Too many tries for that email. Wait 15 minutes, then try again.');
   const link = await b.call('POST', '/api/spirality/link', { link: 'used' });
   assert.equal(link.json.error.message, 'That link has been used.');
+  // The tracker's three refusals of the link itself are one code to the page, LINK_SPENT.
+  assert.deepEqual(link.json.error, { message: 'That link has been used.', code: 'LINK_SPENT' });
+  for (const spent of ['expired', 'unknown']) {
+    const r = await b.call('POST', '/api/spirality/link', { link: spent });
+    assert.equal(r.status, 400);
+    assert.equal(r.json.error.code, 'LINK_SPENT', spent);
+  }
+  // Any other 4xx from the tracker is NOT a spent link: the page must keep it.
+  const garbled = await b.call('POST', '/api/spirality/link', { link: 'garbled' });
+  assert.equal(garbled.status, 400);
+  assert.equal(garbled.json.error.code, 'bad-json');
   await b.call('POST', '/api/spirality/signin', { email: 'pat@example.com', password: 'right' });
   const unknown = await b.call('GET', '/api/spirality/projects/nope/tasks');
   assert.equal(unknown.status, 404);

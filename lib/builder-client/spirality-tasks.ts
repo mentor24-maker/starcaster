@@ -70,9 +70,14 @@ export function writtenThread(w: SpiralityWritten): SpiralityThread | null {
 export const SPIRALITY_LINK_SPENT =
   "This link has expired or was already used. Ask your team for a new invite, or use Forgot password if you already have an account.";
 
-/** Whether a failed /link means the link itself is spent (vs Spirality being unreachable). */
-export function linkIsSpent(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 429;
+/**
+ * Whether a failed /link means the link itself is spent. Only the server's
+ * LINK_SPENT code says so — it is the tracker's own refusal of the link. A
+ * status range cannot: our catch-all, an unknown site and a wrong tracker
+ * address are all 4xx too, and each leaves a perfectly good link.
+ */
+export function linkIsSpent(code: string): boolean {
+  return code === "LINK_SPENT";
 }
 
 export type SpiralityLink = { purpose: string; email: string; expiresAt?: string };

@@ -245,7 +245,7 @@ describe("arriving from an emailed link", () => {
 
   it("a spent link says what to do next, leaves the address, and still asks who is signed in", async () => {
     const replaced: string[] = [];
-    const { fetchImpl, calls } = fakeApi({ "POST /link": err(400, "That link has been used.", "used-link"), "GET /me": ok({ signedIn: false }) });
+    const { fetchImpl, calls } = fakeApi({ "POST /link": err(400, "That link has been used.", "LINK_SPENT"), "GET /me": ok({ signedIn: false }) });
     render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=old"), replace: (a) => replaced.push(a) }} />);
     await flushUntil(() => view() === "signin");
     expect(text()).toContain(SPIRALITY_LINK_SPENT);
@@ -254,11 +254,38 @@ describe("arriving from an emailed link", () => {
   });
 
   it("a spent link with somebody already signed in takes them to their tasks, not to a sign-in form", async () => {
-    const { fetchImpl } = fakeApi({ ...SIGNED_IN, "POST /link": err(410, "That link has expired.", "expired-link") });
+    const { fetchImpl } = fakeApi({ ...SIGNED_IN, "POST /link": err(400, "That link has expired.", "LINK_SPENT") });
     render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=old"), replace: () => {} }} />);
     await flushUntil(() => $$(".builder-spirality-tasks__group").length > 0);
     expect(view()).toBe("tasks");
     expect(text()).toContain("Signed in as Pat");
+    // A spent link changes nothing for someone already signed in: no invite advice over their tasks.
+    expect(text()).not.toContain(SPIRALITY_LINK_SPENT);
+    expect($("[role=alert]")).toBeNull();
+  });
+
+  for (const [status, message, code] of [
+    [400, "Something went wrong talking to Spirality.", "SPIRALITY_ERROR"],
+    [404, "Spirality refused that (404).", "TRACKER_ERROR"],
+    [400, "This page is not on a known site.", "UNKNOWN_SITE"],
+  ] as const) {
+    it(`a ${status} ${code} is not the tracker refusing the link: the link stays and the real message shows`, async () => {
+      const replaced: string[] = [];
+      const { fetchImpl, calls } = fakeApi({ "POST /link": err(status, message, code) });
+      render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=fine"), replace: (a) => replaced.push(a) }} />);
+      await flushUntil(() => view() === "signin");
+      expect(text()).toContain(message);
+      expect(text()).not.toContain(SPIRALITY_LINK_SPENT);
+      expect(replaced).toEqual([]);
+      expect(calls.some((c) => c.path === "/me")).toBe(false);
+    });
+  }
+
+  it("a spent link and Spirality then going quiet show the outage instead of the invite advice", async () => {
+    const { fetchImpl } = fakeApi({ "POST /link": err(400, "That link has been used.", "LINK_SPENT"), "GET /me": err(502, "Spirality could not be reached.", "UNREACHABLE") });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={{ ...where("?link=old"), replace: () => {} }} />);
+    await flushUntil(() => view() === "signin");
+    expect($("[role=alert]")!.textContent).toBe("Spirality could not be reached.");
   });
 
   it("an unreachable tracker keeps the link in the address, so a reload can try it again", async () => {
@@ -444,7 +471,11 @@ describe("signed in", () => {
     let threadLoads = 0;
     const { fetchImpl } = fakeApi({
       ...SIGNED_IN,
-      "GET /tasks/SP-9": () => { threadLoads += 1; return ok(THREAD); },
+      "GET /tasks/SP-9": () => {
+        threadLoads += 1;
+        const reply = { id: 2, parent: null, author: { name: "Pat", machine: false }, machine: false, body: "Thanks", createdAt: "2026-11-06T11:00:00Z" };
+        return ok(threadLoads === 1 ? THREAD : { ...THREAD, comments: [...THREAD.comments, reply] });
+      },
       "POST /tasks/SP-9/comments": ok({ id: "SP-9", threadUnavailable: true }, 201),
     });
     render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
@@ -453,10 +484,29 @@ describe("signed in", () => {
     await flushUntil(() => $$(".builder-spirality-tasks__comment").length > 0);
     type($("textarea") as HTMLTextAreaElement, "Thanks");
     await submit($("form") as HTMLFormElement);
-    await flushUntil(() => threadLoads === 2);
+    await flushUntil(() => $$(".builder-spirality-tasks__comment").length === 2);
     expect(threadLoads).toBe(2);
     expect(($("textarea") as HTMLTextAreaElement).value).toBe("");
-    expect(text()).toContain("Your reply was posted.");
+    // The reloaded thread shows the reply itself, so the stand-in notice is gone.
+    expect(text()).not.toContain("Your reply was posted.");
     expect($("[role=alert]")).toBeNull();
+  });
+
+  it("a reply whose read-back AND reload both failed keeps 'posted' beside the error, so nobody retypes it", async () => {
+    let threadLoads = 0;
+    const { fetchImpl } = fakeApi({
+      ...SIGNED_IN,
+      "GET /tasks/SP-9": () => { threadLoads += 1; return threadLoads === 1 ? ok(THREAD) : err(502, "Spirality could not be reached.", "UNREACHABLE"); },
+      "POST /tasks/SP-9/comments": ok({ id: "SP-9", threadUnavailable: true }, 201),
+    });
+    render(<SpiralityTasksModule settings={{}} liveSite fetchImpl={fetchImpl} location={where()} />);
+    await flushUntil(() => $$(".builder-spirality-tasks__task").length > 0);
+    click($(".builder-spirality-tasks__task") as HTMLElement);
+    await flushUntil(() => $$(".builder-spirality-tasks__comment").length > 0);
+    type($("textarea") as HTMLTextAreaElement, "Thanks");
+    await submit($("form") as HTMLFormElement);
+    await flushUntil(() => !!$("[role=alert]"));
+    expect(text()).toContain("Spirality could not be reached.");
+    expect(text()).toContain("Your reply was posted.");
   });
 });
