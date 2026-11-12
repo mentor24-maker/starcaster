@@ -116,13 +116,17 @@ test('a log with no pass marker is scanned whole', () => {
 
 test('a pass runs pull -> claude -> limit reading -> beat -> sleep decision, in that order', () => {
   const sh = shellWithoutComments(read('scripts/loop_runner.sh'));
-  const pull = sh.indexOf('checkout:current');
+  // The pull is Spirality's runner's own timid pull now (SC-790), not the
+  // `checkout:current` script: same rules — only main, clean, fast-forward.
+  const pull = sh.indexOf('git pull -q --ff-only origin main');
   const pass = sh.indexOf('"$CLAUDE_BIN" -p');
   const limit = sh.indexOf('loop_runner_delay.mjs');
   // The PASS's beat — the one after it. The policy step (task 86bcgjbfk) also
   // beats, before any pass starts, when the rule says not to start one.
   const beat = sh.indexOf('heartbeat -- --beat --role', pass);
-  const pace = sh.indexOf('next-interval');
+  // The queue-paced `next-interval` is not in the tracker's door, so the
+  // runner sleeps its configured interval; the limit still outranks it.
+  const pace = sh.indexOf('sleep "$INTERVAL"', beat);
   assert.ok(pull > 0 && pass > pull, 'the timid pull comes before the pass, or a merged skill edit lags a cycle');
   assert.ok(limit > pass, 'the limit is read out of the pass\'s own output, so it follows the pass');
   // THE ORDER OF THESE TWO FLIPPED ON PURPOSE (task 86bc3t0n1). The beat used
@@ -162,8 +166,12 @@ test('a pass that stood down or was blocked STILL beats, and says which it was',
   // as a stand-down carrying the rule's own sentence, never as a run.
   assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down "\$POLICY_LINE"/,
     'the policy branch beats as a stand-down with the rule\'s sentence');
-  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 5,
-    'exactly five beat calls: worked, a limit closed it, could not work at all, ran out of time, and the rule said not to start');
+  // And a sixth (SC-790): the pause switch said Dane has the deck. The copied
+  // skills no longer ask it, so the runner does, and beats as a stand-down.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down "the pipeline is paused/,
+    'the pause branch beats as a stand-down saying the pipeline is paused');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 6,
+    'exactly six beat calls: worked, a limit closed it, could not work at all, ran out of time, the rule said not to start, and the line is paused');
 });
 
 test('THE ROUND-2 DEFECT: the runner consults the EXIT CODE, and only asks the guard when it is non-zero', () => {

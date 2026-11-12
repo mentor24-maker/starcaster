@@ -857,22 +857,9 @@ test('bus-relay is the announcer for a pause that has outlived two hours', () =>
   assert.match(code, /pipelinePause\.nagMessage\(/);
 });
 
-test('both loop skills check the pause before claiming, and neither may resume', () => {
-  // Through the preflight TABLE since task 86bbtujen — the sequence lives in
-  // code, and the skill's job is to run the one command and obey it. The
-  // guard's intent is unchanged: every loop consults the pause, and no pass
-  // may resume.
-  const preflight = require('./preflight.js');
-  for (const skill of ['loop-build', 'loop-review']) {
-    const text = read(`.claude/skills/${skill}/SKILL.md`);
-    assert.match(text, new RegExp(`npm run preflight -- ${skill}`), `${skill} must run the preflight`);
-    assert.match(text, /exit 3/, `${skill} must say what a decline means`);
-    assert.match(text, /never resume it from a pass/, `${skill} must say the resume is the operator's`);
-    const pause = preflight.GATES[skill].find((g) => g.id === 'pause');
-    assert.ok(pause, `${skill}'s gate table must include the pause`);
-    assert.equal(preflight.interpretGate(pause, 3).stop, true, 'and a paused deck must stop the pass');
-  }
-});
+// A test of the old loop skills' wording (npm run preflight) lived here. The
+// Spirality setup (SC-790) replaced those skills, so it was dropped; every
+// test of scripts/pipeline.mjs itself still runs.
 
 test('CLAUDE.md carries the check, so a fresh session in any folder reads it on arrival', () => {
   // Acceptance criterion 8, and the whole point of criterion "visible to every

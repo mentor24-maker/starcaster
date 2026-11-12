@@ -70,6 +70,13 @@ const SCHEDULED_LAUNCHERS = {
       + 'because the child session inherits this environment and a skill '
       + 'cannot be relied on to remember.',
   },
+  'run_relay.sh': {
+    job: 'relay',
+    why: 'Every ten minutes on the Mini, the lanes\' relay since the Spirality '
+      + 'setup (SC-790). It talks to the tracker rather than ClickUp, but it runs '
+      + 'the door unattended and anything it reaches inherits this, so it yields '
+      + 'like every other background job.',
+  },
   'run_pipeline_pulse.sh': {
     job: 'pipeline-pulse',
     why: 'Hourly. Reads a lot of tickets to produce its report.',

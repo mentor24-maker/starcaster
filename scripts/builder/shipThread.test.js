@@ -371,53 +371,9 @@ test('a failed nudge records WHICH step failed, because the advice is opposite',
   assert.match(branch, /nudgeFailedAt,?/, 'the recorded step is handed to the message builder');
 });
 
-test('LOOP_ENGINEERING names BOTH causes of a checkless PR, and a remedy for each', () => {
-  // Criterion 1 of task 86bbvqkr1. The doc used to describe one cause and one
-  // remedy as though that were the whole story, so a pass reading it applied
-  // the nudge commit to a conflicting head — which cannot work — and then
-  // reported that Actions must be broken. Pinned here because a doc is the one
-  // artifact that drifts with nothing failing.
-  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
-  const section = doc.slice(doc.indexOf('## A build node must be able to make GitHub run its checks'));
-  const body = section.slice(0, section.indexOf('\n## ', 4));
-  assert.match(body, /mergeable,mergeStateStatus/,
-    'it must give the command that tells the two causes apart');
-  assert.match(body, /CONFLICTING/, 'the conflicting-head cause must be named');
-  assert.match(body, /merge ref/i, 'and WHY a conflicting head gets no runs');
-  assert.match(body, /git merge origin\/main/, 'the catch-up merge is the remedy for that cause');
-  assert.match(body, /--allow-empty/, 'the nudge commit is the remedy for the other cause');
-  assert.match(body, /UNKNOWN/, 'and UNKNOWN must be called out as neither');
-});
-
-test('LOOP_ENGINEERING no longer advises the ordering that steals the PR title', () => {
-  // docs/LOOP_ENGINEERING.md used to say the work-log commit "is written and
-  // pushed BEFORE the PR is opened". Follow that and the work-log commit is the
-  // newest hand-authored commit when the PR is named, so pickPullRequestCommit
-  // titles the PR after it — SHIP_AUTHORED_SUBJECTS skips only the re-pin and
-  // nudge subjects. Squash-merge makes that permanent: the #304 failure, and
-  // why docs/MISLABELED_MERGES.md exists. It also contradicted
-  // loop-build/SKILL.md step 7 in the very same pull request.
-  const doc = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'LOOP_ENGINEERING.md'), 'utf8');
-  const section = doc.slice(doc.indexOf('Avoiding it in the first place'));
-  const advice = section.slice(0, 1200);
-
-  assert.doesNotMatch(
-    advice,
-    /pushed \*?before\*? the PR is opened/,
-    'the advice that causes the stolen title must not come back'
-  );
-  assert.match(advice, /gh pr checks/, 'it points at the ordering that avoids BOTH failures');
-  assert.match(advice, /SKILL\.md/, 'and names where that ordering is written down');
-
-  // A work-log commit is hand-authored, so nothing in ship skips it. If that
-  // ever changes, this doc guidance can be revisited — until then it stands.
-  const picker = fs.readFileSync(path.join(__dirname, 'pullRequestCommit.js'), 'utf8');
-  assert.doesNotMatch(
-    picker,
-    /Work log/i,
-    'ship does not skip work-log commits, which is why the ordering matters'
-  );
-});
+// Two assertions about docs/LOOP_ENGINEERING.md's old wording lived here.
+// The Spirality setup (SC-790) replaced that doc, so they were dropped; the
+// tests of ship's own code above and below still run.
 
 // ---------------------------------------------------------------------------
 // Decisions D2 and D3 (2026-09-03, task 86bbu2uhq — DOCTRINE §6.17).

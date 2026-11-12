@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "prepare": "node scripts/install_git_hooks.cjs",
-    "doctor": "node scripts/doctor.mjs",
+    "doctor": "node loop/scripts/doctor.mjs",
     "map": "node scripts/repo_map.cjs",
     "tidy": "node scripts/repo_tidy.cjs",
     "thread": "node scripts/new_thread.cjs",
@@ -23,7 +23,7 @@
     "canon:sync": "doppler run --project starcaster --config prd --no-check-version -- node scripts/sync_canon.mjs",
     "studio:backfill-transcripts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_transcripts.cjs",
     "studio:backfill-cuts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_cuts.cjs",
-    "clickup": "doppler run --project starcaster --config dev --no-check-version -- node scripts/clickup_direct.mjs",
+    "clickup": "node loop/scripts/with_doppler.mjs node loop/scripts/clickup.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",
     "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",
@@ -138,7 +138,9 @@
     "restore:node": "node scripts/restore_node.mjs",
     "check:drilldown": "node scripts/ui/check_drilldown.mjs",
     "fonts:autotag": "node scripts/fonts_autotag.mjs",
-    "fonts:import": "node scripts/fonts_import_fontsource.mjs"
+    "fonts:import": "node scripts/fonts_import_fontsource.mjs",
+    "test:loop": "node --test \"loop/**/*.test.js\" \"loop/**/*.test.mjs\"",
+    "verify": "npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run test:loop"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

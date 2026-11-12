@@ -1,0 +1,1006 @@
+'use strict';
+
+/**
+ * relayLane tests, and the three acceptance scenarios of task 86bchpkxz run
+ * through the SAME decision chain the `relay` command uses (mergeDecision,
+ * then githubGate), with fixtures standing in for ClickUp and GitHub:
+ *
+ *   1. "merge it" from the operator on a Ready to launch ticket with a green,
+ *      mergeable PR → merge.
+ *   2. A merge phrase on a ticket whose PR is red, conflicting or unreviewed
+ *      → no merge, and the reason names the gate.
+ *   3. A comment that is not exactly a merge phrase ("merge PR #4") → nothing.
+ */
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  PR_VIEW_FIELDS, markerBookkeeping, recordBookkeeping, emptyBooks, mergeDestination, relayLine,
+} = require('./relayLane.js');
+const { mergeDecision, githubGate, MERGE_MARKER } = require('./mergeOnComment.js');
+const { stampMachineComment } = require('./machineComment.js');
+
+const OPERATOR = 48012725;
+const AGENT = 99999999;
+
+let nextId = 1;
+function c(t, userId, text) {
+  return { id: String(nextId++), date: String(1000 + t), user: { id: userId }, comment_text: text };
+}
+const PR_URL = 'https://github.com/mentor24-maker/spirality/pull/4';
+const prOpened = (t) => c(t, AGENT, `PR opened: ${PR_URL}`);
+const reviewPassed = (t) => c(t, AGENT, 'REVIEW: PASSED — verified independently.');
+const reviewFailed = (t) => c(t, AGENT, 'REVIEW: sent back to Rework — the test steps do not pass.');
+
+const green = [{ __typename: 'CheckRun', name: 'verify', status: 'COMPLETED', conclusion: 'SUCCESS' }];
+const red = [{ __typename: 'CheckRun', name: 'verify', status: 'COMPLETED', conclusion: 'FAILURE' }];
+const greenPr = { state: 'OPEN', mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN', statusCheckRollup: green };
+
+function decide(comments, status = 'Ready to launch', books = emptyBooks()) {
+  return mergeDecision({ status, comments, operatorId: OPERATOR, ...books });
+}
+
+// --------------------------------------------------- acceptance scenarios
+
+test('ACCEPTANCE 1: "merge it" on a green, mergeable PR merges in one pass', () => {
+  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge it')]);
+  assert.equal(d.act, 'merge');
+  assert.equal(d.pr.number, 4);
+  assert.equal(githubGate(greenPr).action, 'merge');
+});
+
+test('ACCEPTANCE 2a: a merge phrase on a RED PR is refused, and the reason names the checks', () => {
+  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge')]);
+  assert.equal(d.act, 'merge');
+  const g = githubGate({ ...greenPr, statusCheckRollup: red });
+  assert.equal(g.action, 'refuse');
+  assert.match(g.reason, /checks are red: verify/);
+  assert.ok(g.refusalCode, 'a refusal carries the code the notice is classified by');
+});
+
+test('ACCEPTANCE 2b: a merge phrase on a CONFLICTING PR is not merged, and the reason says conflict', () => {
+  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, 'ship it')]);
+  assert.equal(d.act, 'merge');
+  const g = githubGate({ ...greenPr, mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' });
+  assert.equal(g.action, 'conflict');
+  assert.match(g.reason, /CONFLICTING/);
+});
+
+test('ACCEPTANCE 2c: a merge phrase on an UNREVIEWED ticket is refused before GitHub is asked', () => {
+  const noVerdict = decide([prOpened(1), c(3, OPERATOR, 'approve')]);
+  assert.equal(noVerdict.act, 'refuse');
+  assert.match(noVerdict.reason, /no review verdict/);
+
+  const sentBack = decide([prOpened(1), reviewFailed(2), c(3, OPERATOR, 'approve')]);
+  assert.equal(sentBack.act, 'refuse');
+  assert.match(sentBack.reason, /not a PASS/);
+
+  const stale = decide([prOpened(1), c(2, OPERATOR, 'merge'), reviewPassed(3)]);
+  assert.equal(stale.act, 'refuse');
+  assert.match(stale.reason, /predates/);
+});
+
+test('ACCEPTANCE 2d: a merge phrase on a ticket that is not Ready to launch does nothing', () => {
+  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge')], 'In review');
+  assert.equal(d.act, 'ignore');
+});
+
+test('ACCEPTANCE 3: "merge PR #4" is not a merge phrase — nothing happens, nothing is posted', () => {
+  for (const words of ['merge PR #4', 'merge #4', 'please merge', 'merge it when green', 'Merge PR #4.']) {
+    const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, words)]);
+    assert.equal(d.act, 'ignore', words);
+    assert.match(d.reason, /no unhandled merge command/, words);
+  }
+});
+
+test('a machine-posted "merge" never authorizes: the stamp makes it more than the phrase', () => {
+  const d = decide([prOpened(1), reviewPassed(2), c(3, OPERATOR, stampMachineComment('merge'))]);
+  assert.equal(d.act, 'ignore');
+});
+
+// ------------------------------------------------------ marker bookkeeping
+
+const reply = (t, text) => ({ id: String(nextId++), date: String(1000 + t), comment_text: stampMachineComment(text) });
+
+test('no replies: nothing handled, nothing refused', () => {
+  assert.deepEqual(markerBookkeeping([]), { marker: null, handled: false, refused: null, refusedAt: '', refusedCount: 0 });
+  assert.deepEqual(markerBookkeeping(undefined).handled, false);
+});
+
+test('a merged marker spends the authorization forever', () => {
+  const k = markerBookkeeping([reply(1, `${MERGE_MARKER} merged PR #4 at 2026-10-13T20:00:00.000Z — 2026-10-13T20:00:00.000Z`)]);
+  assert.equal(k.handled, true);
+  assert.equal(k.refused, null);
+});
+
+test('a refused marker is re-decided: the reason, its time and its count come back', () => {
+  const k = markerBookkeeping([
+    reply(1, `${MERGE_MARKER} refused: checks are red: verify (FAILURE) — 2026-10-13T20:00:00.000Z`),
+    reply(2, `${MERGE_MARKER} refused: checks are red: verify (FAILURE) — 2026-10-13T20:10:00.000Z`),
+  ]);
+  assert.equal(k.handled, false);
+  assert.equal(k.refused, 'checks are red: verify (FAILURE)');
+  assert.equal(k.refusedAt, '2026-10-13T20:10:00.000Z');
+  assert.equal(k.refusedCount, 2);
+});
+
+test('the NEWEST marker decides: a refusal after a merge is not read back as merged', () => {
+  const k = markerBookkeeping([
+    reply(2, `${MERGE_MARKER} refused: checks are red: verify (FAILURE) — 2026-10-13T20:10:00.000Z`),
+    reply(1, `${MERGE_MARKER} merged PR #4 at x — 2026-10-13T20:00:00.000Z`),
+  ]);
+  assert.equal(k.handled, false);
+  assert.equal(k.refused, 'checks are red: verify (FAILURE)');
+});
+
+test('a prior refusal for the SAME reason quiets the decision; a different reason does not', () => {
+  const comments = [prOpened(1), reviewFailed(2), c(3, OPERATOR, 'merge')];
+  const auth = comments[2];
+  const books = recordBookkeeping(emptyBooks(), auth.id, markerBookkeeping([
+    reply(4, `${MERGE_MARKER} refused: the most recent review verdict is not a PASS — 2026-10-13T20:00:00.000Z`),
+  ]));
+  const quiet = decide(comments, 'Ready to launch', books);
+  assert.equal(quiet.act, 'ignore');
+  assert.match(quiet.reason, /already refused for the same reason/);
+
+  const other = recordBookkeeping(emptyBooks(), auth.id, markerBookkeeping([
+    reply(4, `${MERGE_MARKER} refused: checks are red: verify (FAILURE) — 2026-10-13T20:00:00.000Z`),
+  ]));
+  const loud = decide(comments, 'Ready to launch', other);
+  assert.equal(loud.act, 'refuse');
+  assert.equal(loud.priorRefusal, 'checks are red: verify (FAILURE)');
+});
+
+test('a spent authorization is skipped, so a merged PR is never re-decided', () => {
+  const comments = [prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge')];
+  const books = recordBookkeeping(emptyBooks(), comments[2].id, markerBookkeeping([
+    reply(4, `${MERGE_MARKER} merged PR #4 at x — 2026-10-13T20:00:00.000Z`),
+  ]));
+  assert.equal(decide(comments, 'Ready to launch', books).act, 'ignore');
+});
+
+// -------------------------------------------------------- merge destination
+
+test('no "Next slice:" line: the ticket closes as Live', () => {
+  assert.equal(mergeDestination('## Goal\n\nShip the thing.\n').status, 'Live');
+  assert.equal(mergeDestination('').status, 'Live');
+  assert.equal(mergeDestination(null).status, 'Live');
+});
+
+test('a "Next slice:" line with content sends the ticket back to Queued for the next build pass', () => {
+  const d = mergeDestination('## Slices\n\nSlice 1 is this PR.\n\nNext slice: the Needs your input hand-back, once busRelayPlan arrives.\n');
+  assert.equal(d.status, 'Queued');
+  assert.match(d.why, /Next slice: the Needs your input hand-back/);
+});
+
+test('the line is read whole-line and case-insensitively, with list and bold markers allowed', () => {
+  assert.equal(mergeDestination('- **Next slice:** slice 3').status, 'Queued');
+  assert.equal(mergeDestination('NEXT SLICE: slice 3').status, 'Queued');
+});
+
+test('"Next slice: none" (or done) means no next slice — Live', () => {
+  for (const rest of ['none', 'None.', 'done', 'n/a', '']) {
+    assert.equal(mergeDestination(`Next slice: ${rest}`).status, 'Live', rest);
+  }
+});
+
+test('prose about slices is NOT a declaration: only the line moves a ticket', () => {
+  const prose = 'The ticket returns to `Queued` after each slice merges, until slice 3 is in.';
+  assert.equal(mergeDestination(prose).status, 'Live');
+});
+
+// ---------------------------------------------------------------- odds
+
+test('PR_VIEW_FIELDS covers every field githubGate reads', () => {
+  for (const f of ['state', 'isDraft', 'mergeable', 'mergeStateStatus', 'reviewDecision', 'statusCheckRollup']) {
+    assert.ok(PR_VIEW_FIELDS.includes(f), f);
+  }
+});
+
+test('relayLine is one tab-separated line a log reader can grep', () => {
+  const line = relayLine({ task: { id: 'abc', name: 'Fix it' }, status: 'Ready to launch', outcome: 'would-merge', detail: 'PR #4' });
+  assert.equal(line, 'abc\tReady to launch\twould-merge\tPR #4 "Fix it"');
+  assert.equal(line.split('\n').length, 1);
+});
+
+// ------------------------------------------- the hand-back (slice 2)
+//
+// An answered `Needs your input` ticket, through the same two calls the
+// `relay` command makes: handbackAnswer on the comments, then handbackPlan
+// on that answer's reply thread and the PR's state.
+
+const { BANNER_LABEL } = require('./operatorCard.js');
+const { handHeldText, handbackDoneText, handbackFailureText } = require('./busRelayPlan.js');
+const { handbackAnswer, handbackPlan } = require('./relayLane.js');
+const { isMachineComment } = require('./machineComment.js');
+
+const card = (t) => c(t, OPERATOR, stampMachineComment(`@@CONTEXT ...\n${BANNER_LABEL}Pick (a) or (b).`));
+const NYI = 'Needs your input';
+
+function handBack(comments, { replies = [], pr = null, status = NYI, description } = {}) {
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR, isMachine: isMachineComment });
+  return { verdict, plan: handbackPlan({ status, verdict, answerReplies: replies, pr, description }) };
+}
+
+test('HAND-BACK: his reply to the card, nothing built yet → Queued', () => {
+  const { verdict, plan } = handBack([card(1), c(2, OPERATOR, 'a')]);
+  assert.equal(verdict.state, 'answered');
+  assert.equal(verdict.answer.comment_text, 'a');
+  assert.deepEqual([plan.act, plan.target], ['move', 'Queued']);
+});
+
+test('HAND-BACK: an open PR behind the ticket → Rework; merged → Live; closed unmerged → Queued', () => {
+  const comments = () => [prOpened(1), card(2), c(3, OPERATOR, 'go with (b)')];
+  assert.equal(handBack(comments(), { pr: { number: 4, state: 'OPEN' } }).plan.target, 'Rework');
+  assert.equal(handBack(comments(), { pr: { number: 4, state: 'MERGED' } }).plan.target, 'Live');
+  assert.equal(handBack(comments(), { pr: { number: 4, state: 'CLOSED' } }).plan.target, 'Queued');
+});
+
+// 2026-10-26 (task 86bcrvwam): a multi-slice ticket asked a question between
+// slices has the PREVIOUS slice's PR on it, already merged. The hand-back
+// closed it; it must read the same "Next slice:" line the merge path reads.
+test('HAND-BACK: merged PR but the description names a next slice → Queued, naming the line', () => {
+  const comments = [prOpened(1), card(2), c(3, OPERATOR, '(a) more work first')];
+  const description = '## Slices\n\nSlice 1 shipped as PR #5.\n\nNext slice: the runners and the watchdogs\n';
+  const { plan } = handBack(comments, { pr: { number: 5, state: 'MERGED' }, description });
+  assert.deepEqual([plan.act, plan.target], ['move', 'Queued']);
+  assert.match(plan.why, /PR #5 is already merged/);
+  assert.match(plan.why, /Next slice: the runners and the watchdogs/);
+});
+
+test('HAND-BACK: merged PR with "Next slice: none", or no line at all → still Live', () => {
+  const comments = () => [prOpened(1), card(2), c(3, OPERATOR, 'a')];
+  const pr = { number: 5, state: 'MERGED' };
+  for (const description of ['Next slice: none', 'Next slice: done.', '## Goal\n\nShip it.\n', '', undefined]) {
+    assert.equal(handBack(comments(), { pr, description }).plan.target, 'Live', String(description));
+  }
+});
+
+test('HAND-BACK: "close it" closes a merged ticket whether or not a next slice is named', () => {
+  const comments = () => [prOpened(1), card(2), c(3, OPERATOR, 'close it')];
+  const pr = { number: 5, state: 'MERGED' };
+  for (const description of ['Next slice: the runners and the watchdogs', 'Next slice: none', undefined]) {
+    const { plan } = handBack(comments(), { pr, description });
+    assert.deepEqual([plan.act, plan.target], ['move', 'Live'], String(description));
+    assert.match(plan.why, /your answer says to close it/);
+  }
+});
+
+test('HAND-BACK: a "Next slice:" line never overrides an OPEN PR (Rework) or a ticket with nothing built (Queued)', () => {
+  const description = 'Next slice: slice 3';
+  const comments = [prOpened(1), card(2), c(3, OPERATOR, 'b')];
+  assert.equal(handBack(comments, { pr: { number: 4, state: 'OPEN' }, description }).plan.target, 'Rework');
+  assert.equal(handBack([card(1), c(2, OPERATOR, 'b')], { description }).plan.target, 'Queued');
+});
+
+test('HAND-BACK: "close it" answering the card → Live, even with the PR open, and says the PR was left alone', () => {
+  const { plan } = handBack([prOpened(1), card(2), c(3, OPERATOR, 'close it')], { pr: { number: 4, state: 'OPEN' } });
+  assert.deepEqual([plan.act, plan.target], ['move', 'Live']);
+  assert.match(plan.why, /PR #4 is still open and was not touched/);
+});
+
+test('HAND-BACK: "done" is NOT a close phrase — it goes by the PR', () => {
+  assert.equal(handBack([card(1), c(2, OPERATOR, 'done')]).plan.target, 'Queued');
+});
+
+test('HAND-BACK: a PR whose state could not be read moves nothing', () => {
+  const { plan } = handBack([prOpened(1), card(2), c(3, OPERATOR, 'b')], { pr: { number: 4, state: '', why: 'gh failed' } });
+  assert.equal(plan.act, 'cannot-tell');
+  assert.equal(plan.target, null);
+  assert.match(plan.why, /gh failed/);
+});
+
+test('HAND-BACK: no reply newer than the card → waiting, no move', () => {
+  const { plan } = handBack([c(1, OPERATOR, 'an older word'), card(2)]);
+  assert.deepEqual([plan.act, plan.target], ['waiting', null]);
+});
+
+test('HAND-BACK: the card itself, posted under his token, is never read as his answer', () => {
+  const { verdict, plan } = handBack([card(1)]);
+  assert.equal(verdict.state, 'none');
+  assert.equal(plan.act, 'waiting');
+});
+
+test('HAND-BACK: no machine-written card on the ticket → reported, never moved', () => {
+  const { plan } = handBack([c(1, OPERATOR, 'close it')]);
+  assert.deepEqual([plan.act, plan.target], ['no-card', null]);
+  // A card he QUOTES is his text, not a machine card: still no card.
+  const quoted = handBack([c(1, OPERATOR, `> ${BANNER_LABEL}Pick (a) or (b).\n\na`)]).plan;
+  assert.equal(quoted.act, 'no-card');
+});
+
+test('HAND-BACK: a held-by-hand note newer than the card withholds the move', () => {
+  const held = c(2, OPERATOR, stampMachineComment(handHeldText({ at: 'now' })));
+  const { plan } = handBack([card(1), held, c(3, OPERATOR, 'a')]);
+  assert.deepEqual([plan.act, plan.target], ['held', null]);
+});
+
+test('HAND-BACK: an answer whose reply thread says the hand-back already happened is spent', () => {
+  const done = [{ id: 'r1', comment_text: stampMachineComment(handbackDoneText({ target: 'Queued', at: 'x' })) }];
+  const { plan } = handBack([card(1), c(2, OPERATOR, 'a')], { replies: done });
+  assert.deepEqual([plan.act, plan.target], ['handled', null]);
+});
+
+test('HAND-BACK: a FAILED earlier attempt is retried, and the failure note is not repeated', () => {
+  const failed = [{ id: 'r1', comment_text: stampMachineComment(handbackFailureText({ target: 'Queued', why: 'HTTP 500' })) }];
+  const { plan } = handBack([card(1), c(2, OPERATOR, 'a')], { replies: failed });
+  assert.deepEqual([plan.act, plan.target], ['move', 'Queued']);
+  assert.equal(plan.failureNoted, true);
+});
+
+test('HAND-BACK: an answer from an EARLIER round does not release a newer card', () => {
+  const { plan } = handBack([card(1), c(2, OPERATOR, 'a'), card(3)]);
+  assert.equal(plan.act, 'waiting');
+});
+
+test('HAND-BACK: a ticket not in Needs your input is never released', () => {
+  const { plan } = handBack([card(1), c(2, OPERATOR, 'a')], { status: 'Ready to launch' });
+  assert.equal(plan.act, 'skip');
+  assert.equal(plan.target, null);
+});
+
+test('HAND-BACK: someone else\'s reply is not his answer', () => {
+  assert.equal(handBack([card(1), c(2, AGENT, 'a')]).plan.act, 'waiting');
+});
+
+// ------------------------------------------- the conflict catch-up ticket (86bctbev9)
+
+const { conflictFilingPlan } = require('./relayLane.js');
+const {
+  conflictTicketName, conflictTicketFiledComment, VERDICT_KINDS,
+} = require('./conflictWork.js');
+const { conflictHandOffNotice } = require('./mergeOnComment.js');
+
+const CONFLICT_PR = { number: 12, url: 'https://github.com/mentor24-maker/spirality/pull/12' };
+const CATCH_UP_NAME = conflictTicketName({ pr: CONFLICT_PR, branch: 'move-starcaster-modules', localVerdict: null });
+const filedTrail = (t, id, prNumber = 12) => c(t, AGENT, conflictTicketFiledComment({
+  id, url: `https://app.clickup.com/t/${id}`, prNumber, localVerdict: null,
+}));
+
+test('CONFLICT: a conflicting PR with nothing on file → file one catch-up ticket', () => {
+  const plan = conflictFilingPlan({
+    comments: [prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge')],
+    prNumber: 12, queueTasks: [{ id: 'other', name: 'Something else' }], ticketName: CATCH_UP_NAME, localVerdict: null,
+  });
+  assert.equal(plan.act, 'file');
+  assert.equal(plan.filed, null);
+});
+
+test('CONFLICT: the trail line on the ticket means it is already filed — however many passes run', () => {
+  const comments = [prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge'), filedTrail(4, '86abc123')];
+  for (let pass = 0; pass < 5; pass += 1) {
+    const plan = conflictFilingPlan({ comments, prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus: 'Queued' });
+    assert.equal(plan.act, 'already-filed');
+    assert.deepEqual(plan.filed, { id: '86abc123', url: 'https://app.clickup.com/t/86abc123' });
+    assert.equal(plan.recorded, true);
+  }
+});
+
+test('CONFLICT: a ticket filed whose trail line never posted is found by name in the queue, not filed again', () => {
+  const plan = conflictFilingPlan({
+    comments: [prOpened(1), c(3, OPERATOR, 'merge')],
+    prNumber: 12,
+    queueTasks: [{ id: '86twin', name: CATCH_UP_NAME, url: 'https://app.clickup.com/t/86twin', status: { status: 'queued' } }],
+    ticketName: CATCH_UP_NAME,
+    localVerdict: null,
+  });
+  assert.equal(plan.act, 'already-filed');
+  assert.deepEqual(plan.filed, { id: '86twin', url: 'https://app.clickup.com/t/86twin' });
+  assert.equal(plan.recorded, false, 'the caller still has to write the trail line');
+});
+
+test('CONFLICT: a trail line for a DIFFERENT PR does not count — a rebuilt PR gets its own ticket', () => {
+  const plan = conflictFilingPlan({
+    comments: [filedTrail(4, '86old', 11)], prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: null,
+  });
+  assert.equal(plan.act, 'file');
+});
+
+// SP-100: a catch-up ticket counts as "on file" only while a loop works it.
+const { CATCH_UP_WORKED_STATUSES } = require('./relayLane.js');
+const trackerTrail = (t, id) => c(t, AGENT, conflictTicketFiledComment({
+  id, url: `http://mac-mini.local:4180/t/${id}`, prNumber: 12, localVerdict: null,
+}));
+
+test('CONFLICT (SP-100): a catch-up ticket in any worked status is on file', () => {
+  assert.deepEqual([...CATCH_UP_WORKED_STATUSES].sort(), ['building', 'in review', 'queued', 'rework']);
+  for (const filedStatus of ['Queued', 'Rework', 'Building', 'In review']) {
+    const plan = conflictFilingPlan({ comments: [trackerTrail(4, 'SP-90')], prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus });
+    assert.equal(plan.act, 'already-filed', filedStatus);
+    assert.equal(plan.refiledFrom, null);
+  }
+});
+
+test('CONFLICT (SP-100): a catch-up ticket that left the loop does not block a new one', () => {
+  for (const filedStatus of ['Ready to launch', 'Needs your input', 'Live']) {
+    const plan = conflictFilingPlan({ comments: [trackerTrail(4, 'SP-90')], prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus });
+    assert.equal(plan.act, 'file', filedStatus);
+    assert.equal(plan.refiledFrom.id, 'SP-90');
+    assert.equal(plan.refiledFrom.status, filedStatus);
+  }
+});
+
+test('CONFLICT (SP-100): a catch-up ticket that cannot be read is cannot-tell, never "on file"', () => {
+  for (const filedStatus of [null, undefined, '']) {
+    const plan = conflictFilingPlan({ comments: [trackerTrail(4, 'SP-90')], prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus });
+    assert.equal(plan.act, 'cannot-tell');
+    assert.equal(plan.filed.id, 'SP-90');
+  }
+});
+
+test('CONFLICT (SP-100): the finished catch-up is not its own twin — same name in Ready to launch still files', () => {
+  const plan = conflictFilingPlan({
+    comments: [trackerTrail(4, 'SP-90')], prNumber: 12,
+    queueTasks: [{ id: 'SP-90', name: CATCH_UP_NAME, status: { status: 'ready to launch' } }],
+    ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus: 'Ready to launch',
+  });
+  assert.equal(plan.act, 'file');
+  const noTrail = conflictFilingPlan({
+    comments: [], prNumber: 12,
+    queueTasks: [{ id: 'SP-90', name: CATCH_UP_NAME, status: { status: 'live' } }],
+    ticketName: CATCH_UP_NAME, localVerdict: null,
+  });
+  assert.equal(noTrail.act, 'file', 'a same-named ticket that is Live is not open work');
+});
+
+test('CONFLICT (SP-100): the SP-84 / SP-90 sequence files a second ticket exactly once across passes', () => {
+  // The world the relay sees: the waiting ticket's comments (newest first)
+  // and every ticket's status. One pass = one plan, carried out.
+  const statuses = new Map();
+  let comments = [prOpened(1), reviewPassed(2), c(3, OPERATOR, 'merge')];
+  let nextId = 90;
+  const filings = [];
+  const pass = () => {
+    const trail = require('./conflictWork.js').findConflictTicket(comments, 12);
+    const filedStatus = trail ? statuses.get(trail.id) ?? null : null;
+    const queueTasks = [...statuses].map(([id, st]) => ({ id, name: CATCH_UP_NAME, status: { status: st } }));
+    const plan = conflictFilingPlan({ comments, prNumber: 12, queueTasks, ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus });
+    if (plan.act === 'file') {
+      const id = `SP-${nextId++}`;
+      statuses.set(id, 'queued');
+      filings.push({ id, refiledFrom: plan.refiledFrom });
+      comments = [trackerTrail(100 + filings.length, id), ...comments];
+    }
+    return plan;
+  };
+
+  // First conflict: one ticket, however many passes.
+  for (let i = 0; i < 4; i += 1) pass();
+  assert.deepEqual(filings.map((f) => f.id), ['SP-90']);
+
+  // The build loop catches the PR up; review passes it; it parks in Ready to launch.
+  statuses.set('SP-90', 'building');
+  pass();
+  statuses.set('SP-90', 'in review');
+  pass();
+  statuses.set('SP-90', 'ready to launch');
+  assert.equal(filings.length, 1, 'no second ticket while the first was still being worked');
+
+  // main moves again and the PR conflicts a second time: exactly one new ticket.
+  for (let i = 0; i < 6; i += 1) pass();
+  assert.deepEqual(filings.map((f) => f.id), ['SP-90', 'SP-91']);
+  assert.deepEqual(filings[1].refiledFrom, { id: 'SP-90', url: 'http://mac-mini.local:4180/t/SP-90', status: 'Ready to launch' });
+  assert.equal(pass().act, 'already-filed');
+  assert.equal(pass().filed.id, 'SP-91');
+});
+
+test('CONFLICT (SP-100): a re-filing whose trail did not post is found by name, not filed a third time', () => {
+  const plan = conflictFilingPlan({
+    comments: [trackerTrail(4, 'SP-90')], prNumber: 12,
+    queueTasks: [
+      { id: 'SP-90', name: CATCH_UP_NAME, status: { status: 'ready to launch' } },
+      { id: 'SP-91', name: CATCH_UP_NAME, url: 'http://mac-mini.local:4180/t/SP-91', status: { status: 'queued' } },
+    ],
+    ticketName: CATCH_UP_NAME, localVerdict: null, filedStatus: 'Ready to launch',
+  });
+  assert.equal(plan.act, 'already-filed');
+  assert.equal(plan.filed.id, 'SP-91');
+  assert.equal(plan.recorded, false);
+  assert.equal(plan.refiledFrom.id, 'SP-90', 'the trail line still says why there is a second ticket');
+});
+
+test('CONFLICT (SP-100): the re-filed trail line says the first catch-up landed and main moved again, and still parses', () => {
+  const body = conflictTicketFiledComment({
+    id: 'SP-91', url: 'http://mac-mini.local:4180/t/SP-91', prNumber: 12, localVerdict: null,
+    refiledFrom: { id: 'SP-90', status: 'Ready to launch' },
+  });
+  assert.match(body, /is now ticket SP-91/);
+  assert.match(body, /earlier catch-up, ticket SP-90, was finished \(it is in Ready to launch\), but `main` moved again/);
+  assert.equal(require('./conflictWork.js').findConflictTicket([c(1, AGENT, body)], 12).id, 'SP-91');
+  const first = conflictTicketFiledComment({ id: 'SP-90', url: 'http://mac-mini.local:4180/t/SP-90', prNumber: 12, localVerdict: null });
+  assert.doesNotMatch(first, /moved again/);
+});
+
+test('CONFLICT (SP-100): the relay reads the filed ticket\'s status and reports an unreadable one as unchecked', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'scripts', 'clickup.mjs'), 'utf8');
+  assert.match(src, /conflictFilingPlan\(\{[^}]*filedStatus \}\)/);
+  assert.match(src, /readTaskOrNull\(trail\.id\)/);
+  assert.match(src, /if \(plan\.act === 'cannot-tell'\) \{\s*unchecked\.push\(`\$\{task\.id\}: PR #\$\{pr\.number\} conflicts, and the catch-up ticket on file/);
+  assert.match(src, /recordCatchUp\(task, filed, pr\.number, plan\.refiledFrom\)/);
+});
+
+test('CONFLICT: a proven no-overlap files nothing (the next pass clears it itself)', () => {
+  const clean = { kind: VERDICT_KINDS.NO_OVERLAP, reason: 'merged cleanly' };
+  const plan = conflictFilingPlan({ comments: [], prNumber: 12, queueTasks: [], ticketName: CATCH_UP_NAME, localVerdict: clean });
+  assert.equal(plan.act, 'none');
+});
+
+test('CONFLICT: the notice says filing failed only when nothing is on file, and names the ticket when one is', () => {
+  const failed = conflictHandOffNotice({ commentId: '7', pr: CONFLICT_PR, localVerdict: null, filed: null });
+  assert.match(failed.body, /did not succeed/);
+  const filed = conflictHandOffNotice({ commentId: '7', pr: CONFLICT_PR, localVerdict: null, filed: { id: '86abc123', url: 'https://app.clickup.com/t/86abc123' } });
+  assert.doesNotMatch(filed.body, /did not succeed/);
+  assert.match(filed.body, /ticket 86abc123/);
+  assert.equal(filed.marker, failed.marker, 'the marker does not depend on the filing, so the quiet check reads one reason');
+});
+
+test('CONFLICT: the catch-up ticket names the branch, and the "now ticket" comment keeps the ticket in Ready to launch', () => {
+  assert.match(CATCH_UP_NAME, /PR #12 \(move-starcaster-modules\)/);
+  const body = conflictTicketFiledComment({ id: '86abc123', url: 'https://app.clickup.com/t/86abc123', prNumber: 12, localVerdict: null });
+  assert.match(body, /is now ticket 86abc123 in the Loop Queue/);
+  assert.match(body, /stays in Ready to launch/);
+});
+
+test('PR_VIEW_FIELDS asks for the branch name the catch-up ticket carries', () => {
+  assert.ok(PR_VIEW_FIELDS.includes('headRefName'));
+});
+
+// ── closePlan: his close word on a Ready to launch ticket (SP-68) ──────────
+
+{
+  const { closePlan } = require('./relayLane.js');
+  const { closeRefusedText, handbackDoneText } = require('./busRelayPlan.js');
+  const answered = (text = 'close') => ({ state: 'answered', answer: { id: 'a1', comment_text: text } });
+  const merged = { number: 7, state: 'MERGED' };
+  const open = { number: 7, state: 'OPEN' };
+
+  test('a close word moves the ticket to Live when its own PR, or the PR it unstuck, is merged', () => {
+    const own = closePlan({ verdict: answered(), answerReplies: [], ownPr: merged, unstuckPr: null });
+    assert.deepEqual([own.act, own.target], ['move', 'Live']);
+    assert.match(own.why, /its own PR #7 is merged/);
+    const unstuck = closePlan({ verdict: answered('close it'), answerReplies: [], ownPr: null, unstuckPr: merged });
+    assert.deepEqual([unstuck.act, unstuck.target], ['move', 'Live']);
+    assert.match(unstuck.why, /filed to unstick, is merged/);
+  });
+
+  test('its own PR decides when it has one: an open own PR is not closed on a merged unstuck one', () => {
+    const plan = closePlan({ verdict: answered(), answerReplies: [], ownPr: open, unstuckPr: merged });
+    assert.equal(plan.act, 'refuse');
+    assert.match(plan.why, /its own PR #7 is still open/);
+  });
+
+  test('work that is not merged is refused with the reason, and the same reason is not said twice', () => {
+    for (const [pr, why] of [[open, /still open/], [{ number: 7, state: 'CLOSED' }, /closed without merging/]]) {
+      const plan = closePlan({ verdict: answered(), answerReplies: [], ownPr: null, unstuckPr: pr });
+      assert.equal(plan.act, 'refuse');
+      assert.match(plan.why, why);
+      const again = closePlan({ verdict: answered(), answerReplies: [{ comment_text: closeRefusedText({ why: plan.why, at: 'now' }) }], ownPr: null, unstuckPr: pr });
+      assert.equal(again.act, 'refused-quiet');
+    }
+    const none = closePlan({ verdict: answered(), answerReplies: [], ownPr: null, unstuckPr: null });
+    assert.equal(none.act, 'refuse');
+    assert.match(none.why, /no pull request of its own and names none/);
+    // A reason that changed is said again.
+    const changed = closePlan({ verdict: answered(), answerReplies: [{ comment_text: closeRefusedText({ why: 'something older' }) }], ownPr: null, unstuckPr: open });
+    assert.equal(changed.act, 'refuse');
+  });
+
+  test('the refusal reply promises a later close only while the PR is still open', () => {
+    const cases = [
+      [{ ownPr: open, unstuckPr: null }, true],
+      [{ ownPr: null, unstuckPr: open }, true],
+      [{ ownPr: { number: 7, state: 'CLOSED' }, unstuckPr: null }, false],
+      [{ ownPr: null, unstuckPr: { number: 7, state: 'CLOSED' } }, false],
+      [{ ownPr: null, unstuckPr: null }, false],
+    ];
+    for (const [prs, pending] of cases) {
+      const plan = closePlan({ verdict: answered(), answerReplies: [], ...prs });
+      assert.equal(plan.act, 'refuse', JSON.stringify(prs));
+      assert.equal(plan.pending, pending, JSON.stringify(prs));
+      const text = closeRefusedText({ why: plan.why, pending: plan.pending, at: 'now' });
+      if (pending) {
+        assert.match(text, /still stands: the first relay pass after its work is merged moves it to Live/);
+        assert.doesNotMatch(text, /cannot move it/);
+      } else {
+        assert.doesNotMatch(text, /still stands|after its work is merged/, JSON.stringify(prs));
+        assert.match(text, /cannot move it\. To finish it, tell a session to close it by hand, or reply here/);
+      }
+      // The reason still reads back off either wording, so it is said once.
+      const again = closePlan({ verdict: answered(), answerReplies: [{ comment_text: text }], ...prs });
+      assert.equal(again.act, 'refused-quiet', JSON.stringify(prs));
+    }
+  });
+
+  test('a PR that could not be read is cannot-tell, never a guess', () => {
+    const plan = closePlan({ verdict: answered(), answerReplies: [], ownPr: { number: 7, state: '', why: 'gh failed' }, unstuckPr: null });
+    assert.equal(plan.act, 'cannot-tell');
+    assert.match(plan.why, /gh failed/);
+  });
+
+  test('the hand-back\'s rules: no card, a hold, no answer, another word or a spent answer leave it to the merge step', () => {
+    for (const verdict of [{ state: 'no-question' }, { state: 'hand-held', answer: { comment_text: 'close' } }, { state: 'none' }, answered('merge'), answered('please close this when the PR lands')]) {
+      assert.equal(closePlan({ verdict, answerReplies: [], ownPr: merged }).act, 'not-close', JSON.stringify(verdict));
+    }
+    const spent = [{ comment_text: handbackDoneText({ target: 'Live' }) }];
+    assert.equal(closePlan({ verdict: answered(), answerReplies: spent, ownPr: merged }).act, 'not-close');
+  });
+}
+
+// ------------------------------------------- the project's pre-merge step (SP-185)
+
+{
+  const {
+    mergeWithPreMergeStep, preMergeOutcome, mergeArgs, outputTail, preMergeEnv, PRE_MERGE_TIMEOUT_MS,
+  } = require('./relayLane.js');
+  const { refusalNotice, APPROVAL_CARRIES_OVER } = require('./mergeOnComment.js');
+  const { REFUSAL_CODES, classifyRefusal } = require('./refusalClass.js');
+
+  const pr = { number: 4, url: PR_URL };
+  const SHA = 'abc123def4567890abc123def4567890abc12345';
+  const base = { pr, repo: 'mentor24-maker/spirality', headSha: SHA, baseBranch: 'main', ticketId: 'WC-164' };
+
+  /** A recorder: every call, in order, with what it was given. */
+  function harness(stepResult) {
+    const calls = [];
+    return {
+      calls,
+      runStep: (command, env, timeoutMs) => { calls.push({ what: 'step', command, env, timeoutMs }); return stepResult; },
+      runGh: (args) => { calls.push({ what: 'gh', args }); return { ok: true, stdout: '', stderr: '' }; },
+    };
+  }
+
+  test('pre-merge: no step configured merges with exactly the command it always had', () => {
+    for (const command of [null, undefined, []]) {
+      const h = harness(null);
+      const out = mergeWithPreMergeStep({ ...base, command, runStep: h.runStep, runGh: h.runGh });
+      assert.equal(out.stage, 'merge');
+      assert.equal(out.step, null);
+      assert.deepEqual(h.calls, [{ what: 'gh', args: ['pr', 'merge', '4', '--repo', 'mentor24-maker/spirality', '--squash', '--delete-branch'] }],
+        'no step: no --match-head-commit either, nothing changes for a project that sets nothing');
+    }
+  });
+
+  test('pre-merge: the step runs BEFORE gh pr merge, told the PR and its head commit', () => {
+    const h = harness({ status: 0, stdout: 'applied 2 changes\nall good\n', stderr: '' });
+    const out = mergeWithPreMergeStep({ ...base, command: ['node', 'scripts/apply.mjs'], runStep: h.runStep, runGh: h.runGh });
+    assert.deepEqual(h.calls.map((c) => c.what), ['step', 'gh']);
+    const step = h.calls[0];
+    assert.deepEqual(step.command, ['node', 'scripts/apply.mjs']);
+    assert.equal(step.env.LOOP_PR_NUMBER, '4');
+    assert.equal(step.env.LOOP_PR_URL, PR_URL);
+    assert.equal(step.env.LOOP_HEAD_SHA, SHA);
+    assert.equal(step.env.LOOP_BASE_BRANCH, 'main');
+    assert.equal(step.env.LOOP_TICKET_ID, 'WC-164');
+    assert.equal(step.timeoutMs, PRE_MERGE_TIMEOUT_MS);
+    assert.equal(out.stage, 'merge');
+    assert.equal(out.step.tail, 'applied 2 changes\nall good', 'its last lines ride out for the Merged: note');
+  });
+
+  test('pre-merge: gh pr merge is pinned to the commit the step saw', () => {
+    const h = harness({ status: 0, stdout: '', stderr: '' });
+    mergeWithPreMergeStep({ ...base, command: ['true'], runStep: h.runStep, runGh: h.runGh });
+    const args = h.calls[1].args;
+    const at = args.indexOf('--match-head-commit');
+    assert.ok(at > 0, 'the merge is pinned');
+    assert.equal(args[at + 1], h.calls[0].env.LOOP_HEAD_SHA);
+    assert.equal(args[at + 1], SHA);
+    assert.deepEqual(args.slice(0, 7), ['pr', 'merge', '4', '--repo', 'mentor24-maker/spirality', '--squash', '--delete-branch']);
+  });
+
+  test('pre-merge: a failing step merges NOTHING and is refused, naming the step and its output', () => {
+    for (const result of [
+      { status: 3, stdout: 'connecting\n', stderr: 'ERROR: relation "users" already exists\n' },
+      { status: null, signal: 'SIGTERM', error: Object.assign(new Error('spawnSync node ETIMEDOUT'), { code: 'ETIMEDOUT' }), stdout: 'still going', stderr: '' },
+      { status: null, error: Object.assign(new Error('spawnSync nope ENOENT'), { code: 'ENOENT' }), stdout: '', stderr: '' },
+      { status: null, signal: 'SIGKILL', stdout: '', stderr: '' },
+    ]) {
+      const h = harness(result);
+      const out = mergeWithPreMergeStep({ ...base, command: ['node', 'scripts/apply.mjs'], runStep: h.runStep, runGh: h.runGh });
+      assert.equal(out.stage, 'pre-merge', JSON.stringify(result));
+      assert.deepEqual(h.calls.map((c) => c.what), ['step'], 'gh pr merge is never called');
+      assert.equal(out.refusal.refusalCode, REFUSAL_CODES.preMergeStepFailed);
+      assert.match(out.refusal.why, /pre-merge step \(`node scripts\/apply\.mjs`\)/);
+      assert.ok(!/\n/.test(out.refusal.why), 'the reason is one line: it is also the marker the next pass compares');
+    }
+    const h = harness({ status: 3, stdout: 'connecting\n', stderr: 'ERROR: relation "users" already exists\n' });
+    const out = mergeWithPreMergeStep({ ...base, command: ['node', 'scripts/apply.mjs'], runStep: h.runStep, runGh: h.runGh });
+    assert.match(out.refusal.why, /exited 3$/, 'the reason names how it failed, never its output');
+    assert.match(out.refusal.plainEnglish, /nothing was merged/);
+    assert.match(out.refusal.plainEnglish, /did run, so it may have made changes/);
+    assert.match(out.refusal.plainEnglish, /connecting\nERROR: relation "users" already exists/);
+  });
+
+  test('pre-merge: a time-out says so, never reads as a pass', () => {
+    const out = preMergeOutcome({
+      command: ['sleep', '999'],
+      result: { status: null, signal: 'SIGTERM', error: Object.assign(new Error('x'), { code: 'ETIMEDOUT' }) },
+      timeoutMs: 600000,
+    });
+    assert.equal(out.ok, false);
+    assert.match(out.why, /timed out after 600 seconds/);
+  });
+
+  test('pre-merge: the same failure with a different last line is the same reason', () => {
+    // `why` is the marker the next pass compares: output that changes run to
+    // run (a timestamp, a temp path) must not make it look new every pass.
+    const a = preMergeOutcome({ command: ['node', 'a.mjs'], result: { status: 1, stdout: '', stderr: 'failed at 21:40:01 in /tmp/x1' } });
+    const b = preMergeOutcome({ command: ['node', 'a.mjs'], result: { status: 1, stdout: '', stderr: 'failed at 21:50:07 in /tmp/x2' } });
+    assert.equal(a.why, b.why);
+    assert.match(a.plainEnglish, /21:40:01/, 'the output still reaches the note');
+    assert.match(b.plainEnglish, /21:50:07/);
+    const other = preMergeOutcome({ command: ['node', 'a.mjs'], result: { status: 2, stdout: '', stderr: 'x' } });
+    assert.notEqual(a.why, other.why, 'a different exit is news');
+  });
+
+  test('pre-merge: too much output (ENOBUFS) says the step ran, never "could not be started"', () => {
+    const out = preMergeOutcome({
+      command: ['node', 'noisy.mjs'],
+      result: { status: null, signal: 'SIGTERM', stdout: 'y\n'.repeat(50), stderr: '', error: Object.assign(new Error('spawnSync node ENOBUFS'), { code: 'ENOBUFS' }) },
+    });
+    assert.equal(out.ok, false);
+    assert.match(out.why, /printed more output than the relay keeps \(ENOBUFS\); it did run$/);
+    assert.ok(!/could not be started/.test(out.why));
+    assert.match(out.plainEnglish, /did run, so it may have made changes/);
+  });
+
+  test('pre-merge: a step that could not start does not claim it ran', () => {
+    const out = preMergeOutcome({
+      command: ['no-such-program'],
+      result: { status: null, signal: null, stdout: '', stderr: '', error: Object.assign(new Error('spawnSync no-such-program ENOENT'), { code: 'ENOENT' }) },
+    });
+    assert.match(out.why, /could not be started \(ENOENT\)$/);
+    assert.ok(!/did run/.test(out.plainEnglish));
+  });
+
+  test('pre-merge: no head commit from GitHub means the step is not run and nothing merges', () => {
+    const h = harness({ status: 0 });
+    const out = mergeWithPreMergeStep({ ...base, headSha: '', command: ['true'], runStep: h.runStep, runGh: h.runGh });
+    assert.equal(out.stage, 'pre-merge');
+    assert.deepEqual(h.calls, []);
+    assert.match(out.refusal.why, /was not run: GitHub did not say which commit/);
+  });
+
+  test('pre-merge: the refusal leaves his word unspent and the same failure stays quiet', () => {
+    // The refusal path writes a "refused:" marker, which mergeDecision
+    // re-decides: a later pass merges once the step passes. The same reason
+    // again is quiet; a new one is news.
+    const out = preMergeOutcome({ command: ['node', 'a.mjs'], result: { status: 1, stdout: '', stderr: 'boom' } });
+    const notice = refusalNotice({ commentId: '900', why: out.why, plainEnglish: out.plainEnglish, refusalCode: out.refusalCode });
+    assert.match(notice.marker, /^refused: /);
+    assert.equal(classifyRefusal(out.refusalCode).kind, 'unknown');
+    assert.ok(!notice.body.includes(APPROVAL_CARRIES_OVER), 'it cannot tell that waiting helps, so it does not promise it');
+    assert.match(notice.body, /An agent session/);
+    assert.match(notice.body, /merge word is not spent/);
+    assert.match(notice.body, /boom/);
+
+    const auth = c(3, OPERATOR, 'merge');
+    const comments = [prOpened(1), reviewPassed(2), auth];
+    const books = emptyBooks();
+    recordBookkeeping(books, auth.id, markerBookkeeping([{ comment_text: `${MERGE_MARKER} ${notice.marker} — 2026-11-09T21:00:00.000Z`, date: '5000' }]));
+    const d = decide(comments, 'Ready to launch', books);
+    assert.equal(d.act, 'merge', 'his word is still good for the next pass');
+    assert.equal(d.priorRefusal, out.why, 'and the same failure next pass is the one already said');
+  });
+
+  test('pre-merge: output tail keeps the last lines, trimmed', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n');
+    assert.equal(outputTail(many).split('\n').length, 10);
+    assert.match(outputTail(many), /^line 21\nline 22/);
+    assert.equal(outputTail('\n\n  \n'), '');
+    assert.ok(outputTail('x'.repeat(5000)).length <= 1501);
+  });
+
+  test('pre-merge: mergeArgs and preMergeEnv carry what they are given', () => {
+    assert.deepEqual(mergeArgs({ number: 9, repo: 'o/r' }), ['pr', 'merge', '9', '--repo', 'o/r', '--squash', '--delete-branch']);
+    assert.deepEqual(mergeArgs({ number: 9, repo: 'o/r', headSha: 'f00' }).slice(-2), ['--match-head-commit', 'f00']);
+    assert.deepEqual(Object.keys(preMergeEnv({ pr, headSha: SHA, baseBranch: 'main', ticketId: 'X-1' })).sort(),
+      ['LOOP_BASE_BRANCH', 'LOOP_HEAD_SHA', 'LOOP_PR_NUMBER', 'LOOP_PR_URL', 'LOOP_TICKET_ID']);
+  });
+
+  test('pre-merge: PR_VIEW_FIELDS asks for the base branch the step is told', () => {
+    assert.ok(PR_VIEW_FIELDS.includes('baseRefName'));
+    assert.ok(PR_VIEW_FIELDS.includes('headRefOid'));
+  });
+}
+
+// ── The bus (SP-207): one post per merge and per first refusal ─────────────
+
+{
+  const { mergedBusLine, conflictBusLine, tellBus } = require('./relayLane.js');
+  const { refusalBusLine } = require('./mergeOnComment.js');
+  const TAG = '[CC-starcaster bus-relay]';
+  const TASK = { id: 'SC-12', name: 'Make the heartbeat say which node' };
+  const URL = 'http://mac-mini.local:4180/t/SC-12';
+  const PR = { number: 40, url: 'https://github.com/o/r/pull/40' };
+
+  /** A stand-in for the door's read-back post, recording what it was given. */
+  const fakeBus = (answer) => {
+    const posts = [];
+    const postBus = async (text) => { posts.push(text); return typeof answer === 'function' ? answer(text) : answer; };
+    return { posts, postBus };
+  };
+
+  test('bus: a merge names the ticket by its exact title, the pull request and where the ticket went', () => {
+    const live = mergedBusLine({ tag: TAG, task: TASK, url: URL, pr: PR, dest: { status: 'Live' } });
+    assert.ok(live.startsWith(`${TAG} MERGED: "Make the heartbeat say which node" (SC-12) (${URL})`));
+    assert.match(live, /PR #40 squash-merged into main, ticket set to Live\./);
+    assert.ok(live.endsWith(PR.url));
+    const next = mergedBusLine({ tag: TAG, task: TASK, url: URL, pr: PR, dest: { status: 'Queued' } });
+    assert.match(next, /ticket back to Queued for its next slice/);
+  });
+
+  test('bus: an already-merged PR (SP-216) does not claim this pass squash-merged it', () => {
+    const line = mergedBusLine({ tag: TAG, task: TASK, url: URL, pr: PR, dest: { status: 'Live' }, already: true });
+    assert.match(line, /PR #40 was already merged into main; recorded now, ticket set to Live\./);
+    assert.doesNotMatch(line, /squash-merged/);
+  });
+
+  test('bus: a conflict hand-off names the catch-up ticket, or says nothing is working on it', () => {
+    const filed = conflictBusLine({ tag: TAG, task: TASK, url: URL, pr: PR, filed: { id: 'SC-13', url: 'http://mac-mini.local:4180/t/SC-13' }, branch: 'b', operatorName: 'Dane' });
+    assert.match(filed, /MERGE BLOCKED — "Make the heartbeat say which node" \(SC-12\)/);
+    assert.match(filed, /filed as SC-13/);
+    assert.match(filed, /could not check whether that is true/, 'no local check was made, so it never claims an overlap');
+    const unfiled = conflictBusLine({ tag: TAG, task: TASK, url: URL, pr: PR, filed: null, branch: 'sp-12-heartbeat', operatorName: 'Dane' });
+    assert.match(unfiled, /MERGE BLOCKED AND UNFILED/);
+    assert.match(unfiled, /branch sp-12-heartbeat/);
+  });
+
+  test('bus: with a busProject, one post lands and reads back', async () => {
+    const bus = fakeBus({ ok: true, id: '901' });
+    const told = await tellBus({ busProject: 'starcaster-bus', text: 'MERGED', about: 'SC-12: PR #40 merged', dryRun: false, postBus: bus.postBus });
+    assert.equal(told.act, 'posted');
+    assert.deepEqual(bus.posts, ['MERGED']);
+    assert.match(told.line, /comment 901 read back/);
+    assert.equal(told.unchecked, undefined);
+  });
+
+  test('bus: with no busProject, nothing is written at all', async () => {
+    for (const busProject of [null, undefined, '']) {
+      const bus = fakeBus({ ok: true, id: '1' });
+      const told = await tellBus({ busProject, text: 'MERGED', about: 'x', dryRun: false, postBus: bus.postBus });
+      assert.equal(told.act, 'none');
+      assert.equal(bus.posts.length, 0);
+    }
+  });
+
+  test('bus: a post that fails, or throws, becomes an UNCHECKED line and is not retried', async () => {
+    for (const answer of [{ ok: false, why: 'HTTP 502' }, () => { throw new Error('socket hang up'); }]) {
+      const bus = fakeBus(answer);
+      const told = await tellBus({ busProject: 'starcaster-bus', text: 'MERGED', about: 'SC-12: PR #40 merged', dryRun: false, postBus: bus.postBus });
+      assert.equal(told.act, 'failed');
+      assert.equal(bus.posts.length, 1, 'tried once, never again');
+      assert.match(told.unchecked, /^SC-12: PR #40 merged, but the bus post to starcaster-bus FAILED \((HTTP 502|socket hang up)\)/);
+      assert.match(told.unchecked, /nothing was undone or retried/);
+    }
+  });
+
+  test('bus: a dry run posts nothing', async () => {
+    const bus = fakeBus({ ok: true, id: '1' });
+    const told = await tellBus({ busProject: 'starcaster-bus', text: 'MERGED', about: 'x', dryRun: true, postBus: bus.postBus });
+    assert.equal(told.act, 'would-post');
+    assert.equal(bus.posts.length, 0);
+  });
+
+  test('bus: a refusal uses the class-keyed line moved from StarCaster', () => {
+    const line = refusalBusLine({ label: '"Make the heartbeat say which node" (SC-12)', url: URL, why: 'the verify check is red', kind: 'transient' });
+    assert.match(line, /Merge NOT performed on "Make the heartbeat say which node" \(SC-12\)/);
+  });
+
+  test('bus: the relay announces after the merge note, the first refusal note and the first hand-off note, and a failure reaches UNCHECKED', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'scripts', 'clickup.mjs'), 'utf8');
+    assert.match(src, /const announce = busAnnouncer\(\{ busProject: project\.busProject, dryRun, postBus: postBusMessage, say, unchecked \}\)/);
+    // Each announcement follows the ticket write it is about, so a quiet
+    // ("already said") pass returns before reaching it.
+    assert.match(src, /say\(task, 'refused', `\$\{why\} — explained[^\n]*\n\s*await announce\(task, refusalBusLine\(/);
+    assert.match(src, /NO catch-up ticket'\}`\);\n\s*await announce\(task, conflictBusLine\(/);
+    assert.match(src, /say\(task, 'merged', [^\n]*\n\s*await announce\(task, mergedBusLine\(/);
+    const quiet = src.indexOf("if (decision.priorRefusal === why) { say(task, 'refused-quiet'");
+    assert.ok(quiet > 0 && quiet < src.indexOf('await announce(task, refusalBusLine('), 'the once-only check comes first');
+  });
+}
+
+// ── A stuck conflict hand-off (SP-207, "carry over the stuck merge conflict") ─
+
+{
+  const { stalledHandOffPlan } = require('./relayLane.js');
+  const { STALE_HAND_OFF_MS } = require('./conflictWork.js');
+  const TAG = '[CC-starcaster bus-relay]';
+  const TASK = { id: 'SC-12', name: 'Make the heartbeat say which node' };
+  const PR = { number: 40, url: 'https://github.com/o/r/pull/40' };
+  const FILED = { id: 'SC-13', url: 'http://mac-mini.local:4180/t/SC-13' };
+  const NOW = Date.parse('2026-11-11T18:00:00Z');
+  const ago = (ms) => new Date(NOW - ms).toISOString();
+  const plan = (over) => stalledHandOffPlan({ priorRefusalAt: ago(60_000), now: NOW, filed: FILED, localVerdict: null, tag: TAG, task: TASK, pr: PR, ...over });
+
+  test('stuck: a filed hand-off stays quiet for a day, then is news', () => {
+    assert.equal(plan({ priorRefusalAt: ago(STALE_HAND_OFF_MS - 60_000) }).act, 'quiet');
+    const stuck = plan({ priorRefusalAt: ago(STALE_HAND_OFF_MS + 60_000) });
+    assert.equal(stuck.act, 'stalled');
+    assert.match(stuck.why, /ticket SC-13 has been open 24 hours/);
+    assert.match(stuck.line, /^SC-12 \("Make the heartbeat say which node"\): PR #40/);
+    assert.match(stuck.line, /filed as http:\/\/mac-mini\.local:4180\/t\/SC-13/);
+  });
+
+  test('stuck: with nothing filed it is news at once, and says nothing will pick it up', () => {
+    const stuck = plan({ filed: null });
+    assert.equal(stuck.act, 'stalled');
+    assert.match(stuck.why, /nothing is going to pick this up/);
+    assert.match(stuck.line, /NOT filed anywhere/);
+  });
+
+  test('stuck: an unreadable time counts as stuck, never as quiet', () => {
+    assert.equal(plan({ priorRefusalAt: '' }).act, 'stalled');
+  });
+
+  test('stuck: it never claims a conflict this relay did not check for', () => {
+    const stuck = plan({ priorRefusalAt: ago(STALE_HAND_OFF_MS * 2) });
+    assert.ok(stuck.busText.startsWith(`${TAG} MERGE STILL BLOCKED — THE CHECK NEVER RAN — SC-12`));
+    assert.ok(stuck.busText.endsWith(PR.url));
+    assert.doesNotMatch(stuck.busText, /CONFLICT STILL UNRESOLVED/);
+  });
+
+  test('stuck: reminders are not counted as failed tries, so the third day is still one reminder a day', () => {
+    // Each announced stall writes a marker; three of them would trip
+    // StarCaster's attempts alarm on every pass. The plan never reads a count.
+    assert.equal(plan({ priorRefusalAt: ago(60_000), priorRefusalCount: 5 }).act, 'quiet');
+  });
+
+  test('stuck: the relay restamps the marker only after a reminder lands, and lists every stuck one at the end of the pass', () => {
+    const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'scripts', 'clickup.mjs'), 'utf8');
+    assert.match(src, /stalledHandOffPlan\(\{ priorRefusalAt: decision\.priorRefusalAt, now: Date\.now\(\), filed: plan\.filed \|\| null,/);
+    assert.match(src, /await remindStalledHandOff\(\{ announce, task, stall, prNumber: pr\.number,\n\s*restamp: \(\) => markMergeHandled\(decision\.commentId, task, conflictHandOffNotice\(/);
+    assert.match(src, /stalledSummaryHeadline\(stalledHandOffs\.map\(\(h\) => h\.kind\)\)/);
+    // A ticket filed or recorded this pass is news already: the stall is not asked.
+    assert.match(src, /alreadySaid && plan\.act !== 'file'/);
+    assert.match(src, /if \(alreadySaid && !recordedNow && stall\.act === 'stalled'\)/);
+  });
+
+  // The SP-207 send-back: with no bus, `announce` returned nothing and the
+  // stuck hand-off step crashed reading `told.act`, on every pass.
+  const { busAnnouncer, remindStalledHandOff } = require('./relayLane.js');
+  const wire = ({ busProject, dryRun = false, post = { ok: true, id: '77' } }) => {
+    const said = []; const unchecked = []; const posts = [];
+    const announce = busAnnouncer({ busProject, dryRun, unchecked, say: (task, outcome, detail) => said.push({ outcome, detail }), postBus: async (text) => { posts.push(text); return post; } });
+    return { announce, said, unchecked, posts };
+  };
+  const stuckNoFiling = () => plan({ filed: null, priorRefusalAt: ago(STALE_HAND_OFF_MS * 2) });
+
+  test('stuck, no bus: the reminder step does not crash, writes nothing and restamps nothing', async () => {
+    const w = wire({ busProject: undefined });
+    let restamped = 0;
+    const did = await remindStalledHandOff({ announce: w.announce, task: TASK, stall: stuckNoFiling(), prNumber: PR.number, restamp: async () => { restamped += 1; } });
+    assert.equal(did, false);
+    assert.equal(restamped, 0);
+    assert.deepEqual([w.said, w.unchecked, w.posts], [[], [], []], 'a quiet pass: no line, no UNCHECKED, so exit 0');
+    // It is still a stuck hand-off, so the end-of-pass list still names it.
+    assert.equal(stuckNoFiling().act, 'stalled');
+  });
+
+  test('stuck, no bus: announce answers { act: "none" } for every notice, never undefined', async () => {
+    const told = await wire({ busProject: '' }).announce(TASK, 'MERGED', 'PR #40 merged');
+    assert.deepEqual(told, { act: 'none' });
+  });
+
+  test('stuck, with a bus: a landed reminder restamps once; a failed one restamps nothing and is UNCHECKED', async () => {
+    const ok = wire({ busProject: 'starcaster-bus' });
+    let restamped = 0;
+    assert.equal(await remindStalledHandOff({ announce: ok.announce, task: TASK, stall: stuckNoFiling(), prNumber: PR.number, restamp: async () => { restamped += 1; } }), true);
+    assert.equal(restamped, 1);
+    assert.equal(ok.posts.length, 1);
+    assert.equal(ok.said[0].outcome, 'bus');
+    assert.match(ok.said[0].detail, /SC-12: PR #40 conflict hand-off still stuck, comment 77 read back/);
+
+    const bad = wire({ busProject: 'starcaster-bus', post: { ok: false, why: 'HTTP 500' } });
+    assert.equal(await remindStalledHandOff({ announce: bad.announce, task: TASK, stall: stuckNoFiling(), prNumber: PR.number, restamp: async () => { throw new Error('must not restamp'); } }), false);
+    assert.equal(bad.unchecked.length, 1);
+    assert.match(bad.unchecked[0], /bus post to starcaster-bus FAILED \(HTTP 500\)/);
+  });
+
+  test('stuck, dry run: nothing posted and nothing restamped', async () => {
+    const w = wire({ busProject: 'starcaster-bus', dryRun: true });
+    assert.equal(await remindStalledHandOff({ announce: w.announce, task: TASK, stall: stuckNoFiling(), prNumber: PR.number, restamp: async () => { throw new Error('must not restamp'); } }), false);
+    assert.equal(w.posts.length, 0);
+    assert.equal(w.said[0].outcome, 'would-post-bus');
+  });
+}

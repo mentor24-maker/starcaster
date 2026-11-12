@@ -1,67 +1,77 @@
 #!/bin/bash
-# Run one Starcaster loop skill on a repo-paced interval, forever.
+# Run one Spirality loop skill on a fixed interval, forever.
 #
-#   loop_runner.sh <skill-name> [fallback-interval-seconds]
+#   loop_runner.sh <skill-name> [interval-seconds]
 #
-# COMMITTED SINCE 2026-09-02 (task 86bbtuje2, audit Phase 1). This script ran
-# the whole factory from ~/bin/loop-runner.sh on the Mac Mini for its first
-# two weeks — one hand-installed file, in no repository, with no history. The
-# audit called that the highest-leverage gap on the board: no beats (so the
-# heartbeat reported the loop lanes NOT REPORTING forever), no pull before a
-# pass (so a merged skill edit lagged until some pass happened to fast-forward
-# the checkout), no idea what a usage limit is (2:05am, three passes retried
-# into the same closed window), and an END line that presented `claude -p`'s
-# exit code as a verdict when it is nothing of the kind.
+# Spirality's runner structure (project config, lock, sync lock, pull-before-
+# pass, time limit, honest END line) with StarCaster's own guards merged back
+# in (SC-790, review round 2), each of which answers an incident:
+#   - STARCASTER_CALLER=scheduled, so a background pass yields the ClickUp
+#     reserve to the sessions Dane is talking to (scripts/lib/clickupCaller.cjs);
+#   - the pause switch (`npm run pipeline -- check`) and the shared lane policy
+#     (scripts/loop_policy.mjs), asked before every pass;
+#   - the usage-limit guard (scripts/loop_runner_delay.mjs), which sleeps to a
+#     stated reset instead of retrying into a closed window (2:05am, 2026-09-02);
+#   - a heartbeat after every pass, stood-down and blocked ones included, so
+#     the roll call can tell a dead lane from a working one.
+# The queue-paced sleep (`next-interval`) is not back: the tracker's door has
+# no such command, so the runner sleeps its configured interval.
 #
 # Each iteration is a FRESH headless Claude Code session started in the main
-# checkout. That is deliberate: both loop skills pick up the next ticket from
-# ClickUp on every run, so there is no state to carry between runs, and a
-# crashed run costs one interval rather than the whole night.
+# checkout. Every loop skill picks the next ticket from the tracker on each run,
+# so there is no state to carry between runs, and a crashed run costs one
+# interval rather than the whole night.
 #
-# --allowedTools is used instead of --dangerously-skip-permissions so the deny
-# rules in ~/.claude/settings.json (notably git push --force) still apply, and
-# so the repo PreToolUse hooks still block edits on main and edits to generated
-# files. A headless run cannot answer a permission prompt, so anything not
-# covered here is simply refused and the run continues.
+# --allowedTools is used instead of --dangerously-skip-permissions so the
+# repo's PreToolUse hook (no edits on main) still applies. A headless run
+# cannot answer a permission prompt, so anything not listed is refused and
+# the run continues.
+#
+# Every project-specific name (the log folder, the short name each log and
+# lock starts with, the launchd label) comes from the project config through
+# scripts/project_config.mjs, the way the installer and run_relay.sh read
+# them; nothing here names a project.
 set -u
 
-# A launchd job gets almost no environment; a screen session inherits an odd
-# one. Set the PATH once, here, rather than inline at each call site.
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+# launchd hands the job almost no environment. Set the PATH once, here.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
-SKILL=${1:?usage: loop_runner.sh <skill-name> [fallback-interval-seconds]}
-INTERVAL=${2:-3600}
+SKILL=${1:?usage: loop_runner.sh <skill-name> [interval-seconds]}
+INTERVAL=${2:-1800}
 
-# The repo is WHERE THIS SCRIPT LIVES, never a path typed from memory — this
-# runs on more than one machine, and a literal path is an assumption that
-# fails silently on all but the one it was typed on. And it must be the MAIN
-# checkout: a worktree gets deleted when its thread ships, and the loops must
-# not be running from a folder with that property.
+# The repo is WHERE THIS SCRIPT LIVES, never a path typed from memory, and it
+# must be the MAIN checkout: a worktree is deleted when its work ships.
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -f "$REPO/.git" ] && grep -q '^gitdir:.*worktrees' "$REPO/.git" 2>/dev/null; then
   echo "[loop-runner] Refusing to run from a worktree ($REPO) — worktrees are deleted when their work ships." >&2
   exit 1
 fi
 
-LOG="$HOME/loop-logs/$SKILL.log"
-LOCK="$HOME/loop-logs/$SKILL.lock"
-mkdir -p "$HOME/loop-logs"
+cd "$REPO" || exit 1
 
-# The claude binary, found rather than assumed, with the old hand-install
-# location as the fallback of record.
+SLUG="$(node "$REPO/scripts/project_config.mjs" projectSlug)" || { echo "[loop-runner] could not read projectSlug from the project config" >&2; exit 1; }
+LOG_DIR="$(node "$REPO/scripts/project_config.mjs" logDir)" || { echo "[loop-runner] could not read logDir from the project config" >&2; exit 1; }
+PREFIX="$(node "$REPO/scripts/project_config.mjs" launchdPrefix)" || { echo "[loop-runner] could not read launchdPrefix from the project config" >&2; exit 1; }
+# Empty when the project runs no tracker: the restart step then does nothing.
+TRACKER_PORT="$(node "$REPO/scripts/project_config.mjs" trackerPort)" || { echo "[loop-runner] could not read trackerPort from the project config" >&2; exit 1; }
+LOG="$LOG_DIR/$SLUG-$SKILL.log"
+LOCK="$LOG_DIR/$SLUG-$SKILL.lock"
+mkdir -p "$LOG_DIR"
 CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")}"
 
-# ── One runner per skill ─────────────────────────────────────────────────────
-# Two review loops reviewing the same ticket overwrote each other on
-# 2026-08-22; the lock makes an accidental double-start impossible.
-#
-# A STALE lock is detected rather than obeyed forever (new with the committed
-# runner): the previous life records its PID inside the lock, and if that
-# process is gone — a crash, a reboot, a kill -9 that skipped the trap — the
-# lock is announced, cleared and taken over. Without this, launchd's
-# RunAtLoad would find the lock of the life that died in the reboot and the
-# loops would never start again, silently, which is the exact shape the
-# heartbeat was built to catch but should not have to.
+# This loop's own tracker sign-in (docs/TRACKER_MVP.md, "Running it"): the
+# NAME of its Doppler secret, e.g. loop-build -> TRACKER_TOKEN_LOOP_BUILD.
+# The door reads the value inside its own `doppler run`, so the token never
+# enters this session's environment or its log.
+export TRACKER_TOKEN_NAME="TRACKER_TOKEN_$(printf '%s' "$SKILL" | tr 'a-z-' 'A-Z_')"
+
+# THIS IS A BACKGROUND JOB, AND IT SAYS SO. The ClickUp budget is one allowance
+# for the whole company and scheduled jobs yield (Dane, 2026-09-03: "You are
+# never blocked by a background job."). Every child inherits this.
+export STARCASTER_CALLER=scheduled
+
+# One runner per skill. A stale lock (its pid gone) is announced and taken over,
+# so a reboot never leaves the loop dead behind a lock nobody holds.
 if ! mkdir "$LOCK" 2>/dev/null; then
   OLD_PID="$(cat "$LOCK/pid" 2>/dev/null || true)"
   if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
@@ -70,50 +80,100 @@ if ! mkdir "$LOCK" 2>/dev/null; then
   fi
   echo "[loop-runner] found a STALE lock (pid ${OLD_PID:-unrecorded}, no such process) — clearing it and taking over." | tee -a "$LOG"
   rm -rf "$LOCK"
-  if ! mkdir "$LOCK" 2>/dev/null; then
-    echo "[loop-runner] the lock could not be retaken — something else won the race. Stopping."
-    exit 1
-  fi
+  mkdir "$LOCK" 2>/dev/null || { echo "[loop-runner] the lock could not be retaken. Stopping."; exit 1; }
 fi
 echo "$$" > "$LOCK/pid"
-trap 'rm -rf "$LOCK" 2>/dev/null' EXIT
+# The pass reads this to know it is the runner's pass, not a hand-run session:
+# only a claim made under the build runner writes the claim marker that lets
+# the next pass hand back a ticket a dead pass left in Building (SP-101).
+export LOOP_RUNNER_PID="$$"
 
-cd "$REPO" || exit 1
+# The sync lock every lane takes around pull + npm ci (the only lock the lanes
+# share; each lane's own lock above is its alone). Wait up to 10 minutes
+# for another lane; a lock whose pid is gone is cleared, as above.
+SYNC_LOCK="$LOG_DIR/$SLUG-sync.lock"
+take_sync_lock() {
+  local waited=0 holder
+  until mkdir "$SYNC_LOCK" 2>/dev/null; do
+    holder="$(cat "$SYNC_LOCK/pid" 2>/dev/null || true)"
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$SYNC_LOCK"; continue; fi
+    [ "$waited" -ge 600 ] && return 1
+    sleep 5; waited=$((waited + 5))
+  done
+  echo "$$" > "$SYNC_LOCK/pid"
+}
 
-# ── THIS IS A BACKGROUND JOB, AND IT SAYS SO ─────────────────────────────────
-# The ClickUp budget is one allowance per token for the whole company, and the
-# operator's decision (2026-09-03) is that scheduled jobs yield: "You are never
-# blocked by a background job." Every child process inherits this, so anything
-# this script runs will stop at the reserve instead of spending the budget an
-# interactive session is about to need. See scripts/lib/clickupCaller.cjs —
-# there is no tty guess anywhere; a scheduled job is one that declares itself.
-export STARCASTER_CALLER=scheduled
+# A template with X's, the one form macOS and GNU mktemp both accept.
+PASS_OUT="$(mktemp "${TMPDIR:-/tmp}/$SLUG-pass.XXXXXX")"
+trap 'rm -rf "$LOCK" "$PASS_OUT" 2>/dev/null; [ "$(cat "$SYNC_LOCK/pid" 2>/dev/null)" = "$$" ] && rm -rf "$SYNC_LOCK"' EXIT
+
+# shellcheck source=lib/back_to_main.sh
+source "$REPO/scripts/lib/back_to_main.sh"
+# A pull that changes a file the tracker server loads restarts it, so it runs the new code (SP-150).
+# shellcheck source=lib/tracker_restart.sh
+source "$REPO/scripts/lib/tracker_restart.sh"
 
 while true; do
-  # ── 1. A timid pull, so a pass runs the code and skills on main ────────────
-  # Same rules as the relay's update step, through the same committed tool:
-  # only the main branch, only a clean tree, only fast-forward, and a refusal
-  # is reported (checkout:current posts to the bus itself) but never blocks
-  # the pass — a background job may keep a checkout current; it may not
-  # rewrite someone's work or refuse to work because it could not.
-  npm run --silent checkout:current >> "$LOG" 2>&1 || true
+  # Where main was before this pass synced: noted BEFORE step 0, because that
+  # step can fast-forward main itself, and a tracker change it brings in must
+  # count too (SP-150).
+  BEFORE="$(git rev-parse HEAD 2>/dev/null)"
 
-  # ── 1a. One Claude limit, five users: may a pass start at all? ────────────
-  # Dane and every loop lane on this machine (both repos) share ONE Claude
-  # usage limit, first come first served (task 86bcgjbfk). Two rules, read
-  # fresh before every pass from files all lanes share (~/loop-logs):
-  #   quiet       Dane's hours — no lane starts a pass, so his session keeps
-  #               its share.
-  #   stand-down  another lane already read a usage-limit reset time; sleep
-  #               until it rather than spend a pass rediscovering it.
-  # FAILURE-OPEN: anything that cannot be read answers `run`, and says so in
-  # this log. A bug here must never silence the lanes.
-  POLICY_ANSWER=$(node "$REPO/scripts/loop_policy.mjs" check --lane "starcaster/$SKILL" 2>> "$LOG")
+  # 0. A checkout left on a branch that has merged and gone from origin (a new
+  #    project's lanes run from its setup branch until it merges) goes
+  #    back to main, under the sync lock, so the pull below can run.
+  if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" != "main" ] && [ -z "$(git status --porcelain)" ]; then
+    if take_sync_lock; then
+      MOVED="$(back_to_main_if_merged)"
+      [ -n "$MOVED" ] && echo "[loop-runner] $(date "+%H:%M:%S") $MOVED" >> "$LOG"
+      rm -rf "$SYNC_LOCK"
+    fi
+  fi
+
+  # 1. A timid pull: only main, only a clean tree, only fast-forward. A refusal
+  #    is logged but never blocks the pass. Every lane shares this checkout, so
+  #    the pull and `npm ci` happen under one shared lock: two at once collide
+  #    on .git/index.lock and rebuild node_modules under each other.
+  if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] && [ -z "$(git status --porcelain)" ]; then
+    if take_sync_lock; then
+      git pull -q --ff-only origin main >> "$LOG" 2>&1 || echo "[loop-runner] $(date "+%H:%M:%S") pull of main refused (see above) — running on the checkout as it is" >> "$LOG"
+      # Dependencies follow the lockfile, so a merged change to package.json takes effect on the next pass.
+      npm ci --silent >> "$LOG" 2>&1 || echo "[loop-runner] $(date "+%H:%M:%S") npm ci failed — running with the node_modules already present" >> "$LOG"
+      # After npm ci, so a merge that adds a dependency restarts onto it.
+      RESTARTED="$(restart_tracker_if_changed "$BEFORE" "$(git rev-parse HEAD 2>/dev/null)" "$PREFIX" "$TRACKER_PORT")"
+      [ -n "$RESTARTED" ] && echo "[loop-runner] $(date "+%H:%M:%S") $RESTARTED" >> "$LOG"
+      rm -rf "$SYNC_LOCK"
+    else
+      echo "[loop-runner] $(date "+%H:%M:%S") another lane held the sync lock for 10 minutes — not pulling this pass" >> "$LOG"
+    fi
+  else
+    echo "[loop-runner] $(date "+%H:%M:%S") main checkout is not on a clean main — not pulling. Every pass runs stale code until it is put back on main." >> "$LOG"
+  fi
+
+  # 1a. Has Dane paused the line? Every actor asks before claiming (CLAUDE.md,
+  #     "The pipeline can be paused"), and the copied skills do not ask, so the
+  #     runner asks for them. It FAILS SAFE: anything but exit 0 (running) is
+  #     treated as paused, because running while he has the deck collides with
+  #     what he is doing and idling costs one interval.
+  if ! npm run --silent pipeline -- check >> "$LOG" 2>&1; then
+    PAUSE_SLEEP="${PAUSE_RECHECK_SECONDS:-600}"
+    echo "[loop-runner] $(date "+%H:%M:%S") the pipeline is paused (or the switch could not be read) — no /$SKILL pass; asking again in ${PAUSE_SLEEP}s" >> "$LOG"
+    npm run --silent heartbeat -- --beat --role "$SKILL" \
+      --stood-down "the pipeline is paused; the runner is alive and asking again every ${PAUSE_SLEEP}s" >> "$LOG" 2>&1 || true
+    sleep "$PAUSE_SLEEP"
+    continue
+  fi
+
+  # 1b. One Claude limit, shared by Dane and every lane on this machine (task
+  #     86bcgjbfk): `quiet` is Dane's hours, `stand-down` means another lane
+  #     already read a usage-limit reset. FAILURE-OPEN: anything unreadable
+  #     answers `run`, and says so in this log.
+  POLICY_ANSWER=$(node "$REPO/scripts/loop_policy.mjs" check --lane "$SLUG/$SKILL" 2>> "$LOG")
   read -r POLICY_ACTION POLICY_SLEEP POLICY_LINE <<< "$POLICY_ANSWER"
   if { [ "$POLICY_ACTION" = "quiet" ] || [ "$POLICY_ACTION" = "stand-down" ]; } \
      && [[ "$POLICY_SLEEP" =~ ^[0-9]+$ ]] && [ "$POLICY_SLEEP" -gt 0 ]; then
     echo "[loop-runner] $(date "+%H:%M:%S") $POLICY_LINE; asking again in ${POLICY_SLEEP}s" >> "$LOG"
-    # Still a beat — the runner is alive and obeying the rule — marked as a
+    # Still a beat (the runner is alive and obeying the rule), marked as a
     # stand-down so the roll call does not read it as a pass that worked.
     npm run --silent heartbeat -- --beat --role "$SKILL" \
       --stood-down "$POLICY_LINE" >> "$LOG" 2>&1 || true
@@ -123,90 +183,50 @@ while true; do
 
   echo "" >> "$LOG"
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") START /$SKILL =====" >> "$LOG"
-  # A time limit, because a pass that freezes otherwise blocks this lane
-  # forever: on 2026-09-12 one sat idle for eleven hours and nothing was built
-  # overnight (task 86bbzwuz6). A pass takes 10-15 minutes; two hours is dead.
-  # Exit 124 means it was stopped; the next pass's pass-reconcile hands back
-  # any ticket it had claimed.
-  #
-  # The snapshot is what the pass was running when it was stopped (task
-  # 86bccr85c). Cleared first, so a stop never reports the previous one's.
-  SNAPSHOT="$HOME/loop-logs/$SKILL.timeout-snapshot"
+  # The pass's output goes to the log as it happens AND to its own file, so
+  # the sign-in check below reads this pass only, not an older one.
+  # The time limit writes what the pass was running into this file when it has
+  # to stop it; the pass's own report never arrives in that case. Cleared
+  # first, so a stop never reports the previous stop's snapshot.
+  SNAPSHOT="$LOG_DIR/$SLUG-$SKILL.timeout-snapshot"
   rm -f "$SNAPSHOT"
   RUN_WITH_TIME_LIMIT_SNAPSHOT="$SNAPSHOT" \
   "$REPO/scripts/run_with_time_limit.sh" "${LOOP_PASS_LIMIT_SECONDS:-7200}" -- \
     "$CLAUDE_BIN" -p "/$SKILL" \
     --allowedTools Bash Edit Write Read Glob Grep Task TodoWrite WebFetch \
-    >> "$LOG" 2>&1
-  CODE=$?
-  # The exit code is recorded because its ABSENCE would look like a truncated
-  # log, but it is labelled for what it is. `claude -p` exits 0 whenever it
-  # produced output — the pass that abandoned ticket 86bbjt1b4 with a
-  # finished, green PR exited 0 — so the pass's own report above is the only
-  # verdict there is.
+    2>&1 | tee "$PASS_OUT" >> "$LOG"
+  CODE=${PIPESTATUS[0]}
+  # `claude -p` exits 0 whenever it produced output, so the code is a fact
+  # about the process, not a verdict on the pass. The pass's own report is.
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") END /$SKILL (exit $CODE — not a verdict; the pass's report above is) =====" >> "$LOG"
-
-  # ── 1b. A pass the time limit stopped has no report — say what it was doing ─
-  # On 2026-10-04 five passes in a row on one ticket were stopped here, and
-  # the log held START and END with nothing between: a check that kept failing
-  # looked exactly like a dead machine, for ten hours (task 86bccr85c). This
-  # puts what was running on the ticket the pass held, and on the second stop
-  # since that ticket last reached a pull request, hands it to Dane instead of
-  # letting the next pass claim it for another two hours. It never fails the
-  # runner.
+  # A pass the time limit stopped has no report, so the door is asked to say
+  # what it was doing, on the ticket the pass held (lib/passTimeout.js). It
+  # never fails the runner: until the door has a `pass-timeout` command the
+  # line below logs its "Unknown command" answer and carries on.
   if [ "$CODE" -eq 124 ]; then
     npm run --silent clickup -- pass-timeout --pass "$SKILL" \
       --limit "${LOOP_PASS_LIMIT_SECONDS:-7200}" --snapshot "$SNAPSHOT" \
       >> "$LOG" 2>&1 || true
+    echo "[loop-runner] the pass hit the ${LOOP_PASS_LIMIT_SECONDS:-7200}s time limit and was stopped; its ticket may still be in Building — the next pass or a person should hand it back." >> "$LOG"
+  fi
+  # Only Claude's own sign-in errors, and only in this pass's last lines: a
+  # pass that merely mentions "not logged in" (gh, supabase) is not one.
+  if tail -20 "$PASS_OUT" | grep -qiE "OAuth session expired|Failed to authenticate|Invalid API key|Please run /login"; then
+    echo "[loop-runner] $(date "+%H:%M:%S") THIS PASS COULD NOT SIGN IN TO CLAUDE. Nothing will change until a person signs in on this machine (claude login) and restarts this job: launchctl kickstart -k gui/$(id -u)/$PREFIX.$SKILL" >> "$LOG"
   fi
 
-  # ── 2. What did this pass actually DO? ────────────────────────────────────
-  # ASKED BEFORE THE BEAT, AND THAT ORDER IS THE POINT (task 86bc3t0n1). This
-  # used to run after, so the beat could only ever say "a pass happened" — and
-  # from 2026-09-16 to 2026-09-19 both lanes fired every fifteen minutes, died
-  # in about a second, and beat every time. 90 hours, 20 tickets open, and the
-  # roll call showed all six jobs healthy, because every one of those
-  # statements was true.
-  #
-  # THE EXIT CODE IS A FACT; THE LOG TEXT IS A GUESS ABOUT A FACT (round 2).
-  # $CODE is right here and was never consulted, so the kind was decided by
-  # grepping the pass's prose — which failed in both directions, live:
-  #
-  #   - `Failed to authenticate: OAuth session expired and could not be
-  #     refreshed` contains none of the expected words, so 278 dead passes beat
-  #     as healthy working ones. That is the 90-hour outage.
-  #   - A pass that merely WROTE about limits matched the pattern: on
-  #     2026-09-20 the review pass quoted the guard's own regex in its report
-  #     and the review lane slept half an hour for nothing.
-  #
-  # So a pass that exited 0 is a pass that ran, full stop — no sentence inside
-  # its own report can change that — and only a non-zero pass is handed to the
-  # guard, which says WHICH kind of failure it was. The guard is pure and
-  # tested (scripts/builder/loopRunnerGuard.js); it may never fail the runner.
-  #
-  #   ran         it worked. Pace normally.
-  #   stood-down  a usage limit closed it. Sleep until the stated reset — the
-  #               limit names its own, and retrying before it is a pass spent
-  #               rediscovering the same closed window (2:05, 2:23, 2:38am on
-  #               2026-09-02).
-  #   blocked     it could not work and nothing will change that without a
-  #               human — an expired login, or a failure naming no cause that
-  #               clears itself. Never slept on: sleeping in front of a locked
-  #               door 48 times a day is what the 90 hours were.
-  #   timed-out   it WAS working and the time limit above stopped it (exit
-  #               124). Not a login: on 2026-10-04 every build pass was stopped
-  #               at two hours re-running one failing render check, and the
-  #               roll call told Dane to go and sign in (task 86bccr85e). The
-  #               guard's third field names the ticket the pass was holding.
+  # 2. What did this pass DO? Asked BEFORE the beat (task 86bc3t0n1), so the
+  #    beat can say which kind of pass it was. The exit code is the fact: a pass
+  #    that exited 0 ran, whatever its prose says about limits, and only a
+  #    non-zero pass is handed to the guard (scripts/builder/loopRunnerGuard.js)
+  #    to say WHICH failure it was: stood-down (a usage limit; sleep to its
+  #    reset), blocked (needs a human, e.g. an expired login; never slept on),
+  #    or timed-out (the time limit stopped a working pass).
   PASS_KIND=ran
   LIMIT_SLEEP=0
   if [ "$CODE" -ne 0 ]; then
     GUARD_ANSWER=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" --exit "$CODE" \
       --skill "$SKILL" --limit "${LOOP_PASS_LIMIT_SECONDS:-7200}" 2>> "$LOG")
-    # "<kind> <seconds>", plus "<why>" on a timed-out pass. Anything else means
-    # the guard did not answer, and a pass that exited non-zero is not called
-    # healthy on the strength of a broken reading — it is `blocked`, paced
-    # normally.
     read -r ANSWER_KIND ANSWER_SLEEP ANSWER_WHY <<< "$GUARD_ANSWER"
     case "$ANSWER_KIND" in
       ran|stood-down|blocked|timed-out) PASS_KIND="$ANSWER_KIND" ;;
@@ -216,28 +236,19 @@ while true; do
         ;;
     esac
     if [[ "$ANSWER_SLEEP" =~ ^[0-9]+$ ]]; then LIMIT_SLEEP="$ANSWER_SLEEP"; fi
-    # Only a stand-down sleeps. A `blocked` pass waiting half an hour is the
-    # wrong answer to a locked door, and `ran` never reaches here anyway.
     if [ "$PASS_KIND" != "stood-down" ]; then LIMIT_SLEEP=0; fi
   fi
 
   # A limit this lane read is a limit every lane is under: write it where the
-  # others look (step 1a), so their next cycle sleeps instead of hitting it.
+  # others look (step 1b), so their next cycle sleeps instead of hitting it.
   if [ "$PASS_KIND" = "stood-down" ] && [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
-    node "$REPO/scripts/loop_policy.mjs" stand-down --lane "starcaster/$SKILL" \
+    node "$REPO/scripts/loop_policy.mjs" stand-down --lane "$SLUG/$SKILL" \
       --seconds "$LIMIT_SLEEP" --reason "a usage limit closed a /$SKILL pass" >> "$LOG" 2>&1 || true
   fi
 
-  # ── 3. The beat: this runner fired a pass, and what that pass could do ─────
-  # LIVENESS, not quality — recorded whatever the pass concluded, because what
-  # the heartbeat exists to catch is the runner going quiet (a dead Mini, a
-  # dead screen, a stale lock), and pass QUALITY is throughput's question.
-  #
-  # A STAND-DOWN AND A BLOCK ARE STILL BEATS, marked as what they are. The
-  # runner IS alive, and saying otherwise would send somebody to launchd over a
-  # working schedule — so it beats, and the beat carries the kind so nothing
-  # downstream has to read this log to find out. `--beat` never fails its
-  # caller by contract (scripts/node_heartbeat.mjs).
+  # 3. The beat: LIVENESS, recorded whatever the pass concluded, and carrying
+  #    the kind so nothing downstream has to read this log. `--beat` never
+  #    fails its caller by contract (scripts/node_heartbeat.mjs).
   case "$PASS_KIND" in
     stood-down)
       npm run --silent heartbeat -- --beat --role "$SKILL" \
@@ -259,25 +270,12 @@ while true; do
       ;;
   esac
 
-  # ── 4. How long to sleep ───────────────────────────────────────────────────
+  # 4. How long to sleep: a usage limit's stated reset outranks the interval.
   if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
     echo "[loop-runner] $(date "+%H:%M:%S") usage limit — sleeping ${LIMIT_SLEEP}s (the reason is above)" >> "$LOG"
     sleep "$LIMIT_SLEEP"
     continue
   fi
-
-  # How long to sleep is asked fresh each cycle, not fixed at startup: a number
-  # chosen once is right at that moment and wrong an hour later (task 86bbmg2fb).
-  # The decision lives in scripts/builder/loopInterval.js, tested, and this
-  # stays one call plus its fallback.
-  NEXT=$(npm run --silent clickup -- \
-           next-interval --for "$SKILL" --fallback "$INTERVAL" 2>>"$LOG" | tail -1)
-  # Anything that is not a plain integer means the command did not answer, so
-  # the runner keeps working on its configured argument — never on a guess.
-  if ! [[ "$NEXT" =~ ^[0-9]+$ ]]; then
-    echo "[loop-runner] next-interval gave no usable answer ('$NEXT') — falling back to ${INTERVAL}s" >> "$LOG"
-    NEXT=$INTERVAL
-  fi
-  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${NEXT}s before the next /$SKILL" >> "$LOG"
-  sleep "$NEXT"
+  echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${INTERVAL}s before the next /$SKILL" >> "$LOG"
+  sleep "$INTERVAL"
 done

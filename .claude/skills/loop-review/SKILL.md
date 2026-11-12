@@ -1,339 +1,138 @@
 ---
 name: loop-review
-description: Pick the next "In review" task from the Starcaster "Loop Queue" ClickUp list, independently verify its pull request (build gates + code review + a real test pass), then either mark it "Ready to launch" and ping the operator to merge, or send it back to "Rework" with notes. Designed to be run on a timer with `/loop 30m loop-review`. Never merges on its own.
+description: Pick the next "In review" task from the StarCaster queue in the tracker, independently verify its pull request (`npm run verify` + code review + a real test pass), then either mark it "Ready to launch" and ping Dane to merge, or send it back to "Rework" with notes. Designed to be run on a timer with `/loop 30m loop-review`. Never merges on its own.
+summary: Checks a finished pull request independently
+about: >
+  This is the second pair of eyes. It takes a ticket the builder has finished,
+  runs every check again on its own, reads the change and tries it out the way
+  a person would. If it all holds up, it marks the ticket ready and tells Dane
+  it is ready to merge. If not, it sends the ticket back to the builder with
+  notes on what to fix. It runs by itself on a timer. It never merges
+  anything; only Dane does that.
 ---
 
 # Loop: Review
 
-This is step 3 of 3 in the Starcaster development loop (spec → build → review).
+Step 3 of 3 in StarCaster's development loop (spec → build → review), the loop Spirality defines.
 See `docs/LOOP_ENGINEERING.md` for the whole system.
 
-Each run verifies **one** task's PR. Run under `/loop` it keeps the review queue
-drained so the operator only ever sees PRs that already passed an independent
-check.
+Each run verifies **one** task's PR, so Dane only ever sees PRs that already
+passed an independent check.
 
-## Preflight: one command, obey what it prints
+## Before anything: one reviewer
 
-Before reading the queue or touching anything:
+Two review passes verifying the same ticket overwrite each other's verdict.
+On the Mini the review lane (`com.starcaster.loop-review`) runs this skill
+every 30 minutes, so: **do not start this loop by hand while that lane is
+loaded**.
+
+**First tell which one you are.** The lane's runner, `scripts/loop_runner.sh`,
+exports `LOOP_RUNNER_PID` to every pass it starts:
 
 ```bash
-npm run preflight -- loop-review
+echo "${LOOP_RUNNER_PID:-}"
 ```
 
-Two gates in order — machine ownership, then the operator's pause switch —
-one line each, stopping at the first refusal. The sequence and the exit-code
-dialects live in `scripts/builder/preflight.js`, tested; this section
-deliberately does not enumerate them (task 86bbtujen). Review has no cap gate
-on purpose — review drains the very pull requests the cap waits on, and
-capping it would deadlock the pipeline against itself.
+- **Set** (a number): you ARE the review lane's own pass, and the runner's
+  lock (`$LOG_DIR/$SLUG-loop-review.lock`) is yours: it is what makes you the only
+  one. Carry on. A loaded lane, a held lock and a running `loop_runner.sh`
+  are you, not a second reviewer.
+- **Empty**: you were started by hand. Run
+  `scripts/install_loop_runner.sh --status`; if `loop-review` shows
+  `loaded:   yes`, stop and report that the lane is running, unless Dane has
+  asked for this pass by hand (then every verdict and status write carries
+  `--if-status "In review"`, the review's guard on the ticket's status).
+  Otherwise carry on.
+- **Whenever you stop for this reason**, the first line of your report is
+  exactly `LANE STOOD DOWN: <why, in one line>`, and nothing else ever starts
+  with those words. The setup wizard reads a new project's first lane passes
+  for that line (`npm run onboard:lanes`), never for wording, because a pass
+  that is the lane says "I am the lane, not a second one" too.
 
-*   **exit 0** — go. Take the next ticket in `In review`.
-*   **exit 3** — a normal decline: another machine owns this loop, or Dane
-    has taken the deck. **Report the line it printed and finish the pass
-    successfully.** This is not a failure.
-*   **exit 2** — it could not tell. **Say so loudly and stop.** Never treat
-    "could not check" as clear.
-*   **exit 1** — a real failure. Say so loudly and stop.
-
-A paused deck is resumed by Dane alone — **never resume it from a pass**,
-whatever the reason looks like. Only the person standing on the deck knows
-whether he is finished.
-
-## ClickUp access: use the direct script, not the connector
-
-Every ClickUp touch goes through **`npm run clickup -- <command>`** — a full
-standalone command each time (shell functions do not survive between tool
-calls). Doppler supplies the token; you never see or handle it. The command
-list, the ids, and the reasoning live in ONE place: `docs/LOOP_ENGINEERING.md`
-§"ClickUp access". The moves this loop makes:
+## Ticket access: the direct script, not the connector
 
 ```bash
-npm run clickup -- queue --list 901418546619 --status "In review"   # FIRST LINE is the one to review
-npm run clickup -- get --task <id>                                  # the task, header + body
-npm run clickup -- comments --task <id>                             # the comments — the PR URL lives here
-npm run clickup -- loop-note --task <id> --transition review-started           # CLAIM THE REVIEW — do this before you verify
+npm run clickup -- queue --status "In review"                                 # FIRST LINE is the one to review
+npm run clickup -- get --task <id>                                            # the task, the recorded PR, the send-back count
+npm run clickup -- comments --task <id>                                       # the PR URL and every earlier verdict live here
 npm run clickup -- verdict --task <id> --pass --if-status "In review" --body-file -   # RECORD THE VERDICT FIRST — the gate reads this
 npm run clickup -- verdict --task <id> --fail --if-status "In review" --body-file -   # ... or the send-back, same shape
-npm run clickup -- send-back-rounds --task <id>                     # how many rounds already? exit 3 = escalate, do not send back
 npm run clickup -- ask --task <id> --status "Ready to launch" --body-file -   # pass: card + status together
 npm run clickup -- ask --task <id> --status "Needs your input" --body-file -  # a judgment call only he can settle
 npm run clickup -- status --task <id> --status Rework --if-status "In review" # send back (assignees auto-cleared)
-npm run clickup -- comment --task <id> --body-file -                # a plain note
-npm run clickup -- waiting [--task <id>]                            # read-only: is this ACTUALLY waiting on Dane? run it before saying so
-npm run clickup -- describe --task <id> --body-file -               # REPLACE the description (left column)
-npm run clickup -- chat --channel 2kydhxeu-474 --body-file -        # post to the bus
+npm run clickup -- comment --task <id> --body-file -                          # a plain note
+npm run clickup -- waiting [--task <id>]                                      # read-only: is this ACTUALLY waiting on Dane?
 ```
 
-## Never say something is waiting on Dane without checking
+## The statuses
 
-**One command, run BEFORE the sentence leaves your mouth:**
+Eight, in board order: `Requested → Rework → Queued → Building → In review →
+Needs your input / Ready to launch → Live`. Review only ever takes from
+`In review`. `Requested` is Dane's unspecced request from the tracker page;
+no build or review loop touches it.
 
-```bash
-npm run clickup -- waiting                    # what actually needs him, both lists
-npm run clickup -- waiting --task <id>        # one ticket: status, assignee, last word, verdict
-```
-
-Read-only, a couple of seconds, exit **0** nothing of his / **3** something IS
-his / **1** could not tell. It reports the verdict from three live facts — the
-status, whether he is assigned, and whether the newest comment is his — so a
-ticket he has already answered can never be handed back to him a second time.
-
-Twice on 2026-08-23 an agent told him something was waiting on him when it was
-not, and he acted on it both times: eleven of "seventeen tickets waiting on
-your merge word" already carried his approval, and the YouTube worker question
-he was asked again had been answered `A` an hour earlier. Him, that night:
-*"The issue is making assumptions and stating them with confidence. It has come
-up many times."* Every wrong claim that evening was a confident sentence with
-nothing attached; every right one carried its evidence. This is the evidence,
-and it is cheaper to run than the claim is to reason about.
-
-Applies to the run report as much as to a comment. `ask` enforces the same rule
-at its own end — it refuses to hand a ticket back when his comment is already
-the newest one on it (`--after-his-answer` overrides, on the record).
-
-## The two columns — which one you are writing to
+## The two columns
 
 Detail goes **left** (the description). The **right** column carries only the
-operator card. Ratified 2026-08-22, after Sync 6/7 and 7/7 both stalled because
-the loops' reasoning arrived as walls of text in ClickUp's narrow right column.
-
-Handing a ticket to Dane is one command, not two: `status` refuses to set
-`Ready to launch` or `Needs your input` on its own and points at `ask`. The card
-body is four sections plus a fifth that costly asks must carry, all checked
-before anything is sent:
+operator card. Handing a ticket to Dane is one command, not two: `status`
+refuses to set `Ready to launch` or `Needs your input` and points at `ask`:
 
 ```
 @@ASKED     his own words that caused this ticket, verbatim — never invented
 @@WHEN      optional — when and where he said it
 @@CONTEXT   the problem and the fix in plain English, 50-100 words (enforced)
-@@NEEDED    the specific ask, under a banner he can spot without reading
-@@EVIDENCE  required ONLY when the ask costs money or cannot be undone: the
-            command, its real output in a fence, and a "@@MEASURED 8:04pm"
-            line saying when you ran it — that line is the only thing that
-            dates the card; every other clock in the section is ignored
+@@NEEDED    the specific ask, under a banner he can spot without reading.
+            Its LAST line is his move: "Your move: Merge", "Your move: Close"
+            or "Your move: Reply", then a short reason (enforced)
+@@EVIDENCE  required ONLY when the ask costs money or cannot be undone
 ```
 
 ### A `Ready to launch` card must carry a link he can click
 
 If the work has **any visible surface**, the card names a URL he can open and
-says what he should see there. **First ask one question: is the screen behind
-the sign-in?** Anything in the admin app, the Builder, or a tenant's admin
-pages is. A public tenant page, `builder-preview.html` and the About / Site /
-Explore pages are not.
+says what he should see there. StarCaster's surface is usually a command: give the exact command to paste
+and the output it prints. If there is a page, give its URL. Then two or three lines of **what to look
+for**, in his words.
 
-**Behind the sign-in → never a Vercel preview link.** No preview can be signed
-into. The database settings (`SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-`SUPABASE_SERVICE_KEY`) exist in Vercel for Production only and Doppler `stg`
-has no database, so a preview starts with the strip *"Unknown database — no
-SUPABASE_URL is set"* and answers every sign-in with *"Invalid email or
-password"* — which reads to him as his own password being wrong. On
-2026-11-05 he could not test "UI normalization 6 of 10" (86bcyrqbh) from its
-preview and said he had never been able to test from those links. A second
-database for previews is not affordable yet (Dane, 2026-11-05), and pointing
-previews at the live one is ruled out: test code would touch the live client
-sites. So the review pass **runs the branch itself, against this machine's
-local database, and leaves it running**, from the worktree it verified in:
+**Link files by commit, never by branch:** a GitHub file link names a commit (`.../blob/<commit>/<path>`, the commit from `git rev-parse HEAD` on the pushed branch), `main` for a file already on `main`, or the pull request's files tab (`.../pull/<n>/files`), never a branch: the branch is deleted when Dane merges and the link 404s. `comment`, `ask`, `describe` and `task` refuse a branch link (exit 2).
 
-```bash
-npm ci && npm run env:local && npm run build     # a new folder has no lib/builder/template.js until a build runs;
-                                                 # `npm run dev` alone fails with "Cannot find module './template'"
-npm run doctor                                   # read DATABASE CONTENTS — see below
-PORT=<free port, e.g. 3061> nohup node server.js > /tmp/review-<port>.log 2>&1 &
-curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/   # must print 200 before you hand it over
-```
-
-Pick a port nothing else is on (`lsof -i :<port>` prints nothing) — 3001 is
-usually another worktree's, and a link to it would show him another thread's
-code. On the Mini do **not** run `npm run db:refresh` even if the doctor asks:
-that job belongs to the MacBook (`lib/nodeRoles.js` says which machine owns
-`db-refresh`), and an old
-copy still has his sign-in. Then the card gives him all three of:
-
-- **the link** — `http://mac-mini.local:<port>/<the exact page>` when the pass
-  ran on the Mini (he tests from the MacBook, on the same network), or
-  `http://localhost:<port>/<page>` when it ran on the MacBook;
-- **the sign-in that works there** — `mentor24@gmail.com` / `localdev123`
-  (set by `npm run db:refresh`; every other account is scrubbed);
-- **the exact clicks and what he should see** after each.
-
-Add one line saying the server is running from the review folder and stops
-when the machine restarts — if the link does not open, a reply of *"start it"*
-on the ticket is enough for the next session to bring it back.
-
-**Not behind the sign-in → one of these, in order of preference:**
-
-1. **The Vercel preview URL** for the PR — every PR gets one, it is already
-   built, and it is the real thing rather than a description of it. Name the
-   exact page: not the site root, the page the change is on.
-2. **A published Artifact page** — for work with no page of its own (a
-   generated diagram, a report, a before/after pair).
-3. **The local link, started as above**, when neither of those can exist.
-
-Then two or three lines of **what to look for**, in his words, not the
-ticket's: *"the chip on each block header should say Following, Changed or
-Independent"* — not *"verify the lineage state renders"*.
-
-**No link, on work with a visible surface, is a review FAILURE.** Not a
-footnote, not an apology in the run report — send it back. Dane said it
-outright on task 86bbh7qer:
-
-> This should include a clickable link I can click to test... none of the "How to test" options are clear how I actually do it.
-
-A card that hands him a branch name and a build command has moved the work to
-his desk at the exact moment the loop was supposed to have finished it.
-
-Work with genuinely no visible surface — a guard, a script, a docs change —
-says so in one line (*"nothing to look at; this is a check that runs at commit
-time"*) rather than leaving him to wonder whether a link was forgotten.
-
-Use the connector only if the direct script itself is broken, and say so in
-the run report.
-
-## Loop note — your claim, then your verdict (queue visibility)
-
-The **Loop note** is the only place a review IN FLIGHT is visible. `queue` and
-`get` both print it, so one command answers "is somebody already on this?":
-
-```bash
-npm run clickup -- loop-note --task <id> --transition review-started  # CLAIM — before you verify anything
-npm run clickup -- loop-note --task <id> --transition verified    # PASS -> Ready to launch
-npm run clickup -- loop-note --task <id> --transition sent-back   # FAIL -> back to Rework
-```
-
-The send-back note carries its **round** and reason — `↩ round 3 — three docs
-now contradict the change (12:28pm)` — and reads both off the ticket's own
-verdict comments, so run it **after** `verdict --fail`, not before. Nothing to
-pass by hand.
-
-**The note is written as a ticket comment** (`🔖 Loop note: …`) and every
-reader — `queue`, `get`, the in-flight cap, the pause sweep — takes the newest
-one (task 86bbzww8m). Since 2026-09-08 ClickUp's Free plan refuses every write
-to the custom field ("Custom field usages exceeded for your plan"), so the field
-column is stale and is NOT the record; a line saying the field refused is
-expected and is not a failure. Only "the Loop note comment could not be
-written" means the note is missing — say so in your run report.
-
-`CANNOT STAMP` means the one-time "Loop note" field is not set up yet (see
-`docs/LOOP_ENGINEERING.md`) — note it and carry on; it never blocks a verdict.
-
-## A defect ticket's premise is part of the review
-
-A prose rule with no reader is a rule that erodes, so this lane enforces the
-spec lane's evidence discipline (task 86bbtujfj):
-
-*   A **defect** ticket under review must carry its `EVIDENCE:` — the quoted
-    mechanism, not the prompting log line. Missing entirely → **send back**,
-    naming this section: the builder was handed a suspicion dressed as a spec.
-*   Where the build found the premise wrong, the ticket must show the
-    **correction comment posted before the build** — the trail that separates
-    "built what is true" from "built the description because it was written
-    down". A PR whose changes contradict its ticket's premise with no
-    correction on the ticket is a send-back even when the code is good: the
-    next reader of that ticket will believe the wrong mechanism.
-*   A threshold the PR introduces must trace to the measurement its ticket
-    named — or to one the build performed and recorded. "It seemed right" is
-    the shape that fired on eleven nights in fourteen (2026-09-02).
-
-## Findings outside this PR: park them, do not file them
-
-Reviewing is where the pipeline notices most of its own gaps, so this lane is
-where the queue fills with tickets nobody asked for. Two things belong in your
-verdict and nowhere else:
-
-*   **In scope** — anything wrong with THIS pull request, against THIS
-    ticket's acceptance criteria. That is the send-back or the pass.
-*   **Out of scope** — a gap you noticed in the pipeline, the gates, the
-    scripts, the skills, the schedules, the ClickUp plumbing.
-
-For anything out of scope, **check the rule before filing**: a pipeline or
-self-machinery ticket is filed only when a pipeline failure **actually cost
-something observable** — lost work, a dead lane, a silent outage, a wrong
-merge — and its description names that incident. No incident, no ticket, no
-matter how real the finding is.
-
-Measured 2026-09-06: tickets the pipeline filed about itself went from about
-6 a day in mid-August to about 16 a day in early September, faster than the
-queue drains, with Delray and product work queued behind them. Dane parked 31
-of them that day; the six that stayed all name a failure that actually
-happened. All 31 were genuine findings — which is exactly why *"is it real?"*
-cannot be the gate.
-
-**Where a parked finding goes:** one plain line in the ClickUp doc *The 31
-parked tickets*, `https://app.clickup.com/90141423066/docs/2kydhxeu-814`,
-under **Parked tickets** — what breaks and who feels it, and stop. A headless
-pass has no write route to a ClickUp doc: put the line in your run report and
-as a plain `comment` on the ticket you are reviewing, marked as a parked
-finding, and leave it there.
-
-**Two things this does not change.** A **product** defect — a tenant site, the
-Builder, the admin app — is filed on sight, as always. And a real cost still
-gets a ticket: `docs/DOCTRINE.md` §6.19 (search the queue for the operator's
-own words first) and the evidence rule above both still apply to it.
-
-Canon: `docs/DOCTRINE.md` §6.24; `docs/LOOP_ENGINEERING.md` → "Parking a
-finding instead of filing it".
+**No link, on work with a visible surface, is a review FAILURE** — send it
+back. Work with genuinely no visible surface says so in one line (*"nothing to
+look at; this is a check that runs in CI"*).
 
 ## Workflow
 
-1. **Claim the next task — visibly, before you verify anything.** Find the
-   oldest task with status `In review` in the **Loop Queue** list (id
-   `901418546619`) — the queue command's first line. If none, report "nothing
-   to review" and stop. Read the task (`get`), then read its comments
-   (`comments`) to find the PR URL the build loop posted there.
+1. **Take the next task.** The first line of `queue --status "In review"`. If
+   none, report "nothing to review" and stop. Read the task (`get`) and its
+   comments (`comments`) to find the PR the build loop recorded.
 
-   **Read the Loop note column before you take one.** A ticket reading
-   `🔍 being checked — a review pass started 8/23 3:41am` already has a review
-   running on it: skip it, take the next one. There is no "reviewing" status to
-   move a ticket into — the note IS the claim, and it is printed by both
-   `queue` and `get`, so seeing it costs nothing extra.
+2. **Check out the PR in a worktree.** Reuse the build worktree if it is still
+   there, or add one from the PR branch:
+   `git worktree add .claude/worktrees/<slug>-review -b <branch>-review origin/<branch>`.
+   Run `npm ci` if there is a lockfile. Merge `origin/main` in first so you
+   test the code as it would land.
 
-   Then claim the one you took, before you check anything out:
-
-   ```bash
-   npm run clickup -- loop-note --task <id> --transition review-started
-   ```
-
-   A claim more than about **45 minutes** old is an abandoned pass, not a
-   running one — a review is minutes, not hours. Taking one over is allowed and
-   ordinary: re-stamp it with your own claim so the next pass sees a fresh time,
-   and say in your run report that you did it and how old the claim was. (The
-   claim carries the date as well as the clock precisely so you can tell today's
-   from yesterday's.)
-
-   Why any of this: on 2026-08-22 two review passes verified PR #362 end to end
-   at the same time — neither could see the other — and the second one then
-   overwrote the first one's verdict. See step 4 for the other half of the fix.
-
-   The list's seven statuses, in order, are `Rework → Queued → Building → In review →
-   Needs your input / Ready to launch → Live`. Match them case-insensitively.
-
-   **Assignment is the handoff signal.** Dane finds his work through ClickUp's
-   own *Assigned to me*, not a hand-built filter — a filtered view cannot span
-   the Starcaster and Dane of Earth spaces, but assignment does.
-   `npm run clickup -- status` enforces the mapping automatically and
-   verifies it stuck: `Ready to launch` / `Needs your input` assign Dane,
-   `Rework` and `Queued` clear assignees. Flags exist only to deviate.
-
-2. **Check out the PR in a worktree — in the task's repo.** A task declares
-   its repo with a `repo:<name>` tag (`starcaster` default; also `normie`,
-   `pulse`, `vault`); `npm run clickup -- get --task <id>` prints the resolved
-   `repo:` line. Verify in THAT repo's checkout and run THAT repo's gates
-   (`docs/LOOP_ENGINEERING.md` → "Per-repo gates") — verifying a vault task
-   against starcaster's gates proves nothing. An unknown/ambiguous repo tag is
-   the build loop's to escalate, not review's; if you meet one In review,
-   send it back to `Rework` with a note. Reuse the build worktree if present,
-   or add one from the PR branch. Run `npm ci` if dependencies changed.
+   **A conflict is a fast send-back.** If `get` shows `main: ... conflict`
+   (the relay's `MAIN MOVED:` note) and that merge of `origin/main` does
+   conflict, stop here: `verdict --fail` with "conflicts with main after
+   PR #<merged>, in <files>", then `status --status Rework --if-status "In
+   review"`. Do not spend a test pass on code that cannot land as it is. If
+   the merge goes in cleanly after all, the note is out of date; carry on.
 
 3. **Verify independently — do not trust the build loop's word.**
-   - Re-run the gates: `npm run typecheck`, the affected tests
-     (`test:builder-ui` / `test:builder`), `node scripts/check_conventions.cjs`,
-     and `npm run check:syntax` if `public/js/` was touched.
-   - Run `/code-review` on the branch diff for correctness/quality issues.
-   - **Actually exercise it.** Use the `run` skill (or Playwright) to open the
-     affected page/module and walk the task's "How to test" steps. A green
-     test suite is not proof the feature works — confirm the real behavior.
-   - Sanity-check against the task: are all acceptance criteria met? Any
-     Non-goals violated? Any generated artifact left un-rebuilt?
+   - Re-run the gates: `npm run verify`.
+   - Run `/code-review` on the branch diff for correctness and quality.
+   - **Actually exercise it.** Open the affected screen and walk the task's
+     "How to test" steps. A green test suite is not proof the feature works.
+   - Check the ticket: are all acceptance criteria met? Any Non-goals
+     violated? Every `CLAUDE.md` loop rule kept (`main` never
+     changed unchecked, no secret in the repository or a log, every tracker
+     write read back, a failed step says so)?
+   - Check the premise: a defect ticket must cite its mechanism, and where the
+     build found the premise wrong, the correction must be on the ticket.
+   - **This repository is public.** Grep the diff for anything that looks
+     like a key, token or password. One hit is a send-back, whatever else is
+     right.
 
 4. **Decide — and record the verdict BEFORE you move anything.**
 
@@ -342,103 +141,70 @@ finding instead of filing it".
    ```
 
    **`--if-status` is required, and it is the guard that matters.** A review
-   takes many minutes, so by the time you decide, the queue snapshot you started
-   from is old news. If the ticket has moved — another pass took it, the
-   operator answered something, a rebuild claimed it — the command writes
-   **nothing** and exits 3. When that happens: **re-read and stand down.** Read
-   the comments (`comments --task <id>`) and the ticket (`get --task <id>`) to
-   see what actually happened, do not write the verdict, do not move the status,
-   report what you found, and take the next task. Your verdict was about a state
-   that no longer exists; writing it anyway is precisely the 2026-08-22 failure.
+   takes minutes, and the ticket may have moved meanwhile. If the command
+   exits 3, **re-read and stand down**: do not write the verdict, do not move
+   the status, take the next task.
 
-   The same guard belongs on every status write that follows a review, so the
-   send-back in this step carries `--if-status "In review"` too. The pass path
-   needs no separate guard: `ask --status "Ready to launch"` refuses unless the
-   newest verdict on the ticket is a PASS, so a refused verdict already blocks
-   the status move behind it.
+   `Ready to launch` is Dane's "safe to merge" signal, and `ask`/`status` both
+   **refuse** to set it unless the newest verdict on the ticket is a PASS.
 
-   `Ready to launch` is the operator's "safe to merge" signal, and since task
-   86bbjt18r `ask` and `status` both **refuse** to set it unless the newest
-   verdict on the ticket is a PASS. That is not paperwork: on 2026-08-22 two
-   tickets reached that status with no passing review recorded on them at all,
-   and he approved both in good faith. The command writes the one shape the
-   gate and the merge step both read, and verifies it through the gate itself.
-
-   `--body-file -` takes your one-line reason on stdin — what you ran, what you
-   walked through, what convinced you. Then:
+   `--body-file -` takes your one-line reason on stdin — what you ran, what
+   you walked through, what convinced you. Then:
 
    - **Pass** → `ask --status "Ready to launch"`. `@@ASKED` carries the
      instruction the ticket came from; `@@CONTEXT` says in 50-100 words what
      changed and what he will see; `@@NEEDED` is the merge approval, with the
-     PR link, the test link (the local link and its sign-in for any screen
-     behind the sign-in — never a Vercel preview there; see "A `Ready to
-     launch` card must carry a link he can click"), the exact clicks to check it,
-     and the line **"Tell me to merge when you're ready."** Put the full "How to
-     test" walkthrough in the description with `describe` if it runs long.
-     Also post the compact version to the bus channel.
-     Do **NOT** merge — per standing rule, CC merges only on the operator's
-     explicit command, and only with all checks green.
-   - **Fail, and a machine can fix it** → `verdict --fail` first, then set the
-     task back to `Rework` (`status --status Rework --if-status "In review"`),
-     **clear its assignees**, and add a ClickUp comment listing precisely what
-     to fix and why. The `loop-build` skill will pick it up again. Do not fix
-     it yourself inside the review step — keep build and review separate so the
-     check stays honest.
+     PR link, the preview link, the exact address and clicks to check it, and
+     **how to merge**, in exactly these words:
 
-     `--body-file` is **required** on a send-back and its FIRST LINE is the
-     reason the board will show, so write that line as one short clause a
-     non-programmer can read at a glance ("three docs now contradict the
-     change"), then the detail below it.
+     > **To merge:** reply with one of the merge phrases as the whole comment
+     > and nothing else — `merge`, `merge it`, `ship it` or `approve` (the
+     > list is `mergePhrases` in `spirality.project.json`). The relay
+     > (`com.starcaster.relay`, every 10 minutes) re-checks every gate, merges
+     > PR #N and moves this ticket. "merge PR #N" is *not* a phrase and does
+     > nothing. If `./scripts/install_loop_runner.sh --status` says the relay
+     > is not loaded on the Mini, tell a session **"merge PR #N"** instead.
+
+     (Write it into the card as plain lines, not a blockquote — ClickUp deletes
+     `> ` lines.) Then end `@@NEEDED` with **`Your move: Merge — PR #N`**: the
+     ticket page draws the Merge button from that line. Do **NOT** merge.
+
+     **A ticket with nothing of its own to merge** (a catch-up ticket whose
+     work landed when the PR it unstuck merged, as Spirality's SP-64 did) is not a merge
+     approval. Say what landed, then end with **`Your move: Close — <why its
+     work is live>`**; the page shows a Close button and the relay moves it to
+     Live once that PR is merged. Never tell him to move the ticket himself.
+   - **Fail, and a machine can fix it** → `verdict --fail` first (its FIRST
+     LINE is the reason the board shows — one short clause), then
+     `status --status Rework --if-status "In review"`. Do not fix it yourself
+     inside the review step — keep build and review separate.
 
      **`verdict --fail` refuses on what would be the fourth send-back** (exit
-     3, nothing written) and prints what each previous round found. That is not
-     an error to work around: three rounds means the **spec** is wrong, not the
-     build, and the next move is Dane's. Escalate instead — `ask --status
-     "Needs your input"` with all three rounds named one line each in
-     `@@CONTEXT` (or in the description if it runs long), and `@@NEEDED`
-     offering him named options — respec, split, or drop — rather than an open
-     question. Then `loop-note --transition escalated`. The reasoning is in
-     `docs/LOOP_ENGINEERING.md` → "A send-back says which round it is".
-   - **Fail, and only a human can settle it** (the task is ambiguous, the
-     acceptance criteria contradict what the code should do, or the fix is a
-     product decision) → `ask --status "Needs your input"`. Put the evidence in
-     the description with `describe`; keep `@@CONTEXT` to the 50-100 words he
-     needs to decide, and give `@@NEEDED` named options to choose between
-     rather than an open question. Do not bounce a judgment call around the
-     loop; that is what this status exists for.
+     3) and prints what each round found. Three rounds means the **spec** is
+     wrong, not the build: `ask --status "Needs your input"` with all three
+     rounds named one line each and `@@NEEDED` offering named options
+     (respec / split / drop).
+   - **Fail, and only a human can settle it** (ambiguous task, contradictory
+     acceptance criteria, a project decision) → `ask --status "Needs your
+     input"` with named options to choose between.
 
-5. **Report** the task and your verdict, then finish (the `/loop` wrapper
-   re-invokes you for the next one).
+5. **Report** the task and your verdict, then finish.
 
 ## Guardrails
 
-- **Never merge autonomously.** `Ready to launch` ≠ merged. The operator
-  merges — either by telling a CC session to, or by replying `merge` on the
-  ticket, which the bus-relay pass carries out for him within about ten
-  minutes (task 86bbjd5nn). Either way the authorization is his and this loop never
-  supplies it. This is the human checkpoint that keeps a bad change off the
-  auto-deploying `main`.
-  One consequence for the pass message: the "Reply/tell me to merge when
-  you're ready" line is now literal — replying the single word `merge` on the
-  ticket is enough, and is the route that works when no session is open.
-- **Only the operator moves a task out of `Ready to launch` or
-  `Needs your input`.** Putting a task into one of those two is handing it to
-  him; taking it back out is his call, not a loop's.
+- **Never merge autonomously.** `Ready to launch` ≠ merged. Dane merges by
+  writing a merge phrase on the ticket (the relay is his hands and re-checks
+  every gate, `verify` included) or by telling a session to. The review loop
+  never does.
+- **Only Dane moves a task out of `Ready to launch` or `Needs your input`.**
 - **Independence is the whole point.** Re-run everything; don't rubber-stamp.
-- **Claim before you verify, and never write a verdict past a refused guard.**
-  Two passes reviewing one ticket is wasted work; two passes *writing verdicts*
-  on one ticket is a wrong answer reaching the operator. If `--if-status`
-  refuses, that is the system working — re-read, stand down, move on.
-- **Never force a fourth send-back through.** `--fourth-round-anyway` exists
-  for the case where Dane has already settled the ticket and another round is
-  genuinely right; it is a written claim, not a way past a refusal you did not
-  want. A ticket going round a fourth time is the loop failing to notice it is
-  stuck.
-- **A gap you noticed is not a ticket.** Filing a pipeline finding needs an
-  incident that actually cost something; without one it is one plain line in
-  the parked-backlog doc, or in your run report if you cannot reach it. See
-  "Findings outside this PR" above — this lane is where that queue fills up.
-- If the PR has merge conflicts with main, send it back to `Rework` with a note
-  to rebase — don't resolve conflicts blind.
+- **Never write a verdict past a refused guard.**
+- **Never force a fourth send-back through.** `--fourth-round-anyway` is a
+  written claim for the case where Dane has already settled the ticket.
+- **A gap you noticed is not a ticket.** A finding outside this PR goes in
+  your verdict note and your run report, not into the queue, unless a real
+  failure actually cost something.
+- If the PR has merge conflicts with main, send it back to `Rework` with a
+  note — don't resolve conflicts blind.
 - Keep review comments plain-language and specific enough that the next build
   pass can act on them without re-reading the code.

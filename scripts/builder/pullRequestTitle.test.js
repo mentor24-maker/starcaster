@@ -209,11 +209,6 @@ test('task-name is listed in the command help, or nobody will find it', () => {
   assert.match(usage, /task-name --task <id>/, 'the usage block must advertise it');
 });
 
-test('loop-build writes the title rule down, since the loop lane never calls ship', () => {
-  const skill = read('.claude/skills/loop-build/SKILL.md');
-  assert.match(
-    skill,
-    /title[^\n]*task name|task name[^\n]*title/i,
-    'step 7 must state that the PR title is the ClickUp task name'
-  );
-});
+// A test of the old loop's loop-build skill wording lived here. The Spirality setup
+// (SC-790) replaced loop-build skill, so it was dropped; the tests of the code still run.
+

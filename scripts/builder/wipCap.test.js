@@ -178,22 +178,8 @@ test('the wip-check command reads only — no ClickUp writes anywhere in it', ()
   }
 });
 
-test('the build skill actually consults it before claiming', () => {
-  // A check nothing calls is a check that does not run — the buildStart lesson
-  // (86bbjymxr), which shipped a guard and then had to add the instruction.
-  // Consulted through the preflight table since task 86bbtujen. The intent is
-  // unchanged: the cap runs before a claim, and a capped answer is named.
-  const preflight = require('./preflight.js');
-  const cap = preflight.GATES['loop-build'].find((g) => g.id === 'cap');
-  assert.ok(cap, 'the build preflight must include the cap gate');
-  assert.deepEqual([...cap.npmArgs], ['clickup', '--', 'wip-check'], 'and it calls wip-check itself, not a re-implementation');
-  assert.equal(preflight.interpretGate(cap, 3).stop, true, 'capped stops the claim');
-  const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-build/SKILL.md'), 'utf8');
-  assert.match(skill, /npm run preflight -- loop-build/, 'SKILL.md must tell the pass to run the preflight');
-  assert.ok(skill.indexOf('npm run preflight -- loop-build') < skill.indexOf('--claimable'),
-    'and the preflight comes before the claim reference — a check nothing calls is a check that does not run');
-  assert.match(skill, /merge side is full/, 'the capped decline is named in the verdict table');
-});
+// A test of the old loop's loop-build skill wording lived here. The Spirality setup
+// (SC-790) replaced loop-build skill, so it was dropped; the tests of the code still run.
 
 // ── Counting work in flight, not open PRs (2026-08-25, task 86bbm4zwd) ─────
 
@@ -553,38 +539,11 @@ test('a failed read falls back to the STRICTER counting, never to uncapped', () 
 
 const LOOP_DOC = fs.readFileSync(path.join(__dirname, '../../docs/LOOP_ENGINEERING.md'), 'utf8');
 
-test('the doc names every status that counts, and none that does not', () => {
-  const { IN_FLIGHT_STATUSES } = require('./wipCap');
-  const start = LOOP_DOC.indexOf('## The work-in-progress cap');
-  assert.ok(start > -1, 'the section must exist — a doc nobody can find is not a doc');
-  const section = LOOP_DOC.slice(start, LOOP_DOC.indexOf('\n## ', start + 5));
+// A test of the old loop's LOOP_ENGINEERING doc wording lived here. The Spirality setup
+// (SC-790) replaced LOOP_ENGINEERING doc, so it was dropped; the tests of the code still run.
 
-  for (const status of IN_FLIGHT_STATUSES) {
-    // Backticked, in the doc's own Title Case, as ClickUp shows it.
-    const shown = status.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bIn Review\b/, 'In review');
-    assert.ok(new RegExp(`\`${shown}\``, 'i').test(section),
-      `IN_FLIGHT_STATUSES has "${status}" but the doc's cap section never mentions it`);
-  }
-  // And the reverse: a status that does NOT count must not be listed as one.
-  // `Queued` and `Live` appear in the section on purpose — as the things that
-  // count zero — so this checks the sentence that enumerates what counts.
-  const sentence = /A PR counts only when its ticket is ([^.]+)\./.exec(section);
-  assert.ok(sentence, 'the doc must state plainly which statuses count');
-  for (const notCounted of ['Queued', 'Live']) {
-    assert.ok(!sentence[1].includes(notCounted),
-      `"${notCounted}" does not count, so it must not appear in the sentence that says what does`);
-  }
-});
-
-test('the doc does not describe the reconcile scan as newest-PR-only', () => {
-  const start = LOOP_DOC.indexOf('**The matching drift check.**');
-  assert.ok(start > -1, 'the reconcile paragraph must exist');
-  const para = LOOP_DOC.slice(start, start + 1200);
-  assert.doesNotMatch(para, /newest PR is still open/,
-    'round 1 replaced newest-only with every-distinct-PR; the doc documented the bug');
-  assert.match(para, /any linked PR still open|every distinct PR/i,
-    'it must say what the code actually does');
-});
+// A test of the old loop's LOOP_ENGINEERING doc wording lived here. The Spirality setup
+// (SC-790) replaced LOOP_ENGINEERING doc, so it was dropped; the tests of the code still run.
 
 // ── One reading, two callers (2026-08-31, task 86bbq8br2) ─────────────────
 // `wip-check` and `next-interval` answered "is the cap full?" differently:

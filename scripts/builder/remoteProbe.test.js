@@ -200,7 +200,7 @@ function fixtureInventory() {
       },
       // The skills sweep reads THIS repo, not the fixture, so the real loop
       // skills have to be declared or every fixture run reports them as drift.
-      ...['loop-spec', 'loop-build', 'loop-review'].map((id) => ({
+      ...['loop-spec', 'loop-intake', 'loop-build', 'loop-review'].map((id) => ({
         id, name: id, kind: 'agent', layer: 'coordination',
         summary: 'loop skill', probe: 'skill-file',
       })),

@@ -131,19 +131,6 @@ test('the gate line leads with a verdict word a column of which scans', () => {
 // The skills defer to the command — the whole point of the ticket.
 // ---------------------------------------------------------------------------
 
-test('the skills reference the preflight and no longer enumerate its gates', () => {
-  for (const [file, loop] of [
-    ['.claude/skills/loop-build/SKILL.md', 'loop-build'],
-    ['.claude/skills/loop-review/SKILL.md', 'loop-review'],
-  ]) {
-    const skill = read(file);
-    assert.match(skill, new RegExp(`npm run preflight -- ${loop}`), `${file} runs the one command`);
-    // The three gate commands must not be re-narrated as steps. (pass-reconcile
-    // may stay in the by-hand reference list — the ban is on the SEQUENCE
-    // living as prose, which is what a pass can skip by summarizing badly.)
-    for (const cmd of ['npm run node:owns --', 'npm run pipeline -- check', 'npm run clickup -- wip-check']) {
-      assert.ok(!skill.includes(cmd),
-        `${file} still enumerates "${cmd}" — the sequence lives in scripts/builder/preflight.js now, once`);
-    }
-  }
-});
+// A test of the old loop's loop-skill wording lived here. The Spirality setup
+// (SC-790) replaced loop-skill, so it was dropped; the tests of the code still run.
+

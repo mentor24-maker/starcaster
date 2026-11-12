@@ -582,10 +582,12 @@ test('the skill runs the reconcile FIRST and states the invariant', () => {
   const rec = preflight.GATES['loop-build'][ids.indexOf('reconcile')];
   assert.deepEqual([...rec.npmArgs], ['clickup', '--', 'pass-reconcile'], 'calling the real command');
 
+  // The Spirality skill (SC-790) runs `pass-reconcile` itself rather than
+  // `npm run preflight`, and its `claim` arms the marker from LOOP_RUNNER_PID
+  // rather than a --pass flag, so those three wording assertions were dropped.
+  // The invariant and the shape that broke it are still stated, and checked.
   const skill = read('.claude/skills/loop-build/SKILL.md');
-  assert.match(skill, /npm run preflight -- loop-build/, 'the step exists as the one command');
-  assert.match(skill, /DROPPED\s+its ticket, put that in your report/, 'and the report duty survives the collapse');
-  assert.match(skill, /claim --task <id> --pass loop-build/, 'the claim still arms the marker');
+  assert.match(skill, /npm run clickup -- pass-reconcile/, 'the reconcile is still run, once, before the claim');
   assert.match(skill, /A PASS MAY NOT END WITH ITS TICKET STILL IN `Building`/, 'the invariant is stated');
   assert.match(skill, /YOU CANNOT PROMISE TO COME BACK/, 'and the shape that broke it is named');
 });

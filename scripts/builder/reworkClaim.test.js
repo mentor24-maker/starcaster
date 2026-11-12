@@ -242,11 +242,13 @@ test('the build skill asks for --claimable and claims with `claim`', () => {
   // ticket exists. `--status Queued` in the claim step is the specific
   // regression: it hides every send-back.
   const skill = fs.readFileSync(path.join(__dirname, '../../.claude/skills/loop-build/SKILL.md'), 'utf8');
-  assert.match(skill, /queue --list 901418546619 --claimable/,
+  // The Spirality skill (SC-790) names no list id — the door reads the
+  // project's own list — so the assertions match the command, not the id.
+  assert.match(skill, /npm run clickup -- queue --claimable/,
     'the build skill must ask for the claimable list, not for one status');
   assert.match(skill, /npm run clickup -- claim --task/,
     'and must claim through `claim`, which fills the status guard in for it');
-  assert.doesNotMatch(skill, /queue --list 901418546619 --status Queued/,
+  assert.doesNotMatch(skill, /queue[^\n]*--status Queued/,
     'asking for Queued alone hides every send-back — the bug this ticket closes');
 });
 
