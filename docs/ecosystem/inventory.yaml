@@ -330,6 +330,16 @@ objects:
       url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-spec/SKILL.md
     probe: skill-file
 
+  - id: loop-intake
+    name: loop-intake
+    kind: agent
+    layer: coordination
+    summary: Takes the oldest Requested ticket Dane filed and writes it up as a proper spec, handed to him in Needs your input to approve.
+    links:
+      doc: doctrine/LOOPS.md
+      url: https://github.com/mentor24-maker/starcaster/blob/main/.claude/skills/loop-intake/SKILL.md
+    probe: skill-file
+
   - id: loop-build
     name: loop-build
     kind: agent

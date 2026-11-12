@@ -1,6 +1,29 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(vercel --version)",
+      "Bash(vercel logs *)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/explain_denied_commands.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking standing permission rules"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_bash_writes_on_main.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking branch (no source writes on main)"
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
@@ -9,6 +32,48 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_edits_on_main.cjs\"",
             "timeout": 15,
             "statusMessage": "Checking branch (no edits on main)"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/block_generated_edits.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking for generated-file edits"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/warn_stale_artifacts.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking for stale artifacts"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/require_sql_handoff.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking the SQL handoff block"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/check_operator_handoff.cjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking for a handed-over command"
           }
         ]
       }
