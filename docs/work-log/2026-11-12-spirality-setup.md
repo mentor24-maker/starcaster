@@ -23,3 +23,19 @@ The first version was sent back by review, for two good reasons:
 Bringing those tests back caught one more thing: the setup adds a fourth loop
 skill, `loop-intake`, that the map of the whole system did not list. It does
 now.
+
+### Second rework (review round 2)
+
+The setup had swapped StarCaster's lane runner — the small program that starts
+each build and review pass on the Mini — for a cut-down copy. That copy had
+quietly stopped doing four things: telling the roll call "this lane is alive"
+after each pass, sleeping until a Claude usage limit resets instead of retrying
+into it, obeying the shared "quiet hours / another lane hit a limit" rule, and
+marking itself as a background job so it yields ClickUp budget to Dane's own
+sessions. All four are back, kept inside the new runner's layout. It also now
+checks the pause switch before every pass, so when Dane pauses the line the
+lanes really stop (the new copied skills do not ask it themselves).
+
+Seven deleted test files came back too — they test code that is still in use.
+Only the handful of lines that checked the wording of the old skill and loop
+documents were dropped, each with a note saying why.

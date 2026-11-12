@@ -23,6 +23,10 @@ set -u
 # launchd hands the job almost no environment. Set the PATH once, here.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
+# A background job, and it says so (scripts/lib/clickupCaller.cjs): anything
+# this pass reaches yields the ClickUp reserve to the sessions Dane is in.
+export STARCASTER_CALLER=scheduled
+
 # The repo is WHERE THIS SCRIPT LIVES, and it must be the MAIN checkout: a
 # worktree is deleted when its work ships, and a schedule pointing at one
 # works perfectly until the day it silently does not.

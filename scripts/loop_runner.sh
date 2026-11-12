@@ -3,10 +3,19 @@
 #
 #   loop_runner.sh <skill-name> [interval-seconds]
 #
-# A seed-sized copy of StarCaster's scripts/loop_runner.sh: the lock, the
-# pull-before-pass, the time limit and the honest END line are kept; the
-# queue-paced sleeping, heartbeat and usage-limit guard are left out until
-# Spirality has an incident that needs them.
+# Spirality's runner structure (project config, lock, sync lock, pull-before-
+# pass, time limit, honest END line) with StarCaster's own guards merged back
+# in (SC-790, review round 2), each of which answers an incident:
+#   - STARCASTER_CALLER=scheduled, so a background pass yields the ClickUp
+#     reserve to the sessions Dane is talking to (scripts/lib/clickupCaller.cjs);
+#   - the pause switch (`npm run pipeline -- check`) and the shared lane policy
+#     (scripts/loop_policy.mjs), asked before every pass;
+#   - the usage-limit guard (scripts/loop_runner_delay.mjs), which sleeps to a
+#     stated reset instead of retrying into a closed window (2:05am, 2026-09-02);
+#   - a heartbeat after every pass, stood-down and blocked ones included, so
+#     the roll call can tell a dead lane from a working one.
+# The queue-paced sleep (`next-interval`) is not back: the tracker's door has
+# no such command, so the runner sleeps its configured interval.
 #
 # Each iteration is a FRESH headless Claude Code session started in the main
 # checkout. Every loop skill picks the next ticket from the tracker on each run,
@@ -55,6 +64,11 @@ CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude || echo "$HOME/.local/bin/claude")
 # The door reads the value inside its own `doppler run`, so the token never
 # enters this session's environment or its log.
 export TRACKER_TOKEN_NAME="TRACKER_TOKEN_$(printf '%s' "$SKILL" | tr 'a-z-' 'A-Z_')"
+
+# THIS IS A BACKGROUND JOB, AND IT SAYS SO. The ClickUp budget is one allowance
+# for the whole company and scheduled jobs yield (Dane, 2026-09-03: "You are
+# never blocked by a background job."). Every child inherits this.
+export STARCASTER_CALLER=scheduled
 
 # One runner per skill. A stale lock (its pid gone) is announced and taken over,
 # so a reboot never leaves the loop dead behind a lock nobody holds.
@@ -136,6 +150,37 @@ while true; do
     echo "[loop-runner] $(date "+%H:%M:%S") main checkout is not on a clean main — not pulling. Every pass runs stale code until it is put back on main." >> "$LOG"
   fi
 
+  # 1a. Has Dane paused the line? Every actor asks before claiming (CLAUDE.md,
+  #     "The pipeline can be paused"), and the copied skills do not ask, so the
+  #     runner asks for them. It FAILS SAFE: anything but exit 0 (running) is
+  #     treated as paused, because running while he has the deck collides with
+  #     what he is doing and idling costs one interval.
+  if ! npm run --silent pipeline -- check >> "$LOG" 2>&1; then
+    PAUSE_SLEEP="${PAUSE_RECHECK_SECONDS:-600}"
+    echo "[loop-runner] $(date "+%H:%M:%S") the pipeline is paused (or the switch could not be read) — no /$SKILL pass; asking again in ${PAUSE_SLEEP}s" >> "$LOG"
+    npm run --silent heartbeat -- --beat --role "$SKILL" \
+      --stood-down "the pipeline is paused; the runner is alive and asking again every ${PAUSE_SLEEP}s" >> "$LOG" 2>&1 || true
+    sleep "$PAUSE_SLEEP"
+    continue
+  fi
+
+  # 1b. One Claude limit, shared by Dane and every lane on this machine (task
+  #     86bcgjbfk): `quiet` is Dane's hours, `stand-down` means another lane
+  #     already read a usage-limit reset. FAILURE-OPEN: anything unreadable
+  #     answers `run`, and says so in this log.
+  POLICY_ANSWER=$(node "$REPO/scripts/loop_policy.mjs" check --lane "$SLUG/$SKILL" 2>> "$LOG")
+  read -r POLICY_ACTION POLICY_SLEEP POLICY_LINE <<< "$POLICY_ANSWER"
+  if { [ "$POLICY_ACTION" = "quiet" ] || [ "$POLICY_ACTION" = "stand-down" ]; } \
+     && [[ "$POLICY_SLEEP" =~ ^[0-9]+$ ]] && [ "$POLICY_SLEEP" -gt 0 ]; then
+    echo "[loop-runner] $(date "+%H:%M:%S") $POLICY_LINE; asking again in ${POLICY_SLEEP}s" >> "$LOG"
+    # Still a beat (the runner is alive and obeying the rule), marked as a
+    # stand-down so the roll call does not read it as a pass that worked.
+    npm run --silent heartbeat -- --beat --role "$SKILL" \
+      --stood-down "$POLICY_LINE" >> "$LOG" 2>&1 || true
+    sleep "$POLICY_SLEEP"
+    continue
+  fi
+
   echo "" >> "$LOG"
   echo "===== $(date "+%Y-%m-%d %H:%M:%S") START /$SKILL =====" >> "$LOG"
   # The pass's output goes to the log as it happens AND to its own file, so
@@ -170,6 +215,67 @@ while true; do
     echo "[loop-runner] $(date "+%H:%M:%S") THIS PASS COULD NOT SIGN IN TO CLAUDE. Nothing will change until a person signs in on this machine (claude login) and restarts this job: launchctl kickstart -k gui/$(id -u)/$PREFIX.$SKILL" >> "$LOG"
   fi
 
+  # 2. What did this pass DO? Asked BEFORE the beat (task 86bc3t0n1), so the
+  #    beat can say which kind of pass it was. The exit code is the fact: a pass
+  #    that exited 0 ran, whatever its prose says about limits, and only a
+  #    non-zero pass is handed to the guard (scripts/builder/loopRunnerGuard.js)
+  #    to say WHICH failure it was: stood-down (a usage limit; sleep to its
+  #    reset), blocked (needs a human, e.g. an expired login; never slept on),
+  #    or timed-out (the time limit stopped a working pass).
+  PASS_KIND=ran
+  LIMIT_SLEEP=0
+  if [ "$CODE" -ne 0 ]; then
+    GUARD_ANSWER=$(node "$REPO/scripts/loop_runner_delay.mjs" "$LOG" --exit "$CODE" \
+      --skill "$SKILL" --limit "${LOOP_PASS_LIMIT_SECONDS:-7200}" 2>> "$LOG")
+    read -r ANSWER_KIND ANSWER_SLEEP ANSWER_WHY <<< "$GUARD_ANSWER"
+    case "$ANSWER_KIND" in
+      ran|stood-down|blocked|timed-out) PASS_KIND="$ANSWER_KIND" ;;
+      *)
+        echo "[loop-runner] the pass guard gave no usable answer ('$GUARD_ANSWER') for a pass that exited $CODE — recording it as blocked" >> "$LOG"
+        PASS_KIND=blocked
+        ;;
+    esac
+    if [[ "$ANSWER_SLEEP" =~ ^[0-9]+$ ]]; then LIMIT_SLEEP="$ANSWER_SLEEP"; fi
+    if [ "$PASS_KIND" != "stood-down" ]; then LIMIT_SLEEP=0; fi
+  fi
+
+  # A limit this lane read is a limit every lane is under: write it where the
+  # others look (step 1b), so their next cycle sleeps instead of hitting it.
+  if [ "$PASS_KIND" = "stood-down" ] && [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
+    node "$REPO/scripts/loop_policy.mjs" stand-down --lane "$SLUG/$SKILL" \
+      --seconds "$LIMIT_SLEEP" --reason "a usage limit closed a /$SKILL pass" >> "$LOG" 2>&1 || true
+  fi
+
+  # 3. The beat: LIVENESS, recorded whatever the pass concluded, and carrying
+  #    the kind so nothing downstream has to read this log. `--beat` never
+  #    fails its caller by contract (scripts/node_heartbeat.mjs).
+  case "$PASS_KIND" in
+    stood-down)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --stood-down "a usage limit closed this pass; the runner is sleeping ${LIMIT_SLEEP}s until it resets" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    blocked)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --blocked "the pass exited $CODE having done no work; see $LOG for the reason the guard read" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    timed-out)
+      npm run --silent heartbeat -- --beat --role "$SKILL" \
+        --timed-out "${ANSWER_WHY:-the pass ran the full time limit without finishing and was stopped; see $LOG}" \
+        >> "$LOG" 2>&1 || true
+      ;;
+    *)
+      npm run --silent heartbeat -- --beat --role "$SKILL" >> "$LOG" 2>&1 || true
+      ;;
+  esac
+
+  # 4. How long to sleep: a usage limit's stated reset outranks the interval.
+  if [[ "$LIMIT_SLEEP" =~ ^[0-9]+$ ]] && [ "$LIMIT_SLEEP" -gt 0 ]; then
+    echo "[loop-runner] $(date "+%H:%M:%S") usage limit — sleeping ${LIMIT_SLEEP}s (the reason is above)" >> "$LOG"
+    sleep "$LIMIT_SLEEP"
+    continue
+  fi
   echo "[loop-runner] $(date "+%H:%M:%S") sleeping ${INTERVAL}s before the next /$SKILL" >> "$LOG"
   sleep "$INTERVAL"
 done
