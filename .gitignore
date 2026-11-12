@@ -64,3 +64,4 @@ supabase/.temp/
 
 # Before/after screenshots from `npm run check:shots` — local artifacts, never committed
 .ui-shots/
+.claude/worktrees/

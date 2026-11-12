@@ -1,48 +1,40 @@
 #!/bin/bash
-# Run a command, and stop it if it is still running after N seconds.
+# Run a command with a hard time limit. Exit 124 if it was stopped.
 #
-#   run_with_time_limit.sh <seconds> -- <command> [args...]
+#   run_with_time_limit.sh <seconds> -- <command...>
 #
-# WHY (task 86bbzwuz6, 2026-09-13): a loop-build pass wrote its last line at
-# 22:44 and then sat idle — 0% CPU, no child processes — for eleven hours.
-# loop_runner.sh waited on it with no limit, so the build lane shipped nothing
-# overnight with 30 tickets ready. It ignored SIGTERM and needed SIGKILL.
+# A pass that freezes would otherwise hold its lane forever (StarCaster,
+# 2026-09-12: one sat idle for eleven hours and nothing was built overnight).
+# macOS ships no `timeout`, so this is the portable version.
 #
-# macOS has no `timeout` command, hence this. It POLLS rather than arming a
-# background `sleep`: a sleeping watcher outlives the pass it was watching, one
-# orphan per pass, forever.
-#
-# Exit code: the command's own, or 124 when it was stopped (the GNU timeout
-# convention), after one plain line on stdout saying what was stopped and why.
-#
-# WHAT IT WAS DOING (task 86bccr85c, 2026-10-04): before stopping anything it
-# writes the process tree under the command to stdout — and, when
-# RUN_WITH_TIME_LIMIT_SNAPSHOT names a file, to that file too, one line per
-# process: depth<TAB>pid<TAB>running-for<TAB>command. Five build passes in a
-# row were stopped that day while each re-ran an 8-minute check that never
-# went green, and because a pass prints its report only at the end, the log
-# showed START, END and nothing between. A stuck test looked like a dead
-# machine. loop_runner.sh hands the file to `clickup pass-timeout`.
-
+# WHAT IT WAS DOING: before stopping anything it writes the process tree under
+# the command to stdout — and, when RUN_WITH_TIME_LIMIT_SNAPSHOT names a file,
+# to that file too, one line per process: depth<TAB>pid<TAB>running-for<TAB>
+# command. A pass prints its report only at the end, so a stuck gate used to
+# look exactly like a dead machine (StarCaster, 2026-10-04: five passes in a
+# row stopped while re-running one 8-minute check). loop_runner.sh hands the
+# file to `clickup pass-timeout`, which lib/passTimeout.js turns into words.
+set -u
 LIMIT=${1:?usage: run_with_time_limit.sh <seconds> -- <command...>}
 shift
 [ "$1" = "--" ] && shift
 [ $# -gt 0 ] || { echo "run_with_time_limit: no command given" >&2; exit 2; }
 if ! [[ "$LIMIT" =~ ^[0-9]+$ ]] || [ "$LIMIT" -lt 1 ]; then
-  echo "run_with_time_limit: limit must be a whole number of seconds, got '$LIMIT'" >&2
-  exit 2
+  echo "run_with_time_limit: limit must be a whole number of seconds, got '$LIMIT'" >&2; exit 2
 fi
 POLL=${RUN_WITH_TIME_LIMIT_POLL:-15}
 GRACE=${RUN_WITH_TIME_LIMIT_GRACE:-30}
-
 "$@" &
 PID=$!
 START=$(date +%s)
-
-# Every process under the command, walked down from it, shallowest first.
-# `pkill -P` below reaches only direct children; this has to see the whole
-# tree, because the gate a pass was stuck in sits two or three levels down
-# (claude -> the Bash tool's shell -> npm -> node).
+# Stop the WHOLE tree, not just direct children: a hung `next build` started
+# through Claude's Bash tool is a grandchild or deeper. The tree is listed
+# before anything is killed, because a killed parent's children are re-parented
+# and could no longer be found by walking down from it.
+tree() { local p; for p in $(pgrep -P "$1" 2>/dev/null); do tree "$p"; done; echo "$1"; }
+# The same tree with depth, age and command, shallowest first, for the report
+# and the snapshot file. Walked from the ps table in one pass rather than by
+# repeated pgrep calls, because it runs while the tree is still alive.
 snapshot() {
   ps -A -o pid=,ppid=,etime=,command= 2>/dev/null | awk -v root="$PID" '
     { pid = $1; ppid = $2; et = $3; $1 = ""; $2 = ""; $3 = ""; sub(/^ +/, "")
@@ -61,18 +53,9 @@ snapshot() {
       }
     }'
 }
-
-# Stop the command's children too: a pass's Bash tool can leave a child that
-# keeps the output pipe open after the parent is gone.
-stop() {
-  local signal=$1
-  pkill "-$signal" -P "$PID" 2>/dev/null
-  kill "-$signal" "$PID" 2>/dev/null
-}
-
+stop() { local pids; pids="$(tree "$PID")"; kill "-$1" $pids 2>/dev/null; }
 while kill -0 "$PID" 2>/dev/null; do
-  NOW=$(date +%s)
-  if [ $((NOW - START)) -ge "$LIMIT" ]; then
+  if [ $(( $(date +%s) - START )) -ge "$LIMIT" ]; then
     echo "[run_with_time_limit] $(date "+%Y-%m-%d %H:%M:%S") stopped after ${LIMIT}s — still running at the limit, which a working pass never reaches: $*"
     TREE="$(snapshot)"
     if [ -n "$TREE" ]; then
@@ -87,24 +70,11 @@ while kill -0 "$PID" 2>/dev/null; do
     fi
     stop TERM
     WAITED=0
-    while kill -0 "$PID" 2>/dev/null && [ "$WAITED" -lt "$GRACE" ]; do
-      sleep 1
-      WAITED=$((WAITED + 1))
-    done
-    if kill -0 "$PID" 2>/dev/null; then
-      echo "[run_with_time_limit] it ignored the stop request for ${GRACE}s — forcing it."
-      stop KILL
-    fi
+    while kill -0 "$PID" 2>/dev/null && [ "$WAITED" -lt "$GRACE" ]; do sleep 1; WAITED=$((WAITED + 1)); done
+    if kill -0 "$PID" 2>/dev/null; then echo "[run_with_time_limit] it ignored the stop request for ${GRACE}s — forcing it."; stop KILL; fi
     wait "$PID" 2>/dev/null
     exit 124
   fi
-  # Sleep in short steps so a command that finishes is noticed promptly.
-  STEP=0
-  while [ "$STEP" -lt "$POLL" ] && kill -0 "$PID" 2>/dev/null; do
-    sleep 1
-    STEP=$((STEP + 1))
-  done
+  sleep "$POLL"
 done
-
 wait "$PID"
-exit $?

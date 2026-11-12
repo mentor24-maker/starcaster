@@ -1,0 +1,39 @@
+{
+  "workspaceId": "0",
+  "spaceId": "0",
+  "loopQueueListId": "0",
+  "operatorUserId": "1",
+  "machineUserId": "31",
+  "githubRepo": "mentor24-maker/starcaster",
+  "dopplerProject": "starcaster",
+  "dopplerConfig": "dev",
+  "launchdPrefix": "com.starcaster",
+  "logDir": "~/loop-logs",
+  "mergePhrases": [
+    "merge",
+    "merge it",
+    "ship it",
+    "approve"
+  ],
+  "governancePaths": [
+    "CLAUDE.md",
+    "docs/LOOP_ENGINEERING.md",
+    "docs/DOCTRINE.md",
+    ".claude/skills/",
+    ".claude/settings.json",
+    ".github/workflows/"
+  ],
+  "autoMergeLanes": [
+    "A",
+    "B"
+  ],
+  "operatorName": "Dane",
+  "projectSlug": "starcaster",
+  "legacyMachinePrefixes": [],
+  "projectScripts": {},
+  "trackerPrefix": "SC",
+  "tracker": "api",
+  "trackerUrl": "http://mac-mini.local:4180",
+  "trackerApiUrl": "http://127.0.0.1:4180",
+  "busProject": "starcaster-bus"
+}
