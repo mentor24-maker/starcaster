@@ -110,11 +110,16 @@ if (CHECK && !DRY) {
         ? 'Stranded work is REPORTED, never auto-applied: the pass marker is the only machine-readable difference between a dead loop claim and a hand session mid-build (scripts/builder/repair.js says why). To act: `npm run pipeline -- sweep --apply`.'
         : 'A reading could not be taken or a step failed — this is not an all-clear.',
     ].join('\n');
-    const posted = spawnSync('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', '-'], {
-      encoding: 'utf8', input: body, stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    if (posted.status === 0) { writeStamp(postStamp); console.error('  (posted to the bus)'); }
-    else console.error('  (the bus post FAILED — the finding above is only in this log)');
+    // Through the shared bus helper, which posts to the tracker's bus (SC-791).
+    // This used to call the ticket door's `chat` command, which the tracker's
+    // door does not have: every finding since 2026-11-12 landed only in this log.
+    try {
+      require('./lib/clickup.cjs').postBusMessage(BUS_CHANNEL, body);
+      writeStamp(postStamp);
+      console.error('  (posted to the bus)');
+    } catch (err) {
+      console.error(`  (the bus post FAILED — the finding above is only in this log: ${String(err?.message || err).slice(0, 300)})`);
+    }
   } else {
     console.error(`  (no post: ${decision.why})`);
   }

@@ -84,3 +84,48 @@ test('the shell-out door passes a deadline to the child it spawns', () => {
   assert.equal(sawOptions.timeout, 4321,
     'without a timeout: option the child can hang forever, which is the whole defect');
 });
+
+test('the bus post goes to the tracker\'s bus through the ticket door, not ClickUp chat (SC-791)', () => {
+  const clickup = require('../lib/clickup.cjs');
+  let saw = null;
+  const out = clickup.postBusMessage('2kydhxeu-474', 'an alarm', {
+    from: 'mac-mini',
+    timeoutMs: 4321,
+    run: (cmd, args, options) => { saw = { cmd, args, options }; return 'Posted to the bus: comment 1\n'; },
+  });
+  assert.equal(out, 'Posted to the bus: comment 1');
+  assert.equal(saw.cmd, 'node');
+  assert.match(saw.args[0], /loop[\\/]scripts[\\/]with_doppler\.mjs$/, 'under Doppler, so an unwrapped caller (repair) posts too');
+  assert.match(saw.args[2], /loop[\\/]scripts[\\/]clickup\.mjs$/);
+  assert.deepEqual(saw.args.slice(3), ['bus-post', '--body-file', '-', '--from', 'mac-mini']);
+  assert.ok(!saw.args.includes('chat') && !saw.args.some((a) => /clickup_direct/.test(a)),
+    'the old ClickUp chat door is exactly what this slice retires');
+  assert.equal(saw.options.input, 'an alarm');
+  assert.equal(saw.options.timeout, 4321, 'a hung post must not hang the watchdog that sent it');
+});
+
+test('a bus post that did not land throws, so the caller does not stamp it as sent', () => {
+  const clickup = require('../lib/clickup.cjs');
+  assert.throws(
+    () => clickup.postBusMessage('x', 'an alarm', {
+      from: 'mac-mini',
+      run: () => { const e = new Error('exit 1'); e.stderr = 'bus-post: the tracker has no project "starcaster-bus"'; throw e; },
+    }),
+    /tracker's bus failed: bus-post: the tracker has no project "starcaster-bus"/,
+  );
+});
+
+test('a bus post needs no ClickUp token: the alarm must not depend on a credential it no longer uses', () => {
+  const saved = process.env.CLICKUP_API_TOKEN;
+  delete process.env.CLICKUP_API_TOKEN;
+  delete require.cache[require.resolve('../lib/clickup.cjs')];
+  try {
+    const clickup = require('../lib/clickup.cjs');
+    let ran = false;
+    clickup.postBusMessage('x', 'an alarm', { from: 'mac-mini', run: () => { ran = true; return ''; } });
+    assert.ok(ran);
+  } finally {
+    if (saved !== undefined) process.env.CLICKUP_API_TOKEN = saved;
+    delete require.cache[require.resolve('../lib/clickup.cjs')];
+  }
+});

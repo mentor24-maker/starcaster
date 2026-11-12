@@ -793,7 +793,7 @@ function runDirect(args, { input, what, timeoutMs = SHELL_TIMEOUT_MS, run = exec
 function shellFailureDetail(err, timeoutMs) {
   if (err?.killed || err?.signal === 'SIGTERM' || err?.code === 'ETIMEDOUT') {
     return `it did not finish within ${Math.round(timeoutMs / 1000)}s and was killed `
-      + '(most likely a ClickUp call that hung rather than failed)';
+      + '(most likely a ClickUp or tracker call that hung rather than failed)';
   }
   const detail = (err?.stderr || err?.stdout || err?.message || '').toString().trim();
   return detail.slice(0, 300);
@@ -842,13 +842,55 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
   });
 }
 
-/** Post to the bus through the direct door (inherits its quota reporting). */
-function postBusMessage(channelId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
-  return runDirect(['chat', '--channel', String(channelId), '--body-file', '-'], {
-    input: text,
-    what: `post to bus channel ${channelId}`,
-    timeoutMs,
-  });
+/**
+ * Post to THE BUS, which is the tracker's now (SC-791, slice 1).
+ *
+ * StarCaster moved to the tracker on 2026-11-12 (SC-790). The bus is the
+ * tracker project `busProject` in spirality.project.json, and the one way in is
+ * the ticket door's `bus-post`: a comment on that project's "Team chat" ticket,
+ * read back. Every watchdog's alarm comes through here, so this one function is
+ * what moves them all.
+ *
+ * `channelId` is ignored, and kept only so the dozen callers that still pass
+ * the old ClickUp channel id need no edit in this slice: the tracker has one
+ * bus per project, named in the project config, not a channel per call. The
+ * callers' own ClickUp READS are slice 4 of SC-791.
+ *
+ * No ClickUp token is needed, deliberately: the old path refused before
+ * posting when CLICKUP_API_TOKEN was missing, which would have made an alarm
+ * depend on a credential the alarm no longer uses. The door runs under Doppler
+ * itself (loop/scripts/with_doppler.mjs), so a caller that is not wrapped in
+ * `doppler run` (repair, backup) posts the same way as one that is.
+ *
+ * Throws when the post did not land, with the door's own reason, so every
+ * caller's existing "could NOT post ... not stamping it as sent" path still
+ * runs and the next pass tries again.
+ */
+const WITH_DOPPLER = path.join(ROOT, 'loop', 'scripts', 'with_doppler.mjs');
+const TICKET_DOOR = path.join(ROOT, 'loop', 'scripts', 'clickup.mjs');
+
+function busPostArgs(from) {
+  const args = [WITH_DOPPLER, 'node', TICKET_DOOR, 'bus-post', '--body-file', '-'];
+  if (from) args.push('--from', String(from));
+  return args;
+}
+
+function postBusMessage(_channelId, text, { timeoutMs = SHELL_TIMEOUT_MS, from, run = execFileSync } = {}) {
+  let name = from;
+  if (!name) {
+    try { name = require('../../lib/nodeRoles.js').thisNode().name; } catch { name = ''; }
+  }
+  try {
+    return run('node', busPostArgs(name), {
+      cwd: ROOT,
+      encoding: 'utf8',
+      input: text,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: timeoutMs,
+    }).trim();
+  } catch (err) {
+    throw new Error(`post to the tracker's bus failed: ${shellFailureDetail(err, timeoutMs)}`);
+  }
 }
 
 module.exports = {
@@ -892,4 +934,5 @@ module.exports = {
   moveTaskStatus,
   commentOnTask,
   postBusMessage,
+  busPostArgs,
 };

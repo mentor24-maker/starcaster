@@ -308,56 +308,29 @@ npm run --silent repair -- --check || true
 # at all, and both are findings about the backup, not about this script.
 npm run --silent backup:node -- --scheduled || true
 
-npm run --silent clickup -- bus-relay
-status=$?
-echo "=== exit $status"
-
-# EXIT 7 IS "I STOPPED AT THE CLICKUP RESERVE", NOT "I BROKE" (task 86bbugd8j).
+# THE RELAY STEP ITSELF IS GONE (SC-791, slice 1, 2026-11-12).
 #
-# A scheduled job that yields has not done its work, so it must not exit 0 and
-# must not beat — a beat means "this job succeeded", and a roll call that
-# counted a yield as a success would report a relay that has read nothing for
-# hours as perfectly healthy. But it has not FAILED either, and routing it to
-# report:failure would post a ClickUp outage to the bus every ten minutes for
-# as long as the budget stayed tight, which is the alarm-fatigue shape every
-# other watchdog in this file is written to avoid.
+# This line used to be `npm run --silent clickup -- bus-relay`: the ClickUp
+# relay that moved Dane's answers, merged on his word and posted the merge
+# notices. StarCaster moved to the tracker on 2026-11-12 (SC-790), the new
+# ticket door has no `bus-relay` command, and from then on this job failed on
+# every wake with exit 2. Spirality's own relay lane, `com.starcaster.relay`,
+# does that work against the tracker now, so there is nothing left here to
+# replace it with: what remains of this job is the watchdog wake above.
 #
-# So: no beat, no failure alert, and a line in the log that says plainly what
-# happened. The relay's own output above already names the lists and tickets it
-# did not reach. If this becomes common rather than occasional, the answer is a
-# cheaper pass or a smaller reserve, and both are decisions with measurements
-# behind them (scripts/measure_clickup_headroom.mjs).
-if [ "$status" -eq 7 ]; then
-  echo "=== stopped at the ClickUp reserve — not a failure, and not a success either."
-  echo "=== no beat recorded (this pass did not finish) and no failure alert sent."
-elif [ "$status" -eq 0 ]; then
-  # A beat, and only on a real success. Recorded locally every time (free,
-  # offline); pushed to the shared roll call at most once a day, which is what
-  # keeps this from being channel noise x365 and is the resolution the
-  # requirement actually asks for — a day-long absence, not a ten-minute one.
-  #
-  # A pass on a machine that does not own the relay also exits 0, and that is
-  # correct: `--role bus-relay` records THIS machine as the beater, and the
-  # report only ever counts the OWNER's row, so a non-owner's beat can never
-  # make a dead relay look alive.
-  # It also clears this job's failure and silence alarms, so a fault that is
-  # fixed and returns is announced again straight away rather than being
-  # swallowed by the earlier one's six-hour suppression window. That clearing
-  # lives in the beat rather than here so only one file knows where the stamps
-  # are kept (NODES P1 — a path written twice is a path that drifts).
-  npm run --silent heartbeat -- --beat --role bus-relay || true
-else
-  # The failure alert, in the repo at last. It was built by hand on 2026-08-20
-  # inside an uncommitted wrapper on the MacBook Pro; when Slice B brought the
-  # schedule into git and ownership moved to the Mini, the alert did not come
-  # with it, and a failure on the machine that actually runs the relay reached
-  # nobody. Nothing announced that — which is what an uncommitted file does.
-  # Through npm, not node, so Doppler supplies the ClickUp token the same way
-  # every other write in this file gets it — and NOT redirected to /dev/null:
-  # this script's stdout IS the launchd log, so an alert that could not be sent
-  # has to leave its reason where the next reader will find it.
-  npm run --silent report:failure -- --job bus-relay --status "$status" \
-    --log "$HOME/Library/Logs/bus-relay-launchd.log" || true
-fi
+# So this job now succeeds when it reaches its last line. Every step above is
+# `|| true` and reports its own findings to the bus, which is the tracker's
+# bus now too (scripts/lib/clickup.cjs -> postBusMessage). The beat still
+# says "this wake ran", which is what the roll call needs to see: a schedule
+# that stopped firing is still the thing worth an alarm.
+echo "=== exit 0"
 
-exit $status
+# A beat on every completed wake. Recorded locally every time (free, offline);
+# pushed to the shared roll call at most once a day. A pass on a machine that
+# does not own `bus-relay` beats too, and that is correct: the report only
+# counts the OWNER's row, so a non-owner's beat cannot make a dead wake on the
+# owner look alive. The beat also clears this job's failure and silence alarms
+# (left over from the weeks it failed), so a new fault is announced at once.
+npm run --silent heartbeat -- --beat --role bus-relay || true
+
+exit 0
