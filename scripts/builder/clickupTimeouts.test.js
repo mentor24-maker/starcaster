@@ -129,3 +129,47 @@ test('a bus post needs no ClickUp token: the alarm must not depend on a credenti
     delete require.cache[require.resolve('../lib/clickup.cjs')];
   }
 });
+
+// Review of PR #1004: the config's trackerApiUrl is the Mini's loopback, and
+// this wake runs on the MacBook on purpose. Off the Mini the post must go to
+// the tracker's network address, or every MacBook alarm is "connection refused".
+const PROJECT = { trackerUrl: 'http://mac-mini.local:4180', trackerApiUrl: 'http://127.0.0.1:4180' };
+
+test('off the Mini, a bus post goes to the tracker\'s network address, never 127.0.0.1', () => {
+  const clickup = require('../lib/clickup.cjs');
+  let saw = null;
+  clickup.postBusMessage('x', 'an alarm', {
+    from: 'macbook-pro', env: {}, project: PROJECT, warn: () => {},
+    run: (cmd, args, options) => { saw = options; return ''; },
+  });
+  assert.equal(saw.env.TRACKER_API_URL, 'http://mac-mini.local:4180');
+  assert.doesNotMatch(saw.env.TRACKER_API_URL, /127\.0\.0\.1|localhost/);
+});
+
+test('an unrecognised machine is treated as off the Mini too', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: '', env: {}, project: PROJECT }).TRACKER_API_URL, 'http://mac-mini.local:4180');
+});
+
+test('on the Mini the door keeps its own loopback address', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: 'mac-mini', env: {}, project: PROJECT }).TRACKER_API_URL, undefined);
+});
+
+test('a TRACKER_API_URL the caller already set wins', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: 'macbook-pro', env: { TRACKER_API_URL: 'http://x:1' }, project: PROJECT }).TRACKER_API_URL, 'http://x:1');
+});
+
+test('a scratch-channel override says out loud that it posts to the real bus', () => {
+  const clickup = require('../lib/clickup.cjs');
+  const said = [];
+  clickup.postBusMessage('x', 'a rehearsal', {
+    from: 'mac-mini', env: { CLICKUP_BUS_CHANNEL: 'scratch-1' }, project: PROJECT,
+    warn: (m) => said.push(m), run: () => '',
+  });
+  assert.equal(said.length, 1);
+  assert.match(said[0], /CLICKUP_BUS_CHANNEL=scratch-1 .*REAL bus/);
+  assert.equal(clickup.busChannelOverrideWarning({}), null);
+  assert.equal(clickup.busChannelOverrideWarning({ CLICKUP_BUS_CHANNEL: '2kydhxeu-474' }), null);
+});

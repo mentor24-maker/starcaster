@@ -21,6 +21,7 @@
  * shell-outs inherit the same environment, so they need no token of their own.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { retryDecision } = require('../builder/clickupRetry.js');
 const ledger = require('./clickupLedger.cjs');
@@ -862,6 +863,29 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
  * itself (loop/scripts/with_doppler.mjs), so a caller that is not wrapped in
  * `doppler run` (repair, backup) posts the same way as one that is.
  *
+ * WHICH ADDRESS (review of PR #1004). The project config's `trackerApiUrl` is
+ * http://127.0.0.1:4180, which is only the tracker on the machine it runs on,
+ * the Mini. This wake runs on the MacBook too, on purpose: it is the vantage
+ * point that notices the Mini's jobs going quiet. So off the tracker's own
+ * machine the post goes to the config's network address, `trackerUrl`
+ * (http://mac-mini.local:4180), set as TRACKER_API_URL in the door's
+ * environment, which the door's config reader honours over the file. A
+ * TRACKER_API_URL the caller already set wins over both.
+ *
+ * THE GAP THIS DOES NOT CLOSE, said plainly rather than accepted quietly: the
+ * tracker runs on the Mini. When the Mini itself is off, its tracker is off
+ * too, so the MacBook's alarm about the Mini being down has nowhere to land;
+ * the post fails, the caller logs "could NOT post" in the MacBook's local log
+ * and does not stamp it, and nothing reaches Dane. ClickUp lived off the Mini
+ * and covered that one case. A second route for alarms that does not run on
+ * the Mini is a decision for Dane, raised on SC-791; until then this is a
+ * known hole, not a fixed one.
+ *
+ * `channelId` still means nothing to the tracker. A CLICKUP_BUS_CHANNEL
+ * override (the old way to rehearse an alarm on a scratch channel) cannot be
+ * honoured, so this says so on stderr rather than posting a rehearsal to the
+ * real bus in silence.
+ *
  * Throws when the post did not land, with the door's own reason, so every
  * caller's existing "could NOT post ... not stamping it as sent" path still
  * runs and the next pass tries again.
@@ -875,11 +899,49 @@ function busPostArgs(from) {
   return args;
 }
 
-function postBusMessage(_channelId, text, { timeoutMs = SHELL_TIMEOUT_MS, from, run = execFileSync } = {}) {
+/** The machine the tracker runs on, so the only one where 127.0.0.1 reaches it. */
+const TRACKER_HOST_NODE = 'mac-mini';
+const DEFAULT_BUS_CHANNEL = '2kydhxeu-474';
+
+function readProjectConfig() {
+  try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'spirality.project.json'), 'utf8')); } catch { return {}; }
+}
+
+function isLoopbackUrl(url) {
+  try { return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(new URL(url).hostname); } catch { return false; }
+}
+
+/**
+ * The environment the door runs in for a bus post: unchanged on the tracker's
+ * own machine, and pointed at the tracker's network address everywhere else.
+ * Pure, so the test can drive every branch.
+ */
+function busPostEnv({ node, env = process.env, project = readProjectConfig() } = {}) {
+  const out = { ...env };
+  if (env.TRACKER_API_URL) return out;
+  if (node === TRACKER_HOST_NODE) return out;
+  if (project.trackerApiUrl && !isLoopbackUrl(project.trackerApiUrl)) return out;
+  if (project.trackerUrl) out.TRACKER_API_URL = project.trackerUrl;
+  return out;
+}
+
+/** The one line said when a scratch-channel override can no longer be honoured. */
+function busChannelOverrideWarning(env = process.env) {
+  const override = env.CLICKUP_BUS_CHANNEL;
+  if (!override || override === DEFAULT_BUS_CHANNEL) return null;
+  return `postBusMessage: CLICKUP_BUS_CHANNEL=${override} is set, but the tracker has one bus `
+    + 'per project and no channels, so this post goes to the REAL bus (starcaster-bus, Team chat).';
+}
+
+function postBusMessage(_channelId, text, {
+  timeoutMs = SHELL_TIMEOUT_MS, from, run = execFileSync, env = process.env, project, warn = (m) => console.error(m),
+} = {}) {
   let name = from;
   if (!name) {
     try { name = require('../../lib/nodeRoles.js').thisNode().name; } catch { name = ''; }
   }
+  const warning = busChannelOverrideWarning(env);
+  if (warning) warn(warning);
   try {
     return run('node', busPostArgs(name), {
       cwd: ROOT,
@@ -887,6 +949,7 @@ function postBusMessage(_channelId, text, { timeoutMs = SHELL_TIMEOUT_MS, from, 
       input: text,
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: timeoutMs,
+      env: busPostEnv({ node: name, env, ...(project ? { project } : {}) }),
     }).trim();
   } catch (err) {
     throw new Error(`post to the tracker's bus failed: ${shellFailureDetail(err, timeoutMs)}`);
@@ -935,4 +998,6 @@ module.exports = {
   commentOnTask,
   postBusMessage,
   busPostArgs,
+  busPostEnv,
+  busChannelOverrideWarning,
 };

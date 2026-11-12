@@ -17,3 +17,13 @@ at ClickUp. One of them, the repair check, had been sending its findings into
 nothing since the move.
 
 The other five slices are their own tickets, SC-792 to SC-796.
+
+**After review sent it back.** The tracker's address in the settings,
+127.0.0.1, only means "this machine", so it only works on the Mini. The
+MacBook runs these same watchdogs on purpose (it is the one that can notice
+the Mini's jobs going quiet), and every alarm it sent would have bounced. Off
+the Mini, alarms now go to the tracker's network address, mac-mini.local.
+One gap is left open and named rather than hidden: the tracker lives on the
+Mini, so if the Mini is switched off, the MacBook's "the Mini is down" alarm
+has nowhere to go. ClickUp used to cover that. Whether to add a second route
+for alarms is Dane's decision, raised on SC-791.
