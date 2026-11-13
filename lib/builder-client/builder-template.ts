@@ -4572,6 +4572,10 @@ export function createEmptyModule(
                             emailReports: "false",
                             icon: "bug",
                             corner: "bottom-right",
+                            // SC-804: "page" = this page only (today's behaviour);
+                            // "site" = every page of the live site, read by the
+                            // server from PUBLISHED pages (lib/bugReportSiteWide.js).
+                            showOn: "page",
                             iconSize: "40",
                             iconBlock: "true",
                             blockColor: "#0f4f8f",

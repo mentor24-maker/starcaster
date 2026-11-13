@@ -615,6 +615,10 @@ function sample(page, selector, read, settleMs, series, probes, dispatch) {
       // otherwise "nothing is running" reads as "everything advanced".
       advanced: after.length > 0 && after.every((a, i) => a.currentTime > (before[i]?.currentTime ?? 0)),
       text: (el.textContent || '').trim().slice(0, 200),
+      // How many elements the contract's selector matches on the whole page.
+      // "Exactly one" is a claim no single-element read can make — a second,
+      // stacked copy is invisible to everything above (SC-804's double icon).
+      matches: document.querySelectorAll(selector).length,
       settleMs,
     };
   }, { selector, read, settleMs, series: series ?? null, probes: probes ?? null, dispatch: dispatch ?? null });
@@ -958,6 +962,11 @@ try {
          * (task 86bcxmrw2). Absent unless a contract asks.
          */
         ...(contract.pageAddresses ? { pageAddresses: contract.pageAddresses } : {}),
+        /*
+         * A site-wide Bug Report (SC-804), which the live site receives beside
+         * the page from the server. The preview honours it under ?live=1 only.
+         */
+        ...(contract.siteWideBugReport ? { siteWideBugReport: contract.siteWideBugReport } : {}),
       },
       contract.emulate?.storedDevice || contract.emulate?.previewDevice || 'desktop',
       contract.emulate?.liveSite === true
