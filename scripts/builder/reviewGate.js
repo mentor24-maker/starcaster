@@ -21,9 +21,9 @@
  *
  * Everything in here is a pure function over data someone else fetched: the
  * PR body, the head commit's timestamp, and the ticket's comments. No
- * network, no `gh`, no ClickUp client — which is what makes every refusal
+ * network, no `gh`, no tracker client — which is what makes every refusal
  * path testable, including the ones that are awkward to reproduce live (a
- * PASS that predates the newest commit; ClickUp being unreachable).
+ * PASS that predates the newest commit; the tracker being unreachable).
  *
  * The verdict parser is IMPORTED from mergeOnComment, never re-implemented.
  * A gate that disagreed with the merge step about what counts as a PASS
@@ -49,7 +49,12 @@ const { prTrailLanded } = require('./loopTrail.js');
  * link at all (task 86bbmmv7t, finding 2). Both sides read the one matcher
  * below now, and it carries the reasoning for which shape won.
  */
-const { CLICKUP_LINK_RE, findTicketId, findTicketIds } = require('./clickupTicketLink.js');
+// The loop's matcher, not scripts/builder/clickupTicketLink.js (SC-795): since
+// the move to the tracker (SC-790) a PR names its ticket as
+// `Ticket: http://mac-mini.local:4180/t/SC-12`, which only this copy reads. It
+// still reads an old app.clickup.com link, so a PR opened before the move
+// keeps the answer it had.
+const { CLICKUP_LINK_RE, findTicketId, findTicketIds, ticketLink } = require('../../loop/lib/clickupTicketLink.js');
 
 /**
  * A deliberate override, e.g. `[gate-waived: hotfix, site is down]`.
@@ -282,13 +287,14 @@ function allowsMerge(verdict) {
  *                                        body points at can be confirmed as
  *                                        this PR's own
  * @param {string|number} input.headCommittedAt  the newest commit's timestamp
- * @param {Array|null} input.comments   the ticket's ClickUp comments, or null
- *                                      if they could not be read
- * @param {string} [input.clickupError] why the comments could not be read
+ * @param {Array|null} input.comments   the ticket's comments (ClickUp's shape,
+ *                                      read from the tracker), or null if they
+ *                                      could not be read
+ * @param {string} [input.trackerError] why the comments could not be read
  * @returns {{verdict: string, reason: string, ticketId: string,
  *            waiverReason: string, verdictCommentId: string}}
  */
-function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, clickupError } = {}) {
+function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, trackerError } = {}) {
   const base = { ticketId: '', waiverReason: '', verdictCommentId: '', cause: '' };
 
   // The override is read FIRST, before the ticket link is even required. A
@@ -314,11 +320,11 @@ function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, click
     return {
       ...base,
       verdict: FAIL,
-      reason: 'the PR body carries no ClickUp ticket link, so there is no review to check',
+      reason: 'the PR body carries no ticket link, so there is no review to check',
     };
   }
 
-  // A gate that opens when it cannot see is not a gate. ClickUp being
+  // A gate that opens when it cannot see is not a gate. The tracker being
   // unreachable is the one answer that must never be mistaken for "fine":
   // "nothing reviewed this" and "I could not find out" look identical from
   // here, and only one of them is safe.
@@ -327,8 +333,8 @@ function reviewGateDecision({ prBody, prNumber, headCommittedAt, comments, click
       ...base,
       ticketId,
       verdict: CANNOT_TELL,
-      cause: 'clickup-unreachable',
-      reason: `could not read ticket ${ticketId} from ClickUp${clickupError ? `: ${clickupError}` : ''}`,
+      cause: 'tracker-unreachable',
+      reason: `could not read ticket ${ticketId} from the tracker${trackerError ? `: ${trackerError}` : ''}`,
     };
   }
 
@@ -701,7 +707,7 @@ const GATE_LABEL = 'MERGE GATE';
 function gateMessage(decision, { prNumber } = {}) {
   const label = prNumber ? `PR #${prNumber}` : 'This PR';
   const ticketLine = decision.ticketId
-    ? `Ticket: https://app.clickup.com/t/${decision.ticketId}`
+    ? `Ticket: ${ticketLink(decision.ticketId)}`
     : 'Ticket: none found in the PR body';
 
   if (decision.verdict === WAIVED) {
@@ -742,17 +748,18 @@ function gateMessage(decision, { prNumber } = {}) {
       ]
       : decision.verdict === CANNOT_TELL
         ? [
-          'The gate could not reach ClickUp, so it cannot tell whether this work',
-          'was reviewed. It fails rather than passes, deliberately: a gate that',
-          'opens when it cannot see is not a gate.',
+          'The gate could not read the ticket from the tracker, so it cannot tell',
+          'whether this work was reviewed. It fails rather than passes,',
+          'deliberately: a gate that opens when it cannot see is not a gate.',
           '',
-          'What to do: re-run this check. If it keeps failing, the CI ClickUp',
-          'token is missing or expired — see docs/LOOP_ENGINEERING.md, "The review gate".',
+          'What to do: re-run this check. If it keeps failing, the CI tracker',
+          'token (the TRACKER_REVIEW_GATE_TOKEN repository secret) is missing or',
+          'refused, or the tracker is down; the line above says which.',
         ]
         : !decision.ticketId
           ? [
             'What to do: add the ticket link to this PR description, on a line of',
-            'its own — `https://app.clickup.com/t/<id>`. The full link, not the id',
+            `its own — \`${ticketLink('<id>')}\`. The full link, not the id`,
             'alone; every PR gets a ticket, hand-made ones included. If this',
             'genuinely has no ticket and must merge anyway, put',
             '`[gate-waived: <reason>]` in the body; that is allowed, and it is',
