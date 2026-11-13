@@ -24,3 +24,14 @@ Three traps turned up while switching, and each is fixed:
 
 Each check took a real reading on the Mini before this was opened. New tests
 fail if any of them reaches for ClickUp again.
+
+**Second round, after review.** Review found one more thing still on
+ClickUp: the pipeline's own pause switch, and the "stranded ticket" sweep
+that the nightly repair runs. The sweep was looking at the old ClickUp list
+and naming a ticket by its ClickUp number; with "apply" it would have moved a
+ticket nobody reads any more. Both now read the tracker. The pause switch
+lives in the tracker's bus project beside the other standing tickets, and the
+loops ask it before every pass, so an expired ClickUp key can no longer stop
+them. Run against the tracker, the sweep now names the same stuck ticket by
+its tracker number (SC-716) and, as before, only suggests moving it. Main's
+pulse change, which landed in the meantime, was merged in.

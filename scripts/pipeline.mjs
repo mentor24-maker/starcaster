@@ -31,8 +31,14 @@
  * Every decision lives in scripts/builder/pipelinePause.js (pure, tested,
  * no network). This file is only the plumbing that carries them out.
  *
- * The token is Doppler's; the `pipeline` npm script wraps this in `doppler run`, and
- * nothing here prints or logs it (DOCTRINE 4.1).
+ * THE TRACKER, NOT CLICKUP (SC-794). The switch is a standing ticket in the
+ * tracker's bus project, and the queue the sweep and the drain read is this
+ * project's own. Both are reached through the ticket door by
+ * ./builder/pipelineTrackerCall.js, which answers the ClickUp-shaped paths the
+ * store and the sweep were written against — their rules did not change, only
+ * where the tickets are. The announcement is the tracker's bus (`bus-post`).
+ * Doppler supplies the door's token; nothing here sees, prints or logs it
+ * (DOCTRINE 4.1).
  */
 
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -43,10 +49,12 @@ import pipelineSweep from './builder/pipelineSweep.js';
 import pipelinePauseStore from './builder/pipelinePauseStore.js';
 import localWorkReading from './builder/localWorkReading.js';
 import machineComment from './builder/machineComment.js';
-// The one door to ClickUp, and the budget it keeps (task 86bbugcpa).
+// The bus post (the tracker's `bus-post`, read back) and the ticket door.
 import clickupLib from './lib/clickup.cjs';
+import trackerDoor from './lib/trackerDoor.cjs';
+import pipelineTrackerCall from './builder/pipelineTrackerCall.js';
 
-const { clickupFetch, getBudget, yieldedResult } = clickupLib;
+const { postBusMessage } = clickupLib;
 
 const {
   SWITCH_TASK_NAME, SWITCH_SEED_DESCRIPTION, STRANDED_AFTER_MS,
@@ -64,18 +72,15 @@ const { workProbe, workInProgressFor, thisNodeName } = localWorkReading;
 // unreadable (pipelinePauseStore.js says why that matters).
 const { readSwitch: storeReadSwitch, fetchQueue: storeFetchQueue, loopNoteOf, whyOf } = pipelinePauseStore;
 
-const TOKEN = process.env.CLICKUP_API_TOKEN;
-/** Constant in every real run; overridable only so tests can point at a
- *  server that is not ClickUp. Same knob the shared client uses. */
-const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
-const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-/** Set this once the switch ticket exists and every read is a single GET. */
-const PAUSE_TASK = process.env.CLICKUP_PAUSE_TASK || '';
+/** Only a label for the store's path: the translator reads this project's
+ *  queue and the bus project, whatever list name it is handed. */
+const LOOP_QUEUE_LIST = 'tracker';
+/** No id shortcut on the tracker: the switch is always found by its NAME in
+ *  the bus project (the old CLICKUP_PAUSE_TASK was a ClickUp id). */
+const PAUSE_TASK = '';
 /** The status the switch ticket rests in: outside every claim query and every
  *  bus-relay watch, so a pause switch can never be mistaken for work. */
-const SWITCH_STATUS = process.env.CLICKUP_PAUSE_TASK_STATUS || 'Live';
+const SWITCH_STATUS = 'Live';
 
 const DEFAULT_WAIT_MINUTES = 30;
 const DEFAULT_POLL_SECONDS = 20;
@@ -124,52 +129,19 @@ function usage(code = 2) {
   process.exit(code);
 }
 
-if (!TOKEN) {
-  console.error('CLICKUP_API_TOKEN is not set in this environment.\n');
-  console.error('The sanctioned route is Doppler, which already holds the token:');
-  console.error('  npm run pipeline -- <command>');
-  console.error('Agents never handle the live value by hand (DOCTRINE 4.1).');
-  process.exit(2);
-}
+/** Every ticket-door command this process ran; reported at the end. */
+const requestsThisPass = () => trackerDoor.requestsMade();
 
-/**
- * Every request this process makes; reported at the end, like bus-relay's.
- *
- * The counter is the SHARED one now (2026-09-04, task 86bbugcpa) rather than a
- * private `let` — the limit is per token and there is one token for the whole
- * company, so a count that only knows about its own file is not a budget. The
- * number printed below is unchanged in practice: every request this command
- * makes, including the pause store's, already went through `call`, because the
- * store takes its transport injected instead of opening its own.
- */
-const requestsThisPass = () => getBudget().requests;
+const toTracker = pipelineTrackerCall.trackerCall();
 
 async function call(method, path, body) {
-  // Every comment this script posts goes on under Dane's token, so it is
-  // stamped here the way clickup_direct.mjs's `callOnce` stamps its own —
-  // without it the bus relay reads a sweep note as his answer (task
-  // 86bccgp8q). Idempotent, so a body the caller already stamped is unchanged.
+  // Machine notes are stamped, so no relay reads a sweep note as Dane's
+  // answer (task 86bccgp8q). Idempotent, so a body the caller already stamped
+  // is unchanged.
   if (method === 'POST' && isCommentPostPath(path)) body = stampCommentBody(body);
-  // Through the one door. It never throws — a transport failure comes back as
-  // `transportError` — but this file's contract is that `call` DOES throw and
-  // `tryCall` below catches it, so the rejection is re-raised here and nowhere
-  // else. Behaviour is identical to the bare `fetch` this replaced.
-  const out = await clickupFetch(`${API_BASE}${path}`, {
-    method,
-    headers: { Authorization: TOKEN, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  // THE THIRD OUTCOME, AND IT MUST NOT THROW (task 86bc0w6my). A yield is not
-  // a transport failure and must not be raised as one: `safely()` below would
-  // catch it and `whyOf` would render it as "could not reach ClickUp", which
-  // is the sentence that stopped both loops on 2026-09-15 while the pipeline
-  // was running. It comes back as a RESULT carrying `yielded`, in the shape
-  // every reader here already handles — `whyOf` has printed a non-numeric
-  // status verbatim since task 86bbugd8j, waiting for exactly this.
-  if (out.yielded) return { ...yieldedResult(out.yielded), ok: false };
-  if (out.transportError) throw out.transportError;
-  const { res, json, text } = out;
-  return { res, json, text, ok: res.ok };
+  // The translator never throws; a failed door command comes back as
+  // `{ ok: false, threw }`, which `whyOf` reads as the reason.
+  return toTracker(method, path, body);
 }
 
 /** Never throw out of a WRITE either. The store wraps every read it makes;
@@ -285,16 +257,20 @@ async function writeRecord(taskId, text, label, at) {
  *  2026-08-23 (busRelayPlan.js). A failed announcement must not fail the
  *  command, and must never be silent either. */
 async function announce(content) {
-  const out = await tryCall('POST', `/api/v3/workspaces/${WORKSPACE}/chat/channels/${BUS_CHANNEL}/messages`, {
-    type: 'message', content, content_format: 'text/md',
-  });
-  if (out.ok) { console.error('  announced on the party line.'); return true; }
-  console.error(`  NOT announced on the party line (${whyOf(out)}) — the record is on the switch ticket instead.`);
-  return false;
+  try {
+    // The tracker's bus (`bus-post`), read back; it throws when it did not land.
+    postBusMessage(content);
+    console.error('  announced on the party line.');
+    return true;
+  } catch (err) {
+    console.error(`  NOT announced on the party line (${String(err?.message || err).slice(0, 300)}) — the record is on the switch ticket instead.`);
+    return false;
+  }
 }
 
-/** Best effort, loudly reported. The field is created once by hand in ClickUp;
- *  a missing one is a note nobody gets, never a pause that did not happen. */
+/** Best effort, loudly reported. The tracker has no "Loop note" field, so on
+ *  the tracker this always takes the "no field" line: a note nobody gets,
+ *  never a pause that did not happen. */
 async function stampSwitchNote(task, text) {
   const field = (task?.custom_fields || []).find((f) => String(f.name || '').trim().toLowerCase() === 'loop note');
   if (!field) { console.error('  (no "Loop note" field on this list — the queue will not show the state at a glance)'); return; }
@@ -526,7 +502,7 @@ if (cmd === 'check') {
   // outside every claim query and every bus-relay watch — a switch that could
   // be picked up as work would be picked up as work.
   if (!sw.switchFound) {
-    console.error(`No switch ticket yet — creating "${SWITCH_TASK_NAME}" in the Loop Queue.`);
+    console.error(`No switch ticket yet — creating "${SWITCH_TASK_NAME}" in the tracker's bus project (${trackerDoor.BUS_PROJECT}).`);
     const made = await tryCall('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
       name: SWITCH_TASK_NAME,
       status: SWITCH_STATUS,
@@ -539,8 +515,7 @@ if (cmd === 'check') {
     });
     if (!made.ok) {
       console.error(`\nCould not create the switch ticket (${whyOf(made)}).`);
-      console.error(`If the failure names the status, this list has no "${SWITCH_STATUS}" status — set`);
-      console.error('CLICKUP_PAUSE_TASK_STATUS to a status the Loop Queue actually has, one that no loop claims from.');
+      console.error(`If the failure names the status, the bus project has no "${SWITCH_STATUS}" status.`);
       process.exit(1);
     }
     sw = await readSwitch({ withQueue: true });

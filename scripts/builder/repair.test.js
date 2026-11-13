@@ -261,6 +261,14 @@ test('the sweep\'s own threshold note is preamble too, not a finding', () => {
   assert.match(repair.findingLine(out, 'stranded'), /WOULD be unstuck/);
 });
 
+test('the no-switch-yet line of the banner is preamble too (SC-794: the tracker starts with no switch)', () => {
+  const pause = require('./pipelinePause.js');
+  const banner = pause.pauseVerdict({ readable: true, switchFound: false, comments: [] }).message.split('\n');
+  assert.equal(banner.length, 2, 'the no-switch banner is two lines; if it changes, SWEEP_PREAMBLE must follow it');
+  const out = [...banner, '1 stranded ticket WOULD be unstuck: SC-716 (would return to Queued).'];
+  assert.match(repair.findingLine(out, 'stranded'), /WOULD be unstuck: SC-716/);
+});
+
 test('a sweep that found nothing still reports its all-clear, not the banner', () => {
   const out = ['The pipeline is RUNNING — resumed by Dane.', 'No stranded tickets needed unsticking.'];
   assert.equal(repair.findingLine(out, 'stranded'), 'No stranded tickets needed unsticking.');

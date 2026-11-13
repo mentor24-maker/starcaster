@@ -216,6 +216,14 @@ async function readComments(taskId, opts) {
   try { return await getTaskCommentRecords(taskId, opts); } catch { return null; }
 }
 
+/**
+ * Forget every comment read so far. The cache is one read per process, which
+ * is right for a watchdog that reads once; a command that WRITES a comment and
+ * then reads it back (the pause switch's `writeRecord`) must not be answered
+ * from before its own write.
+ */
+function forgetComments() { commentCache.clear(); }
+
 function _resetCacheForTests() { commentCache.clear(); doorRuns = 0; }
 
 /**
@@ -425,5 +433,6 @@ module.exports = {
   moveTaskStatus,
   commentOnTask,
   writeStandingTicket,
+  forgetComments,
   _resetCacheForTests,
 };
