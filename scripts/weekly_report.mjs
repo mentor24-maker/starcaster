@@ -92,8 +92,17 @@ if (!HOME_CHECK.ok) {
   process.exit(1);
 }
 const REPORTS_DIR = HOME_CHECK.dir;
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+// THE TRACKER, NOT CLICKUP (SC-792). The ticket stages are read from this
+// project on the tracker, the narrative ticket is filed in the bus project,
+// and failures post to the bus through the same `postBusMessage` every other
+// alarm uses. Both names come from spirality.project.json, the one file that
+// says where this project's tickets live, so they cannot drift from the door.
+const { postBusMessage } = require(path.join(REPO, 'scripts/lib/clickup.cjs'));
+const PROJECT_CONFIG = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(REPO, 'spirality.project.json'), 'utf8')); } catch (_) { return {}; }
+})();
+const TRACKER_PROJECT = PROJECT_CONFIG.projectSlug || 'starcaster';
+const BUS_PROJECT = PROJECT_CONFIG.busProject || 'starcaster-bus';
 const GH_REPO = 'mentor24-maker/starcaster';
 // How many CI runs to ask GitHub for. Big enough that a normal week comes back
 // whole — this repo ran 466 in one seven-day window — and finite so that a
@@ -120,7 +129,7 @@ if (flag('help')) {
   --no-tests       skip the test-suite figure (it prints "not available" with that reason)
   --help
 
-Figures only. The narrative is a person's job — see the ticket in the Loop Queue
+Figures only. The narrative is a person's job — see the ticket on the tracker
 this run files, or write it straight onto the page.`);
   process.exit(0);
 }
@@ -437,7 +446,7 @@ function gatherStages() {
   // --until as well as --since. With only a floor, "closed in the window"
   // counted everything closed from the window start UNTIL NOW, so a report for
   // an older week credited itself with tickets closed days after it ended.
-  const res = run('npm', ['run', '--silent', 'clickup', '--', 'stage-counts', '--list', LOOP_QUEUE_LIST, '--since', WINDOW.from, '--until', WINDOW.to], { timeout: 180000 });
+  const res = run('npm', ['run', '--silent', 'clickup', '--', 'stage-counts', '--project', TRACKER_PROJECT, '--since', WINDOW.from, '--until', WINDOW.to], { timeout: 180000 });
   if (!res.ok) return R.notAvailable(res.reason);
   try {
     const json = JSON.parse(res.stdout.slice(res.stdout.indexOf('{')));
@@ -619,7 +628,7 @@ the numbers are the script's, the words are yours.`;
 
   const scratch = scratchFile('ticket.md', body);
   const res = run('npm', ['run', '--silent', 'clickup', '--', 'task',
-    '--list', LOOP_QUEUE_LIST, '--name', `Weekly report: ${WINDOW.from} to ${WINDOW.to} — write the narrative`,
+    '--list', BUS_PROJECT, '--name', `Weekly report: ${WINDOW.from} to ${WINDOW.to} — write the narrative`,
     '--body-file', scratch.path, '--status', 'Queued', '--priority', 'normal'], { timeout: 180000 });
   scratch.cleanup();
   if (!res.ok) {
@@ -627,7 +636,7 @@ the numbers are the script's, the words are yours.`;
     console.error(`Could not file the narrative ticket: ${res.reason}`);
     return;
   }
-  console.error('Narrative ticket filed in the Loop Queue.');
+  console.error(`Narrative ticket filed in the tracker's ${BUS_PROJECT} project.`);
 }
 
 /**
@@ -636,15 +645,10 @@ the numbers are the script's, the words are yours.`;
  * down, that must not turn a partial success into a crash.
  */
 function bus(message) {
-  let scratch = null;
   try {
-    scratch = scratchFile('bus.md', `[CC-starcaster] ${message}`);
-    const res = run('npm', ['run', '--silent', 'clickup', '--', 'chat', '--channel', BUS_CHANNEL, '--body-file', scratch.path], { timeout: 120000 });
-    if (!res.ok) console.error(`(could not reach the bus either: ${res.reason})`);
+    postBusMessage(null, `[CC-starcaster] ${message}`, { timeoutMs: 120000 });
   } catch (err) {
     console.error(`(could not reach the bus either: ${err.message})`);
-  } finally {
-    if (scratch) scratch.cleanup();
   }
 }
 

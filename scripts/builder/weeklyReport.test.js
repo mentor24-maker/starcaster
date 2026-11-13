@@ -705,12 +705,29 @@ test('the report never asks run() to call a failure a success', () => {
     'allowFail made every `if (!res.ok)` below it dead code, twice, in two different functions — it does not come back');
 });
 
-test('the bus warning is reachable: bus() checks the result it gets back', () => {
+test('the bus warning is reachable: bus() reports a post that did not land', () => {
   const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
   const busFn = src.slice(src.indexOf('function bus('));
   const body = busFn.slice(0, busFn.indexOf('\n}'));
-  assert.match(body, /if \(!res\.ok\)/, 'a failed bus post is reported');
+  // postBusMessage THROWS when the post did not land (it never returns a
+  // failure), so the catch is the only place a failed post can be heard.
+  assert.match(body, /postBusMessage\(/, 'the post goes through the shared bus helper');
+  assert.match(body, /catch \(err\) \{\s*console\.error\(`\(could not reach the bus either/, 'a failed bus post is reported');
   assert.ok(!/allowFail/.test(body), 'and nothing upstream is telling run() to lie about it');
+});
+
+// SC-792. The tracker's door has no `chat` command and knows no ClickUp list
+// ids, so after the switch these three calls failed every Monday. Read the
+// code, not the comments: a comment may still say where things used to live.
+test('the report reaches the tracker, never ClickUp', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '..', 'weekly_report.mjs'), 'utf8');
+  const code = src.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+  assert.ok(!/'chat'/.test(code), 'the bus post uses bus-post (postBusMessage), not the ClickUp-only `chat`');
+  assert.ok(!/901418546619|2kydhxeu-474|CLICKUP_LOOP_QUEUE_LIST|CLICKUP_BUS_CHANNEL/.test(code),
+    'no ClickUp list or channel id: the tracker reads its projects from spirality.project.json');
+  assert.match(code, /'stage-counts', '--project', TRACKER_PROJECT/, 'stages are counted over the tracker project');
+  assert.match(code, /'--list', BUS_PROJECT, '--name'/, 'the narrative ticket is filed in the bus project');
+  assert.match(code, /PROJECT_CONFIG\.busProject/, 'the bus project name comes from the project config');
 });
 
 // ── The three smaller round-3 items ────────────────────────────────────────
