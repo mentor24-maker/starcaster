@@ -16,9 +16,10 @@
  * READ-ONLY IS A HARD PROPERTY, NOT AN INTENTION. This file uses exactly three
  * sources and writes to none of them:
  *   - the loop logs on disk, opened for reading
- *   - ClickUp GETs, issued directly rather than through `clickup_direct.mjs`,
- *     because that command's job is writes and this one must not be able to
- *     make one by accident
+ *   - the tracker's tickets, through the door's ONE read-only command,
+ *     `tickets --json` (`scripts/lib/trackerTickets.cjs` `readTickets`, which
+ *     builds its own arguments and can run nothing else). It was ClickUp GETs
+ *     until StarCaster moved to the tracker (SC-793)
  *   - `gh pr list` / `gh pr view`, both read subcommands
  * There is no write path in this file. `npm run reconcile` is where repairs
  * live; the pulse reports and stops (the ticket's own rule: report, never
@@ -44,15 +45,15 @@ const { findPullRequest, mergeDecision, checkState } = require('./builder/mergeO
 const staleReady = require('../lib/staleReady.js');
 const { printAndExit } = require('./lib/flushExit.cjs');
 
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-logs');
-const { clickupFetch, ClickUpReserveYield, reserveStopMessage } = require('./lib/clickup.cjs');
+// The read half ONLY. `runDoor` (the write-capable half of the same file) is
+// deliberately not imported: see "READ-ONLY IS A HARD PROPERTY" above.
+const { readTickets, asLoopTasks, projectConfig } = require('./lib/trackerTickets.cjs');
 
-const TOKEN = process.env.CLICKUP_API_TOKEN;
-/** Constant in every real run; overridable only so tests can point at a
- *  server that is not ClickUp. Same knob the shared client uses. */
-const API_BASE = process.env.CLICKUP_API_BASE || 'https://api.clickup.com';
-const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+const PROJECT = projectConfig();
+/** The tracker's seat for Dane (`operatorUserId` in spirality.project.json),
+ *  whose merge word on a Ready-to-launch ticket this report counts. */
+const OPERATOR_ID = Number(PROJECT.operatorUserId);
 
 const asJson = process.argv.includes('--json');
 const useExitCode = process.argv.includes('--exit-code');
@@ -67,8 +68,17 @@ const useExitCode = process.argv.includes('--exit-code');
  * a zero-pass "all clear" — on a machine that does not run the loop, "no log"
  * and "the loop never claimed" are the same bytes.
  */
+function loopLogName(job) {
+  const slug = String(PROJECT.projectSlug || '').trim();
+  return slug ? `${slug}-${job}.log` : `${job}.log`;
+}
+
 function readNoOp(job, queuedCount, now) {
-  const file = path.join(LOOP_LOG_DIR, `${job}.log`);
+  // `<projectSlug>-<job>.log`: the name Spirality's lane runner writes
+  // (`$LOG_DIR/$SLUG-loop-build.log`) since StarCaster's lanes moved to it on
+  // 2026-11-12. The old StarCaster runner wrote `loop-build.log`, which stopped
+  // growing that day, so reading it made A1 call a running lane stopped (SC-793).
+  const file = path.join(LOOP_LOG_DIR, loopLogName(job));
   let text;
   try {
     text = fs.readFileSync(file, 'utf8');
@@ -100,85 +110,21 @@ function readNoOp(job, queuedCount, now) {
   };
 }
 
-// ── ClickUp: GETs only ───────────────────────────────────────────────────────
-
-/*
- * Through the SHARED door (2026-09-04, task 86bbugcpa), so this hourly job's
- * requests are counted against the one company token instead of being spent
- * invisibly beside the relay's.
- *
- * The door never throws — it hands a transport failure back as
- * `transportError` — but every caller in this file is written around a throw,
- * and this ticket's non-goal is that nothing observable changes. So the
- * rejection is re-raised at exactly this line and nowhere else, with the
- * original error object, which is what the old bare `fetch` propagated.
- */
-async function clickupGet(apiPath) {
-  if (!TOKEN) {
-    throw new Error(
-      'CLICKUP_API_TOKEN is not set. Run this via `npm run pulse` so Doppler supplies it.'
-    );
-  }
-  const out = await clickupFetch(`${API_BASE}${apiPath}`, {
-    method: 'GET',
-    headers: { Authorization: TOKEN },
-  });
-  // THE THIRD OUTCOME (task 86bc0w6my). Raised as its own error TYPE rather
-  // than a generic one, so `main().catch` below can tell "this hourly job
-  // stood down at the reserve" from "ClickUp broke" — two events with opposite
-  // fixes. Without this the `res.ok` on the next line dereferenced a null
-  // `res` and the pulse reported a TypeError as its reading.
-  if (out.yielded) {
-    throw new ClickUpReserveYield(
-      `ClickUp GET ${apiPath} was not sent: ${out.yielded.why}`,
-      out.yielded,
-    );
-  }
-  if (out.transportError) throw out.transportError;
-  const { res, json, text } = out;
-  if (!res.ok) throw new Error(`HTTP ${res.status} ${json?.err || text.slice(0, 160)}`);
-  return json;
-}
-
-/** Every non-archived task in the list, across all pages. Same termination
- *  rule as lib/clickup.cjs: an empty page or an explicit last_page, never
- *  `last_page !== false` (the API can omit the flag, which truncated at 100).
- *
- *  `include_closed=true` IS LOAD-BEARING. Without it the list endpoint hides
- *  every closed-type status: measured live on 2026-08-30, 47 tickets came back
- *  where 163 existed, and all 116 `Live` ones were invisible — which made B1's
- *  zombie shape (terminal ticket, PR still open) impossible to fire. The
- *  fourth reader in this repo to hit the same trap; see the regression test. */
-async function listTasks(listId) {
-  const tasks = [];
-  for (let page = 0; page < 50; page++) {
-    const json = await clickupGet(`/api/v2/list/${listId}/task?archived=false&include_closed=true&page=${page}`);
-    const batch = Array.isArray(json.tasks) ? json.tasks : [];
-    tasks.push(...batch);
-    if (batch.length === 0 || json.last_page === true) return tasks;
-  }
-  throw new Error('stopped after 50 pages — implausible, treat the read as incomplete');
-}
+// ── The tracker: one read ─────────────────────────────────────────────────────
 
 /**
- * A task's comments as OBJECTS, oldest-first — not the plain strings
- * `lib/clickup.cjs` returns — because `findPullRequest` is the reader
- * `build-start` itself uses, and shape 4 is defined as "what build-start would
- * see". Asking a different question with a second parser is how the two drift.
+ * Every ticket in this project, Live included, with its comments, in ONE read
+ * (SC-793). Live is load-bearing: B1's zombie shape is a terminal ticket whose
+ * PR is still open, and a read without closed tickets cannot see one (measured
+ * on ClickUp on 2026-08-30: 47 tickets came back where 163 existed). The
+ * comments ride along because the tracker answers all ~800 tickets with their
+ * comments in under two seconds, which is cheaper than one read per ticket.
+ *
+ * Throws on a failed read; `main` reports that as CANNOT TELL, never as an
+ * empty queue.
  */
-async function getComments(taskId) {
-  const all = [];
-  let query = '';
-  for (let page = 0; page < 40; page++) {
-    const json = await clickupGet(`/api/v2/task/${taskId}/comment${query}`);
-    const batch = Array.isArray(json.comments) ? json.comments : [];
-    all.push(...batch);
-    if (batch.length < 25) break;
-    const oldest = batch[batch.length - 1];
-    if (!oldest?.id || !oldest?.date) break;
-    query = `?start=${encodeURIComponent(oldest.date)}&start_id=${encodeURIComponent(oldest.id)}`;
-  }
-  return all.reverse();
+function readQueue() {
+  return asLoopTasks(readTickets({ includeClosed: true, comments: true }));
 }
 
 // ── GitHub: read subcommands only ────────────────────────────────────────────
@@ -231,8 +177,9 @@ function prSnapshot(number) {
 // ── B1: assemble one record per ticket ───────────────────────────────────────
 
 /**
- * Only tickets worth comparing are fetched, because comments cost a request
- * each and the list runs to hundreds. That is every in-flight ticket (shapes
+ * Only tickets worth comparing are compared, because each one can cost a
+ * `gh pr view` and the list runs to hundreds (the comments themselves arrive
+ * with the one tracker read, `commentsById`). That is every in-flight ticket (shapes
  * 1 and 3), every ticket an open PR names (shape 4), and every terminal ticket
  * an open PR names (shape 2).
  *
@@ -240,7 +187,7 @@ function prSnapshot(number) {
  * four shapes, so skipping it drops no finding — and the report says how many
  * were compared so the number is never mistaken for "all of them".
  */
-async function readDrift(tasks, { prs: openPrs, error: prError }, { now } = {}) {
+async function readDrift(tasks, { prs: openPrs, error: prError }, { now, commentsById = new Map() } = {}) {
   if (openPrs === null) {
     return {
       findings: [],
@@ -280,14 +227,12 @@ async function readDrift(tasks, { prs: openPrs, error: prError }, { now } = {}) 
     const readyBase = {
       taskId: id,
       name: task.name,
-      url: task.url || `https://app.clickup.com/t/${id}`,
+      url: task.url || id,
       hours: (now - Number(task.date_updated)) / staleReady.MS_PER_HOUR,
     };
 
-    let comments = null;
-    try {
-      comments = await getComments(id);
-    } catch {
+    const comments = commentsById.get(id) || null;
+    if (!comments) {
       records.push({
         taskId: id,
         name: task.name,
@@ -348,9 +293,10 @@ async function main() {
   const generatedAt = new Date().toISOString();
 
   let tasks = null;
+  let commentsById = new Map();
   let queueError = null;
   try {
-    tasks = await listTasks(LOOP_QUEUE_LIST);
+    ({ tasks, commentsById } = readQueue());
   } catch (err) {
     queueError = err.message;
   }
@@ -366,7 +312,7 @@ async function main() {
     : null;
 
   const drift = tasks
-    ? await readDrift(tasks, listOpenPrs(), { now: Date.parse(generatedAt) })
+    ? await readDrift(tasks, listOpenPrs(), { now: Date.parse(generatedAt), commentsById })
     : null;
 
   // WHOSE HANDS the Ready-to-launch backlog needs, read from GitHub rather than
@@ -397,7 +343,7 @@ async function main() {
     printAndExit(JSON.stringify(result, null, 2), code);
   } else {
     if (queueError) {
-      console.log(`CANNOT TELL — the Loop Queue could not be read: ${queueError}`);
+      console.log(`CANNOT TELL — the tracker's tickets could not be read: ${queueError}`);
       console.log('A2 and B1 need it, so both are reported as unread rather than as clear.\n');
     }
     printAndExit(formatReport(result), code);
@@ -410,17 +356,6 @@ function argValue(flag) {
 }
 
 main().catch((err) => {
-  // A STAND-DOWN IS NOT A CRASH (task 86bc0w6my). A yield escaping to here is
-  // this job declining to spend the last of the minute's ClickUp budget, and
-  // "PULSE FAILED" would send the next reader looking for an outage that never
-  // happened. The exit code is deliberately unchanged: the pulse still took no
-  // reading, and CANNOT TELL is exit 2 whatever the reason — what changes is
-  // that the reason is now true.
-  if (err instanceof ClickUpReserveYield) {
-    console.error(`\n${reserveStopMessage('the pipeline pulse', err.message)}`);
-    printAndExit('This is not an all-clear. No check ran — but nothing is broken.', useExitCode ? 2 : 0, { stream: 'stderr' });
-    return;
-  }
   // Rule 5: even a crash says so loudly rather than producing a quiet nothing.
   // Through the same flush-then-leave door: a crash message discarded by
   // `process.exit` IS the quiet nothing this rule forbids, and stderr is a

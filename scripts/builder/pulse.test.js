@@ -1023,15 +1023,14 @@ test('and once the "PR opened:" comment is added, the same ticket reports clean'
 
 // ── Round-2 send-back (2026-08-30): the reader starved the honest module ────
 
-test('BREAK-TEST: the pulse asks ClickUp for closed tasks, or Live tickets are invisible', () => {
-  // Measured live: without include_closed the Loop Queue read 47 tickets where
-  // 163 existed, and all 116 Live ones were missing — so shape 2 (terminal
-  // ticket, PR still open) could never fire in production. Fourth reader in
-  // this repo to hit this; the other three carry the same assertion
-  // (pipelinePauseStore, reconcile_clickup_github, wipCap).
+test('BREAK-TEST: the pulse asks the tracker for Live tickets too, or they are invisible', () => {
+  // Measured live on ClickUp: without include_closed the Loop Queue read 47
+  // tickets where 163 existed, and all 116 Live ones were missing — so shape 2
+  // (terminal ticket, PR still open) could never fire in production. The
+  // tracker's `tickets --json` hides Live the same way unless asked (SC-793).
   const src = fs.readFileSync(path.join(__dirname, '..', 'pulse.cjs'), 'utf8');
-  assert.match(src, /\/task\?archived=false&include_closed=true&page=/,
-    'listTasks must send include_closed=true');
+  assert.match(src, /readTickets\(\{ includeClosed: true, comments: true \}\)/,
+    'the queue read must ask for Live tickets, and for the comments B1 reads');
 });
 
 test('BREAK-TEST: an unread loop log makes the HEADLINE say CANNOT TELL, never "the loop is claiming"', () => {
@@ -1194,7 +1193,18 @@ test('BREAK-TEST: the pulse command contains no write path at all', () => {
     assert.equal(re.test(code), false, `scripts/pulse.cjs must contain no ${what}`);
   }
 
-  assert.match(code, /method:\s*'GET'/, 'and it really does read ClickUp');
+  // SC-793: the tickets come through the tracker's door, whose other commands
+  // write. Only its read half may be imported, and nothing here may run the
+  // door (or its Doppler wrapper) itself.
+  for (const [re, what] of [
+    [/runDoor/, 'the write-capable door runner'],
+    [/clickup\.mjs|with_doppler/, 'a direct call to the ticket door'],
+    [/api\.clickup\.com|clickupFetch|CLICKUP_API_TOKEN/, 'a ClickUp call (the tickets are on the tracker)'],
+  ]) {
+    assert.equal(re.test(code), false, `scripts/pulse.cjs must contain no ${what}`);
+  }
+  assert.match(code, /const \{ readTickets, asLoopTasks, projectConfig \} = require\('\.\/lib\/trackerTickets\.cjs'\)/,
+    'and it really does read the tracker, through the read half only');
   assert.match(code, /'pr',\s*'list'/, 'and it really does read GitHub');
 });
 

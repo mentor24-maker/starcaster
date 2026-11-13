@@ -227,9 +227,13 @@ const PASS_MARKERS = [
   },
 ];
 
-/** A ClickUp task id. A pass that engaged a ticket names it; a pass that
- *  declined at a gate writes nothing to ClickUp and names none. */
-const CLICKUP_TASK_RE = /\b86bb[a-z0-9]{5,}\b/i;
+/** A ticket id. A pass that engaged a ticket names it; a pass that declined
+ *  at a gate writes nothing to the tracker and names none. Two shapes: the
+ *  tracker's (`SC-793`, the `trackerPrefix` in spirality.project.json) since
+ *  StarCaster moved to it on 2026-11-12, and ClickUp's (`86bb…`) for the
+ *  passes logged before. Without the first, every pass on the tracker read as
+ *  claimless and A1 alarmed on a lane that was building (SC-793). */
+const CLICKUP_TASK_RE = /\bSC-\d+\b|\b86bb[a-z0-9]{5,}\b/i;
 
 /**
  * One pass → `{ outcome, reasonKey, reason }`.
