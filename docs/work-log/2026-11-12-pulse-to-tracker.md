@@ -19,3 +19,17 @@ pass named a ClickUp id, so every pass on the tracker looked idle.
 
 The pause switch and the heartbeat's shared row, which each pass also
 touches, still use ClickUp; the heartbeat is SC-794.
+
+**Second round, after review.** Review found the pulse still could not tell
+which ticket an open pull request belongs to: it only recognised ClickUp
+links, and every pull request since the move links to the tracker instead. So
+two of its warnings — "this ticket is finished but its pull request is still
+open" and "a pull request names a ticket that has no record of it" — could
+never go off, while the report still said how many tickets it had compared.
+It now uses the same link reader the review gate uses, so the two cannot
+disagree, and a test proves both warnings fire for tracker tickets.
+
+Three smaller holes closed in the same round: if Dane's tracker account
+number could not be read, his "merge" replies were silently ignored (now the
+report says it cannot tell, and why); a wiped report read back as "cut short"
+instead of "empty"; and one test was passing only by coincidence.

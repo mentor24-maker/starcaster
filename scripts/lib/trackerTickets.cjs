@@ -76,8 +76,15 @@ function parseTicketsOutput(stdout) {
 }
 
 /** Run one door command, bounded, under Doppler. Throws with the door's reason. */
+/**
+ * `config` is the project config (spirality.project.json's object), used only
+ * to decide the tracker's address off the Mini. It is NOT `readTickets`'s
+ * `project`, which is a tracker project's slug for `--project`; one name for
+ * both meant a test's config object became `--project [object Object]` and
+ * never reached the address decision (SC-793 review).
+ */
 function runDoor(args, {
-  input, what, timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node = thisNodeName(), project,
+  input, what, timeoutMs = DOOR_TIMEOUT_MS, run = execFileSync, env = process.env, node = thisNodeName(), config,
 } = {}) {
   try {
     return String(run('node', [WITH_DOPPLER, 'node', TICKET_DOOR, ...args], {
@@ -87,7 +94,7 @@ function runDoor(args, {
       stdio: input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
       timeout: timeoutMs,
       maxBuffer: 64 * 1024 * 1024,
-      env: busPostEnv({ node, env, ...(project ? { project } : {}) }),
+      env: busPostEnv({ node, env, ...(config ? { project: config } : {}) }),
     }));
   } catch (err) {
     throw new Error(`${what || `the tracker's ${args[0]}`} failed: ${shellFailureDetail(err, timeoutMs)}`);
@@ -111,10 +118,19 @@ function ticketPageUrl(id, config = projectConfig()) {
  * or null when the output has no description at all (which a read-back must
  * treat as unread, never as an empty description).
  */
+/** What the door's `get` prints in place of an empty description. */
+const NO_BODY_PLACEHOLDER = '(no body)';
+
 function descriptionFromGet(printed) {
   const text = String(printed || '');
   const cut = text.indexOf('\n---\n');
-  return cut < 0 ? null : text.slice(cut + 5).replace(/\n\s*tracker: \d+ request\(s\) this run\s*$/, '').trim();
+  if (cut < 0) return null;
+  const body = text.slice(cut + 5).replace(/\n\s*tracker: \d+ request\(s\) this run\s*$/, '').trim();
+  // The door prints this placeholder for a ticket with NO description
+  // (loop/scripts/clickup.mjs `get`). It is not text anybody wrote, so it
+  // reads as empty — otherwise a wiped report read back as TRUNCATED, which
+  // names the wrong failure (SC-793 review).
+  return body === NO_BODY_PLACEHOLDER ? '' : body;
 }
 
 /**
@@ -163,6 +179,7 @@ module.exports = {
   readTickets,
   ticketPageUrl,
   descriptionFromGet,
+  NO_BODY_PLACEHOLDER,
   asLoopTasks,
   projectConfig,
 };

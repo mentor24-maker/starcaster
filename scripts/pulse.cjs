@@ -38,6 +38,8 @@ const {
   stageResidency,
   driftFindings,
   indexPrsByTicket,
+  driftCandidates,
+  operatorIdFrom,
   formatReport,
   exitCodeFor,
 } = require('./builder/pulse.js');
@@ -49,11 +51,13 @@ const LOOP_LOG_DIR = process.env.LOOP_LOG_DIR || path.join(os.homedir(), 'loop-l
 // The read half ONLY. `runDoor` (the write-capable half of the same file) is
 // deliberately not imported: see "READ-ONLY IS A HARD PROPERTY" above.
 const { readTickets, asLoopTasks, projectConfig } = require('./lib/trackerTickets.cjs');
+// Which ticket a PR declares: the one definition pr-opened and the review gate read.
+const { findTicketIds } = require('../loop/lib/clickupTicketLink.js');
 
 const PROJECT = projectConfig();
 /** The tracker's seat for Dane (`operatorUserId` in spirality.project.json),
  *  whose merge word on a Ready-to-launch ticket this report counts. */
-const OPERATOR_ID = Number(PROJECT.operatorUserId);
+const OPERATOR_ID = operatorIdFrom(PROJECT);
 
 const asJson = process.argv.includes('--json');
 const useExitCode = process.argv.includes('--exit-code');
@@ -206,13 +210,8 @@ async function readDrift(tasks, { prs: openPrs, error: prError }, { now, comment
     };
   }
 
-  const byTicket = indexPrsByTicket(openPrs);
-  const { IN_FLIGHT_STATUSES } = require('./builder/pulse.js');
-
-  const candidates = tasks.filter((t) => {
-    const status = String(t?.status?.status || '').toLowerCase();
-    return IN_FLIGHT_STATUSES.has(status) || byTicket.has(String(t?.id || '').toLowerCase());
-  });
+  const byTicket = indexPrsByTicket(openPrs, findTicketIds);
+  const candidates = driftCandidates(tasks, byTicket);
 
   const records = [];
   // The Ready-to-launch half rides along on THIS loop rather than opening its
@@ -270,8 +269,10 @@ async function readDrift(tasks, { prs: openPrs, error: prError }, { now, comment
         prReadError: snap ? snap.why : null,
         prState: snap ? snap.state : null,
         checks: snap ? snap.checks : null,
-        mergeWordGiven: (() => {
-          const d = mergeDecision({ status: task.status?.status, comments, operatorId: OPERATOR_ID });
+        mergeWordReadable: OPERATOR_ID.id !== null,
+        mergeWordError: OPERATOR_ID.why,
+        mergeWordGiven: OPERATOR_ID.id === null ? null : (() => {
+          const d = mergeDecision({ status: task.status?.status, comments, operatorId: OPERATOR_ID.id });
           return d.act === 'merge' || d.act === 'refuse';
         })(),
       });

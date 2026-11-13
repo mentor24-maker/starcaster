@@ -62,14 +62,25 @@ test('a hung door is killed and says so', () => {
   assert.throws(() => tt.readTickets({ run, node: 'mac-mini', timeoutMs: 5000 }), /did not finish within 5s and was killed/);
 });
 
-test('off the Mini the door is pointed at the tracker\'s network address', () => {
+test('BREAK-TEST: off the Mini the door is pointed at the tracker\'s network address', () => {
+  // An address the real spirality.project.json does NOT hold, so this passes
+  // only if the config given actually reaches the address decision. The old
+  // test passed the real address and so passed whether or not it arrived.
   const { run, calls } = fakeRun();
-  const project = { trackerApiUrl: 'http://127.0.0.1:4180', trackerUrl: 'http://mac-mini.local:4180' };
-  tt.readTickets({ run, node: 'macbook-pro', env: {}, project });
-  assert.equal(calls[0].opts.env.TRACKER_API_URL, 'http://mac-mini.local:4180');
+  const config = { trackerApiUrl: 'http://127.0.0.1:4999', trackerUrl: 'http://tracker.example:4999' };
+  tt.readTickets({ run, node: 'macbook-pro', env: {}, config });
+  assert.equal(calls[0].opts.env.TRACKER_API_URL, 'http://tracker.example:4999');
+  assert.ok(!calls[0].args.includes('--project'), 'a config is not a project slug');
   const mini = fakeRun();
-  tt.readTickets({ run: mini.run, node: 'mac-mini', env: {}, project });
+  tt.readTickets({ run: mini.run, node: 'mac-mini', env: {}, config });
   assert.equal(mini.calls[0].opts.env.TRACKER_API_URL, undefined, 'on the Mini the config\'s own address stands');
+});
+
+test('a project slug and a config travel separately', () => {
+  const { run, calls } = fakeRun();
+  tt.readTickets({ project: 'starcaster-bus', config: { trackerUrl: 'http://tracker.example:4999' }, run, node: 'macbook-pro', env: {} });
+  assert.deepEqual(calls[0].args.slice(3), ['tickets', '--json', '--project', 'starcaster-bus']);
+  assert.equal(calls[0].opts.env.TRACKER_API_URL, 'http://tracker.example:4999');
 });
 
 test('asLoopTasks gives the pure checks the shape they were written against', () => {
@@ -119,13 +130,22 @@ test('descriptionFromGet reads the stored description, and null when there is no
   assert.equal(tt.descriptionFromGet('id: x\nno separator'), null);
 });
 
+test('BREAK-TEST: the door\'s "(no body)" placeholder reads as an EMPTY description, not as text', () => {
+  // A wiped report must read back as empty; read as text, it was reported as
+  // TRUNCATED, which names the wrong failure.
+  const printed = `id:       SCBUS-2\nname:     Pipeline pulse\n---\n${tt.NO_BODY_PLACEHOLDER}\n\n  tracker: 2 request(s) this run\n`;
+  assert.equal(tt.NO_BODY_PLACEHOLDER, '(no body)', 'the exact text loop/scripts/clickup.mjs prints');
+  assert.equal(tt.descriptionFromGet(printed), '');
+  assert.equal(tt.descriptionFromGet('id: x\n---\nSee (no body) above.\n'), 'See (no body) above.', 'only the whole placeholder');
+});
+
 // SC-793. Read the code, not the comments: a comment may still say where
 // things used to live.
 test('the pulse reaches the tracker, never ClickUp', () => {
   const reader = codeOf('scripts/pulse.cjs');
   assert.ok(!/901418546619|CLICKUP_LOOP_QUEUE_LIST|api\.clickup\.com|clickupFetch|CLICKUP_OPERATOR_ID|48012725/.test(reader),
     'the reader has no ClickUp list, call or operator id');
-  assert.match(reader, /Number\(PROJECT\.operatorUserId\)/, 'Dane is the tracker\'s operator seat, from the project config');
+  assert.match(reader, /operatorIdFrom\(PROJECT\)/, 'Dane is the tracker\'s operator seat, from the project config');
 
   const publisher = codeOf('scripts/pulse_publish.mjs');
   assert.ok(!/901418546619|2kydhxeu-474|CLICKUP_LOOP_QUEUE_LIST|CLICKUP_BUS_CHANNEL|CLICKUP_PULSE_DIGEST|api\/v2|clickup\.call\(|clickup\.listTasks\(/.test(publisher),

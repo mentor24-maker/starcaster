@@ -631,7 +631,7 @@ function isTerminalStatus(status, statusType) {
  *     commentsReadable } false when the comment fetch itself failed
  */
 /**
- * The ClickUp link a PR body is REQUIRED to carry (`loop-build` step 7, and
+ * The ticket link a PR body is REQUIRED to carry (`loop-build` step 6, and
  * `pr-opened` refuses without it). This is the PR's declaration of which
  * ticket it belongs to.
  *
@@ -642,20 +642,70 @@ function isTerminalStatus(status, statusType) {
  * exactly one. Prose mentions another ticket all the time; the URL line means
  * "this PR is that ticket's work", which is the only claim shape 4 is about.
  */
-const CLICKUP_URL_RE = /https:\/\/app\.clickup\.com\/t\/(86bb[a-z0-9]+)/gi;
+/**
+ * Since the move off ClickUp (2026-11-12) every PR carries the tracker's link
+ * rather than the ClickUp one, `Ticket: <trackerUrl>/t/SC-12`. Which links
+ * count is ONE definition, `findTicketIds` in loop/lib/clickupTicketLink.js —
+ * the same one `pr-opened` and the review gate read — so this check cannot
+ * disagree with them about which ticket a PR declares. It knows both forms,
+ * the `/tickets/` address the door's `get` prints, and any host.
+ *
+ * It is PASSED IN (`ticketIdsIn`), not required here, because that reader
+ * reads spirality.project.json and this module touches no disk.
+ *
+ * Until SC-793's send-back only the ClickUp form was read here, so every PR
+ * opened after the move declared nothing, and shapes 2 and 4 could never fire
+ * while the report still said how many tickets it had compared.
+ */
 
-/** taskId -> [open PR numbers that DECLARE it via the required link]. */
-function indexPrsByTicket(openPrs) {
+/**
+ * taskId (lowercased) -> [open PR numbers that DECLARE it via the required
+ * link]. `ticketIdsIn(text)` returns the lowercased ticket ids `text` links to;
+ * scripts/pulse.cjs passes the shared `findTicketIds`.
+ */
+function indexPrsByTicket(openPrs, ticketIdsIn) {
+  if (typeof ticketIdsIn !== 'function') {
+    throw new TypeError('indexPrsByTicket needs the link reader (findTicketIds from loop/lib/clickupTicketLink.js)');
+  }
   const index = new Map();
   for (const pr of openPrs || []) {
     const text = `${pr.title || ''}\n${pr.body || ''}`;
-    const declared = new Set([...text.matchAll(CLICKUP_URL_RE)].map((m) => m[1].toLowerCase()));
+    const declared = new Set(ticketIdsIn(text).map((id) => String(id).toLowerCase()));
     for (const id of declared) {
       if (!index.has(id)) index.set(id, []);
       index.get(id).push(pr.number);
     }
   }
   return index;
+}
+
+/**
+ * The operator's id, or null with the reason. `Number(undefined)` is NaN, and
+ * NaN equals nobody — so an unreadable config used to make every merge word
+ * invisible without a sound (SC-793 review). Null makes each Ready-to-launch
+ * row CANNOT TELL instead, naming why.
+ */
+function operatorIdFrom(project) {
+  const raw = project && project.operatorUserId;
+  const id = Number(raw);
+  if (raw === undefined || raw === null || String(raw).trim() === '' || !Number.isFinite(id) || id <= 0) {
+    return { id: null, why: `spirality.project.json has no usable operatorUserId (${raw === undefined ? 'missing, or the file could not be read' : JSON.stringify(raw)})` };
+  }
+  return { id, why: null };
+}
+
+/**
+ * Which tickets the drift check looks at: every in-flight one, plus any ticket
+ * an open PR declares. The second half is the ONLY way a finished (Live)
+ * ticket is examined at all, so it is the only way shape 2 — a Live ticket
+ * whose PR is still open — can fire. An index that reads no link (SC-793's
+ * send-back) turns that half off without a sound.
+ */
+function driftCandidates(tasks, byTicket) {
+  return (tasks || []).filter((t) => {
+    const status = String(t?.status?.status || '').toLowerCase();
+    return IN_FLIGHT_STATUSES.has(status) || (byTicket && byTicket.has(String(t?.id || '').toLowerCase()));
+  });
 }
 
 function driftFindings(records) {
@@ -1099,8 +1149,9 @@ module.exports = {
   IN_FLIGHT_STATUSES,
   TERMINAL_STATUSES,
   isTerminalStatus,
-  CLICKUP_URL_RE,
   indexPrsByTicket,
+  driftCandidates,
+  operatorIdFrom,
   driftFindings,
   // report
   COMPLETION_MARKER,
