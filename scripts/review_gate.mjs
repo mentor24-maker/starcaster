@@ -14,8 +14,9 @@
  *
  *   node scripts/review_gate.mjs --pr <number> [--repo owner/name]
  *
- * Needs `gh` (for the PR) and CLICKUP_API_TOKEN (for the ticket). Without the
- * ClickUp token the answer is CANNOT TELL — never a pass.
+ * Needs `gh` (for the PR) and TRACKER_REVIEW_GATE_TOKEN (for the ticket, read
+ * from the tracker at `trackerPublicUrl` in spirality.project.json; SC-795).
+ * Without the token the answer is CANNOT TELL — never a pass.
  *
  * Every message this file prints begins with `gate.GATE_LABEL`, never the word
  * REVIEW. That is not cosmetic: `mergeOnComment.isReviewVerdict` reads any line
@@ -29,11 +30,35 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const gate = require('./builder/reviewGate.js');
-const reviewGateClickup = require('./builder/reviewGateClickup.js');
+const reviewGateTracker = require('./builder/reviewGateTracker.js');
+const { projectConfig } = require('../loop/lib/substrateConfig.js');
 
-const CLICKUP_TOKEN = process.env.CLICKUP_API_TOKEN;
-const WORKSPACE = process.env.CLICKUP_WORKSPACE_ID || '90141423066';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+/*
+ * The tracker, not ClickUp, since SC-795 (2026-11-12). Both calls live in
+ * scripts/builder/reviewGateTracker.js, because this file runs `main()` on
+ * import and so can never be required by a test, and what the gate does with
+ * a missing or refused token is the failure mode CI has actually had.
+ *
+ * The address is `trackerPublicUrl`: GitHub's machines cannot reach the Mini's
+ * home-network name. TRACKER_PUBLIC_URL overrides it for a rehearsal against
+ * another tracker; nothing in CI sets it.
+ */
+const TRACKER_TOKEN = process.env[reviewGateTracker.TOKEN_SECRET];
+
+function trackerSettings() {
+  let config = null;
+  try { config = projectConfig(); } catch { config = null; }
+  return {
+    baseUrl: process.env.TRACKER_PUBLIC_URL || (config && config.trackerPublicUrl) || '',
+    busProject: (config && config.busProject) || '',
+  };
+}
+
+const readTicketComments = (taskId) =>
+  reviewGateTracker.readTicketComments(taskId, { token: TRACKER_TOKEN, ...trackerSettings() });
+
+const announceWaiver = (content) =>
+  reviewGateTracker.announceWaiver(content, { token: TRACKER_TOKEN, ...trackerSettings() });
 
 function arg(name, fallback = '') {
   const i = process.argv.indexOf(`--${name}`);
@@ -68,25 +93,6 @@ function gh(args) {
   };
 }
 
-/*
- * Both ClickUp calls live in scripts/builder/reviewGateClickup.js now
- * (2026-09-04, task 86bbugcpa). They went there for two reasons at once: they
- * route through the shared client so this gate's requests are counted against
- * the one company token, and — because this file runs `main()` on import and
- * so can never be required by a test — that was the only way to PIN what they
- * do with a missing or expired token, which is the failure mode CI has
- * actually had. The pin runs the pre-migration originals as a control.
- */
-const readTicketComments = (taskId) =>
-  reviewGateClickup.readTicketComments(taskId, { token: CLICKUP_TOKEN });
-
-const announceWaiver = (content) =>
-  reviewGateClickup.announceWaiver(content, {
-    token: CLICKUP_TOKEN,
-    workspace: WORKSPACE,
-    busChannel: BUS_CHANNEL,
-  });
-
 async function main() {
   const prNumber = arg('pr', process.env.PR_NUMBER || '');
   const repo = arg('repo', process.env.GITHUB_REPOSITORY || '');
@@ -103,7 +109,7 @@ async function main() {
     '--json', 'body,number,url,commits',
   ]);
   if (!view.ok) {
-    // Cannot read the PR at all. Same rule as an unreachable ClickUp: this is
+    // Cannot read the PR at all. Same rule as an unreachable tracker: this is
     // a CANNOT TELL, and it is never a pass.
     const message = `${gate.GATE_LABEL} CANNOT TELL — could not read PR #${prNumber} from GitHub: ${view.stderr || 'unknown error'}`;
     console.error(message);
@@ -150,11 +156,11 @@ async function main() {
   // Only fetch the ticket when the answer could depend on it: a waived PR and
   // a PR with no ticket link are both decided from the body alone.
   let comments = null;
-  let clickupError = '';
+  let trackerError = '';
   if (ticketId && !waiver) {
     const read = await readTicketComments(ticketId);
     comments = read.comments;
-    clickupError = read.why;
+    trackerError = read.why;
   }
 
   const decision = gate.reviewGateDecision({
@@ -165,7 +171,7 @@ async function main() {
     prNumber: pr.number,
     headCommittedAt,
     comments,
-    clickupError,
+    trackerError,
   });
 
   const message = gate.gateMessage(decision, { prNumber: pr.number });
