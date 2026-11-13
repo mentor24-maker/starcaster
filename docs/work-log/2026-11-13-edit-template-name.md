@@ -16,3 +16,13 @@ saved. Its box is now locked, with a line underneath explaining why.
 
 Nothing on any client's public site changes. These are Builder admin screens
 only.
+
+**Second round (after review).** The reviewer found the real reason a rename
+looked like it didn't work: the Templates screen shows the templates twice —
+the "Saved Page Templates" table at the top, drawn by the older admin code, and
+the newer Template Details editor below it. Saving a new name worked, but only
+the editor refreshed; the table above kept the old name until the whole browser
+page was reloaded. Now the editor sends a "templates changed" signal after
+every save, create and delete, and the table re-draws itself when it hears it.
+Checked on a local copy: renamed a template and the table showed the new name
+straight away, no reload.

@@ -118,7 +118,7 @@ import {
 } from "./builder/builder-shared-block-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
 import { BuilderTemplateNameDialog } from "./builder/builder-template-name-dialog";
-import { BUILT_IN_TEMPLATE_NAME_NOTE, cleanTemplateName, defaultTemplateNameForPage, isSavableTemplateId } from "@/lib/builder-template-name";
+import { BUILT_IN_TEMPLATE_NAME_NOTE, announcePageTemplatesChanged, cleanTemplateName, defaultTemplateNameForPage, isSavableTemplateId } from "@/lib/builder-template-name";
 import { BuilderPreviewDeviceModal, type BuilderPreviewFrameDevice } from "./builder/builder-device-preview";
 import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import {
@@ -1920,6 +1920,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setPageTemplates((current) =>
           current.map((candidate) => (candidate.id === data.pageTemplate!.id ? data.pageTemplate! : candidate))
         );
+        announcePageTemplatesChanged();
       } else {
         const page = pages.find((candidate) => candidate.id === source.sourceId);
 
@@ -2003,6 +2004,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setPageTemplates((current) =>
           current.map((candidate) => (candidate.id === data.pageTemplate!.id ? data.pageTemplate! : candidate))
         );
+        announcePageTemplatesChanged();
       } else {
         const page = pages.find((candidate) => candidate.id === source.sourceId);
 
@@ -2180,6 +2182,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
 
       setTemplateNameDialog(null);
       await loadPageTemplates();
+      announcePageTemplatesChanged();
       setSelectedTemplateId(data.pageTemplate.id);
       setBuilderMode("templates");
       setMessage(`Created template "${data.pageTemplate.name}" from this page.`);
@@ -2448,6 +2451,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setSelectedTemplateId(data.pageTemplate.id);
       }
       await loadPageTemplates();
+      announcePageTemplatesChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save template.");
     } finally {
@@ -2730,6 +2734,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       setMessage("Page template deleted.");
       if (selectedTemplateId === templateId) { setSelectedTemplateId(""); setDraft(createDraftFromTemplate(null)); }
       await loadPageTemplates();
+      announcePageTemplatesChanged();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to delete template."); }
   }
 

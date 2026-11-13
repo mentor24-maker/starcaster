@@ -46,3 +46,24 @@ export function cleanTemplateName(name: string): string | null {
   const value = String(name ?? "").trim();
   return value ? value : null;
 }
+
+/**
+ * Window event the React Builder fires after it saves, creates or deletes a
+ * page template.
+ *
+ * Builder › Templates shows TWO lists of the same templates: React's own
+ * Template Details, and the "Saved Page Templates" table above it, which is
+ * drawn by the older vanilla code (`public/js/builder.js`,
+ * `renderPageTemplateRecordsTableHost`). React reloading its own list never
+ * reached that table, so a rename saved correctly and the table kept showing
+ * the old name until a full browser reload — which reads as "the name can't be
+ * edited" (SC-803, found on review). `public/js/builder.js` listens for this
+ * event and re-draws its table. Keep the string in step with the listener there.
+ */
+export const PAGE_TEMPLATES_CHANGED_EVENT = "builder:page-templates-changed";
+
+/** Tell every other list on the screen that the saved templates changed. */
+export function announcePageTemplatesChanged(target: EventTarget | undefined = typeof window === "undefined" ? undefined : window): void {
+  if (!target) return;
+  target.dispatchEvent(new CustomEvent(PAGE_TEMPLATES_CHANGED_EVENT));
+}
