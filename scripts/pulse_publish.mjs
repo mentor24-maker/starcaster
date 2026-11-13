@@ -478,7 +478,7 @@ if (!items.length) {
         // The tracker's bus (`bus-post`, read back), bounded by
         // `clickup.SHELL_TIMEOUT_MS`: a subprocess can hang the schedule
         // exactly as a fetch can. It throws when the post did not land.
-        clickup.postBusMessage(null, text);
+        clickup.postBusMessage(text);
         for (const item of due) {
           const why = writeStamp(item.key, new Date(NOW).toISOString());
           if (why) console.log(`Posted, but the suppression stamp for ${item.key} could not be written (${why}).`);

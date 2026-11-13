@@ -45,27 +45,32 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 /**
- * Replaces `scripts/lib/clickup.cjs` in the require cache before the script
- * loads it, so nothing here reaches ClickUp, Doppler or the party line.
+ * Replaces `scripts/lib/trackerDoor.cjs` (the ticket read, since SC-794) and
+ * `scripts/lib/clickup.cjs` (the bus post) in the require cache before the
+ * script loads them, so nothing here reaches the tracker, Doppler or the bus.
  * `STUB_TASKS` empty means the read FAILS, which is the unreadable UNKNOWN.
  */
 const PRELOAD = `'use strict';
 const fs = require('node:fs');
-const target = require.resolve(process.env.STUB_CLICKUP);
-require.cache[target] = {
-  id: target, filename: target, path: require('node:path').dirname(target),
-  loaded: true, children: [], paths: [],
-  exports: {
-    async listTasks() {
-      if (!process.env.STUB_TASKS) throw new Error('ClickUp said HTTP 500 (stubbed outage)');
-      return JSON.parse(fs.readFileSync(process.env.STUB_TASKS, 'utf8'));
-    },
-    postBusMessage(channel, text) {
-      fs.appendFileSync(process.env.STUB_POSTS, '--- POST ---\\n' + text + '\\n');
-      return { ok: true };
-    },
+function stub(file, exports) {
+  const target = require.resolve(file);
+  require.cache[target] = {
+    id: target, filename: target, path: require('node:path').dirname(target),
+    loaded: true, children: [], paths: [], exports,
+  };
+}
+stub(process.env.STUB_TRACKER, {
+  async listTasks() {
+    if (!process.env.STUB_TASKS) throw new Error('the tracker read failed (stubbed outage)');
+    return JSON.parse(fs.readFileSync(process.env.STUB_TASKS, 'utf8'));
   },
-};
+});
+stub(process.env.STUB_CLICKUP, {
+  postBusMessage(text) {
+    fs.appendFileSync(process.env.STUB_POSTS, '--- POST ---\\n' + text + '\\n');
+    return { ok: true };
+  },
+});
 `;
 
 /** A ClickUp task in the shape the API returns: millis as STRINGS. */
@@ -132,6 +137,7 @@ function makeBench() {
           HOME: home,
           PATH: bin, // no `gh` — its documented "not installed" branch, never the network
           STUB_CLICKUP: path.join(REPO, 'scripts', 'lib', 'clickup.cjs'),
+          STUB_TRACKER: path.join(REPO, 'scripts', 'lib', 'trackerDoor.cjs'),
           STUB_TASKS: tasks ? tasksFile : '',
           STUB_POSTS: posts,
         },

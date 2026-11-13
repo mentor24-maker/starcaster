@@ -334,7 +334,7 @@ function liveDeps({ node, ledgerFile } = {}) {
     probe: () => signIn.probeGateway(client.getOpenClawConfig().baseUrl),
     ask: (request) => client.callOpenClawResponses(request),
     extractJson: (raw) => client.extractJsonFromText(raw),
-    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(null, body),
+    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(body),
     readLedger: () => readLedger(ledgerFile),
     writeLedger: (ledger) => writeLedger(ledgerFile, ledger),
   };

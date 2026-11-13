@@ -71,12 +71,15 @@ const staleReady = require('../lib/staleReady.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
+// Tickets and comments from the tracker, through the ticket door (SC-794). Dane's
+// seat is the TRACKER's operator id from spirality.project.json, not the old
+// ClickUp id: a ClickUp id matches no comment on the tracker, so every answer
+// would have read as a machine's.
+const tracker = require('./lib/trackerDoor.cjs');
 const { findPullRequest, mergeDecision, checkState } = require('./builder/mergeOnComment.js');
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+const OPERATOR_ID = tracker.OPERATOR_ID;
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -244,8 +247,7 @@ function prSnapshot(number) {
  *  incomplete read returns null: half a trail that looks whole is how a reader
  *  concludes something never happened. */
 async function readComments(taskId) {
-  const out = await clickup.pageComments({ get: (p) => clickup.call('GET', p), taskId });
-  return out.complete ? out.comments : null;
+  return tracker.readComments(taskId);
 }
 
 // --- the pipeline switch ----------------------------------------------------
@@ -277,7 +279,7 @@ function pipelinePaused() {
 
 if (CHECK && !FORCE
     && !heartbeat.dueAgain({ lastAt: readFileOrEmpty(READ_STAMP_FILE), now: NOW, everyMs: READ_EVERY_MS })) {
-  console.log('Read within the last hour — not asking ClickUp or GitHub again. '
+  console.log('Read within the last hour — not asking the tracker or GitHub again. '
     + '(`--force` takes a fresh reading; a hand-run `npm run stale-ready` is never throttled.)');
   process.exit(0);
 }
@@ -285,14 +287,14 @@ if (CHECK && !FORCE
 let tasks = null;
 let queueError = null;
 try {
-  tasks = await clickup.listTasks(LOOP_QUEUE_LIST);
+  tasks = await tracker.listTasks();
 } catch (err) {
   queueError = String(err?.message || err).slice(0, 200);
 }
 
 if (!tasks) {
   // No tickets, no verdict — said out loud and exited 2, never as "all quiet".
-  console.log(`CANNOT TELL — the Loop Queue could not be read: ${queueError}`);
+  console.log(`CANNOT TELL — the tracker's tickets could not be read: ${queueError}`);
   console.log('Nothing about Ready to launch is known this pass. This is not an all-clear.');
   process.exit(2);
 }
@@ -313,7 +315,7 @@ for (const task of ready) {
   const base = {
     taskId: id,
     name: task.name,
-    url: task.url || `https://app.clickup.com/t/${id}`,
+    url: task.url || tracker.ticketUrl(id),
     hours: Number.isFinite(updated) && updated > 0
       ? (NOW - updated) / staleReady.MS_PER_HOUR
       : NaN,
@@ -395,7 +397,7 @@ console.log(staleReady.renderReport({
 // 108-114 requests on 2026-09-03 and are already retrying against ClickUp's
 // ~100/minute window (tasks 86bbugbay, 86bbuebkb).
 console.log('');
-console.log(`ClickUp requests this pass: ${clickup.requestsMade()} (ClickUp allows ~100/minute)`);
+console.log(`Tracker reads this pass: ${tracker.requestsMade()} door command(s)`);
 
 const code = staleReady.exitCodeFor(findings);
 
@@ -446,7 +448,7 @@ if (DRY) {
 }
 
 try {
-  clickup.postBusMessage(BUS_CHANNEL, text);
+  clickup.postBusMessage(text);
   for (const f of due) {
     // Posted but not stamped: the next pass posts a duplicate. Noisy, and far
     // better than an unwritable folder silencing the alarm outright — the same

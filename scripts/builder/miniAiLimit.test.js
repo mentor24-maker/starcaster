@@ -222,6 +222,23 @@ test('on the Mini the brake posts through the door, needing no TRACKER_TOKEN_APP
   assert.equal(appCalled, false, 'the Vercel-only door must not be used on the Mini');
 });
 
+// SC-800: main's copy of this seam passed a null channel first, and the door
+// takes (text, options) since SC-794, so it refused every post. The tests above
+// inject doorPost, so only this one reaches the real call.
+test('with no injected door, the brake calls the door with the message first', async () => {
+  const door = require('../lib/clickup.cjs');
+  const real = door.postBusMessage;
+  const calls = [];
+  door.postBusMessage = (...args) => { calls.push(args); return 'posted'; };
+  try {
+    const out = await limit.postBusFor({ env: {} })('ALARM: stop');
+    assert.deepEqual(out, { ok: true, why: '' });
+    assert.deepEqual(calls, [['ALARM: stop']]);
+  } finally {
+    door.postBusMessage = real;
+  }
+});
+
 test('a door that throws is a failed post with its reason, so the day is given back', async () => {
   const post = limit.postBusFor({ env: {}, doorPost: () => { throw new Error("post to the tracker's bus failed: 401"); } });
   const out = await post('ALARM: stop');
@@ -240,5 +257,5 @@ test('on Vercel the brake keeps the app\'s own door', async () => {
 test('the live seams use postBusFor, never trackerForward directly', () => {
   const src = fs.readFileSync(path.join(ROOT, 'lib', 'miniAiLimit.js'), 'utf8');
   assert.match(src, /postBus: postBusFor\(\)/);
-  assert.match(src, /clickup\.cjs'\)\.postBusMessage\(null, body\)/);
+  assert.match(src, /clickup\.cjs'\)\.postBusMessage\(body\)/);
 });

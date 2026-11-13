@@ -52,13 +52,16 @@ const staleAnswer = require('../lib/staleAnswer.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
+// Tickets and comments from the tracker, through the ticket door (SC-794). Dane's
+// seat is the TRACKER's operator id from spirality.project.json, not the old
+// ClickUp id: a ClickUp id matches no comment on the tracker, so every answer
+// would have read as a machine's.
+const tracker = require('./lib/trackerDoor.cjs');
 const busRelayPlan = require('./builder/busRelayPlan.js');
 const machineComment = require('./builder/machineComment.js');
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+const OPERATOR_ID = tracker.OPERATOR_ID;
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -182,8 +185,7 @@ function writeReadStamp(at) {
  *  whole of the question here. An incomplete read returns null: half a trail
  *  that looks whole is how a reader concludes something never happened. */
 async function readComments(taskId) {
-  const out = await clickup.pageComments({ get: (p) => clickup.call('GET', p), taskId });
-  return out.complete ? out.comments : null;
+  return tracker.readComments(taskId);
 }
 
 /**
@@ -196,15 +198,16 @@ async function readComments(taskId) {
  * the problem — and conflating them is the DOCTRINE 3.11 failure this whole
  * family of checks is written against.
  *
- * The envelope is unwrapped in `lib/staleAnswer.js`, not here, because the
- * three lines that used to do it here read `out.res.ok` — the OTHER ClickUp
- * client's shape — and so answered "could not tell" on every reading ever
- * taken. Pure and unit-tested is the only way that stays fixed.
+ * ON THE TRACKER THERE IS NOTHING TO READ (SC-794). The markers were replies
+ * the old ClickUp bus-relay threaded under his answer; the tracker has no
+ * reply threads and the relay that hands tickets back is Spirality's lane,
+ * which writes none. So this answers null, "could not check", every time:
+ * the finding falls through to the general "the hand-back is failing"
+ * sentence rather than blaming the party line, which is the honest reading.
+ * It does NOT answer false, which would assert a delivery failed.
  */
-async function readAnswerMarkers(commentId) {
-  return staleAnswer.markersFromReplyEnvelope(
-    await clickup.call('GET', `/api/v2/comment/${commentId}/reply`),
-  );
+async function readAnswerMarkers(_commentId) {
+  return null;
 }
 
 // --- the pipeline switch ----------------------------------------------------
@@ -230,7 +233,7 @@ function pipelinePaused() {
 
 if (CHECK && !FORCE
     && !heartbeat.dueAgain({ lastAt: readFileOrEmpty(READ_STAMP_FILE), now: NOW, everyMs: READ_EVERY_MS })) {
-  console.log(`Read within the last ${READ_EVERY_MS / 60000} minutes — not asking ClickUp again. `
+  console.log(`Read within the last ${READ_EVERY_MS / 60000} minutes — not asking the tracker again. `
     + '(`--force` takes a fresh reading; a hand-run `npm run stale-answer` is never throttled.)');
   process.exit(0);
 }
@@ -238,14 +241,14 @@ if (CHECK && !FORCE
 let tasks = null;
 let queueError = null;
 try {
-  tasks = await clickup.listTasks(LOOP_QUEUE_LIST);
+  tasks = await tracker.listTasks();
 } catch (err) {
   queueError = String(err?.message || err).slice(0, 200);
 }
 
 if (!tasks) {
   // No tickets, no verdict — said out loud and exited 2, never as "all quiet".
-  console.log(`CANNOT TELL — the Loop Queue could not be read: ${queueError}`);
+  console.log(`CANNOT TELL — the tracker's tickets could not be read: ${queueError}`);
   console.log('Nothing about Needs your input is known this pass. This is not an all-clear.');
   process.exit(2);
 }
@@ -262,7 +265,7 @@ const parked = tasks.filter(
 const records = [];
 for (const task of parked) {
   const id = String(task.id);
-  const base = { taskId: id, name: task.name, url: task.url || `https://app.clickup.com/t/${id}` };
+  const base = { taskId: id, name: task.name, url: task.url || tracker.ticketUrl(id) };
 
   let comments = null;
   try { comments = await readComments(id); } catch { comments = null; }
@@ -333,7 +336,7 @@ console.log(staleAnswer.renderReport({
 // line the relay, reconcile and stale-ready all print. It matters here because
 // the whole incident behind this check was a pass running out of that budget.
 console.log('');
-console.log(`ClickUp requests this pass: ${clickup.requestsMade()} (ClickUp allows ~100/minute)`);
+console.log(`Tracker reads this pass: ${tracker.requestsMade()} door command(s)`);
 
 const code = staleAnswer.exitCodeFor(findings);
 
@@ -386,7 +389,7 @@ if (DRY) {
 }
 
 try {
-  clickup.postBusMessage(BUS_CHANNEL, text);
+  clickup.postBusMessage(text);
   for (const f of due) {
     // Posted but not stamped: the next pass posts a duplicate. Noisy, and far
     // better than an unwritable folder silencing the alarm outright — the same

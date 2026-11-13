@@ -23,7 +23,6 @@ const watch = require('../lib/workerWatch.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const clickup = require('./lib/clickup.cjs');
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const TIMEOUT_MS = 15000;
 
 const argv = process.argv.slice(2);
@@ -72,10 +71,10 @@ if (CHECK) {
       ? watch.renderAlarm({ judged, node, at })
       : watch.renderClear({ judged, node, at });
     if (DRY) {
-      console.log(`--- would post to the bus (${BUS_CHANNEL}) ---\n${text}\n--- (dry run: nothing sent, nothing stamped) ---`);
+      console.log(`--- would post to the bus (the tracker's) ---\n${text}\n--- (dry run: nothing sent, nothing stamped) ---`);
     } else {
       try {
-        clickup.postBusMessage(BUS_CHANNEL, text);
+        clickup.postBusMessage(text);
         fs.mkdirSync(heartbeat.heartbeatDir(), { recursive: true });
         if (decided.action === 'post') {
           fs.writeFileSync(STAMPS[judged.verdict], `${at}\n`);

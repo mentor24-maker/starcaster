@@ -40,8 +40,6 @@ const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-
 const argv = process.argv.slice(2);
 const arg = (name, fallback = '') => {
   const i = argv.indexOf(`--${name}`);
@@ -102,7 +100,7 @@ const text = heartbeat.renderFailurePost({
 });
 
 try {
-  clickup.postBusMessage(BUS_CHANNEL, text);
+  clickup.postBusMessage(text);
   try {
     fs.mkdirSync(heartbeat.heartbeatDir(), { recursive: true });
     fs.writeFileSync(stampFile, `${at}\n`);

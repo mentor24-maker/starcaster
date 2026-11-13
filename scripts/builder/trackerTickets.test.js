@@ -155,7 +155,7 @@ test('the pulse reaches the tracker, never ClickUp', () => {
   assert.match(publisher, /\['describe', '--task', found\.task\.id, '--body-file', '-'\]/, 'and rewritten in place after that');
   assert.match(publisher, /\['get', '--task', String\(taskId\)\]/, 'and read back after every write');
   assert.match(publisher, /projectConfig\(\)\.busProject/, 'the bus project name comes from the project config');
-  assert.match(publisher, /clickup\.postBusMessage\(null, text\)/, 'alarms go to the tracker\'s bus');
+  assert.match(publisher, /clickup\.postBusMessage\(text\)/, 'alarms go to the tracker\'s bus');
 });
 
 test('A1 reads the build lane\'s log under the name Spirality\'s runner writes', () => {

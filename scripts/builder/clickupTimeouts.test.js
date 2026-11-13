@@ -88,7 +88,7 @@ test('the shell-out door passes a deadline to the child it spawns', () => {
 test('the bus post goes to the tracker\'s bus through the ticket door, not ClickUp chat (SC-791)', () => {
   const clickup = require('../lib/clickup.cjs');
   let saw = null;
-  const out = clickup.postBusMessage('2kydhxeu-474', 'an alarm', {
+  const out = clickup.postBusMessage('an alarm', {
     from: 'mac-mini',
     timeoutMs: 4321,
     run: (cmd, args, options) => { saw = { cmd, args, options }; return 'Posted to the bus: comment 1\n'; },
@@ -107,7 +107,7 @@ test('the bus post goes to the tracker\'s bus through the ticket door, not Click
 test('a bus post that did not land throws, so the caller does not stamp it as sent', () => {
   const clickup = require('../lib/clickup.cjs');
   assert.throws(
-    () => clickup.postBusMessage('x', 'an alarm', {
+    () => clickup.postBusMessage('an alarm', {
       from: 'mac-mini',
       run: () => { const e = new Error('exit 1'); e.stderr = 'bus-post: the tracker has no project "starcaster-bus"'; throw e; },
     }),
@@ -122,7 +122,7 @@ test('a bus post needs no ClickUp token: the alarm must not depend on a credenti
   try {
     const clickup = require('../lib/clickup.cjs');
     let ran = false;
-    clickup.postBusMessage('x', 'an alarm', { from: 'mac-mini', run: () => { ran = true; return ''; } });
+    clickup.postBusMessage('an alarm', { from: 'mac-mini', run: () => { ran = true; return ''; } });
     assert.ok(ran);
   } finally {
     if (saved !== undefined) process.env.CLICKUP_API_TOKEN = saved;
@@ -138,7 +138,7 @@ const PROJECT = { trackerUrl: 'http://mac-mini.local:4180', trackerApiUrl: 'http
 test('off the Mini, a bus post goes to the tracker\'s network address, never 127.0.0.1', () => {
   const clickup = require('../lib/clickup.cjs');
   let saw = null;
-  clickup.postBusMessage('x', 'an alarm', {
+  clickup.postBusMessage('an alarm', {
     from: 'macbook-pro', env: {}, project: PROJECT, warn: () => {},
     run: (cmd, args, options) => { saw = options; return ''; },
   });
@@ -164,7 +164,7 @@ test('a TRACKER_API_URL the caller already set wins', () => {
 test('a scratch-channel override says out loud that it posts to the real bus', () => {
   const clickup = require('../lib/clickup.cjs');
   const said = [];
-  clickup.postBusMessage('x', 'a rehearsal', {
+  clickup.postBusMessage('a rehearsal', {
     from: 'mac-mini', env: { CLICKUP_BUS_CHANNEL: 'scratch-1' }, project: PROJECT,
     warn: (m) => said.push(m), run: () => '',
   });

@@ -31,8 +31,6 @@ const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
-
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
 const CHECK = flag('check');
@@ -209,7 +207,7 @@ if (!dueAgain(readStamp(alarmStamp), heartbeat.REPOST_EVERY_MS)) {
 }
 
 try {
-  clickup.postBusMessage(BUS_CHANNEL, post);
+  clickup.postBusMessage(post);
   const why = writeStamp(alarmStamp, new Date(NOW).toISOString());
   if (why) console.log('Posted, but the suppression stamp could not be written (' + why + ').');
   console.log('Posted to the bus.');

@@ -1255,14 +1255,15 @@ test('the failure alert and the closeout name the SAME stamp — a rename on eit
 });
 
 test('A FAILED ROLL-CALL READ NEVER BECOMES AN EMPTY ONE — both read-modify-write sites', () => {
-  // Round-2 review, finding 3. `clickup.call` resolves on an HTTP error rather
-  // than throwing, so `fresh.ok === false` used to fall into the same branch as
+  // Round-2 review, finding 3. The read (`clickup.call` then, `tracker.getTask`
+  // since SC-794) resolves on a failed read rather than throwing, so
+  // `fresh.ok === false` used to fall into the same branch as
   // "the description carries no readable block" — and the PUT then rewrote the
   // shared roll call from this machine's beats alone, deleting every other
   // machine's row. `--push-owned` makes it worse than `--beat` did, because it
   // writes N roles in one go.
   const src = fs.readFileSync(path.join(__dirname, '..', 'node_heartbeat.mjs'), 'utf8');
-  const reads = [...src.matchAll(/const fresh = await clickup\.call\('GET'/g)];
+  const reads = [...src.matchAll(/const fresh = await tracker\.getTask\(/g)];
   assert.equal(reads.length, 2, 'the roll-call read sites have changed in number — check each one by hand');
   for (const read of reads) {
     const after = src.slice(read.index, read.index + 2500);
