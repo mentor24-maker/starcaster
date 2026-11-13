@@ -321,17 +321,20 @@ function formatHealth(run) {
 }
 
 /**
- * The real seams, on the Mini. The ClickUp token comes from Doppler (the
- * worker runs under `doppler run`, scripts/install_youtube_outreach_worker.sh).
+ * The real seams, on the Mini. An alarm posts to the tracker's bus through the
+ * ticket door's `bus-post` (scripts/lib/clickup.cjs postBusMessage, SC-791/
+ * SC-796): one comment on the bus project's "Team chat" ticket, read back. The
+ * tracker has one bus per project, so there is no channel to name; the door
+ * runs under Doppler itself.
  */
-function liveDeps({ node, ledgerFile, busChannel = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474' } = {}) {
+function liveDeps({ node, ledgerFile } = {}) {
   const client = require('../../lib/openclawResponsesClient');
   return {
     node,
     probe: () => signIn.probeGateway(client.getOpenClawConfig().baseUrl),
     ask: (request) => client.callOpenClawResponses(request),
     extractJson: (raw) => client.extractJsonFromText(raw),
-    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(busChannel, body),
+    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(null, body),
     readLedger: () => readLedger(ledgerFile),
     writeLedger: (ledger) => writeLedger(ledgerFile, ledger),
   };
