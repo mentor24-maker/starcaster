@@ -205,3 +205,40 @@ test('the setting: a whole number from 0, optional so other forms leave it alone
   assert.equal(store.normaliseRow(null).miniDailyRequests, 40);
   assert.equal(store.normaliseRow({ mini_daily_requests: 0 }).miniDailyRequests, 0);
 });
+
+// ── SC-796 review: the brake posts from the Mini, which has no app token ────
+
+test('on the Mini the brake posts through the door, needing no TRACKER_TOKEN_APP', async () => {
+  const sent = [];
+  let appCalled = false;
+  const post = limit.postBusFor({
+    env: {}, // no VERCEL, no TRACKER_TOKEN_APP: exactly the Mini's Doppler
+    doorPost: (text) => { sent.push(text); return 'posted SCBUS-1 comment 9'; },
+    appPost: async () => { appCalled = true; return { ok: false, why: 'TRACKER_TOKEN_APP is not set' }; },
+  });
+  const out = await post('ALARM: stop');
+  assert.deepEqual(out, { ok: true, why: '' });
+  assert.deepEqual(sent, ['ALARM: stop']);
+  assert.equal(appCalled, false, 'the Vercel-only door must not be used on the Mini');
+});
+
+test('a door that throws is a failed post with its reason, so the day is given back', async () => {
+  const post = limit.postBusFor({ env: {}, doorPost: () => { throw new Error("post to the tracker's bus failed: 401"); } });
+  const out = await post('ALARM: stop');
+  assert.equal(out.ok, false);
+  assert.match(out.why, /401/);
+});
+
+test('on Vercel the brake keeps the app\'s own door', async () => {
+  let doorCalled = false;
+  const post = limit.postBusFor({ env: { VERCEL: '1' }, doorPost: () => { doorCalled = true; }, appPost: async (t) => ({ ok: true, why: '', t }) });
+  const out = await post('ALARM: stop');
+  assert.equal(out.ok, true);
+  assert.equal(doorCalled, false);
+});
+
+test('the live seams use postBusFor, never trackerForward directly', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'lib', 'miniAiLimit.js'), 'utf8');
+  assert.match(src, /postBus: postBusFor\(\)/);
+  assert.match(src, /clickup\.cjs'\)\.postBusMessage\(null, body\)/);
+});

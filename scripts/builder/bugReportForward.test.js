@@ -27,7 +27,7 @@ const TICKET = 'SC-9001';
 
 // ── A fake tracker: records requests, answers like tracker/server.mjs ──────
 
-function fakeTracker({ createStatus = 401, landedStatus = 'needs your input', landedAssignee = OPERATOR, stickyWrongStatus = false, deleteStatus = 200, readBackBody = 'body', throwOn = null } = {}) {
+function fakeTracker({ createStatus = 401, landedStatus = 'needs your input', landedAssignee = OPERATOR, stickyWrongStatus = false, deleteStatus = 200, patchStatus = 200, readBackBody = 'body', throwOn = null } = {}) {
   const requests = [];
   let reads = 0;
   const fetchImpl = async (url, init = {}) => {
@@ -57,7 +57,7 @@ function fakeTracker({ createStatus = 401, landedStatus = 'needs your input', la
       });
     }
     if (method === 'DELETE') return json(deleteStatus, deleteStatus === 200 ? { deleted: TICKET } : { error: 'not-deletable', message: 'started' });
-    if (method === 'PATCH') return json(200, { ticket: { id: TICKET }, changed: ['status'] });
+    if (method === 'PATCH') return json(patchStatus, patchStatus === 200 ? { ticket: { id: TICKET }, changed: ['status'] } : { error: 'forbidden', message: 'only the operator may set that status' });
     return json(404, { error: 'unexpected path' });
   };
   return { fetchImpl, requests };
@@ -197,6 +197,37 @@ test('BLOCKER: when the fail-safe DELETE itself fails, the result says the ticke
   assert.match(result.error, /Move or delete it by hand/);
   assert.doesNotMatch(result.error, /deleted it rather than/);
   assert.equal(result.taskId, TICKET, 'the surviving ticket id is returned so it can be found');
+});
+
+test('an undeletable ticket in a status no loop claims is not called "in the queue" — the message reads the real status', async () => {
+  // SC-796 review: the tracker deletes only requested/queued tickets, so a
+  // report that landed "needs your input" for the WRONG person answers 409 —
+  // and saying a build loop may claim it would be false.
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 201, landedAssignee: MACHINE, stickyWrongStatus: true, deleteStatus: 409, patchStatus: 403 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
+  assert.equal(result.code, 'HELD_STATUS_NOT_DELETED');
+  assert.match(result.error, /"needs your input", which no build loop claims from/);
+  assert.doesNotMatch(result.error, /build loop may claim/);
+  assert.match(result.error, /correction was refused .*HTTP 403.*only the operator may set that status/, 'the PATCH refusal is kept');
+});
+
+test('an undeletable ticket left "queued" still says a build loop may claim it', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 201, landedStatus: 'queued', stickyWrongStatus: true, deleteStatus: 409 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
+  assert.match(result.error, /It is in "queued" right now, where a build loop may claim it/);
+});
+
+test('a token but no address names the ADDRESS, not the token', async () => {
+  const forward = require('../../lib/trackerForward');
+  assert.match(forward.notConfiguredReason({ token: 't', baseUrl: '' }), /no public address/);
+  assert.doesNotMatch(forward.notConfiguredReason({ token: 't', baseUrl: '' }), /TRACKER_TOKEN_APP is not set/);
+  assert.match(forward.notConfiguredReason({ token: '', baseUrl: BASE }), /TRACKER_TOKEN_APP is not set/);
+  // And the bug-report path uses that reason rather than its own guess.
+  const fs = require('node:fs');
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'bugReportForward.js'), 'utf8');
+  assert.match(src, /notConfiguredReason\(deps\)/);
 });
 
 test('a hung tracker (request timeout) is a failure, never mistaken for success', async () => {

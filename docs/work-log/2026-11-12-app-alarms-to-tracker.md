@@ -17,3 +17,13 @@ It needs one setting before it works on the live site: the app's tracker
 sign-in, `TRACKER_TOKEN_APP`, in Vercel, then a redeploy. That is a secret
 value, so it is Dane's to put in; it is asked for on its own ticket. Until
 then reports are still saved and emailed, and the failure is logged by name.
+
+**After review (first send-back).** Review caught that the Mini's AI brake
+runs on the Mini, not on the website, so it could never have used the
+website's tracker sign-in: its warning would have gone nowhere. It now posts
+the way the Mini's other jobs do, through the loops' own door. Both alarms
+now begin with the word "ALARM:", which is the one thing that makes the
+tracker send Dane a text; before, they only raised the unread count. And two
+error messages now say what is actually wrong: whether the sign-in or the
+address is missing, and, for a bug report that landed in the wrong place,
+which status it really sits in.

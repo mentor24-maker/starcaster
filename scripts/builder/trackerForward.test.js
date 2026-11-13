@@ -101,12 +101,37 @@ test('the alarm callers on the website reach the tracker, not ClickUp', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', '..', f), 'utf8');
+  // The Mini's brake reaches trackerForward only on Vercel; on the Mini it
+  // goes through the door (scripts/builder/miniAiLimit.test.js holds that).
   for (const f of ['routes/aiQuota.js', 'lib/miniAiLimit.js']) {
     assert.match(read(f), /require\('[./]+(?:lib\/)?trackerForward'\)\.postBusMessage/, `${f} posts through trackerForward`);
     assert.doesNotMatch(read(f), /clickupForward/, `${f} no longer reaches the ClickUp door`);
   }
   assert.match(read('lib/bugReportForward.js'), /require\('\.\/trackerForward'\)/);
   assert.doesNotMatch(read('lib/clickupForward.js'), /fetch|clickup\.cjs|api\.clickup\.com/, 'the old door writes nothing');
+});
+
+test('the REAL alarm texts start with ALARM:, so the tracker texts Dane; the all-clear does not', () => {
+  // SC-796 review: the tracker texts the operator only for bus posts whose
+  // message starts "ALARM:" (loop/lib/trackerBus.js isAlarmPost). Both the AI
+  // spend alarm and the Mini's brake began with an emoji, so neither woke him.
+  const trackerBus = require('../../loop/lib/trackerBus.js');
+  const spend = require('../../lib/aiSpendAlarm');
+  const brake = require('../../lib/miniAiLimit');
+  const context = {
+    settings: { dailyLimitUsd: 20, spikeMultiple: 3 },
+    reading: { todayUsd: 31.5, averageUsd: 4, caveats: [], source: 'meter', topSpender: null },
+    judged: { ratio: 7.9, why: 'the bill could not be read' },
+  };
+  const at = Date.parse('2026-11-12T22:00:00Z');
+  for (const kind of ['over-limit', 'spike', 'unreadable']) {
+    const text = spend.renderAlert(kind, context);
+    assert.equal(trackerBus.isAlarmPost(forward.renderBusPost(text, at)), true, `${kind} alarm must be texted, got: ${text.split('\n')[0]}`);
+  }
+  assert.equal(trackerBus.isAlarmPost(forward.renderBusPost(spend.renderClear('over-limit', context), at)), false, 'an all-clear must not text him');
+  const line = brake.busLine({ sentence: brake.stoppedSentence({ limit: 3, reachedAt: '2026-11-12T10:12:00Z' }), byJob: { 'starcaster:openclaw-smoke': 3 } }, 'mac-mini');
+  assert.equal(line.startsWith(trackerBus.ALARM_PREFIX), true, line);
+  assert.equal(trackerBus.isAlarmPost(forward.renderBusPost(line, at)), true);
 });
 
 // ── The copies of the door's own vocabulary, pinned to it ─────────────────
