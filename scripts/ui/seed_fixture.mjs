@@ -327,7 +327,8 @@ const buildTuned = (ids) => ({
   'bug-report': {
     name: 'Bug Report (floating, staff only)',
     settings: {
-      visibility: 'staff', emailReports: 'true', icon: 'ladybug', corner: 'bottom-left', iconSize: '55',
+      // showOn 'site' (SC-804) so the gated "Every page" note row renders and is measured.
+      visibility: 'staff', emailReports: 'true', icon: 'ladybug', corner: 'bottom-left', showOn: 'site', iconSize: '55',
       iconBlock: 'true', blockColor: '#7a1f3d', iconColor: '#fff4e6', labelText: 'Report a problem',
       popupTitle: 'Tell us what broke', promptPlaceholder: 'What happened, and what did you expect?',
       thankYouMessage: 'Got it — thank you for helping us fix this.',

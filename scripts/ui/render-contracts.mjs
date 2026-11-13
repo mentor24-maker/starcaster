@@ -2698,6 +2698,57 @@ export const RENDER_CONTRACTS = [
     },
   },
 
+  ...[
+    {
+      id: 'bug-report-site-wide-shows-on-a-page-without-the-module',
+      why:
+        'SC-804: "Every page of the site" must put the icon on pages that have no Bug Report module ' +
+        'at all — that is the whole point of the switch. This page holds only a text module, renders ' +
+        'as a published page, and is handed the site-wide module the server would send. Exactly one ' +
+        'trigger, in the site-wide module\'s block colour, proves the page painted it.',
+      module: { type: 'text', text: '<p>A page with no Bug Report module.</p>', settings: {} },
+    },
+    {
+      id: 'bug-report-site-wide-overrides-the-pages-own-module',
+      why:
+        'SC-804: "site-wide overrides the page". A page that carries its own Bug Report module (here ' +
+        'green, bottom-left) must show ONE icon, with the site-wide module\'s settings — never two ' +
+        'stacked in a corner, and never the page\'s own colour. The count is the assertion: every ' +
+        'other read here sees only the first match, so a second icon would pass them all.',
+      module: {
+        type: 'bug-report',
+        settings: { iconBlock: 'true', blockColor: '#1e8449', corner: 'bottom-left', showOn: 'page' },
+      },
+    },
+  ].map(({ id, why, module }) => ({
+    id,
+    why,
+    module,
+    emulate: { liveSite: true },
+    siteWideBugReport: {
+      moduleId: 'site-wide-module',
+      pageId: '1',
+      pageSlug: '',
+      pageName: 'Home',
+      settings: { iconBlock: 'true', blockColor: '#c0392b', iconColor: '#ffffff', iconSize: '50', showOn: 'site' },
+    },
+    selector: '.builder-bug-report-trigger',
+    read: ['backgroundColor'],
+    expect(sample) {
+      if (sample.matches !== 1) {
+        return `the page shows ${sample.matches} bug-report icon(s), not exactly 1 — ` +
+          (sample.matches > 1
+            ? 'the page\'s own module is not standing down for the site-wide one.'
+            : 'the site-wide module is not reaching the page.');
+      }
+      if (sample.styles.backgroundColor !== 'rgb(192, 57, 43)') {
+        return `the icon is ${sample.styles.backgroundColor}, not the site-wide block colour #c0392b — ` +
+          'the page is showing its own module instead of the site-wide one.';
+      }
+      return null;
+    },
+  })),
+
   {
     id: 'section-four-column-grid',
     why:

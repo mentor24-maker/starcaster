@@ -22,6 +22,7 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { buildPageAddressMap } from "@/lib/page-link";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
+import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
 
 /**
  * The frames this page can show. `email` is not one of the buttons — an email
@@ -48,6 +49,12 @@ type PreviewDraft = {
   themeRecord?: BuilderThemeRecord | null;
   /** Page id → current slug, for links stored by reference (lib/builder-client/page-link.js). */
   pageAddresses?: Record<string, string> | null;
+  /**
+   * A site-wide Bug Report (SC-804), honoured only under `?live=1`. Nothing in
+   * the app writes it: it exists so `check:render` can prove, with no
+   * database, that a live page shows exactly one icon (render-contracts.mjs).
+   */
+  siteWideBugReport?: SiteWideBugReport | null;
 };
 
 function readPageAddresses(value: unknown): Record<string, string> | null {
@@ -245,6 +252,7 @@ export function BuilderPreviewPage() {
           themeId?: string;
           themeShellBackground?: ThemeShellBackgroundSource;
           pageAddresses?: unknown;
+          siteWideBugReport?: unknown;
         };
         const document = normalizeBuilderDocument(parsed);
         const storedPalette = parsed.themePalette;
@@ -263,6 +271,7 @@ export function BuilderPreviewPage() {
           themeId,
           themeShellBackground: storedShellBackground,
           pageAddresses: readPageAddresses(parsed.pageAddresses),
+          siteWideBugReport: readSiteWideBugReport(parsed.siteWideBugReport),
         });
         if (hasCrmPaletteColors(storedPalette) && resolvedStyles) {
           setThemePalette(storedPalette);
@@ -336,6 +345,7 @@ export function BuilderPreviewPage() {
         previewMode
         liveSite={isLive}
         pageAddresses={draft.pageAddresses}
+        siteWideBugReport={draft.siteWideBugReport ?? null}
       />
     </BuilderViewportShellLayout>
   ) : null;

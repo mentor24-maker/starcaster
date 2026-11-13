@@ -29,6 +29,7 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
+import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
 
 /**
  * The live theme record the server attaches to each page
@@ -56,6 +57,13 @@ type SitePage = {
    * (lib/pageLinkAddresses.js). Sent beside the page, not inside it.
    */
   pageAddresses?: Record<string, string> | null;
+  /**
+   * The Bug Report module set to "Every page of the site" (SC-804), which the
+   * server picks from the published pages and sends beside the page. Null when
+   * none is site-wide, or when the server could not tell: then each page shows
+   * only its own module, exactly as before the setting existed.
+   */
+  siteWideBugReport?: SiteWideBugReport | null;
 };
 
 function readPageAddresses(value: unknown): Record<string, string> | null {
@@ -153,12 +161,16 @@ async function fetchPublicPage(projectId: string, slug: string): Promise<SitePag
     `/api/public/page?projectId=${encodeURIComponent(projectId)}&slug=${encodeURIComponent(slug)}`
   );
   if (!res.ok) return null;
-  const data = await res.json() as { page?: unknown; renditions?: unknown; pageAddresses?: unknown };
+  const data = await res.json() as { page?: unknown; renditions?: unknown; pageAddresses?: unknown; siteWideBugReport?: unknown };
   // Registered before the page renders so the first paint already picks the
   // right image file rather than swapping it afterwards.
   registerImageRenditionMap(data.renditions);
   if (!data.page || typeof data.page !== "object") return null;
-  return { ...mapSitePageRecord(data.page as Record<string, unknown>), pageAddresses: readPageAddresses(data.pageAddresses) };
+  return {
+    ...mapSitePageRecord(data.page as Record<string, unknown>),
+    pageAddresses: readPageAddresses(data.pageAddresses),
+    siteWideBugReport: readSiteWideBugReport(data.siteWideBugReport),
+  };
 }
 
 async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unauthorized"> {
@@ -168,10 +180,11 @@ async function fetchPrivatePages(projectId: string): Promise<SitePage[] | "unaut
   );
   if (res.status === 401) return "unauthorized";
   if (!res.ok) return [];
-  const data = await res.json() as { pages?: unknown[]; pageAddresses?: unknown };
+  const data = await res.json() as { pages?: unknown[]; pageAddresses?: unknown; siteWideBugReport?: unknown };
   const pages = Array.isArray(data.pages) ? data.pages : [];
   const pageAddresses = readPageAddresses(data.pageAddresses);
-  return pages.map((p: unknown) => ({ ...mapSitePageRecord(p as Record<string, unknown>), pageAddresses }));
+  const siteWideBugReport = readSiteWideBugReport(data.siteWideBugReport);
+  return pages.map((p: unknown) => ({ ...mapSitePageRecord(p as Record<string, unknown>), pageAddresses, siteWideBugReport }));
 }
 
 function findHomePage(pages: SitePage[]): SitePage | null {
@@ -408,6 +421,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           suppressShellBackground
           projectId={projectId}
           pageAddresses={page.pageAddresses}
+          siteWideBugReport={page.siteWideBugReport ?? null}
           liveSite
         />
       </BuilderViewportShellLayout>

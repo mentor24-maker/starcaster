@@ -60,6 +60,51 @@ export const BUG_REPORT_CORNER_OPTIONS: Array<{ value: BugReportCorner; label: s
   { value: "bottom-left", label: "Bottom left" },
 ];
 
+/**
+ * "Show on" (SC-804): this page only, or every page of the live site.
+ *
+ * The site-wide copy is found by the SERVER from the project's PUBLISHED pages
+ * (lib/bugReportSiteWide.js) and handed to the live page beside the page itself
+ * as `siteWideBugReport`; the page then shows that one icon and hides its own
+ * Bug Report module, so a page never stacks two in a corner. A draft changes
+ * nothing until it is published. These values are what the server reads — keep
+ * them in step with `SHOW_ON_SITE` there.
+ */
+export type BugReportShowOn = "page" | "site";
+export const BUG_REPORT_SHOW_ON_SITE: BugReportShowOn = "site";
+export const BUG_REPORT_SHOW_ON_OPTIONS: Array<{ value: BugReportShowOn; label: string }> = [
+  { value: "page", label: "This page only" },
+  { value: "site", label: "Every page of the site" },
+];
+
+/** The site-wide module the server picked, as the live page receives it. */
+export type SiteWideBugReport = {
+  moduleId: string;
+  settings: Record<string, string>;
+  pageId: string;
+  pageSlug: string;
+  pageName: string;
+};
+
+/** Pure: accept only a well-formed site-wide record; anything else is "none". */
+export function readSiteWideBugReport(value: unknown): SiteWideBugReport | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const settings = raw.settings;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) return null;
+  const clean: Record<string, string> = {};
+  for (const [key, v] of Object.entries(settings as Record<string, unknown>)) {
+    if (typeof v === "string") clean[key] = v;
+  }
+  return {
+    moduleId: String(raw.moduleId ?? ""),
+    settings: clean,
+    pageId: String(raw.pageId ?? ""),
+    pageSlug: String(raw.pageSlug ?? ""),
+    pageName: String(raw.pageName ?? ""),
+  };
+}
+
 /** Mirrors the 2/5 caps (lib/projectBugReportScreenshots.js) for the panel's read-only note and the picker. */
 export const BUG_REPORT_MAX_SCREENSHOTS = 5;
 // HAND-COPY of the server cap: lib/projectBugReportScreenshots.js
