@@ -84,3 +84,92 @@ test('the shell-out door passes a deadline to the child it spawns', () => {
   assert.equal(sawOptions.timeout, 4321,
     'without a timeout: option the child can hang forever, which is the whole defect');
 });
+
+test('the bus post goes to the tracker\'s bus through the ticket door, not ClickUp chat (SC-791)', () => {
+  const clickup = require('../lib/clickup.cjs');
+  let saw = null;
+  const out = clickup.postBusMessage('2kydhxeu-474', 'an alarm', {
+    from: 'mac-mini',
+    timeoutMs: 4321,
+    run: (cmd, args, options) => { saw = { cmd, args, options }; return 'Posted to the bus: comment 1\n'; },
+  });
+  assert.equal(out, 'Posted to the bus: comment 1');
+  assert.equal(saw.cmd, 'node');
+  assert.match(saw.args[0], /loop[\\/]scripts[\\/]with_doppler\.mjs$/, 'under Doppler, so an unwrapped caller (repair) posts too');
+  assert.match(saw.args[2], /loop[\\/]scripts[\\/]clickup\.mjs$/);
+  assert.deepEqual(saw.args.slice(3), ['bus-post', '--body-file', '-', '--from', 'mac-mini']);
+  assert.ok(!saw.args.includes('chat') && !saw.args.some((a) => /clickup_direct/.test(a)),
+    'the old ClickUp chat door is exactly what this slice retires');
+  assert.equal(saw.options.input, 'an alarm');
+  assert.equal(saw.options.timeout, 4321, 'a hung post must not hang the watchdog that sent it');
+});
+
+test('a bus post that did not land throws, so the caller does not stamp it as sent', () => {
+  const clickup = require('../lib/clickup.cjs');
+  assert.throws(
+    () => clickup.postBusMessage('x', 'an alarm', {
+      from: 'mac-mini',
+      run: () => { const e = new Error('exit 1'); e.stderr = 'bus-post: the tracker has no project "starcaster-bus"'; throw e; },
+    }),
+    /tracker's bus failed: bus-post: the tracker has no project "starcaster-bus"/,
+  );
+});
+
+test('a bus post needs no ClickUp token: the alarm must not depend on a credential it no longer uses', () => {
+  const saved = process.env.CLICKUP_API_TOKEN;
+  delete process.env.CLICKUP_API_TOKEN;
+  delete require.cache[require.resolve('../lib/clickup.cjs')];
+  try {
+    const clickup = require('../lib/clickup.cjs');
+    let ran = false;
+    clickup.postBusMessage('x', 'an alarm', { from: 'mac-mini', run: () => { ran = true; return ''; } });
+    assert.ok(ran);
+  } finally {
+    if (saved !== undefined) process.env.CLICKUP_API_TOKEN = saved;
+    delete require.cache[require.resolve('../lib/clickup.cjs')];
+  }
+});
+
+// Review of PR #1004: the config's trackerApiUrl is the Mini's loopback, and
+// this wake runs on the MacBook on purpose. Off the Mini the post must go to
+// the tracker's network address, or every MacBook alarm is "connection refused".
+const PROJECT = { trackerUrl: 'http://mac-mini.local:4180', trackerApiUrl: 'http://127.0.0.1:4180' };
+
+test('off the Mini, a bus post goes to the tracker\'s network address, never 127.0.0.1', () => {
+  const clickup = require('../lib/clickup.cjs');
+  let saw = null;
+  clickup.postBusMessage('x', 'an alarm', {
+    from: 'macbook-pro', env: {}, project: PROJECT, warn: () => {},
+    run: (cmd, args, options) => { saw = options; return ''; },
+  });
+  assert.equal(saw.env.TRACKER_API_URL, 'http://mac-mini.local:4180');
+  assert.doesNotMatch(saw.env.TRACKER_API_URL, /127\.0\.0\.1|localhost/);
+});
+
+test('an unrecognised machine is treated as off the Mini too', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: '', env: {}, project: PROJECT }).TRACKER_API_URL, 'http://mac-mini.local:4180');
+});
+
+test('on the Mini the door keeps its own loopback address', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: 'mac-mini', env: {}, project: PROJECT }).TRACKER_API_URL, undefined);
+});
+
+test('a TRACKER_API_URL the caller already set wins', () => {
+  const { busPostEnv } = require('../lib/clickup.cjs');
+  assert.equal(busPostEnv({ node: 'macbook-pro', env: { TRACKER_API_URL: 'http://x:1' }, project: PROJECT }).TRACKER_API_URL, 'http://x:1');
+});
+
+test('a scratch-channel override says out loud that it posts to the real bus', () => {
+  const clickup = require('../lib/clickup.cjs');
+  const said = [];
+  clickup.postBusMessage('x', 'a rehearsal', {
+    from: 'mac-mini', env: { CLICKUP_BUS_CHANNEL: 'scratch-1' }, project: PROJECT,
+    warn: (m) => said.push(m), run: () => '',
+  });
+  assert.equal(said.length, 1);
+  assert.match(said[0], /CLICKUP_BUS_CHANNEL=scratch-1 .*REAL bus/);
+  assert.equal(clickup.busChannelOverrideWarning({}), null);
+  assert.equal(clickup.busChannelOverrideWarning({ CLICKUP_BUS_CHANNEL: '2kydhxeu-474' }), null);
+});

@@ -157,8 +157,8 @@ test('the relay wake runs the repair, before the relay, and may not be failed by
   const sh = read('scripts/run_bus_relay.sh');
   const line = 'npm run --silent repair -- --check || true';
   assert.ok(sh.includes(line), 'the schedule exists — a repair nobody runs was the whole ticket');
-  assert.ok(sh.indexOf(line) < sh.indexOf('npm run --silent clickup -- bus-relay'),
-    'before the ownership-gated relay step, like every sentinel: the idle wake on the non-owning machine is the vantage that survives the owner being dead');
+  assert.ok(sh.indexOf(line) < sh.indexOf('npm run --silent heartbeat -- --beat --role bus-relay'),
+    'before the wake records its beat: a beat means the wake ran its sentinels, so the repair has to be one of them');
 });
 
 test('the sweep-never-applies rationale is written where the refusal lives', () => {
@@ -272,4 +272,12 @@ test('every other step keeps the first line, and an empty step says so', () => {
   assert.equal(repair.findingLine(['The pipeline is RUNNING — resumed by Dane.'], 'stranded'),
     'The pipeline is RUNNING — resumed by Dane.',
     'a sweep whose ONLY line is the banner has nothing better to show');
+});
+
+test('the relay wake no longer calls the ClickUp relay the tracker door does not have (SC-791)', () => {
+  const sh = read('scripts/run_bus_relay.sh');
+  assert.ok(!/^\s*npm run[^\n]*clickup -- bus-relay/m.test(sh),
+    'the ticket door has no bus-relay command since 2026-11-12; calling it failed the job on every wake (exit 2)');
+  assert.ok(!/clickup -- chat/.test(read('scripts/repair.mjs')),
+    'repair posted with the door\'s `chat` command, which the tracker door does not have');
 });

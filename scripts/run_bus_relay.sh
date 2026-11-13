@@ -1,7 +1,10 @@
 #!/bin/bash
 #
-# What the schedule (every 10 minutes) actually runs. Two steps: bring the
-# checkout up to date with main, then relay.
+# What the schedule (every 10 minutes) actually runs: bring the checkout up to
+# date with main, then the watchdog wake below. The relay step that used to end
+# this file is gone (SC-791, 2026-11-12): Spirality's `com.starcaster.relay`
+# lane does that work against the tracker now. The job keeps its old name,
+# `bus-relay`, because its schedule, its heartbeat role and its log all carry it.
 #
 # WHY THE UPDATE STEP EXISTS
 # The relay reads WHO MAY RUN IT out of lib/nodeRoles.js in this checkout, at
@@ -12,9 +15,9 @@
 # error. The relay would simply never start, which is the exact shape of the
 # failure this schedule was moved to fix.
 #
-# The update is deliberately timid, and never blocks the relay:
+# The update is deliberately timid, and never blocks the wake:
 #   - only on the main branch, only with a clean tree, only fast-forward
-#   - any refusal is logged and the relay runs anyway on the code that is here
+#   - any refusal is logged and the wake runs anyway on the code that is here
 # A background job may keep a checkout current; it may not rewrite someone's
 # work to do it.
 
@@ -53,7 +56,7 @@ echo "=== bus-relay $(date '+%Y-%m-%d %H:%M:%S') — $REPO"
 # rule that a background job may not rewrite someone's work is the reason this
 # step is trusted at all. It reports; a person or an agent session repairs.
 #
-# Never allowed to fail the relay, like its neighbours below.
+# Never allowed to fail the wake, like its neighbours below.
 npm run --silent checkout:current -- --check || true
 
 # Does the machine still agree with the repo about how often to wake?
@@ -61,7 +64,9 @@ npm run --silent checkout:current -- --check || true
 # loud. The reasoning and the exit codes live in the script itself.
 REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 
-# THE WATCHDOG, BEFORE THE OWNERSHIP CHECK — deliberately (NODES Slice E).
+# THE WATCHDOG, ON EVERY MACHINE — deliberately (NODES Slice E). (These blocks
+# used to say "before the ownership check": the relay step at the end asked who
+# owned it. That step is gone, so every line here simply runs on every machine.)
 #
 # A watchdog that runs on the same machine as the job it watches cannot notice
 # that machine being switched off, which is the case it exists for. This wake-up
@@ -89,12 +94,12 @@ REPO="$REPO" "$REPO/scripts/bus_relay_interval.sh" "interval: " || true
 # would have prevented it. A false alarm is this feature's own failure mode, and
 # that would have been one on day one.
 #
-# Never allowed to fail the relay, like its neighbours. It answers 0 or 2 and
+# Never allowed to fail the wake, like its neighbours. It answers 0 or 2 and
 # never 1: it moves a fact from one surface to another and judges nothing.
 npm run --silent heartbeat -- --push-owned || true
 
 # Reads the shared roll call and posts to the bus only when a job has gone
-# quiet; it is silent otherwise. Never allowed to fail the relay.
+# quiet; it is silent otherwise. Never allowed to fail the wake.
 npm run --silent heartbeat -- --check || true
 
 # THE SAME WATCHDOG'S OTHER HALF, AND IT RUNS FROM THE OPPOSITE VANTAGE POINT
@@ -131,7 +136,7 @@ npm run --silent heartbeat -- --stale-check --check || true
 # runs and achieves nothing writes a full, cheerful log, which reads as health
 # and so stops anybody looking; finding it took a morning of reading logs.
 #
-# Before the ownership check for the same reason the heartbeat is: the machine
+# On every machine for the same reason the heartbeat is: the machine
 # that does NOT own the relay is already awake here doing nothing, and that
 # idle wake is the vantage point that survives the owning machine being dead.
 #
@@ -139,7 +144,7 @@ npm run --silent heartbeat -- --stale-check --check || true
 # could not be taken is itself the alarm, and until 2026-09-01 it was the one
 # state that reached nobody, because the `|| true` below discards the exit code
 # it announced itself with. Each is once per 6h, cleared by the next pass that
-# is not in that state. Silent otherwise, and never allowed to fail the relay:
+# is not in that state. Silent otherwise, and never allowed to fail the wake:
 # it exits 1 on a stall and 2 on an unknown, which are findings about the
 # pipeline, not this script's failure.
 npm run --silent throughput -- --check || true
@@ -157,7 +162,7 @@ npm run --silent throughput -- --check || true
 # machine side is keeping up" — false in both halves, and it would have told
 # him he was the blocker when he was not.
 #
-# BEFORE THE OWNERSHIP CHECK, but NOT by inheriting its neighbours' reasoning.
+# ON EVERY MACHINE, but NOT by inheriting its neighbours' reasoning.
 # Theirs is "a watchdog that runs only where its job runs cannot notice that
 # machine being switched off", and this check watches ClickUp and GitHub rather
 # than a machine, so that argument is not available to it. The reason it
@@ -169,7 +174,7 @@ npm run --silent throughput -- --check || true
 # Posts to the bus only when something is stuck, once per ticket per REASON per
 # 6h, cleared when the ticket stops being stuck — and it asks the pipeline
 # switch first, so it stays quiet while Dane has the deck. Never allowed to
-# fail the relay: it exits 1 on a finding and 2 on a cannot-tell, both of which
+# fail the wake: it exits 1 on a finding and 2 on a cannot-tell, both of which
 # are readings, not this script's failure.
 npm run --silent stale-ready -- --check || true
 
@@ -198,7 +203,7 @@ npm run --silent stale-ready -- --check || true
 # every 20 rather than hourly — an hourly read against a half-hour window is a
 # check that looks like it works. Posts once per ticket per REASON per 6h,
 # cleared when the ticket stops being stuck, and it asks the pipeline switch
-# first. Never allowed to fail the relay: it exits 1 on a finding and 2 on a
+# first. Never allowed to fail the wake: it exits 1 on a finding and 2 on a
 # cannot-tell, both of which are readings, not this script's failure.
 npm run --silent stale-answer -- --check || true
 # THE SIXTH WATCHDOG — can production reach the YouTube download helper?
@@ -211,7 +216,7 @@ npm run --silent stale-answer -- --check || true
 # throughout the outage — and posts once per 6h while it fails, one all-clear
 # when it answers again.
 #
-# Before the ownership check and on every machine, for the reason its
+# On every machine, for the reason its
 # neighbours give: the wake on the machine that does not own the helper is the
 # one vantage point that survives the Mini being off. Never allowed to fail the
 # relay: 1 is UNREACHABLE and 2 is CANNOT TELL, both readings, not failures.
@@ -224,7 +229,7 @@ npm run --silent worker-watch -- --check || true
 # all-clear when it is picked up. Unlike its neighbours it posts only from the
 # machine that owns `site-import-worker` (it decides that itself), because
 # "once per job" is only true with one poster; the owning machine being off is
-# the heartbeat's to catch. Never allowed to fail the relay: 1 is WAITING and 2
+# the heartbeat's to catch. Never allowed to fail the wake: 1 is WAITING and 2
 # is CANNOT TELL, both readings, not failures.
 npm run --silent site-import-watch -- --check || true
 # THE EIGHTH — did a merged database change ever reach production? (ticket 86bcu8ftx)
@@ -236,7 +241,7 @@ npm run --silent site-import-watch -- --check || true
 # compares production with a snapshot of production, and an unapplied file
 # changes neither. This compares production with what docs/SQL declares.
 # Posts only from the relay's owner, once a day per file until production has
-# it, one all-clear when it does. Never allowed to fail the relay: 1 is
+# it, one all-clear when it does. Never allowed to fail the wake: 1 is
 # UNAPPLIED and 2 is CANNOT TELL, both readings, not failures.
 npm run --silent sql:unapplied -- --check || true
 # THE TENTH — does any client site link to a page that no longer exists?
@@ -249,7 +254,7 @@ npm run --silent sql:unapplied -- --check || true
 # ONE ClickUp ticket, "Broken links on client sites", rewritten in place, with
 # Dane assigned only while it lists something — never on the bus, by his
 # decision. Runs only on the machine owning `broken-links-check` (it decides
-# that itself). Never allowed to fail the relay: 1 is BROKEN LINKS FOUND and 2
+# that itself). Never allowed to fail the wake: 1 is BROKEN LINKS FOUND and 2
 # is CANNOT TELL, both readings, not failures.
 npm run --silent broken-links -- --check || true
 # THE NINTH — has an AI key run out of credit or been refused? (ticket 86bcvhfht)
@@ -263,7 +268,7 @@ npm run --silent broken-links -- --check || true
 # per dead key, one all-clear when it works — and once per 6h when a key has
 # been UNREADABLE for over an hour, because a check that stays blind is the
 # two-days-of-CANNOT_TELL failure again. Only the relay's owner posts, so
-# nothing is said twice. Never allowed to fail the relay: 1 is a dead key and 2
+# nothing is said twice. Never allowed to fail the wake: 1 is a dead key and 2
 # is CANNOT TELL, both readings, not failures.
 npm run --silent ai-keys -- --check || true
 
@@ -277,7 +282,7 @@ npm run --silent ai-keys -- --check || true
 # only; unmarked strandings are POSTED, never auto-applied
 # (scripts/builder/repair.js carries the whole safety argument). Throttled to
 # one fresh reading per half hour; findings post once per 6h, cleared by the
-# next clean run. Never allowed to fail the relay, like its neighbours.
+# next clean run. Never allowed to fail the wake, like its neighbours.
 npm run --silent repair -- --check || true
 
 # THE BACKUP, ON THE SAME IDLE WAKE (ticket 86bc1c1zb).
@@ -296,68 +301,49 @@ npm run --silent repair -- --check || true
 # already watched means the backup cannot silently die without the alarms that
 # are already here noticing.
 #
-# NOT BEHIND THE OWNERSHIP CHECK, also deliberately, and for a different reason
+# NOT OWNED BY ONE MACHINE, also deliberately, and for a different reason
 # from its neighbours: this is not an exclusive job. Each machine backs up
 # ITSELF, into its own folder in the repo, so two machines running it in the
 # same minute touch disjoint paths and there is no race to lose.
 #
 # `--scheduled` makes the stamp decide, not the clock: the relay wakes every ten
 # minutes and a backup is a daily thing, so all but one wake a day exits 0
-# having done nothing and said why. Never allowed to fail the relay — it exits
+# having done nothing and said why. Never allowed to fail the wake — it exits
 # 1 when something could not be captured and 2 when it could not take a reading
 # at all, and both are findings about the backup, not about this script.
 npm run --silent backup:node -- --scheduled || true
 
-npm run --silent clickup -- bus-relay
-status=$?
-echo "=== exit $status"
-
-# EXIT 7 IS "I STOPPED AT THE CLICKUP RESERVE", NOT "I BROKE" (task 86bbugd8j).
+# THE RELAY STEP ITSELF IS GONE (SC-791, slice 1, 2026-11-12).
 #
-# A scheduled job that yields has not done its work, so it must not exit 0 and
-# must not beat — a beat means "this job succeeded", and a roll call that
-# counted a yield as a success would report a relay that has read nothing for
-# hours as perfectly healthy. But it has not FAILED either, and routing it to
-# report:failure would post a ClickUp outage to the bus every ten minutes for
-# as long as the budget stayed tight, which is the alarm-fatigue shape every
-# other watchdog in this file is written to avoid.
+# This line used to be `npm run --silent clickup -- bus-relay`: the ClickUp
+# relay that moved Dane's answers, merged on his word and posted the merge
+# notices. StarCaster moved to the tracker on 2026-11-12 (SC-790), the new
+# ticket door has no `bus-relay` command, and from then on this job failed on
+# every wake with exit 2. Spirality's own relay lane, `com.starcaster.relay`,
+# does that work against the tracker now, so there is nothing left here to
+# replace it with: what remains of this job is the watchdog wake above.
 #
-# So: no beat, no failure alert, and a line in the log that says plainly what
-# happened. The relay's own output above already names the lists and tickets it
-# did not reach. If this becomes common rather than occasional, the answer is a
-# cheaper pass or a smaller reserve, and both are decisions with measurements
-# behind them (scripts/measure_clickup_headroom.mjs).
-if [ "$status" -eq 7 ]; then
-  echo "=== stopped at the ClickUp reserve — not a failure, and not a success either."
-  echo "=== no beat recorded (this pass did not finish) and no failure alert sent."
-elif [ "$status" -eq 0 ]; then
-  # A beat, and only on a real success. Recorded locally every time (free,
-  # offline); pushed to the shared roll call at most once a day, which is what
-  # keeps this from being channel noise x365 and is the resolution the
-  # requirement actually asks for — a day-long absence, not a ten-minute one.
-  #
-  # A pass on a machine that does not own the relay also exits 0, and that is
-  # correct: `--role bus-relay` records THIS machine as the beater, and the
-  # report only ever counts the OWNER's row, so a non-owner's beat can never
-  # make a dead relay look alive.
-  # It also clears this job's failure and silence alarms, so a fault that is
-  # fixed and returns is announced again straight away rather than being
-  # swallowed by the earlier one's six-hour suppression window. That clearing
-  # lives in the beat rather than here so only one file knows where the stamps
-  # are kept (NODES P1 — a path written twice is a path that drifts).
-  npm run --silent heartbeat -- --beat --role bus-relay || true
-else
-  # The failure alert, in the repo at last. It was built by hand on 2026-08-20
-  # inside an uncommitted wrapper on the MacBook Pro; when Slice B brought the
-  # schedule into git and ownership moved to the Mini, the alert did not come
-  # with it, and a failure on the machine that actually runs the relay reached
-  # nobody. Nothing announced that — which is what an uncommitted file does.
-  # Through npm, not node, so Doppler supplies the ClickUp token the same way
-  # every other write in this file gets it — and NOT redirected to /dev/null:
-  # this script's stdout IS the launchd log, so an alert that could not be sent
-  # has to leave its reason where the next reader will find it.
-  npm run --silent report:failure -- --job bus-relay --status "$status" \
-    --log "$HOME/Library/Logs/bus-relay-launchd.log" || true
-fi
+# So this job now succeeds when it reaches its last line. Every step above is
+# `|| true` and reports its own findings to the bus, which is the tracker's
+# bus now too (scripts/lib/clickup.cjs -> postBusMessage). The beat still
+# says "this wake ran", which is what the roll call needs to see: a schedule
+# that stopped firing is still the thing worth an alarm.
+#
+# WHAT WENT WITH THE RELAY STEP, ON PURPOSE: the `report:failure` call that ran
+# when the relay exited non-zero. There is no step left whose failure is this
+# script's own, so there is nothing for it to report: each watchdog above posts
+# its own finding, and a step that crashes outright leaves its reason in this
+# log. So the wake exits 0 and beats even when every check above failed. What
+# still raises an alarm is the wake NOT RUNNING (the roll call and the stale
+# check), which is the failure only this job can show.
+echo "=== exit 0"
 
-exit $status
+# A beat on every completed wake. Recorded locally every time (free, offline);
+# pushed to the shared roll call at most once a day. A pass on a machine that
+# does not own `bus-relay` beats too, and that is correct: the report only
+# counts the OWNER's row, so a non-owner's beat cannot make a dead wake on the
+# owner look alive. The beat also clears this job's failure and silence alarms
+# (left over from the weeks it failed), so a new fault is announced at once.
+npm run --silent heartbeat -- --beat --role bus-relay || true
+
+exit 0
