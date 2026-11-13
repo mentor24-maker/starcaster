@@ -94,6 +94,74 @@ test('WEEKLY_REPORT_DIR overrides the default, and the default is under HOME', (
   assert.equal(home.reportHome({ HOME: '/Users/x' }), path.join('/Users/x', home.DEFAULT_HOME));
 });
 
+test('the default home is NOT in a folder macOS guards against scheduled jobs (SC-797)', () => {
+  // ~/Documents was the default, and launchd may not list it: five Mondays
+  // wrote their edition and then died with EPERM rebuilding the index.
+  const top = home.DEFAULT_HOME.split(path.sep)[0];
+  for (const guarded of home.PROTECTED_FOLDERS) {
+    assert.ok(!(home.DEFAULT_HOME === guarded || home.DEFAULT_HOME.startsWith(guarded + path.sep)),
+      `the default home ${home.DEFAULT_HOME} is inside ~/${guarded}, which a launchd job cannot read`);
+  }
+  assert.notEqual(top, 'Documents');
+});
+
+test('old editions are carried over from ~/Documents — never overwriting, never deleting', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-carry-'));
+  try {
+    const legacy = path.join(tmp, home.LEGACY_HOME);
+    fs.mkdirSync(legacy, { recursive: true });
+    fs.writeFileSync(path.join(legacy, '2026-10-18.html'), 'old figures\n');
+    fs.writeFileSync(path.join(legacy, '2026-10-18.data.json'), '{}\n');
+    fs.writeFileSync(path.join(legacy, '2026-11-08.html'), 'old figures, superseded\n');
+    fs.writeFileSync(path.join(legacy, 'index.html'), 'stale index\n');
+    const target = path.join(tmp, home.DEFAULT_HOME);
+    fs.mkdirSync(target, { recursive: true });
+    fs.writeFileSync(path.join(target, '2026-11-08.html'), 'his narrative\n');
+
+    const result = home.carryOverLegacyEditions({ HOME: tmp });
+    assert.equal(result.reason, null);
+    assert.deepEqual(result.copied.sort(), ['2026-10-18.data.json', '2026-10-18.html']);
+    assert.deepEqual(result.kept, ['2026-11-08.html']);
+    assert.equal(fs.readFileSync(path.join(target, '2026-11-08.html'), 'utf8'), 'his narrative\n',
+      'a page already in the new home is never overwritten');
+    assert.equal(fs.existsSync(path.join(target, 'index.html')), false,
+      'the index is rebuilt by the run, not copied stale');
+    assert.equal(fs.existsSync(path.join(legacy, '2026-10-18.html')), true, 'nothing is deleted');
+
+    const again = home.carryOverLegacyEditions({ HOME: tmp });
+    assert.deepEqual(again.copied, [], 'a second run copies nothing');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('an unreadable old folder is a sentence, not a crash', () => {
+  // Under launchd this is the expected answer: the old folder is the one macOS
+  // will not let the job list. The report must go on regardless.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'weekly-carry-eperm-'));
+  const legacy = path.join(tmp, home.LEGACY_HOME);
+  try {
+    fs.mkdirSync(legacy, { recursive: true });
+    fs.writeFileSync(path.join(legacy, '2026-10-18.html'), 'x\n');
+    fs.chmodSync(legacy, 0o000);
+    let readable = true;
+    try { fs.readdirSync(legacy); } catch { readable = false; }
+    if (readable) return; // running as root: permissions cannot be staged here
+    const result = home.carryOverLegacyEditions({ HOME: tmp });
+    assert.deepEqual(result.copied, []);
+    assert.match(result.reason, /could not read the old folder/);
+  } finally {
+    try { fs.chmodSync(legacy, 0o755); } catch { /* already gone */ }
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('an explicit WEEKLY_REPORT_DIR is left alone by the carry-over', () => {
+  const result = home.carryOverLegacyEditions({ HOME: '/nonexistent', WEEKLY_REPORT_DIR: '/tmp/x' });
+  assert.deepEqual(result.copied, []);
+  assert.match(result.reason, /WEEKLY_REPORT_DIR is set/);
+});
+
 // ── The uploader ──────────────────────────────────────────────────────────
 
 /**

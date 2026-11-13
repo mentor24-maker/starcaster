@@ -24,12 +24,20 @@ to the MacBook and/or Google Drive in the Projects/Starcaster folder in a
 dedicated sub-folder."*
 
 The report now writes to a folder **outside every git checkout** — by default
-`~/Documents/Starcaster/Weekly Reports`, and `lib/weeklyReportHome.js` refuses
+`~/Starcaster/Weekly Reports`, and `lib/weeklyReportHome.js` refuses
 to run at all if that folder turns out to be inside a repo — and `--publish`
 uploads the edition to the Drive folder above, reading each file back from Drive
 before calling it done. An upload that fails is a failed run: it posts to the
 bus and exits non-zero, which `scripts/report_job_failure.mjs` turns into an
 alert. There is no quiet path where the report exists on one machine only.
+
+**Not `~/Documents` (SC-797).** It used to be `~/Documents/Starcaster/Weekly
+Reports`. macOS does not let a scheduled job list `~/Documents` (or `~/Desktop`,
+`~/Downloads`) without a permission granted in System Settings, so from
+2026-09-28 every Monday run wrote its edition, then died rebuilding the index —
+before the Drive upload. The first run in the new folder copies the old editions
+across (never overwriting, never deleting); where macOS refuses even that, it
+says so in the log and carries on.
 
 ## Two rules about the Drive folder
 
