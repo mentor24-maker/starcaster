@@ -13353,7 +13353,23 @@ App.builder = (function () {
   // Init — wire up form handlers
   // ---------------------------------------------------------------------------
 
+  // SC-803: the React Builder saves, creates and deletes page templates on
+  // its own, and announces it with this window event
+  // (lib/builder-client/builder-template-name.ts, PAGE_TEMPLATES_CHANGED_EVENT).
+  // Without re-drawing here, the "Saved Page Templates" table kept the old
+  // name after a rename until a full browser reload.
+  let pageTemplatesChangedListenerBound = false;
+  function bindPageTemplatesChangedListener() {
+    if (pageTemplatesChangedListenerBound) return;
+    pageTemplatesChangedListenerBound = true;
+    window.addEventListener('builder:page-templates-changed', async () => {
+      await loadSavedPageTemplates();
+      renderPageTemplateRecordsTable();
+    });
+  }
+
   function init() {
+    bindPageTemplatesChangedListener();
     const formIdInput = byId('builderFormIdInput');
     const formNameInput = byId('builderFormNameInput');
     const emailTemplateForm = byId('builderEmailTemplateForm');

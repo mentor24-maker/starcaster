@@ -12893,3 +12893,33 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: 0.85em;
   opacity: 0.75;
 }
+
+/*
+ * Save as Template name dialog (task SC-803): one name box, a plain problem
+ * line when the name is blank, and Cancel / Save on the right.
+ */
+.builder-react-root .builder-template-name-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 12px);
+}
+
+.builder-react-root .builder-template-name-dialog-problem {
+  box-sizing: border-box;
+  margin: 0;
+  max-width: 100%;
+  width: auto;
+}
+
+.builder-react-root .builder-template-name-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3, 8px);
+}
+
+/* The note under a built-in template's name box, saying why it cannot change. */
+.builder-react-root .builder-template-name-note {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}

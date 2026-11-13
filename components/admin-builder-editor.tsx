@@ -117,6 +117,8 @@ import {
   type SharedBlockSaveChoice
 } from "./builder/builder-shared-block-save-modal";
 import { BuilderGalleryModal } from "./builder/builder-gallery-modal";
+import { BuilderTemplateNameDialog } from "./builder/builder-template-name-dialog";
+import { BUILT_IN_TEMPLATE_NAME_NOTE, announcePageTemplatesChanged, cleanTemplateName, defaultTemplateNameForPage, isSavableTemplateId } from "@/lib/builder-template-name";
 import { BuilderPreviewDeviceModal, type BuilderPreviewFrameDevice } from "./builder/builder-device-preview";
 import type { BuilderEditorStyleDevice } from "@/lib/builder-device-overrides";
 import {
@@ -197,6 +199,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   const [savedSections, setSavedSections] = useState<BuilderSavedSectionRecord[]>([]);
   const [products, setProducts] = useState<BuilderProductRecord[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  // Save as Template asks for a name first (SC-803): null = dialog closed,
+  // otherwise the name it opened with.
+  const [templateNameDialog, setTemplateNameDialog] = useState<string | null>(null);
   const [selectedPageId, setSelectedPageId] = useState("");
   const [pageSlug, setPageSlug] = useState("");
   const [pageTemplateId, setPageTemplateId] = useState("");
@@ -1915,6 +1920,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setPageTemplates((current) =>
           current.map((candidate) => (candidate.id === data.pageTemplate!.id ? data.pageTemplate! : candidate))
         );
+        announcePageTemplatesChanged();
       } else {
         const page = pages.find((candidate) => candidate.id === source.sourceId);
 
@@ -1998,6 +2004,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setPageTemplates((current) =>
           current.map((candidate) => (candidate.id === data.pageTemplate!.id ? data.pageTemplate! : candidate))
         );
+        announcePageTemplatesChanged();
       } else {
         const page = pages.find((candidate) => candidate.id === source.sourceId);
 
@@ -2131,10 +2138,22 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
     setDraft((c) => ({ ...c, id: selectedPageId, name: c.name || template.name, templateKind: "modular", emailFunction: "", pageBackground: template.pageBackground, theme: template.theme, layoutSections: resolveTemplateSections(template.layoutSections, savedSections, frameResolution.makeId) as typeof c.layoutSections }));
   }
 
-  async function makeTemplateFromPage() {
+  /**
+   * Save as Template: open the name dialog. Nothing is created until the
+   * dialog's Save — it used to name the template "<page> Template" silently.
+   */
+  function openTemplateNameDialog() {
     if (!draft.name.trim()) { setError("Page title is required before making a template."); return; }
+    setError(null);
+    setTemplateNameDialog(defaultTemplateNameForPage(draft.name));
+  }
 
-    const templateName = `${draft.name.trim()} Template`;
+  // Stable identity: the dialog's Escape listener re-binds when this changes.
+  const closeTemplateNameDialog = useCallback(() => setTemplateNameDialog(null), []);
+
+  async function makeTemplateFromPage(name: string) {
+    const templateName = cleanTemplateName(name);
+    if (!templateName) { setError("Template name is required."); return; }
 
     setIsSaving(true);
     setError(null);
@@ -2161,7 +2180,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         throw new Error(data.error ?? "Failed to create template from page.");
       }
 
+      setTemplateNameDialog(null);
       await loadPageTemplates();
+      announcePageTemplatesChanged();
       setSelectedTemplateId(data.pageTemplate.id);
       setBuilderMode("templates");
       setMessage(`Created template "${data.pageTemplate.name}" from this page.`);
@@ -2386,6 +2407,13 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
   // --- CRUD ---
 
   async function saveTemplate() {
+    // The built-in template has no database row, so the store refuses it
+    // ("id is required"). Say why instead of passing that through.
+    if (!isSavableTemplateId(draft.id)) {
+      setError(BUILT_IN_TEMPLATE_NAME_NOTE);
+      return;
+    }
+
     const resolvedName =
       draft.name.trim() ||
       (draft.templateKind === "email" ? getDefaultEmailTemplateName(draft.emailFunction) : "");
@@ -2423,6 +2451,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         setSelectedTemplateId(data.pageTemplate.id);
       }
       await loadPageTemplates();
+      announcePageTemplatesChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save template.");
     } finally {
@@ -2705,6 +2734,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
       setMessage("Page template deleted.");
       if (selectedTemplateId === templateId) { setSelectedTemplateId(""); setDraft(createDraftFromTemplate(null)); }
       await loadPageTemplates();
+      announcePageTemplatesChanged();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to delete template."); }
   }
 
@@ -3212,7 +3242,9 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
         <BuilderTemplateList
           templates={pageTemplates}
           selectedTemplateId={selectedTemplateId}
+          draftId={draft.id}
           draftName={draft.name}
+          onSaveTemplate={() => void saveTemplate()}
           templateKind={draft.templateKind}
           emailFunction={draft.emailFunction}
           pageBackground={draft.pageBackground}
@@ -3301,7 +3333,7 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
           onBulkCreate={() => setShowBulkCreate(true)}
 
           onPreviewDraft={previewDraftOn}
-          onMakeTemplate={() => void makeTemplateFromPage()}
+          onMakeTemplate={openTemplateNameDialog}
           onPageEditorFocus={setPageEditorFocused}
           onSavePage={() => void savePage()}
           pageVisibility={pageVisibility}
@@ -3609,6 +3641,15 @@ export function AdminBuilderEditor({ initialMode, initialRecordId, autoNewPage, 
             {builderMode === "templates" ? "Delete Template" : "Delete Page"}
           </button>
         </div>
+      ) : null}
+
+      {templateNameDialog !== null ? (
+        <BuilderTemplateNameDialog
+          initialName={templateNameDialog}
+          isSaving={isSaving}
+          onSave={(name) => void makeTemplateFromPage(name)}
+          onCancel={closeTemplateNameDialog}
+        />
       ) : null}
 
       {isGalleryOpen ? (
