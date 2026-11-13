@@ -21,6 +21,21 @@ const { listPublicFontsBySlugs } = require('../lib/fontsStore');
 const { createBugReport, MAX_DESCRIPTION_LENGTH: MAX_BUG_REPORT_DESCRIPTION_LENGTH } = require('../lib/projectBugReportsStore');
 const { forwardBugReport } = require('../lib/bugReportForward');
 const { emailBugReport } = require('../lib/bugReportEmail');
+const { resolveSiteWideBugReport, publicSiteWideBugReport } = require('../lib/bugReportSiteWide');
+
+/**
+ * The Bug Report module set to "Every page of the site" (SC-804), for a page
+ * response. Never a reason to fail the page: if it cannot be read the answer
+ * is null, the page shows its own module as before, and the miss is logged.
+ */
+async function siteWideBugReportFor(projectId) {
+  const result = await resolveSiteWideBugReport(projectId);
+  if (!result.ok) {
+    console.warn(`[bug-report site-wide UNREADABLE] project ${projectId}: ${result.error}`);
+    return null;
+  }
+  return publicSiteWideBugReport(result.data);
+}
 const {
   storeBugReportScreenshot,
   verifyBugReportScreenshots,
@@ -202,11 +217,14 @@ async function handle(req, res, pathname, method) {
     const { pageAddressesFor } = require('../lib/pageLinkAddresses');
     const pageAddresses = await pageAddressesFor(scopedProjectId, page);
 
+    const siteWideBugReport = await siteWideBugReportFor(scopedProjectId);
+
     return respondJson(res, req, 200, {
       ok: true,
       page,
       renditions,
       pageAddresses,
+      siteWideBugReport,
       // Which of the two answered. Useful in a browser's network tab when a
       // page looks stale: "draft" means this project has not published it.
       source: built ? 'published' : 'draft',
@@ -239,7 +257,43 @@ async function handle(req, res, pathname, method) {
     const { pageAddressesFor } = require('../lib/pageLinkAddresses');
     const pageAddresses = await pageAddressesFor(scopedProjectId, result.data);
 
-    return respondJson(res, req, 200, { ok: true, pages: result.data, pageAddresses }), true;
+    // "Every page" includes the tenant's signed-in admin pages (SC-804 Risk).
+    const siteWideBugReport = await siteWideBugReportFor(scopedProjectId);
+
+    return respondJson(res, req, 200, { ok: true, pages: result.data, pageAddresses, siteWideBugReport }), true;
+  }
+
+  // GET /api/public/bug-report/site-wide?projectId=… — which Bug Report module
+  // is showing on every page of the live site, and which OTHER modules are also
+  // set to (SC-804). The module's settings panel asks, so it can say "another
+  // module is already site-wide, on page X". Everything here is already public:
+  // the winner's settings are what every visitor's page renders, and the other
+  // entries are names and addresses of published public pages, which
+  // /api/public/pages lists in full.
+  if (pathname === '/api/public/bug-report/site-wide' && (readMethod === 'GET' || readMethod === 'HEAD')) {
+    if (checkEndpointLimit(req, res, 'public.bugReportSiteWide')) return true;
+
+    const { searchParams } = getUrlObj(req);
+    const projectId = String(searchParams.get('projectId') || '').trim();
+    if (!projectId) return respondErr(res, req, 400, 'projectId is required'), true;
+
+    const bind = await assertProjectIdAllowedOnHost(req, projectId);
+    if (!bind.ok) return respondErr(res, req, bind.status || 403, bind.error, { code: bind.code }), true;
+
+    const result = await resolveSiteWideBugReport(bind.projectId || projectId);
+    if (!result.ok) {
+      return respondErr(res, req, 503, `Could not tell which Bug Report is site-wide: ${result.error}`, {
+        code: 'SITE_WIDE_UNREADABLE',
+      }), true;
+    }
+    const answer = result.data;
+    return respondJson(res, req, 200, {
+      ok: true,
+      data: {
+        siteWide: publicSiteWideBugReport(answer),
+        others: answer ? answer.others : [],
+      },
+    }), true;
   }
 
   // GET /api/public/bug-report/viewer?projectId=… — which visibility tier the

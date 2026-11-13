@@ -91,7 +91,7 @@ import {
   CRM_FORM_STYLES_EVENT,
   type CrmFormStylesEventDetail
 } from "./builder/builder-crm-form-module-settings";
-import { BugReportModule } from "./builder/builder-bug-report-module";
+import { BugReportModule, type SiteWideBugReport } from "./builder/builder-bug-report-module";
 import { SpiralityTasksModule } from "./builder/builder-spirality-tasks-module";
 import { parseBreadcrumbItems } from "./builder/builder-breadcrumb-module-settings";
 import {
@@ -268,6 +268,14 @@ type BuilderTemplatePreviewProps = {
    * the link showed before references existed.
    */
   pageAddresses?: PageAddressMap | null;
+  /**
+   * The Bug Report module set to "Every page of the site" (SC-804), picked by
+   * the server from the project's published pages. On a live page it renders
+   * once, here, and every Bug Report module in the page's own sections stands
+   * down, so a page that has its own never shows two icons. Ignored off the
+   * live site: the Builder shows each page as it is.
+   */
+  siteWideBugReport?: SiteWideBugReport | null;
 };
 
 /**
@@ -276,6 +284,15 @@ type BuilderTemplatePreviewProps = {
  * handed it, and no module can forget to resolve.
  */
 const PageAddressContext = createContext<PageAddressMap | null>(null);
+
+/**
+ * True when a site-wide Bug Report is showing on this live page (SC-804). A
+ * page's own Bug Report modules read it and render nothing: "site-wide
+ * overrides the page", one icon, never two stacked in a corner. A context, not
+ * a prop, because a module can sit at any depth (a table cell's modules render
+ * through BuilderModulePreview too).
+ */
+const SiteWideBugReportContext = createContext(false);
 
 type ContactFormField = {
   id: string;
@@ -1852,8 +1869,10 @@ export function BuilderTemplatePreview({
   projectId = "",
   applyThemePageMargins = true,
   suppressShellBackground = false,
-  pageAddresses = null
+  pageAddresses = null,
+  siteWideBugReport = null
 }: BuilderTemplatePreviewProps) {
+  const siteWideBugReportActive = liveSite && Boolean(siteWideBugReport);
   const shellBackground = suppressShellBackground
     ? {}
     : getShellBackgroundLayers(pageBackground, themeShellBackground);
@@ -2032,6 +2051,7 @@ export function BuilderTemplatePreview({
 
   return (
     <PageAddressContext.Provider value={pageAddresses}>
+    <SiteWideBugReportContext.Provider value={siteWideBugReportActive}>
     <div
       className={
         shellClassName
@@ -2076,7 +2096,17 @@ export function BuilderTemplatePreview({
       )}
       {shellClassName ? <GameModuleOverlayHosts /> : null}
       {shellClassName ? <BuilderReminderRuntime layoutSections={layoutSections} /> : null}
+      {siteWideBugReportActive && siteWideBugReport ? (
+        <BugReportModule
+          key={siteWideBugReport.moduleId || "site-wide-bug-report"}
+          settings={siteWideBugReport.settings}
+          previewMode={previewMode}
+          liveSite={liveSite}
+          projectId={projectId}
+        />
+      ) : null}
     </div>
+    </SiteWideBugReportContext.Provider>
     </PageAddressContext.Provider>
   );
 }
@@ -2902,6 +2932,7 @@ function buildBuilderColumnStyle(section: BuilderTemplateSection, columnKey: str
  */
 function BuilderModulePreview(props: BuilderModulePreviewProps) {
   const pageAddresses = useContext(PageAddressContext);
+  const siteWideBugReportActive = useContext(SiteWideBugReportContext);
   const { module } = props;
   const resolved = useMemo(() => {
     const settings = resolvePageLinksInSettings(module.settings, pageAddresses);
@@ -2910,6 +2941,9 @@ function BuilderModulePreview(props: BuilderModulePreviewProps) {
     const text = typeof module.text === "string" ? resolvePageLinksInHtml(module.text, pageAddresses) : module.text;
     return settings === module.settings && text === module.text ? module : { ...module, settings, text };
   }, [module, pageAddresses]);
+  // Site-wide overrides the page (SC-804): the one site-wide icon is rendered
+  // by BuilderTemplatePreview itself, so this page's own copy stands down.
+  if (siteWideBugReportActive && module.type === "bug-report") return null;
   return <BuilderModulePreviewBody {...props} module={resolved} />;
 }
 
