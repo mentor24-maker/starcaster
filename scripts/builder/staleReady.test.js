@@ -72,6 +72,16 @@ test('ROW 2 — green, approved, and still not merged is the MACHINE side', () =
   assert.match(f.message, /merge step is not running/);
 });
 
+test('BREAK-TEST: ROW 4d — a merge word that could not be read is CANNOT TELL, never "IS yours"', () => {
+  // SC-793 review: an unreadable operator id made every green ticket read as
+  // waiting on Dane, even after he had said "merge".
+  const f = classifyReady(ticket({ mergeWordGiven: null, mergeWordReadable: false, mergeWordError: 'no usable operatorUserId' }));
+  assert.equal(f.actor, CANNOT_TELL);
+  assert.equal(f.reasonKey, 'merge-word-unknown');
+  assert.match(f.message, /no usable operatorUserId/);
+  assert.doesNotMatch(f.message, /IS yours/);
+});
+
 test('ROW 3 — THE INCIDENT: red checks name a machine, name the check, and never blame Dane', () => {
   const f = classifyReady(ticket({
     mergeWordGiven: true,
