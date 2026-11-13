@@ -39,14 +39,26 @@
 
 const CLICKUP_LINK_RE = /https?:\/\/app\.clickup\.com\/t\/(?:\d+\/)?([a-z0-9]+)/i;
 
+/**
+ * THE TRACKER'S LINK, TOO (SC-794). Since 2026-11-12 a PR names its ticket as
+ * the tracker's page, `Ticket: http://mac-mini.local:4180/t/SC-12` (the line
+ * `pr-opened` requires). Recognised by SHAPE, `/t/<PREFIX>-<number>` on any
+ * host: the prefix-dash-number id is not the shape of a sha or a hash, so the
+ * "fails open on a coincidence" objection above does not apply to it, and the
+ * host is the project config's to change, not this matcher's. Ids come back
+ * lowercased like ClickUp's, so `sc-12`.
+ */
+const TRACKER_LINK_RE = /https?:\/\/[a-z0-9.-]+(?::\d+)?\/t\/([a-z][a-z0-9]*-\d+)(?![a-z0-9-])/i;
+const ANY_LINK_RE = new RegExp(`${CLICKUP_LINK_RE.source}|${TRACKER_LINK_RE.source}`, 'gi');
+
+function idOf(match) {
+  return String(match[1] || match[2] || '');
+}
+
 /** Every ticket a body links to, in the order they appear, lowercased. */
 function findTicketIds(prBody) {
-  const all = String(prBody || '').match(new RegExp(CLICKUP_LINK_RE, 'gi')) || [];
-  return all
-    .map((link) => {
-      const m = CLICKUP_LINK_RE.exec(link);
-      return m ? m[1].toLowerCase() : '';
-    })
+  return [...String(prBody || '').matchAll(ANY_LINK_RE)]
+    .map((m) => idOf(m).toLowerCase())
     .filter(Boolean);
 }
 
@@ -58,8 +70,8 @@ function findTicketIds(prBody) {
  * lands on is actually this PR's own.
  */
 function findTicketId(prBody) {
-  const m = CLICKUP_LINK_RE.exec(String(prBody || ''));
-  return m ? m[1] : '';
+  const m = new RegExp(ANY_LINK_RE.source, 'i').exec(String(prBody || ''));
+  return m ? idOf(m) : '';
 }
 
 /**

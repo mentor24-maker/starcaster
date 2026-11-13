@@ -324,14 +324,14 @@ function formatHealth(run) {
  * The real seams, on the Mini. The ClickUp token comes from Doppler (the
  * worker runs under `doppler run`, scripts/install_youtube_outreach_worker.sh).
  */
-function liveDeps({ node, ledgerFile, busChannel = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474' } = {}) {
+function liveDeps({ node, ledgerFile } = {}) {
   const client = require('../../lib/openclawResponsesClient');
   return {
     node,
     probe: () => signIn.probeGateway(client.getOpenClawConfig().baseUrl),
     ask: (request) => client.callOpenClawResponses(request),
     extractJson: (raw) => client.extractJsonFromText(raw),
-    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(busChannel, body),
+    post: async (body) => require('../../scripts/lib/clickup.cjs').postBusMessage(body),
     readLedger: () => readLedger(ledgerFile),
     writeLedger: (ledger) => writeLedger(ledgerFile, ledger),
   };

@@ -40,7 +40,6 @@ const aiKeys = require('../lib/aiKeys.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const STATE_FILE = path.join(heartbeat.heartbeatDir(), 'ai-keys-alarms.json');
 const OPENCLAW_ENV = path.join(os.homedir(), '.openclaw', '.env');
 const PRD_SCOPE = process.env.AI_KEYS_DOPPLER_SCOPE || path.join(os.homedir(), 'Studio');
@@ -160,10 +159,10 @@ if (CHECK) {
       const node = relay.node?.name || 'an unnamed machine';
       const text = aiKeys.renderMessage({ ...decided, comparisons, node, at: new Date().toISOString() });
       if (DRY) {
-        console.log(`--- would post to the bus (${BUS_CHANNEL}) ---\n${text}\n--- (dry run: nothing sent, nothing stamped) ---`);
+        console.log(`--- would post to the bus (the tracker's) ---\n${text}\n--- (dry run: nothing sent, nothing stamped) ---`);
       } else {
         try {
-          require('./lib/clickup.cjs').postBusMessage(BUS_CHANNEL, text);
+          require('./lib/clickup.cjs').postBusMessage(text);
           saveState();
           console.log('ai-keys: posted to the bus.');
         } catch (err) {

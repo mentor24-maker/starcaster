@@ -53,7 +53,6 @@ const clickup = require('./lib/clickup.cjs');
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const DIGEST_TASK = process.env.CLICKUP_PULSE_DIGEST_TASK || '';
 // The status the record rests in: outside every claim query and every relay
 // watch, for the same reason the roll call and the pause switch sit there — a
@@ -497,7 +496,7 @@ if (!items.length) {
       try {
         // Bounded by `clickup.SHELL_TIMEOUT_MS` — it is a subprocess that talks
         // to ClickUp, so it can hang the schedule exactly as a fetch can.
-        clickup.postBusMessage(BUS_CHANNEL, text);
+        clickup.postBusMessage(text);
         for (const item of due) {
           const why = writeStamp(item.key, new Date(NOW).toISOString());
           if (why) console.log(`Posted, but the suppression stamp for ${item.key} could not be written (${why}).`);

@@ -269,7 +269,7 @@ test('LIVE: the qualifying ticket is moved to Live, and the move is GUARDED (AC3
     prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
     updateStatus: (id, status, opts) => moved.push([id, status, opts]),
     commentOn: () => {},
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     isLive: true,
   });
   assert.equal(moved.length, 1, 'the qualifying ticket must actually move');
@@ -338,7 +338,7 @@ test('BREAK-TEST through the scan: the merge command removed gives today\'s flag
     getComments: authored(said(trail(596), BEFORE_MERGE - 60_000)),
     prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
     updateStatus: (id, s) => moved.push([id, s]),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     recordFlagged: () => {},
     isLive: true,
@@ -358,7 +358,7 @@ test('BREAK-TEST through the scan: Needs your input with his merge word on it is
     getComments: authored(...authorized()),
     prState: () => ({ state: 'MERGED', mergedAt: MERGED_AT }),
     updateStatus: (id, s) => moved.push([id, s]),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: () => {},
     recordFlagged: () => {},
     isLive: true,
@@ -464,7 +464,7 @@ test('a CLOSED-unmerged PR while the task is in-flight is FLAGGED, never "clean"
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], wet.clean, wet.repaired, wet.unchecked, {
     getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     recordFlagged: () => {},
     isLive: true,
     commentOn: () => {},
@@ -483,7 +483,7 @@ test('a merged PR on an OPERATOR status is FLAGGED, never auto-moved (review fin
       getComments: comments(trail(42)),
       prState: () => ({ state: 'MERGED' }),
       updateStatus: (id, s) => moved.push([id, s]),
-      postBus: async (ch, text) => posted.push(text),
+      postBus: async (text) => posted.push(text),
       commentOn: async (id, text) => commented.push([id, text]),
       recordFlagged: () => {},
       isLive: true,
@@ -512,7 +512,7 @@ test('a merged PR under an operator status is recorded ON THE TICKET, not only o
   await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     recordFlagged: () => {},
     isLive: true,
@@ -533,7 +533,7 @@ test('the durable comment is proposed, never written, in a dry run', async () =>
   await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     isLive: false,
   });
@@ -566,7 +566,7 @@ test('an unchanged finding is not re-posted on the next run — one comment, not
   const deps = {
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
     recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
@@ -602,7 +602,7 @@ test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed stil
   await checkMergedTasks([task('t1', 'Held', 'ready to launch')], clean, repaired, unchecked, {
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
     recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
@@ -618,7 +618,7 @@ test('ROUND 2: a finding flagged to the bus BEFORE the durable half existed stil
   await checkMergedTasks([task('t1', 'Held', 'ready to launch')], second.clean, second.repaired, second.unchecked, {
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
     recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
@@ -639,7 +639,7 @@ test('ROUND 2: a ticket comment that FAILED is retried next run; the bus post th
   const deps = () => ({
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     commentOn: async (id, text) => {
       if (!commentWorks) throw new Error('ClickUp said no');
       commented.push([id, text]);
@@ -676,7 +676,7 @@ test('ROUND 2: a bus post that FAILED is retried next run; the comment that succ
   const deps = () => ({
     getComments: comments(trail(42)),
     prState: () => ({ state: 'MERGED' }),
-    postBus: async (ch, text) => { if (!busWorks) throw new Error('party line down'); posted.push(text); },
+    postBus: async (text) => { if (!busWorks) throw new Error('party line down'); posted.push(text); },
     commentOn: async (id, text) => commented.push([id, text]),
     alreadyFlagged: flagged,
     recordFlagged: (key, at) => flagged.set(key, new Date(at || Date.now()).toISOString()),
@@ -777,7 +777,7 @@ test('a contradiction already flagged INSIDE THE WINDOW is not re-posted (review
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
     getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     alreadyFlagged: new Map([
       ['contradiction:closed-pr|t1|9', new Date(now - 60 * 60 * 1000).toISOString()],
     ]),
@@ -801,7 +801,7 @@ test('the SAME contradiction is said again once the 6h window has passed', async
   await checkMergedTasks([task('t1', 'Stuck', 'in review')], clean, repaired, unchecked, {
     getComments: comments(trail(9)),
     prState: () => ({ state: 'CLOSED' }),
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     alreadyFlagged: new Map([
       ['contradiction:closed-pr|t1|9', new Date(now - 7 * 60 * 60 * 1000).toISOString()],
     ]),
@@ -871,7 +871,7 @@ test('a branch whose stamped task is terminal is flagged — dry proposes, live 
   await checkStampedBranches([task('t1', 'Widget', 'live')], wet.clean, wet.repaired, wet.unchecked, {
     branches: [{ name: 'widget-thing', onMac: true }],
     getStampedTaskId: () => 't1',
-    postBus: async (ch, text) => posted.push(text),
+    postBus: async (text) => posted.push(text),
     recordFlagged: () => {},
     isLive: true,
     commentOn: () => {},
@@ -900,7 +900,7 @@ test('a stamp pointing at a task outside this list is UNCHECKED, not assumed orp
     getStampedTaskId: () => 'not-in-this-list',
   });
   assert.equal(unchecked.length, 1);
-  assert.match(unchecked[0], /not in this Loop Queue list/);
+  assert.match(unchecked[0], /is not on the tracker — cannot verify/);
 });
 
 // ── pure helpers ──────────────────────────────────────────────────────────
@@ -1076,9 +1076,11 @@ test('reconcile asks for closed tasks, or the leftover-PR scan cannot fire', () 
   // tasks and ZERO terminal ones, so tasks.filter(isTerminal) iterated an
   // empty set and the whole check was decoration. With it: 98 terminal tasks.
   const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
-  assert.match(src, /listTasks\(LOOP_QUEUE_LIST, \{ includeClosed: true \}\)/);
-  const lib = fs.readFileSync(path.join(__dirname, '../lib/clickup.cjs'), 'utf8');
-  assert.match(lib, /include_closed=true/, 'and listTasks must actually send it');
+  // Since SC-794 the read is the tracker's, through the ticket door.
+  assert.match(src, /listTasks\(\{ includeClosed: true \}\)/);
+  assert.match(src, /require\('\.\/lib\/trackerDoor\.cjs'\)/, 'and listTasks is the tracker door\'s');
+  const lib = fs.readFileSync(path.join(__dirname, '../lib/trackerDoor.cjs'), 'utf8');
+  assert.match(lib, /args\.push\('--include-closed'\)/, 'and listTasks must actually ask the door for Live tickets');
 });
 
 test('the leftover-PR scan is bounded — the terminal set only grows', () => {
@@ -1171,7 +1173,7 @@ test('BREAK-TEST: --check asks the pipeline switch BEFORE it reads or writes any
   const src = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
   assert.match(src, /pipeline\.mjs/, 'it must consult the one switch implementation, not read the flag twice');
   const pauseAt = src.indexOf('const deck = deckVerdict()');
-  const readAt = src.indexOf('await listTasks(LOOP_QUEUE_LIST');
+  const readAt = src.indexOf('await listTasks({ includeClosed: true })');
   assert.ok(pauseAt > 0 && pauseAt < readAt, 'the switch is asked before the queue is read');
 });
 
@@ -1373,11 +1375,16 @@ test('and each closing line really reaches THAT export, not a local of its own',
   // importing it and grew its own counter would still pass the test above.
   const reconcileSrc = fs.readFileSync(path.join(__dirname, '../reconcile_clickup_github.cjs'), 'utf8');
   assert.match(reconcileSrc, /requestsMade,/, 'reconcile imports the shared counter');
-  assert.match(reconcileSrc, /requests this pass: \$\{requestsMade\(\)\}/, 'and its closing line calls it');
+  // Since SC-794 the counter both lines call is the tracker door's.
+  assert.match(reconcileSrc, /\} = require\('\.\/lib\/trackerDoor\.cjs'\)/, 'reconcile takes it from the tracker door');
+  assert.match(reconcileSrc, /this pass: \$\{requestsMade\(\)\} door command/, 'and its closing line calls it');
 
   const staleSrc = fs.readFileSync(path.join(__dirname, '../stale_ready.mjs'), 'utf8');
-  assert.match(staleSrc, /requests this pass: \$\{clickup\.requestsMade\(\)\}/,
+  assert.match(staleSrc, /this pass: \$\{tracker\.requestsMade\(\)\} door command/,
     'stale-ready closes with the same line, through the same export');
+  const door = require('../lib/trackerDoor.cjs');
+  assert.equal(typeof door.requestsMade, 'function', 'and the tracker door exports it');
+  assert.ok(Number.isFinite(door.requestsMade()), 'as a number the closing line can print');
 });
 
 test('the counter is the ONE DOOR\'s, so a pass counts what the door actually spent', () => {
@@ -1494,7 +1501,7 @@ test('CLAIMABLE + OPEN PR: flagged to the bus AND onto the ticket, and never mov
     getComments: comments(trail(449)),
     prState: () => ({ state: 'OPEN' }),
     updateStatus: () => { moves += 1; },
-    postBus: async (_c, m) => { bus.push(m); },
+    postBus: async (m) => { bus.push(m); },
     commentOn: async (id, text) => { ticketComments.push({ id, text }); },
     isLive: true,
     log: () => {},
@@ -1813,7 +1820,7 @@ test('QUEUED + OPEN PR still flags — that half was right and must not be lost'
     prIndex: () => [indexed(449, 't1')],
     getComments: comments(trail(449)),
     prState: () => ({ state: 'OPEN' }),
-    postBus: async (_c, m) => { bus.push(m); },
+    postBus: async (m) => { bus.push(m); },
     commentOn: async () => {},
     isLive: true,
     log: () => {},
