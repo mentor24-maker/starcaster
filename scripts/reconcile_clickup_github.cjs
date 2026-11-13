@@ -55,9 +55,9 @@
  * the ticket that put this on a schedule asked for a figure rather than an
  * assumption, because a watchdog that exhausts the rate limit takes the relay
  * down with it. 2026-09-04, against a 340-task queue: **31 requests in 19
- * seconds** for the read half. Writes shell out to `clickup_direct.mjs`, a
- * separate process with its own budget, so a live pass that flags or moves
- * costs more than the number it prints — that figure is a floor. `npm run
+ * seconds** for the read half. (Since SC-794 it reads the tracker through the
+ * ticket door instead: two or three door commands for the read half, about a
+ * second on the Mini, and one per write.) `npm run
  * repair` takes a fresh reading at most every 30 minutes (`READ_EVERY_MS`),
  * which is what 31 reads buys comfortably; it is NOT safe at the relay's own
  * ten-minute wake, and the throttle is the reason, not an accident.
@@ -88,22 +88,26 @@
  * Every branch predating PR #344 is unstamped, so that would manufacture
  * false positives on day one. Reported as "could not check", not skipped.
  *
- * Writes go through scripts/clickup_direct.mjs (lib/clickup.cjs shells out),
- * so a status move is verified and clears assignees, and the bus post reports
- * quota — one implementation of those rules, not a weaker second copy.
+ * Writes go through the ticket door (scripts/lib/trackerDoor.cjs shells out to
+ * `npm run clickup`'s script), so a status move is verified and clears
+ * assignees — one implementation of those rules, not a weaker second copy.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+// The tickets, their comments and every repair go through the TRACKER's ticket
+// door (SC-794), in the shapes this file always read (lib/trackerDoor.cjs).
+// Only the bus post is clickup.cjs's, and it lands on the tracker's bus too.
 const {
   listTasks,
   getTaskCommentRecords,
   moveTaskStatus,
-  postBusMessage,
   commentOnTask,
   requestsMade,
-} = require('./lib/clickup.cjs');
+  OPERATOR_ID: TRACKER_OPERATOR_ID,
+} = require('./lib/trackerDoor.cjs');
+const { postBusMessage } = require('./lib/clickup.cjs');
 const { thisNode } = require('../lib/nodeRoles.js');
 // The merge path's own readers, never re-implemented here. `findPullRequests`
 // answers "which PR is this ticket's"; the four below answer "did Dane
@@ -138,12 +142,11 @@ const { branchInventory, stampedTaskId, root } = require('./lib/repo_state.cjs')
 // so a .cjs requires it directly — one reader of the switch, not a second.
 const digest = require('../lib/pulseDigest.js');
 
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 
-/** Dane's ClickUp user id — the same default and the same override every other
- *  reader of his word uses (`stale_ready.mjs`, `pulse.cjs`). */
-const OPERATOR_ID = Number(process.env.CLICKUP_OPERATOR_ID || 48012725);
+/** Dane's seat on the TRACKER (spirality.project.json `operatorUserId`), the
+ *  same one stale-ready and stale-answer read. The old ClickUp id matches no
+ *  comment on the tracker, so his merge word would never have been seen. */
+const OPERATOR_ID = TRACKER_OPERATOR_ID;
 
 // The status ladder, by ROLE — not a hand-copied name list per concern.
 // Auto-repair: the machine may move these on its own. Operator: only Dane
@@ -1452,7 +1455,7 @@ async function flag(key, message, ctx) {
   }
 
   try {
-    await postBus(BUS_CHANNEL, `[reconciler] ${message}`);
+    await postBus(`[reconciler] ${message}`);
     recordFlagged(busKey, at);
     repaired.push(`${what} — flagged to the bus (${busDue.why})`);
   } catch (err) {
@@ -1489,7 +1492,7 @@ async function checkStampedBranches(tasks, clean, repaired, unchecked, deps = {}
 
     const task = tasksById.get(taskId);
     if (!task) {
-      unchecked.push(`branch ${branch.name}: stamped task ${taskId} is not in this Loop Queue list — cannot verify`);
+      unchecked.push(`branch ${branch.name}: stamped task ${taskId} is not on the tracker — cannot verify`);
       continue;
     }
 
@@ -1533,9 +1536,9 @@ async function main() {
     // without it `tasks.filter(isTerminal)` is structurally empty and the
     // leftover-PR scan below can never fire (review round 1, measured: 36
     // tasks returned while 66 Live tickets existed).
-    tasks = await listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
+    tasks = await listTasks({ includeClosed: true });
   } catch (err) {
-    console.error(`[reconcile] FAILED to read the Loop Queue — nothing could be checked: ${err.message}`);
+    console.error(`[reconcile] FAILED to read the tracker's tickets — nothing could be checked: ${err.message}`);
     process.exit(1);
   }
 
@@ -1580,7 +1583,7 @@ async function main() {
   // than the drift it watches for. If this creeps toward 100 the answer is a
   // cheaper pass (the terminal scan is already capped) or a longer throttle,
   // decided on this number.
-  say(`[reconcile] ClickUp requests this pass: ${requestsMade()} (ClickUp allows ~100/minute)`);
+  say(`[reconcile] tracker reads and writes this pass: ${requestsMade()} door command(s)`);
   if (repaired.length) {
     say(live ? '\nRepaired / flagged:' : '\nWould repair / flag:');
     repaired.forEach((line) => say(`  ✓ ${line}`));

@@ -40,7 +40,6 @@ const CHECK = flag('check');
 const DRY = flag('dry-run');
 const NOW = Date.now();
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const STAMP_DIR = heartbeat.heartbeatDir();
 const readStamp = path.join(STAMP_DIR, 'repair-read.stamp');
 const postStamp = path.join(STAMP_DIR, 'repair-post.stamp');
@@ -52,7 +51,7 @@ const clearStamp = (f) => { try { fs.rmSync(f, { force: true }); } catch { /* li
 // The scheduled throttle — taken BEFORE any read, so a throttled wake costs
 // nothing at all (throughput's pattern).
 if (CHECK && !flag('force') && !repair.readDue({ lastReadAtMs: readFileMs(readStamp), nowMs: NOW })) {
-  console.log('Read within the last half hour — not asking ClickUp or GitHub again. (`--force` overrides.)');
+  console.log('Read within the last half hour — not asking the tracker or GitHub again. (`--force` overrides.)');
   process.exit(0);
 }
 if (CHECK) writeStamp(readStamp);
@@ -114,7 +113,7 @@ if (CHECK && !DRY) {
     // This used to call the ticket door's `chat` command, which the tracker's
     // door does not have: every finding since 2026-11-12 landed only in this log.
     try {
-      require('./lib/clickup.cjs').postBusMessage(BUS_CHANNEL, body);
+      require('./lib/clickup.cjs').postBusMessage(body);
       writeStamp(postStamp);
       console.error('  (posted to the bus)');
     } catch (err) {

@@ -2,109 +2,126 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 /**
- * Bug Report 3/5 — every stored report becomes a ClickUp task HELD for the
- * operator ("Needs your input", assigned to 48012725), created AFTER the row
- * is written and never able to fail the reporter's request.
+ * Bug Report 3/5 — every stored report becomes a tracker ticket HELD for the
+ * operator ("needs your input", assigned to the operator's actor), filed
+ * AFTER the row is written and never able to fail the reporter's request.
+ * Until SC-796 this was a ClickUp task; the guards are the same.
  *
  * Three layers, each pinned:
- *  - lib/clickupForward.js asserts the held status and the operator assignee
- *    IN CODE, reads the task back, and deletes one that landed wrong;
- *  - lib/bugReportForward.js composes the task body and marks the row
+ *  - lib/trackerForward.js asserts the held status and the operator assignee
+ *    IN CODE, reads the ticket back, and deletes one that landed wrong;
+ *  - lib/bugReportForward.js composes the ticket body and marks the row
  *    forwarded / failed_forward;
  *  - routes/publicSite.js runs it after the write and still answers 201 when
- *    ClickUp is broken or unconfigured.
+ *    the tracker is broken or unconfigured.
  */
 
-const LOOP_QUEUE = '901418546619';
-const OPERATOR = 48012725;
-const MACHINE = 54254347;
+const PROJECT_CONFIG = require('../../spirality.project.json');
+const OPERATOR = Number(PROJECT_CONFIG.operatorUserId);
+const MACHINE = Number(PROJECT_CONFIG.machineUserId);
+const BASE = 'https://tracker.test:8443';
+const TICKET = 'SC-9001';
 
-// ── A fake ClickUp: records requests, answers like the real API ────────────
+// ── A fake tracker: records requests, answers like tracker/server.mjs ──────
 
-function fakeClickup({ createStatus = 401, landedStatus = 'Needs your input', landedAssignees = [OPERATOR], stickyWrongStatus = false, deleteStatus = 200, readBackBody = 'body', throwOn = null } = {}) {
+function fakeTracker({ createStatus = 401, landedStatus = 'needs your input', landedAssignee = OPERATOR, stickyWrongStatus = false, deleteStatus = 200, patchStatus = 200, readBackBody = 'body', throwOn = null } = {}) {
   const requests = [];
   let reads = 0;
   const fetchImpl = async (url, init = {}) => {
     const method = init.method || 'GET';
-    const path = String(url).replace('https://api.clickup.com', '');
+    const path = String(url).replace(BASE, '');
     const body = init.body ? JSON.parse(init.body) : undefined;
-    requests.push({ method, path, body, auth: init.headers?.Authorization });
-    // Simulate a hung ClickUp: the real clickupRequest aborts and catches.
+    requests.push({ method, path, body, auth: init.headers?.Authorization, url: String(url) });
+    // Simulate a hung tracker: the real request aborts and is caught.
     if (throwOn && throwOn === method) {
       const e = new Error('aborted'); e.name = 'TimeoutError'; throw e;
     }
     const json = (status, payload) => ({ ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(payload) });
 
-    if (method === 'POST' && path === `/api/v2/list/${LOOP_QUEUE}/task`) {
-      if (createStatus !== 200) return json(createStatus, { err: 'Token invalid', ECODE: 'OAUTH_025' });
-      return json(200, { id: 'task_abc', url: 'https://app.clickup.com/t/task_abc' });
+    if (method === 'POST' && path === '/projects/starcaster/tickets') {
+      if (createStatus !== 201) return json(createStatus, { error: 'unauthorised', message: 'that token is not a sign-in' });
+      return json(201, { id: TICKET, status: body.status });
     }
-    if (method === 'GET' && path === '/api/v2/task/task_abc') {
+    if (method === 'GET' && path === `/tickets/${TICKET}`) {
       reads += 1;
       const corrected = reads > 1 && !stickyWrongStatus;
       return json(200, {
-        id: 'task_abc',
-        status: { status: corrected ? 'Needs your input' : landedStatus },
-        assignees: (corrected ? [OPERATOR] : landedAssignees).map((id) => ({ id })),
+        id: TICKET,
+        status: corrected ? 'needs your input' : landedStatus,
+        assignee: corrected ? OPERATOR : landedAssignee,
         description: readBackBody,
+        comments: [],
       });
     }
-    if (method === 'DELETE') return json(deleteStatus, { id: 'task_abc' });
-    if (method === 'PUT') return json(200, { id: 'task_abc' });
-    return json(404, { err: 'unexpected path' });
+    if (method === 'DELETE') return json(deleteStatus, deleteStatus === 200 ? { deleted: TICKET } : { error: 'not-deletable', message: 'started' });
+    if (method === 'PATCH') return json(patchStatus, patchStatus === 200 ? { ticket: { id: TICKET }, changed: ['status'] } : { error: 'forbidden', message: 'only the operator may set that status' });
+    return json(404, { error: 'unexpected path' });
   };
   return { fetchImpl, requests };
 }
 
-// ── lib/clickupForward ─────────────────────────────────────────────────────
+const deps = (extra) => ({ token: 'test-token', baseUrl: BASE, ...extra });
 
-test('a held task is created in the Loop Queue as "Needs your input", assigned to the operator, and read back', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
+// ── lib/trackerForward ─────────────────────────────────────────────────────
+
+test('a held ticket is filed in the StarCaster project as "needs your input", assigned to the operator, and read back', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201 });
   const result = await createHeldTask(
     { name: 'Bug report: the menu overlaps', markdownDescription: '# body', tags: ['bug-report', 'proj-1'] },
-    { fetchImpl, token: 'test-token' }
+    deps({ fetchImpl })
   );
   assert.equal(result.ok, true, result.error);
-  assert.equal(result.taskId, 'task_abc');
+  assert.equal(result.taskId, TICKET);
+  assert.equal(result.url, `${PROJECT_CONFIG.trackerUrl}/t/${TICKET}`, 'the link is the page Dane opens');
   const post = requests.find((r) => r.method === 'POST');
-  assert.equal(post.body.status, 'Needs your input');
-  assert.deepEqual(post.body.assignees, [OPERATOR]);
+  assert.equal(post.body.status, 'needs your input');
+  assert.equal(post.body.assignee, OPERATOR);
+  assert.equal(post.body.description, '# body');
   assert.deepEqual(post.body.tags, ['bug-report', 'proj-1']);
-  assert.equal(post.auth, 'test-token');
-  assert.ok(requests.some((r) => r.method === 'GET' && r.path === '/api/v2/task/task_abc'), 'must read the task back, not trust the 200');
-  assert.equal(result.status, 'Needs your input');
+  assert.equal(post.auth, 'Bearer test-token');
+  assert.ok(requests.every((r) => !/clickup\.com/.test(r.url)), 'nothing goes to ClickUp');
+  assert.ok(requests.some((r) => r.method === 'GET' && r.path === `/tickets/${TICKET}`), 'must read the ticket back, not trust the 201');
+  assert.equal(result.status, 'needs your input');
 });
 
-test('the status assertion lives in code: asking for "Queued" is refused before any request', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't', status: 'Queued' });
+test('the default address is the public one in spirality.project.json, never the Mini\'s loopback', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201 });
+  await createHeldTask({ name: 'x', markdownDescription: 'y' }, { token: 't', fetchImpl, env: {} });
+  assert.ok(PROJECT_CONFIG.trackerPublicUrl, 'spirality.project.json must carry trackerPublicUrl');
+  assert.match(requests[0].url, new RegExp(`^${PROJECT_CONFIG.trackerPublicUrl.replace(/[.:/]/g, '\\$&')}/projects/starcaster/tickets$`));
+  assert.doesNotMatch(requests[0].url, /127\.0\.0\.1|localhost|\.local[:/]/);
+});
+
+test('the status assertion lives in code: asking for "queued" is refused before any request', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl, status: 'Queued' }));
   assert.equal(result.ok, false);
   assert.equal(result.code, 'HELD_STATUS_REQUIRED');
   assert.equal(requests.length, 0, 'no request may be made for a non-held status');
 });
 
-test('the machine account can never be the assignee — refused before any request', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't', assignees: [MACHINE] });
+test('only the operator may hold the ticket — a machine assignee is refused before any request', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl, assignee: MACHINE }));
   assert.equal(result.ok, false);
-  assert.equal(result.code, 'MACHINE_ASSIGNEE_REFUSED');
+  assert.equal(result.code, 'OPERATOR_ASSIGNEE_REQUIRED');
   assert.equal(requests.length, 0);
 });
 
-test('no token → CLICKUP_NOT_CONFIGURED and no request', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: '' });
+test('no token → TRACKER_NOT_CONFIGURED naming TRACKER_TOKEN_APP, and no request', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl, token: '' }));
   assert.equal(result.ok, false);
-  assert.equal(result.code, 'CLICKUP_NOT_CONFIGURED');
+  assert.equal(result.code, 'TRACKER_NOT_CONFIGURED');
+  assert.match(result.error, /TRACKER_TOKEN_APP/);
   assert.equal(requests.length, 0);
 });
 
@@ -116,150 +133,126 @@ async function withGlobalFetchSpy(fn) {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {
     calls.push(String(url));
-    return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'task_real', url: 'https://app.clickup.com/t/task_real' }) };
+    return { ok: true, status: 201, text: async () => JSON.stringify({ id: 'SC-1' }) };
   };
   try { return await fn(calls); } finally { globalThis.fetch = realFetch; }
 }
 
-test('a test run holding a REAL token and no injected transport never reaches ClickUp', async () => {
-  const { createHeldTask, createSyntheticReportTask } = require('../../lib/clickupForward');
+test('a test run holding a REAL token and no injected transport never reaches the tracker', async () => {
+  const { createHeldTask, createSyntheticReportTask, postBusMessage } = require('../../lib/trackerForward');
   assert.ok(process.env.NODE_TEST_CONTEXT, 'node --test must mark this process, or the guard has nothing to read');
   await withGlobalFetchSpy(async (calls) => {
-    const held = await createHeldTask({ name: 'Bug report: Menu overlaps logo', markdownDescription: 'y' }, { token: 'pk_real_looking' });
-    const synthetic = await createSyntheticReportTask({ name: 'Bug report: x', markdownDescription: 'y' }, { token: 'pk_real_looking' });
+    const held = await createHeldTask({ name: 'Bug report: Menu overlaps logo', markdownDescription: 'y' }, { token: 'real_looking' });
+    const synthetic = await createSyntheticReportTask({ name: 'Bug report: x', markdownDescription: 'y' }, { token: 'real_looking' });
+    const bus = await postBusMessage('ALARM: x', { token: 'real_looking' });
     assert.deepEqual(calls, [], 'no request may leave a test run');
     assert.equal(held.ok, false);
-    assert.match(held.error, /test run may not reach the real ClickUp/);
+    assert.match(held.error, /test run may not reach the real tracker/);
     assert.equal(synthetic.ok, false);
-    assert.match(synthetic.error, /test run may not reach the real ClickUp/);
+    assert.match(synthetic.error, /test run may not reach the real tracker/);
+    assert.equal(bus.ok, false);
+    assert.match(bus.why, /test run may not reach the real tracker/);
   });
 });
 
 test('outside a test runner the same call DOES go out — the guard reads the runner, not the token', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
+  const { createHeldTask } = require('../../lib/trackerForward');
   await withGlobalFetchSpy(async (calls) => {
-    await createHeldTask({ name: 'Bug report: real visitor', markdownDescription: 'y' }, { token: 'pk_real_looking', env: {} });
-    assert.ok(calls.some((u) => u.endsWith(`/api/v2/list/${LOOP_QUEUE}/task`)), `a production server must still forward, saw: ${calls.join(', ')}`);
+    await createHeldTask({ name: 'Bug report: real visitor', markdownDescription: 'y' }, { token: 'real_looking', env: {} });
+    assert.ok(calls.some((u) => u.endsWith('/projects/starcaster/tickets')), `a production server must still forward, saw: ${calls.join(', ')}`);
   });
 });
 
 test('a broken token answers a plain failure (HTTP 401), never a throw', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl } = fakeClickup({ createStatus: 401 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 'bad' });
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 401 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl, token: 'bad' }));
   assert.equal(result.ok, false);
-  assert.equal(result.code, 'CLICKUP_CREATE_FAILED');
+  assert.equal(result.code, 'TRACKER_CREATE_FAILED');
   assert.match(result.error, /HTTP 401/);
 });
 
-test('a request the door declines to send is reported as a stand-down, never as a crash', async () => {
-  // 2026-09-15, task 86bc0w6my. `clickupFetch` has a THIRD outcome — a
-  // scheduled job refusing to spend the last of the minute's ClickUp budget —
-  // and it hands back `res: null`. Five callers existed; four read `res.ok`
-  // straight off it and threw `Cannot read properties of null`. This one is
-  // the quietest of the five, because it runs on a VISITOR'S request path: the
-  // crash would have surfaced as a 500 on a bug report.
-  //
-  // It cannot fire today — nothing on the web server declares
-  // STARCASTER_CALLER, and the default is `interactive`, which never yields —
-  // so the yield is forced here. "Cannot happen today" rests on a default in
-  // another file, which is not the same as cannot happen.
-  //
-  // IT MUST DECLARE A LEDGER OF ITS OWN (task 86bc0wrxg, review round 3). The
-  // door only reaches its yield verdict for a request that spends the budget,
-  // and a faked request from a test run spends it only against a ledger the
-  // test declared (`CLICKUP_LEDGER_PATH`). Without that line this test stops
-  // exercising the stand-down at all: the door waves the request through, the
-  // fake transport answers 200, and the assertion below fails on a SUCCESS —
-  // which is what a test silently ceasing to test its own subject looks like.
-  // The fixture path is a throwaway, so the operator's shared ledger at
-  // ~/.starcaster/clickup-ledger.jsonl is untouched either way.
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200 });
-  const ledgerDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bugreport-ledger-'));
-  const before = {
-    caller: process.env.STARCASTER_CALLER,
-    reserve: process.env.CLICKUP_RESERVE,
-    ledger: process.env.CLICKUP_LEDGER_PATH,
-  };
-  process.env.STARCASTER_CALLER = 'scheduled';
-  // A reserve as large as the whole limit makes the very first request yield,
-  // with no ledger state to arrange.
-  process.env.CLICKUP_RESERVE = '100';
-  process.env.CLICKUP_LEDGER_PATH = path.join(ledgerDir, 'ledger.jsonl');
-  try {
-    const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
-    assert.equal(result.ok, false, 'nothing was created, so this is not a success');
-    assert.equal(requests.length, 0, 'and the request really was not sent');
-    assert.match(result.error, /reserve/i,
-      'the reason must name the reserve — "could not reach ClickUp" sends the reader to the network');
-    assert.doesNotMatch(result.error, /Cannot read properties of null/,
-      'the TypeError this whole ticket is about');
-    assert.doesNotMatch(result.error, /HTTP YIELDED/,
-      'the sentinel is not an HTTP status and must not be printed as one');
-  } finally {
-    if (before.caller === undefined) delete process.env.STARCASTER_CALLER;
-    else process.env.STARCASTER_CALLER = before.caller;
-    if (before.reserve === undefined) delete process.env.CLICKUP_RESERVE;
-    else process.env.CLICKUP_RESERVE = before.reserve;
-    if (before.ledger === undefined) delete process.env.CLICKUP_LEDGER_PATH;
-    else process.env.CLICKUP_LEDGER_PATH = before.ledger;
-    fs.rmSync(ledgerDir, { recursive: true, force: true });
-  }
-});
-
-test('a task that lands "queued" is corrected once, and if still wrong it is DELETED and reported', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  // Sticky: ClickUp keeps answering "queued" even after the corrective PUT.
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, landedStatus: 'queued', stickyWrongStatus: true });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+test('a ticket that lands "queued" is corrected once, and if still wrong it is DELETED and reported', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201, landedStatus: 'queued', stickyWrongStatus: true });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
   assert.equal(result.ok, false);
   assert.equal(result.code, 'HELD_STATUS_NOT_HONOURED');
-  assert.ok(requests.some((r) => r.method === 'PUT'), 'one corrective PUT');
-  assert.ok(requests.some((r) => r.method === 'DELETE' && r.path === '/api/v2/task/task_abc'), 'the hazard is removed');
+  const patch = requests.find((r) => r.method === 'PATCH');
+  assert.ok(patch, 'one corrective PATCH');
+  assert.deepEqual(patch.body, { status: 'needs your input', assignee: OPERATOR });
+  assert.ok(requests.some((r) => r.method === 'DELETE' && r.path === `/tickets/${TICKET}`), 'the hazard is removed');
   assert.match(result.error, /deleted it/);
 });
 
-test('BLOCKER: when the fail-safe DELETE itself fails, the result says the task SURVIVES — never "deleted it"', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  // Lands wrong and stays wrong, AND the DELETE 401s (scoped token / rate limit).
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, landedStatus: 'queued', stickyWrongStatus: true, deleteStatus: 401 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+test('BLOCKER: when the fail-safe DELETE itself fails, the result says the ticket SURVIVES — never "deleted it"', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201, landedStatus: 'queued', stickyWrongStatus: true, deleteStatus: 409 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
   assert.equal(result.ok, false);
   assert.equal(result.code, 'HELD_STATUS_NOT_DELETED');
   assert.ok(requests.some((r) => r.method === 'DELETE'), 'the DELETE was attempted');
   assert.match(result.error, /could NOT be deleted/);
-  assert.match(result.error, /task_abc/);
+  assert.match(result.error, new RegExp(TICKET));
   assert.match(result.error, /Move or delete it by hand/);
   assert.doesNotMatch(result.error, /deleted it rather than/);
-  assert.equal(result.taskId, 'task_abc', 'the surviving task id is returned so it can be found');
+  assert.equal(result.taskId, TICKET, 'the surviving ticket id is returned so it can be found');
 });
 
-test('a hung ClickUp (request timeout) is a failure, never mistaken for success', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl } = fakeClickup({ createStatus: 200, throwOn: 'POST' });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
-  assert.equal(result.ok, false, 'a timeout must not read as a created task');
-  assert.equal(result.code, 'CLICKUP_CREATE_FAILED');
+test('an undeletable ticket in a status no loop claims is not called "in the queue" — the message reads the real status', async () => {
+  // SC-796 review: the tracker deletes only requested/queued tickets, so a
+  // report that landed "needs your input" for the WRONG person answers 409 —
+  // and saying a build loop may claim it would be false.
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 201, landedAssignee: MACHINE, stickyWrongStatus: true, deleteStatus: 409, patchStatus: 403 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
+  assert.equal(result.code, 'HELD_STATUS_NOT_DELETED');
+  assert.match(result.error, /"needs your input", which no build loop claims from/);
+  assert.doesNotMatch(result.error, /build loop may claim/);
+  assert.match(result.error, /correction was refused .*HTTP 403.*only the operator may set that status/, 'the PATCH refusal is kept');
+});
+
+test('an undeletable ticket left "queued" still says a build loop may claim it', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 201, landedStatus: 'queued', stickyWrongStatus: true, deleteStatus: 409 });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
+  assert.match(result.error, /It is in "queued" right now, where a build loop may claim it/);
+});
+
+test('a token but no address names the ADDRESS, not the token', async () => {
+  const forward = require('../../lib/trackerForward');
+  assert.match(forward.notConfiguredReason({ token: 't', baseUrl: '' }), /no public address/);
+  assert.doesNotMatch(forward.notConfiguredReason({ token: 't', baseUrl: '' }), /TRACKER_TOKEN_APP is not set/);
+  assert.match(forward.notConfiguredReason({ token: '', baseUrl: BASE }), /TRACKER_TOKEN_APP is not set/);
+  // And the bug-report path uses that reason rather than its own guess.
+  const fs = require('node:fs');
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'bugReportForward.js'), 'utf8');
+  assert.match(src, /notConfiguredReason\(deps\)/);
+});
+
+test('a hung tracker (request timeout) is a failure, never mistaken for success', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl } = fakeTracker({ createStatus: 201, throwOn: 'POST' });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
+  assert.equal(result.ok, false, 'a timeout must not read as a filed ticket');
+  assert.equal(result.code, 'TRACKER_CREATE_FAILED');
   assert.match(result.error, /timed out/);
 });
 
-test('an empty task body (the wrong-field 200-but-blank trap) is not accepted as landed', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  // Status and assignees are right, but the body read back empty — a task was
-  // created blank. It is corrected once (cannot fix the body) then deleted.
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, readBackBody: '', deleteStatus: 200 });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'real body' }, { fetchImpl, token: 't' });
-  assert.equal(result.ok, false, 'a blank-bodied task must not pass');
-  assert.ok(requests.some((r) => r.method === 'DELETE'), 'the blank task is removed');
+test('an empty ticket body (the 200-but-blank trap) is not accepted as landed', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201, readBackBody: '', stickyWrongStatus: true });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'real body' }, deps({ fetchImpl }));
+  assert.equal(result.ok, false, 'a blank-bodied ticket must not pass');
+  assert.ok(requests.some((r) => r.method === 'DELETE'), 'the blank ticket is removed');
 });
 
-test('a task that lands wrong but is fixed by the corrective PUT is accepted', async () => {
-  const { createHeldTask } = require('../../lib/clickupForward');
-  const { fetchImpl, requests } = fakeClickup({ createStatus: 200, landedStatus: 'queued', stickyWrongStatus: false });
-  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, { fetchImpl, token: 't' });
+test('a ticket that lands wrong but is fixed by the corrective PATCH is accepted', async () => {
+  const { createHeldTask } = require('../../lib/trackerForward');
+  const { fetchImpl, requests } = fakeTracker({ createStatus: 201, landedStatus: 'queued', stickyWrongStatus: false });
+  const result = await createHeldTask({ name: 'x', markdownDescription: 'y' }, deps({ fetchImpl }));
   assert.equal(result.ok, true, result.error);
-  assert.ok(requests.some((r) => r.method === 'PUT'));
+  assert.ok(requests.some((r) => r.method === 'PATCH'));
   assert.ok(!requests.some((r) => r.method === 'DELETE'));
 });
 
@@ -305,7 +298,7 @@ test('with no project record and no screenshots the body still says so rather th
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const adminStorePath = require.resolve('../../lib/projectAdminStore.js');
-const clickupForwardPath = require.resolve('../../lib/clickupForward.js');
+const trackerForwardPath = require.resolve('../../lib/trackerForward.js');
 const rebuildPaths = [
   '../../lib/projectScope.js',
   '../../lib/assetsStore.js',
@@ -318,7 +311,7 @@ const realSupabase = require(supabasePath);
 
 const KNOWN_PROJECT_ID = 'proj_1';
 
-function withRouteMocks({ clickup } = {}) {
+function withRouteMocks({ tracker } = {}) {
   const db = { bugReports: [] };
   const created = [];
   let nextId = 1;
@@ -350,20 +343,20 @@ function withRouteMocks({ clickup } = {}) {
     },
   };
   const fakeAdminStore = { getAdminSession: async () => null };
-  const realClickup = require(clickupForwardPath);
-  const fakeClickupForward = {
-    ...realClickup,
-    isConfigured: () => clickup?.configured !== false,
+  const realTracker = require(trackerForwardPath);
+  const fakeTrackerForward = {
+    ...realTracker,
+    isConfigured: () => tracker?.configured !== false,
     createHeldTask: async (task) => {
       created.push(task);
-      return clickup?.outcome || { ok: true, taskId: 'task_abc', url: 'https://app.clickup.com/t/task_abc', status: 'Needs your input', assignees: [OPERATOR] };
+      return tracker?.outcome || { ok: true, taskId: TICKET, url: `http://mac-mini.local:4180/t/${TICKET}`, status: 'needs your input', assignees: [OPERATOR] };
     },
   };
 
-  const saved = [supabasePath, adminStorePath, clickupForwardPath, ...rebuildPaths].map((p) => [p, require.cache[p]]);
+  const saved = [supabasePath, adminStorePath, trackerForwardPath, ...rebuildPaths].map((p) => [p, require.cache[p]]);
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
   require.cache[adminStorePath] = { id: adminStorePath, filename: adminStorePath, loaded: true, exports: fakeAdminStore };
-  require.cache[clickupForwardPath] = { id: clickupForwardPath, filename: clickupForwardPath, loaded: true, exports: fakeClickupForward };
+  require.cache[trackerForwardPath] = { id: trackerForwardPath, filename: trackerForwardPath, loaded: true, exports: fakeTrackerForward };
   for (const p of rebuildPaths) delete require.cache[p];
   const publicSite = require('../../routes/publicSite.js');
 
@@ -411,11 +404,11 @@ test('route: a submitted report is forwarded AFTER the write and the row reads f
 
 test('route: a broken token still gives the reporter a 201; the row reads failed_forward; the failure is logged loudly', async () => {
   const { publicSite, db, logged, restore } = withRouteMocks({
-    clickup: { outcome: { ok: false, code: 'CLICKUP_CREATE_FAILED', error: 'create task failed — HTTP 401: Token invalid' } },
+    tracker: { outcome: { ok: false, code: 'TRACKER_CREATE_FAILED', error: 'file ticket failed — HTTP 401: that token is not a sign-in' } },
   });
   try {
     const { status, payload } = await submit(publicSite, {});
-    assert.equal(status, 201, 'the reporter must never pay for ClickUp being broken');
+    assert.equal(status, 201, 'the reporter must never pay for the tracker being broken');
     assert.equal(payload.ok, true);
     assert.equal(payload.data.status, 'failed_forward');
     assert.equal(db.bugReports.length, 1, 'the row is the record and it exists');
@@ -426,14 +419,14 @@ test('route: a broken token still gives the reporter a 201; the row reads failed
   }
 });
 
-test('route: with no CLICKUP_API_TOKEN the row reads failed_forward and the log names the env var and the redeploy', async () => {
-  const { publicSite, db, logged, created, restore } = withRouteMocks({ clickup: { configured: false } });
+test('route: with no TRACKER_TOKEN_APP the row reads failed_forward and the log names the env var and the redeploy', async () => {
+  const { publicSite, db, logged, created, restore } = withRouteMocks({ tracker: { configured: false } });
   try {
     const { status } = await submit(publicSite, {});
     assert.equal(status, 201);
     assert.equal(created.length, 0, 'nothing is attempted without a token');
     assert.equal(db.bugReports[0].status, 'failed_forward');
-    assert.ok(logged.some((l) => /CLICKUP_API_TOKEN/.test(l) && /redeploy/i.test(l)), `log must name the fix, got: ${logged.join(' | ')}`);
+    assert.ok(logged.some((l) => /TRACKER_TOKEN_APP/.test(l) && /redeploy/i.test(l)), `log must name the fix, got: ${logged.join(' | ')}`);
   } finally {
     restore();
   }

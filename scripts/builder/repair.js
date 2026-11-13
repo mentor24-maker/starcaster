@@ -197,7 +197,11 @@ function readDue({ lastReadAtMs, nowMs, everyMs = READ_EVERY_MS } = {}) {
  * a ticket. Named exactly, because `findingLine` picks the first line that is
  * not one of these.
  */
-const SWEEP_PREAMBLE = Object.freeze([/^The pipeline is /, /^\(counting a ticket stranded /]);
+// The third is the banner's second line while no switch ticket exists yet —
+// which is the tracker's normal state since SC-794 moved the switch there, so
+// without it the report's finding line read "(`npm run pipeline -- pause`
+// creates the switch ticket …)" instead of what the sweep found.
+const SWEEP_PREAMBLE = Object.freeze([/^The pipeline is /, /^\(counting a ticket stranded /, /^\(`npm run pipeline -- pause` creates the switch ticket /]);
 
 /**
  * WHICH LINE OF A STEP'S OUTPUT GOES ON THE REPORT.

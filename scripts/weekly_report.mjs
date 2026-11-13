@@ -658,7 +658,7 @@ the numbers are the script's, the words are yours.`;
  */
 function bus(message) {
   try {
-    postBusMessage(null, `[CC-starcaster] ${message}`, { timeoutMs: 120000 });
+    postBusMessage(`[CC-starcaster] ${message}`, { timeoutMs: 120000 });
   } catch (err) {
     console.error(`(could not reach the bus either: ${err.message})`);
   }

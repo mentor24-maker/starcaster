@@ -31,7 +31,7 @@ function checkDeps() {
     writeCheck: store.writeCheck,
     readBill: (opts) => require('../lib/anthropicBilling').getAnthropicBilling(opts),
     readMeter: (since) => require('../lib/observeStore').getMeteredSpendByDay(since),
-    postBus: (text) => require('../lib/clickupForward').postBusMessage(text),
+    postBus: (text) => require('../lib/trackerForward').postBusMessage(text),
     sendEmail: (msg) => require('../lib/mailer').sendEmail(msg),
   };
 }

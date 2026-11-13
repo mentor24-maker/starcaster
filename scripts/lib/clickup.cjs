@@ -852,10 +852,12 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
  * read back. Every watchdog's alarm comes through here, so this one function is
  * what moves them all.
  *
- * `channelId` is ignored, and kept only so the dozen callers that still pass
- * the old ClickUp channel id need no edit in this slice: the tracker has one
- * bus per project, named in the project config, not a channel per call. The
- * callers' own ClickUp READS are slice 4 of SC-791.
+ * It takes the message and nothing else: the tracker has one bus per project,
+ * named in the project config, not a channel per call. The old first argument,
+ * a ClickUp channel id, was dropped in SC-794 along with every caller's
+ * CLICKUP_BUS_CHANNEL constant; a caller still passing one (a string where the
+ * options belong) is refused out loud rather than posting the channel id as
+ * the message.
  *
  * No ClickUp token is needed, deliberately: the old path refused before
  * posting when CLICKUP_API_TOKEN was missing, which would have made an alarm
@@ -881,7 +883,7 @@ function commentOnTask(taskId, text, { timeoutMs = SHELL_TIMEOUT_MS } = {}) {
  * the Mini is a decision for Dane, raised on SC-791; until then this is a
  * known hole, not a fixed one.
  *
- * `channelId` still means nothing to the tracker. A CLICKUP_BUS_CHANNEL
+ * A CLICKUP_BUS_CHANNEL
  * override (the old way to rehearse an alarm on a scratch channel) cannot be
  * honoured, so this says so on stderr rather than posting a rehearsal to the
  * real bus in silence.
@@ -933,9 +935,13 @@ function busChannelOverrideWarning(env = process.env) {
     + 'per project and no channels, so this post goes to the REAL bus (starcaster-bus, Team chat).';
 }
 
-function postBusMessage(_channelId, text, {
-  timeoutMs = SHELL_TIMEOUT_MS, from, run = execFileSync, env = process.env, project, warn = (m) => console.error(m),
-} = {}) {
+function postBusMessage(text, options = {}) {
+  if (typeof options === 'string') {
+    throw new Error('postBusMessage takes (text, options) since SC-794; this caller still passes a ClickUp channel id first, so nothing was posted.');
+  }
+  const {
+    timeoutMs = SHELL_TIMEOUT_MS, from, run = execFileSync, env = process.env, project, warn = (m) => console.error(m),
+  } = options || {};
   let name = from;
   if (!name) {
     try { name = require('../../lib/nodeRoles.js').thisNode().name; } catch { name = ''; }

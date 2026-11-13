@@ -309,22 +309,23 @@ test('the runner is read from the real process env, which a handed-in env cannot
 });
 
 /*
- * ONE DEFINITION, TWO DOORS. `lib/clickupForward.js` refuses a real request on
- * the same question, and until this round it kept its own copy of the
+ * ONE DEFINITION, TWO DOORS. `lib/trackerForward.js` (the app's door to the
+ * tracker, which took over from `lib/clickupForward.js` on SC-796) refuses a
+ * real request on the same question, and until this round it kept its own copy of the
  * predicate. Two copies of a rule this quiet drift, and the drift is invisible
  * — each file goes on passing its own tests while the system stops agreeing
  * with itself. Asserting the identity is cheap and it cannot rot.
  */
 test('both doors ask the SAME question object, so the two cannot drift apart', () => {
-  const forwardSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'clickupForward.js'), 'utf8');
+  const forwardSrc = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'trackerForward.js'), 'utf8');
   assert.match(
     forwardSrc,
     /require\('\.\.\/scripts\/lib\/clickup\.cjs'\)/,
-    'clickupForward must come through the door module',
+    'trackerForward must come through the door module',
   );
   assert.ok(
     /const \{[^}]*\bunderTestRunner\b[^}]*\} = require\('\.\.\/scripts\/lib\/clickup\.cjs'\)/.test(forwardSrc),
-    'clickupForward must IMPORT underTestRunner rather than keep a second copy',
+    'trackerForward must IMPORT underTestRunner rather than keep a second copy',
   );
   assert.doesNotMatch(
     forwardSrc,

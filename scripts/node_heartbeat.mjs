@@ -3,7 +3,7 @@
  * `npm run heartbeat` — is anything that should be running quietly not?
  *
  * The decisions live in lib/nodeHeartbeat.js (pure, no network, fully tested).
- * This file is the IO: the local stamp, the shared roll call on ClickUp, and
+ * This file is the IO: the local stamp, the shared roll call on the tracker, and
  * the bus post. See that module's header for why the two clocks differ, and
  * why the watchdog has to be able to run from the machine that does NOT own
  * the job it is watching.
@@ -56,9 +56,11 @@ const require = createRequire(import.meta.url);
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
+// The roll call lives on the TRACKER now (SC-794), in the bus project beside
+// "Team chat", read and rewritten through the ticket door. Only the bus posts
+// still go through clickup.cjs, and they land on the tracker's bus too.
+const tracker = require('./lib/trackerDoor.cjs');
 
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const ROLL_CALL_TASK = process.env.CLICKUP_ROLL_CALL_TASK || '';
 // The status the roll call rests in: outside every claim query and every
 // bus-relay watch, for the same reason the pause switch sits there — a ticket
@@ -194,7 +196,7 @@ function closeAlarms(recovered) {
 
   for (const item of plan.announce) {
     try {
-      clickup.postBusMessage(BUS_CHANNEL, heartbeat.renderRecoveredPost({
+      clickup.postBusMessage(heartbeat.renderRecoveredPost({
         role: item.role,
         node: NODE.name || 'an unnamed machine',
         quietSince: item.quietSince,
@@ -216,7 +218,21 @@ function closeAlarms(recovered) {
   return said;
 }
 
-// --- the roll call on ClickUp -----------------------------------------------
+// --- the roll call on the tracker --------------------------------------------
+
+/**
+ * The "last pushed" stamps, named for the surface they were pushed TO.
+ *
+ * The roll call moved from ClickUp to the tracker (SC-794), and the old stamps
+ * (`push-<role>`) record pushes to the OLD ticket. Read as they were, every
+ * role would say "pushed within the last day" and push nothing, so the new
+ * roll call would sit empty for up to a day while the other machine's
+ * `--check` read every job as never having beaten. A new name means the first
+ * push after the move finds no record and fills the tracker's roll call at
+ * once. The old files are left alone: nothing reads them any more.
+ */
+function pushStamp(role) { return `tracker-push-${role}`; }
+function pushKindStamp(role) { return `tracker-push-kind-${role}`; }
 
 /**
  * Find the roll call. Its identity is its NAME; `CLICKUP_ROLL_CALL_TASK` is a
@@ -227,27 +243,31 @@ function closeAlarms(recovered) {
  */
 async function findRollCall() {
   if (ROLL_CALL_TASK) {
-    try {
-      const out = await clickup.call('GET', `/api/v2/task/${ROLL_CALL_TASK}`);
-      if (out.ok && out.json && out.json.id) return { readable: true, found: true, task: out.json };
-      // 401 covers both a bad token and a task this token cannot see, deleted
-      // ones included — so fall through to the name rather than conclude.
-    } catch { /* fall through to the list walk */ }
+    const out = await tracker.getTask(ROLL_CALL_TASK);
+    if (out.ok && out.json && out.json.id) return { readable: true, found: true, task: out.json };
+    // A shortcut naming a ticket that is gone or unreadable falls through to
+    // the name rather than concluding anything.
   }
   let tasks;
   try {
-    tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
+    tasks = await tracker.listTasks({ project: tracker.BUS_PROJECT, includeClosed: true });
   } catch (err) {
-    return { readable: false, found: false, why: `reading the Loop Queue: ${String(err && err.message).slice(0, 200)}` };
+    return { readable: false, found: false, why: `reading the tracker's ${tracker.BUS_PROJECT} project: ${String(err && err.message).slice(0, 200)}` };
   }
-  const task = tasks.find(
+  const listed = tasks.find(
     (t) => String(t.name || '').trim().toLowerCase() === heartbeat.ROLL_CALL_TASK_NAME.toLowerCase(),
   );
-  return task ? { readable: true, found: true, task } : { readable: true, found: false };
+  if (!listed) return { readable: true, found: false };
+  // The list carries no description, so the one ticket is read in full: its
+  // body IS the roll call. A failed read is unreadable, never "absent", or the
+  // next push would create a second roll call beside the first.
+  const full = await tracker.getTask(listed.id);
+  if (!full.ok) return { readable: false, found: false, why: full.why };
+  return { readable: true, found: true, task: full.json };
 }
 
 /**
- * The description ClickUp actually holds.
+ * The description the ticket actually holds.
  *
  * Both fields are consulted and the one with CONTENT wins, because the API
  * does not consistently populate the same one: a task written with
@@ -262,17 +282,18 @@ function descriptionOf(task) {
 }
 
 async function createRollCall() {
-  const out = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
+  const out = await tracker.createTask({
+    project: tracker.BUS_PROJECT,
     name: heartbeat.ROLL_CALL_TASK_NAME,
     status: ROLL_CALL_STATUS,
-    markdown_description: heartbeat.renderRollCall([], { now: NOW }),
+    body: heartbeat.renderRollCall([], { now: NOW }),
   });
   if (!out.ok) {
     return {
       ok: false,
-      why: `HTTP ${out.status} ${String((out.json && out.json.err) || out.text || '').slice(0, 200)}`
-        + `\n  If the failure names the status, this list has no "${ROLL_CALL_STATUS}" status — set`
-        + '\n  CLICKUP_ROLL_CALL_STATUS to one the Loop Queue has that no loop claims from.',
+      why: `${out.why}`
+        + `\n  If the failure names the status, the tracker refused "${ROLL_CALL_STATUS}" — set`
+        + '\n  CLICKUP_ROLL_CALL_STATUS to one no loop claims from.',
     };
   }
   return { ok: true, task: out.json };
@@ -477,13 +498,13 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '', timedOutWhy = 
   //    "this lane has stopped doing any work at all" — held for a day, a
   //    pipeline that went dead this morning is reported tomorrow morning, and
   //    one that came back goes on reading as dead just as long.
-  const pushedKind = readStamp(`push-kind-${role}`);
+  const pushedKind = readStamp(pushKindStamp(role));
   const kindChanged = Boolean(pushedKind) && pushedKind !== kind;
   if (kindChanged) {
     console.error(`heartbeat: this pass ${heartbeat.kindWord(kind)} where the roll call says it `
       + `${heartbeat.kindWord(pushedKind)} — pushing now rather than waiting for the daily slot.`);
   }
-  if (!kindChanged && !heartbeat.dueAgain({ lastAt: readStamp(`push-${role}`), now: NOW, everyMs: heartbeat.PUSH_EVERY_MS })) {
+  if (!kindChanged && !heartbeat.dueAgain({ lastAt: readStamp(pushStamp(role)), now: NOW, everyMs: heartbeat.PUSH_EVERY_MS })) {
     console.error('heartbeat: shared row already pushed within the last day — not pushing again.');
     return 0;
   }
@@ -512,10 +533,10 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '', timedOutWhy = 
   // ever advances a row and never moves one backwards; a lost update costs at
   // most one day's resolution on the other machine's row, and its next push
   // corrects it.
-  const fresh = await clickup.call('GET', `/api/v2/task/${task.id}`);
+  const fresh = await tracker.getTask(task.id);
   // A FAILED READ IS NOT AN EMPTY ROLL CALL (task 86bbw9nbj, round 2 review,
   // finding 3). This is a read-modify-write over a description two machines
-  // share. `clickup.call` resolves rather than throws on an HTTP error, so a
+  // share. `tracker.getTask` resolves rather than throws on a failed read, so a
   // 502 or a 403 used to fall into the same branch as "the block is corrupt"
   // and the PUT below rewrote the whole roll call from this one beat —
   // silently deleting every other machine's row, which the next `--check`
@@ -523,7 +544,7 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '', timedOutWhy = 
   // alike: a read that SUCCEEDED and found no readable block is a roll call
   // worth rebuilding, and a read that failed is a thing we do not know.
   if (!fresh.ok) {
-    console.error(`heartbeat: could not read the roll call before writing it (HTTP ${fresh.status}) — not rewriting it from this beat alone, which would drop every other machine's row. The local beat stands and the next push tries again.`);
+    console.error(`heartbeat: could not read the roll call before writing it (${fresh.why}) — not rewriting it from this beat alone, which would drop every other machine's row. The local beat stands and the next push tries again.`);
     return 0;
   }
   const existing = heartbeat.parseRollCall(descriptionOf(fresh.json));
@@ -540,17 +561,15 @@ async function doBeat(role, { standDownWhy = '', blockedWhy = '', timedOutWhy = 
     console.error('heartbeat: the roll call was read but carries no readable beat block — rebuilding it from this beat alone.');
   }
 
-  const wrote = await clickup.call('PUT', `/api/v2/task/${task.id}`, {
-    markdown_description: heartbeat.renderRollCall(rows, { now: NOW }),
-  });
+  const wrote = await tracker.describeTask(task.id, heartbeat.renderRollCall(rows, { now: NOW }));
   if (!wrote.ok) {
-    console.error(`heartbeat: could not write the roll call (HTTP ${wrote.status}). The local beat stands.`);
+    console.error(`heartbeat: could not write the roll call (${wrote.why}). The local beat stands.`);
     return 0;
   }
-  writeStamp(`push-${role}`, at);
+  writeStamp(pushStamp(role), at);
   // The KIND that is now on the shared row, so the next pass can tell a
-  // transition from an ordinary repeat without re-reading ClickUp.
-  writeStamp(`push-kind-${role}`, kind);
+  // transition from an ordinary repeat without re-reading the tracker.
+  writeStamp(pushKindStamp(role), kind);
   console.error(`heartbeat: ${role} pushed to the roll call as "${kind}" (${task.url}).`);
   return 0;
 }
@@ -707,7 +726,7 @@ async function doStaleCheck({ post }) {
     } else {
       const text = heartbeat.renderStalePost({ quiet: toAnnounce, node: NODE.name, now: NOW });
       try {
-        clickup.postBusMessage(BUS_CHANNEL, text);
+        clickup.postBusMessage(text);
         const at = new Date(NOW).toISOString();
         for (const q of toAnnounce) writeStamp(`stale-${q.role}`, at);
         console.error(`heartbeat: posted to the bus about ${toAnnounce.map((q) => q.role).join(', ')} having stopped.`);
@@ -763,7 +782,7 @@ async function doStaleCheck({ post }) {
  */
 // A TRANSPORT FAILURE MUST NOT SWALLOW THE REPORT (task 86bbw9nbj, round 2
 // review, finding 4). The pass below builds its whole report in `out` and
-// prints once at the end, and `clickup.call` throws on a transport failure —
+// prints once at the end, and a door read could throw on a transport failure —
 // that is its stated contract, not an edge case — so a network blip lost
 // every line including the PUSH lines saying what was about to be written.
 // The buffer lives out here so the catch can still print it. `doBeat` avoids
@@ -801,8 +820,8 @@ async function pushOwnedPass(out) {
   const entries = owned.map((role) => ({
     role,
     beat: heartbeat.readBeat({ role }),
-    lastPushAt: readStamp(`push-${role}`),
-    lastPushKind: readStamp(`push-kind-${role}`),
+    lastPushAt: readStamp(pushStamp(role)),
+    lastPushKind: readStamp(pushKindStamp(role)),
   }));
   const plan = heartbeat.rollCallPushPlan({ entries, now: NOW });
 
@@ -861,14 +880,14 @@ async function pushOwnedPass(out) {
     task = made.task;
   }
 
-  const fresh = await clickup.call('GET', `/api/v2/task/${task.id}`);
+  const fresh = await tracker.getTask(task.id);
   // The same read-modify-write hazard as `doBeat`, and worse here: this mode
   // pushes every owned role at once, so one failed GET would wipe the other
   // machine's rows for N roles in a single write. A failed read is a cannot
   // tell — the local stamps are untouched and the next wake tries again.
   if (!fresh.ok) {
     out.push('');
-    out.push(bold(yellow(`Could not read the roll call before writing it (HTTP ${fresh.status}).`)));
+    out.push(bold(yellow(`Could not read the roll call before writing it (${fresh.why}).`)));
     out.push(`        ${dim('not rewriting it from these beats alone — that would delete every other machine\'s row. Nothing was stamped, so the next wake tries again.')}`);
     out.push('');
     console.log(out.join('\n'));
@@ -896,12 +915,10 @@ async function pushOwnedPass(out) {
     out.push(`        ${dim('the roll call was read but carries no readable beat block — rebuilding it from these beats alone')}`);
   }
 
-  const wrote = await clickup.call('PUT', `/api/v2/task/${task.id}`, {
-    markdown_description: heartbeat.renderRollCall(rows, { now: NOW }),
-  });
+  const wrote = await tracker.describeTask(task.id, heartbeat.renderRollCall(rows, { now: NOW }));
   if (!wrote.ok) {
     out.push('');
-    out.push(bold(yellow(`Could not write the roll call (HTTP ${wrote.status}). The local beats stand; nothing was stamped, so the next wake tries again.`)));
+    out.push(bold(yellow(`Could not write the roll call (${wrote.why}). The local beats stand; nothing was stamped, so the next wake tries again.`)));
     out.push('');
     console.log(out.join('\n'));
     return 2;
@@ -910,8 +927,8 @@ async function pushOwnedPass(out) {
   // Stamped only AFTER a confirmed write, so a failed push is retried rather
   // than being recorded as done — the same discipline the bus posts above use.
   for (const item of plan.push) {
-    writeStamp(`push-${item.role}`, item.at);
-    writeStamp(`push-kind-${item.role}`, heartbeat.normalizeKind(item.kind));
+    writeStamp(pushStamp(item.role), item.at);
+    writeStamp(pushKindStamp(item.role), heartbeat.normalizeKind(item.kind));
   }
   const verdict = heartbeat.relayVerdict({
     ownedEmitters: entries.length, pushed: plan.push.length, unknown: plan.unknown.length,
@@ -960,7 +977,7 @@ async function doCheck(state) {
     reportedBy: NODE.name || 'an unnamed machine',
   });
   try {
-    clickup.postBusMessage(BUS_CHANNEL, text);
+    clickup.postBusMessage(text);
     const at = new Date(NOW).toISOString();
     for (const o of toAnnounce) writeStamp(`quiet-${o.role}`, at);
     console.error(`heartbeat: posted to the bus about ${toAnnounce.map((o) => o.role).join(', ')}.`);
@@ -1006,7 +1023,7 @@ async function announceBlocked(state) {
     reportedBy: NODE.name || 'an unnamed machine',
   });
   try {
-    clickup.postBusMessage(BUS_CHANNEL, text);
+    clickup.postBusMessage(text);
     const at = new Date(NOW).toISOString();
     for (const b of toAnnounce) writeStamp(`standdown-${b.role}`, at);
     console.error(`heartbeat: posted to the bus — ${toAnnounce.map((b) => b.role).join(', ')} firing and unable to work at all.`);
@@ -1045,7 +1062,7 @@ async function announceStandDowns(state) {
     reportedBy: NODE.name || 'an unnamed machine',
   });
   try {
-    clickup.postBusMessage(BUS_CHANNEL, text);
+    clickup.postBusMessage(text);
     const at = new Date(NOW).toISOString();
     for (const sd of toAnnounce) writeStamp(`standdown-${sd.role}`, at);
     console.error(`heartbeat: posted to the bus — ${toAnnounce.map((sd) => sd.role).join(', ')} firing and doing no work.`);

@@ -31,7 +31,6 @@ const watch = require('../lib/siteImportWatch.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const roles = require('../lib/nodeRoles.js');
 
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
 const DB_CONTAINER = 'supabase_db_starcaster';
 const ROLE = 'site-import-worker';
 
@@ -109,7 +108,7 @@ if (CHECK) {
     if (!posts.length) console.log('site-import-watch: nothing new to say on the bus.');
 
     if (DRY) {
-      for (const text of posts) console.log(`--- would post to the bus (${BUS_CHANNEL}) ---\n${text}`);
+      for (const text of posts) console.log(`--- would post to the bus (the tracker's) ---\n${text}`);
       if (posts.length) console.log('--- (dry run: nothing sent, nothing stamped) ---');
     } else {
       let sent = true;
@@ -117,7 +116,7 @@ if (CHECK) {
         const clickup = require('./lib/clickup.cjs');
         for (const text of posts) {
           try {
-            clickup.postBusMessage(BUS_CHANNEL, text);
+            clickup.postBusMessage(text);
           } catch (err) {
             sent = false;
             console.error(`site-import-watch: could NOT post to the bus (${String(err?.message || err).slice(0, 300)}); not stamping it as sent.`);

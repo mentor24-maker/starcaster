@@ -51,9 +51,9 @@ const throughput = require('../lib/loopThroughput.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
-
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const BUS_CHANNEL = process.env.CLICKUP_BUS_CHANNEL || '2kydhxeu-474';
+// The tickets come from the tracker through the ticket door (SC-794); only the
+// bus post is still clickup.cjs's, and it posts to the tracker's bus too.
+const tracker = require('./lib/trackerDoor.cjs');
 
 const argv = process.argv.slice(2);
 const flag = (name) => argv.includes(`--${name}`);
@@ -77,16 +77,17 @@ const yellow = (t) => paint('33', t);
 // --- the two reads ----------------------------------------------------------
 
 /**
- * Every Loop Queue ticket, CLOSED ONES INCLUDED.
+ * Every ticket in the tracker project, LIVE ONES INCLUDED (SC-794: the tracker,
+ * through the door's `tickets --json`, not ClickUp's frozen Loop Queue).
  *
  * `include_closed` is not optional here and its absence would be silent: `Live`
- * is a closed-type status, so without it ClickUp returns only the open work and
+ * is the closed status, so without it the door prints only the open work and
  * the headline number — tickets closed per day — is a confident zero on a week
  * where 67 things shipped. That is the same trap `stage-counts` documents.
  */
 async function readQueue() {
   try {
-    const tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true });
+    const tasks = await tracker.listTasks({ includeClosed: true });
     if (!Array.isArray(tasks) || !tasks.length) return { tasks: null, why: 'no tasks came back' };
     return { tasks, why: null };
   } catch (err) {
@@ -270,7 +271,7 @@ function announceUnknown(v, evidence = null) {
     return;
   }
   try {
-    clickup.postBusMessage(BUS_CHANNEL, text);
+    clickup.postBusMessage(text);
     const why = writeStamp(stampFileForThis, new Date(NOW).toISOString());
     if (why) console.log(`Posted, but the suppression stamp could not be written (${why}).`);
     console.log('');
@@ -476,7 +477,7 @@ if (!throughput.dueAgain({ lastAt: readStamp(), now: NOW, everyMs: heartbeat.REP
 }
 
 try {
-  clickup.postBusMessage(BUS_CHANNEL, text);
+  clickup.postBusMessage(text);
   // Posted but not stamped: the next stall inside the window posts a duplicate.
   // Noisy, and far better than an unwritable folder silencing the alarm
   // outright — the same trade report_job_failure.mjs makes.

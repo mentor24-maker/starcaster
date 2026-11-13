@@ -45,11 +45,9 @@ const roles = require('../lib/nodeRoles.js');
 const digest = require('../lib/pulseDigest.js');
 
 const ROLE = 'broken-links-check';
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
 // Created in Live, as every standing ticket is, so no loop ever claims it
 // (lib/loopNoticeboards.js); the assignee is what puts it in front of Dane.
 const TICKET_STATUS = 'Live';
-const TICKET_TIMEOUT = { timeoutMs: 30 * 1000 };
 const DB_CONTAINER = 'supabase_db_starcaster';
 // A reading that could not be taken is retried hourly, not weekly — and not
 // every ten minutes either, which would spend production disk IO on a failure.
@@ -163,7 +161,11 @@ if (CHECK) {
     process.exit(0);
   }
   const everyMs = state.lastVerdict === 'cannot-tell' ? RETRY_AFTER_CANNOT_TELL_MS : ticketText.CHECK_EVERY_MS;
-  if (!FORCE && !DRY && !ticketText.checkDue({ state, everyMs })) {
+  // A ticket remembered from ClickUp was never written on the tracker (SC-794),
+  // so the first wake after the move takes its reading now rather than up to a
+  // week later, and files the ticket where Dane now looks.
+  const movedToTracker = !state.ticket || require('./lib/trackerDoor.cjs').isTrackerId(state.ticket.id);
+  if (!FORCE && !DRY && movedToTracker && !ticketText.checkDue({ state, everyMs })) {
     console.log(`broken-links: last checked ${state.checkedAt}; the next check is not due yet.`);
     process.exit(0);
   }
@@ -193,56 +195,18 @@ const exitCode = failed.length ? 2 : brokenCount ? 1 : 0;
  * waiting for you" writer in scripts/unapplied_sql_watch.mjs.
  */
 async function writeTicket(rendered, remembered) {
-  const clickup = require('./lib/clickup.cjs');
-  const { OPERATOR_USER_ID } = require('../lib/clickupForward.js');
-  const named = (t) => String(t?.name || '').trim().toLowerCase() === ticketText.TASK_NAME.toLowerCase();
-  let task = null;
-  if (remembered) {
-    try {
-      const out = await clickup.call('GET', `/api/v2/task/${remembered}`, undefined, TICKET_TIMEOUT);
-      if (out.ok && out.json && out.json.id && named(out.json)) task = out.json;
-    } catch { /* fall back to the name */ }
-  }
-  if (!task) {
-    let tasks;
-    try {
-      tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true, timeoutMs: TICKET_TIMEOUT.timeoutMs });
-    } catch (err) {
-      return { ok: false, why: `reading the Loop Queue: ${String(err?.message || err).slice(0, 200)}` };
-    }
-    task = tasks.find(named) || null;
-  }
-  try {
-    if (!task) {
-      const made = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
-        name: ticketText.TASK_NAME,
-        status: TICKET_STATUS,
-        markdown_description: rendered.body,
-        assignees: rendered.assign ? [OPERATOR_USER_ID] : [],
-      }, TICKET_TIMEOUT);
-      if (!made.ok) return { ok: false, why: `creating the ticket: HTTP ${made.status} ${String(made.json?.err || '').slice(0, 200)}` };
-      task = made.json;
-    } else {
-      const change = ticketText.assigneeChange({ current: task.assignees || [], assign: rendered.assign, operatorId: OPERATOR_USER_ID });
-      const wrote = await clickup.call('PUT', `/api/v2/task/${task.id}`, {
-        markdown_description: rendered.body,
-        assignees: change,
-      }, TICKET_TIMEOUT);
-      if (!wrote.ok) return { ok: false, why: `HTTP ${wrote.status} writing ${task.url}` };
-    }
-    // A description write that normalises to nothing still returns 200 (DOCTRINE §3.10).
-    const back = await clickup.call('GET', `/api/v2/task/${task.id}?include_markdown_description=true`, undefined, TICKET_TIMEOUT);
-    if (!back.ok) return { ok: false, id: task.id, url: task.url, why: `written, but reading it back failed (HTTP ${back.status})` };
-    const landed = digest.digestWriteVerdict({ sent: rendered.body, readBack: back.json?.markdown_description ?? back.json?.description ?? '' });
-    if (!landed.ok) return { ok: false, id: task.id, url: task.url, why: landed.why };
-    const ids = (back.json?.assignees || []).map((a) => Number(a.id));
-    const assignedRight = rendered.assign === null
-      || (rendered.assign ? ids.length === 1 && ids[0] === OPERATOR_USER_ID : ids.length === 0);
-    if (!assignedRight) return { ok: false, id: task.id, url: task.url, why: `the description landed but the assignees read back as [${ids.join(', ')}]` };
-    return { ok: true, id: task.id, url: back.json?.url || task.url };
-  } catch (err) {
-    return { ok: false, id: task?.id, url: task?.url, why: String(err?.message || err).slice(0, 300) };
-  }
+  // The tracker, through the ticket door (SC-794): the ticket lives in the bus
+  // project, beside "Team chat", and Dane's seat is the tracker's operator id.
+  const tracker = require('./lib/trackerDoor.cjs');
+  return tracker.writeStandingTicket({
+    name: ticketText.TASK_NAME,
+    body: rendered.body,
+    assign: rendered.assign,
+    remembered,
+    status: TICKET_STATUS,
+    // A description write that normalises to nothing still says ok (DOCTRINE §3.10).
+    verdict: digest.digestWriteVerdict,
+  });
 }
 
 if (!CHECK) process.exit(exitCode);
