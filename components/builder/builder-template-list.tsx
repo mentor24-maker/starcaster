@@ -9,11 +9,16 @@ import { useEffect, useRef, useState } from "react";
 import { BuilderBackgroundControls } from "./builder-background-controls";
 import { BuilderCollapseIcon } from "./builder-collapse-icon";
 import { formatTemplateTimestamp } from "./builder-utils";
+import { BUILT_IN_TEMPLATE_NAME_NOTE, isSavableTemplateId } from "@/lib/builder-template-name";
 
 type BuilderTemplateListProps = {
   templates: BuilderTemplateRecord[];
   selectedTemplateId: string;
+  /** The open template's id; a built-in one cannot be saved, so cannot be renamed. */
+  draftId?: string;
   draftName: string;
+  /** Enter in the name box saves, the same as the Save Template button. */
+  onSaveTemplate?: () => void;
   templateKind: BuilderTemplateKind;
   emailFunction: BuilderEmailFunction | "";
   pageBackground: BackgroundSettings;
@@ -38,7 +43,9 @@ type BuilderTemplateListProps = {
 export function BuilderTemplateList({
   templates,
   selectedTemplateId,
+  draftId = "",
   draftName,
+  onSaveTemplate,
   templateKind,
   emailFunction,
   pageBackground,
@@ -58,6 +65,9 @@ export function BuilderTemplateList({
   themePrimaryColor
 }: BuilderTemplateListProps) {
   const isEmailTemplate = templateKind === "email";
+  // SC-803: the built-in template has no database row, so a name typed into
+  // it could never be saved. Say so instead of accepting typing that is lost.
+  const nameLocked = !isSavableTemplateId(draftId);
   const [collapsedPanels, setCollapsedPanels] = useState({
     templates: true,
     details: true
@@ -228,10 +238,25 @@ export function BuilderTemplateList({
                 ref={nameInputRef}
                 type="text"
                 value={draftName}
-                onChange={(event) => onSetDraftName(event.target.value)}
+                readOnly={nameLocked}
+                aria-describedby={nameLocked ? "builder-template-name-note" : undefined}
+                onChange={(event) => {
+                  if (!nameLocked) onSetDraftName(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !nameLocked && !isSaving && onSaveTemplate) {
+                    event.preventDefault();
+                    onSaveTemplate();
+                  }
+                }}
                 placeholder="Untitled template"
               />
             </label>
+            {nameLocked ? (
+              <p className="builder-template-name-note" id="builder-template-name-note">
+                {BUILT_IN_TEMPLATE_NAME_NOTE}
+              </p>
+            ) : null}
 
             {isEmailTemplate ? (
               <div className="builder-email-merge-tokens-panel">
