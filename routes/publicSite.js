@@ -372,14 +372,14 @@ async function handle(req, res, pathname, method) {
     if (screenshots.data.assetIds.length) await markScreenshotsAttached(screenshots.data.assetIds, { projectId: scopedProjectId });
 
     // AFTER the write, never before: the row is the record. Forwarding to
-    // ClickUp (held for the operator) can fail without the reporter ever
+    // the tracker (held for the operator) can fail without the reporter ever
     // knowing — the row is marked failed_forward and the failure is logged
     // loudly (lib/bugReportForward.js). Awaited on purpose: serverless freezes
     // the function once the response goes out.
     const forward = await forwardBugReport(result.data, scope);
 
     // Same contract again, and independent of the forward above: whether the
-    // ClickUp task landed has no bearing on whether the operator asked to be
+    // tracker ticket landed has no bearing on whether the operator asked to be
     // emailed. Awaited for the same freeze reason; cannot throw, cannot fail
     // the reporter's request, and never trusts the request body for the
     // toggle (lib/bugReportEmail.js, rule 4).

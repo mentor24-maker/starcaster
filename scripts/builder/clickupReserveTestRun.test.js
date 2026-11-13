@@ -125,7 +125,7 @@ test('the bug-report forwarder reads THIS definition, not its own copy', () => {
   // test run reached real ClickUp. That guard and this one must never come to
   // disagree about what a test run is, so they share one function — asserted
   // here rather than trusted, because the drift would be silent.
-  const forward = fs.readFileSync(path.join(__dirname, '../../lib/clickupForward.js'), 'utf8');
+  const forward = fs.readFileSync(path.join(__dirname, '../../lib/trackerForward.js'), 'utf8');
   assert.match(forward, /require\('\.\.\/scripts\/lib\/clickup\.cjs'\)/);
   assert.match(forward, /underTestRunner\s*[,}]/, 'it imports the shared predicate');
   assert.doesNotMatch(forward, /function underTestRunner/, 'and does not define a second one');
