@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { classifyReportOrigin } = require('../../lib/bugReportOrigin');
-const { createSyntheticReportTask, HELD_STATUS, SYNTHETIC_STATUS } = require('../../lib/clickupForward');
+const { createSyntheticReportTask, HELD_STATUS, SYNTHETIC_STATUS } = require('../../lib/trackerForward');
 const { forwardBugReport } = require('../../lib/bugReportForward');
 
 /**
@@ -101,7 +101,7 @@ test('createSyntheticReportTask refuses the held status outright', async () => {
 test('createSyntheticReportTask refuses to assign anybody', async () => {
   const out = await createSyntheticReportTask(
     { name: 'x' },
-    { token: 't', assignees: [48012725], fetchImpl: async () => { throw new Error('must not reach the network'); } }
+    { token: 't', assignees: [1], fetchImpl: async () => { throw new Error('must not reach the network'); } }
   );
   assert.equal(out.ok, false);
   assert.equal(out.code, 'SYNTHETIC_MUST_NOT_ASSIGN');
@@ -113,10 +113,10 @@ test('a synthetic task that lands assigned anyway is reported, not accepted', as
   const fetchImpl = async (url, init = {}) => {
     const method = init.method || 'GET';
     const json = (status, payload) => ({ ok: status < 300, status, text: async () => JSON.stringify(payload) });
-    if (method === 'POST') return json(200, { id: 'syn_1', url: 'https://app.clickup.com/t/syn_1' });
-    return json(200, { id: 'syn_1', status: { status: HELD_STATUS }, assignees: [{ id: 48012725 }] });
+    if (method === 'POST') return json(201, { id: 'SC-9001', status: 'live' });
+    return json(200, { id: 'SC-9001', status: HELD_STATUS, assignee: 1, description: 'x', comments: [] });
   };
-  const out = await createSyntheticReportTask({ name: 'x' }, { token: 't', fetchImpl });
+  const out = await createSyntheticReportTask({ name: 'x' }, { token: 't', baseUrl: 'https://tracker.test', fetchImpl });
   assert.equal(out.ok, false);
   assert.equal(out.code, 'SYNTHETIC_LANDED_ASSIGNED');
   assert.match(out.error, /operator's lane/);
