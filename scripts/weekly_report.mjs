@@ -78,7 +78,7 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const R = require(path.join(REPO, 'scripts/builder/weeklyReport.js'));
 const { run: runCommand } = require(path.join(REPO, 'scripts/builder/runCommand.js'));
 const { checkRole } = require(path.join(REPO, 'lib/nodeRoles.js'));
-const { checkReportHome } = require(path.join(REPO, 'lib/weeklyReportHome.js'));
+const { checkReportHome, carryOverLegacyEditions } = require(path.join(REPO, 'lib/weeklyReportHome.js'));
 const { uploadEdition, driveConfig } = require(path.join(REPO, 'lib/weeklyReportDrive.js'));
 
 // WHERE THIS RUN MAY WRITE, decided before anything else happens.
@@ -92,6 +92,18 @@ if (!HOME_CHECK.ok) {
   process.exit(1);
 }
 const REPORTS_DIR = HOME_CHECK.dir;
+
+// The folder moved out of ~/Documents (SC-797). Bring the old editions along so
+// the index still lists every week; say what happened either way.
+{
+  const carried = carryOverLegacyEditions();
+  if (carried.copied.length) {
+    process.stderr.write(`Carried ${carried.copied.length} old edition file(s) into ${REPORTS_DIR}\n`);
+  }
+  if (carried.reason && !/^no old folder|^WEEKLY_REPORT_DIR/.test(carried.reason)) {
+    process.stderr.write(`Old editions: ${carried.reason}\n`);
+  }
+}
 // THE TRACKER, NOT CLICKUP (SC-792). The ticket stages are read from this
 // project on the tracker, the narrative ticket is filed in the bus project,
 // and failures post to the bus through the same `postBusMessage` every other
