@@ -267,6 +267,7 @@ const GOVERNANCE_STEMS = [
   // was carriable by Lane B, and each decides something the machinery above
   // then acts on:
   'reviewGateClickup', // what the referee reads back from ClickUp, i.e. whether a ticket has a passing verdict
+  'reviewGateTracker', // the same read from the tracker since SC-795, which replaced it
   'clickupTicketLink', // what counts as "this PR names its ticket" — widen the matcher and the gate accepts a PR with no trail
   'loopTrail', // the trail the referee reads to decide a PR was opened by a loop at all
   'generated_files', // check_conventions' and check_syntax' definition of which files are generated

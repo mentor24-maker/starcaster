@@ -69,10 +69,12 @@ jobs:
       - name: Review gate
         env:
           GH_TOKEN: ${{ github.token }}
-          # The ClickUp read token. Absent -> the gate answers CANNOT TELL and
-          # never a pass. It is NOT invented here: if this secret does not
-          # exist yet, that is the operator's one-time setup step, and the
-          # gate says so in its own output rather than guessing.
-          CLICKUP_API_TOKEN: ${{ secrets.CLICKUP_API_TOKEN }}
+          # The gate's own tracker sign-in (SC-795): it reads the ticket's
+          # verdict from the tracker at `trackerPublicUrl` in
+          # spirality.project.json, and calls no ClickUp API. Absent -> the
+          # gate answers CANNOT TELL and never a pass. It is NOT invented
+          # here: putting this secret in is the operator's one-time setup step
+          # (a real secret value), and the gate says so in its own output.
+          TRACKER_REVIEW_GATE_TOKEN: ${{ secrets.TRACKER_REVIEW_GATE_TOKEN }}
           REVIEW_GATE_ENFORCING: ${{ vars.REVIEW_GATE_ENFORCING }}
         run: node scripts/review_gate.mjs --pr "${{ github.event.pull_request.number }}"

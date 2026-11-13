@@ -171,7 +171,7 @@ test('an unreadable date is CANNOT TELL, never a pass', () => {
 // Acceptance criterion 5 — no ticket link in the body fails.
 // ---------------------------------------------------------------------------
 
-test('a PR body with no ClickUp link fails — a PR nobody can trace does not merge', () => {
+test('a PR body with no ticket link fails — a PR nobody can trace does not merge', () => {
   const decision = gate.reviewGateDecision({
     prBody: 'Quick fix, no ticket.',
     headCommittedAt: NOW,
@@ -180,7 +180,7 @@ test('a PR body with no ClickUp link fails — a PR nobody can trace does not me
   // BREAK-TEST: return PASS when ticketId is empty and this fails — hand-made
   // PRs would route around the gate simply by omitting the link.
   assert.equal(decision.verdict, gate.FAIL);
-  assert.match(decision.reason, /no ClickUp ticket link/);
+  assert.match(decision.reason, /no ticket link/);
 });
 
 test('both live ClickUp link shapes are recognised', () => {
@@ -310,16 +310,16 @@ test('the gate imports the verdict parser rather than re-implementing it', () =>
 });
 
 // ---------------------------------------------------------------------------
-// Acceptance criterion 8 — ClickUp unreachable is CANNOT TELL, never a pass.
+// Acceptance criterion 8 — the tracker unreachable is CANNOT TELL, never a pass.
 // ---------------------------------------------------------------------------
 
-test('unreadable ClickUp comments are CANNOT TELL, never a pass', () => {
+test('unreadable ticket comments are CANNOT TELL, never a pass', () => {
   for (const comments of [null, undefined, 'oops', { comments: [] }]) {
     const decision = gate.reviewGateDecision({
       prBody: BODY_WITH_TICKET,
       headCommittedAt: NOW,
       comments,
-      clickupError: 'HTTP 503',
+      trackerError: 'HTTP 503',
     });
     // BREAK-TEST: change the Array.isArray guard to `if (!comments)` and the
     // 'oops' / object cases fall through to "no verdict"→FAIL, which is still
@@ -348,10 +348,10 @@ test('a missing CI token reads as CANNOT TELL and says which secret is missing',
     prBody: BODY_WITH_TICKET,
     headCommittedAt: NOW,
     comments: null,
-    clickupError: 'CLICKUP_API_TOKEN is not set in this job — the CI secret is missing',
+    trackerError: 'TRACKER_REVIEW_GATE_TOKEN is not set in this job — the CI secret is missing',
   });
   assert.equal(decision.verdict, gate.CANNOT_TELL);
-  assert.match(gate.gateMessage(decision), /CLICKUP_API_TOKEN|token/i);
+  assert.match(gate.gateMessage(decision), /TRACKER_REVIEW_GATE_TOKEN is not set/);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,26 +396,24 @@ test('the workflow runs the gate, feeds it the token, and never invents a secret
   assert.match(yml, /name:\s*review-gate/);
   assert.match(yml, /on:\s*\n\s*pull_request:/);
   assert.match(yml, /node scripts\/review_gate\.mjs/);
-  // The token name matches the one the rest of the repo already uses, rather
-  // than a new one made up for CI (task non-goal: "do not invent a CI secret").
-  assert.match(yml, /CLICKUP_API_TOKEN:\s*\$\{\{\s*secrets\.CLICKUP_API_TOKEN\s*\}\}/);
+  // The gate's own tracker sign-in (SC-795), under the one name the gate
+  // reads; the ClickUp token it used to read is gone from the job.
+  assert.match(yml, /TRACKER_REVIEW_GATE_TOKEN:\s*\$\{\{\s*secrets\.TRACKER_REVIEW_GATE_TOKEN\s*\}\}/);
+  assert.doesNotMatch(yml, /CLICKUP_API_TOKEN/);
   assert.match(yml, /REVIEW_GATE_ENFORCING:\s*\$\{\{\s*vars\.REVIEW_GATE_ENFORCING\s*\}\}/);
   // `edited` matters: adding the ticket link IS the fix for one of the
   // refusals, and a gate blind to its own fix sends people to a re-run button.
   assert.match(yml, /types:\s*\[[^\]]*edited[^\]]*\]/);
 });
 
-test('the ClickUp token name the gate reads is the one the repo already uses', () => {
-  const direct = require('node:fs').readFileSync(
-    require('node:path').join(__dirname, '..', 'clickup_direct.mjs'),
-    'utf8',
-  );
+test('the token name the gate reads is the one the workflow passes it', () => {
   const runner = require('node:fs').readFileSync(
     require('node:path').join(__dirname, '..', 'review_gate.mjs'),
     'utf8',
   );
-  assert.match(direct, /process\.env\.CLICKUP_API_TOKEN/);
-  assert.match(runner, /process\.env\.CLICKUP_API_TOKEN/);
+  const { TOKEN_SECRET } = require('./reviewGateTracker.js');
+  assert.equal(TOKEN_SECRET, 'TRACKER_REVIEW_GATE_TOKEN');
+  assert.match(runner, /process\.env\[reviewGateTracker\.TOKEN_SECRET\]/);
 });
 
 // ---------------------------------------------------------------------------
@@ -1120,13 +1118,14 @@ test('the gate and pr-opened agree about every ticket-reference shape', () => {
 
 test('both read the SAME matcher, so they cannot drift apart again', () => {
   const fs = require('node:fs');
-  assert.ok(fs.existsSync(require.resolve('./clickupTicketLink.js')));
+  // The loop's copy since SC-795: it is the one that reads a tracker link.
+  assert.ok(fs.existsSync(require.resolve('../../loop/lib/clickupTicketLink.js')));
   for (const file of ['./reviewGate.js', './loopTrail.js']) {
     const source = fs.readFileSync(require.resolve(file), 'utf8');
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     // BREAK-TEST: paste a local app.clickup.com regex back into either file and
     // this fails. Agreement by two matching copies is not agreement.
-    assert.match(code, /require\('\.\/clickupTicketLink\.js'\)/, `${file} stopped importing the shared matcher`);
+    assert.match(code, /require\('\.\.\/\.\.\/loop\/lib\/clickupTicketLink\.js'\)/, `${file} stopped importing the shared matcher`);
     assert.doesNotMatch(code, /app\\\.clickup\\\.com/, `${file} has its own ClickUp link regex again`);
   }
 });

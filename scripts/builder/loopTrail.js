@@ -29,7 +29,9 @@
  */
 
 const { findPullRequest, isReviewVerdict, isReviewPassed } = require('./mergeOnComment.js');
-const { bodyNamesTicket } = require('./clickupTicketLink.js');
+// The loop's matcher, the one the review gate reads too (SC-795): it knows
+// the tracker's `<trackerUrl>/t/SC-12` link as well as the old ClickUp one.
+const { bodyNamesTicket } = require('../../loop/lib/clickupTicketLink.js');
 
 /** The one shape `mergeOnComment.findPullRequest` will find. */
 function prOpenedComment(prUrl, extra) {
