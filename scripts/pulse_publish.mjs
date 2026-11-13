@@ -29,7 +29,7 @@
  * `scripts/pulse.cjs` declares read-only as a hard property, not an intention:
  * three sources, no write path, so it cannot post or repair by accident. That
  * property is worth more than the few milliseconds saved by requiring it in
- * here, and importing it would put a ClickUp PUT one typo away from the file
+ * here, and importing it would put a tracker write one typo away from the file
  * that promises it has none. So: this file writes, that file reads, and the
  * boundary between them is a process.
  *
@@ -50,14 +50,17 @@ const pulse = require('../scripts/builder/pulse.js');
 const heartbeat = require('../lib/nodeHeartbeat.js');
 const nodeRoles = require('../lib/nodeRoles.js');
 const clickup = require('./lib/clickup.cjs');
+const trackerTickets = require('./lib/trackerTickets.cjs');
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const LOOP_QUEUE_LIST = process.env.CLICKUP_LOOP_QUEUE_LIST || '901418546619';
-const DIGEST_TASK = process.env.CLICKUP_PULSE_DIGEST_TASK || '';
-// The status the record rests in: outside every claim query and every relay
-// watch, for the same reason the roll call and the pause switch sit there — a
-// ticket that could be picked up as work would be picked up as work.
-const DIGEST_STATUS = process.env.CLICKUP_PULSE_DIGEST_STATUS || 'Live';
+// THE TRACKER, NOT CLICKUP (SC-793). The record is a ticket in the tracker's
+// bus project (`busProject` in spirality.project.json, beside "Team chat"),
+// read with the door's `tickets --json` and written with its `task` and
+// `describe`. Not in this project's own queue: a ticket there could be picked
+// up as work, and the bus project is one no loop claims from.
+const BUS_PROJECT = trackerTickets.projectConfig().busProject || 'starcaster-bus';
+// The status the record rests in, the same one "Team chat" wears.
+const DIGEST_STATUS = 'Live';
 const ROLE = 'pipeline-pulse';
 
 const argv = process.argv.slice(2);
@@ -73,7 +76,8 @@ const NOW = Date.now();
 const NODE = nodeRoles.thisNode();
 
 // EVERY CALL OUT OF THIS FILE HAS A DEADLINE — the three subprocesses AND the
-// five ClickUp calls this file makes directly.
+// tracker calls that write the record (each one a bounded door subprocess
+// since SC-793; they were five direct ClickUp calls before).
 //
 // Round 1 of this ticket's review bounded the subprocesses. Round 2 found that
 // the reasoning below applies word for word to the ClickUp reads and writes
@@ -98,16 +102,11 @@ const READING_TIMEOUT_MS = 10 * 60 * 1000; // the pulse: three sources, many `gh
 const SWITCH_TIMEOUT_MS = 2 * 60 * 1000;   // one ClickUp read
 const BEAT_TIMEOUT_MS = 2 * 60 * 1000;     // a local stamp plus at most one ClickUp write
 
-// The deadline on each ClickUp request this file makes, and it is deliberately
-// TIGHTER than the library's own 60s default, because of the one place a
-// per-request bound still multiplies: `listTasks` pages, up to 50 times. A
-// ClickUp that HANGS throws on the first page and does not multiply — that is
-// the failure this bound exists for. A ClickUp that is merely slow does, and
-// 50 x 60s is 50 minutes, which does not fit inside an hourly cadence. At 30s
-// the worst case is 25 minutes, comfortably inside it, and a single healthy
-// ClickUp call takes well under a second.
-const CLICKUP_TIMEOUT_MS = 30 * 1000;
-const TIMEOUT = { timeoutMs: CLICKUP_TIMEOUT_MS };
+// The deadline on each door call that keeps the record (a read, a write, a
+// read-back): one tracker request each, on this machine, well under a second
+// when healthy. Two minutes covers Doppler starting up and a slow disk.
+const DOOR_TIMEOUT_MS = 2 * 60 * 1000;
+const DOOR = { timeoutMs: DOOR_TIMEOUT_MS };
 
 // --- suppression stamps -----------------------------------------------------
 //
@@ -203,7 +202,7 @@ function takeReading() {
       ok: false,
       why: timedOut
         ? `the pulse did not finish within ${Math.round(READING_TIMEOUT_MS / 60000)} minutes and was killed `
-          + '(most likely a `gh` or ClickUp call that hung rather than failed)'
+          + '(most likely a `gh` or tracker call that hung rather than failed)'
         : `the pulse could not be started (${out.error.message})`,
     };
   }
@@ -226,107 +225,89 @@ function takeReading() {
 // --- the durable record -----------------------------------------------------
 
 /**
- * Find the record. Its identity is its NAME; `CLICKUP_PULSE_DIGEST_TASK` is a
- * shortcut that must never become the definition — a shortcut pointing at a
- * deleted task has to fall back to the name, not report the record gone.
+ * Find the record, by its NAME, in the bus project. Live included, because
+ * that is the status it rests in.
  */
-async function findDigestTask() {
-  if (DIGEST_TASK) {
-    try {
-      const out = await clickup.call('GET', `/api/v2/task/${DIGEST_TASK}`, undefined, TIMEOUT);
-      if (out.ok && out.json && out.json.id) return { readable: true, found: true, task: out.json };
-    } catch { /* fall through to the name */ }
-  }
-  let tasks;
+function findDigestTask() {
+  let rows;
   try {
-    tasks = await clickup.listTasks(LOOP_QUEUE_LIST, { includeClosed: true, timeoutMs: CLICKUP_TIMEOUT_MS });
+    rows = trackerTickets.readTickets({ project: BUS_PROJECT, includeClosed: true, ...DOOR });
   } catch (err) {
-    return { readable: false, found: false, why: `reading the Loop Queue: ${String(err?.message || err).slice(0, 200)}` };
+    return { readable: false, found: false, why: `reading the tracker's ${BUS_PROJECT} project: ${String(err?.message || err).slice(0, 300)}` };
   }
-  const task = tasks.find(
+  const row = rows.find(
     (t) => String(t.name || '').trim().toLowerCase() === digest.DIGEST_TASK_NAME.toLowerCase(),
   );
-  return task ? { readable: true, found: true, task } : { readable: true, found: false };
+  return row ? { readable: true, found: true, task: digestTask(row.id) } : { readable: true, found: false };
+}
+
+/** The record as this file reports it: its id and its page on the tracker. */
+function digestTask(id) {
+  return { id: String(id), url: trackerTickets.ticketPageUrl(id) || String(id) };
 }
 
 /**
  * Read the record back and say whether it LANDED.
  *
- * `clickup_direct.mjs describe` does this for exactly the reason it matters
- * here: a description write that normalises to nothing returns a clean 200
- * (docs/DOCTRINE.md §3.10). What the reading MEANS is decided by
+ * A description write that normalises to nothing can still report success
+ * (docs/DOCTRINE.md §3.10), and the door's own `describe` read-back checks
+ * only that it is not empty. What the reading MEANS is decided by
  * `digest.digestWriteVerdict`, which is pure and tested; this only fetches.
  */
-async function readDigestBack(taskId, sent) {
-  let back;
+function readDigestBack(taskId, sent) {
+  let printed;
   try {
-    back = await clickup.call(
-      'GET', `/api/v2/task/${taskId}?include_markdown_description=true`, undefined, TIMEOUT,
-    );
+    printed = trackerTickets.runDoor(['get', '--task', String(taskId)], { what: `reading ${taskId} back`, ...DOOR });
   } catch (err) {
-    return digest.digestWriteVerdict({ sent, readable: false, why: String(err?.message || err).slice(0, 200) });
+    return digest.digestWriteVerdict({ sent, readable: false, why: String(err?.message || err).slice(0, 300) });
   }
-  if (!back.ok) {
-    return digest.digestWriteVerdict({ sent, readable: false, why: `HTTP ${back.status}` });
+  const saved = trackerTickets.descriptionFromGet(printed);
+  if (saved === null) {
+    return digest.digestWriteVerdict({ sent, readable: false, why: `\`get --task ${taskId}\` printed no description` });
   }
-  const saved = back.json?.markdown_description ?? back.json?.description ?? '';
   return digest.digestWriteVerdict({ sent, readBack: saved });
 }
 
-async function writeDigest(body) {
-  const found = await findDigestTask();
+function writeDigest(body) {
+  const found = findDigestTask();
   if (!found.readable) return { ok: false, why: found.why };
 
-  // The POST and the PUT are the only two ClickUp calls in this file that were
-  // not inside a try/catch, and `clickup.call` THROWS on a network failure
-  // while returning `{ok:false}` on an HTTP error. Unwrapped, a network
-  // failure here escaped as a stack trace — losing the "the reading is now
-  // nowhere but this log" line written for exactly that moment. The run still
-  // exited non-zero, so the alert fired; it just arrived unreadable.
+  // Every door call throws on failure, with the door's own reason; each one
+  // is caught here so a failure reaches the "the reading is now nowhere but
+  // this log" line written for exactly that moment, not a stack trace.
   if (!found.found) {
-    let made;
+    let printed;
     try {
-      made = await clickup.call('POST', `/api/v2/list/${LOOP_QUEUE_LIST}/task`, {
-        name: digest.DIGEST_TASK_NAME,
-        status: DIGEST_STATUS,
-        markdown_description: body,
-      }, TIMEOUT);
+      printed = trackerTickets.runDoor(
+        ['task', '--list', BUS_PROJECT, '--name', digest.DIGEST_TASK_NAME, '--status', DIGEST_STATUS, '--body-file', '-'],
+        { input: body, what: `creating the "${digest.DIGEST_TASK_NAME}" ticket in ${BUS_PROJECT}`, ...DOOR },
+      );
     } catch (err) {
-      return { ok: false, why: `creating the record: ${String(err?.message || err).slice(0, 300)}` };
+      return { ok: false, why: `creating the record: ${String(err?.message || err).slice(0, 400)}` };
     }
-    if (!made.ok) {
-      return {
-        ok: false,
-        why: `HTTP ${made.status} ${String(made.json?.err || made.text || '').slice(0, 200)}`
-          + `\n  If the failure names the status, this list has no "${DIGEST_STATUS}" status — set`
-          + '\n  CLICKUP_PULSE_DIGEST_STATUS to one the Loop Queue has that no loop claims from.',
-      };
-    }
-    const check = await readDigestBack(made.json?.id, body);
-    if (!check.ok) return { ok: false, why: check.why };
-    return { ok: true, task: made.json, created: true, verified: check.verified, warn: check.why };
+    const id = (/Created task (\S+)/.exec(printed) || [])[1];
+    if (!id) return { ok: false, why: `creating the record: the door did not say which ticket it made (${printed.trim().slice(0, 200)})` };
+    const task = digestTask(id);
+    const check = readDigestBack(id, body);
+    if (!check.ok) return { ok: false, why: `${check.why} (${task.url})` };
+    return { ok: true, task, created: true, verified: check.verified, warn: check.why };
   }
 
-  let wrote;
   try {
-    wrote = await clickup.call(
-      'PUT', `/api/v2/task/${found.task.id}`, { markdown_description: body }, TIMEOUT,
-    );
+    trackerTickets.runDoor(['describe', '--task', found.task.id, '--body-file', '-'], {
+      input: body, what: `rewriting ${found.task.url}`, ...DOOR,
+    });
   } catch (err) {
-    return { ok: false, why: `writing ${found.task.url}: ${String(err?.message || err).slice(0, 300)}` };
+    // A record too large to store was the only thing this job said, hourly,
+    // from 2026-09-20 to 2026-10-02 (task 86bcc9dp8, on ClickUp). renderDigest
+    // caps the body, so say the size and the cap with any refusal.
+    return {
+      ok: false,
+      why: `${String(err?.message || err).slice(0, 400)} (${body.length} characters sent; the cap is `
+        + `${digest.DIGEST_MAX_CHARS}, DIGEST_MAX_CHARS in lib/pulseDigest.js)`,
+    };
   }
-  if (!wrote.ok) {
-    // 413 is "too large", and from 2026-09-20 to 2026-10-02 it was the only
-    // thing this job said, hourly, while the record stayed twelve days stale
-    // (task 86bcc9dp8). renderDigest caps the body now, so a 413 here means
-    // the cap itself is above what ClickUp takes — say so, with the size.
-    const tooLarge = wrote.status === 413
-      ? ` — the record is TOO LARGE for ClickUp even after capping (${body.length} characters sent;`
-        + ` the cap is ${digest.DIGEST_MAX_CHARS}). Lower DIGEST_MAX_CHARS in lib/pulseDigest.js.`
-      : '';
-    return { ok: false, why: `HTTP ${wrote.status} writing ${found.task.url}${tooLarge}` };
-  }
-  const check = await readDigestBack(found.task.id, body);
+  const check = readDigestBack(found.task.id, body);
   if (!check.ok) return { ok: false, why: `${check.why} (${found.task.url})` };
   return { ok: true, task: found.task, created: false, verified: check.verified, warn: check.why };
 }
@@ -444,7 +425,7 @@ if (DRY) {
   console.log(body);
 }
 
-const wrote = DRY ? { ok: true, task: null, created: false } : await writeDigest(body);
+const wrote = DRY ? { ok: true, task: null, created: false } : writeDigest(body);
 if (!wrote.ok) {
   console.log('');
   console.log(`Could NOT write the durable record — ${wrote.why}`);
@@ -494,8 +475,9 @@ if (!items.length) {
       console.log(text);
     } else {
       try {
-        // Bounded by `clickup.SHELL_TIMEOUT_MS` — it is a subprocess that talks
-        // to ClickUp, so it can hang the schedule exactly as a fetch can.
+        // The tracker's bus (`bus-post`, read back), bounded by
+        // `clickup.SHELL_TIMEOUT_MS`: a subprocess can hang the schedule
+        // exactly as a fetch can. It throws when the post did not land.
         clickup.postBusMessage(text);
         for (const item of due) {
           const why = writeStamp(item.key, new Date(NOW).toISOString());

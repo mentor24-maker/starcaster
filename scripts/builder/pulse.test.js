@@ -19,6 +19,8 @@ const {
   driftFindings,
   isTerminalStatus,
   indexPrsByTicket,
+  driftCandidates,
+  operatorIdFrom,
   COMPLETION_MARKER,
   bottleneckSentence,
   describeBreakdown,
@@ -29,6 +31,12 @@ const {
   LOOP_STALE_AFTER_HOURS,
   lastSeenAlive,
 } = require('./pulse');
+
+// The link reader scripts/pulse.cjs hands the indexer, with a fixed config so
+// these tests do not depend on spirality.project.json.
+const { findTicketIds } = require('../../loop/lib/clickupTicketLink.js');
+const TRACKER_OPTS = { trackerPrefix: 'SC', trackerUrl: 'http://mac-mini.local:4180' };
+const readLinks = (text) => findTicketIds(text, TRACKER_OPTS);
 
 /**
  * Task 86bbm9h60. Seven incidents in one week, not one of them a crash — every
@@ -904,7 +912,7 @@ test('BREAK-TEST: a PR that merely MENTIONS other tickets does not link to them'
       'This supersedes the approach in 86bbjj6qb and covers 86bbjve6b too.',
       'An id that does not exist, such as 86bbnonexistent, prints a clear error.',
     ].join('\n'),
-  }]);
+  }], readLinks);
 
   assert.deepEqual([...index.keys()], ['86bbk34x7'], 'only the declared ticket');
   assert.deepEqual(index.get('86bbk34x7'), [435]);
@@ -917,13 +925,77 @@ test('two PRs declaring the same ticket both land under it', () => {
   const index = indexPrsByTicket([
     { number: 1, title: 'a', body: 'https://app.clickup.com/t/86bbsame' },
     { number: 2, title: 'b', body: 'ref https://app.clickup.com/t/86bbsame here' },
-  ]);
+  ], readLinks);
   assert.deepEqual(index.get('86bbsame'), [1, 2]);
 });
 
 test('a PR with no ClickUp link contributes nothing rather than throwing', () => {
-  assert.equal(indexPrsByTicket([{ number: 9, title: 'x', body: null }]).size, 0);
-  assert.equal(indexPrsByTicket(null).size, 0);
+  assert.equal(indexPrsByTicket([{ number: 9, title: 'x', body: null }], readLinks).size, 0);
+  assert.equal(indexPrsByTicket(null, readLinks).size, 0);
+  assert.throws(() => indexPrsByTicket([], undefined), /link reader/, 'no reader is a loud mistake, not an empty index');
+});
+
+// ── SC-793: the tracker's link is a declaration too ─────────────────────────
+
+
+test('BREAK-TEST: a PR declaring a tracker ticket is indexed under it, in both link forms', () => {
+  // Every PR since the move carries `Ticket: <trackerUrl>/t/SC-<n>`. Reading
+  // only ClickUp links indexed none of them, so shapes 2 and 4 went silent.
+  const index = indexPrsByTicket([
+    { number: 1006, title: 'Switch the pipeline pulse', body: 'Ticket: http://mac-mini.local:4180/t/SC-793\n\nSlice of SC-791, report on http://mac-mini.local:4180/t/SCBUS-2.' },
+    { number: 1007, title: 'x', body: 'Ticket: http://127.0.0.1:4180/tickets/SC-794' },
+  ], readLinks);
+  assert.deepEqual(index.get('sc-793'), [1006]);
+  assert.deepEqual(index.get('sc-794'), [1007], 'the /tickets/ address the door\'s get prints, any host');
+  assert.equal(index.has('sc-791'), false, 'a bare id in prose is discussed, not claimed');
+  assert.equal(index.has('scbus-2'), false, 'another project\'s ticket is not this one');
+});
+
+test('BREAK-TEST: a Live tracker ticket whose PR is still open fires shape 2', () => {
+  // The zombie case end to end: the index is the only way a Live ticket is
+  // examined at all, so an index that reads no tracker link drops it here.
+  const openPrs = [{ number: 1006, title: 't', body: 'Ticket: http://mac-mini.local:4180/t/SC-793' }];
+  const tasks = [
+    { id: 'SC-793', name: 'Switch the pipeline pulse', status: { status: 'live' } },
+    { id: 'SC-1', name: 'Untouched', status: { status: 'live' } },
+  ];
+  const byTicket = indexPrsByTicket(openPrs, readLinks);
+  const candidates = driftCandidates(tasks, byTicket);
+  assert.deepEqual(candidates.map((t) => t.id), ['SC-793'], 'the declared Live ticket is examined');
+
+  const { findings } = driftFindings(candidates.map((t) => ({
+    taskId: t.id,
+    name: t.name,
+    status: t.status.status,
+    commentsReadable: true,
+    ticketPrNumbers: [1006],
+    buildStartSees: 1006,
+    buildStartPrState: 'OPEN',
+    openPrsNamingTicket: byTicket.get(t.id.toLowerCase()) || [],
+  })));
+  assert.deepEqual(findings.map((f) => f.shape), ['shape-2']);
+  assert.equal(findings[0].taskId, 'SC-793');
+});
+
+test('BREAK-TEST: an open PR naming a tracker ticket that has no record of it fires shape 4', () => {
+  const byTicket = indexPrsByTicket([{ number: 1010, title: 't', body: 'Ticket: http://mac-mini.local:4180/t/SC-795' }], readLinks);
+  const { findings } = driftFindings([{
+    taskId: 'SC-795', name: 'Review gate', status: 'queued', commentsReadable: true,
+    ticketPrNumbers: [], buildStartSees: null, buildStartPrState: null,
+    openPrsNamingTicket: byTicket.get('sc-795') || [],
+  }]);
+  assert.ok(findings.some((f) => f.shape === 'shape-4' && f.pr === 1010));
+});
+
+test('BREAK-TEST: an unreadable operator id is no id at all, with the reason', () => {
+  // Number(undefined) is NaN and NaN matches nobody: every merge word went
+  // unseen without a sound.
+  assert.deepEqual(operatorIdFrom({ operatorUserId: '1' }), { id: 1, why: null });
+  for (const bad of [{}, { operatorUserId: '' }, { operatorUserId: 'dane' }, { operatorUserId: 0 }, null]) {
+    const out = operatorIdFrom(bad);
+    assert.equal(out.id, null, JSON.stringify(bad));
+    assert.match(out.why, /operatorUserId/);
+  }
 });
 
 // ── A running pass is not a hung one ────────────────────────────────────────
@@ -983,7 +1055,7 @@ test('BREAK-TEST: the real one-way link — PR #373 <-> 86bbjj6qb, as it stood o
     number: 373,
     title: 'Public POST endpoints verify the projectId they are handed',
     body: 'https://app.clickup.com/t/86bbjj6qb\n\nPlain-language summary…',
-  }]);
+  }], readLinks);
   assert.deepEqual(index.get('86bbjj6qb'), [373]);
 
   const { findings } = driftFindings([{
@@ -1023,15 +1095,14 @@ test('and once the "PR opened:" comment is added, the same ticket reports clean'
 
 // ── Round-2 send-back (2026-08-30): the reader starved the honest module ────
 
-test('BREAK-TEST: the pulse asks ClickUp for closed tasks, or Live tickets are invisible', () => {
-  // Measured live: without include_closed the Loop Queue read 47 tickets where
-  // 163 existed, and all 116 Live ones were missing — so shape 2 (terminal
-  // ticket, PR still open) could never fire in production. Fourth reader in
-  // this repo to hit this; the other three carry the same assertion
-  // (pipelinePauseStore, reconcile_clickup_github, wipCap).
+test('BREAK-TEST: the pulse asks the tracker for Live tickets too, or they are invisible', () => {
+  // Measured live on ClickUp: without include_closed the Loop Queue read 47
+  // tickets where 163 existed, and all 116 Live ones were missing — so shape 2
+  // (terminal ticket, PR still open) could never fire in production. The
+  // tracker's `tickets --json` hides Live the same way unless asked (SC-793).
   const src = fs.readFileSync(path.join(__dirname, '..', 'pulse.cjs'), 'utf8');
-  assert.match(src, /\/task\?archived=false&include_closed=true&page=/,
-    'listTasks must send include_closed=true');
+  assert.match(src, /readTickets\(\{ includeClosed: true, comments: true \}\)/,
+    'the queue read must ask for Live tickets, and for the comments B1 reads');
 });
 
 test('BREAK-TEST: an unread loop log makes the HEADLINE say CANNOT TELL, never "the loop is claiming"', () => {
@@ -1194,7 +1265,18 @@ test('BREAK-TEST: the pulse command contains no write path at all', () => {
     assert.equal(re.test(code), false, `scripts/pulse.cjs must contain no ${what}`);
   }
 
-  assert.match(code, /method:\s*'GET'/, 'and it really does read ClickUp');
+  // SC-793: the tickets come through the tracker's door, whose other commands
+  // write. Only its read half may be imported, and nothing here may run the
+  // door (or its Doppler wrapper) itself.
+  for (const [re, what] of [
+    [/runDoor/, 'the write-capable door runner'],
+    [/clickup\.mjs|with_doppler/, 'a direct call to the ticket door'],
+    [/api\.clickup\.com|clickupFetch|CLICKUP_API_TOKEN/, 'a ClickUp call (the tickets are on the tracker)'],
+  ]) {
+    assert.equal(re.test(code), false, `scripts/pulse.cjs must contain no ${what}`);
+  }
+  assert.match(code, /const \{ readTickets, asLoopTasks, projectConfig \} = require\('\.\/lib\/trackerTickets\.cjs'\)/,
+    'and it really does read the tracker, through the read half only');
   assert.match(code, /'pr',\s*'list'/, 'and it really does read GitHub');
 });
 
