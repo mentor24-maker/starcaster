@@ -41,5 +41,13 @@ paused ones included). Spirality's application-checks step on the relay
 (SP-274) is not in StarCaster's copy. `scripts/builder/pulse.js` takes
 Spirality's START-line pattern, which allows the `(model: …)` note.
 
+**The loop-build skill carries Spirality's `wip-check` step** (SP-238), copied
+from `e5d86e4` with only the `lib/wipCap.js` path changed to
+`loop/lib/wipCap.js`. The runner asks the cap inside its work check, but it
+skips that check on the first pass after a restart and on the forced idle
+pass, so the skill's own step is what holds the cap on those passes.
+`scripts/builder/loopBuildSkillWipCheck.test.js` fails if the skill stops
+asking `wip-check` before it claims.
+
 This whole copy is a stopgap, deleted when Spirality runs StarCaster's lanes
 from its own folder (SP-273 / SP-276).

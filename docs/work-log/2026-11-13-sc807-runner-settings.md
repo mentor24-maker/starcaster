@@ -18,3 +18,11 @@ still sends its heartbeat, so a quiet, healthy lane is never reported dead.
 
 After merging, the Mini's scheduled jobs are reinstalled once so the relay
 switches to its one-minute tick.
+
+**Review round 1 fix.** Review found that the work-in-progress limit could be
+skipped: the runner only checks the limit while deciding whether there is any
+work, and it skips that check on the first pass after it starts up and on the
+pass it forces every six hours. Those passes went straight into building
+without asking whether there was room. The build instructions now ask
+`wip-check` themselves before taking a ticket, exactly as Spirality's do, and a
+new test fails if that step is ever removed.

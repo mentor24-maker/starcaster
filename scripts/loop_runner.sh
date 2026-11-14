@@ -4,9 +4,13 @@
 #   loop_runner.sh <skill-name> [interval-seconds]
 #
 # Spirality's runner at e5d86e4 (the Settings page's wake time, pause switches,
-# model and the empty-queue check, SP-236/237/239/292; the work-in-progress cap,
-# SP-238, is asked inside the work check) with StarCaster's own guards merged
-# back in (SC-790, SC-807), each of which answers an incident:
+# model and the empty-queue check, SP-236/237/239/292) with StarCaster's own
+# guards merged back in. The work-in-progress cap (SP-238) is asked in TWO
+# places, and only both together cover it: the work check below, and the
+# loop-build skill's own `wip-check` step, which is what holds the cap on the
+# passes that skip the work check (the first after a restart, and the forced
+# idle pass every IDLE_PASS_EVERY). StarCaster's guards (SC-790, SC-807) each
+# answer an incident:
 #   - STARCASTER_CALLER=scheduled, so a background pass yields the ClickUp
 #     reserve to the sessions Dane is talking to (scripts/lib/clickupCaller.cjs);
 #   - the pause switch (`npm run pipeline -- check`) and the shared lane policy
