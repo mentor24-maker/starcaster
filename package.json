@@ -140,7 +140,8 @@
     "fonts:autotag": "node scripts/fonts_autotag.mjs",
     "fonts:import": "node scripts/fonts_import_fontsource.mjs",
     "test:loop": "node --test \"loop/**/*.test.js\" \"loop/**/*.test.mjs\"",
-    "verify": "npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run test:loop"
+    "test:runner": "node --test \"scripts/lib/*.test.mjs\"",
+    "verify": "npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths && npm run test:loop && npm run test:runner"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

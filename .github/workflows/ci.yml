@@ -183,6 +183,12 @@ jobs:
         # same decoration the rule it replaced turned out to be.
         run: npm run test:hooks
 
+      - name: Unit tests (lane runner)
+        # The copied lane runner's helpers and the runner itself, driven in a
+        # scratch folder with stand-ins (SC-807): wake time, model, pause,
+        # the empty-queue skip, and the heartbeat StarCaster adds to each.
+        run: npm run test:runner
+
       - name: Unit tests (site import engine)
         # Runs after the full build so lib/builder/template.js exists for
         # the mapper's round-trip proof.

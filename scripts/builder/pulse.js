@@ -70,9 +70,14 @@ const MS_PER_HOUR = 3600 * 1000;
  * `)` is now allowed between the number and the closing paren; the test
  * `scripts/builder/pulse.test.js` derives its fixture line FROM loop_runner.sh
  * so the two cannot drift apart again without a test going red.
+ *
+ * The same goes for the START line: since SP-239 (SC-807 here) it names the
+ * model the pass ran on, `(model: <id or default>)`, and a START this pattern
+ * missed would leave every pass with no start at all. A START with no note
+ * still matches. Same pattern as Spirality's lib/pulse.js at e5d86e4.
  */
 const PASS_BANNER_RE =
-  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\(exit (-?\d+)[^)]*\))?\s+=====$/;
+  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\((?:exit (-?\d+)[^)]*|model: [^)]*)\))?\s+=====$/;
 
 /**
  * Split a loop log into passes.

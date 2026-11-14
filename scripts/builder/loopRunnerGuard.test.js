@@ -125,8 +125,10 @@ test('a pass runs pull -> claude -> limit reading -> beat -> sleep decision, in 
   // beats, before any pass starts, when the rule says not to start one.
   const beat = sh.indexOf('heartbeat -- --beat --role', pass);
   // The queue-paced `next-interval` is not in the tracker's door, so the
-  // runner sleeps its configured interval; the limit still outranks it.
-  const pace = sh.indexOf('sleep "$INTERVAL"', beat);
+  // runner sleeps the wake time set on the Settings page (SC-807: read just
+  // before the sleep, which a wake file can end early); the limit still
+  // outranks it.
+  const pace = sh.indexOf('sleep_until_woken', sh.indexOf('read_wake_time', beat));
   assert.ok(pull > 0 && pass > pull, 'the timid pull comes before the pass, or a merged skill edit lags a cycle');
   assert.ok(limit > pass, 'the limit is read out of the pass\'s own output, so it follows the pass');
   // THE ORDER OF THESE TWO FLIPPED ON PURPOSE (task 86bc3t0n1). The beat used
@@ -170,8 +172,12 @@ test('a pass that stood down or was blocked STILL beats, and says which it was',
   // skills no longer ask it, so the runner does, and beats as a stand-down.
   assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down "the pipeline is paused/,
     'the pause branch beats as a stand-down saying the pipeline is paused');
-  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 6,
-    'exactly six beat calls: worked, a limit closed it, could not work at all, ran out of time, the rule said not to start, and the line is paused');
+  // And two more (SC-807): paused on the Settings page beats as a stand-down,
+  // and a pass the work check skipped (nothing to do) beats as a plain run.
+  assert.match(sh, /heartbeat -- --beat --role "\$SKILL" \\\s*\n\s*--stood-down "paused on the Settings page/,
+    'the Settings-page pause branch beats as a stand-down');
+  assert.ok(sh.split('heartbeat -- --beat --role').length - 1 === 8,
+    'exactly eight beat calls: worked, a limit closed it, could not work at all, ran out of time, the rule said not to start, the line is paused, paused on the Settings page, and nothing to do');
 });
 
 test('THE ROUND-2 DEFECT: the runner consults the EXIT CODE, and only asks the guard when it is non-zero', () => {
