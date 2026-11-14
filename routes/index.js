@@ -85,6 +85,7 @@ const themeWizard = require('./themeWizard');
 const themeUsage  = require('./themeUsage');
 const builderPageLinks = require('./builderPageLinks');
 const fonts       = require('./fonts');
+const context     = require('./context');
 const publicSite  = require('./publicSite');
 const spirality   = require('./spirality');
 
@@ -142,6 +143,7 @@ const ROUTE_MODULES = [
   siteImport,
   siteExport,
   fonts,
+  context,
   seoAltText,
   communityAssets,
   messaging,

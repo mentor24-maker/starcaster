@@ -89,6 +89,7 @@ const SCREENS = [
   },
   { id: 'assetsFootagePage', label: 'Assets: Footage' },
   { id: 'assetsFontsPage', label: 'Assets: Fonts' },
+  { id: 'assetsContextPage', label: 'Assets: Context' },
   { id: 'assetsFootagePage', label: 'Assets: Footage, transcript open', open: '[data-testid="studio-transcript-open"]' },
   {
     id: 'assetsFootagePage',

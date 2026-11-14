@@ -15,6 +15,7 @@ import { BuilderThemeColorField } from './components/builder/builder-theme-color
 import { BuilderSharedPageTemplatesIsland } from './components/builder/builder-shared-page-templates';
 import { BuilderSharedPagesIsland } from './components/builder/builder-shared-pages';
 import { confirmPageDelete } from './components/builder/confirm-page-delete';
+import ContextManager from './components/context/context-manager';
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -539,10 +540,27 @@ function mountSharedPagesOnLoad() {
   createRoot(host).render(<BuilderSharedPagesIsland />);
 }
 
+/**
+ * Assets › Context (ticket SC-808). Mounted from THIS bundle, not from
+ * react-entry.js the way Fonts is, because it uses the Builder's rich-text
+ * editor and this bundle already carries it: mounting from public/bundle.js
+ * would have shipped a second copy of the editor (1.73MB -> 2.92MB, measured)
+ * to every admin page. Its host is permanent markup (src/pages/assets.html),
+ * so it mounts once on load; it reads nothing until its page is shown.
+ */
+function mountContextManagerOnLoad() {
+  const host = document.getElementById('assetsContextReactRoot');
+  if (!host || host.dataset.mounted === '1') return;
+  host.dataset.mounted = '1';
+  createRoot(host).render(<ContextManager />);
+}
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', mountSharedPageTemplatesOnLoad, { once: true });
   document.addEventListener('DOMContentLoaded', mountSharedPagesOnLoad, { once: true });
+  document.addEventListener('DOMContentLoaded', mountContextManagerOnLoad, { once: true });
 } else {
   mountSharedPageTemplatesOnLoad();
   mountSharedPagesOnLoad();
+  mountContextManagerOnLoad();
 }
