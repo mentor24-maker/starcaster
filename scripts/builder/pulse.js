@@ -88,9 +88,14 @@ const PASS_BANNER_RE =
  * must count it: on a quiet queue the runner forces a real START/END only
  * every IDLE_PASS_EVERY (6h), so without the SKIP stamps every quiet lane
  * would read as "has not run in 4h" and post a false alarm to the bus.
+ * The note takes anything up to the closing ` =====`: the runner puts the
+ * work check's own line inside it, and that line has brackets of its own
+ * ("no claimable ticket (Rework or Queued)", "cap is full (room/cap: …)"),
+ * so a `[^)]*` note stopped at the first `)` and read no real loop-build SKIP
+ * at all (SC-807 review, round 3).
  */
 const SKIP_BANNER_RE =
-  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+SKIP\s+\/(\S+)(?:\s+\([^)]*\))?\s+=====$/;
+  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+SKIP\s+\/(\S+)(?:\s+\(.*\))?\s+=====$/;
 
 /**
  * Split a loop log into passes.
