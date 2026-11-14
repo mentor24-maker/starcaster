@@ -70,9 +70,32 @@ const MS_PER_HOUR = 3600 * 1000;
  * `)` is now allowed between the number and the closing paren; the test
  * `scripts/builder/pulse.test.js` derives its fixture line FROM loop_runner.sh
  * so the two cannot drift apart again without a test going red.
+ *
+ * The same goes for the START line: since SP-239 (SC-807 here) it names the
+ * model the pass ran on, `(model: <id or default>)`, and a START this pattern
+ * missed would leave every pass with no start at all. A START with no note
+ * still matches. Same pattern as Spirality's lib/pulse.js at e5d86e4.
  */
 const PASS_BANNER_RE =
-  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\(exit (-?\d+)[^)]*\))?\s+=====$/;
+  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(START|END)\s+\/(\S+)(?:\s+\((?:exit (-?\d+)[^)]*|model: [^)]*)\))?\s+=====$/;
+
+/**
+ * THE SKIP LINE (SC-807). Since SP-292 the runner asks for work without AI
+ * first and, on an empty queue, writes one dated line instead of a pass:
+ *   ===== 2026-11-13 22:10:00 SKIP /loop-build (no work; Claude not started) =====
+ * It is deliberately NOT a pass, so it never joins the no-op streak. But it
+ * IS proof the runner was awake at that moment, and the staleness check below
+ * must count it: on a quiet queue the runner forces a real START/END only
+ * every IDLE_PASS_EVERY (6h), so without the SKIP stamps every quiet lane
+ * would read as "has not run in 4h" and post a false alarm to the bus.
+ * The note takes anything up to the closing ` =====`: the runner puts the
+ * work check's own line inside it, and that line has brackets of its own
+ * ("no claimable ticket (Rework or Queued)", "cap is full (room/cap: …)"),
+ * so a `[^)]*` note stopped at the first `)` and read no real loop-build SKIP
+ * at all (SC-807 review, round 3).
+ */
+const SKIP_BANNER_RE =
+  /^=====\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+SKIP\s+\/(\S+)(?:\s+\(.*\))?\s+=====$/;
 
 /**
  * Split a loop log into passes.
@@ -88,11 +111,18 @@ const PASS_BANNER_RE =
 function parsePassLog(text) {
   const passes = [];
   const unterminated = [];
+  const skips = [];
   let open = null;
 
   for (const line of String(text || '').split('\n')) {
     const m = PASS_BANNER_RE.exec(line);
     if (!m) {
+      const skip = SKIP_BANNER_RE.exec(line);
+      if (skip) {
+        // A sign of life, never a pass, and never part of an open pass's body.
+        skips.push(skip[1]);
+        continue;
+      }
       if (open) open.body.push(line);
       continue;
     }
@@ -109,7 +139,7 @@ function parsePassLog(text) {
     open = null;
   }
   if (open) unterminated.push(open);
-  return { passes, unterminated };
+  return { passes, unterminated, skips };
 }
 
 /**
@@ -297,13 +327,21 @@ const NOOP_STREAK_THRESHOLD = 3;
  * intervals at the LONGEST cadence is 3h — past that, no queue depth explains
  * the silence. Measured from the newest pass's END (or a still-running pass's
  * START), so the pulse's own in-flight pass counts as a sign of life.
+ *
+ * SINCE SC-807 the runner sleeps the wake time set on the tracker's Settings
+ * page (300-600s here) and, on an empty queue, writes a SKIP line instead of
+ * a pass, forcing a real pass only every 6h. The newest SKIP stamp therefore
+ * counts as "last seen alive" too; without it a healthy quiet lane would go
+ * stale after 3h. The threshold itself is unchanged: a runner that writes
+ * neither a pass nor a SKIP for three hours has stopped.
  */
 const LOOP_STALE_AFTER_HOURS = 3;
 
-/** The newest moment the loop was provably alive: the latest END banner, or
- *  the START of a pass that has not ended yet. Epoch ms, or null if no banner
- *  carries a readable stamp. */
-function lastSeenAlive(passes, unterminated) {
+/** The newest moment the loop was provably alive: the latest END banner, the
+ *  START of a pass that has not ended yet, or the latest SKIP line (a pass the
+ *  runner skipped on an empty queue). Epoch ms, or null if no banner carries a
+ *  readable stamp. */
+function lastSeenAlive(passes, unterminated, skips) {
   let best = null;
   for (const p of passes || []) {
     const t = Date.parse(String(p?.end || '').replace(' ', 'T'));
@@ -311,6 +349,10 @@ function lastSeenAlive(passes, unterminated) {
   }
   for (const p of unterminated || []) {
     const t = Date.parse(String(p?.start || '').replace(' ', 'T'));
+    if (Number.isFinite(t) && (best === null || t > best)) best = t;
+  }
+  for (const stamp of skips || []) {
+    const t = Date.parse(String(stamp || '').replace(' ', 'T'));
     if (Number.isFinite(t) && (best === null || t > best)) best = t;
   }
   return best;
@@ -322,12 +364,15 @@ function lastSeenAlive(passes, unterminated) {
  * @param now           epoch ms — enables the staleness check (this module owns
  *                      no clock, so without it only the streak is judged)
  * @param unterminated  passes with no END yet; a young one proves the loop alive
+ * @param skips         SKIP stamps from `parsePassLog`; a young one proves the
+ *                      runner alive, but never counts toward the streak
  */
 function noOpStreak(passes, {
   queuedCount,
   threshold = NOOP_STREAK_THRESHOLD,
   now,
   unterminated,
+  skips,
   staleAfterHours = LOOP_STALE_AFTER_HOURS,
 } = {}) {
   const classified = (passes || []).map((p) => ({ pass: p, ...classifyPass(p) }));
@@ -343,7 +388,7 @@ function noOpStreak(passes, {
   const breakdown = {};
   for (const s of streak) breakdown[s.reasonKey] = (breakdown[s.reasonKey] || 0) + 1;
   const unreadable = streak.filter((s) => s.outcome === 'unknown').length;
-  const lastSeen = lastSeenAlive(passes, unterminated);
+  const lastSeen = lastSeenAlive(passes, unterminated, skips);
   const lastPassAtIso = lastSeen === null ? null : new Date(lastSeen).toISOString();
 
   const base = {
@@ -1132,6 +1177,7 @@ function exitCodeFor(result) {
 module.exports = {
   // A1
   PASS_BANNER_RE,
+  SKIP_BANNER_RE,
   PASS_MARKERS,
   NOOP_STREAK_THRESHOLD,
   LOOP_STALE_AFTER_HOURS,

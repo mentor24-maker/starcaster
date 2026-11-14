@@ -1157,7 +1157,7 @@ project; never mixed.
   never as Dane.
 - A pull request's title is the ticket's name, byte for byte, and its body
   carries the ticket link (`pr-opened` prints the exact line it accepts).
-  `npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths`, then the copied loop tests (`npm run test:loop`), the same thing CI's `verify` check runs on every
+  `npm run verify` is the definition of done. It runs `npm run typecheck && npm run test:builder-ui && npm run build && npm run test:builder && npm run test:hooks && npm run check:syntax && node scripts/check_conventions.cjs && npm run check:ui && npm run check:models && npm run check:paths`, then the copied loop tests (`npm run test:loop`) and the copied runner tests (`npm run test:runner`), the same thing CI's `verify` check runs on every
   pull request.
 - Two statuses are Dane's: `Needs your input` and `Ready to launch`. Only
   `ask` may set them, and no loop takes a ticket back out of them.

@@ -9,6 +9,7 @@ const {
   PASS_MARKERS,
   NOOP_STREAK_THRESHOLD,
   parsePassLog,
+  SKIP_BANNER_RE,
   classifyPass,
   classifyUnterminated,
   PASS_HUNG_AFTER_HOURS,
@@ -1181,6 +1182,119 @@ test('a pass still running counts as the loop being alive', () => {
   assert.equal(noOpStreak(passes, { queuedCount: 5, now, unterminated }).verdict, 'clear');
   assert.equal(noOpStreak(passes, { queuedCount: 5, now }).verdict, 'finding', 'and without it, stale');
   assert.equal(lastSeenAlive(passes, unterminated), Date.parse('2026-08-30T11:50:00'));
+});
+
+// SC-807: the runner's SKIP line, rendered from loop_runner.sh itself so the
+// pulse and the runner cannot drift apart without a test going red.
+function runnerSkipLine({ stamp, skill, workLine }) {
+  const sh = fs.readFileSync(path.join(__dirname, '..', 'loop_runner.sh'), 'utf8');
+  const echoes = sh.split('\n')
+    .map((l) => /^\s*echo "(===== .* SKIP \/\$SKILL.*=====)" >> "\$LOG"\s*$/.exec(l))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  assert.equal(echoes.length, 1, 'loop_runner.sh writes exactly one SKIP line');
+  return echoes[0]
+    .replace(/\$\(date "[^"]*"\)/, stamp)
+    .replace(/\$SKILL/g, skill)
+    .replace(/\$\{WORK_LINE:-([^}]*)\}/, (_, fallback) => (workLine ?? fallback));
+}
+
+/**
+ * The work check's REAL verdict lines, from scripts/lib/workCheck.mjs with a
+ * stand-in door, so a test renders the SKIP line the runner actually writes.
+ * The fallback text "no work" has no brackets; the real loop-build lines do,
+ * and that difference hid a pattern that read none of them (SC-807 round 3).
+ */
+async function realWorkLines() {
+  const { workVerdict } = await import(path.join(__dirname, '..', 'lib', 'workCheck.mjs'));
+  const answer = (map) => (args) => map[args[0]] ?? { status: 0, stdout: '', stderr: '' };
+  const emptyBuild = workVerdict('loop-build', { door: answer({
+    'pass-reconcile': { status: 0, stdout: '', stderr: '' },
+    'wip-check': { status: 0, stdout: 'room: 2 of 5 in flight\n', stderr: '' },
+    queue: { status: 0, stdout: '', stderr: '' },
+  }) });
+  const capFull = workVerdict('loop-build', { door: answer({
+    'pass-reconcile': { status: 0, stdout: '', stderr: '' },
+    'wip-check': { status: 3, stdout: 'full: 5 of 5 in flight (SC-1, SC-2, SC-3, SC-4, SC-5)\n', stderr: '' },
+  }) });
+  const emptyIntake = workVerdict('loop-intake', { door: answer({ queue: { status: 0, stdout: '', stderr: '' } }) });
+  for (const v of [emptyBuild, capFull, emptyIntake]) assert.equal(v.code, 3, `a no-work verdict: ${v.line}`);
+  return { emptyBuild: emptyBuild.line, capFull: capFull.line, emptyIntake: emptyIntake.line };
+}
+
+test('BREAK-TEST: the SKIP lines the runner REALLY writes are read, brackets and all', async () => {
+  const lines = await realWorkLines();
+  assert.ok(lines.emptyBuild.includes('(Rework or Queued)'), `fixture carries the real brackets: ${lines.emptyBuild}`);
+  assert.ok(lines.capFull.includes('(full: 5 of 5'), `fixture carries the real brackets: ${lines.capFull}`);
+  for (const [name, workLine, skill] of [
+    ['empty build queue', lines.emptyBuild, 'loop-build'],
+    ['cap full', lines.capFull, 'loop-build'],
+    ['empty intake queue', lines.emptyIntake, 'loop-intake'],
+  ]) {
+    const skip = runnerSkipLine({ stamp: '2026-11-13 21:50:00', skill, workLine });
+    const m = SKIP_BANNER_RE.exec(skip);
+    assert.ok(m, `${name}: the pulse reads the runner's SKIP line: ${skip}`);
+    assert.equal(m[1], '2026-11-13 21:50:00');
+    assert.equal(m[2], skill);
+  }
+
+  // The review's exact case: a 5h-old END, then a 10-minute-old real loop-build SKIP.
+  const now = Date.parse('2026-11-13T22:00:00');
+  const log = [
+    '===== 2026-11-13 16:50:00 START /loop-build (model: default) =====',
+    '===== 2026-11-13 17:00:00 END /loop-build (exit 0 — not a verdict; the pass\'s report above is) =====',
+    runnerSkipLine({ stamp: '2026-11-13 21:50:00', skill: 'loop-build', workLine: lines.emptyBuild }),
+  ].join('\n');
+  const { passes, unterminated, skips } = parsePassLog(log);
+  assert.deepEqual(skips, ['2026-11-13 21:50:00']);
+  assert.equal(passes.length, 1);
+  const out = noOpStreak(passes, { queuedCount: 0, now, unterminated, skips });
+  assert.notEqual(out.verdict, 'finding', 'a lane that skipped 10 minutes ago is not stale');
+});
+
+test('BREAK-TEST: a lane whose newest line is a SKIP is ALIVE, even with its last END 5h old', () => {
+  // Review of SC-807, round 2: the runner skips Claude on an empty queue and
+  // forces a real pass only every 6h. Counting only START/END, a quiet lane
+  // read as "has not run in 4h" and the hourly pulse posted a false alarm.
+  const now = Date.parse('2026-11-13T22:00:00');
+  const log = [
+    '===== 2026-11-13 16:50:00 START /loop-build (model: default) =====',
+    'queue empty',
+    '===== 2026-11-13 17:00:00 END /loop-build (exit 0 — not a verdict; the pass\'s report above is) =====',
+    runnerSkipLine({ stamp: '2026-11-13 21:50:00', skill: 'loop-build' }),
+  ].join('\n');
+  const { passes, unterminated, skips } = parsePassLog(log);
+  assert.equal(passes.length, 1, 'the SKIP line is not a pass');
+  assert.equal(unterminated.length, 0);
+  assert.deepEqual(skips, ['2026-11-13 21:50:00'], 'the SKIP line written by loop_runner.sh is read');
+  const out = noOpStreak(passes, { queuedCount: 0, now, unterminated, skips });
+  assert.notEqual(out.verdict, 'finding', 'a lane that skipped 10 minutes ago is not stale');
+  assert.equal(out.stale, undefined);
+  assert.equal(out.lastPassAt, new Date(Date.parse('2026-11-13T21:50:00')).toISOString());
+  assert.equal(noOpStreak(passes, { queuedCount: 0, now, unterminated }).verdict, 'finding',
+    'and without the SKIP stamps the same log reads as stale');
+});
+
+test('a SKIP line never joins the no-op streak or an open pass\'s body', () => {
+  const skip = runnerSkipLine({ stamp: '2026-11-13 21:05:00', skill: 'loop-build' });
+  const { passes, skips } = parsePassLog([
+    banner('2026-11-13 21:00:00', 'START'), 'working', skip, banner('2026-11-13 21:10:00', 'END', 0),
+    skip, skip,
+  ].join('\n'));
+  assert.equal(passes.length, 1);
+  assert.deepEqual(passes[0].body, ['working']);
+  assert.equal(skips.length, 3);
+});
+
+test('a runner silent for 3h+ is still stale when its newest SKIP is old too', () => {
+  const now = Date.parse('2026-11-13T22:00:00');
+  const out = noOpStreak([stamped('2026-11-13T12:00:00', '2026-11-13T12:10:00')], {
+    queuedCount: 0, now, skips: ['2026-11-13 18:00:00'],
+  });
+  assert.equal(out.verdict, 'finding');
+  assert.equal(out.stale, true);
+  assert.ok(out.message.includes(`has not run in 4h — last seen alive ${new Date(Date.parse('2026-11-13T18:00:00')).toISOString()}`),
+    'last seen is the newest SKIP, not the older END');
 });
 
 test('BREAK-TEST: a log with no readable stamps is CANNOT TELL about staleness, not clear', () => {
