@@ -100,8 +100,8 @@ function readNoOp(job, queuedCount, now) {
     };
   }
 
-  const { passes, unterminated } = parsePassLog(text);
-  const result = noOpStreak(passes, { queuedCount, now, unterminated });
+  const { passes, unterminated, skips } = parsePassLog(text);
+  const result = noOpStreak(passes, { queuedCount, now, unterminated, skips });
   return {
     ...result,
     source: file,

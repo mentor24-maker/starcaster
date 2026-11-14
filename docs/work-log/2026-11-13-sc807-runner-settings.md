@@ -26,3 +26,12 @@ pass it forces every six hours. Those passes went straight into building
 without asking whether there was room. The build instructions now ask
 `wip-check` themselves before taking a ticket, exactly as Spirality's do, and a
 new test fails if that step is ever removed.
+
+**Second review fix.** The hourly pipeline health check (`npm run pulse`)
+decided whether a lane was alive only from its "pass started / pass ended"
+lines. The new runner writes a one-line "skipped, nothing to do" note instead
+of a pass when the queue is empty, and only runs a full pass every six hours,
+so after three quiet hours the health check would have told the bus a healthy
+lane had stopped. It now counts those skip notes as signs of life (never as
+passes), and a test reads the skip line straight out of the runner script so
+the two cannot drift apart.
