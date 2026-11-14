@@ -6,7 +6,7 @@ repository (`npm run doctor`).
 
 Every file here except this README is copied byte for byte from
 [Spirality](https://github.com/mentor24-maker/spirality) at commit
-`2a5d802`, keeping Spirality's layout (`scripts/` beside `lib/`) so no import
+`e5d86e4`, keeping Spirality's layout (`scripts/` beside `lib/`) so no import
 changes. The project settings it reads are StarCaster's own
 `spirality.project.json` at the repository root.
 
