@@ -37,6 +37,7 @@ let byProject: Record<string, ContextEntry[]> = {};
 let sent: { method: string; path: string; body: any }[] = [];
 let refuseRead = "";
 let nextId = 1;
+let holdWrite: Promise<void> | null = null;
 
 async function flush() {
   for (let i = 0; i < 6; i += 1) {
@@ -86,6 +87,7 @@ beforeEach(() => {
   sent = [];
   refuseRead = "";
   nextId = 1;
+  holdWrite = null;
   (window as unknown as { App: unknown }).App = {
     api: async (path: string, options: RequestInit = {}) => {
       const method = String(options.method || "GET").toUpperCase();
@@ -96,6 +98,7 @@ beforeEach(() => {
         if (refuseRead) return { ok: false, error: { message: refuseRead } };
         return { ok: true, data: { entries: [...list], total: list.length } };
       }
+      if (method !== "GET" && holdWrite) await holdWrite;
       if (method === "POST") {
         if (!String(body.title || "").trim()) return { ok: false, error: { message: "An entry needs a title." } };
         const entry: ContextEntry = {
@@ -190,6 +193,47 @@ describe("Assets › Context", () => {
     await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
     await flush();
     expect(rows()).toEqual(["B only"]);
+  });
+
+  it("a save still in flight when the project switches does not report or reload under the new project", async () => {
+    byProject.proj_b = [{ id: "00000000-0000-0000-0000-0000000000ee", title: "B only", kind: "note", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z" }];
+    await mount();
+    await click(button("New entry"));
+    change(container!.querySelector("input[name='title']") as HTMLInputElement, "Written in A");
+    let release: () => void = () => {};
+    holdWrite = new Promise<void>((resolve) => { release = resolve; });
+    const form = container!.querySelector("form")!;
+    act(() => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    await flush();
+    activeProject = "proj_b";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    const readsAfterSwitch = sent.filter((s) => s.method === "GET").length;
+    // The write lands in the project it was sent from.
+    activeProject = "proj_a";
+    await act(async () => { release(); });
+    await flush();
+    activeProject = "proj_b";
+    expect(container!.textContent).not.toContain('Saved "Written in A"');
+    expect(sent.filter((s) => s.method === "GET").length).toBe(readsAfterSwitch);
+    expect(rows()).toEqual(["B only"]);
+  });
+
+  it("a delete still in flight when the project switches does not report under the new project", async () => {
+    byProject.proj_a = [{ id: "00000000-0000-0000-0000-0000000000ff", title: "A note", kind: "note", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z" }];
+    await mount();
+    let release: () => void = () => {};
+    holdWrite = new Promise<void>((resolve) => { release = resolve; });
+    await click(button("Delete"));
+    act(() => { button("Yes, delete").dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await flush();
+    activeProject = "proj_b";
+    await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+    await flush();
+    activeProject = "proj_a";
+    await act(async () => { release(); });
+    await flush();
+    expect(container!.textContent).not.toContain('Deleted "A note"');
   });
 
   it("a refused read is shown as the reason, never as an empty project", async () => {

@@ -18,3 +18,12 @@ One thing changed from the plan along the way: the editor is big, and loading
 the page the planned way would have added a second copy of it to the admin
 app, making every admin screen about 70% heavier to download. The page now
 borrows the copy the Builder already loads, which costs almost nothing.
+
+**After review (same day).** Four fixes before it ships. A client's own site
+login (the admin sign-in on their custom domain) could reach these notes, and
+since agent sessions will read them, a client could have written into what our
+agents are told; that door is now shut. A momentary database hiccup no longer
+claims the table is missing and sends Dane to re-run SQL he already ran. An
+edit that sends an empty "text" field no longer wipes the note. And saving or
+deleting just as you switch projects no longer shows "Saved" under the other
+project.

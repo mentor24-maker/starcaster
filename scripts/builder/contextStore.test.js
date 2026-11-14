@@ -24,12 +24,14 @@ const routePath = require.resolve('../../routes/context.js');
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
-function withStore({ sql = SQL_PATH } = {}) {
+function withStore({ sql = SQL_PATH, failWith = null } = {}) {
   const db = sql ? createFakeDb(parseSchemaFile(sql)) : null;
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({}),
-    sbQuery: async (args) => (db
+    sbQuery: async (args) => (failWith
+      ? failWith
+      : db
       ? db.sbQuery(args)
       : { ok: false, status: 404, error: 'relation "public.context_entries" does not exist' }),
   };
@@ -190,4 +192,34 @@ test('route: a path it does not own falls through', async (t) => {
   const res = fakeRes();
   assert.equal(await route.handle(fakeReq({ method: 'GET' }), res, '/api/contexts', 'GET'), false);
   assert.equal(await route.handle(fakeReq({ method: 'GET' }), res, '/api/context/a/b', 'GET'), false);
+});
+
+test('a tenant admin session (a client\'s own site login) is refused on every /api/context path', () => {
+  const { acceptsProjectAdminSession } = require('../../lib/projectAdminApiAuth');
+  assert.equal(acceptsProjectAdminSession('/api/context'), false);
+  assert.equal(acceptsProjectAdminSession('/api/context/'), false);
+  assert.equal(acceptsProjectAdminSession('/api/context/00000000-0000-0000-0000-000000000000'), false);
+  // Control: the deny entry is not so broad it catches a tenant's own media.
+  assert.equal(acceptsProjectAdminSession('/api/assets'), true);
+});
+
+test('a database that did not answer is not reported as a missing table', async (t) => {
+  const { store, restore } = withStore({ failWith: { ok: false, status: 502, error: 'Bad gateway' } });
+  t.after(restore);
+  const list = await store.listEntries(100, SCOPE_A);
+  assert.equal(list.ok, false);
+  assert.equal(list.status, 503);
+  assert.match(list.error, /Could not reach the database/);
+  assert.doesNotMatch(list.error, /context_entries_setup\.sql/);
+});
+
+test('bodyHtml: null on an edit leaves the note alone instead of erasing it', async (t) => {
+  const { store, restore } = withStore();
+  t.after(restore);
+  const made = await store.createEntry({ title: 'Keep', bodyHtml: RICH }, SCOPE_A);
+  const edited = await store.updateEntry(made.data.id, { title: 'Kept', bodyHtml: null }, SCOPE_A);
+  assert.equal(edited.ok, true, edited.error);
+  const read = await store.getEntry(made.data.id, SCOPE_A);
+  assert.equal(read.data.title, 'Kept');
+  assert.equal(read.data.bodyHtml, RICH);
 });

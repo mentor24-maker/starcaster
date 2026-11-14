@@ -145,12 +145,16 @@ export default function ContextManager() {
     }
     setSaving(true);
     setFormError('');
+    // A project switch while this is in flight bumps requestSeq; the answer
+    // then belongs to the OLD project and must not report or reload here.
+    const seq = requestSeq.current;
     try {
       const isNew = !draft.id;
       const body = await call(isNew ? CONTEXT_PATH : `${CONTEXT_PATH}/${encodeURIComponent(draft.id!)}`, {
         method: isNew ? 'POST' : 'PATCH',
         body: JSON.stringify({ title, bodyHtml: draft.bodyHtml }),
       });
+      if (seq !== requestSeq.current) return;
       if (!body?.ok) {
         setFormError(body?.error?.message || 'The entry could not be saved.');
         return;
@@ -160,6 +164,7 @@ export default function ContextManager() {
       setNotice(`Saved "${saved?.title || title}".`);
       await load();
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setFormError(err instanceof Error ? err.message : 'The entry could not be saved.');
     } finally {
       setSaving(false);
@@ -168,8 +173,10 @@ export default function ContextManager() {
 
   const remove = async (entry: ContextEntry) => {
     setConfirmingDelete('');
+    const seq = requestSeq.current;
     try {
       const body = await call(`${CONTEXT_PATH}/${encodeURIComponent(entry.id)}`, { method: 'DELETE' });
+      if (seq !== requestSeq.current) return;
       if (!body?.ok) {
         setNotice(body?.error?.message || `"${entry.title}" could not be deleted.`);
         return;
@@ -178,6 +185,7 @@ export default function ContextManager() {
       setNotice(`Deleted "${entry.title}".`);
       await load();
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setNotice(err instanceof Error ? err.message : `"${entry.title}" could not be deleted.`);
     }
   };
