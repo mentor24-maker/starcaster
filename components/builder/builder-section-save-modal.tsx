@@ -250,9 +250,10 @@ export function BuilderSectionSaveModal({
                 onChange={(event) => setPublish(event.target.checked)}
                 type="checkbox"
               />
-              <span>
-                Publish the pages this rewrites, so the changes are live — otherwise they change as
-                drafts and you publish them when you are ready.
+              <span>Publish the Rewritten Pages</span>
+              <span className="meta">
+                Puts the changes live now. Leave it off and they change as drafts, which you publish
+                when you are ready.
               </span>
             </label>
 

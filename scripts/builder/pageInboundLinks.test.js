@@ -157,3 +157,30 @@ test('the five settings 86bcxu518 made pickers are scanned, references and typed
     'Home page › A › Blog Links Manager › Blog Manager Page',
   ]);
 });
+
+// SC-812's third send-back: one name per setting key could not match every
+// panel using that key ("targetPageUrl" is "Results Page" on Site Search and
+// "Target Page" on Blog Post Tags). This reads each module's own settings
+// panel and fails when the name the delete warning shows is not its label.
+test('each link setting is named with its own module panel\'s label', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const dir = path.join(__dirname, '..', '..', 'components', 'builder');
+  let compared = 0;
+  const wrong = [];
+  for (const [type, fields] of Object.entries(scan.LINK_SETTINGS)) {
+    const file = path.join(dir, `builder-${type}-module-settings.tsx`);
+    if (!fs.existsSync(file)) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    for (const key of Object.keys(fields)) {
+      const m = source.match(new RegExp(`key:\\s*"${key}",?\\s*(?:\\n\\s*)?label:\\s*"([^"]+)"`));
+      if (!m) continue;
+      compared += 1;
+      const shown = scan.settingLabel(type, key);
+      if (shown !== m[1]) wrong.push(`${type}.${key}: warning says "${shown}", panel says "${m[1]}"`);
+    }
+  }
+  // A pattern that stopped matching would pass silently; 24 compare today.
+  assert.ok(compared >= 22, `only ${compared} panel labels compared: the pattern no longer matches the panels`);
+  assert.deepEqual(wrong, []);
+});

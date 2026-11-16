@@ -150,6 +150,19 @@ test('a checkbox caption is a label, so a full stop does not make it a sentence 
   assert.equal(verdicts[2], null);
 });
 
+test('a checkbox is found when a handler with "=>" comes before type= (SC-812 third send-back)', () => {
+  const tsx = `
+    <label>
+      <input checked={publish} onChange={(event) => { setPublish(event.target.checked); }} type="checkbox" />
+      Publish the pages this rewrites, so the changes are live.
+    </label>
+    <label><input onChange={(e) => go(e.target.value > 2)} type="text" /> Sample text.</label>`;
+  const labels = labelsOf(tsx, { jsx: true });
+  assert.deepEqual(labels.map((l) => l.kind), ['checkbox caption', '<label>']);
+  assert.ok(labelProblem(labels[0]), 'the full-sentence checkbox caption is refused');
+  assert.equal(labelProblem(labels[1]), null);
+});
+
 test('a caption span beside a fill-in or a colon is still read (SC-812 second send-back)', () => {
   const tsx = `
     <label><span>Display name</span>{required ? ' *' : null}<input /></label>

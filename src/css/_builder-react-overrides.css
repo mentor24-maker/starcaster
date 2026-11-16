@@ -6376,9 +6376,13 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
    Boxed and given its own row so it reads as a decision rather than as fine
    print under the choices it modifies. */
 .builder-react-root .builder-choice-dialog-publish {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2, 8px);
+  /* Checkbox in the first column; the caption and its help text stacked in
+     the second, so the help sits under the caption, not beside it. */
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  column-gap: var(--space-2, 8px);
+  row-gap: 2px;
   margin-top: var(--space-1, 4px);
   padding: var(--space-2, 8px) var(--space-3, 12px);
   border: 1px solid rgba(11, 42, 74, 0.14);
@@ -6386,6 +6390,10 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   color: var(--ink, #0b2a4a);
   line-height: 1.5;
   cursor: pointer;
+}
+
+.builder-react-root .builder-choice-dialog-publish .meta {
+  grid-column: 2;
 }
 
 .builder-react-root .builder-choice-dialog-publish input {

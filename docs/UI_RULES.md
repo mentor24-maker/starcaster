@@ -960,9 +960,13 @@ as a rule first, then gets a checker where one is possible.
   only under a condition (`{show ? <span>Primary Color</span> : null}`), a checkbox drawn
   by a component (`<Toggle label=…>`) rather than an `<input type="checkbox">`
   inside a `<label>` (its caption is checked, but a full stop still passes),
-  and text that quotes a label elsewhere (an error message saying "Most
-  Actions per Day must be…", the link names in `lib/pageInboundLinks.js`),
-  which has to be changed by hand when the label changes.
+  a word joined to a fill-in or holding code (`${n}th`, `{name}'s`,
+  `$price`) — that one word is skipped, though the words around it are
+  read — and
+  text that quotes a label elsewhere (an error message saying "Most
+  Actions per Day must be…"), which has to be changed by hand when the label
+  changes. The link names in `lib/pageInboundLinks.js` are the exception: a
+  test reads each module's panel and fails when one stops matching.
 
 ## D — Density and layout of panels
 

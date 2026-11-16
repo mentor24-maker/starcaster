@@ -40,3 +40,15 @@ caption beside a required-field star, a label holding an apostrophe, HTML
 comments, and components whose `label` is not a field), and the page names in
 the Builder › Pages delete warning and the broken-links ticket now match what
 each panel shows ("Blog Manager Page", "Redirect Path").
+
+**Third send-back.** One checkbox still had a whole sentence for its caption —
+the Publish box in the dialog for saving a shared section. The check missed it
+because it stopped reading the checkbox's tag at the first `>`, and the `=>`
+inside the box's click handler came first. It now reads each `<input>` tag
+whole, a test with exactly that shape proves it, and the box says "Publish the
+Rewritten Pages" with the explanation as help text underneath. Second, the
+Builder › Pages delete warning used one name per setting, but the same setting
+is called different things in different modules' panels ("Results Page" on
+Site Search, "Target Page" on Blog Post Tags). It now uses each module's own
+name, and a new test reads every module's panel and fails if the two ever
+drift apart again.
