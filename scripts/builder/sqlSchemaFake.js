@@ -407,6 +407,8 @@ function parseSchemaText(sqlText) {
   const tables = new Map();
   const indexes = [];
   const rlsEnabled = new Set();
+  /** tables the read-only login (starcaster_readonly) is given a read rule on. */
+  const readonlyReadable = new Set();
   /** function name → the column its before-update trigger stamps. */
   const triggerFunctions = new Map();
   /** table → (trigger name → column stamped on every update). */
@@ -556,6 +558,25 @@ function parseSchemaText(sqlText) {
     }
 
     /*
+     * The read rule for the read-only login, IMPLEMENTED as a record rather
+     * than skipped: `readonlyReadable` names each table it covers, so a test
+     * can assert the rule is there (SC-810: without it, production reads of a
+     * table under row-level security return zero rows and no error). Only
+     * this exact guarded shape, the one canon_documents_setup.sql carries, is
+     * recognised; any other `do` block still refuses loudly below.
+     */
+    match = /^do \$\$ begin if exists \(select 1 from pg_roles where rolname = 'starcaster_readonly'\) and not exists \( select 1 from pg_policies where schemaname = 'public' and tablename = '([a-z_][a-z0-9_]*)' and policyname = 'starcaster_readonly_select' \) then execute 'grant select on public\.([a-z_][a-z0-9_]*) to starcaster_readonly'; execute 'create policy starcaster_readonly_select on public\.([a-z_][a-z0-9_]*) ' \|\| 'for select to starcaster_readonly using \(true\)'; end if; end \$\$$/i.exec(normalized);
+    if (match) {
+      const [, probed, granted, policied] = match;
+      if (probed !== granted || granted !== policied) {
+        throw new Error(`sqlSchemaFake: read rule names three different tables (${probed}, ${granted}, ${policied})`);
+      }
+      if (!tables.has(granted)) throw new Error(`sqlSchemaFake: read rule on ${granted} before it is created`);
+      readonlyReadable.add(granted);
+      continue;
+    }
+
+    /*
      * The `updated_at` trigger idiom, IMPLEMENTED rather than skipped.
      *
      * Every table here maintains updated_at with a before-update trigger, so
@@ -602,7 +623,7 @@ function parseSchemaText(sqlText) {
     throw new Error(`sqlSchemaFake: unsupported statement — ${normalized.slice(0, 120)}`);
   }
 
-  return { tables, indexes, rlsEnabled, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
+  return { tables, indexes, rlsEnabled, readonlyReadable, triggers, statements: statements.map((s) => s.trim()).filter(Boolean) };
 }
 
 function parseSchemaFile(filePath) {
