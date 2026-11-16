@@ -56,6 +56,16 @@ on. A login with no read rule sees zero rows and gets no error, so without it
 every project would print "No context entries" — a false empty. The rule is
 the last block of `docs/SQL/context_entries_setup.sql`; the file is safe to
 run again, so a database that ran an earlier copy gets it by running the
-file once more.
+file once more. Nobody has to remember that: before reading production the
+command checks that the rule is there, and if it is missing it stops with
+exit 2 and says to run the file again, rather than printing a false empty.
+(`npm run sql:unapplied` cannot see read rules, so this check is the only
+thing that would notice.)
+
+**`--save` refuses any folder inside a git working tree**, not only this one,
+because from a worktree the main checkout is the same public repository in
+another folder. Symlinks are resolved first. And it only downloads addresses
+that are this project's own stored context files, the same check the store
+makes when the address is saved.
 
 Adding and editing stay on the Context page: the command never writes.

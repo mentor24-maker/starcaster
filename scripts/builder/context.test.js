@@ -327,7 +327,9 @@ test('--save refuses a folder inside the repo, including "..name" folders and ot
   fs.unlinkSync(link);
   fs.rmSync(other, { recursive: true, force: true });
   assert.equal(viaLink.status, 1);
-  assert.match(viaLink.stderr, /--save must be outside the repository/);
+  // Caught by the resolved path itself, not only by the git check behind it.
+  assert.match(viaLink.stderr, /--save must be outside the repository[^\n]*: \S+\/files\n/);
+  assert.doesNotMatch(viaLink.stderr, /git working tree/);
 });
 
 test('a file whose address is not this project\'s stored file is not fetched', () => {
