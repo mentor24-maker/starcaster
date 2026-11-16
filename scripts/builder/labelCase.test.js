@@ -11,7 +11,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  titleCaseProblem, toTitleCase, labelsOf, findLabelProblems, blankComments, scannedFiles, FILL,
+  titleCaseProblem, toTitleCase, labelsOf, findLabelProblems, labelProblem, blankComments, scannedFiles, FILL,
 } = require('../../lib/labelCase.js');
 
 test('every field label on the admin screens and Builder panels is in Title Case (UI_RULES L10)', () => {
@@ -31,7 +31,7 @@ test('the Title Case rule: big words capitalised, small words free inside, first
     'Base Size (px)', 'Button Corners px', 'Overlay Strength %', 'YouTube Channel', 'CRM Form', 'iPhone Width',
     'Download .mp4 and .mp3 Files', 'Tags (Comma-separated)', 'Author When the Source Has None:',
     `Rows for ${FILL} of Them`, '6-digit Code', 'Use Page Primary/Accent Color',
-    'I manually confirm this API action.',
+    'Every field starts empty.',
   ]) {
     assert.equal(titleCaseProblem(ok), null, ok);
   }
@@ -66,7 +66,7 @@ test('the label finder reads label props and <label> text, and skips aria-label,
   assert.deepEqual(labels, [
     'label prop: Theme name',
     '<label>: Post title',
-    '<label>: Show captions',
+    'checkbox caption: Show captions',
     `<label>: ${FILL} rows`,
     '<label>: After a file filter',
   ]);
@@ -135,4 +135,46 @@ test('a label chosen by an expression has each possible result read, not the str
     `label expression: Last ${FILL} days`,
   ]);
   assert.ok(titleCaseProblem(`Last ${FILL} days`));
+});
+
+test('a checkbox caption is a label, so a full stop does not make it a sentence (SC-812 second send-back)', () => {
+  const tsx = `
+    <label><input type="checkbox" /><span>Replace titles that already have text.</span></label>
+    <label><input type="checkbox" /><span>Replace Existing Titles.</span></label>
+    <label><input type="radio" /><span>Every field starts empty.</span></label>`;
+  const labels = labelsOf(tsx, { jsx: true });
+  assert.deepEqual(labels.map((l) => l.kind), ['checkbox caption', 'checkbox caption', '<label>']);
+  const verdicts = labels.map(labelProblem);
+  assert.match(verdicts[0] ?? '', /"titles"/);
+  assert.match(verdicts[1] ?? '', /not a sentence/);
+  assert.equal(verdicts[2], null);
+});
+
+test('a caption span beside a fill-in or a colon is still read (SC-812 second send-back)', () => {
+  const tsx = `
+    <label><span>Display name</span>{required ? ' *' : null}<input /></label>
+    <label><span>Start date</span>:<input /></label>`;
+  assert.deepEqual(labelsOf(tsx, { jsx: true }).map((l) => l.text), ['Display name', 'Start date']);
+});
+
+test('a field-config label holding the other quote mark is read (SC-812 second send-back)', () => {
+  const js = `[{ key: 'notes', label: "What didn't work", control: 'text' }, { key: 'a', label: 'The "all" label', control: 'text' }]`;
+  assert.deepEqual(labelsOf(js, { jsx: false, fields: true }).map((l) => l.text), ["What didn't work", 'The "all" label']);
+});
+
+test('a label prop on a component that is not a field is skipped, and HTML comments are not read (SC-812 second send-back)', () => {
+  const tsx = `
+    <RunResult lines={x} label="What the search did" />
+    <DriveLink label="Watch this in Google Drive" />
+    <BuilderSettingRow label="Theme name" />`;
+  assert.deepEqual(labelsOf(tsx, { jsx: true }).map((l) => l.text), ['Theme name']);
+  const html = blankComments(`<!-- <label>Old label here</label> -->\n<label for="a">Keyword filter</label>`);
+  assert.deepEqual(labelsOf(html, { jsx: false }).map((l) => `${l.line}: ${l.text}`), ['2: Keyword filter']);
+});
+
+test('the rewrite and the check agree, sentences included', () => {
+  for (const text of ['Theme name', 'Notes for the agent', 'Every field starts empty.', 'Until (optional)', 'Base size (px)']) {
+    assert.equal(titleCaseProblem(toTitleCase(text)), null, text);
+  }
+  assert.equal(toTitleCase('Every field starts empty.'), 'Every field starts empty.');
 });

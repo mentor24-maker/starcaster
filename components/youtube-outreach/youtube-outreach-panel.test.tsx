@@ -482,7 +482,8 @@ describe("YouTube outreach screen", () => {
   it("labels the safety settings with what they actually do", async () => {
     await mount();
     await click(button("Account settings"));
-    expect(text()).toContain("Never comment on a video more than once, unless that video is set to repeat");
+    expect(text()).toContain("Never Comment Twice on a Video");
+    expect(text()).toContain("A video set to repeat is the one exception.");
     expect(text()).not.toContain("in one day");
     expect(text()).toContain("Blank uses this project's own time zone.");
     expect(text()).not.toContain("server's clock");

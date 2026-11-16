@@ -590,7 +590,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
 
               {seedType === "brand_kit" ? (
                 <label className="tw-field">
-                  <span>Logo or brand image</span>
+                  <span>Logo or Brand Image</span>
                   <select value={seedAssetId} onChange={(e) => setSeedAssetId(e.target.value)}>
                     <option value="">— Choose an image —</option>
                     {images.map((asset) => (

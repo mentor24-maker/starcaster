@@ -13,7 +13,7 @@ const NOW = Date.parse('2026-11-03T19:00:00-07:00');
 const brokenLink = {
   where: 'Saved section "Header" › Header',
   module: 'Menu',
-  item: 'Menu item "About"',
+  item: 'Menu Item "About"',
   setting: 'Link',
   source: { kind: 'saved-section', id: 's', name: 'Header' },
   shownOn: 4,
@@ -33,7 +33,7 @@ test('broken links are listed by project and Dane is assigned', () => {
   assert.equal(out.count, 1);
   assert.match(out.body, /^# 1 broken link on 1 site/);
   assert.match(out.body, /## Delray \(delraytennis\.com\) — 1 broken link/);
-  assert.match(out.body, /- Saved section "Header" › Header › Menu › Menu item "About" \(shown on 4 pages\) — goes to \/about/);
+  assert.match(out.body, /- Saved section "Header" › Header › Menu › Menu Item "About" \(shown on 4 pages\) — goes to \/about/);
   assert.doesNotMatch(out.body, /Clean/);
   assert.match(out.body, /Last checked .* from mac-mini: 2 projects read\./);
 });

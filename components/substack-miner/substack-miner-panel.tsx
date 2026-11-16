@@ -1212,7 +1212,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {seedBusy ? 'Adding…' : 'Add writers'}
               </button>
             </div>
-            <RunResult lines={seedLines} label="What Adding the Writers Did" />
+            <RunResult lines={seedLines} label="What adding the writers did" />
           </form>
 
           <div className="substack-miner-filters">
@@ -1427,7 +1427,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {growBusy ? 'Growing…' : 'Grow keywords now'}
               </button>
             </div>
-            <RunResult lines={growLines} label="What Growing Keywords Did" />
+            <RunResult lines={growLines} label="What growing keywords did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Search the web">
@@ -1449,7 +1449,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {searchBusy ? 'Searching…' : 'Search the web'}
               </button>
             </div>
-            <RunResult lines={searchLines} label="What the Search Did" />
+            <RunResult lines={searchLines} label="What the search did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Suggest decisions">
@@ -1457,10 +1457,11 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <p className="substack-miner-card-note">
               Reads each undecided writer's newest posts and suggests Approve or Reject, with reasons, from the decisions you have
               already made. Nothing is decided until you click Agree on the Candidates tab. Each writer is one paid AI call.
+              Writers that already have a suggestion are skipped unless Redo Existing Suggestions is on.
             </p>
             <label className="substack-miner-not">
               <input type="checkbox" checked={suggestRedo} onChange={(e) => setSuggestRedo(e.target.checked)} />
-              <span>Suggest again for writers that already have a suggestion.</span>
+              <span>Redo Existing Suggestions</span>
             </label>
             <div className="substack-miner-actions">
               <button
@@ -1472,7 +1473,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {suggestBusy ? 'Suggesting… (about 5 seconds a writer)' : 'Suggest decisions'}
               </button>
             </div>
-            <RunResult lines={suggestLines} label="What Suggesting Did" />
+            <RunResult lines={suggestLines} label="What suggesting did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read writers' posts">
@@ -1491,7 +1492,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {postsBusy ? 'Reading…' : "Read writers' posts"}
               </button>
             </div>
-            <RunResult lines={postsLines} label="What Reading Posts Did" />
+            <RunResult lines={postsLines} label="What reading posts did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read recommendations">
@@ -1511,7 +1512,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {snowballBusy ? 'Reading…' : 'Read recommendations of approved writers'}
               </button>
             </div>
-            <RunResult lines={snowballLines} label="What Reading Recommendations Did" />
+            <RunResult lines={snowballLines} label="What reading recommendations did" />
           </section>
 
           <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
@@ -1533,7 +1534,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {csvBusy ? 'Importing…' : 'Import'}
               </button>
             </div>
-            <RunResult lines={csvLines} label="What the Subscriber Import Did" />
+            <RunResult lines={csvLines} label="What the subscriber import did" />
           </form>
         </div>
       ) : null}

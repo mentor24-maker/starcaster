@@ -487,7 +487,7 @@ describe("Substack Notes topic drafts on a timer (5/7)", () => {
     await click(button("Settings"));
     const box = el<HTMLInputElement>("#sn-auto-topic-drafts");
     expect(box.checked).toBe(false);
-    expect(text()).toContain("Draft Notes from my topics on their own");
+    expect(text()).toContain("Draft Notes Automatically");
     await click(box);
     await submit(el<HTMLFormElement>("form.substack-notes-settings"));
     const put = requests.filter((r) => r.method === "PUT").pop();

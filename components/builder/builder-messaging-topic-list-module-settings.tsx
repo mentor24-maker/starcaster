@@ -96,7 +96,7 @@ export function BuilderMessagingTopicListModuleSettings({
           [
             {
               key: "allLabel",
-              label: "'All' label",
+              label: "'All' Label",
               width: "full",
               control: "custom",
               visibleWhen: showsAllPill,

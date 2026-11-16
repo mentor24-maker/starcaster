@@ -846,10 +846,10 @@ function SettingsEditor({ settings, busy, error, onSave, onCancel }: {
         <Field label="Time Zone" htmlFor="yto-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
           <input id="yto-time-zone" type="text" value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
         </Field>
-        <Field label="One Comment per Video" htmlFor="yto-one-per-video">
+        <Field label="One Comment per Video" htmlFor="yto-one-per-video" help="A video set to repeat is the one exception.">
           <label className="yt-outreach-check">
             <input id="yto-one-per-video" type="checkbox" checked={form.oneCommentPerVideo} onChange={(e) => set('oneCommentPerVideo', e.target.checked)} />
-            <span>Never comment on a video more than once, unless that video is set to repeat.</span>
+            <span>Never Comment Twice on a Video</span>
           </label>
         </Field>
         <Field label="Channels to Avoid" htmlFor="yto-avoid-channels" help="One per line.">

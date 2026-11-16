@@ -47,7 +47,7 @@ test('a reference, a typed menu address and a form are all found, each named', (
     'CRM form "Request White Paper" › Form › After submit',
   ]);
   const toAbout = scan.linksToPages(links, p.pages, ['3'])['3'].map(scan.describeLink);
-  assert.deepEqual(toAbout, ['Saved section "Site header" › Header › Menu › Menu item "About" (shown on 3 pages)']);
+  assert.deepEqual(toAbout, ['Saved section "Site header" › Header › Menu › Menu Item "About" (shown on 3 pages)']);
 });
 
 test('a page nothing points at is absent from the answer', () => {
@@ -71,7 +71,7 @@ test('a page copy that CHANGED its shared header still reports its own link', ()
     modules: [nav([{ label: 'Old about', href: '/about-us' }])],
   }];
   const broken = scan.brokenLinks(scan.collectProjectLinks(p), p.pages).map(scan.describeLink);
-  assert.deepEqual(broken, ['Lonely page › Header › Menu › Menu item "Old about"']);
+  assert.deepEqual(broken, ['Lonely page › Header › Menu › Menu Item "Old about"']);
 });
 
 test('the weekly check names a reference to a deleted page and a typed address nothing answers', () => {
@@ -147,13 +147,13 @@ test('the five settings 86bcxu518 made pickers are scanned, references and typed
   const links = scan.collectProjectLinks(p);
   assert.deepEqual(scan.linksToPages(links, p.pages, ['7'])['7'].map(scan.describeLink), [
     'Home page › A › Breadcrumb › Crumb "Courts"',
-    'Home page › A › Player sign-in › After sign-in page',
-    'Home page › A › Blog Links Manager › Post view page',
+    'Home page › A › Player sign-in › Redirect Path',
+    'Home page › A › Blog Links Manager › Post View Page',
   ]);
   // A typed address nothing answers is broken; /portal/dashboard is not a Builder page, so it is not judged.
   assert.deepEqual(scan.brokenLinks(links, p.pages).map(scan.describeLink), [
     'Home page › A › Breadcrumb › Crumb "Old"',
     'Home page › A › Headline Rotator › Headline "Book now"',
-    'Home page › A › Blog Links Manager › Blog Manager page',
+    'Home page › A › Blog Links Manager › Blog Manager Page',
   ]);
 });

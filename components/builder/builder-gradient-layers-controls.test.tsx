@@ -37,7 +37,7 @@ describe("where gradient layers can be edited", () => {
       expect(markup).toContain("Layer 1 (Top)");
       expect(markup).toContain("Centre X %");
       expect(markup).not.toContain("Color 2");
-      expect(markup).not.toContain("Secondary color");
+      expect(markup).not.toContain("Secondary Color");
     }
   });
 

@@ -29,3 +29,14 @@ watching the test fail, and every label it found is fixed. Error messages that
 quote a label ("Most Actions per Day must be…") and the Theme Wizard's colour
 names were brought in line by hand. What the check still cannot see is listed
 in UI_RULES L10, so nobody mistakes a green run for full coverage.
+
+**Second send-back.** Review found five checkbox captions that had been given
+a full stop so the check would treat them as sentences and let them through.
+They are now short Title Case captions ("Replace Existing Titles", "Never
+Comment Twice on a Video"), with the explanation moved into the help text
+under them, and the check now refuses a full stop on any checkbox caption.
+The check also learned to read four more shapes it used to skip quietly (a
+caption beside a required-field star, a label holding an apostrophe, HTML
+comments, and components whose `label` is not a field), and the page names in
+the Builder › Pages delete warning and the broken-links ticket now match what
+each panel shows ("Blog Manager Page", "Redirect Path").

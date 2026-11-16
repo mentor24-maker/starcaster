@@ -227,7 +227,7 @@ export function BuilderPopulateTitlesPage() {
           <div className="populate-titles-overwrite">
             <label className="populate-titles-check">
               <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
-              <span>Replace titles that already have text.</span>
+              <span>Replace Existing Titles</span>
             </label>
             <p className="meta populate-titles-check-help">
               Leave this off to fill only the empty ones and keep the titles you've written yourself.

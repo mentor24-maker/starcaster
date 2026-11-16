@@ -821,7 +821,7 @@ export function BuilderBackgroundControls({
 
         {background.mode === "color" || showTwoColourGradient ? (
           <label className="field builder-background-inline-color-field">
-            {showColorFieldLabel ? <span>Primary color</span> : null}
+            {showColorFieldLabel ? <span>Primary Color</span> : null}
             <BuilderThemeColorField
               fallback="#ffffff"
               themeColors={themeColors}

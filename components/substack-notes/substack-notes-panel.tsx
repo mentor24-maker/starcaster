@@ -581,7 +581,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
               checked={form.autoTopicDrafts}
               onChange={(e) => set('autoTopicDrafts', e.target.checked)}
             />
-            <span>Draft Notes from my topics on their own.</span>
+            <span>Draft Notes Automatically</span>
           </label>
         </Field>
         <Field label="Words to Avoid" htmlFor="sn-avoid-words" help="One per line.">
