@@ -20,11 +20,12 @@ const supabasePath = require.resolve('../../lib/supabase.js');
 const scopePath = require.resolve('../../lib/projectScope.js');
 const storePath = require.resolve('../../lib/contextStore.js');
 const routePath = require.resolve('../../routes/context.js');
+const blobPath = require.resolve('../../lib/blobStorage.js');
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
-function withStore({ sql = SQL_PATH, failWith = null } = {}) {
+function withStore({ sql = SQL_PATH, failWith = null, blob = {} } = {}) {
   const db = sql ? createFakeDb(parseSchemaFile(sql)) : null;
   const fakeSupabase = {
     isConfigured: () => true,
@@ -35,17 +36,40 @@ function withStore({ sql = SQL_PATH, failWith = null } = {}) {
       ? db.sbQuery(args)
       : { ok: false, status: 404, error: 'relation "public.context_entries" does not exist' }),
   };
+  const deleted = [];
+  const tokens = [];
+  const fakeBlob = {
+    isConfigured: () => blob.configured !== false,
+    deleteBlob: async (url) => {
+      deleted.push(url);
+      return blob.deleteFails ? { ok: false, status: 502, error: blob.deleteFails } : { ok: true, status: 200 };
+    },
+    // Runs the route's own onBeforeGenerateToken, the way @vercel/blob does.
+    handleClientUpload: async ({ body, onBeforeGenerateToken }) => {
+      try {
+        const opts = await onBeforeGenerateToken(body.payload.pathname, body.payload.clientPayload, true);
+        tokens.push({ pathname: body.payload.pathname, ...opts });
+        return { ok: true, status: 200, data: { type: 'blob.generate-client-token', clientToken: 'ct_fake' } };
+      } catch (err) {
+        return { ok: false, status: 400, error: err.message };
+      }
+    },
+  };
   const realSupabase = require.cache[supabasePath];
+  const realBlob = require.cache[blobPath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
+  require.cache[blobPath] = { id: blobPath, filename: blobPath, loaded: true, exports: fakeBlob };
   for (const p of [scopePath, storePath, routePath]) delete require.cache[p];
   const store = require(storePath);
   const route = require(routePath);
   function restore() {
     if (realSupabase) require.cache[supabasePath] = realSupabase;
     else delete require.cache[supabasePath];
+    if (realBlob) require.cache[blobPath] = realBlob;
+    else delete require.cache[blobPath];
     for (const p of [scopePath, storePath, routePath]) delete require.cache[p];
   }
-  return { db, store, route, restore };
+  return { db, store, route, restore, deleted, tokens };
 }
 
 async function rawRows(db) {
@@ -223,3 +247,152 @@ test('bodyHtml: null on an edit leaves the note alone instead of erasing it', as
   assert.equal(read.data.title, 'Kept');
   assert.equal(read.data.bodyHtml, RICH);
 });
+
+// ── Files (SC-809) ───────────────────────────────────────────────────────────
+
+const FILE_URL_A = 'https://abc123.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1731700000000_Price_list-Xy12.pdf';
+const FILE_URL_B = 'https://abc123.public.blob.vercel-storage.com/APP/Assets/Context/proj_b/1731700000000_secret-Xy12.pdf';
+const MB = 1024 * 1024;
+
+test('a file entry is recorded with its name, type and size, titled by its file name, in both tenant columns', async (t) => {
+  const { db, store, restore } = withStore();
+  t.after(restore);
+  const saved = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A, name: 'Price list.pdf', size: 20 * MB } }, SCOPE_A);
+  assert.equal(saved.ok, true, saved.error);
+  assert.equal(saved.data.kind, 'file');
+  assert.equal(saved.data.title, 'Price list.pdf');
+  assert.equal(saved.data.fileUrl, FILE_URL_A);
+  assert.equal(saved.data.fileType, 'application/pdf');
+  assert.equal(saved.data.fileSize, 20 * MB);
+  const [row] = await rawRows(db);
+  assert.equal(row.project_id, 'proj_a');
+  assert.equal(row.owner_user_id, 'user_1');
+  assert.equal(row.file_name, 'Price list.pdf');
+});
+
+test('a file entry is refused for a wrong type, an oversize file, or an address outside this project\'s folder', async (t) => {
+  const { db, store, restore } = withStore();
+  t.after(restore);
+  const exe = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A.replace('.pdf', '.exe'), name: 'setup.exe', size: 100 } }, SCOPE_A);
+  assert.equal(exe.status, 400);
+  assert.equal(exe.error, 'This file type is not accepted: .exe');
+  const big = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A, name: 'big.pdf', size: 51 * MB } }, SCOPE_A);
+  assert.equal(big.status, 400);
+  assert.match(big.error, /51 MB, and the limit is 50 MB/);
+  // Another project's file: recording it would let this project delete it.
+  const foreign = await store.createEntry({ kind: 'file', file: { url: FILE_URL_B, name: 'secret.pdf', size: 100 } }, SCOPE_A);
+  assert.equal(foreign.status, 400);
+  assert.match(foreign.error, /not one of this project's uploaded context files/);
+  const elsewhere = await store.createEntry({ kind: 'file', file: { url: 'https://evil.example/APP/Assets/Context/proj_a/x.pdf', name: 'x.pdf', size: 100 } }, SCOPE_A);
+  assert.equal(elsewhere.status, 400);
+  const sneaky = await store.createEntry({ kind: 'file', file: { url: 'https://abc.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/../proj_b/x.pdf', name: 'x.pdf', size: 100 } }, SCOPE_A);
+  assert.equal(sneaky.status, 400);
+  const odd = await store.createEntry({ kind: 'folder', title: 'x' }, SCOPE_A);
+  assert.equal(odd.status, 400);
+  assert.equal((await rawRows(db)).length, 0);
+});
+
+test('deleting a file entry also deletes the stored file; a note deletes no file', async (t) => {
+  const { store, restore, deleted } = withStore();
+  t.after(restore);
+  const file = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A, name: 'Price list.pdf', size: 1000 } }, SCOPE_A);
+  const note = await store.createEntry({ title: 'n', bodyHtml: '' }, SCOPE_A);
+  const goneNote = await store.deleteEntry(note.data.id, SCOPE_A);
+  assert.equal(goneNote.data.file, null);
+  assert.deepEqual(deleted, []);
+  const goneFile = await store.deleteEntry(file.data.id, SCOPE_A);
+  assert.equal(goneFile.ok, true);
+  assert.deepEqual(goneFile.data.file, { removed: true });
+  assert.deepEqual(deleted, [FILE_URL_A]);
+});
+
+test('a stored file that could not be deleted still removes the row, and says the file was left behind and where', async (t) => {
+  const { db, store, restore } = withStore({ blob: { deleteFails: 'Vercel Blob delete failed: 503 Service Unavailable' } });
+  t.after(restore);
+  const file = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A, name: 'Price list.pdf', size: 1000 } }, SCOPE_A);
+  const gone = await store.deleteEntry(file.data.id, SCOPE_A);
+  assert.equal(gone.ok, true);
+  assert.equal(gone.data.file.removed, false);
+  assert.match(gone.data.file.error, /503 Service Unavailable/);
+  assert.ok(gone.data.file.error.includes(FILE_URL_A), 'the message names where the file still is');
+  assert.equal((await rawRows(db)).length, 0);
+});
+
+test('a file entry in one project cannot be deleted (nor its file) from another', async (t) => {
+  const { store, restore, deleted } = withStore();
+  t.after(restore);
+  const file = await store.createEntry({ kind: 'file', file: { url: FILE_URL_A, name: 'a.pdf', size: 1000 } }, SCOPE_A);
+  const other = await store.deleteEntry(file.data.id, SCOPE_B);
+  assert.equal(other.status, 404);
+  assert.deepEqual(deleted, []);
+  assert.equal((await store.listEntries(100, SCOPE_B)).data.length, 0);
+});
+
+function tokenRequest(pathname, size = 1000) {
+  return { type: 'blob.generate-client-token', payload: { pathname, callbackUrl: 'http://x/api/context/blob-upload', clientPayload: JSON.stringify({ size }), multipart: true } };
+}
+
+test('route: an upload token is given only for this project\'s folder and an accepted type, capped at 50MB', async (t) => {
+  const { route, restore, tokens } = withStore();
+  t.after(restore);
+  const ok = await call(route, 'POST', '/api/context/blob-upload', { json: tokenRequest('APP/Assets/Context/proj_a/17_report.pdf') });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.clientToken, 'ct_fake');
+  assert.equal(tokens[0].maximumSizeInBytes, 50 * MB);
+  assert.ok(tokens[0].allowedContentTypes.includes('application/pdf'));
+  assert.ok(!tokens[0].allowedContentTypes.some((type) => /video|zip|octet/.test(type)));
+
+  const foreign = await call(route, 'POST', '/api/context/blob-upload', { json: tokenRequest('APP/Assets/Context/proj_b/17_report.pdf') });
+  assert.equal(foreign.status, 400);
+  assert.match(foreign.body.error.message, /active project's own folder/);
+  const exe = await call(route, 'POST', '/api/context/blob-upload', { json: tokenRequest('APP/Assets/Context/proj_a/17_setup.exe') });
+  assert.equal(exe.status, 400);
+  assert.equal(exe.body.error.message, 'This file type is not accepted: .exe');
+  const big = await call(route, 'POST', '/api/context/blob-upload', { json: tokenRequest('APP/Assets/Context/proj_a/17_big.pdf', 80 * MB) });
+  assert.equal(big.status, 400);
+  assert.match(big.body.error.message, /80 MB, and the limit is 50 MB/);
+  assert.equal(tokens.length, 1);
+});
+
+test('route: with no file storage set up, an upload says so rather than failing vaguely', async (t) => {
+  const { route, restore } = withStore({ blob: { configured: false } });
+  t.after(restore);
+  const res = await call(route, 'POST', '/api/context/blob-upload', { json: tokenRequest('APP/Assets/Context/proj_a/1_a.pdf') });
+  assert.equal(res.status, 503);
+  assert.match(res.body.error.message, /File storage \(Vercel Blob\) is not set up/);
+});
+
+test('route: POST records a file and DELETE reports what happened to it', async (t) => {
+  const { route, restore, deleted } = withStore();
+  t.after(restore);
+  const made = await call(route, 'POST', '/api/context', { json: { kind: 'file', file: { url: FILE_URL_A, name: 'Price list.pdf', size: 2048 } } });
+  assert.equal(made.status, 201);
+  assert.equal(made.body.data.entry.fileName, 'Price list.pdf');
+  const gone = await call(route, 'DELETE', `/api/context/${made.body.data.entry.id}`);
+  assert.equal(gone.status, 200);
+  assert.deepEqual(gone.body.data.file, { removed: true });
+  assert.deepEqual(deleted, [FILE_URL_A]);
+});
+
+test('the tenant-admin deny list covers the upload endpoint too', () => {
+  const { acceptsProjectAdminSession } = require('../../lib/projectAdminApiAuth');
+  assert.equal(acceptsProjectAdminSession('/api/context/blob-upload'), false);
+});
+
+test('file rules: size wording, folder, and the accept list', () => {
+  const types = require('../../lib/contextFileTypes.js');
+  assert.equal(types.formatFileSize(20 * MB), '20 MB');
+  assert.equal(types.formatFileSize(1.5 * MB), '1.5 MB');
+  assert.equal(types.formatFileSize(340 * 1024), '340 KB');
+  assert.equal(types.formatFileSize(1), '1 byte');
+  assert.equal(types.checkContextFile({ name: 'a.zip', size: 10 }).message, 'This file type is not accepted: .zip');
+  assert.match(types.checkContextFile({ name: 'README', size: 10 }).message, /no extension/);
+  assert.equal(types.checkContextFile({ name: 'Notes.MD', size: 10 }).type.label, 'Markdown');
+  assert.equal(types.checkContextFile({ name: 'x.pdf', size: 50 * MB }).ok, true);
+  assert.equal(types.checkContextFile({ name: 'x.pdf', size: 50 * MB + 1 }).ok, false);
+  assert.equal(types.contextStoragePath('proj a', 'My file (1).pdf', 5), 'APP/Assets/Context/proj_a/5_My_file_1_.pdf');
+  for (const ext of ['pdf', 'txt', 'md', 'csv', 'json', 'docx', 'xlsx', 'png', 'jpg', 'gif', 'webp']) {
+    assert.ok(types.ACCEPT_ATTRIBUTE.split(',').includes(`.${ext}`), ext);
+  }
+});
+
