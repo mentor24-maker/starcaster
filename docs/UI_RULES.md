@@ -937,13 +937,22 @@ as a rule first, then gets a checker where one is possible.
   added by the operator 2026-11-15, SC-811; bringing StarCaster's labels into
   line is SC-812)* — **[auto]** for form field labels:
   `scripts/builder/labelCase.test.js` (rule in `lib/labelCase.js`) reads every
-  `label="…"` prop, `<label>` text, and Builder settings field declared as
-  data (`{ key, label, control }`; a dropdown option's `{ value, label }` is
-  not a field label) in `components/`,
-  `lib/builder-client/`, `src/pages/`, `src/layout.html` and `public/js/`,
-  and fails `npm run verify` on one that is not Title Case. A label written as
-  a full sentence, ending in a full stop, stays a sentence; units ("px",
-  "ms") stay lower case. Buttons, headings and tabs are still **[eye]**.
+  `label="…"` prop, each string a `label={…}` expression can result in
+  (`label={a ? 'One' : \`Last ${n} Days\`}`), `<label>` text — including a
+  `<span>` caption when the label has no text of its own, but not a hint span
+  (`meta`, `muted`, `hint`, …) — and Builder settings fields declared as data
+  (`{ key, label, control }`, in the React panels and in `public/js/`'s
+  frozen Builder alike; a dropdown option's `{ value, label }` is not a field
+  label) in `components/`, `lib/builder-client/`, `src/pages/`,
+  `src/layout.html` and `public/js/`, and fails `npm run verify` on one that
+  is not Title Case. A label written as a full sentence, ending in a full
+  stop, stays a sentence; units ("px", "ms") stay lower case. Buttons,
+  headings and tabs are still **[eye]**.
+  **What it cannot see** (check these by eye): a label held in a variable or
+  passed through a differently named prop (`boxLabel`, a component's default
+  parameter), a label built in plain JS by concatenation, and text that
+  quotes a label elsewhere (an error message saying "Most Actions per Day
+  must be…"), which has to be changed by hand when the label changes.
 
 ## D — Density and layout of panels
 

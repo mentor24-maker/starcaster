@@ -55,7 +55,7 @@ describe('AiQuotaView', () => {
     expect(html).toContain('$1.25');
     expect(html).toContain('Last 7 Days');
     expect(html).toContain('$5.00');
-    expect(html).toContain('Last 30 days');
+    expect(html).toContain('Last 30 Days');
     expect(html).toContain('$12.50');
   });
 

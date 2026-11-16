@@ -233,7 +233,7 @@ export function BuilderTemplateList({
         {!collapsedPanels.details ? (
           <div className="builder-meta-grid builder-meta-grid-templates">
             <label className="field">
-              <span>Template name</span>
+              <span>Template Name</span>
               <input
                 ref={nameInputRef}
                 type="text"

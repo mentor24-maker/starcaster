@@ -941,7 +941,7 @@ export default function FootagePanel(): React.ReactElement {
         onSubmit={(e) => { e.preventDefault(); void runSearch(said); }}
       >
         <label className="studio-footage-filter studio-footage-search-field">
-          <span>Search what you said</span>
+          <span>Search What You Said</span>
           <input
             type="search"
             value={said}

@@ -1460,7 +1460,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
             </p>
             <label className="substack-miner-not">
               <input type="checkbox" checked={suggestRedo} onChange={(e) => setSuggestRedo(e.target.checked)} />
-              <span>Suggest again for writers that already have a suggestion</span>
+              <span>Suggest again for writers that already have a suggestion.</span>
             </label>
             <div className="substack-miner-actions">
               <button

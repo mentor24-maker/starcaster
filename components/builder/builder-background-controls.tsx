@@ -841,7 +841,7 @@ export function BuilderBackgroundControls({
 
         {showTwoColourGradient ? (
           <label className="field builder-background-inline-color-field">
-            <span>Secondary color</span>
+            <span>Secondary Color</span>
             <BuilderThemeColorField
               fallback="#eaf4ff"
               themeColors={themeColors}
@@ -909,7 +909,7 @@ export function BuilderBackgroundControls({
       {background.mode === "image" ? (
         <div className="builder-section-background-controls">
           <label className="field">
-            <span>Background image URL</span>
+            <span>Background Image URL</span>
             <input
               type="text"
               value={background.imageUrl}

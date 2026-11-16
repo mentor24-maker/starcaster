@@ -2710,7 +2710,7 @@ function SocialShareModuleEditor({
     <>
       <div className="builder-slider-design-grid">
         <label className="field">
-          <span>Share label</span>
+          <span>Share Label</span>
           <input
             type="text"
             value={module.settings.shareLabel ?? "Share this poll"}
@@ -2718,7 +2718,7 @@ function SocialShareModuleEditor({
           />
         </label>
         <label className="field">
-          <span>URL override</span>
+          <span>URL Override</span>
           <input
             type="text"
             value={module.settings.shareUrl ?? ""}
@@ -2727,7 +2727,7 @@ function SocialShareModuleEditor({
           />
         </label>
         <label className="field">
-          <span>Fallback question</span>
+          <span>Fallback Question</span>
           <input
             type="text"
             value={module.settings.shareFallbackQuestion ?? ""}
@@ -2773,7 +2773,7 @@ function SocialShareModuleEditor({
           />
         </BuilderInlineNumberSelectRow>
         <label className="field">
-          <span>Icon background</span>
+          <span>Icon Background</span>
           <BuilderThemeColorField
             dialogLabel="Share icon background"
             fallback="#ffffff"
@@ -2802,7 +2802,7 @@ function SocialShareModuleEditor({
         </BuilderInlineNumberSelectRow>
       </div>
       <label className="field">
-        <span>Default post template</span>
+        <span>Default Post Template</span>
         <textarea
           className="builder-textarea"
           rows={3}
@@ -2829,7 +2829,7 @@ function SocialShareModuleEditor({
             </div>
             <div className="builder-slider-item-grid">
               <label className="field">
-                <span>Button color</span>
+                <span>Button Color</span>
                 <div className="builder-nav-color-field">
                   <BuilderThemeColorField
                     dialogLabel={`${platform.label} button color`}
@@ -2869,7 +2869,7 @@ function SocialShareModuleEditor({
               ) : null}
               {platform.supportsText ? (
                 <label className="field builder-slider-item-grid-full">
-                  <span>Post template</span>
+                  <span>Post Template</span>
                   <textarea
                     className="builder-textarea"
                     rows={3}
@@ -3061,7 +3061,7 @@ function HeadlineRotatorModuleEditor({
   return (
     <>
       <div className="builder-slider-design-grid">
-        <label className="field"><span>Font size (px)</span><input type="number" min="10" max="120" value={module.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE} onChange={(e) => updateSetting("fontSize", e.target.value)} /></label>
+        <label className="field"><span>Font Size (px)</span><input type="number" min="10" max="120" value={module.settings.fontSize ?? HEADLINE_ROTATOR_DEFAULT_FONT_SIZE} onChange={(e) => updateSetting("fontSize", e.target.value)} /></label>
         <label className="field">
           <span>Color</span>
           <BuilderThemeColorField
@@ -3073,15 +3073,15 @@ function HeadlineRotatorModuleEditor({
           />
         </label>
         <label className="field builder-checkbox-field"><span>Bold</span><input type="checkbox" checked={module.settings.bold !== "false"} onChange={(e) => updateSetting("bold", e.target.checked ? "true" : "false")} /></label>
-        <label className="field"><span>Vertical alignment</span><select value={module.settings.verticalAlignment ?? "center"} onChange={(e) => updateSetting("verticalAlignment", e.target.value)}><option value="top">Top</option><option value="center">Center</option><option value="bottom">Bottom</option></select></label>
-        <label className="field"><span>Min height (px)</span><input type="number" min="0" max="1200" step="4" value={module.settings.minHeight ?? "480"} onChange={(e) => updateSetting("minHeight", e.target.value)} /></label>
-        <label className="field"><span>Fade duration (ms)</span><input type="number" min="0" max="5000" step="50" value={module.settings.fadeDuration ?? "800"} onChange={(e) => updateSetting("fadeDuration", e.target.value)} /></label>
-        <label className="field"><span>Display speed (ms)</span><input type="number" min="500" max="20000" step="100" value={module.settings.displaySpeed ?? "3000"} onChange={(e) => updateSetting("displaySpeed", e.target.value)} /></label>
+        <label className="field"><span>Vertical Alignment</span><select value={module.settings.verticalAlignment ?? "center"} onChange={(e) => updateSetting("verticalAlignment", e.target.value)}><option value="top">Top</option><option value="center">Center</option><option value="bottom">Bottom</option></select></label>
+        <label className="field"><span>Min Height (px)</span><input type="number" min="0" max="1200" step="4" value={module.settings.minHeight ?? "480"} onChange={(e) => updateSetting("minHeight", e.target.value)} /></label>
+        <label className="field"><span>Fade Duration (ms)</span><input type="number" min="0" max="5000" step="50" value={module.settings.fadeDuration ?? "800"} onChange={(e) => updateSetting("fadeDuration", e.target.value)} /></label>
+        <label className="field"><span>Display Speed (ms)</span><input type="number" min="500" max="20000" step="100" value={module.settings.displaySpeed ?? "3000"} onChange={(e) => updateSetting("displaySpeed", e.target.value)} /></label>
         {/* C3: boolean reads as on/off, matching the Bold checkbox above —
             same "true"/"false" stored values the select wrote. */}
-        <label className="field builder-checkbox-field"><span>Drop shadow</span><input type="checkbox" checked={(module.settings.dropShadow ?? "false") === "true"} onChange={(e) => updateSetting("dropShadow", e.target.checked ? "true" : "false")} /></label>
+        <label className="field builder-checkbox-field"><span>Drop Shadow</span><input type="checkbox" checked={(module.settings.dropShadow ?? "false") === "true"} onChange={(e) => updateSetting("dropShadow", e.target.checked ? "true" : "false")} /></label>
         <label className="field">
-          <span>Shadow color</span>
+          <span>Shadow Color</span>
           <BuilderThemeColorField
             dialogLabel="Headline shadow color"
             fallback="#000000"
@@ -3092,7 +3092,7 @@ function HeadlineRotatorModuleEditor({
         </label>
         <label className="field"><span>Shadow X</span><input type="number" min="-20" max="20" step="1" value={module.settings.dropShadowX ?? "3"} onChange={(e) => updateSetting("dropShadowX", e.target.value)} /></label>
         <label className="field"><span>Shadow Y</span><input type="number" min="-20" max="20" step="1" value={module.settings.dropShadowY ?? "3"} onChange={(e) => updateSetting("dropShadowY", e.target.value)} /></label>
-        <label className="field"><span>Shadow blur</span><input type="number" min="0" max="30" step="1" value={module.settings.dropShadowBlur ?? "2"} onChange={(e) => updateSetting("dropShadowBlur", e.target.value)} /></label>
+        <label className="field"><span>Shadow Blur</span><input type="number" min="0" max="30" step="1" value={module.settings.dropShadowBlur ?? "2"} onChange={(e) => updateSetting("dropShadowBlur", e.target.value)} /></label>
       </div>
       <div className="builder-headline-table-wrap">
         <table className="builder-headline-table">
@@ -4035,7 +4035,7 @@ export function BuilderModuleCard({
               its own. What is left below belongs to the video module. */}
           {isVideoModule && (
             <label className="field">
-              <span>Video embed URL</span>
+              <span>Video Embed URL</span>
               <input
                 type="text"
                 value={module.settings.url ?? ""}
@@ -4083,7 +4083,7 @@ export function BuilderModuleCard({
           {module.type === "contact-form" && (
             <div className="builder-contact-form-settings">
               <label className="field">
-                <span>Form type</span>
+                <span>Form Type</span>
                 <select
                   value={getContactFormMode(module.settings)}
                   onChange={(event) =>
@@ -4114,7 +4114,7 @@ export function BuilderModuleCard({
           {isVideoModule ? (
             <div className="builder-video-controls-grid">
               <label className="field">
-                <span>Video name</span>
+                <span>Video Name</span>
                 <input
                   type="text"
                   value={module.settings.videoName ?? module.name ?? ""}
@@ -4281,7 +4281,7 @@ export function BuilderModuleCard({
                 </select>
               </label>
               <label className="field builder-code-editor-field">
-                <span>Embed code / snippet</span>
+                <span>Embed Code / Snippet</span>
                 <textarea
                   className="builder-textarea builder-code-textarea"
                   value={module.text}

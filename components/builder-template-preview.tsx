@@ -9254,7 +9254,7 @@ function EventManagerPreview({
             checked={isAllDay}
             onChange={(e) => toggleAllDay(e.target.checked)}
           />
-          <span>All day</span>
+          <span>All Day</span>
         </label>
         <label className="builder-event-manager-check">
           <input

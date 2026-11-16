@@ -64,8 +64,8 @@ const LOCK_LABELS: Record<string, string> = {
 const PALETTE_RAIL_ROLES: Array<{ bg: string; text: string; label: string }> = [
   { bg: "header", text: "headerText", label: "Header" },
   { bg: "surface", text: "surfaceText", label: "Sections" },
-  { bg: "band", text: "bandText", label: "Soft band" },
-  { bg: "inverse", text: "inverseText", label: "Dark band" },
+  { bg: "band", text: "bandText", label: "Soft Band" },
+  { bg: "inverse", text: "inverseText", label: "Dark Band" },
   { bg: "button", text: "buttonText", label: "Button" }
 ];
 
@@ -552,7 +552,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
           {pages.length ? (
             <>
               <label className="tw-field">
-                <span>Base the looks on</span>
+                <span>Base the Looks on</span>
                 <select value={seedType} onChange={(e) => setSeedType(e.target.value as ThemeWizardSeedType)}>
                   <option value="current_pages">This site as it is now</option>
                   <option value="external_url">Another website — paste the address</option>
@@ -563,7 +563,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
 
               {seedType === "external_url" ? (
                 <label className="tw-field">
-                  <span>Website address to read</span>
+                  <span>Website Address to Read</span>
                   <input
                     type="text"
                     value={seedUrl}
@@ -578,7 +578,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
 
               {seedType === "brief" ? (
                 <label className="tw-field">
-                  <span>Describe the organisation</span>
+                  <span>Describe the Organisation</span>
                   <textarea
                     rows={4}
                     value={seedText}
@@ -604,7 +604,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
               ) : null}
 
               <label className="tw-field">
-                <span>Preview the looks on this page</span>
+                <span>Preview the Looks on This Page</span>
                 <select value={previewPageId} onChange={(e) => setPreviewPageId(e.target.value)}>
                   {sortPagesByName(pages).map((page: PageRecord) => (
                     <option key={page.id} value={page.id}>{page.name || page.slug || page.id}</option>
@@ -630,7 +630,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                   </div>
                 ))}
                 <label className="tw-field">
-                  <span>Describe the banner area <span className="tw-muted">(optional)</span></span>
+                  <span>Describe the Banner Area <span className="tw-muted">(optional)</span></span>
                   <textarea
                     rows={2}
                     value={heroNote}
@@ -639,7 +639,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                   />
                 </label>
                 <label className="tw-field">
-                  <span>Reference website for the banner look <span className="tw-muted">(optional)</span></span>
+                  <span>Reference Website for the Banner Look <span className="tw-muted">(optional)</span></span>
                   <input
                     type="text"
                     value={heroReferenceUrl}
@@ -831,7 +831,7 @@ export function BuilderThemeWizard({ onClose }: { onClose?: () => void }) {
                   </select>
                 </label>
                 <label className="tw-field">
-                  <span>What worked, what didn&apos;t</span>
+                  <span>What Worked, What Didn&apos;t</span>
                   <textarea
                     rows={3}
                     value={notes[candidate.id] || ""}

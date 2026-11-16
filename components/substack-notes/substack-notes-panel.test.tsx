@@ -424,7 +424,7 @@ describe("Substack Notes screen", () => {
     type(el<HTMLInputElement>("#sn-start-hour"), "23");
     type(el<HTMLInputElement>("#sn-end-hour"), "9");
     await submit(el<HTMLFormElement>("form.substack-notes-settings"));
-    expect(text()).toContain("Not saved: Active from (23) must be earlier than Active until (9)");
+    expect(text()).toContain("Not saved: Active from (23) must be earlier than Active Until (9)");
     expect(stores.proj_doe.settings.saved).toBe(false);
   });
 
@@ -726,7 +726,7 @@ describe("Substack Notes helpers", () => {
   });
 
   it("swaps code field names for the labels on screen", () => {
-    expect(plainError("maxActionsPerDay must be between 0 and 50")).toBe("Most actions per day must be between 0 and 50");
+    expect(plainError("maxActionsPerDay must be between 0 and 50")).toBe("Most Actions per Day must be between 0 and 50");
   });
 });
 
@@ -950,7 +950,7 @@ describe("three Notes or replies to choose from (Outreach wizard 11/19)", () => 
     expect(options(id).length).toBe(2);
     expect(card(id).textContent).toContain("One option was dropped: it uses \"synergy\", which is on the account's words-to-avoid list.");
     await click(options(id)[1]);
-    expect(card(id).querySelector(`label[for="sn-draft-${id}-box"]`)?.textContent).toBe("Your reply");
+    expect(card(id).querySelector(`label[for="sn-draft-${id}-box"]`)?.textContent).toBe("Your Reply");
     await click(button("Approve", card(id)));
     expect(requests.filter((r) => r.path.endsWith("/approve")).pop()?.body).toEqual({ text: "A star chart helps, round 1.", option: 2 });
   });

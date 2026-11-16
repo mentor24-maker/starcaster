@@ -414,7 +414,7 @@ export function BuilderCarouselModuleSettings({
                 height. Naming it "Height" in both left the operator setting a
                 number that visibly did nothing (2026-08-16). */}
             <BuilderModuleField
-              label={isCards ? "Image height (0 = auto)" : "Height (0 = auto)"}
+              label={isCards ? "Image Height (0 = Auto)" : "Height (0 = Auto)"}
               width="num"
             >
               <BuilderNumberSelectControl
@@ -584,7 +584,7 @@ export function BuilderCarouselModuleSettings({
                     with no visible text at all. */}
                 {showItemCopy ? (
                   <BuilderModuleField
-                    label={isCards ? "Title" : "Caption title"}
+                    label={isCards ? "Title" : "Caption Title"}
                     width="text-md"
                     className="builder-card-field--a"
                   >

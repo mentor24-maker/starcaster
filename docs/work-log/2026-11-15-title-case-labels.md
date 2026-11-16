@@ -18,3 +18,14 @@ dropdown, which are not labels.
 One honest gap: a few screens build their labels from lists the check cannot
 read. The Themes screen was one of them; it was found by opening it in a
 browser and fixed by hand.
+
+**After review sent it back:** the check was blind to three ways labels are
+written, and about seventy sentence-case labels were hiding there — a label
+whose words sit in a `<span>` (the Headline Rotator's "Font size (px)"), the
+old Builder's field lists in plain JavaScript ("Posts per page"), and a label
+picked by a condition ("Their Note, pasted" next to its already-fixed twin).
+The check now reads all three, each was proved by switching it off and
+watching the test fail, and every label it found is fixed. Error messages that
+quote a label ("Most Actions per Day must be…") and the Theme Wizard's colour
+names were brought in line by hand. What the check still cannot see is listed
+in UI_RULES L10, so nobody mistakes a green run for full coverage.

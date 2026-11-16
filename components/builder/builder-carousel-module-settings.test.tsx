@@ -179,8 +179,8 @@ describe("format-specific controls", () => {
     // With captions off there is nowhere on the slide for title and body to
     // appear, and an editor that collects copy nothing renders is the defect
     // this merge is cleaning up.
-    expect(panelHtml({ format: "slideshow" })).not.toContain(">Caption title<");
-    expect(panelHtml({ format: "slideshow", showCaptions: "true" })).toContain(">Caption title<");
+    expect(panelHtml({ format: "slideshow" })).not.toContain(">Caption Title<");
+    expect(panelHtml({ format: "slideshow", showCaptions: "true" })).toContain(">Caption Title<");
     // The link is the exception — a slide can be clickable with no text.
     expect(panelHtml({ format: "slideshow" })).toContain(">Link<");
   });

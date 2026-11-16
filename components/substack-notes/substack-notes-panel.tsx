@@ -194,18 +194,18 @@ function getApi(): AppShape['api'] | null {
 const FIELD_WORDS: Array<[RegExp, string]> = [
   [/\btargetUrl\b/g, 'The link'],
   [/\bideaText\b/g, 'The idea'],
-  [/\bsubstackUrl\b/g, 'Substack address'],
-  [/\byoutubeChannelId\b/g, 'YouTube channel'],
-  [/\bmaxActionsPerDay\b/g, 'Most actions per day'],
-  [/\bminMinutesBetween\b/g, 'Shortest gap'],
-  [/\bjitterMinutes\b/g, 'Random extra'],
+  [/\bsubstackUrl\b/g, 'Substack Address'],
+  [/\byoutubeChannelId\b/g, 'YouTube Channel'],
+  [/\bmaxActionsPerDay\b/g, 'Most Actions per Day'],
+  [/\bminMinutesBetween\b/g, 'Shortest Gap'],
+  [/\bjitterMinutes\b/g, 'Random Extra'],
   [/\bactiveStartHour\b/g, 'Active from'],
-  [/\bactiveEndHour\b/g, 'Active until'],
-  [/\btimeZone\b/g, 'Time zone'],
-  [/\bavoidWords\b/g, 'Words to avoid'],
+  [/\bactiveEndHour\b/g, 'Active Until'],
+  [/\btimeZone\b/g, 'Time Zone'],
+  [/\bavoidWords\b/g, 'Words to Avoid'],
   [/\blinkPolicy\b/g, 'Links'],
   [/\btargetText\b/g, 'Their Note'],
-  [/\bautoTopicDrafts\b/g, 'Draft Notes from my topics on their own'],
+  [/\bautoTopicDrafts\b/g, 'Draft from Topics'],
 ];
 
 export function plainError(message: string): string {
@@ -572,7 +572,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
         <Field
           label="Draft from Topics"
           htmlFor="sn-auto-topic-drafts"
-          help="Every half hour, Starcaster drafts a Note from your topics while there is room under Most actions per day. Your own ideas go first, and you still approve every one."
+          help="Every half hour, Starcaster drafts a Note from your topics while there is room under Most Actions per Day. Your own ideas go first, and you still approve every one."
         >
           <label className="substack-notes-check">
             <input
@@ -581,7 +581,7 @@ function SettingsEditor({ settings, busy, error, onSave }: {
               checked={form.autoTopicDrafts}
               onChange={(e) => set('autoTopicDrafts', e.target.checked)}
             />
-            <span>Draft Notes from my topics on their own</span>
+            <span>Draft Notes from my topics on their own.</span>
           </label>
         </Field>
         <Field label="Words to Avoid" htmlFor="sn-avoid-words" help="One per line.">
@@ -669,7 +669,7 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
         <DraftChooser
           options={item.draftOptions || []}
           idPrefix={boxId}
-          boxLabel={item.kind === 'reply' ? 'Your reply' : 'Your Note'}
+          boxLabel={item.kind === 'reply' ? 'Your Reply' : 'Your Note'}
           busy={busy}
           error={error}
           onApprove={(words, option) => onApprove(words, option)}
@@ -1354,7 +1354,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <>
                               <TextEditor
                                 id={`sn-edit-${item.id}`}
-                                label={editingField === 'targetText' ? 'Their Note, pasted' : 'What I want to say, roughly'}
+                                label={editingField === 'targetText' ? 'Their Note, Pasted' : 'What I Want to Say, Roughly'}
                                 initial={editingField === 'targetText' ? item.targetText : item.ideaText}
                                 busy={busy}
                                 onSave={(text) => void saveText(item, text)}

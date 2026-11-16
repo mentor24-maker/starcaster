@@ -146,19 +146,19 @@ export function AlarmView({ alarm, onSave, saving, message, miniLimit = null }: 
         onSubmit={(e) => { e.preventDefault(); onSave(values); }}
       >
         <label className="field">
-          <span>Daily limit ($)</span>
+          <span>Daily Limit ($)</span>
           <input type="number" min="0.01" step="0.01" value={values.dailyLimitUsd} onChange={set('dailyLimitUsd')} required />
         </label>
         <label className="field">
-          <span>Spike multiple (×)</span>
+          <span>Spike Multiple (×)</span>
           <input type="number" min="1" step="0.5" value={values.spikeMultiple} onChange={set('spikeMultiple')} required />
         </label>
         <label className="field">
-          <span>Email alerts to</span>
+          <span>Email Alerts to</span>
           <input type="email" value={values.alertEmail} placeholder={ready?.defaultEmail || 'your email'} onChange={set('alertEmail')} />
         </label>
         <label className="field">
-          <span>Mini AI requests a day</span>
+          <span>Mini AI Requests a Day</span>
           <input type="number" min="0" step="1" value={values.miniDailyRequests} onChange={set('miniDailyRequests')} required />
         </label>
         <button type="submit" className="btn btn-save" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>

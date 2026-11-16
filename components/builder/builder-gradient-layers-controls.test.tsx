@@ -34,7 +34,7 @@ describe("where gradient layers can be edited", () => {
     for (const horizontal of [true, false]) {
       const markup = html({ allowGradientLayers: true, horizontal, background: layered });
       expect(markup).toContain('data-gradient-layer-count="2"');
-      expect(markup).toContain("Layer 1 (top)");
+      expect(markup).toContain("Layer 1 (Top)");
       expect(markup).toContain("Centre X %");
       expect(markup).not.toContain("Color 2");
       expect(markup).not.toContain("Secondary color");

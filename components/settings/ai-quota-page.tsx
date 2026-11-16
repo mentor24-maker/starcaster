@@ -183,7 +183,7 @@ export function AiQuotaView({ data }: { data: AiQuota }): React.ReactElement {
       <div className="ai-quota-tiles">
         <TotalTile label="Today (Last 24 Hours)" total={data.recent.last24h} />
         <TotalTile label="Last 7 Days" total={data.recent.last7d} />
-        <TotalTile label={`Last ${WINDOW_DAYS} days`} total={last30} />
+        <TotalTile label={`Last ${WINDOW_DAYS} Days`} total={last30} />
       </div>
 
       {unseen.length > 0 && (

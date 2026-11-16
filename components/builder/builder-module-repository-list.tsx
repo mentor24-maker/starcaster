@@ -1178,7 +1178,7 @@ function RepositoryTable({
                         <div className="builder-saved-module-editor">
                           <div className="builder-meta-grid">
                             <label className="field">
-                              <span>Saved module name</span>
+                              <span>Saved Module Name</span>
                               <input
                                 type="text"
                                 value={editingName}
@@ -1186,7 +1186,7 @@ function RepositoryTable({
                               />
                             </label>
                             <label className="field">
-                              <span>Module class</span>
+                              <span>Module Class</span>
                               <select
                                 value={editingModuleClass}
                                 onChange={(event) => onSetEditingModuleClass(event.target.value)}
@@ -1500,7 +1500,7 @@ function SavedSectionsTable({
                         <div className="builder-saved-module-editor">
                           <div className="builder-meta-grid">
                             <label className="field">
-                              <span>Saved section name</span>
+                              <span>Saved Section Name</span>
                               <input type="text" value={editingSectionName} onChange={(event) => onSetEditingSectionName(event.target.value)} />
                             </label>
                             <div className="field">

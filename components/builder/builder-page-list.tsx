@@ -888,7 +888,7 @@ export function BuilderPageList({
         {!collapsedPanels.details ? (
           <div className="builder-meta-grid builder-meta-grid-pages">
             <label className="field">
-              <span>Page title</span>
+              <span>Page Title</span>
               <input
                 ref={titleInputRef}
                 className="builder-page-details-field"
