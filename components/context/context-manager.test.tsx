@@ -24,6 +24,13 @@ vi.mock("../builder-rich-text-editor", () => ({
   ),
 }));
 
+// The real upload talks to Vercel Blob from a CDN-loaded SDK; what this file
+// tests is what the page asks it to do, and what the page does with the answer.
+const uploadToBlob = vi.fn(async (file: File, options: { pathname?: string }) => `https://store1.public.blob.vercel-storage.com/${options.pathname}-x1y2`);
+vi.mock("../../lib/builder-client/media-blob-upload", () => ({
+  uploadToBlob: (file: File, options: { pathname?: string }) => uploadToBlob(file, options),
+}));
+
 import ContextManager, { EMPTY_TEXT, PROJECT_SWITCH_EVENT, type ContextEntry } from "./context-manager";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -38,6 +45,22 @@ let sent: { method: string; path: string; body: any }[] = [];
 let refuseRead = "";
 let nextId = 1;
 let holdWrite: Promise<void> | null = null;
+let refuseFileRecord = "";
+let fileDeleteResult: { removed: boolean; error?: string } | null = null;
+
+const MB = 1024 * 1024;
+function fakeFile(name: string, size: number, type = ""): File {
+  const file = new File(["x"], name, { type });
+  Object.defineProperty(file, "size", { value: size });
+  return file;
+}
+
+async function pick(...files: File[]) {
+  const input = container!.querySelector("[data-testid='context-file-input']") as HTMLInputElement;
+  Object.defineProperty(input, "files", { value: files, configurable: true });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+  await flush();
+}
 
 async function flush() {
   for (let i = 0; i < 6; i += 1) {
@@ -88,7 +111,12 @@ beforeEach(() => {
   refuseRead = "";
   nextId = 1;
   holdWrite = null;
+  refuseFileRecord = "";
+  fileDeleteResult = null;
+  uploadToBlob.mockClear();
   (window as unknown as { App: unknown }).App = {
+    projectContext: { getSessionProjectId: () => activeProject },
+    getSessionToken: () => "tok_123",
     api: async (path: string, options: RequestInit = {}) => {
       const method = String(options.method || "GET").toUpperCase();
       const body = options.body ? JSON.parse(String(options.body)) : null;
@@ -99,6 +127,16 @@ beforeEach(() => {
         return { ok: true, data: { entries: [...list], total: list.length } };
       }
       if (method !== "GET" && holdWrite) await holdWrite;
+      if (method === "POST" && body.kind === "file") {
+        if (refuseFileRecord) return { ok: false, error: { message: refuseFileRecord } };
+        const entry: ContextEntry = {
+          id: `00000000-0000-0000-0000-00000000000${nextId++}`,
+          title: body.title || body.file.name, kind: "file", bodyHtml: "", updatedAt: "2026-11-15T20:00:00Z",
+          fileUrl: body.file.url, fileName: body.file.name, fileSize: body.file.size, fileType: "application/pdf",
+        };
+        list.unshift(entry);
+        return { ok: true, data: { entry } };
+      }
       if (method === "POST") {
         if (!String(body.title || "").trim()) return { ok: false, error: { message: "An entry needs a title." } };
         const entry: ContextEntry = {
@@ -116,7 +154,7 @@ beforeEach(() => {
         return { ok: true, data: { entry: list[at] } };
       }
       const [removed] = list.splice(at, 1);
-      return { ok: true, data: { entry: removed } };
+      return { ok: true, data: { entry: removed, file: removed.kind === "file" ? (fileDeleteResult || { removed: true }) : null } };
     },
   };
 });
@@ -241,5 +279,128 @@ describe("Assets › Context", () => {
     await mount();
     expect(container!.textContent).toContain("context_entries_setup.sql");
     expect(container!.textContent).not.toContain(EMPTY_TEXT);
+  });
+
+  describe("files (SC-809)", () => {
+    it("a 20MB PDF uploads to this project's folder and appears as a PDF of 20 MB with a working link", async () => {
+      await mount();
+      await pick(fakeFile("Price list.pdf", 20 * MB, "application/pdf"));
+
+      expect(uploadToBlob).toHaveBeenCalledTimes(1);
+      const [, options] = uploadToBlob.mock.calls[0] as unknown as [File, Record<string, any>];
+      expect(options.pathname).toMatch(/^APP\/Assets\/Context\/proj_a\/\d+_Price_list\.pdf$/);
+      expect(options.handleUploadUrl).toBe("/api/context/blob-upload");
+      expect(options.contentType).toBe("application/pdf");
+      expect(options.headers).toEqual({ "X-Project-ID": "proj_a", Authorization: "Bearer tok_123" });
+
+      const post = sent.find((s) => s.method === "POST")!;
+      expect(post.body.kind).toBe("file");
+      expect(post.body.file).toMatchObject({ name: "Price list.pdf", size: 20 * MB });
+
+      const row = container!.querySelector("tbody tr")!;
+      const cells = [...row.querySelectorAll("td")].map((td) => td.textContent);
+      expect(cells.slice(0, 3)).toEqual(["Price list.pdf", "PDF", "20 MB"]);
+      const link = row.querySelector("a")!;
+      expect(link.getAttribute("href")).toBe(post.body.file.url);
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(container!.textContent).toContain('Uploaded "Price list.pdf".');
+    });
+
+    it("an .exe is refused before any upload, naming the type", async () => {
+      await mount();
+      await pick(fakeFile("setup.exe", 1000, "application/x-msdownload"));
+      expect(uploadToBlob).not.toHaveBeenCalled();
+      expect(sent.some((s) => s.method === "POST")).toBe(false);
+      expect(container!.querySelector("[role='alert']")!.textContent).toBe("This file type is not accepted: .exe");
+    });
+
+    it("a file over 50MB is refused before any upload, naming the size", async () => {
+      await mount();
+      await pick(fakeFile("huge.pdf", 62 * MB));
+      expect(uploadToBlob).not.toHaveBeenCalled();
+      expect(container!.textContent).toContain("This file is 62 MB, and the limit is 50 MB.");
+    });
+
+    it("dropping files on the page uploads them, and one bad file does not stop the good one", async () => {
+      await mount();
+      const host = container!.querySelector(".context-manager")!;
+      const drop = new Event("drop", { bubbles: true, cancelable: true }) as Event & { dataTransfer: unknown };
+      drop.dataTransfer = { files: [fakeFile("notes.md", 2048), fakeFile("archive.zip", 2048)], types: ["Files"] };
+      await act(async () => { host.dispatchEvent(drop); });
+      await flush();
+      expect(uploadToBlob).toHaveBeenCalledTimes(1);
+      expect(rows()).toEqual(["notes.md"]);
+      expect(container!.textContent).toContain("archive.zip: This file type is not accepted: .zip");
+    });
+
+    it("a refused upload token shows the server's reason, not the storage library's generic sentence", async () => {
+      uploadToBlob.mockRejectedValueOnce(new Error("Vercel Blob: Failed to retrieve the client token"));
+      const realApi = (window as any).App.api;
+      (window as any).App.api = async (path: string, options: RequestInit = {}) => {
+        if (path === "/api/context/blob-upload") {
+          sent.push({ method: "POST", path, body: JSON.parse(String(options.body)) });
+          // The real App.api throws a refusal, carrying the server's message and status.
+          throw Object.assign(new Error("File storage (Vercel Blob) is not set up on this server, so files cannot be uploaded here."), { status: 503 });
+        }
+        return realApi(path, options);
+      };
+      await mount();
+      await pick(fakeFile("r.pdf", 100));
+      const ask = sent.find((s) => s.path === "/api/context/blob-upload")!;
+      const [, options] = uploadToBlob.mock.calls[0] as unknown as [File, Record<string, any>];
+      expect(ask.body.payload.pathname).toBe(options.pathname);
+      expect(container!.querySelector("[role='alert']")!.textContent).toBe(
+        "r.pdf was not uploaded: File storage (Vercel Blob) is not set up on this server, so files cannot be uploaded here.",
+      );
+    });
+
+    it("an upload that stored the file but could not record it says where the file is", async () => {
+      refuseFileRecord = "The context entries table is not in this database yet.";
+      await mount();
+      await pick(fakeFile("a.csv", 100));
+      const alert = container!.querySelector("[role='alert']")!.textContent || "";
+      expect(alert).toContain("a.csv was uploaded but could not be added to the list");
+      expect(alert).toContain("https://store1.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/");
+    });
+
+    it("deleting a file whose stored copy could not be removed says it was left behind", async () => {
+      byProject.proj_a = [{
+        id: "00000000-0000-0000-0000-000000000a01", title: "Deck", kind: "file", bodyHtml: "", updatedAt: "2026-11-15T20:00:00Z",
+        fileUrl: "https://store1.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1_deck.pdf", fileName: "deck.pdf", fileSize: 3 * MB,
+      }];
+      fileDeleteResult = { removed: false, error: "Vercel Blob delete failed: 503. It is still stored at https://store1.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1_deck.pdf" };
+      await mount();
+      await click(button("Delete"));
+      await click(button("Yes, delete"));
+      expect(container!.textContent).toContain('Deleted "Deck" from the list, but its stored file was left behind: Vercel Blob delete failed: 503');
+      expect(container!.textContent).toContain(EMPTY_TEXT);
+    });
+
+    it("deleting a file that was removed cleanly just says deleted", async () => {
+      byProject.proj_a = [{
+        id: "00000000-0000-0000-0000-000000000a02", title: "Deck", kind: "file", bodyHtml: "", updatedAt: "2026-11-15T20:00:00Z",
+        fileUrl: "https://store1.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1_deck.pdf", fileName: "deck.pdf", fileSize: 3 * MB,
+      }];
+      await mount();
+      await click(button("Delete"));
+      await click(button("Yes, delete"));
+      expect(container!.textContent).toContain('Deleted "Deck".');
+      expect(container!.textContent).not.toContain("left behind");
+    });
+
+    it("a file is uploaded into the folder of the project active at the time, so another project never sees it", async () => {
+      await mount();
+      activeProject = "proj_b";
+      await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+      await flush();
+      await pick(fakeFile("b.png", 5000));
+      const [, options] = uploadToBlob.mock.calls[0] as unknown as [File, Record<string, any>];
+      expect(options.pathname).toMatch(/^APP\/Assets\/Context\/proj_b\//);
+      activeProject = "proj_a";
+      await act(async () => { window.dispatchEvent(new Event(PROJECT_SWITCH_EVENT)); });
+      await flush();
+      expect(rows()).toEqual([]);
+      expect(container!.textContent).toContain(EMPTY_TEXT);
+    });
   });
 });

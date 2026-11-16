@@ -113,3 +113,23 @@
   border-color: var(--btn-danger-flat-hover);
   color: var(--btn-danger-flat-hover);
 }
+
+/* SC-809: files dropped anywhere on the page upload; the outline says so. */
+.context-manager-toolbar {
+  align-items: center;
+}
+
+.context-manager-hint,
+.context-manager-file-note {
+  font-size: var(--text-sm);
+  opacity: 0.75;
+}
+
+.context-manager--dragging {
+  outline: 2px dashed currentColor;
+  outline-offset: var(--space-2);
+}
+
+.context-manager-title a {
+  overflow-wrap: anywhere;
+}
