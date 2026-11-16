@@ -15,7 +15,7 @@ who the client is, what not to say.
 ```
 npm run context -- list --project <slug|id|name>     one line per entry: id, title, kind, last updated
 npm run context -- dump --project <slug|id|name>     every note in full, one Markdown document
-npm run context -- get  --id <entry id>              one entry in full (a file: name, type, size, address)
+npm run context -- get  --id <entry id> --project <slug|id|name>   one entry in full (a file: name, type, size, address)
 ```
 
 `dump` is the usual one: a single read gives you everything. Files are listed
@@ -39,7 +39,9 @@ that the context could not be read.
 
 ## How it reads
 
-Read-only, and scoped to the one project named. Production is read through
+Read-only, and scoped to the one project named — every command needs
+`--project`, `get` included, so an entry id can never reach into another
+project. Production is read through
 `PROD_DB_READONLY_URL` with `psql` inside the local Supabase container (the
 same route `npm run broken-links` uses), so the local container must be
 running (`supabase start`). The Doppler `dev` config points the app's own
@@ -47,5 +49,13 @@ database settings at this machine, which is why the command does not go
 through `lib/contextStore.js`'s queries; it uses that store's row shape, and
 the logic lives in `lib/contextReadout.js` (tests:
 `scripts/builder/context.test.js`).
+
+**Production needs the read rule.** The command reads production as the
+read-only login `starcaster_readonly`, and the table has row-level security
+on. A login with no read rule sees zero rows and gets no error, so without it
+every project would print "No context entries" — a false empty. The rule is
+the last block of `docs/SQL/context_entries_setup.sql`; the file is safe to
+run again, so a database that ran an earlier copy gets it by running the
+file once more.
 
 Adding and editing stay on the Context page: the command never writes.

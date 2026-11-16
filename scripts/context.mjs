@@ -4,7 +4,7 @@
  * for agent sessions (ticket SC-810). docs/CONTEXT_LIBRARY.md says when.
  *
  *   npm run context -- list --project <slug|id|name>            one line per entry
- *   npm run context -- get  --id <entry id> [--project <p>]     one entry in full
+ *   npm run context -- get  --id <entry id> --project <p>       one entry in full
  *   npm run context -- dump --project <slug|id|name>            every note, one document
  *
  *   --save <folder>   (get, dump) also download the files, into a folder OUTSIDE the repo
@@ -42,7 +42,7 @@ const DB_CONTAINER = 'supabase_db_starcaster';
 
 const USAGE = `Usage:
   npm run context -- list --project <slug|id|name>
-  npm run context -- get  --id <entry id> [--project <slug|id|name>] [--save <folder>]
+  npm run context -- get  --id <entry id> --project <slug|id|name> [--save <folder>]
   npm run context -- dump --project <slug|id|name> [--save <folder>]
 Add --local to read this machine's database instead of production.`;
 
@@ -128,7 +128,7 @@ const ENTRIES_SQL = `select coalesce(json_agg(row_to_json(c) order by c.updated_
   from context_entries c where c.project_id = :'pid';`;
 
 const ENTRY_SQL = `select coalesce(json_agg(row_to_json(c)), '[]'::json)
-  from context_entries c where c.id::text = :'eid';`;
+  from context_entries c where c.id::text = :'eid' and c.project_id = :'pid';`;
 
 function readProjects(conn) {
   const res = psqlJson(conn, PROJECTS_SQL);
@@ -229,23 +229,19 @@ async function main() {
   // get
   const id = flag('--id');
   if (!id) done(1, `Which entry? Add --id <entry id> (the first column of list).\n${USAGE}`);
-  const folder = saveFolder();
+  // --project is required: an id alone could name another project's entry,
+  // and "every query names the project" is the promise (review of PR #1017).
   const wantedProject = flag('--project');
-  const project = wantedProject ? findProject(conn, wantedProject) : null;
-  const res = psqlJson(conn, ENTRY_SQL, { eid: id });
+  if (!wantedProject) done(1, `Which project is entry ${id} in? Add --project <slug or id>.\n${USAGE}`);
+  const folder = saveFolder();
+  const project = findProject(conn, wantedProject);
+  const res = psqlJson(conn, ENTRY_SQL, { eid: id, pid: project.id });
   if (res.error) done(2, readout.describeReadFailure(res.error, WHERE));
   const row = (Array.isArray(res.data) ? res.data : [])[0];
   const entry = row ? rowToEntry(row) : null;
-  if (!entry || (project && entry.projectId !== project.id)) {
-    done(1, `No context entry ${id}${project ? ` in ${readout.projectLabel(project)}` : ''} in ${WHERE}.`);
-  }
-  let owner = project;
-  if (!owner) {
-    const projects = readProjects(conn);
-    owner = projects.data?.find((p) => p.id === entry.projectId) || { id: entry.projectId };
-  }
+  if (!entry) done(1, `No context entry ${id} in ${readout.projectLabel(project)} in ${WHERE}.`);
   const { saved, failed } = await saveFiles([entry], folder);
-  process.stdout.write(`${readout.formatEntry(entry, { project: owner, savedPath: saved[entry.id] || '' })}\n`);
+  process.stdout.write(`${readout.formatEntry(entry, { project, savedPath: saved[entry.id] || '' })}\n`);
   reportFailedDownloads(failed);
   done(0);
 }

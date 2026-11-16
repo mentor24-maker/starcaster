@@ -19,3 +19,13 @@ it. A `#` line inside a code sample is no longer turned into a heading in the
 dump. A file download that stalls now gives up after a minute and says so,
 instead of hanging. `--help` succeeds, the "more than one project" message
 reads as a sentence, and a mistyped project no longer leaves an empty folder.
+
+Fixed after the second review: production reads the table through a
+read-only login, and with the database's per-row security switched on, a
+login with no read rule sees nothing at all and gets no error. So the day the
+SQL file was run, every project would have read as "no context", the exact
+false answer this command exists to prevent. The SQL file now gives that login
+its read rule (safe to run again on a database that already ran it). `get` now
+needs `--project` too, so an entry id can never pull in another project's
+note. And a code sample or a second paragraph inside a bullet point now keeps
+its shape instead of being squashed onto one line.

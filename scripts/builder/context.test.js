@@ -182,8 +182,17 @@ function runContext(args, { projects, entries }) {
   fs.writeFileSync(fake, `#!/usr/bin/env node
 const fs = require('fs');
 const sql = fs.readFileSync(0, 'utf8');
-const file = /app_projects/.test(sql) ? 'projects.json' : 'entries.json';
-process.stdout.write(fs.readFileSync(${JSON.stringify(dir)} + '/' + file, 'utf8'));
+const vars = {};
+const argv = process.argv.slice(2);
+argv.forEach((a, i) => { if (a === '-v' && /^(pid|eid)=/.test(argv[i + 1])) { const [k, ...v] = argv[i + 1].split('='); vars[k] = v.join('='); } });
+const read = (f) => JSON.parse(fs.readFileSync(${JSON.stringify(dir)} + '/' + f, 'utf8'));
+if (/app_projects/.test(sql)) { process.stdout.write(JSON.stringify(read('projects.json'))); process.exit(0); }
+// Answer the way the real WHERE clause does, so a query that forgets the
+// project filter is caught rather than echoed back.
+let rows = read('entries.json');
+if (/:'pid'/.test(sql)) rows = rows.filter((r) => r.project_id === vars.pid);
+if (/:'eid'/.test(sql)) rows = rows.filter((r) => r.id === vars.eid);
+process.stdout.write(JSON.stringify(rows));
 `);
   fs.chmodSync(fake, 0o755);
   const script = path.resolve(__dirname, '..', 'context.mjs');
@@ -226,4 +235,41 @@ test('--save leaves no folder behind when the project is not found', () => {
   const res = runContext(['dump', '--project', 'nosuchproject', '--save', folder], { projects: PROJECTS, entries: [] });
   assert.equal(res.status, 1);
   assert.equal(fs.existsSync(folder), false);
+});
+
+test('get needs --project, and never prints another project\'s entry', () => {
+  const rows = [{
+    id: 'e-agora', project_id: 'proj_2', owner_user_id: 'u', title: 'Agora rules', kind: 'note',
+    body_html: '<p>Only for AGORA.</p>', file_url: '', file_name: '', file_type: '', file_size: null,
+    created_at: '2026-11-15T20:00:00Z', updated_at: '2026-11-15T21:30:00Z',
+  }];
+  const bare = runContext(['get', '--id', 'e-agora'], { projects: PROJECTS, entries: rows });
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, /Which project is entry e-agora in\? Add --project/);
+  assert.equal(bare.stdout, '');
+  const wrong = runContext(['get', '--id', 'e-agora', '--project', 'izit-app'], { projects: PROJECTS, entries: rows });
+  assert.equal(wrong.status, 1);
+  assert.match(wrong.stderr, /No context entry e-agora in IZIT:APP/);
+  assert.doesNotMatch(wrong.stdout, /Only for AGORA/);
+  const right = runContext(['get', '--id', 'e-agora', '--project', 'agora'], { projects: PROJECTS, entries: rows });
+  assert.equal(right.status, 0, right.stderr);
+  assert.match(right.stdout, /Only for AGORA\./);
+});
+
+test('a list item keeps a code block\'s line breaks and its paragraphs apart', () => {
+  assert.equal(readout.htmlToText('<ul><li><pre>line1\nline2</pre></li></ul>'), '- ```\n  line1\n  line2\n  ```');
+  assert.equal(readout.htmlToText('<ul><li><p>Rule one.</p><p>Exception: X.</p></li></ul>'), '- Rule one.\n\n  Exception: X.');
+  assert.equal(readout.htmlToText('<ul><li>a<ul><li>b</li></ul></li><li><p>c</p></li></ul>'), '- a\n  - b\n- c');
+});
+
+// Production reads as starcaster_readonly under row-level security, where a
+// login with no read rule sees zero rows and no error: every project would
+// print "No context entries", exit 0 (review of PR #1017).
+test('the setup SQL gives the read-only login a read rule on context_entries', () => {
+  const sql = fs.readFileSync(path.resolve(__dirname, '..', '..', 'docs', 'SQL', 'context_entries_setup.sql'), 'utf8');
+  assert.match(sql, /grant select on public\.context_entries to starcaster_readonly/);
+  assert.match(sql, /create policy starcaster_readonly_select on public\.context_entries '\s*\|\| 'for select to starcaster_readonly using \(true\)/);
+  // And the parsed schema agrees: the guarded block reads as a rule on this table.
+  const { parseSchemaText } = require('./sqlSchemaFake.js');
+  assert.ok(parseSchemaText(sql).readonlyReadable.has('context_entries'));
 });
