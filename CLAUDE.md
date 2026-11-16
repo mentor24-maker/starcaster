@@ -327,6 +327,8 @@ never reaches him (task 86bcwam1k). Give every new docs/SQL file a
 what the ticket tells him — and a `-- RUN AFTER docs/SQL/<file>` line when it
 needs another file first.
 
+**Before working for a client project, read its context:** `npm run context -- dump --project <slug>` prints the notes the operator keeps on Assets › Context (brand voice, rules, background). Exit 2 means it could not be read, never "none" — `docs/CONTEXT_LIBRARY.md`.
+
 `npm run broken-links` is the same shape for client sites (task 86bcxn69z): a
 read-only pass over every project's pages, saved sections and forms that names
 each link pointing at a page that no longer exists. Once a week on the relay's
