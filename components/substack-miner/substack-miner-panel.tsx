@@ -1194,7 +1194,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       {!detailId && tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
           <form className="substack-miner-card" aria-label="Add writers by link" onSubmit={addSeeds}>
-            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add writers by link</label>
+            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add Writers by Link</label>
             <p className="substack-miner-card-note">
               Paste one link per line — an article, a publication's address, or a person's profile (substack.com/@name) — and the
               writer behind it is added as a candidate. Links on a publication's own domain work too. To say why a writer fits,
@@ -1457,10 +1457,11 @@ export default function SubstackMinerPanel(): React.ReactElement {
             <p className="substack-miner-card-note">
               Reads each undecided writer's newest posts and suggests Approve or Reject, with reasons, from the decisions you have
               already made. Nothing is decided until you click Agree on the Candidates tab. Each writer is one paid AI call.
+              Writers that already have a suggestion are skipped unless Redo Existing Suggestions is on.
             </p>
             <label className="substack-miner-not">
               <input type="checkbox" checked={suggestRedo} onChange={(e) => setSuggestRedo(e.target.checked)} />
-              <span>Suggest again for writers that already have a suggestion</span>
+              <span>Redo Existing Suggestions</span>
             </label>
             <div className="substack-miner-actions">
               <button
@@ -1515,7 +1516,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
           </section>
 
           <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
-            <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import subscribers</label>
+            <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import Subscribers</label>
             <p className="substack-miner-card-note">
               Download the subscriber list from your Substack dashboard (Subscribers, then Export) and choose the file or paste it here.
               Each email that belongs to a contact marks that contact as a subscriber; emails with no contact are counted, never added.

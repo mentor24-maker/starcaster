@@ -141,7 +141,7 @@ export function RichTextLinkDialog({
             disabled={!pages?.length}
             onChange={() => setMode("page")}
           />
-          A page on this site
+          A Page on This Site
         </label>
         <label>
           <input
@@ -150,7 +150,7 @@ export function RichTextLinkDialog({
             checked={mode === "web"}
             onChange={() => setMode("web")}
           />
-          A web address
+          A Web Address
         </label>
       </div>
       {mode === "page" ? (

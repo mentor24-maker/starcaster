@@ -24,7 +24,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "linkText",
-            label: "Link text",
+            label: "Link Text",
             width: "text-md",
             control: "text",
             placeholder: "Admin",

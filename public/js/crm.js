@@ -1496,7 +1496,7 @@ App.crm = (function () {
     const alertParts = (el('crmFormEditorAlertEmails')?.value || '').split(/[\s,;]+/).map((part) => part.trim()).filter(Boolean);
     const badAlert = alertParts.filter((part) => !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(part));
     if (badAlert.length) {
-      return `"${badAlert[0]}" is not an email address — fix it in Alert these addresses, or clear the field to use the Contact Alert Email from Settings.`;
+      return `"${badAlert[0]}" is not an email address — fix it in Alert These Addresses, or clear the field to use the Contact Alert Email from Settings.`;
     }
     const confirmationEnabled = Boolean(el('crmFormEditorConfirmEnabled')?.checked);
     const hasEmail = (fields || []).some((field) => String(field.key || '').toLowerCase() === 'email');

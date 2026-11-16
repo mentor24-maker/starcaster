@@ -108,7 +108,7 @@ export function BuilderGradientLayersControls({
           // Fragments, not wrapper divs: the panel column is ONE grid whose rows
           // sit directly in it (UI_RULES W0), and a wrapper would start its own.
           <Fragment key={index}>
-            <BuilderSettingRow label={index === 0 && layers.length > 1 ? `${name} (top)` : name}>
+            <BuilderSettingRow label={index === 0 && layers.length > 1 ? `${name} (Top)` : name}>
               <select
                 value={layer.kind}
                 onChange={(event) =>

@@ -279,7 +279,7 @@ export function BuilderReminderRecordEditor({
             onChange={(event) => updateRecord({ isActive: event.target.checked })}
             type="checkbox"
           />
-          <span>Show when criteria match</span>
+          <span>Show When Criteria Match</span>
         </label>
       </BuilderModuleField>
     </div>

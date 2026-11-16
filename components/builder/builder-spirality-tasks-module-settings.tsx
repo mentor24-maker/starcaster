@@ -27,7 +27,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "defaultProject",
-            label: "Opens on project",
+            label: "Opens on Project",
             width: "text-md",
             control: "text",
             placeholder: "spirality",

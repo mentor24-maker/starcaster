@@ -323,14 +323,14 @@ function SetPasswordForm({ api, link, info, onDone }: { api: SpiralityApi; link:
       <h3 className="builder-spirality-tasks__title">{linkPurposeTitle(info.purpose)}</h3>
       <p className="builder-spirality-tasks__muted">For {info.email}</p>
       {invite ? (
-        <Field label="Your name" id={`${id}-name`}>
+        <Field label="Your Name" id={`${id}-name`}>
           <input id={`${id}-name`} type="text" autoComplete="name" required value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
       ) : null}
-      <Field label="New password" id={`${id}-password`}>
+      <Field label="New Password" id={`${id}-password`}>
         <input id={`${id}-password`} type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
       </Field>
-      <Field label="Type it again" id={`${id}-confirm`}>
+      <Field label="Type It Again" id={`${id}-confirm`}>
         <input id={`${id}-confirm`} type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
       </Field>
       {error ? <p className="builder-spirality-tasks__error" role="alert">{error}</p> : null}

@@ -223,7 +223,7 @@ export function BuilderSeoAltTextPage() {
           <h3>Options</h3>
           <label style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
             <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
-            <span>Replace alt text that's already there</span>
+            <span>Replace Existing Alt Text</span>
           </label>
           <p className="meta">
             Leave this off to fill only the empty ones and keep the alt text you've written yourself.

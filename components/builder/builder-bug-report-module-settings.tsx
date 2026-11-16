@@ -128,7 +128,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "popupTitle",
-            label: "Popup title",
+            label: "Popup Title",
             width: "text-md",
             control: "text",
             placeholder: "Report a problem",
@@ -157,7 +157,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "labelText",
-            label: "Label beside icon",
+            label: "Label Beside Icon",
             width: "text-md",
             control: "text",
             placeholder: "(icon only)",
@@ -168,7 +168,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "visibility",
-            label: "Who sees it",
+            label: "Who Sees It",
             width: "select-md",
             control: "select",
             options: BUG_REPORT_VISIBILITY_OPTIONS,
@@ -177,7 +177,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "emailReports",
-            label: "Email each report",
+            label: "Email Each Report",
             width: "check",
             control: "checkbox",
             trueValue: "true",
@@ -214,7 +214,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "iconSize",
-            label: "Icon size",
+            label: "Icon Size",
             width: "num",
             control: "number",
             min: 20,
@@ -225,7 +225,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "iconColor",
-            label: "Icon color",
+            label: "Icon Color",
             width: "color",
             control: "color",
             dialogLabel: "Icon color",
@@ -236,7 +236,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "iconBlock",
-            label: "Background block",
+            label: "Background Block",
             width: "check",
             control: "checkbox",
             trueValue: "true",
@@ -246,7 +246,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "blockColor",
-            label: "Block color",
+            label: "Block Color",
             width: "color",
             control: "color",
             dialogLabel: "Block color",
@@ -283,7 +283,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "siteWideNote",
-            label: "Every page",
+            label: "Every Page",
             width: "full",
             control: "custom",
             visibleWhen: (settings) => settings.showOn === BUG_REPORT_SHOW_ON_SITE,

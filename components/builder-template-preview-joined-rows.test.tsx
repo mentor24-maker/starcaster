@@ -80,11 +80,11 @@ describe("the control that turns joining on", () => {
   it("offers the checkbox on any row that has one above it", () => {
     const html = renderControls(true);
 
-    expect(html).toContain("Share background");
+    expect(html).toContain("Share Background");
   });
 
   it("hides it on the first row, which has nothing above it to share with", () => {
-    expect(renderControls(false)).not.toContain("Share background");
+    expect(renderControls(false)).not.toContain("Share Background");
   });
 
   /**
@@ -97,7 +97,7 @@ describe("the control that turns joining on", () => {
    */
   it("uses the same plain label-and-control markup as the Locked row", () => {
     const html = renderControls(true);
-    const shareRow = html.slice(html.indexOf("Share background"));
+    const shareRow = html.slice(html.indexOf("Share Background"));
     const lockedRow = html.slice(html.indexOf("Locked"));
 
     expect(shareRow).toContain('<div class="builder-setting-value"><input type="checkbox"');

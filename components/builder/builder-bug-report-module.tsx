@@ -528,7 +528,7 @@ function BugReportDialog({
               <div className="builder-bug-report-shots">
                 <label className="builder-bug-report-picker">
                   <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple onChange={onPickFiles} disabled={activeShotCount >= BUG_REPORT_MAX_SCREENSHOTS} />
-                  <span>Add screenshots (up to {BUG_REPORT_MAX_SCREENSHOTS}, {BUG_REPORT_MAX_SCREENSHOT_MB} MB each)</span>
+                  <span>Add Screenshots (Up to {BUG_REPORT_MAX_SCREENSHOTS}, {BUG_REPORT_MAX_SCREENSHOT_MB} MB Each)</span>
                 </label>
                 {shots.length ? (
                   <ul className="builder-bug-report-shot-list">

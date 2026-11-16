@@ -206,7 +206,7 @@ function TableCellModules({
                       brings its own Content axis, and two Content headings a
                       few hundred pixels apart read as a bug. */}
                   <div className="builder-schema-group-title">Module</div>
-                  <BuilderModuleField label="Module label" width="text-md">
+                  <BuilderModuleField label="Module Label" width="text-md">
                     <input type="text" value={mod.name} onChange={(e) => updateModuleField(mod.id, "name", e.target.value)} placeholder="Internal label" />
                   </BuilderModuleField>
 

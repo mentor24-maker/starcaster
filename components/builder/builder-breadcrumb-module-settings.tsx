@@ -173,7 +173,7 @@ export function BuilderBreadcrumbModuleSettings({
           [
             {
               key: "items",
-              label: "Trail items",
+              label: "Trail Items",
               width: "full",
               control: "custom",
               bare: true,

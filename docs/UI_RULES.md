@@ -378,7 +378,7 @@ as a rule first, then gets a checker where one is possible.
   are wider than the four panels it is allowed to touch:**
 
   *   **A `width: "full"` field is invisible to `check_panels`.** Messaging
-      Topic List declares three (`URL param`, `'All' label`, `Post feed URL`);
+      Topic List declares three (`URL Param`, `'All' Label`, `Post Feed URL`);
       the check measured its Content group as **6 fields** while the panel
       rendered **9**. A `full` field makes its strip a full-width block, and a
       full-width block matches none of the check's group selectors, so the
@@ -935,7 +935,38 @@ as a rule first, then gets a checker where one is possible.
   [`docs/UI_DOCTRINE.md`](https://github.com/mentor24-maker/spirality/blob/main/docs/UI_DOCTRINE.md)
   §1, and a change to it is made in both. *(SP-138, 2026-11-05; field labels
   added by the operator 2026-11-15, SC-811; bringing StarCaster's labels into
-  line is SC-812)* — **[TODO-check]**
+  line is SC-812)* — **[auto]** for form field labels:
+  `scripts/builder/labelCase.test.js` (rule in `lib/labelCase.js`) reads every
+  `label="…"` prop, each string a `label={…}` expression can result in
+  (`label={a ? 'One' : \`Last ${n} Days\`}`), `<label>` text — including a
+  `<span>` caption when the label has no text of its own, but not a hint span
+  (`meta`, `muted`, `hint`, …) — and Builder settings fields declared as data
+  (`{ key, label, control }`, in the React panels and in `public/js/`'s
+  frozen Builder alike; a dropdown option's `{ value, label }` is not a field
+  label) in `components/`, `lib/builder-client/`, `src/pages/`,
+  `src/layout.html` and `public/js/`, and fails `npm run verify` on one that
+  is not Title Case. A label written as a full sentence, ending in a full
+  stop, stays a sentence — **except a checkbox's caption**, which is a label
+  and is refused if it ends in a full stop: never add punctuation to get a
+  label past the check; shorten it to a Title Case caption and put the
+  explanation in help text. Units ("px", "ms") stay lower case. Comments
+  (`//`, `/* */`, `<!-- -->`) are not read, and nor is the `label` prop of a
+  component that uses it for something else (`DriveLink`, `RunResult`,
+  `LessonRow` in `NOT_FIELD_LABEL`). Buttons, headings and tabs are still
+  **[eye]**.
+  **What it cannot see** (check these by eye): a label held in a variable or
+  passed through a differently named prop (`boxLabel`, a component's default
+  parameter), a label built in plain JS by concatenation, a caption shown
+  only under a condition (`{show ? <span>Primary Color</span> : null}`), a checkbox drawn
+  by a component (`<Toggle label=…>`) rather than an `<input type="checkbox">`
+  inside a `<label>` (its caption is checked, but a full stop still passes),
+  a word joined to a fill-in or holding code (`${n}th`, `{name}'s`,
+  `$price`) — that one word is skipped, though the words around it are
+  read — and
+  text that quotes a label elsewhere (an error message saying "Most
+  Actions per Day must be…"), which has to be changed by hand when the label
+  changes. The link names in `lib/pageInboundLinks.js` are the exception: a
+  test reads each module's panel and fails when one stops matching.
 
 ## D — Density and layout of panels
 

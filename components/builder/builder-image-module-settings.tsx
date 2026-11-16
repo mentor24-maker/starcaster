@@ -328,7 +328,7 @@ export function BuilderImageModuleSettings({
           [
             {
               key: "alt",
-              label: "Alt text",
+              label: "Alt Text",
               width: "full",
               control: "text",
               placeholder: "Describe the image for screen readers",

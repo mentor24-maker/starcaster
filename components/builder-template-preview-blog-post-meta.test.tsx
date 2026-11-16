@@ -36,7 +36,7 @@ function formMarkup(settings: Record<string, string>) {
 describe("Blog post form: author and date", () => {
   it("shows a Post date picker on the create form, with the blank-means-publish-time note", () => {
     const html = formMarkup({});
-    expect(html).toContain("Post date");
+    expect(html).toContain("Post Date");
     expect(html).toContain('type="date"');
     expect(html).toContain("stamped the moment the post is published");
   });

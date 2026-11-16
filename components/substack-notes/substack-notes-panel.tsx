@@ -194,18 +194,18 @@ function getApi(): AppShape['api'] | null {
 const FIELD_WORDS: Array<[RegExp, string]> = [
   [/\btargetUrl\b/g, 'The link'],
   [/\bideaText\b/g, 'The idea'],
-  [/\bsubstackUrl\b/g, 'Substack address'],
-  [/\byoutubeChannelId\b/g, 'YouTube channel'],
-  [/\bmaxActionsPerDay\b/g, 'Most actions per day'],
-  [/\bminMinutesBetween\b/g, 'Shortest gap'],
-  [/\bjitterMinutes\b/g, 'Random extra'],
+  [/\bsubstackUrl\b/g, 'Substack Address'],
+  [/\byoutubeChannelId\b/g, 'YouTube Channel'],
+  [/\bmaxActionsPerDay\b/g, 'Most Actions per Day'],
+  [/\bminMinutesBetween\b/g, 'Shortest Gap'],
+  [/\bjitterMinutes\b/g, 'Random Extra'],
   [/\bactiveStartHour\b/g, 'Active from'],
-  [/\bactiveEndHour\b/g, 'Active until'],
-  [/\btimeZone\b/g, 'Time zone'],
-  [/\bavoidWords\b/g, 'Words to avoid'],
+  [/\bactiveEndHour\b/g, 'Active Until'],
+  [/\btimeZone\b/g, 'Time Zone'],
+  [/\bavoidWords\b/g, 'Words to Avoid'],
   [/\blinkPolicy\b/g, 'Links'],
   [/\btargetText\b/g, 'Their Note'],
-  [/\bautoTopicDrafts\b/g, 'Draft Notes from my topics on their own'],
+  [/\bautoTopicDrafts\b/g, 'Draft from Topics'],
 ];
 
 export function plainError(message: string): string {
@@ -539,40 +539,40 @@ function SettingsEditor({ settings, busy, error, onSave }: {
           : 'Nothing has been saved for this account yet — these are the starting settings. Save to keep them.'}
       </p>
       <div className="substack-notes-form">
-        <Field label="Substack address" htmlFor="sn-substack-url" help="Your publication, for example https://daneofearth.substack.com">
+        <Field label="Substack Address" htmlFor="sn-substack-url" help="Your publication, for example https://daneofearth.substack.com">
           <input id="sn-substack-url" type="text" inputMode="url" placeholder="https://" value={form.substackUrl} onChange={(e) => set('substackUrl', e.target.value)} />
         </Field>
-        <Field label="YouTube channel" htmlFor="sn-youtube-channel" help="The channel id: starts with UC, 24 characters. Optional.">
+        <Field label="YouTube Channel" htmlFor="sn-youtube-channel" help="The channel id: starts with UC, 24 characters. Optional.">
           <input id="sn-youtube-channel" type="text" value={form.youtubeChannelId} onChange={(e) => set('youtubeChannelId', e.target.value)} />
         </Field>
-        <Field label="Most actions per day" htmlFor="sn-max-per-day" help="Notes, replies, restacks and likes all count.">
+        <Field label="Most Actions per Day" htmlFor="sn-max-per-day" help="Notes, replies, restacks and likes all count.">
           <input id="sn-max-per-day" type="number" min={0} max={50} value={form.maxActionsPerDay} onChange={(e) => set('maxActionsPerDay', e.target.value)} />
         </Field>
-        <Field label="Shortest gap (minutes)" htmlFor="sn-min-gap" help="The least time between two actions.">
+        <Field label="Shortest Gap (Minutes)" htmlFor="sn-min-gap" help="The least time between two actions.">
           <input id="sn-min-gap" type="number" min={0} max={1440} value={form.minMinutesBetween} onChange={(e) => set('minMinutesBetween', e.target.value)} />
         </Field>
-        <Field label="Random extra (minutes)" htmlFor="sn-jitter" help="Up to this much is added to each gap, so actions do not arrive like clockwork.">
+        <Field label="Random Extra (Minutes)" htmlFor="sn-jitter" help="Up to this much is added to each gap, so actions do not arrive like clockwork.">
           <input id="sn-jitter" type="number" min={0} max={1440} value={form.jitterMinutes} onChange={(e) => set('jitterMinutes', e.target.value)} />
         </Field>
-        <Field label="Active from (hour)" htmlFor="sn-start-hour" help="0–23, on a 24-hour clock.">
+        <Field label="Active from (Hour)" htmlFor="sn-start-hour" help="0–23, on a 24-hour clock.">
           <input id="sn-start-hour" type="number" min={0} max={23} value={form.activeStartHour} onChange={(e) => set('activeStartHour', e.target.value)} />
         </Field>
-        <Field label="Active until (hour)" htmlFor="sn-end-hour" help="1–24. Must be later than the start.">
+        <Field label="Active Until (Hour)" htmlFor="sn-end-hour" help="1–24. Must be later than the start.">
           <input id="sn-end-hour" type="number" min={1} max={24} value={form.activeEndHour} onChange={(e) => set('activeEndHour', e.target.value)} />
         </Field>
-        <Field label="Time zone" htmlFor="sn-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
+        <Field label="Time Zone" htmlFor="sn-time-zone" help="For example America/Denver. Blank uses this project's own time zone.">
           <input id="sn-time-zone" type="text" value={form.timeZone} onChange={(e) => set('timeZone', e.target.value)} />
         </Field>
-        <Field label="Extra notes for this channel" htmlFor="sn-voice" help="Notes are written from your canon, the same as Reddit comments. Anything here is added after it, for Substack only.">
+        <Field label="Extra Notes for This Channel" htmlFor="sn-voice" help="Notes are written from your canon, the same as Reddit comments. Anything here is added after it, for Substack only.">
           <textarea id="sn-voice" rows={4} value={form.voice} onChange={(e) => set('voice', e.target.value)} />
         </Field>
         <Field label="Topics" htmlFor="sn-topics" help="One per line. They appear on the Ideas tab, ready to use.">
           <textarea id="sn-topics" rows={4} value={form.topics} onChange={(e) => set('topics', e.target.value)} />
         </Field>
         <Field
-          label="Draft from topics"
+          label="Draft from Topics"
           htmlFor="sn-auto-topic-drafts"
-          help="Every half hour, Starcaster drafts a Note from your topics while there is room under Most actions per day. Your own ideas go first, and you still approve every one."
+          help="Every half hour, Starcaster drafts a Note from your topics while there is room under Most Actions per Day. Your own ideas go first, and you still approve every one."
         >
           <label className="substack-notes-check">
             <input
@@ -581,10 +581,10 @@ function SettingsEditor({ settings, busy, error, onSave }: {
               checked={form.autoTopicDrafts}
               onChange={(e) => set('autoTopicDrafts', e.target.checked)}
             />
-            <span>Draft Notes from my topics on their own</span>
+            <span>Draft Notes Automatically</span>
           </label>
         </Field>
-        <Field label="Words to avoid" htmlFor="sn-avoid-words" help="One per line.">
+        <Field label="Words to Avoid" htmlFor="sn-avoid-words" help="One per line.">
           <textarea id="sn-avoid-words" rows={3} value={form.avoidWords} onChange={(e) => set('avoidWords', e.target.value)} />
         </Field>
         <Field label="Links" htmlFor="sn-link-policy" help="Whether a Note or reply may include a link to your work.">
@@ -669,7 +669,7 @@ function ApprovalCard({ item, busy, error, onApprove, onReject, onRedraft }: {
         <DraftChooser
           options={item.draftOptions || []}
           idPrefix={boxId}
-          boxLabel={item.kind === 'reply' ? 'Your reply' : 'Your Note'}
+          boxLabel={item.kind === 'reply' ? 'Your Reply' : 'Your Note'}
           busy={busy}
           error={error}
           onApprove={(words, option) => onApprove(words, option)}
@@ -1162,7 +1162,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
       {tab === 'ideas' ? (
         <div className="substack-notes-tabpanel" role="tabpanel" aria-label="Ideas">
           <form className="substack-notes-add" onSubmit={addIdea}>
-            <label className="substack-notes-add-label" htmlFor="sn-idea">Jot an idea for a Note</label>
+            <label className="substack-notes-add-label" htmlFor="sn-idea">Jot an Idea for a Note</label>
             <textarea id="sn-idea" rows={2} value={ideaText} onChange={(e) => setIdeaText(e.target.value)} />
             <button type="submit" className="btn btn-primary" disabled={adding || !ideaText.trim()}>
               {adding ? 'Adding…' : 'Add'}
@@ -1235,7 +1235,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <>
                               <TextEditor
                                 id={`sn-edit-${item.id}`}
-                                label="Edit the idea"
+                                label="Edit the Idea"
                                 initial={item.ideaText}
                                 busy={busy}
                                 onSave={(text) => void saveText(item, text)}
@@ -1282,7 +1282,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
         <div className="substack-notes-tabpanel" role="tabpanel" aria-label="Engage">
           <form className="substack-notes-card substack-notes-engage-add" onSubmit={addEngage}>
             <div className="substack-notes-form">
-              <Field label="Substack Note link" htmlFor="sn-note-url" help="The address of one Note — it ends /note/c- and a number.">
+              <Field label="Substack Note Link" htmlFor="sn-note-url" help="The address of one Note — it ends /note/c- and a number.">
                 <input
                   id="sn-note-url"
                   type="text"
@@ -1292,7 +1292,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                   onChange={(e) => setNoteUrl(e.target.value)}
                 />
               </Field>
-              <Field label="What to do" htmlFor="sn-engage-reply">
+              <Field label="What to Do" htmlFor="sn-engage-reply">
                 <div className="substack-notes-choices" role="radiogroup" aria-label="What to do">
                   {ENGAGE_OPTIONS.map((o) => (
                     <label key={o.value} className="substack-notes-choice">
@@ -1310,7 +1310,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                 </div>
               </Field>
               {engageKind === 'reply' ? (
-                <Field label="What I want to say, roughly" htmlFor="sn-reply-text" help="Optional. The agent writes the reply from this.">
+                <Field label="What I Want to Say, Roughly" htmlFor="sn-reply-text" help="Optional. The agent writes the reply from this.">
                   <textarea id="sn-reply-text" rows={3} value={replyText} onChange={(e) => setReplyText(e.target.value)} />
                 </Field>
               ) : null}
@@ -1354,7 +1354,7 @@ export default function SubstackNotesPanel(): React.ReactElement {
                             <>
                               <TextEditor
                                 id={`sn-edit-${item.id}`}
-                                label={editingField === 'targetText' ? 'Their Note, pasted' : 'What I want to say, roughly'}
+                                label={editingField === 'targetText' ? 'Their Note, Pasted' : 'What I Want to Say, Roughly'}
                                 initial={editingField === 'targetText' ? item.targetText : item.ideaText}
                                 busy={busy}
                                 onSave={(text) => void saveText(item, text)}
