@@ -4916,7 +4916,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
               </div>
             ) : null}
             <div style={{ flex: "0 1 12rem", minWidth: 0 }}>
-              <label style={labelStyle}>Post date</label>
+              <label style={labelStyle}>Post Date</label>
               <input
                 style={inputStyle}
                 type="date"
@@ -5074,7 +5074,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
             <div style={{ padding: "0 0.875rem 0.875rem" }}>
               {showCategories ? (
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Categories (slugs, comma-separated)</label>
+                  <label style={labelStyle}>Categories (Slugs, Comma-separated)</label>
                   <input
                     style={inputStyle}
                     type="text"
@@ -5092,7 +5092,7 @@ function BlogPostCreatePreview({ settings }: { settings: Record<string, string> 
 
               {showTags ? (
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Tags (comma-separated)</label>
+                  <label style={labelStyle}>Tags (Comma-separated)</label>
                   <input
                     style={inputStyle}
                     type="text"
@@ -5610,7 +5610,7 @@ function BlogImportPanel({ onImported, onClose }: { onImported: () => void; onCl
         <button type="button" className="builder-blog-import-btn" onClick={selectAllProbable}>Select all probable posts</button>
         <button type="button" className="builder-blog-import-btn" onClick={() => setSelected(new Set())}>Select none</button>
         <label className="builder-blog-import-author">
-          Author when the source has none:{" "}
+          Author When the Source Has None:{" "}
           <input
             type="text"
             value={defaultAuthor}
@@ -9010,7 +9010,7 @@ function EventManagerPreview({
         ) : null}
         {repeat.enabled ? (
           <div className="builder-event-manager-field">
-            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (optional)</label>
+            <label className="builder-event-manager-label" htmlFor="event-repeat-until">Until (Optional)</label>
             <input
               id="event-repeat-until"
               className="builder-event-manager-input"
@@ -9119,7 +9119,7 @@ function EventManagerPreview({
                             />
                           </label>
                           <label className="builder-event-manager-label">
-                            Instructor this date
+                            Instructor This Date
                             <input
                               className="builder-event-manager-input"
                               value={entry?.instructor || ""}
@@ -9128,7 +9128,7 @@ function EventManagerPreview({
                             />
                           </label>
                           <label className="builder-event-manager-label">
-                            Note for this date
+                            Note for This Date
                             <input
                               className="builder-event-manager-input"
                               value={entry?.note || ""}
@@ -9860,7 +9860,7 @@ function BlogCategoryManagerPreview({ settings }: { settings: Record<string, str
             ) : null}
             {showSortOrder ? (
               <div style={fieldStyle}>
-                <label style={labelStyle}>Sort order</label>
+                <label style={labelStyle}>Sort Order</label>
                 <input type="number" style={{ ...inputStyle, width: 80 }} value={form.sortOrder} onChange={(e) => setForm((f) => ({ ...f, sortOrder: e.target.value }))} />
               </div>
             ) : null}
@@ -13720,7 +13720,7 @@ function AdminLoginPreview({
             </div>
             {forgotNotice && <div style={noticeStyle}>{forgotNotice}</div>}
             <form onSubmit={handleResetSubmit}>
-              <label style={labelStyle}>6-digit code</label>
+              <label style={labelStyle}>6-digit Code</label>
               <input
                 type="text"
                 required
@@ -13733,7 +13733,7 @@ function AdminLoginPreview({
                 onChange={(e) => setResetCode(e.target.value.replace(/\D/g, ""))}
                 placeholder="123456"
               />
-              <label style={labelStyle}>New password</label>
+              <label style={labelStyle}>New Password</label>
               <input
                 type="password"
                 required
@@ -13744,7 +13744,7 @@ function AdminLoginPreview({
                 onChange={(e) => setResetPassword(e.target.value)}
                 placeholder="At least 8 characters"
               />
-              <label style={labelStyle}>Confirm new password</label>
+              <label style={labelStyle}>Confirm New Password</label>
               <input
                 type="password"
                 required
@@ -13776,7 +13776,7 @@ function AdminLoginPreview({
               Enter your email and we&rsquo;ll send you a 6-digit code to set a new password.
             </div>
             <form onSubmit={handleForgotRequest}>
-              <label style={labelStyle}>Email address</label>
+              <label style={labelStyle}>Email Address</label>
               <input
                 type="email"
                 required
@@ -13809,7 +13809,7 @@ function AdminLoginPreview({
     <div style={cardStyle}>
       <div style={{ fontWeight: 700, fontSize: 20, color: "#18324a", marginBottom: 20 }}>{formTitle}</div>
       <form onSubmit={handleLogin}>
-        <label style={labelStyle}>Email address</label>
+        <label style={labelStyle}>Email Address</label>
         <input type="email" required style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         <label style={labelStyle}>Password</label>
         <input type="password" required style={inputStyle} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
@@ -14379,7 +14379,7 @@ function AdminSupportFormPreview({
         </div>
 
         <div>
-          <label htmlFor="admin-support-title" style={labelStyle}>Issue title</label>
+          <label htmlFor="admin-support-title" style={labelStyle}>Issue Title</label>
           <input
             id="admin-support-title"
             type="text"
@@ -14393,7 +14393,7 @@ function AdminSupportFormPreview({
         </div>
 
         <div>
-          <label htmlFor="admin-support-description" style={labelStyle}>Issue description</label>
+          <label htmlFor="admin-support-description" style={labelStyle}>Issue Description</label>
           <textarea
             id="admin-support-description"
             rows={6}
@@ -14407,7 +14407,7 @@ function AdminSupportFormPreview({
 
         {showScreenshot && (
           <div>
-            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (optional)</label>
+            <label htmlFor="admin-support-screenshot" style={labelStyle}>Screenshot (Optional)</label>
             <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--muted, #888)" }}>
               A picture of what you are seeing helps a lot. Images up to about 6MB.
             </p>
@@ -15641,7 +15641,7 @@ function AdminRelatedArticlesPreview({
             old two-column layout cut every term name off with an ellipsis. */}
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "0.9rem" }}>
           <div style={{ flex: "1 1 320px", minWidth: 0 }}>
-            <label style={labelStyle} htmlFor="admin-blog-links-term">Show articles filed under</label>
+            <label style={labelStyle} htmlFor="admin-blog-links-term">Show Articles Filed Under</label>
             <select
               id="admin-blog-links-term"
               style={{ ...inputStyle, background: "#fff" }}

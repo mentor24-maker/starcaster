@@ -175,7 +175,7 @@ export default function RedditSubreddits({ onChanged }: { onChanged?: () => void
         </button>
       </div>
       <form className="outreach-wizard-connect-form" onSubmit={(e) => { e.preventDefault(); void addByName(); }}>
-        <label htmlFor="reddit-subs-add">Add by name</label>
+        <label htmlFor="reddit-subs-add">Add by Name</label>
         <input id="reddit-subs-add" type="text" className="outreach-wizard-account-input" placeholder="r/polymath" value={name} onChange={(e) => setName(e.target.value)} />
         <button type="submit" className="btn" disabled={!!busy || !name.trim()}>Add</button>
       </form>

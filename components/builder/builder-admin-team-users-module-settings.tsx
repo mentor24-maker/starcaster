@@ -30,7 +30,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -38,7 +38,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "tableTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Team Members",
@@ -48,7 +48,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "showAddButton",
-            label: "Add button",
+            label: "Add Button",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -56,7 +56,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "addButtonLabel",
-            label: "Add button label",
+            label: "Add Button Label",
             width: "text-md",
             control: "text",
             placeholder: "Add Team Member",
@@ -73,7 +73,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showEditButton",
-            label: "Edit button",
+            label: "Edit Button",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -81,7 +81,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "showDeleteButton",
-            label: "Delete button",
+            label: "Delete Button",
             width: "check",
             control: "checkbox",
             fallback: "true",

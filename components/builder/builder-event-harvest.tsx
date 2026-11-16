@@ -225,12 +225,12 @@ export function BuilderEventHarvest({ accent, categories, headers, onClose, onCr
 
           <div className="builder-event-manager-field-row builder-event-harvest-options">
             <div className="builder-event-manager-field">
-              <label className="builder-event-manager-label" htmlFor="harvest-week">Week starting</label>
+              <label className="builder-event-manager-label" htmlFor="harvest-week">Week Starting</label>
               <input id="harvest-week" type="date" className="builder-event-manager-input" value={weekStart}
                 onChange={(e) => setWeekStart(e.target.value ? mondayOf(e.target.value) : "")} />
             </div>
             <div className="builder-event-manager-field">
-              <label className="builder-event-manager-label" htmlFor="harvest-zone">Time zone</label>
+              <label className="builder-event-manager-label" htmlFor="harvest-zone">Time Zone</label>
               <input id="harvest-zone" className="builder-event-manager-input" value={timeZone}
                 onChange={(e) => setTimeZone(e.target.value)} placeholder="America/New_York"
                 aria-invalid={!isValidTimeZone(timeZone)} />

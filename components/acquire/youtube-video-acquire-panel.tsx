@@ -394,7 +394,7 @@ export function YoutubeVideoAcquirePanel(): React.ReactElement {
                   checked={includeMedia}
                   onChange={(event) => setIncludeMedia(event.target.checked)}
                 />{' '}
-                Download .mp4 and .mp3 files
+                Download .mp4 and .mp3 Files
               </label>
               <label className="checkbox-row">
                 <input
@@ -403,7 +403,7 @@ export function YoutubeVideoAcquirePanel(): React.ReactElement {
                   checked={captureContact}
                   onChange={(event) => setCaptureContact(event.target.checked)}
                 />{' '}
-                Save the creator as a contact
+                Save the Creator as a Contact
               </label>
             </div>
           </div>

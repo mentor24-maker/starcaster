@@ -67,7 +67,7 @@ export function BuilderMessagingTopicListModuleSettings({
           [
             {
               key: "filterParam",
-              label: "URL param",
+              label: "URL Param",
               width: "full",
               control: "custom",
               rendersVia: "MessagingTopicListPreview",
@@ -117,7 +117,7 @@ export function BuilderMessagingTopicListModuleSettings({
           [
             {
               key: "targetPageUrl",
-              label: "Post feed URL",
+              label: "Post Feed URL",
               width: "full",
               control: "picker",
               source: "pages",
@@ -195,7 +195,7 @@ export function BuilderMessagingTopicListModuleSettings({
           [
             {
               key: "fontSize",
-              label: "Font size",
+              label: "Font Size",
               width: "num",
               control: "number",
               min: 10,
@@ -207,7 +207,7 @@ export function BuilderMessagingTopicListModuleSettings({
           [
             {
               key: "activeColor",
-              label: "Active color",
+              label: "Active Color",
               width: "color",
               control: "theme-color",
               dialogLabel: "Active pill text color",
@@ -216,7 +216,7 @@ export function BuilderMessagingTopicListModuleSettings({
             },
             {
               key: "activeBg",
-              label: "Active bg",
+              label: "Active BG",
               width: "color",
               control: "theme-color",
               dialogLabel: "Active pill background",
@@ -225,7 +225,7 @@ export function BuilderMessagingTopicListModuleSettings({
             },
             {
               key: "inactiveColor",
-              label: "Inactive color",
+              label: "Inactive Color",
               width: "color",
               control: "theme-color",
               dialogLabel: "Inactive pill text color",
@@ -234,7 +234,7 @@ export function BuilderMessagingTopicListModuleSettings({
             },
             {
               key: "inactiveBg",
-              label: "Inactive bg",
+              label: "Inactive BG",
               width: "color",
               control: "theme-color",
               dialogLabel: "Inactive pill background",

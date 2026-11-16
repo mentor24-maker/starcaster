@@ -1194,7 +1194,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
       {!detailId && tab === 'candidates' ? (
         <div className="substack-miner-tabpanel" role="tabpanel" aria-label="Candidates">
           <form className="substack-miner-card" aria-label="Add writers by link" onSubmit={addSeeds}>
-            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add writers by link</label>
+            <label className="substack-miner-card-title" htmlFor="sm-seeds">Add Writers by Link</label>
             <p className="substack-miner-card-note">
               Paste one link per line — an article, a publication's address, or a person's profile (substack.com/@name) — and the
               writer behind it is added as a candidate. Links on a publication's own domain work too. To say why a writer fits,
@@ -1212,7 +1212,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {seedBusy ? 'Adding…' : 'Add writers'}
               </button>
             </div>
-            <RunResult lines={seedLines} label="What adding the writers did" />
+            <RunResult lines={seedLines} label="What Adding the Writers Did" />
           </form>
 
           <div className="substack-miner-filters">
@@ -1427,7 +1427,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {growBusy ? 'Growing…' : 'Grow keywords now'}
               </button>
             </div>
-            <RunResult lines={growLines} label="What growing keywords did" />
+            <RunResult lines={growLines} label="What Growing Keywords Did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Search the web">
@@ -1449,7 +1449,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {searchBusy ? 'Searching…' : 'Search the web'}
               </button>
             </div>
-            <RunResult lines={searchLines} label="What the search did" />
+            <RunResult lines={searchLines} label="What the Search Did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Suggest decisions">
@@ -1472,7 +1472,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {suggestBusy ? 'Suggesting… (about 5 seconds a writer)' : 'Suggest decisions'}
               </button>
             </div>
-            <RunResult lines={suggestLines} label="What suggesting did" />
+            <RunResult lines={suggestLines} label="What Suggesting Did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read writers' posts">
@@ -1491,7 +1491,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {postsBusy ? 'Reading…' : "Read writers' posts"}
               </button>
             </div>
-            <RunResult lines={postsLines} label="What reading posts did" />
+            <RunResult lines={postsLines} label="What Reading Posts Did" />
           </section>
 
           <section className="substack-miner-card" aria-label="Read recommendations">
@@ -1511,11 +1511,11 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {snowballBusy ? 'Reading…' : 'Read recommendations of approved writers'}
               </button>
             </div>
-            <RunResult lines={snowballLines} label="What reading recommendations did" />
+            <RunResult lines={snowballLines} label="What Reading Recommendations Did" />
           </section>
 
           <form className="substack-miner-card" aria-label="Import subscribers" onSubmit={importSubscribers}>
-            <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import subscribers</label>
+            <label className="substack-miner-card-title" htmlFor="sm-subscribers">Import Subscribers</label>
             <p className="substack-miner-card-note">
               Download the subscriber list from your Substack dashboard (Subscribers, then Export) and choose the file or paste it here.
               Each email that belongs to a contact marks that contact as a subscriber; emails with no contact are counted, never added.
@@ -1533,7 +1533,7 @@ export default function SubstackMinerPanel(): React.ReactElement {
                 {csvBusy ? 'Importing…' : 'Import'}
               </button>
             </div>
-            <RunResult lines={csvLines} label="What the subscriber import did" />
+            <RunResult lines={csvLines} label="What the Subscriber Import Did" />
           </form>
         </div>
       ) : null}

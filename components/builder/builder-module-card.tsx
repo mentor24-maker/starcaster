@@ -2403,7 +2403,7 @@ function renderModulePreview(module: BuilderTemplateModule) {
     return (
       <div className="builder-module-preview-copy" style={{ maxWidth: 340, border: "1px solid #dde8f0", borderRadius: 10, padding: "22px 20px", background: "#fff" }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: "#18324a", marginBottom: 14 }}>{title}</div>
-        <label style={labelStyle}>Email address</label>
+        <label style={labelStyle}>Email Address</label>
         <input type="email" disabled placeholder="you@example.com" style={inputStyle} />
         <label style={labelStyle}>Password</label>
         <input type="password" disabled placeholder="••••••••" style={inputStyle} />
@@ -2755,7 +2755,7 @@ function SocialShareModuleEditor({
         </label>
         <BuilderInlineNumberSelectRow>
           <BuilderInlineNumberSelect
-            label="Label font size"
+            label="Label Font Size"
             value={module.settings.shareLabelSize ?? "14"}
             min={8}
             max={64}
@@ -2763,7 +2763,7 @@ function SocialShareModuleEditor({
             onChange={(value) => updateSetting("shareLabelSize", value)}
           />
           <BuilderInlineNumberSelect
-            label="Icon size"
+            label="Icon Size"
             value={module.settings.shareIconSize ?? "36"}
             min={20}
             max={120}
@@ -2784,7 +2784,7 @@ function SocialShareModuleEditor({
         </label>
         <BuilderInlineNumberSelectRow>
           <BuilderInlineNumberSelect
-            label="Glyph size"
+            label="Glyph Size"
             value={module.settings.shareGlyphSize ?? "20"}
             min={10}
             max={96}
@@ -2792,7 +2792,7 @@ function SocialShareModuleEditor({
             onChange={(value) => updateSetting("shareGlyphSize", value)}
           />
           <BuilderInlineNumberSelect
-            label="Icon gap"
+            label="Icon Gap"
             value={module.settings.shareIconGap ?? "12"}
             min={0}
             max={64}

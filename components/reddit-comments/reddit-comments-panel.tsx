@@ -324,13 +324,13 @@ function ReadingCard({ item, busy, error, onPaste, onReadAgain, onReject }: {
       {line?.offerPaste ? (
         <div className="reddit-comments-paste">
           <p className="reddit-comments-help">Open the link, copy the post into these boxes, then click Save.</p>
-          <label className="reddit-comments-label" htmlFor={id('title')}>Post title</label>
+          <label className="reddit-comments-label" htmlFor={id('title')}>Post Title</label>
           <input id={id('title')} type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <label className="reddit-comments-label" htmlFor={id('body')}>Post text</label>
+          <label className="reddit-comments-label" htmlFor={id('body')}>Post Text</label>
           <textarea id={id('body')} rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
           {item.parentCommentId ? (
             <>
-              <label className="reddit-comments-label" htmlFor={id('comment')}>The comment you are replying to</label>
+              <label className="reddit-comments-label" htmlFor={id('comment')}>The Comment You Are Replying to</label>
               <textarea id={id('comment')} rows={3} value={comment} onChange={(e) => setComment(e.target.value)} />
             </>
           ) : null}
@@ -389,7 +389,7 @@ function DraftCard({ item, busy, error, onApprove, onReject, onRedraft }: {
   return (
     <article className="reddit-comments-card" data-item-id={item.id} aria-label="Comment waiting for approval">
       <PostSummary item={item} />
-      <label className="reddit-comments-label" htmlFor={boxId}>Your comment</label>
+      <label className="reddit-comments-label" htmlFor={boxId}>Your Comment</label>
       <textarea id={boxId} className="reddit-comments-draft" rows={6} value={text} onChange={(e) => setText(e.target.value)} />
       <p className="reddit-comments-help">{`${text.trim().length} characters`}</p>
       <p className="reddit-comments-help reddit-comments-canon">{canonLine(item.canonUsed)}</p>
@@ -702,7 +702,7 @@ export default function RedditCommentsPanel(): React.ReactElement {
       ) : null}
       {pace ? <p className="reddit-comments-help reddit-comments-pace">{pace}</p> : null}
       <form className="reddit-comments-add" onSubmit={addItem}>
-        <label className="reddit-comments-label" htmlFor="rc-link">Paste a Reddit post or comment link</label>
+        <label className="reddit-comments-label" htmlFor="rc-link">Paste a Reddit Post or Comment Link</label>
         <div className="reddit-comments-add-row">
           <input
             id="rc-link"
@@ -719,13 +719,13 @@ export default function RedditCommentsPanel(): React.ReactElement {
         {needsPaste ? (
           <div className="reddit-comments-paste">
             <p className="reddit-comments-help">Open the link, copy the post into these boxes, then click Add again.</p>
-            <label className="reddit-comments-label" htmlFor="rc-paste-title">Post title</label>
+            <label className="reddit-comments-label" htmlFor="rc-paste-title">Post Title</label>
             <input id="rc-paste-title" type="text" value={pasteTitle} onChange={(e) => setPasteTitle(e.target.value)} />
-            <label className="reddit-comments-label" htmlFor="rc-paste-body">Post text</label>
+            <label className="reddit-comments-label" htmlFor="rc-paste-body">Post Text</label>
             <textarea id="rc-paste-body" rows={5} value={pasteBody} onChange={(e) => setPasteBody(e.target.value)} />
             {isCommentLink(link) ? (
               <>
-                <label className="reddit-comments-label" htmlFor="rc-paste-comment">The comment you are replying to</label>
+                <label className="reddit-comments-label" htmlFor="rc-paste-comment">The Comment You Are Replying to</label>
                 <textarea id="rc-paste-comment" rows={3} value={pasteComment} onChange={(e) => setPasteComment(e.target.value)} />
               </>
             ) : null}

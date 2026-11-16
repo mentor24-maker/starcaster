@@ -134,7 +134,7 @@ export function SiteImportBuildControls({
           {preview ? "Preview Again" : "Preview Build"}
         </button>
         <label className="site-import-theme-default">
-          <input type="checkbox" checked={noTheme} onChange={(e) => setNoTheme(e.target.checked)} /> Skip the theme
+          <input type="checkbox" checked={noTheme} onChange={(e) => setNoTheme(e.target.checked)} /> Skip the Theme
         </label>
         <button
           type="button"

@@ -117,7 +117,7 @@ export default function NoWorkspacePanel(): JSX.Element {
       ) : (
         <>
           <div className="form-row">
-            <label htmlFor="noWorkspaceNote">Anything you want to add? (optional)</label>
+            <label htmlFor="noWorkspaceNote">Anything You Want to Add? (Optional)</label>
             <textarea
               id="noWorkspaceNote"
               rows={3}

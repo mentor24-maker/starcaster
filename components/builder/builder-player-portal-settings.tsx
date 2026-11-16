@@ -22,7 +22,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
   return (
     <div className="builder-player-portal-settings">
       <div className="builder-player-portal-settings-row">
-        <BuilderSettingRow label="Intro heading">
+        <BuilderSettingRow label="Intro Heading">
           <input
             type="text"
             value={module.text}
@@ -35,7 +35,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             placeholder="Sign in"
           />
         </BuilderSettingRow>
-        <BuilderSettingRow label="Default mode">
+        <BuilderSettingRow label="Default Mode">
           <select
             value={settings.defaultMode === "register" ? "register" : "login"}
             onChange={(event) => updateSetting("defaultMode", event.target.value)}
@@ -44,7 +44,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             <option value="register">Register</option>
           </select>
         </BuilderSettingRow>
-        <BuilderSettingRow label="Show register">
+        <BuilderSettingRow label="Show Register">
           <select
             value={settings.showRegister === "false" ? "false" : "true"}
             onChange={(event) => updateSetting("showRegister", event.target.value)}
@@ -53,7 +53,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
             <option value="false">No</option>
           </select>
         </BuilderSettingRow>
-        <BuilderSettingRow label="Forgot password">
+        <BuilderSettingRow label="Forgot Password">
           <select
             value={settings.showForgotPassword === "false" ? "false" : "true"}
             onChange={(event) => updateSetting("showForgotPassword", event.target.value)}
@@ -66,7 +66,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
       {/* Its own row: under Custom… the picker adds a typed box, which would push this
           label above the others in the row (task 86bcxu518, review round 1). */}
       <div className="builder-player-portal-settings-redirect">
-        <BuilderSettingRow label="Redirect path">
+        <BuilderSettingRow label="Redirect Path">
           {/* A page picked here is stored by id, so renaming it cannot break the redirect (task 86bcxu518). */}
           <BuilderProjectDataPicker
             source="pages"

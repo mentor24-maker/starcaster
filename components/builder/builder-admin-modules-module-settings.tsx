@@ -29,7 +29,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -37,7 +37,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "tableTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Premium Modules",
@@ -57,7 +57,7 @@ const SCHEMA: BuilderSettingsSchema = {
             // (unchecked leaves visitors a read-only modules list) rides on the
             // tooltip so it cannot silently disappear (L7).
             key: "showToggle",
-            label: "Toggle buttons",
+            label: "Toggle Buttons",
             width: "check",
             control: "custom",
             fallback: "true",

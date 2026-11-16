@@ -107,7 +107,7 @@ describe("Carousel settings editor", () => {
     // Every field is a lattice field with a declared pair-column — a field
     // that lands in neither track is what put the sub-row out of phase with
     // the columns above it.
-    for (const label of ["Alt text", "Link", "Image"]) {
+    for (const label of ["Alt Text", "Link", "Image"]) {
       expect(html).toContain(`>${label}</span>`);
     }
   });
@@ -148,12 +148,12 @@ describe("format-specific controls", () => {
     const html = panelHtml({ format: "slideshow" });
     expect(html).toContain(">Transition<");
     expect(html).toContain(">Captions<");
-    expect(html).not.toContain(">Card width<");
+    expect(html).not.toContain(">Card Width<");
   });
 
   it("offers Card width on a card slider, and neither Transition nor Captions", () => {
     const html = panelHtml({ format: "cards" });
-    expect(html).toContain(">Card width<");
+    expect(html).toContain(">Card Width<");
     // Fade needs one item to fade between; several cards share the frame.
     expect(html).not.toContain(">Transition<");
     expect(html).not.toContain(">Captions<");

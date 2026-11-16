@@ -326,7 +326,7 @@ export function BuilderSectionControls({
                     </select>
                   </BuilderSettingRow>
           {canJoinPrevious && !device ? (
-                    <BuilderSettingRow label="Share background">
+                    <BuilderSettingRow label="Share Background">
                       <input
                         type="checkbox"
                         checked={section.joinWithPrevious === true}

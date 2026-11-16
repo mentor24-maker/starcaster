@@ -935,7 +935,15 @@ as a rule first, then gets a checker where one is possible.
   [`docs/UI_DOCTRINE.md`](https://github.com/mentor24-maker/spirality/blob/main/docs/UI_DOCTRINE.md)
   §1, and a change to it is made in both. *(SP-138, 2026-11-05; field labels
   added by the operator 2026-11-15, SC-811; bringing StarCaster's labels into
-  line is SC-812)* — **[TODO-check]**
+  line is SC-812)* — **[auto]** for form field labels:
+  `scripts/builder/labelCase.test.js` (rule in `lib/labelCase.js`) reads every
+  `label="…"` prop, `<label>` text, and Builder settings field declared as
+  data (`{ key, label, control }`; a dropdown option's `{ value, label }` is
+  not a field label) in `components/`,
+  `lib/builder-client/`, `src/pages/`, `src/layout.html` and `public/js/`,
+  and fails `npm run verify` on one that is not Title Case. A label written as
+  a full sentence, ending in a full stop, stays a sentence; units ("px",
+  "ms") stay lower case. Buttons, headings and tabs are still **[eye]**.
 
 ## D — Density and layout of panels
 

@@ -427,7 +427,7 @@ export function BuilderCarouselModuleSettings({
               />
             </BuilderModuleField>
             {supports.cardWidth ? (
-              <BuilderModuleField label="Card width" width="num">
+              <BuilderModuleField label="Card Width" width="num">
                 <BuilderNumberSelectControl
                   value={settings.cardWidth ?? "280"}
                   min={180}
@@ -456,7 +456,7 @@ export function BuilderCarouselModuleSettings({
               <BuilderModuleFieldStrip>
                 {/* Off unless explicitly on, so no slideshow that predates the
                     merge gains text it never had. */}
-                <BuilderModuleField label="Show captions" width="check">
+                <BuilderModuleField label="Show Captions" width="check">
                   <input
                     type="checkbox"
                     checked={settings.showCaptions === "true"}
@@ -611,7 +611,7 @@ export function BuilderCarouselModuleSettings({
                 </BuilderModuleField>
                 {showItemCopy ? null : thumbFor("beside")}
                 {showItemCopy ? (
-                  <BuilderModuleField label="Link label" width="text-md" className="builder-card-field--a">
+                  <BuilderModuleField label="Link Label" width="text-md" className="builder-card-field--a">
                     <input
                       type="text"
                       value={item.linkLabel}
@@ -621,7 +621,7 @@ export function BuilderCarouselModuleSettings({
                     />
                   </BuilderModuleField>
                 ) : null}
-                <BuilderModuleField label="Alt text" width="text-md" className="builder-card-field--a">
+                <BuilderModuleField label="Alt Text" width="text-md" className="builder-card-field--a">
                   <input
                     type="text"
                     value={item.imageAlt}

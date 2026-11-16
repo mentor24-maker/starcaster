@@ -51,9 +51,9 @@ const view = (data: AiQuota) => renderToStaticMarkup(<AiQuotaView data={data} />
 describe('AiQuotaView', () => {
   it('shows today, 7-day and 30-day totals', () => {
     const html = view(quota());
-    expect(html).toContain('Today (last 24 hours)');
+    expect(html).toContain('Today (Last 24 Hours)');
     expect(html).toContain('$1.25');
-    expect(html).toContain('Last 7 days');
+    expect(html).toContain('Last 7 Days');
     expect(html).toContain('$5.00');
     expect(html).toContain('Last 30 days');
     expect(html).toContain('$12.50');
@@ -73,7 +73,7 @@ describe('AiQuotaView', () => {
       byModel: [{ provider: 'gemini', model: 'gemini-2.5-pro', calls: 1, tokens: 10, costUsd: 0, fullyPriced: false }],
     }));
     expect(html).toContain('These totals are incomplete.');
-    expect(html.indexOf('These totals are incomplete.')).toBeLessThan(html.indexOf('Today (last 24 hours)'));
+    expect(html.indexOf('These totals are incomplete.')).toBeLessThan(html.indexOf('Today (Last 24 Hours)'));
     expect(html).toContain('incomplete — no price');
   });
 

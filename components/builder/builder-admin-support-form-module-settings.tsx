@@ -38,7 +38,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showContact",
-            label: "Contact details",
+            label: "Contact Details",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -46,7 +46,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "contactHeading",
-            label: "Contact heading",
+            label: "Contact Heading",
             width: "text-md",
             control: "text",
             placeholder: "Need a hand with your website?",
@@ -58,7 +58,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "contactIntro",
-            label: "Contact intro",
+            label: "Contact Intro",
             width: "full",
             control: "text",
             placeholder: "Optional line above the email and phone",
@@ -69,7 +69,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showTitle",
-            label: "Show title",
+            label: "Show Title",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -77,7 +77,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "formTitle",
-            label: "Title text",
+            label: "Title Text",
             width: "text-md",
             control: "text",
             placeholder: "Request Support",
@@ -87,7 +87,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "buttonText",
-            label: "Button text",
+            label: "Button Text",
             width: "text-md",
             control: "text",
             placeholder: "Send Request",
@@ -96,7 +96,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "defaultPriority",
-            label: "Default priority",
+            label: "Default Priority",
             width: "select-md",
             control: "select",
             options: [
@@ -112,7 +112,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showHistory",
-            label: "Past requests",
+            label: "Past Requests",
             width: "check",
             control: "checkbox",
             fallback: "true",
@@ -120,7 +120,7 @@ const SCHEMA: BuilderSettingsSchema = {
           },
           {
             key: "historyTitle",
-            label: "Past requests title",
+            label: "Past Requests Title",
             width: "text-md",
             control: "text",
             placeholder: "Your Recent Requests",
@@ -137,7 +137,7 @@ const SCHEMA: BuilderSettingsSchema = {
         [
           {
             key: "showScreenshot",
-            label: "Screenshot upload",
+            label: "Screenshot Upload",
             width: "check",
             control: "checkbox",
             fallback: "true",

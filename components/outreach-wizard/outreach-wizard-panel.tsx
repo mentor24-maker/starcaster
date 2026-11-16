@@ -291,9 +291,9 @@ export function ConnectControls({ channel, onChanged, onCheckAsked }: {
       ) : null}
       {account.pace ? (
         <form className="outreach-wizard-connect-form" onSubmit={(e) => { e.preventDefault(); void savePace(); }}>
-          <label htmlFor="outreach-reddit-per-day">Comments a day</label>
+          <label htmlFor="outreach-reddit-per-day">Comments a Day</label>
           <input id="outreach-reddit-per-day" type="number" min={1} max={50} className="outreach-wizard-number" value={perDay} onChange={(e) => setPerDay(e.target.value)} />
-          <label htmlFor="outreach-reddit-gap">Minutes apart, at least</label>
+          <label htmlFor="outreach-reddit-gap">Minutes Apart, at Least</label>
           <input id="outreach-reddit-gap" type="number" min={0} max={1440} className="outreach-wizard-number" value={gap} onChange={(e) => setGap(e.target.value)} />
           <button type="submit" className="btn btn-save" disabled={!!busy}>Save pace</button>
         </form>

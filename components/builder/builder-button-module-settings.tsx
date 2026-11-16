@@ -190,7 +190,7 @@ export function BuilderButtonModuleSettings({
           [
             {
               key: "hrefTokens",
-              label: "Merge tokens",
+              label: "Merge Tokens",
               width: "full",
               control: "custom",
               bare: true,
