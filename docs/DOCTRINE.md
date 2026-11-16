@@ -7,6 +7,14 @@ without its story gets deleted by the next person who finds it inconvenient.
 This is not a style guide. It is the set of things that cost hours, and what to
 do instead.
 
+**The loop's rules live in Spirality** (2026-11-15, SC-811). The loop was
+built here before it had a name, so its lessons were written here. A section
+about its own machinery (the merge step, the relay, the watchdogs, asks,
+claims, pipeline tickets) is now a one-line pointer to the same number in
+[Spirality's `docs/DOCTRINE.md`](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md), which holds the
+whole rule. A rule every agent session in this repository must follow, and
+a general rule, is kept here as well as there.
+
 Companion documents: `CREDENTIALING_HARDENING_PLAN.md` (what was built),
 `CREDENTIAL_CHECKS_SETUP.md` (turning the optional checks on),
 `runbook-credential-rotation.md` (rotating a leaked secret).
@@ -140,39 +148,7 @@ cache.
 
 ### 1.7 A quota that blocks writes but not reads looks exactly like an outage
 
-**Incident (2026-08-17).** Five ClickUp writes failed in a row with "Rate limit
-exceeded. Please wait 1171 minutes" — nearly twenty hours. It read as the whole
-integration being down account-wide, and the work (a task and a wrap-up post)
-was parked in a file on the Desktop to wait it out.
-
-Two things made it look worse than it was. Plain reads (`search`,
-`get_workspace_hierarchy`) kept answering normally throughout, so the failures
-looked arbitrary rather than budgeted. And the chat endpoints reported **"wait
-NaN minutes"** — a JavaScript not-a-number leaking into operator-facing text,
-which reads as a broken connector rather than a spent allowance.
-
-The countdown itself was honest: four readings taken across three hours (1171,
-1023, 998, 992 minutes) all resolved to a single fixed reset, matching the raw
-`retryAfter` to within eleven seconds. It was a real rolling ~24h window.
-
-**The part that mattered: there were two limits, not one.** The *connector*
-(claude.ai's ClickUp bridge) budgets writes over ~24 hours. ClickUp's own API
-limits by the MINUTE — about 100 requests, reset in 60 seconds — and was
-nowhere near its ceiling. A personal API token talking straight to
-`api.clickup.com` was never blocked at all. Nothing had to wait.
-
-**Do this:** when a hosted integration reports a limit measured in *hours*, it
-is the integration's quota, not the upstream provider's — provider limits are
-almost always per-minute. Check whether a direct path exists before waiting.
-`scripts/clickup_direct.mjs` is that path here — run as `npm run clickup --
-<command>`, it covers the full loop surface (queue/get/comments/status/
-comment/task/chat/lists; bare `npm run clickup` prints the list). It prints
-the provider's true `x-ratelimit-*` headers so the two buckets can be told
-apart, and verifies every write by reading the result back.
-
-**Corollary:** a retry-after rendered as `NaN`, `undefined` or `Infinity` is not
-evidence about the wait. It means the value was missing — go and find the real
-one before planning around the number on the screen.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §1.7](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#17-a-quota-that-blocks-writes-but-not-reads-looks-exactly-like-an-outage). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ---
 
@@ -270,36 +246,7 @@ the referent — replace it only where the actor is genuinely an agent session.
 
 ### 2.6 The actor has one source, or two code paths will name two
 
-§2.5 made every hand-off name the actor it waits on. That is necessary and it is
-not sufficient. On 2026-08-30 the merge step named its actor correctly, and a
-second code path in the same pass named a different one.
-
-PR #444 was approved and its branch needed catching up with `main`. The catch-up
-merged cleanly and the **push** lost a race — another session had pushed to the
-same branch seconds earlier, so git rejected it with `fetch first`.
-`branchCatchUp` reported `PUSH_FAILED`; `clickup_direct.mjs` mapped it to
-`kind: 'unknown'`; `mergeOnComment.conflictHandOffNotice` read that, chose the
-actor `later-pass`, and wrote the true sentence — *"It will be merged on the next
-run."* Nothing needed to act.
-
-Then the filing path ran. It files on `gate.action === 'conflict'` alone and
-never reads the local verdict, so it opened a ticket titled *"Resolve the merge
-conflict on PR #444"* — for conflict markers that did not exist; `git merge-tree
---write-tree` on the two branches exits 0 with a clean tree — and posted a second
-comment naming the build loop as the actor. The two comments landed 200
-milliseconds apart saying different things. The ticket then sat two hours in
-Ready to launch, because a reader believes whichever one they read last, and
-neither named actor was going to move it.
-
-**Do this:** derive the actor once and let every consumer read that one value —
-the notice, the filing decision, the log line. Where two readers exist, a test
-asserts they cannot disagree on the same fixtures, the way the verdict parser
-already guards its own pair. An actor computed twice is two actors.
-
-The tell is a condition that stops short of the value it is deciding about:
-`if (!filed && !dryRun)` asks whether a ticket already exists and whether this is
-a real run, and never asks the one question it is answering — *is there anything
-to resolve?* Closing it is task 86bbq80j5.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §2.6](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#26-the-actor-has-one-source-or-two-code-paths-will-name-two). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 2.7 Every time quoted to the operator is Mountain time — never UTC
 
@@ -334,54 +281,7 @@ section exists so that he never has to ask it again.
 
 ### 2.8 A refusal that cannot clear must not promise that it will
 
-§2.1 is about a message whose **diagnosis** is wrong. This is the opposite and
-costs more: a message whose diagnosis is right every single time, and whose
-**prognosis** is invented.
-
-On 2026-09-02, task 86bbqw49y sat in "Ready to launch" for twelve hours with its
-pull request already merged and its work live in production. The merge-on-comment
-step read Dane's `merge`, went to GitHub, found PR #513 already merged, and
-declined. That was correct — there was nothing left to merge. It then said this,
-every ten minutes from 06:26 to 10:40 UTC:
-
-```
-Merge not performed. PR #513 is not in a state that can be merged safely.
-Why: the PR is already merged.
-
-Your approval is still standing — you do not have to say "merge" again. Every
-later pass re-checks this ticket, so the moment the reason above is dealt with
-it goes through on its own. You will only hear from this step again if the
-answer changes.
-```
-
-Nothing will deal with it. No later pass can. "Already merged" is terminal, and
-the sentence promising otherwise is exactly what stopped anyone looking. Three
-reasons appeared on that one ticket, all carrying the same reassurance, and only
-one of them was transient:
-
-| Count | Reason | Can a later pass clear it? |
-|---|---|---|
-| 16 | the PR is already merged | **No — terminal** |
-| 3 | no "PR opened:" comment on this ticket | **No — terminal** |
-| 6 | no review verdict on this ticket | Yes |
-
-Two thirds of the refusals told the reader to wait for something that was never
-coming. Then the repeat-suppressor noticed the reason had not changed and
-silenced them, so the ticket went from reassuring-and-wrong to saying nothing at
-all. **Dedup without escalation converts a loud wrong answer into a quiet one**,
-which is not an improvement — it is the same defect with the evidence removed.
-
-**Do this:** classify every refusal reason as `terminal` or `transient` **at the
-point it is raised**, never by inferring from its wording later. A reason with no
-classification is a build error, not a default. Only a transient reason may say
-the approval stands and the pass will retry. A terminal one drops that sentence
-entirely, says plainly what it needs instead, posts **once**, and then escalates
-rather than repeating — and it names who must act, an agent session or Dane, in
-the active voice (§2.5).
-
-The general form is worth carrying past merges: **a message can be completely
-accurate about the present and still lie about the future, and the lie is the
-expensive half, because it is the part that tells the reader to stop looking.**
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §2.8](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#28-a-refusal-that-cannot-clear-must-not-promise-that-it-will). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ---
 
@@ -534,99 +434,15 @@ restore command. A tool's own log is not evidence about the database.
 
 ### 3.12 A guard placed after the refusal it exists to pre-empt is unreachable
 
-The merge step was taught to notice a `review-gate` check that had answered an
-older question and **re-run** it rather than merge on it (task 86bbmk7pv, PR
-#443). The decision logic was pure, tested from nine angles, and correct. It was
-also, in the one mode it was written for, dead code.
-
-The step's first rule is *never merge past a red check*. In enforcing mode a
-stale gate **exits 1** — so it IS a red check, `githubGate` answered `refuse`,
-and the function returned three lines above the staleness question. Ticking the
-branch-protection box would have produced exactly the deadlock the ticket was
-written to prevent.
-
-Two things hid it. The feature ships **advisory first** (exit 0), and in advisory
-mode the stale check reads green, the refusal never fires, and the block is
-reached — so every trial and every test exercised the reachable half. And the
-wiring test asserted only that the staleness call appeared *before the merge
-command*, which stayed true with the code unreachable: it pinned a boundary that
-could not move, so it could not fail.
-
-**Do this:** when a check exists to handle a specific failure state, prove it is
-**reached while the system is in that state** — not merely that it is called
-somewhere before the action. Two questions catch it:
-
-- *What else answers first?* List the branches that return before yours. A guard
-  that interprets a red signal must sit above the rule that refuses on red
-  signals; a stale red means "run it again", and only the re-run's answer is a
-  real refusal.
-- *Which mode did I test?* A feature with an advisory phase and an enforcing
-  phase is two programs. Green in the harmless one is not evidence about the
-  other, and the enforcing path is the one with the consequences.
-
-An ordering test must pin the boundary that can actually move — here,
-*staleness before the red-check refusal*, not *staleness before the merge*.
-Break it on purpose and watch it fail; an assertion that survives the bug it
-names is decoration.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §3.12](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#312-a-guard-placed-after-the-refusal-it-exists-to-pre-empt-is-unreachable). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 3.13 A watchdog that runs only where its subject runs cannot see the case it exists for
 
-Slice E of the NODES plan (task 86bbhbadj, PR #469) had to make *silence*
-detectable: a job that fails writes a log line, but a job that never fires
-writes nothing anywhere, and nothing is indistinguishable from a quiet week.
-
-The obvious build is a check on the machine that owns the job — it has the
-data, it is already awake when the job runs, and it needs no coordination. It is
-also useless, and useless in the exact scenario the feature was written for.
-**The machine being switched off takes the watchdog out with the job.** A
-schedule evicted by an OS update, a Mini unplugged, a launchd job that never
-reloaded after a restart: in every one of those the watcher and the watched die
-together, and the silence goes unreported by the one thing built to report it.
-
-So the beats go on a surface **both** machines read (a ClickUp ticket), and the
-check runs from whichever machine is awake — including, and especially, the one
-that does **not** own the job. `scripts/run_bus_relay.sh` performs it *before*
-the ownership test, which reads oddly until you see why: the non-owning machine
-was already waking every ten minutes to say "not my job" and exit, and that idle
-wake is the only vantage point in the system that survives the owning machine
-being dead.
-
-**Do this:** for any check whose subject is a machine, a process or a schedule,
-ask *what takes both of us out at once?* If the answer is "the thing I am
-watching for", the check is in the wrong place. Put the evidence somewhere
-neither party owns, and read it from somewhere the failure cannot reach.
-
-The corollary is a resolution question, and it is the cheap half: the shared
-record only needs to be as fine-grained as the absence you must notice. Slice E
-pushes one row per machine per day, because the requirement is "a day-long
-absence is visible", not "a ten-minute one is". A finer clock would have been
-more writes, more noise and no more detection.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §3.13](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#313-a-watchdog-that-runs-only-where-its-subject-runs-cannot-see-the-case-it-exists-for). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 3.14 An unpopulated field is not an empty answer
 
-The same slice reads its roll call out of a ClickUp task description. Driven
-against the live API, ClickUp answered a `GET` with `markdown_description: ""`
-for a task whose description it was holding **perfectly well** — the text
-arriving under `description` instead. The reader preferred the markdown field,
-so it handed the parser an empty string for a record that was entirely intact.
-
-The parser then did the reasonable thing and read an empty string as *an empty
-roll call*: no beats recorded yet. Which would have announced **every scheduled
-job in the system as having gone quiet, all at once**, off a field that was
-simply not filled in. For a monitoring feature that is the worst available
-failure: an alarm that cries wolf is an alarm nobody reads, so a false-alarm
-storm does not merely add noise, it disables the real alerts behind it.
-
-It was caught only because the thing was run against the live service instead of
-reasoned about — the code is correct against the API as documented.
-
-**Do this:** when a provider can return a field empty, decide explicitly which
-of two things "empty" means — *a confirmed absence* or *nothing was read* — and
-make the two render differently (§3.2, §3.11). Where the record you write always
-carries something (a preamble, a header, a marker), a wholly empty read is
-**unreadable**, never zero results. And consult every field that could carry the
-value rather than one by preference; a provider populating a different field
-than the one you wrote is a real behaviour, not a corruption.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §3.14](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#314-an-unpopulated-field-is-not-an-empty-answer). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 3.15 A declared behaviour is not a running one — watch it, do not read one frame
 
@@ -722,55 +538,9 @@ passed and that the pass is not evidence, and then look at the panel. On the
 Media Manager nobody has yet — recorded in `docs/MEDIA_MANAGER.md` §7 rather
 than quietly left as a green tick.
 
-
 ### 3.18 A watchdog that is awake, correct and unread is indistinguishable from coverage
 
-§3.13 asks *where* a watchdog runs. This asks the two questions that remain once
-it is running in the right place, and a check can pass both of §3.13's tests and
-still miss everything.
-
-The twelve hours in §2.8 were not unwatched. **Three watchdogs were awake and
-pointed straight at that ticket, and none of them reached Dane.**
-
-| Watchdog | Cadence | What it saw | Why it did not land |
-|---|---|---|---|
-| `stale-ready` | every 10 min, on the Mini, inside `run_bus_relay.sh` | `READY TO LAUNCH — 1 ticket in the stage, 0 past 24h / Nothing is stuck.` | Its threshold is **24 hours**. The ticket was stuck twelve. It reported all-clear, honestly. |
-| `reconcile` | by hand only | Named the ticket exactly: *"sits in ready to launch but PR #513 is already MERGED"* | Nothing schedules it, and its finding goes to the bus. |
-| merge-on-comment | every 10 min | Refused 25 times, correctly | Reassured while refusing (§2.8). |
-
-Note what is *not* wrong here. Every one of them was correctly placed by §3.13's
-rule, running on the right machine, reading live state, and telling the truth.
-The instinct on discovering this was to schedule `reconcile` — and that would
-have found the same thing sooner and filed it into the same unread channel.
-**The cadence was never the problem.** The two failures were:
-
-- **Threshold.** Twenty-four hours is a reasonable grace period for a ticket
-  nobody has looked at. It is far too patient for one the operator has
-  personally approved: he stated an expectation the moment he typed `merge`, and
-  he noticed inside a day, so the machine must notice sooner than he does. Dane
-  ruled on this the same day, verbatim: *"Yes → tickets carrying your merge
-  comment get a short fuse (1–2h)"*.
-- **Destination.** All three write to the bus. The bus was not read. A finding
-  in an unread channel is not a quieter alert — **it is silence wearing an
-  alert's clothes**, and it is worse than having no watchdog at all, because it
-  reads as coverage on the board and nobody builds the thing that would have
-  worked.
-
-**Do this:** for every check, answer two questions in writing before believing
-it works. *What is the longest this can be wrong before somebody who cares finds
-out by other means?* — if that number is smaller than the threshold, the
-threshold is wrong. And *who reads where this lands, and how would I know if
-they stopped?* — if there is no answer, the check is not finished, however
-correct its logic.
-
-A threshold is a claim about who is allowed to notice first. Whenever the
-operator has stated an expectation — an approval, a `merge`, a deadline — the
-clock starts there and runs faster than his patience, not slower.
-
-Measure that clock from the event itself, never from a record's `date_updated`:
-any edit resets it, so on 86bbqw49y the twenty-five automated refusal comments
-would each have reset the very clock built to catch them.
-
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §3.18](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#318-a-watchdog-that-is-awake-correct-and-unread-is-indistinguishable-from-coverage). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 3.19 Break-test a check in the PASSING direction too — a false positive is worse than a miss
 
@@ -913,13 +683,10 @@ to a file and check the real code, or the gate is theatre.
 
 ### 5.4 Asset pins: rebuild to resolve, never hand-edit
 
-`?v=` hashes come from built files. Two specific traps:
+`?v=` hashes come from built files.
 
-- **`npm ci`'s postinstall can leave a bundle in a transient state**, so the
-  first `build:assets` afterwards pins a hash a clean build does not reproduce.
-  Run it twice; if the value changes, the first was noise.
-- **A locally-built bundle hash must not be committed** — it ships a
-  cache-buster nobody can reproduce (landmine 8).
+*Two bullets about committing pins were retired on 2026-11-15 (SC-811): no
+committed file has carried a `?v=` pin since 2026-08-24 (below).*
 
 - **The folder's own layout can leak into the hash.** esbuild stamps each
   bundled module's path into the output as a comment and resolves symlinks to
@@ -1463,7 +1230,6 @@ renders from component state. Every control worked on screen and not one value
 reached the database. See §5.22 — knowing to reload is not enough if you reload
 the surface that cannot see the write.
 
-
 ### 5.21 An upsert without `merge-duplicates` is not an upsert — and a store that falls back on failure reports a save that did not happen
 
 2026-09-02, task 86bbt72jw, fixed in PR #533. `lib/blogCardTemplateStore.js`
@@ -1555,7 +1321,6 @@ The harness pages keep their job — they are how `check:render` and
 `check:panels` stay cheap enough to run every time. They are instruments for
 regression, not evidence that a feature works where it ships.
 
-
 ### 5.23 A condition that narrows a behaviour must be written in the same terms as the symptom
 
 2026-09-02. PR #522 → fixed by #543, three lines apart.
@@ -1626,7 +1391,6 @@ Verify a split like this against **every** preset value, not the one in use. Two
 of the three cases here would never have been exercised by the fixture in front
 of me.
 
-
 ### 5.25 A field the interface promises to fill is not filled by the promise
 
 2026-09-03, task 86bbu23n7, PR #549. The Create Post form's Slug box carries the
@@ -1671,7 +1435,6 @@ cause been taken at face value, the fix would have gone into the import — the
 one code path that was already correct — and the five broken posts would still
 be broken. §6.13 says a reported conflict is a claim to verify; the same is true
 of a reported cause, and it costs one query to check.
-
 
 ### 5.26 A probe must ask a question the thing can ANSWER — a malformed question's honest error reads as absence
 
@@ -2253,13 +2016,11 @@ not a control.** When a rule is mechanical, give it a checker.
 template.** When he has SQL to run, do not print the statements. Emit exactly
 this block and nothing else in its place — spaced exactly as shown here:
 
-
 #################### RUN SQL IN SUPABASE ####################
 
 [github url]
 
 ##########################################################
-
 
 **Two blank lines above and below each SQL handoff block** (operator, 2026-08-12: "add
 two paragraph breaks above and below each SQL set so they stand out clearly").
@@ -2384,56 +2145,7 @@ a hole" is the whole finding.*
 
 ### 6.7 On a send-back, merge `main` in before you rework — the fix may already be there
 
-**The incident (2026-08-30, ticket 86bbmg2fb, PR #441).** Review sent the
-branch back asking, among other things, for `next-interval` to survive an
-unreadable list without exiting non-zero. `fetchAllTasks` ended in `die()`, so
-the rework added a `soft` option that throws instead. Meanwhile — while the
-branch sat in review — a different ticket (86bbm4zwd) had added the same escape
-hatch to the same function on `main`, named `fatal: false`, returning
-`{ tasks: null, failed }`. `ship` stopped on the conflict. The resolution was
-to delete the rework and call `main`'s version: the correct code had existed
-before the rework started, and the only work the rework produced was the
-conflict.
-
-**Do this:** the first command on a sent-back branch is `git merge
-origin/main`, before reading the review notes against the code. A branch that
-has been in review for days is editing a file `main` has since changed; §6.2
-says the conflict is information, and this is the cheap time to receive it.
-Then look for the asked-for fix on `main` by *behaviour* — search for the
-function, not for the name you were about to give it.
-
-**Addendum (same day, same merge): after resolving a conflict by keeping both
-sides, PARSE the file before you commit it.** The same `git merge origin/main`
-on ticket 86bbmg2tq hit a content conflict in `scripts/clickup_direct.mjs`
-where both branches had added lines in the same place. "Keep both sides" fused
-two separate `const { ... } = X;` statements onto one line — a resolution git
-considers complete and node considers a SyntaxError. It was caught only
-because an agent happened to run `node --check` by hand.
-
-Nothing in the toolchain would have caught it. `check:syntax` parsed only
-`public/js/`. `test:builder` reads `clickup_direct.mjs` as *text* — two
-source-level assertions — and never executes it. `check_conventions` skips its
-added-line checks during a merge, precisely because a merge adds lines it did
-not write. So a file every loop pass runs could have reached `main` green, and
-the next loop pass would have died on line 1: every ticket stuck in whatever
-status it was in, with no verdict written anywhere, and no error anyone would
-see until somebody wondered why the queue had stopped moving.
-
-That gap is now closed — `npm run check:syntax` parses every hand-written
-`.js`/`.mjs`/`.cjs` under `scripts/` and `lib/` as well as `public/js/`, in
-pre-commit and in CI (ticket 86bbq5hwg). Two things follow. First, the fused
-statement is caught for you; you no longer have to remember `node --check`.
-Second, and more general: **a clean merge is a claim about text, not about
-meaning.** Git's job ends at "no overlapping edits"; whether the result is
-still a program is a separate question, and every file class needs something
-that asks it. The first sweep under the new gate found an unrelated file that
-had been unparseable on `main` since it was committed
-(`scripts/import_messaging_tweets_csv.js`, a missing closing paren) — which is
-the same lesson from the other end: nothing had ever parsed it either.
-
-The same claim fails one level higher too, where the merged result parses
-perfectly and two files simply assert opposite rules: §6.11. And one level
-lower, where the conflict being reworked around was never there at all: §6.13.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.7](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#67-on-a-send-back-merge-main-in-before-you-rework--the-fix-may-already-be-there). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.8 A fixture must be a shape the real source can produce, and the assertion must name the value
 
@@ -2662,158 +2374,15 @@ guard that only proves it stays quiet has proved nothing.
 
 ### 6.10 A behaviour proven in an uncommitted file does not move when its job moves
 
-On 2026-08-20 the `bus-relay` failure alert was built, break-tested and watched
-to work: a forced failure posted to the bus, a second one was suppressed, a
-success cleared the stamp. It was written into
-`~/Library/Application Support/starcaster/bus-relay-cron.sh` — a hand-installed
-file on the MacBook Pro, correct at the time, in git nowhere.
-
-Then two ordinary, well-run changes landed. Slice B brought the schedule into
-the repo (`scripts/run_bus_relay.sh` + `scripts/install_bus_relay.sh`), and
-`lib/nodeRoles.js` moved `bus-relay` to the Mac Mini. Both were reviewed. Both
-were right. **Neither carried the alert**, because the alert was not in the
-thing being moved — so from that cutover until 2026-08-30, a relay failure on
-the machine that actually ran it reached nobody at all.
-
-Nothing could have caught it. No test covered the file, no review saw it, no
-check compared old behaviour against new, and the regression's only symptom is
-the absence of a message nobody was expecting on a particular day. It was found
-only because the *next* ticket in the same plan went looking at the runner.
-
-**Do this:** when a slice says a thing "now lives in the repo", diff what the
-old artifact did against what the new one does before believing the migration
-is complete — the committed version is a rewrite, not a move, and rewrites drop
-things. Treat "we proved this works" as scoped to the file it was proved in.
-And when a hand-installed file is superseded, say explicitly what happened to
-every behaviour it carried; "it is replaced" is a claim about the file, not
-about the behaviour.
-
-The general shape, which is why this sits next to §6.6: work that lives outside
-version control has no changelog, no review, no test and no blast radius anyone
-can compute. That is acceptable for a one-off, and it is a debt that comes due
-the first time anything around it moves.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.10](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#610-a-behaviour-proven-in-an-uncommitted-file-does-not-move-when-its-job-moves). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.11 A clean merge is not agreement — and a review verdict has a shelf life
 
-**The incident (2026-08-30, ticket 86bbmmv7t, PR #444, fixed in commit
-`80b5502b`).** The PR was reviewed green on 08-26 and sat in `Ready to launch`
-for four days waiting on Dane's merge word. When he gave it, the merge step
-refused: CI was red. Nothing on the branch had changed since the review.
-
-The branch had tightened what counts as a PR naming its ticket — a bare id
-(`ClickUp: 86bbm4zwd`) stopped counting, only a full `app.clickup.com/t/<id>`
-URL does (`scripts/builder/clickupTicketLink.js`). Meanwhile the WIP-cap work
-landed on `main` carrying `scripts/builder/wipCap.test.js`, whose drift test
-asserted the **old** rule: it fed a bare id to `prBodyCarriesTicket` and
-expected `true`.
-
-The two changes share no line and no file. `git merge` reported no conflict and
-`git merge-tree --write-tree` exited 0 with a clean tree. Both branches were
-green on their own. The contradiction was in the **rule**, not in the text, and
-it surfaced only when the catch-up merge put both in one tree: one failure out
-of 1,665, four days after a review had approved the branch.
-
-**This is the case with no conflict, which is why §6.2 and §6.7 do not reach
-it.** §6.2 says a conflict is information; §6.7 says merge `main` in before you
-rework so you receive that information early. Both assume git has something to
-report. Here it had nothing, so nothing prompted anyone to look. §6.7's closing
-line — *a clean merge is a claim about text, not about meaning* — was about
-whether the result still parses; this is the same claim failing one level up,
-where the result parses fine and two files now assert opposite rules.
-
-**Do this:**
-
-- **Treat a review verdict as certifying the code at that commit, not the
-  branch.** "Verified" has a shelf life. A branch approved days ago is
-  re-tested by its catch-up merge, not by the review that already happened —
-  and a branch waiting on a merge word is exactly the branch most likely to
-  have had the ground move under it.
-- **When a change tightens or loosens a rule other code asserts, go looking
-  for the tests of that behaviour before shipping.** `git grep` the function
-  name and a fixture string — not only the file you are editing. The test that
-  broke here was in a file the branch never touched, in a subsystem it had
-  nothing to do with.
-- **When a test disagrees with a new rule, do not simply flip the
-  expectation.** Assert the property the test was written to guard, then pin
-  the rule's current answer explicitly beside it, so the next drift fails
-  loudly instead of leaving the test vacuously passing. That is what
-  `80b5502b` did: the one-directional property (the cap may count more than
-  the gate lets through, never less) plus three pinned assertions naming the
-  ticket that set the rule.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.11](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#611-a-clean-merge-is-not-agreement--and-a-review-verdict-has-a-shelf-life). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.12 Match what he typed, not what the tool stored — and prove a filter against real input
 
-**The incident (2026-09-01, ticket 86bbt038u, PR #515, merged as `3d821bd7`).**
-Dane came back from a break and asked whether the loops were stuck. They were
-not: both lanes were building and reviewing normally. What was stuck was the
-auto-merge lane, which had latched itself off on 08-30 at 8:31pm and stayed off
-for two days without telling anybody.
-
-He tried to release it the sanctioned way — posting `resume auto-merging` on
-the party line — three times. All three were ignored. `switchCommand` matches
-`resume` as the WHOLE message, deliberately, because a resume that fires when
-he was only *talking* about resuming costs an unwanted merge. But ClickUp's
-message box turns a **pasted** phrase into a fenced code block and guesses a
-language, so what the switch actually received was:
-
-````
-```cpp
-resume auto-merging
-```
-````
-
-Three defects, and only the first was visible from the code:
-
-1. `normalizeCommand` never stripped the editor's formatting, so the backticks
-   were being read as part of what he said. The same hole sat on the merge
-   path — his `merge` worked only because he happened to type it by hand.
-2. `readBusSwitchSignals` carried the comment *"Only HIS words. An agent post
-   quoting the phrase is a machine talking to itself"* and did not enforce it:
-   it accepted any message whose `user_id` was Dane's, which every agent's
-   posts are, because they all post under his token. The ticket path next door
-   had been enforcing exactly that rule with the machine marker all along.
-3. **The filter added for (2) matched nothing at all.** ClickUp's chat api
-   escapes the brackets — `\[CC-starcaster bus-relay\] ...` — and every entry
-   in `LEGACY_MACHINE_PREFIXES` begins with `[`. Run over the live channel
-   before the fix, six of six recent messages classified as Dane's own words,
-   three of them posted by the relay itself.
-
-The third is the one that nearly shipped. Every unit test passed, because every
-fixture had been hand-written in the shape its author expected rather than
-captured from the surface the code actually reads.
-
-**Do this:**
-
-- **An input box you do not control is part of the wire format.** When a
-  command must match exactly, normalise away what the *editor* added before
-  comparing — fences, language tags, smart quotes, escaping. Strictness is
-  only honest when it is strict about things the operator can control;
-  otherwise "whole message" quietly means "whole message plus whatever the
-  client decided to wrap it in". Note the fix here did **not** loosen the
-  matcher: the deliberate `stop`/`resume` asymmetry survived untouched, because
-  the bug was never the strictness.
-- **Prove a filter against real captured input before believing it.** A filter
-  that matches nothing is silent in precisely the same way as a filter with
-  nothing to catch — this is §3.11's failure wearing a different hat. Fixtures
-  written by the same author as the filter share its blind spot by
-  construction. Fetch a page of the real messages, run the predicate over them,
-  and look at the classifications one by one.
-- **A stated intent is not a guard.** If a comment says what must not happen,
-  either the code enforces it or the comment is a false statement with a shelf
-  life — and the next reader will trust it, because it is written in the
-  imperative and sits directly above the code. When you find one, the fix is
-  the enforcement, not a better comment.
-- **Two doors into the same decision must be guarded the same way.** The ticket
-  path and the bus path both answered "is this Dane's word?", and only one of
-  them checked. The weaker door was the one nobody watched. Where a rule has
-  more than one entrance, read them together, or derive them from one shared
-  predicate so they cannot drift apart (§6.2's ancestor, and the same argument
-  as the single-reading rule for shared questions).
-- **A latch must keep saying it is latched.** The self-disable recorded
-  `"1 thing(s)"` — the count, not the sentences it was holding — and announced
-  nothing on the passes that followed. That is why two days passed. A brake
-  that cannot say why it engaged is one nobody can safely release; a brake that
-  says so once and then goes quiet is indistinguishable from a quiet week.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.12](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#612-match-what-he-typed-not-what-the-tool-stored--and-prove-a-filter-against-real-input). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.13 A reported conflict is a claim to verify, not an instruction to start editing
 
@@ -2888,50 +2457,7 @@ stale by the time it finished.
 
 ### 6.14 A pull request opened without a claim is invisible to every other session
 
-On 2026-09-01 a hand-driven session was asked to finish ticket 86bbjve6q. It did
-what the rules say: read the ticket, found it **`Queued`, unassigned, with no loop
-note** — every signal a session can check said the work was free — and claimed it.
-One command later, while checking whether the Vercel variables still needed
-setting, it found them already there, **created eight minutes earlier**, a
-production deployment `Ready` seven minutes earlier, and **PR #517** open ten
-minutes earlier. Another session had been building the ticket the whole time and
-had never claimed it.
-
-This is the 2026-08-20 two-sessions-one-epic collision, reproduced exactly, five
-weeks after the rule written to prevent it. Note which guards did and did not
-fire. **Worktree separation did not help, and could not**: both threads were
-scrupulous about it, each in its own folder on its own branch. Separate folders
-stop two threads corrupting each other's *files*; they say nothing about two
-threads building the same *thing*.
-
-What surfaced it was the claim — made by the session that was **not** doing the
-work. That is the whole lesson, and it inverts the way the rule is usually read:
-
-- **The claim is not a lock you take for your own benefit. It is a signal you
-  emit for everyone else.** A session that skips it loses nothing itself and
-  removes the only evidence anyone else could have used.
-- **So the session that opens the pull request must be the session that claimed
-  the ticket.** Not "a claim happened at some point" — the actor that builds is
-  the actor that claims, because the claim is what makes that actor visible.
-- **Every signal reading "free" is not evidence of free.** Status, assignee and
-  loop note all agreed and all three were wrong together, because they are one
-  source: whatever last wrote to the ticket. Three consistent readings from one
-  unwritten source is one silence, not three confirmations.
-
-What actually caught it was an unrelated read of *external* state — Vercel — one
-step before a duplicate deploy. That is luck, not a control, and it should not be
-relied on again. Until something enforces this, the cheap habits are
-`npm run map` and the queue before starting an epic (THREAD-DISCIPLINE rule 4), and
-treating **any** ticket whose work you can see evidence of as claimed by somebody,
-whatever its status says.
-
-Related: the same night produced two more tickets whose status disagreed with
-reality — one `Queued` with an open PR, one `Queued` with a **merged** PR and its
-closing note already posted. `npm run reconcile` could report none of them, because
-`Queued` and `Rework` satisfy neither `isInFlight` nor `isTerminal` and so fall out
-of both of its scans (task 86bbt3wzk). Three instances in one evening of *the
-ticket does not know what happened to it* is a systems answer waiting to be built,
-not three slips.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.14](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#614-a-pull-request-opened-without-a-claim-is-invisible-to-every-other-session). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.15 An abandoned branch's unique file is evidence of a rejected plan until proven otherwise
 
@@ -3015,7 +2541,6 @@ which is the §2.5 defect with a future tense.
 Both halves reduce to one habit: **before reporting that something is true, ask
 what you would have to have observed for it to be true, and check that you
 observed it.**
-
 
 ### 6.17 When doctrine answers yes AND no, the contradiction is the defect — three merge-lane decisions, decided once
 
@@ -3132,241 +2657,23 @@ itself, that one is answered first.
 
 ### 6.20 A command handed to the operator is plain text — formatting silently breaks the match
 
-2026-09-03, 11:11pm. The auto-merge lane had latched itself off thirteen hours
-earlier and only a person can clear it. The operator was told, in a message that
-rendered the phrase in bold-and-backticks, to post `resume auto-merging` on the
-party line. He copied what he was given. ClickUp preserved the formatting, so
-what arrived was:
-
-```
-**`resume auto-merging`**
-```
-
-`switchCommand` matches "resume" against the WHOLE message, deliberately — a
-stop that fires when he only mentioned it costs a delay and one word to undo,
-while a resume that fires when he was talking ABOUT resuming costs an unwanted
-merge. That asymmetry is right and is not the defect. The defect is that the
-near-miss looked exactly like silence: nothing matched, nothing said so, and he
-reasonably believed the lane was back. It stayed off for another 35 minutes and
-was only found because he asked. His second attempt, typed as plain text,
-matched on the first try.
-
-Measured against the real matcher — it is forgiving about case, spacing, a
-hyphen and single backticks, and unforgiving about bold and about extra words:
-
-```
-"resume auto-merging"        -> resume      "**`resume auto-merging`**" -> null
-"Resume auto-merging"        -> resume      "please resume auto-merging" -> null
-"`resume auto-merging`"      -> resume      "resume auto-merge"          -> null
-```
-
-- **Never wrap a phrase he is meant to type in backticks, bold, or a fenced
-  block.** Put it on its own line as bare text, with nothing around it.
-- This is §6.12 pointed the other way. That rule says match what he TYPED
-  rather than what the tool stored; this one says do not make him type what the
-  tool will mangle. Both failures look like the operator getting it wrong.
-- The matcher saying "that did not take" is filed as 86bbuv99r — but no code fix
-  removes this rule, because the next command an agent hands over is a fresh
-  chance to format it.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.20](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#620-a-command-handed-to-the-operator-is-plain-text--formatting-silently-breaks-the-match). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.21 ClickUp's audit trail cannot name a machine actor — do not conclude from it
 
-2026-09-03, 11:57pm. A ticket in `Building` was closed to `Live` with no branch,
-no pull request, no tag and no comment. Two agent sessions spent twenty minutes
-looking for the actor. The ClickUp Activity feed said:
-
-> You changed status from Building to Live
-
-That sentence carried **no information in either direction**. Every script in
-this system authenticates with the operator's personal token, so the loops, both
-agent sessions, `pulse` and the review gate all appear in the feed as him. One
-session nearly accepted authorship of a write it had not made; the operator
-nearly accepted authorship of one he had not made either.
-
-The answer came from reading the code, not the trail: `npm run repair` runs
-`reconcile --live` unattended, `reconcile` matched a merged pull request that
-was mentioned in passing in a comment and belonged to a different ticket, and
-`AUTO_REPAIR_STATUSES` made the ticket eligible the moment it was claimed.
-Filed as 86bbuv66c.
-
-- **A status change attributed to Dane is evidence of nothing.** Treat it as
-  "some holder of the token", which is every actor in the system.
-- Machine COMMENTS already carry a `[machine]` stamp for exactly this reason
-  (§2.5). Status writes have no equivalent, so the only way to attribute one is
-  to read every code path that could have made it.
-- When an unexplained write appears, enumerate the WRITERS and check each one's
-  log, rather than reading the feed. The feed will name the operator every time.
+*Retired on 2026-11-15 (SC-811). Tickets moved from ClickUp to the tracker, where every actor signs in with its own token and each move is recorded with the actor that made it, so the trail now names the machine. The number is not reused.*
 
 ### 6.22 Measure a duration threshold within one cadence era
 
-2026-09-03. Choosing an alarm threshold for "this job has stopped working", the
-honest move was to measure how long real failures last rather than pick a round
-number — the ticket asked for exactly that, because a recency alarm had already
-been killed on this project for firing on eleven nights in fourteen.
-
-The log held 866 passes and 83 failures. It also held a **cadence change**: the
-job ran hourly until 2026-08-30 and every ten minutes after. Measured across
-that boundary, a four-pass blip from the hourly era reads as a *three-hour
-outage* and lands in the same population as a twenty-minute one, and any
-threshold drawn from the mixture fits neither era.
-
-Segmented to the ten-minute era — 687 passes — the separation was clean:
-
-```
-blips (1-2 consecutive failures)   36 runs   longest 21 min without a success
-real outages (3+)                   4 runs   shortest 36 min
-```
-
-Nothing between 21 and 36 minutes. That gap chose the threshold, and it
-contradicted the proposal in the ticket: sixty minutes would have caught two of
-the four real outages.
-
-- Before measuring durations out of a log, **check whether the thing being
-  measured changed rate inside the window.** Median gap between events, by day,
-  is a two-line check and it decides whether the rest of the analysis means
-  anything.
-- Prefer a threshold expressed as a multiple of each job's own interval to a
-  global constant, for the same reason: one number cannot serve a ten-minute job
-  and a weekly one.
-- Say which era the numbers come from when recording them. A future reader
-  re-measuring over the whole log will get a different answer and assume the
-  first was wrong.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.22](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#622-measure-a-duration-threshold-within-one-cadence-era). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.23 An ask is a status transition, not a paragraph
 
-**2026-09-04, task 86bbuzyra.** A throughput analysis found that the auto-merge
-lane can never merge the pipeline's own code, which had cost roughly seven
-hours of a ten-hour night. The fix widens what may reach production without a
-human hand — squarely Dane's call, not an agent's.
-
-The session filed the ticket as **Queued**, ended the description with a
-paragraph addressed to *whoever builds it* — "this is governance, Dane may want
-to set the boundary himself, ask before building" — and then told him it had
-"written it into the ticket as a question rather than a decision."
-
-It had not. He found all three failures himself: *"that ticket was not marked
-Needs your attention, nor do I see any questions for me in it."*
-
-1. **The paragraph addressed the wrong reader.** It instructed a future build
-   agent, not the operator.
-2. **Nothing was dispatched.** `clickup ask` was never run and the status never
-   moved, so nothing put it in front of him. The repo already has a read-only
-   command that answers "is anything actually waiting on Dane?" — it would have
-   said no. It was not run.
-3. **It sat in a status a machine may claim.** The next `loop-build` pass would
-   have taken it and picked the production boundary itself — a governance
-   decision made by a machine, by accident, with no record that a decision had
-   ever been open.
-
-The report to the operator was the last layer: it stated the ask as done, so
-the one human who could have noticed was told there was nothing to notice.
-
-**A fourth thing, and it is the argument for the rule rather than a detail.**
-Building the operator card properly forced the session to *verify* the boundary
-it had recommended, and the recommendation was wrong — it would have made
-`lib/` auto-mergeable, which `server.js` requires directly at runtime. The
-unmade ask was also hiding an unchecked claim. Dispatching a decision makes you
-assemble the evidence for it; the prose version never does.
-
-- **Describing an ask is not asking.** A question in a ticket description, a
-  code comment, a work log, a pull request body or a terminal reply is
-  documentation. It reaches whoever was already reading that artefact for
-  another reason.
-- **A decision that is genuinely Dane's is dispatched**, with
-  `npm run clickup -- ask --task <id> --body-file <f> --status "Needs your input"`,
-  and **confirmed** with `npm run clickup -- waiting --task <id>` printing
-  **WAITING ON DANE**. If `waiting` does not say that, no ask has been made,
-  whatever the description says. Never report "I asked him" on the strength of
-  prose — and never on the strength of `ask` exiting 0 either; the read-back is
-  the evidence.
-- **An unresolved operator decision must never sit in a claimable status.**
-  `Queued` and `Rework` are both claimable. This is the part that turns an
-  untidy ask into a wrong decision: the ticket does not wait, it gets built.
-- **The card format costs a round trip twice if you do not know it.** Every
-  `@@MARKER` sits **alone on its line** — content on the same line makes the
-  whole file preamble and the card is refused. `@@ASKED` carries **Dane's own
-  words, verbatim**, the instruction the ticket descends from; the question
-  being put to him goes in `@@NEEDED`. `@@EVIDENCE` plus a `@@MEASURED <time>`
-  line becomes mandatory when the validator reads the ask as costly or
-  irreversible — a governance ask trips this, and satisfying it improves the
-  card rather than padding it.
-
-**The test at design time:** if Dane never opens this ticket, what happens? If
-the answer is "a machine picks", it was never an ask.
-
-Cross-repo canon: vault `doctrine/REPORTING-NEEDS-A-READER.md` clause 5,
-ratified 2026-09-04 (commit `a09d72c`). That document's first four clauses cover
-reports that *were* sent, into destinations with no reader; this is the case one
-step earlier, where nothing was dispatched at all and every existing check still
-passes. §6.16 is the nearest neighbour and is about build claims, not operator
-decisions; §6.9 is the same family from the other side — handing Dane a command
-is a claim that CC cannot run it.
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.23](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#623-an-ask-is-a-status-transition-not-a-paragraph). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.24 A pipeline ticket is filed for a COST, not for a gap — and its title says what breaks
 
-**2026-09-06, Dane's decision; task 86bbvtnfn.** The pipeline had started
-filing tickets about itself faster than the queue could drain them. Measured
-that day, pipeline self-maintenance tickets went from roughly **6 a day in
-mid-August to roughly 16 a day in early September**. Every one was a real
-finding, honestly filed, and none of them stood between the company and
-shipping — the paying work (Delray, product) queued behind them.
-
-**31 tickets were parked that day. Six stayed.** All six trace to a failure
-that actually happened: pipeline code that could not auto-merge overnight
-(86bbuzyra), Pulse's silent low-credit alarm (86bbvr5zv), Pulse invisible to
-the roll call (86bbvr5ym), a relay crash that can lose Dane's answer for good
-(86bbvr4w3), a conflicted PR that runs no checks (86bbvqkr1), hand-run cleanup
-mislabelling a half-built ticket (86bbvj44f). Not one of the 31 could name an
-incident.
-
-That ratio is the rule. A tool that inspects itself will always find more than
-it can fix, so *"is this a real finding?"* is the wrong gate — every one of the
-31 passed it. The gate has to be **did it cost us anything.**
-
-- **The stopping rule.** File a pipeline or self-machinery ticket only when a
-  pipeline failure **actually cost something observable** — lost work, a dead
-  lane, a silent outage, a wrong merge. Name the incident in the description.
-  A theoretical gap noticed while reviewing or building is not a ticket, however
-  correct it is.
-- **Where the gap goes instead.** One plain line in the parked-backlog doc,
-  *The 31 parked tickets* —
-  `https://app.clickup.com/90141423066/docs/2kydhxeu-814` — under **Parked
-  tickets**. Say what breaks and who feels it, and stop. If the pass cannot
-  reach that doc (a headless loop has no ClickUp-doc write route), put the line
-  in its run report and as a plain comment on the ticket it was already
-  working, and say there that it is a parked finding. **What it must not do is
-  file it.**
-- **A parked ticket is not a killed one.** The 31 were closed as **Live** with
-  the tag **`deferred`** — never `wont-do` — keeping every description and
-  comment. To revive one: open it and set its status back to `Queued`. That is
-  the whole procedure.
-- **Title style, everywhere a ticket is created.** The name says **in plain
-  words what breaks and who feels it**, readable by the operator scanning a
-  list of seventy. The clever diagnostic sentence goes in the description,
-  where it is useful. Dane, verbatim: *"your descriptions of tickets is so
-  cryptic and full of fanciful turns of phrases that it is difficult for me to
-  understand which ones are really important and which ones aren't."*
-
-**This does not touch product defects.** A client-facing bug is filed on
-sight, exactly as before; the rule is about the pipeline's tickets on itself.
-Nor does it touch the tickets the machinery files **automatically** for a lane
-that is actually stopped — the merge-conflict tickets of §"...and a hand-off
-now names who is going to act" (`docs/LOOP_ENGINEERING.md`). A blocked pull
-request is a dead lane, which is a cost, and that path files nothing when the
-merge comes back clean. Nor the three tickets that are not work at all but
-places to write — the pause switch (`scripts/pipeline.mjs`), the roll call
-(`scripts/node_heartbeat.mjs`) and the pipeline pulse record
-(`scripts/pulse_publish.mjs`), each created once and rewritten in place
-thereafter. This rule governs the ones an agent files on judgment.
-Nor does it lower the bar for the ones that do get filed — §6.19 still says
-search the queue for the symptom first, and the spec lane's evidence rule
-(a defect ticket cites its mechanism) is unchanged.
-
-§6.23 is the nearest neighbour from the other direction: that one is about a
-decision that should have been dispatched to Dane and was not; this one is
-about findings that should never have been dispatched to the queue at all.
-Both are the same underlying question — *who is this for, and will they act on
-it?*
+*Moved to Spirality on 2026-11-15 (SC-811, SP-318): [its `docs/DOCTRINE.md` §6.24](https://github.com/mentor24-maker/spirality/blob/main/docs/DOCTRINE.md#624-a-pipeline-ticket-is-filed-for-a-cost-not-for-a-gap--and-its-title-says-what-breaks). This is a rule about the loop's own machinery, and the loop lives in Spirality, so its rules do too. The number is kept so code that cites it still finds it.*
 
 ### 6.25 When a missing feature blocks the job, build the feature — do not patch around it
 

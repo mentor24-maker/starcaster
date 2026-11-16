@@ -19,11 +19,7 @@ To preserve the integrity of our monolithic architecture and reduce frustrating 
 
 
 ## 1. Global Component Paradigm: Buttons
-Never override native bare-metal `button { ... }` or `input { ... }` tags globally via CSS. Instead, map all native interactive elements hierarchically through explicit utility classes.
-*   **Primary Actions**: Use `<button class="btn btn-primary">`.
-*   **Secondary/Ghost**: Use `<button class="btn btn-ghost">`.
-*   **Destructive/Alert**: Use `<button class="btn btn-danger">`.
-*   **Micro Integrations**: For deeply embedded grid/table interactions, Javascript constructs should dynamically append `.btn .tiny-btn .icon-btn`. 
+*Retired on 2026-11-15 (SC-811).* Superseded by [`UI_RULES.md`](../UI_RULES.md) C9 (2026-11-05): four kinds, `btn` (outlined secondary), `btn btn-primary`, `btn btn-save`, `btn btn-danger`, at two heights. `btn-ghost` is only an alias of `btn` now.
 
 ## 2. Global Typography Matrix
 To prevent fragmented rendering across browser distributions (MacOS/Windows overrides), the typography is locked to a strict internal baseline kerning model via `styles.css`:
@@ -31,9 +27,7 @@ To prevent fragmented rendering across browser distributions (MacOS/Windows over
 *   **Header Color Constraint**: All top-level textual arrays default to `color: var(--ink);` to uphold contrast against the `#ffffff` paper backdrop, explicitly protecting legibility over aggressive theme resets.
 
 ## 3. Form Administration Standards
-Legacy inline grids are officially deprecated. Stacking and padding inconsistencies disrupt cognitive acquisition inside heavy modal administration tasks. Use these specific grid containers instead of bare `<div>` structures:
-*   **Input Stacking**: Any modal section requiring sequential vertical stacks (Label → Input) uses `<div class="form-group">` rather than explicit flex instructions or row-mapping blocks to perfectly inherit margin margins.
-*   **Admin Panels**: Standard input grids dynamically routing fields mapping sideways use `.standard-form-grid`. For ultra-dense modals (e.g. video curation filters), utilize `.standard-form-grid-4col`. 
+*Retired on 2026-11-15 (SC-811).* Superseded by [`UI_RULES.md`](../UI_RULES.md) L9 (a short setting keeps its label beside it; a text box takes its label above; `.form-grid-beside`, `.form-field-above`) and W7 (boxes sized to what goes in them).
 
 ## 4. "Pod" Data Layouts & Navigation Anchors
 Landing pages no longer utilize flowchart schematics or legacy primitive layout wrappers. Interactive navigational hubs dynamically draw to explicit Grid classes wrapping Pod interfaces:
@@ -46,6 +40,4 @@ Landing pages no longer utilize flowchart schematics or legacy primitive layout 
     *   Icons perfectly inherit color accents via `color: var(--accent);`.
 
 ## 5. Instructional Text Purge
-Core root-level applications are aggressively structured against instructional "bloat".
-*   In-line manual summaries under root structural anchors (`<div class="page-heading-row">...</div> <p>...`) are prohibited system-wide.
-*   End users draw operational instructions either implicitly from structural constraints or explicitly from deeply embedded tooltips/micro-copy later, maintaining perfectly crisp platform layouts visually.
+*Retired on 2026-11-15 (SC-811).* Superseded by [`UI_RULES.md`](../UI_RULES.md) R11 (2026-11-05): a screen may carry one `.page-heading-desc` line under its title, one sentence of 150 characters or fewer.

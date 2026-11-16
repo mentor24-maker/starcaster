@@ -922,6 +922,21 @@ as a rule first, then gets a checker where one is possible.
   *(review ticket 86bcyp009, operator 2026-11-05: "I like all of them")* —
   **[eye]**
 
+- **L10.** **Title Case for every word that names a thing you click or a
+  part of the screen** — buttons, links drawn as buttons, an icon button's
+  tooltip, headings, toggles, tabs, table column headings and **form field
+  labels**. Sentences (help text, notes, error messages, the text inside an
+  empty box) stay in sentence case, and so do names. Capitalise the first
+  word and every other word except the small ones (a, an, the; and, but, or,
+  nor, for, so, yet; as, at, by, in, of, on, to, up, via, per, vs, with,
+  from, into, onto), unless the small word is part of the verb ("Set Up",
+  "Sign In"). This is the one capital-letters rule for both projects: the
+  full rule, with its examples, is Spirality's
+  [`docs/UI_DOCTRINE.md`](https://github.com/mentor24-maker/spirality/blob/main/docs/UI_DOCTRINE.md)
+  §1, and a change to it is made in both. *(SP-138, 2026-11-05; field labels
+  added by the operator 2026-11-15, SC-811; bringing StarCaster's labels into
+  line is SC-812)* — **[TODO-check]**
+
 ## D — Density and layout of panels
 
 *Umbrella: compact forms — no wasted screen, no scrolling that a better
