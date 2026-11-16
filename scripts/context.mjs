@@ -57,10 +57,19 @@ function flag(name) {
 const LOCAL = argv.includes('--local');
 const WHERE = LOCAL ? "this machine's database" : 'production';
 
+// Stopping is a thrown Exit, never process.exit(). On macOS a write to a pipe
+// finishes later, and process.exit() throws away whatever has not gone yet:
+// an agent piping a dump got the first 64 KB and exit 0 (review of PR #1017).
+// Setting exitCode and letting main() return lets Node drain stdout first.
+class Exit extends Error {}
+
 function done(code, message, stream = 'err') {
   if (message) (stream === 'out' ? process.stdout : process.stderr).write(`${message}\n`);
-  process.exit(code);
+  process.exitCode = code;
+  throw new Exit();
 }
+
+const DOWNLOAD_TIMEOUT_MS = 60000;
 
 // ------------------------------------------------------------------ reading
 
@@ -130,8 +139,8 @@ function readProjects(conn) {
 function findProject(conn, wanted) {
   const projects = readProjects(conn);
   if (projects.error) done(2, projects.error);
-  const found = readout.resolveProject(projects.data, wanted);
-  if (!found.ok) done(1, `${found.message} in ${WHERE}.`);
+  const found = readout.resolveProject(projects.data, wanted, WHERE);
+  if (!found.ok) done(1, found.message);
   return found.project;
 }
 
@@ -143,6 +152,8 @@ function readEntries(conn, project) {
 
 // ------------------------------------------------------------------ saving files
 
+// The folder is checked up front but only created once there is something to
+// save, so a mistyped project or entry leaves no empty folder behind.
 function saveFolder() {
   const value = flag('--save');
   if (value === null) return null;
@@ -151,20 +162,24 @@ function saveFolder() {
   if (readout.isInside(folder, REPO)) {
     done(1, `--save must be outside the repository (it is public, and these are a project's own files): ${folder}`);
   }
-  fs.mkdirSync(folder, { recursive: true });
   return folder;
 }
 
 async function download(entry, folder) {
   if (!entry.fileUrl) return { error: `${entry.title}: no file address is recorded` };
   try {
-    const res = await fetch(entry.fileUrl);
+    // A stalled download must not hang the whole command with nothing printed.
+    const res = await fetch(entry.fileUrl, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
     if (!res.ok) return { error: `${entry.title}: the download answered ${res.status} (${entry.fileUrl})` };
     const bytes = Buffer.from(await res.arrayBuffer());
+    fs.mkdirSync(folder, { recursive: true });
     const target = path.join(folder, readout.saveName(entry));
     fs.writeFileSync(target, bytes);
     return { path: target };
   } catch (err) {
+    if (err?.name === 'TimeoutError') {
+      return { error: `${entry.title}: the download did not finish within ${DOWNLOAD_TIMEOUT_MS / 1000} seconds (${entry.fileUrl})` };
+    }
     return { error: `${entry.title}: could not download ${entry.fileUrl}: ${err?.message || err}` };
   }
 }
@@ -189,7 +204,8 @@ function reportFailedDownloads(failed) {
 // ------------------------------------------------------------------ commands
 
 async function main() {
-  if (!command || argv.includes('--help') || argv.includes('-h')) done(command ? 0 : 1, USAGE);
+  if (argv.includes('--help') || argv.includes('-h')) done(0, USAGE, 'out');
+  if (!command) done(1, USAGE);
   if (!['list', 'get', 'dump'].includes(command)) done(1, `Unknown command "${command}".\n${USAGE}`);
 
   const conn = connection();
@@ -234,4 +250,8 @@ async function main() {
   done(0);
 }
 
-main().catch((err) => done(2, `context: ${err?.stack || err}`));
+main().catch((err) => {
+  if (err instanceof Exit) return;
+  process.stderr.write(`context: ${err?.stack || err}\n`);
+  process.exitCode = 2;
+});

@@ -11,3 +11,11 @@ context" and "I could not read the context" never look alike. Production does
 not have the Context table yet (its SQL file has not been run there), and the
 command says exactly that, naming the file, instead of pretending the project
 is empty. A wrong project name is named back too.
+
+Fixed after review: a long dump read by an agent used to be cut off at 64 KB
+with no warning, because the command quit before the text finished leaving;
+it now waits for every byte, and a test pushes 120 KB through a pipe to prove
+it. A `#` line inside a code sample is no longer turned into a heading in the
+dump. A file download that stalls now gives up after a minute and says so,
+instead of hanging. `--help` succeeds, the "more than one project" message
+reads as a sentence, and a mistyped project no longer leaves an empty folder.

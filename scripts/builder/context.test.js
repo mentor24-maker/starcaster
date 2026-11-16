@@ -3,6 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const { spawnSync } = require('child_process');
 
 /**
  * `npm run context` (SC-810): the rich-text conversion, finding the project
@@ -71,7 +74,9 @@ test('a project is found by id, slug or name; an unknown one names what was aske
   assert.equal(readout.resolveProject(PROJECTS, 'izit:app').project.id, 'proj_1');
   const missing = readout.resolveProject(PROJECTS, 'nosuchproject');
   assert.equal(missing.ok, false);
-  assert.equal(missing.message, 'Could not find project nosuchproject');
+  assert.equal(missing.message, 'Could not find project nosuchproject.');
+  assert.equal(readout.resolveProject(PROJECTS, 'nosuchproject', 'production').message,
+    'Could not find project nosuchproject in production.');
   // An empty project list is "not found", never a match.
   assert.equal(readout.resolveProject([], 'agora').ok, false);
 });
@@ -81,6 +86,9 @@ test('two projects sharing a name are refused by name, never answered with one o
   assert.equal(twin.ok, false);
   assert.match(twin.message, /More than one project is called twin: twin-a \(proj_3\), twin-b \(proj_4\)/);
   assert.equal(readout.resolveProject(PROJECTS, 'twin-b').project.id, 'proj_4');
+  // Where it looked goes before the list, so the sentence still reads.
+  assert.match(readout.resolveProject(PROJECTS, 'twin', 'production').message,
+    /^More than one project is called twin in production: twin-a .*Name it by slug or id\.$/);
 });
 
 test('an empty project says so; it is not the same text as a failed read', () => {
@@ -148,4 +156,74 @@ test('saved files get a safe name kept unique by the entry id, and must land out
   assert.equal(readout.isInside(repo, repo), true);
   assert.equal(readout.isInside('/tmp/context-files', repo), false);
   assert.equal(readout.isInside(`${repo}-other`, repo), false);
+});
+
+test('dump shifts headings where they are made, never "#" lines inside code or text', () => {
+  const html = '<h1>Real heading</h1><pre># not a heading\ncode</pre><p>Plain text</p>';
+  const rows = [entry({ body_html: html })];
+  const doc = readout.formatDump(rows, PROJECTS[0]);
+  assert.match(doc, /\n### Real heading\n/);
+  assert.match(doc, /```\n# not a heading\ncode\n```/);
+  assert.doesNotMatch(doc, /### not a heading/);
+  // get and dump agree about the code block.
+  const one = readout.formatEntry(rows[0]);
+  assert.match(one, /```\n# not a heading\ncode\n```/);
+  // The shift is capped at six levels.
+  assert.equal(readout.htmlToText('<h5>Deep</h5>', { headingShift: 2 }), '###### Deep');
+});
+
+// The command itself, run as an agent session runs it: through a pipe. A
+// stand-in "docker" on PATH answers the two queries, so no database is needed.
+function runContext(args, { projects, entries }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-test-'));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(projects));
+  fs.writeFileSync(path.join(dir, 'entries.json'), JSON.stringify(entries));
+  const fake = path.join(dir, 'docker');
+  fs.writeFileSync(fake, `#!/usr/bin/env node
+const fs = require('fs');
+const sql = fs.readFileSync(0, 'utf8');
+const file = /app_projects/.test(sql) ? 'projects.json' : 'entries.json';
+process.stdout.write(fs.readFileSync(${JSON.stringify(dir)} + '/' + file, 'utf8'));
+`);
+  fs.chmodSync(fake, 0o755);
+  const script = path.resolve(__dirname, '..', 'context.mjs');
+  const res = spawnSync(process.execPath, [script, ...args, '--local'], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}` },
+    maxBuffer: 1024 * 1024 * 64,
+  });
+  fs.rmSync(dir, { recursive: true, force: true });
+  return res;
+}
+
+test('a dump bigger than one pipe buffer arrives whole through a pipe', () => {
+  const big = 'x'.repeat(120000);
+  const rows = [{
+    id: 'e1', project_id: 'proj_2', owner_user_id: 'u', title: 'Big note', kind: 'note',
+    body_html: `<p>${big}</p><p>THE-LAST-LINE</p>`, file_url: '', file_name: '', file_type: '', file_size: null,
+    created_at: '2026-11-15T20:00:00Z', updated_at: '2026-11-15T21:30:00Z',
+  }];
+  const res = runContext(['dump', '--project', 'agora'], { projects: PROJECTS, entries: rows });
+  assert.equal(res.status, 0, res.stderr);
+  assert.ok(res.stdout.length > 120000, `only ${res.stdout.length} characters arrived`);
+  assert.match(res.stdout, /THE-LAST-LINE\n$/);
+});
+
+test('the command: --help exits 0, an unknown project exits 1 naming it, an empty one exits 0', () => {
+  const help = runContext(['--help'], { projects: PROJECTS, entries: [] });
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /Usage:/);
+  const missing = runContext(['list', '--project', 'nosuchproject'], { projects: PROJECTS, entries: [] });
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /Could not find project nosuchproject in this machine's database\./);
+  const empty = runContext(['list', '--project', 'agora'], { projects: PROJECTS, entries: [] });
+  assert.equal(empty.status, 0);
+  assert.equal(empty.stdout, 'No context entries in AGORA\n');
+});
+
+test('--save leaves no folder behind when the project is not found', () => {
+  const folder = path.join(os.tmpdir(), `context-save-${process.pid}-${Date.now()}`);
+  const res = runContext(['dump', '--project', 'nosuchproject', '--save', folder], { projects: PROJECTS, entries: [] });
+  assert.equal(res.status, 1);
+  assert.equal(fs.existsSync(folder), false);
 });
