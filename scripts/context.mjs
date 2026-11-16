@@ -36,6 +36,7 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const readout = require('../lib/contextReadout.js');
 const { rowToEntry } = require('../lib/contextStore.js');
+const { isContextFileUrl } = require('../lib/contextFileTypes.js');
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DB_CONTAINER = 'supabase_db_starcaster';
@@ -130,6 +131,24 @@ const ENTRIES_SQL = `select coalesce(json_agg(row_to_json(c) order by c.updated_
 const ENTRY_SQL = `select coalesce(json_agg(row_to_json(c)), '[]'::json)
   from context_entries c where c.id::text = :'eid' and c.project_id = :'pid';`;
 
+// Production reads under row-level security as starcaster_readonly: with no
+// read rule it sees zero rows and no error, which would print "No context
+// entries" on every project. sql:unapplied cannot see policies, so the
+// command checks for itself before it reads (review of PR #1017).
+const READ_RULE_SQL = `select json_build_object(
+    'table', to_regclass('public.context_entries') is not null,
+    'rule', exists (select 1 from pg_policies
+                     where schemaname = 'public' and tablename = 'context_entries'
+                       and policyname = '${readout.READ_RULE}'));`;
+
+function checkReadRule(conn) {
+  if (LOCAL) return; // this machine reads as postgres, which no rule limits
+  const res = psqlJson(conn, READ_RULE_SQL);
+  if (res.error) done(2, `Could not check the read rule in ${WHERE}: ${res.error}`);
+  const verdict = readout.readRuleVerdict(res.data, WHERE);
+  if (!verdict.ok) done(2, verdict.message);
+}
+
 function readProjects(conn) {
   const res = psqlJson(conn, PROJECTS_SQL);
   if (res.error) return { error: `Could not read the project list in ${WHERE}: ${res.error}` };
@@ -158,15 +177,31 @@ function saveFolder() {
   const value = flag('--save');
   if (value === null) return null;
   if (!value) done(1, '--save needs a folder, for example --save /tmp/context-files');
-  const folder = path.resolve(value);
-  if (readout.isInside(folder, REPO)) {
-    done(1, `--save must be outside the repository (it is public, and these are a project's own files): ${folder}`);
+  const refuse = (why) => done(1, `--save must be outside the repository (it is public, and these are a project's own files): ${why}`);
+  // Symlinks resolved, so a link into the repo does not pass as outside it.
+  const { real, existing } = readout.realFolder(value);
+  if (readout.isInside(real, readout.realFolder(REPO).real)) refuse(real);
+  // Any git working tree is refused, not only this one: from a worktree, the
+  // main checkout is the same public repository in another folder.
+  try {
+    const top = execFileSync('git', ['-C', existing, 'rev-parse', '--show-toplevel'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (top) refuse(`${real} is inside the git working tree at ${top}`);
+  } catch (err) {
+    if (err instanceof Exit) throw err;
+    // git said "not a working tree" (or is not installed): outside, as wanted.
   }
-  return folder;
+  return real;
 }
 
 async function download(entry, folder) {
   if (!entry.fileUrl) return { error: `${entry.title}: no file address is recorded` };
+  // The same check the store makes when it writes the address: only this
+  // project's own stored files are fetched, never whatever a row holds.
+  if (!isContextFileUrl(entry.fileUrl, entry.projectId)) {
+    return { error: `${entry.title}: not downloaded, because ${entry.fileUrl} is not one of this project's stored context files` };
+  }
   try {
     // A stalled download must not hang the whole command with nothing printed.
     const res = await fetch(entry.fileUrl, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
@@ -218,6 +253,7 @@ async function main() {
     if (command === 'list' && flag('--save') !== null) done(1, '--save goes with get or dump, not list.');
     const folder = command === 'dump' ? saveFolder() : null;
     const project = findProject(conn, wanted);
+    checkReadRule(conn);
     const entries = readEntries(conn, project);
     if (command === 'list') done(0, readout.formatList(entries, project), 'out');
     const { saved, failed } = await saveFiles(entries, folder);
@@ -235,6 +271,7 @@ async function main() {
   if (!wantedProject) done(1, `Which project is entry ${id} in? Add --project <slug or id>.\n${USAGE}`);
   const folder = saveFolder();
   const project = findProject(conn, wantedProject);
+  checkReadRule(conn);
   const res = psqlJson(conn, ENTRY_SQL, { eid: id, pid: project.id });
   if (res.error) done(2, readout.describeReadFailure(res.error, WHERE));
   const row = (Array.isArray(res.data) ? res.data : [])[0];

@@ -174,7 +174,7 @@ test('dump shifts headings where they are made, never "#" lines inside code or t
 
 // The command itself, run as an agent session runs it: through a pipe. A
 // stand-in "docker" on PATH answers the two queries, so no database is needed.
-function runContext(args, { projects, entries }) {
+function runContext(args, { projects, entries, readRule = null, local = true }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'context-test-'));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(projects));
   fs.writeFileSync(path.join(dir, 'entries.json'), JSON.stringify(entries));
@@ -186,6 +186,7 @@ const vars = {};
 const argv = process.argv.slice(2);
 argv.forEach((a, i) => { if (a === '-v' && /^(pid|eid)=/.test(argv[i + 1])) { const [k, ...v] = argv[i + 1].split('='); vars[k] = v.join('='); } });
 const read = (f) => JSON.parse(fs.readFileSync(${JSON.stringify(dir)} + '/' + f, 'utf8'));
+if (/pg_policies/.test(sql)) { process.stdout.write(${JSON.stringify(JSON.stringify(readRule))}); process.exit(0); }
 if (/app_projects/.test(sql)) { process.stdout.write(JSON.stringify(read('projects.json'))); process.exit(0); }
 // Answer the way the real WHERE clause does, so a query that forgets the
 // project filter is caught rather than echoed back.
@@ -196,9 +197,13 @@ process.stdout.write(JSON.stringify(rows));
 `);
   fs.chmodSync(fake, 0o755);
   const script = path.resolve(__dirname, '..', 'context.mjs');
-  const res = spawnSync(process.execPath, [script, ...args, '--local'], {
+  const res = spawnSync(process.execPath, [script, ...args, ...(local ? ['--local'] : [])], {
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${dir}${path.delimiter}${process.env.PATH}` },
+    env: {
+      ...process.env,
+      PATH: `${dir}${path.delimiter}${process.env.PATH}`,
+      PROD_DB_READONLY_URL: 'postgresql://reader:not-a-secret@db.example.test:5432/postgres',
+    },
     maxBuffer: 1024 * 1024 * 64,
   });
   fs.rmSync(dir, { recursive: true, force: true });
@@ -272,4 +277,76 @@ test('the setup SQL gives the read-only login a read rule on context_entries', (
   // And the parsed schema agrees: the guarded block reads as a rule on this table.
   const { parseSchemaText } = require('./sqlSchemaFake.js');
   assert.ok(parseSchemaText(sql).readonlyReadable.has('context_entries'));
+});
+
+// The rule can be missing in production even after this PR: main's earlier
+// copy of the setup file had none, and sql:unapplied cannot see policies. So
+// the command checks before reading, and a missing rule is exit 2, never a
+// quiet "No context entries" (review of PR #1017, round 3).
+test('production: a missing read rule exits 2 and says to re-run the setup file', () => {
+  const rows = [{
+    id: 'e1', project_id: 'proj_2', owner_user_id: 'u', title: 'Agora rules', kind: 'note',
+    body_html: '<p>Hello</p>', file_url: '', file_name: '', file_type: '', file_size: null,
+    created_at: '2026-11-15T20:00:00Z', updated_at: '2026-11-15T21:30:00Z',
+  }];
+  for (const cmd of [['list', '--project', 'agora'], ['dump', '--project', 'agora'], ['get', '--id', 'e1', '--project', 'agora']]) {
+    const missing = runContext(cmd, { projects: PROJECTS, entries: [], readRule: { table: true, rule: false }, local: false });
+    assert.equal(missing.status, 2, `${cmd[0]}: ${missing.stderr}`);
+    assert.match(missing.stderr, /The read rule is missing in production.*Run docs\/SQL\/context_entries_setup\.sql again/s);
+    assert.doesNotMatch(missing.stdout, /No context entries/);
+  }
+  const noTable = runContext(['list', '--project', 'agora'], { projects: PROJECTS, entries: [], readRule: { table: false, rule: false }, local: false });
+  assert.equal(noTable.status, 2);
+  assert.match(noTable.stderr, /table is not in production yet/);
+  const unclear = runContext(['list', '--project', 'agora'], { projects: PROJECTS, entries: [], readRule: null, local: false });
+  assert.equal(unclear.status, 2);
+  assert.match(unclear.stderr, /Could not tell whether the read-only login may read/);
+  const ok = runContext(['list', '--project', 'agora'], { projects: PROJECTS, entries: rows, readRule: { table: true, rule: true }, local: false });
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.match(ok.stdout, /^e1\tAgora rules\tnote\t/);
+});
+
+test('--save refuses a folder inside the repo, including "..name" folders and other git working trees', () => {
+  const repo = path.resolve(__dirname, '..', '..');
+  assert.equal(readout.isInside(path.join(repo, '..ctx'), repo), true);
+  assert.equal(readout.isInside(path.join(repo, '..'), repo), false);
+  assert.equal(readout.isInside(path.join(repo, '..', 'elsewhere'), repo), false);
+  const inRepo = runContext(['dump', '--project', 'agora', '--save', path.join(repo, '..ctx')], { projects: PROJECTS, entries: [] });
+  assert.equal(inRepo.status, 1);
+  assert.match(inRepo.stderr, /--save must be outside the repository/);
+  // Some other git working tree (the main checkout, seen from a worktree).
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), 'context-git-'));
+  spawnSync('git', ['init', '-q', other]);
+  const inGit = runContext(['dump', '--project', 'agora', '--save', path.join(other, 'not-yet', 'files')], { projects: PROJECTS, entries: [] });
+  assert.equal(inGit.status, 1);
+  assert.match(inGit.stderr, /inside the git working tree at /);
+  // A symlink out of tmp into the repo is resolved, not trusted.
+  const link = path.join(os.tmpdir(), `context-link-${process.pid}-${Date.now()}`);
+  fs.symlinkSync(repo, link);
+  const viaLink = runContext(['dump', '--project', 'agora', '--save', path.join(link, 'files')], { projects: PROJECTS, entries: [] });
+  fs.unlinkSync(link);
+  fs.rmSync(other, { recursive: true, force: true });
+  assert.equal(viaLink.status, 1);
+  assert.match(viaLink.stderr, /--save must be outside the repository/);
+});
+
+test('a file whose address is not this project\'s stored file is not fetched', () => {
+  const folder = path.join(os.tmpdir(), `context-save-${process.pid}-${Date.now()}-url`);
+  const rows = [{
+    id: 'f1', project_id: 'proj_2', owner_user_id: 'u', title: 'Elsewhere', kind: 'file',
+    body_html: '', file_url: 'http://127.0.0.1:9/secret', file_name: 'x.pdf', file_type: 'pdf', file_size: 10,
+    created_at: '2026-11-15T20:00:00Z', updated_at: '2026-11-15T21:30:00Z',
+  }];
+  const res = runContext(['dump', '--project', 'agora', '--save', folder], { projects: PROJECTS, entries: rows });
+  assert.equal(res.status, 2);
+  assert.match(res.stderr, /not downloaded, because http:\/\/127\.0\.0\.1:9\/secret is not one of this project's stored context files/);
+  assert.equal(fs.existsSync(folder), false);
+});
+
+test('an ordered list may start at 0, and inline code may hold a backtick', () => {
+  assert.equal(readout.htmlToText('<ol start="0"><li>zero</li><li>one</li></ol>'), '0. zero\n1. one');
+  assert.equal(readout.htmlToText('<ol><li>a</li></ol>'), '1. a');
+  assert.equal(readout.htmlToText('<p><code>a`b</code></p>'), '``a`b``');
+  assert.equal(readout.htmlToText('<p><code>`x</code></p>'), '`` `x ``');
+  assert.equal(readout.htmlToText('<p><code>plain</code></p>'), '`plain`');
 });
