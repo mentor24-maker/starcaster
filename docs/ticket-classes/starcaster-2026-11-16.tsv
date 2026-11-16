@@ -1,0 +1,820 @@
+# StarCaster ticket classes, back-filled 2026-11-16 (SC-813). One row per ticket.
+# Columns: id, kind, started_by, outcome (blank = still open), title. Values as lib/ticketClass.js in Spirality defines them.
+# Applied by scripts/backfill_ticket_class.mjs; the tracker is the record, this file is how each value was chosen.
+id	kind	started_by	outcome	title
+SC-1	feature	agent	test	Test: isLocalDevHost() in local-dev-host.ts
+SC-2	feature	agent	test	Test: getPollDoneMessage() in poll-done-copy.ts
+SC-3	feature	operator	done	Test: gallery-media-topic.ts (normalize + build options)
+SC-4	feature	operator	done	Test: module-trigger.ts (normalize / get / isGame)
+SC-5	feature	operator	done	Test: gallery-media-badge-type.ts (badge helpers)
+SC-6	feature	operator	done	Sweep every module panel for the form rules established 8/12-8/13
+SC-7	feature	operator	done	Sync 4/7: group a shared-section push into one undoable event
+SC-8	feature	operator	done	Sync 5/7: see a locally changed copy before a push overwrites it
+SC-9	feature	operator	done	Sync 6a/7: the state chip + lineage line (display only)
+SC-10	feature	operator	done	Sync 7/7: one propagation engine for sections and modules
+SC-11	feature	operator	done	Builder: refuse to save over a change you have not seen (stale-editor guard)
+SC-12	feature	operator	done	Page History: record and show who saved each version
+SC-13	feature	operator	done	Page History: say what changed, not just how many sections
+SC-14	feature	operator	done	Page History: keep hourly milestones so a long build day does not scroll off
+SC-15	feature	operator	done	Shared sections: undo a whole propagation as one action
+SC-16	feature	operator	done	CSS-visible check T1 — `check:css`: ask the browser what it kept
+SC-17	feature	operator	done	CSS-visible check T2 — make `check:css` a blocking CI gate
+SC-18	feature	operator	done	CSS-visible check T3 — `check:render`: measure the rendered module
+SC-19	feature	operator	done	CSS-visible check T4 — the differential: prove no control is dead
+SC-20	fix	operator	done	`npm run ship` prints a fatal error and exits non-zero after a successful merge
+SC-21	feature	operator	wont-do	R4 — assert no horizontal scroll on the public-site render, where it is actually measurable
+SC-22	feature	operator	done	CSS-visible check T5 — C4 (classes nothing styles), and wire the three checks into the doctrine
+SC-23	feature	operator	done	Site Import reconcile — finish Phase 3 orphans
+SC-24	feature	operator	done	Acquire YouTube — whole-video acquire panel + worker
+SC-25	feature	operator	done	Builder rows: four, five, or six equal columns
+SC-26	feature	operator	wont-do	Login page Explore link — Orbitron + electric halo
+SC-27	feature	operator	done	Task-closes-thread: wire Q1 into the thread tooling
+SC-28	feature	operator	done	The reconciler: ClickUp <-> GitHub drift repair job
+SC-29	feature	operator	done	Screenshot review pipeline: before/after to the approval queue
+SC-30	feature	operator	done	Approvals list + conventions for one-click decisions
+SC-31	operational	operator	done	Mac Mini engine-room setup
+SC-32	feature	operator	done	Loops go direct: ClickUp client covers read/claim/status + skills point at it
+SC-33	feature	operator	done	Bug Report 1/5: intake table, store, and submit endpoint
+SC-34	feature	operator	done	Bug Report 2/5: screenshot uploads with hard caps
+SC-35	feature	agent	done	Bug Report 3/5: forward each report into the Loop Queue, held for Dane
+SC-36	feature	operator	done	Bug Report 4/5: the Builder module — floating icon, popup form, settings panel
+SC-37	feature	operator	done	Bug Report 5/5: optional email alert to the project's support address
+SC-38	feature	operator	done	Urgent is the human lane: cap agent-set priority at High
+SC-39	feature	operator	done	Ecosystem map 1/6 — inventory format + seed the real ecosystem
+SC-40	feature	operator	done	Ecosystem map 2/6 — generate the SVG from the inventory
+SC-41	feature	operator	done	Ecosystem map 3/6 — generated Obsidian stubs + the map note
+SC-42	feature	operator	done	Ecosystem map 4/6 — clickable objects linked to their Obsidian notes
+SC-43	feature	agent	done	Ecosystem map 5/6 — drift check so the map cannot quietly go stale
+SC-44	feature	operator	done	Ecosystem map 6/6 — standalone HTML view for anyone without the vault
+SC-45	feature	operator	done	Loops: let a task declare which repo it belongs to
+SC-46	feature	operator	done	Image effects: surface slide, axis-rotate, flips (Dane's decision on 86bbfrpbb)
+SC-47	feature	operator	done	Image effects: surface parkour (follow-on, do not start until 86bbh8zc5 merges)
+SC-48	feature	operator	done	Comment-driven handback: answering a task returns it to the machine
+SC-49	feature	operator	done	NODES Slice A — remove machine-specific paths from starcaster
+SC-50	feature	operator	done	NODES Slice C — node identity and role ownership (blocks safe two-machine operation)
+SC-51	feature	operator	done	NODES Slice D — provision a node by script, not by document
+SC-52	feature	operator	done	NODES Slice E — failures and silence both reach the bus
+SC-53	feature	operator	done	Loop hand-offs must include a clickable test link for the operator
+SC-54	feature	operator	done	Vault drift check: unpublished canon and dangling doctrine citations reach `npm run doctor`
+SC-55	fix	agent	done	ship: "no checks reported" right after push should wait, not stop
+SC-56	fix	operator	done	Ecosystem diagram: attribute-based styling so Obsidian renders it (fixes the black box)
+SC-57	feature	operator	done	Queue visibility: a glanceable 'Loop note' column + a per-pass heartbeat line
+SC-58	feature	operator	done	Ready-to-launch tickets: the operator's 'merge' comment performs the merge
+SC-59	feature	operator	done	Main-branch guard: block shell writes and refuse commits on main, not just Edit-tool edits
+SC-60	feature	operator	done	Ecosystem HTML: --public flag that omits the Details block, so the shareable copy is safe by construction
+SC-61	fix	operator	done	Public POST endpoints accept an unverified projectId on system hosts — apply the 1/5 fix everywhere it applies
+SC-62	fix	operator	done	loop-review: verdict writes must be race-safe (--if-status), claim reviews visibly
+SC-63	feature	agent	done	Bug-report screenshots: scheduled orphan sweep (pending assets from abandoned forms)
+SC-64	operational	operator	wont-do	Mac Mini: colima cannot start (lima missing) and the job reports exit 0 anyway
+SC-65	feature	operator	done	Ecosystem drift check: probe objects hosted on a reachable remote node
+SC-66	fix	agent	done	Bug Report module: submitting from the builder's own preview files a real report
+SC-67	fix	agent	done	tidy never cleans a branch that was squash-merged with 2+ commits — and says nothing
+SC-68	fix	operator	done	npm run map calls a brand-new empty worktree 'already shipped, safe to delete'
+SC-69	documentation	operator	done	DOCTRINE: a vitest test that requires a generated lib passes locally and always fails CI
+SC-70	fix	operator	done	Loop docs and the loop-build skill disagree about where a loop session starts
+SC-71	feature	agent	test	ZZZ scratch - repo tag probe (review loop, delete me)
+SC-72	fix	operator	done	Starcaster.pro favicon fix
+SC-73	fix	agent	test	Bug report: LIVE CHECK 86bbjj6qb submit — Marinoff & Associates
+SC-74	fix	agent	test	Bug report: LIVE CHECK 86bbjj6qb tenant — Marinoff & Associates
+SC-75	fix	agent	done	projectId never reaches modules in ordinary page sections — only the overlay layer gets it
+SC-76	feature	operator	done	ClickUp tickets: detail on the left, a fixed operator card on the right
+SC-77	fix	agent	done	Merge-on-comment: three ways an approved ticket silently never ships
+SC-78	feature	operator	done	Panel sweep 1/15: put the module chrome and the settings column in ONE grid
+SC-79	feature	operator	done	Panel sweep 2/15: seed real content so check:panels can actually see the item managers
+SC-80	feature	operator	done	Panel sweep 3/15: Navigation
+SC-81	feature	operator	done	Panel sweep 4/15: Table
+SC-82	feature	operator	done	Panel sweep 5/15: Carousel
+SC-83	feature	operator	done	Panel sweep 6/15: Tractor Nav
+SC-84	feature	operator	done	Panel sweep 7/15: the text and button panels
+SC-85	feature	operator	done	Panel sweep 8/15: the image and effect panels
+SC-86	feature	operator	done	Panel sweep 9/15: the CRM panels
+SC-87	feature	operator	done	Panel sweep 10/15: the search and breadcrumb panels
+SC-88	feature	operator	done	Panel sweep 11/15: the reminder, poll and messaging panels
+SC-89	feature	operator	done	Panel sweep 12/15: the blog reading panels
+SC-90	feature	operator	done	Panel sweep 13/15: the blog discovery panels
+SC-91	feature	operator	done	Panel sweep 14/15: the blog manager panels
+SC-92	feature	operator	done	Panel sweep 15/15: the tenant admin panels
+SC-93	fix	operator	done	Page save accepts a shape that silently strips the shared-section link
+SC-94	feature	operator	done	ask command must carry the same race guard as status (--if-status)
+SC-95	fix	operator	done	loop-build's node owner is stale: the Mini is told it may not build
+SC-96	fix	operator	done	PRs pushed from the second build node never trigger CI
+SC-97	feature	operator	done	Studio 1/8: the catalog — video_sessions and video_sources (do not start until 86bbjv61n and 86bbjv96t are Live)
+SC-98	feature	operator	done	Studio 2/8: the local SQLite job queue with leases
+SC-99	feature	operator	done	Studio 3/8: Drive changes-API watcher for Inbox and Plates
+SC-100	feature	operator	done	Studio 4/8: resumable ingest with hash dedupe and a disk floor
+SC-101	feature	operator	done	Studio 5/8: probe and device-lane inference from container metadata
+SC-102	feature	operator	done	Studio 6/8: proxy video, analysis audio, and the skip-the-proxy threshold
+SC-103	feature	operator	done	Studio 7/8: the worker daemon, launchd, heartbeat, and keeping workers out of Vercel
+SC-104	feature	operator	done	Studio 8/8: the Footage screen and the operator's guide
+SC-105	fix	agent	done	A loop agent force-pushed past the deny rule — the guard has a hole
+SC-106	feature	operator	done	Acquire YouTube slice 2/4: the acquire panel (React island)
+SC-107	feature	operator	done	Acquire YouTube slice 3/4: the yt-dlp media worker service (code only, no deploy)
+SC-108	operational	operator	done	Acquire YouTube slice 4/4: deploy the worker + run the migration (operator's hands; do not start until slices 1-3 merge)
+SC-109	fix	agent	done	A fresh worktree cannot run check:panels — no database, and the fix needs a live credential
+SC-110	fix	operator	done	block_bash_writes_on_main misses a python heredoc — an agent wrote to main tonight
+SC-111	fix	agent	test	Bug report: projectId-prop proof - deletes itself — UI Harness Fixture
+SC-112	fix	agent	done	bus-relay lives on the laptop, so Dane's answers sat unheard for nine hours
+SC-113	feature	operator	done	The relay's handback must not depend on the party line (option B — chat is a single point of failure)
+SC-114	feature	operator	done	loop-build must not start a second PR on a ticket that already has one open
+SC-115	fix	agent	done	The bus is unreachable: every chat post returns HTTP 400, and bus-relay's handback depends on it
+SC-116	fix	agent	done	The relay hands over conflicts that are not conflicts (GitHub cannot run our merge driver)
+SC-117	fix	operator	done	A conflict hand-off tells Dane his approval stands, then throws it away
+SC-118	fix	operator	done	Our own test harness files bug reports into Dane's inbox
+SC-119	fix	operator	done	The catch-up pushes stale asset pins and turns green branches red
+SC-120	fix	operator	done	The hand-off comment reads as a request in Dane's own lane
+SC-121	fix	operator	done	loop-build keeps shipping the (#PR) placeholder — three red branches in one day
+SC-122	fix	agent	done	Merge in one pass: the relay waits 85 seconds instead of an hour
+SC-123	feature	agent	done	Cap work in progress: stop building when the merge side is the bottleneck
+SC-124	feature	operator	done	Poll the merge step every 10 minutes, not every hour
+SC-125	feature	operator	done	One command that answers what is actually waiting on Dane
+SC-126	feature	operator	done	An escalation that costs money must carry the command that proves it
+SC-127	fix	agent	done	The merge step must rebuild stale asset pins itself, not hand them to a session
+SC-128	feature	operator	done	Stop pinning src/layout.html — it is source, and its pins are redundant
+SC-129	feature	operator	done	End the ?v= problem: no committed file carries a build hash
+SC-130	feature	operator	done	Weekly report: generate the figures on a schedule, leave the writing to a person
+SC-131	feature	operator	done	Lane A auto-merge: tests and docs merge themselves after a one-hour window
+SC-132	fix	agent	done	The WIP cap counts PRs it should not, and deadlocks the build loop
+SC-133	feature	operator	done	Pipeline pulse, phase 1: the three checks that would have caught this week
+SC-134	feature	operator	done	Panel sweep 1b/15: the chrome and the settings column below it share tracks
+SC-135	feature	operator	done	Image drop shadow: add Angle and Distance alongside Shadow X and Y
+SC-136	feature	operator	done	A merge gate the repository enforces, not one every session has to remember
+SC-137	feature	operator	done	Pause the pipeline: a sanctioned way to clear the decks and go fast
+SC-138	feature	operator	done	Connections: a client grants Starcaster access to their own social accounts (X + Instagram first)
+SC-139	feature	operator	done	The loop's idle time should follow the queue, not a number chosen once
+SC-140	feature	operator	done	A send-back should say which round it is, and the fourth should ask Dane
+SC-141	fix	agent	test	Bug report: live check real id 86bbjj6qb — IZIT:APP
+SC-142	fix	agent	done	The merge step must re-run a stale review-gate, not merge on it
+SC-143	feature	agent	done	Four holes in the review gate, to close before it is switched on
+SC-144	fix	agent	done	Studio catalog: a falsy enum value is coerced to the default under a 201
+SC-145	feature	operator	done	Connections 1/7: the vault — one encrypted row per project, provider and account
+SC-146	feature	operator	done	Connections 2/7: the adapter contract, proven twice (do not start until 86bbpz1d0 is Live)
+SC-147	feature	operator	done	Connections 3/7: the resolver — a project's own connection wins over the global keys (do not start until 86bbpz1e1 is Live)
+SC-148	feature	operator	done	Connections 4/7: the Connections screen — four card states, generated from the catalogue (do not start until 86bbpz1ed is Live)
+SC-149	feature	operator	done	Connections 5/7: Instagram, and the two checks that stop an unhelpful Meta error (do not start until 86bbpz1gd is Live)
+SC-150	feature	operator	done	Connections 6/7: staying connected — refresh, verify, the amber card, a real revoke (do not start until 86bbpz1gd is Live)
+SC-151	feature	operator	done	Connections 7/7: X — per-user posting, without touching Dane's own (do not start until 86bbpz1gv is Live)
+SC-152	feature	operator	done	Panel chrome and settings columns share one edge — the last staggered rectangle, on all 29 panels
+SC-153	fix	operator	done	A conflict hand-off tells Dane to sit tight and asks an empty room for help
+SC-154	feature	operator	done	Say 'agent session' where the code says 'human': apply the ratified terminology rule
+SC-155	feature	operator	done	Pipeline pause switch
+SC-156	documentation	operator	done	Doctrine: CC runs operational commands — put the rule in CLAUDE.md, not only memory
+SC-157	feature	agent	done	Tripwire: a Stop hook that refuses to end a turn which hands the operator a command CC could run
+SC-158	fix	operator	done	Builder: a saved section has two names — renaming the master never renames the title stamped on every page
+SC-159	fix	operator	done	Builder: text that is in the draft does not show in the editor ("Wut?"), and a heading's text emptied on save ("Blog")
+SC-160	feature	operator	done	Builder Preview renders like the live site, under a thin yellow strip
+SC-161	fix	agent	wont-do	check:panels goes green if the shared lattice stops being declared
+SC-162	feature	operator	wont-do	Every Loop Queue ticket name starts with its ID — enforce it at creation, not by hand
+SC-163	documentation	operator	wont-do	Land the Studio plan and its measurements in docs/ — they only exist in an Artifact and on Dane's Desktop
+SC-164	documentation	operator	done	Fast-track lane: write the 'Let's fast track <id>' procedure into CLAUDE.md and LOOP_ENGINEERING
+SC-165	feature	agent	done	A merge that fuses two statements must fail before it reaches main: parse scripts/ at pre-commit
+SC-166	feature	operator	done	Admin buttons: flat single colours, bright green #00CC00 / blue #0000CC, grey #AACCAA when disabled
+SC-167	feature	operator	done	The operator card ends on the ask: banner last, bold red, ask on the label line
+SC-168	documentation	operator	done	WORK-LOG tells the story of the red banner (#457)
+SC-169	documentation	operator	done	Doc note: per-site browser zoom can fake a preview/live rendering mismatch
+SC-170	operational	operator	done	Resolve the merge conflict on PR #444 (review-gate-holes)
+SC-171	fix	operator	done	Builder: a shared-section push reports a skipped copy as overwritten when one page holds both
+SC-172	fix	agent	done	`ship` must write the "PR opened:" line, or the gate blocks every hand-shipped PR
+SC-173	documentation	operator	done	Doctrine: a guard placed after the refusal it exists to pre-empt is unreachable
+SC-174	feature	agent	done	A clean merge is not agreement — two branches can contradict without touching a line
+SC-175	fix	agent	done	A lost push race is filed as a merge conflict, while the same pass promises it will self-heal
+SC-176	documentation	operator	done	Doctrine: one hand-off, one actor — and record the PR #444 stall
+SC-177	operational	operator	done	Record the Connections vault migration as applied
+SC-178	documentation	operator	done	Doctrine: a cache must not remember a failed probe as an answer
+SC-179	fix	agent	done	Pulse channel-steward has failed 820 times in nine days on a 401 — and nothing said so
+SC-180	fix	operator	done	The rotation runbook cannot see a credential that lives in Doppler or is copied by another repo
+SC-181	feature	agent	done	NODES Slice D follow-up — doctor:node has no reboot test
+SC-182	feature	operator	done	Node roll call
+SC-183	documentation	operator	done	Secrets doctrine: the rule is about exposure, not custody
+SC-184	fix	agent	done	The sleep timer counts PRs the claim gate does not — loop-build idles an hour on a full cap that is not full
+SC-185	operational	operator	wont-do	Consolidate the CC-starcaster memory index — it is near its read limit
+SC-186	fix	operator	done	The rotation runbook's ClickUp "second home" would swap Pulse's identity for Dane's
+SC-187	documentation	operator	done	Docs: the heartbeat, and the three rules Slice E produced
+SC-188	documentation	operator	done	Rotation runbook: log tonight's ClickUp token change, and warn that a log read prints values
+SC-189	feature	operator	done	Builder: video as a fifth background mode — the data model and poster fallback
+SC-190	feature	operator	done	Builder: the video background layer — a real video element behind section rows
+SC-191	feature	operator	done	Builder: the Video option and its controls in the background selector panel
+SC-192	feature	operator	done	Builder: video as a whole-page background
+SC-193	feature	operator	done	Builder: warn when a background video is big enough to slow a client's site
+SC-194	feature	operator	done	Builder: video backgrounds on individual cells
+SC-195	fix	operator	done	Builder: the video background pickers flash the gallery and collapse to an empty shell
+SC-196	feature	operator	done	Builder: crossfade the loop seam on a video background instead of cutting
+SC-197	documentation	operator	done	Docs: video backgrounds, and the two check gaps the work exposed
+SC-198	feature	operator	done	Builder: parallax — a background image or video that scrolls slower than the page
+SC-199	fix	operator	done	Builder: the Overlay Screen editor never made it into the React section panel
+SC-200	feature	operator	done	Builder: gradient direction is hardcoded to 135 degrees — add an angle control
+SC-201	feature	operator	done	Builder: overlay blend mode — tint a photo instead of fogging it
+SC-202	feature	operator	done	Builder: overlay screen on individual cells, not just the whole row
+SC-203	operational	operator	wont-do	Weekly report: 2026-08-24 to 2026-08-30 — write the narrative
+SC-204	fix	operator	wont-do	Weekly report: the four defects round 4 found — a snapshot row, a vanishing edition, a false failure, and an unasked pause
+SC-205	fix	agent	done	Ready to launch: a ticket stuck there with red checks must say so — and must not blame Dane for it
+SC-206	documentation	operator	done	Docs: overlay screens, and the four parts a Builder setting has to have
+SC-207	feature	agent	done	A loop that runs but does not shorten the queue must say so — throughput, not liveness
+SC-208	feature	operator	done	Loop heartbeat
+SC-209	fix	operator	done	pipeline resume reports a released review as "returned to Queued" — the sweep is right, the summary is not
+SC-210	feature	operator	done	A pull request must carry its ticket's name, so the two lists can be read side by side
+SC-211	fix	agent	done	The bus relay reads the loop's own operator card as Dane's answer and releases the escalation
+SC-212	documentation	operator	done	DOCTRINE 5.17 owns a second symptom it never names: the same six properties disable background-attachment: fixed
+SC-213	fix	agent	done	build-start reads the PR number in the WRONG REPO for any repo:<other> ticket — the duplicate-PR guard is blind across repos
+SC-214	fix	agent	done	The pulse has never run on a schedule — it was built to be scheduled and nothing ever fires it
+SC-215	feature	operator	done	Send-backs need a status of their own — Rework, so half-finished work stops hiding in the queue
+SC-216	fix	agent	done	Throughput alarm: six ways the new stall detector can still fail quietly
+SC-217	fix	agent	wont-do	check:syntax does not reach routes/, api/, workers/ or server.js — the same parse hole, one floor over
+SC-218	fix	agent	wont-do	The parse gate is module-format blind, and two artifact lists still disagree
+SC-219	fix	agent	done	The merge gate reads its own operator card as the review verdict, and refuses approved tickets forever
+SC-220	fix	agent	done	A machine that cannot update itself must say so on the bus — and name the real reason
+SC-221	operational	operator	done	Resolve the merge conflict on PR #489 (rework-status)
+SC-222	documentation	operator	done	Doctrine: every time quoted to Dane is Mountain time — never UTC
+SC-223	fix	agent	done	The merge refusal names the wrong reason — "a required review or check is missing" on a PR with green checks and a conflict
+SC-224	feature	operator	done	Media Manager 1/3: mirror (flip) in the asset image editor
+SC-225	fix	operator	done	Media Manager 2/3: the bulk uploader offers Video and then refuses to accept one
+SC-226	feature	operator	done	Media Manager 3/3: mark and filter media added through the Admin Media Manager
+SC-227	fix	agent	done	require_sql_handoff's three-refusal stand-down never engages in a worktree
+SC-228	fix	operator	done	Builder Pages: the Template column tells the truth (and the filter dropdown stops repeating itself)
+SC-229	feature	operator	done	Builder Pages: bulk-change the template on every page in a filter
+SC-230	feature	operator	done	pipeline resume records no reason, so an unauthorised resume is invisible on the switch ticket
+SC-231	feature	operator	done	Media Manager 4/5: a tenant admin may manage their own project's media, and only their own
+SC-232	feature	operator	done	Media Manager 5/5: the Media Manager module a tenant admin uses to upload and browse media
+SC-233	fix	operator	done	Media Manager: the Content description never renders, and Rename never saves
+SC-234	feature	operator	done	Media Manager: tag any file, from a project tag list you can add to
+SC-235	feature	operator	done	Media Manager: filter the gallery by name, aspect, tag and category
+SC-236	fix	operator	done	Dane's resume word is unreadable when ClickUp code-blocks it — strip markdown in the shared normalizer
+SC-237	fix	operator	done	The auto-merge latch must name what it could not verify, and say out loud that it is still latched
+SC-238	fix	operator	done	The stranded-ticket sweep must work while the pipeline is running — resume's early exit skips it
+SC-239	documentation	operator	done	Write down what the code-block outage taught: prove a filter against real input, and a comment is not a guard
+SC-240	fix	agent	done	reconcile cannot see a Queued or Rework ticket at all, so a claimable ticket with an open PR reads as clean
+SC-241	fix	agent	done	A reported merge conflict is a claim to verify, not an instruction to start editing
+SC-242	documentation	operator	done	Write down what tonight's collision taught, and correct two now-false lines in LOOP_ENGINEERING
+SC-243	feature	operator	done	Featured-image border, shadow and placement controls, and a Card Manager grouped to the standard
+SC-244	feature	operator	done	Every Pages dropdown lists its pages alphabetically
+SC-245	documentation	operator	done	Write down what the Media Manager work produced, and two findings from it
+SC-246	feature	operator	done	The Card Manager's designer renders where the operator opens it
+SC-247	fix	operator	done	A check that could not run must not exit 0
+SC-248	feature	operator	done	Link the card's featured image to its post
+SC-249	feature	operator	done	Pipeline pulse
+SC-250	fix	agent	done	The SQL hand-off hook's safety brake has never worked in a worktree
+SC-251	feature	operator	wont-do	Does the hand-off tripwire fire on Dane's own machine? Nobody has measured it
+SC-252	fix	agent	done	The stranded-build sweep is unreachable while the pipeline is running — the repair status recommends cannot run
+SC-253	fix	agent	done	A build pass may not end with its ticket still in Building — a one-shot session cannot keep a promise to come back
+SC-254	fix	operator	done	A stranded build must not count against the work-in-progress cap
+SC-255	fix	agent	done	A blocked queue is not an idle queue — the loops back off hardest exactly when they are stuck
+SC-256	fix	agent	done	throughput cannot see a stall shorter than its own 24-hour window
+SC-257	fix	operator	done	The sweep is reachable, tested, and nothing ever calls it
+SC-258	fix	operator	done	A terminal merge refusal must stop saying the approval is still standing
+SC-259	fix	operator	done	A published page is served by address but filed by page id — an orphan snapshot outranks the real page
+SC-260	fix	operator	done	Three watchdogs saw the stuck ticket and none of them reached Dane
+SC-261	fix	agent	wont-do	resolveCredentials "an expiring connection is still live" fails in CI and passes locally
+SC-262	fix	operator	done	An unpublished or private page keeps a full copy of its content in the published table
+SC-263	documentation	operator	done	Doctrine: three lessons from the stuck-ticket morning have nowhere to live
+SC-264	feature	operator	done	Blog Manager: bulk-import discarded pages into blog posts
+SC-265	feature	operator	done	Commit the engine: the loop runner joins the repo, beats, pulls, and knows what a usage limit is
+SC-266	feature	operator	done	One status taxonomy: four private copies of the queue's statuses become views of loopStatuses
+SC-267	feature	operator	done	One preflight command: the gate sequence moves from skill prose into tested code
+SC-268	feature	operator	done	One board: eight watchdogs composed into a single state-of-the-line screen
+SC-269	feature	agent	done	Premise discipline: a defect ticket cites its mechanism, and a build pass verifies before building
+SC-270	documentation	operator	done	Write down what the Card Manager work taught: a fake upsert, and verifying on the wrong surface
+SC-271	documentation	operator	wont-do	CLAUDE.md has two landmines numbered 12, and ten files cite the number
+SC-272	feature	operator	done	The blog card's border is settable, and its image sits flush with the top
+SC-273	documentation	operator	done	Write down the other two Card Manager lessons: a condition in the wrong terms, and splitting a preset safely
+SC-274	fix	operator	done	Blog import: slugs did not populate, and the Slug field needs normalizing
+SC-275	fix	agent	wont-do	ship retries its own catch-up instead of exiting for someone to retype the command
+SC-276	documentation	operator	done	Close-out docs for the blog import and the slug repair
+SC-277	documentation	operator	done	The UI rules audit still records the Card Manager as a pointer panel with an unclear C7
+SC-278	feature	operator	done	A merge asks the pause switch, and ship states the review gate's verdict (decisions D2+D3)
+SC-279	feature	operator	done	Tag Cloud: a Title, a panel that matches the others, and tags that actually link
+SC-280	feature	operator	done	Consolidate asset_tags into messaging_tags, and flag the tags the client admin creates
+SC-281	feature	operator	done	Tag Cloud reads the project's real tags, with a manual override
+SC-282	fix	operator	wont-do	throughput --dry-run is not read-only: a rehearsal mutes the real alarm
+SC-283	fix	agent	wont-do	Terminal-ness is a status-NAME allowlist, so a renamed closed status reads as MOVING
+SC-284	fix	operator	wont-do	The throughput alarm calls a deliberate pause a stall
+SC-285	feature	operator	done	A blog links manager: categories, tags, and hand-picked related articles
+SC-286	fix	operator	done	Blog import drops the original WordPress tags — extract them
+SC-287	operational	operator	done	Backfill the missing tags onto the three imported Delray blog posts
+SC-288	feature	operator	done	Connections 6b/7: the amber card, and a refused connect says why (do not start until 86bbpz1gk is Live)
+SC-289	fix	agent	done	A scheduled pass-reconcile revokes a LIVE build claim, so two loops can build one ticket
+SC-290	fix	operator	wont-do	A timestamp in the 59th second of a minute is refused as impossible
+SC-291	feature	operator	done	The Blog Links module needs a real Tag manager, and nothing should be truncated
+SC-292	feature	agent	done	EPIC — Six ClickUp clients share one rate limit and none knows the others exist
+SC-293	fix	operator	duplicate	The public tag cloud shows demo tags instead of the blog's real ones
+SC-294	fix	agent	done	check:panels counts the trigger panel but cannot fail on it — reverting the fix it just shipped stays green
+SC-295	feature	operator	done	Relate posts from the post editor — Categories, Tags and Related Posts in one collapsible container
+SC-296	feature	agent	done	bus-relay reads the Loop Queue first, so a tight budget cannot starve the merge lane
+SC-297	feature	agent	done	bus-relay re-reads only tickets touched since its last pass, so list size stops costing requests
+SC-298	feature	operator	done	Tag manager: click a tag's post count to see and open those posts
+SC-299	fix	agent	done	A ClickUp 429 waits and retries instead of killing the pass
+SC-300	feature	operator	done	One door to ClickUp: a shared client that knows the remaining budget, with clickup_direct migrated onto it
+SC-301	feature	operator	done	Migrate pulse, pipeline, review-gate and the forwarder onto the shared ClickUp client (do not start until 86bbugcdb is Live)
+SC-302	fix	operator	done	Admin wording and demo data are reaching visitors on the public blog
+SC-303	feature	operator	done	Scheduled jobs yield: reserve ClickUp headroom for the sessions Dane is talking to (do not start until 86bbugcpa is Live)
+SC-304	fix	agent	done	A relay pass that runs out of budget says which list it never reached, instead of listing three tickets
+SC-305	fix	agent	done	A job that has not succeeded in an hour is audible — 16 hours of a dead merge lane was nearly silent
+SC-306	feature	agent	done	Let a Code module's map or embed show right away instead of behind a "Load Chart" click
+SC-307	feature	operator	done	Split Related Articles out of the Tag manager into its own module
+SC-308	fix	operator	done	A new page keeps the template you chose — the create save drops it today
+SC-309	feature	operator	done	Retire "2 - Menu Banner" — the obsolete header every new page still comes up with
+SC-310	fix	operator	done	A Post Feed opened at ?tag= shows which tag it filtered on, instead of "All Tags" over an empty page
+SC-311	documentation	operator	done	Write down the four traps and two UI rules the blog links work produced
+SC-312	documentation	operator	done	DOCTRINE 5.29 cites a ticket id that does not exist
+SC-313	fix	operator	done	Saving a Saved Section offers to publish the pages it rewrites, instead of leaving them as drafts to find by hand
+SC-314	fix	agent	wont-do	check:panels is blind to the Code module's own fields
+SC-315	feature	operator	done	A main menu item squares its bottom corners while its dropdown is open, so the two read as one shape
+SC-316	fix	operator	done	The tag manager's post count does not say how many are actually live
+SC-317	fix	operator	done	You Might Also Like vanishes instead of saying why it found nothing
+SC-318	fix	operator	done	The public blog feed filters over only the first 100 published posts
+SC-319	feature	operator	done	A Post Feed can be set to one filter — tag, category or author — and says what it matched
+SC-320	fix	operator	done	Builder instructions are printed to visitors on published pages — six of them
+SC-321	documentation	operator	done	Write down the per-copy/per-page rule and the Save & Publish flow the saved-section work produced
+SC-322	fix	operator	done	The merge relay waits 180s for CI, which is shorter than CI — under queue pressure no PR can ever merge
+SC-323	documentation	operator	done	Doctrine 5.27 names the wrong default site — measure it, correct it, pin it with a test
+SC-324	fix	operator	done	A Post Feed says "13" and renders 9 — the list and its own count disagree
+SC-325	fix	operator	done	The /tags sidebar shows placeholder tags and an admin instruction to visitors
+SC-326	documentation	operator	done	Capture the 9/3 blog-visibility findings in doctrine, CLAUDE.md and the feature docs
+SC-327	fix	operator	done	The merge relay believes one stale CONFLICTING reading, so a green PR stops dead with a false reason
+SC-328	fix	agent	done	The stranded sweep calls a half-built ticket empty, because it only looks for a pull request
+SC-329	feature	operator	wont-do	Pipeline dashboard 1/3: record an hourly snapshot of the pipeline's own numbers
+SC-330	feature	operator	wont-do	Pipeline dashboard 2/3: serve the stored readings as one Observe API endpoint
+SC-331	feature	operator	wont-do	Pipeline dashboard 3/3: the Pipeline panel on Observe > Dashboard
+SC-332	fix	operator	done	The spec skill tells Dane to start a build loop that has run unattended since 9/2
+SC-333	fix	agent	done	reconcile closes a ticket on a PR that belongs to a different ticket, silently
+SC-334	fix	operator	done	A near-miss switch command must say it did not take, instead of matching nothing in silence
+SC-335	fix	agent	done	Under merge pressure a green PR keeps resetting its own CI, so the queue cannot drain
+SC-336	documentation	operator	done	Write down the three rules the 9/3 pipeline-repair session produced
+SC-337	fix	operator	done	GitHub does not apply the union driver to mergeability, so a clean branch can sit CONFLICTING forever
+SC-338	fix	operator	done	The merge relay repeats CANNOT TELL forever with no bound, so a permanent block looks like a momentary one
+SC-339	fix	operator	done	A CANNOT-TELL that repeats forever is a stall wearing a status update
+SC-340	fix	operator	done	The .gitattributes union-merge comment is false about the mergeability flag, and that is the half that matters
+SC-341	fix	operator	wont-do	The one-door ClickUp guard promises the whole repo, but three ways past it still work
+SC-342	feature	operator	done	Pipeline fixes can't merge overnight — they all wait for Dane to wake up
+SC-343	fix	operator	done	A ticket waiting on Dane's merge holds a build slot, so the build loop goes idle while he sleeps
+SC-344	fix	operator	done	A ticket whose merge Dane already ordered stays in Ready to launch after the PR merges, holding a build slot
+SC-345	documentation	operator	done	Doctrine: an ask is a status transition, not a paragraph in a ticket body
+SC-346	feature	operator	done	Enable a GitHub merge queue so many approved PRs can drain without a catch-up merge each
+SC-347	fix	operator	done	Ship and the relay would report a QUEUED merge as a completed one, so no merge queue can be switched on yet
+SC-348	fix	agent	done	Lane A reads its own machine comments as Dane objecting, and cancels a merge he authorized
+SC-349	fix	agent	wont-do	Two merge-step paths delete the CANNOT TELL clock instead of leaving it alone
+SC-350	fix	operator	wont-do	Four messages still tell you to resume the pipeline with a command that is now refused
+SC-351	fix	agent	wont-do	The CANNOT TELL escalation can report "1h 60m", and a corrupt pass count spreads as NaN
+SC-352	fix	agent	done	The reconciler's closure note tells every ticket it closes that '[object Object]' did it
+SC-353	fix	operator	done	The SQL hook's refusal counter can freeze: read and write disagree on which state file is authoritative
+SC-354	fix	agent	done	Bulk Create still drops the page template — the other create path #614 did not reach
+SC-355	fix	operator	wont-do	npm run ship merges without taking the merge window, so a fast track can still reset a machine merge
+SC-356	fix	operator	done	loop-review is pinned at an hourly cadence with work waiting, because the step-down needs two identical readings
+SC-357	fix	operator	wont-do	The auto-merge latch tells a human to say a phrase that clears nothing — the lane cannot be turned back on
+SC-358	fix	agent	done	The Mini cannot reach the MacBook, so the stranded sweep is half-blind from the seat that runs it
+SC-359	fix	agent	done	Hand-run cleanup can mistake a half-built ticket for never-started and misfile it
+SC-360	fix	operator	wont-do	The operator hand-off hook still has both faults its SQL sibling just had fixed, and a comment in the fixed one is now false
+SC-361	feature	operator	done	Builder-time placeholders still reach visitors on three modules, and nothing renders every module to catch the next one
+SC-362	operational	operator	done	Resolve the merge conflict on PR #628 (blog-feed-full-scan)
+SC-363	fix	agent	wont-do	doctor:node calls three running jobs 'not installed', so the reboot test excuses the three most likely to die
+SC-364	fix	agent	wont-do	The Mini's ssh route to the MacBook is untracked, so doctor:node passes a machine whose route is gone
+SC-365	operational	operator	wont-do	Consolidate the archive across four locations, then make MaxOne the encrypted backup drive and close the laptop's security gaps
+SC-366	fix	operator	done	The /tags search box ignores what a visitor types — it is not a duplicate, it is dead
+SC-367	fix	agent	done	A PR with a merge conflict gets no CI checks and just sits stuck (currently blocking PR #599)
+SC-368	fix	agent	wont-do	The hand-off tripwire cannot fire in Dane's sessions — it gates on an entrypoint his sessions do not carry
+SC-369	fix	operator	done	The merge step's dedup has been broken since 9/1, so a conflicting PR re-posts forever and never escalates
+SC-370	operational	operator	done	Archive consolidation 1/6 — index all four locations by content hash and report the duplicates
+SC-371	operational	operator	done	Archive consolidation 2/6 — unzip and route video to mentorofaio, everything else back to mentor24
+SC-372	operational	operator	done	Archive consolidation 3/6 — get the MacBook under 400 GB so a backup can fit on MaxOne
+SC-373	operational	operator	done	Archive consolidation 4/6 — reformat MaxOne as encrypted APFS and take the first Time Machine backup
+SC-374	feature	operator	done	Archive consolidation 5/6 — doctor:node reports when a machine's last successful backup went stale
+SC-375	operational	operator	done	Archive consolidation 6/6 — turn the MacBook firewall on without breaking the Mini's ssh route
+SC-376	documentation	operator	wont-do	docs/WORK-LOG.md credits PR #630 with the blog-feed paging fix — that was #629
+SC-377	fix	operator	done	A relay crash at the wrong moment permanently loses an answer Dane wrote on a ticket
+SC-378	feature	operator	wont-do	Bind the machine stamp to its own comment body, so a pasted card cannot authenticate text somebody edited
+SC-379	fix	operator	done	Pulse doesn't report in to the roll call, so a Pulse outage looks like a quiet week
+SC-380	fix	agent	done	Pulse's low-credit alarm is silent — send it where someone will hear it (this hid a 12-day outage)
+SC-381	feature	agent	wont-do	Pulse's credit balance is a number a human types, and nothing notices when it goes stale
+SC-382	fix	operator	done	A switch command wrapped in bold does not match, so the lane stays off while Dane types the right words
+SC-383	feature	operator	done	Loops: only file pipeline tickets for failures that actually cost something, and title all tickets in plain English
+SC-384	fix	operator	duplicate	Blog manager's View (eye) icon links to /blog-post-view, a page that does not exist — it should link to the site's real post page (/blog-post on Delray)
+SC-385	feature	operator	done	Blog Manager: edit a post's author and date, and link the editor thumbnail to the post
+SC-386	fix	operator	done	loop-build still cuts a second branch over half-finished work the cleanup just found
+SC-387	fix	operator	done	A checkless-PR message states "this branch is behind main" when it never measured that
+SC-388	fix	operator	done	Delray /tags: turn the post feed's own search on and delete the dead sidebar search box
+SC-389	operational	operator	done	Weekly report: 2026-08-31 to 2026-09-06 — write the narrative
+SC-390	feature	operator	done	Auto-tag extension 1/3: a deterministic tag scorer that matches on meaning, measured against the tags already on Delray's and Marinoff's posts
+SC-391	feature	operator	done	Auto-tag extension 2/3: the run route that adds existing tags to every post and undoes the whole run in one call
+SC-392	feature	operator	done	Auto-tag extension 3/3: the Auto-tag button in the Blog Links manager, with progress, results and Undo
+SC-393	fix	agent	done	Post Feed: the results line counts the search but says it counts the tag — live on Delray /tags
+SC-394	fix	operator	done	The relay hands an answered ticket back to Queued even when its work is already merged — a build loop can claim live work
+SC-395	fix	agent	wont-do	Two ClickUp coordination surfaces are down: the Loop note field and the bus channel
+SC-396	fix	operator	done	Panel seam: make check:panels see the chrome-vs-columns stagger it has been passing over
+SC-397	fix	operator	done	The weekly report leaves files behind, so the Mini runs stale code six days out of seven
+SC-398	fix	agent	done	Builder: a page with no name shows as a blank row in the Table module's link dropdown
+SC-399	fix	operator	done	The roll call uses one staleness window for every job, so a daily job reads as dead when it is fine
+SC-400	feature	agent	done	Give Pulse's two jobs real roll-call entries, so a Pulse outage is finally noticed
+SC-401	fix	agent	done	Pipeline alarms are silently vanishing instead of reaching the bus, and no loop pass can claim a ticket
+SC-402	fix	operator	done	Builder: a shared-section save that half fails can wipe your hand edit when you retry it
+SC-403	fix	agent	done	Builder: uploading a video for a row background turns it into an image background instead
+SC-404	feature	operator	done	Team chat
+SC-405	fix	operator	done	Builder: a row's video background is wiped every time you save the page
+SC-406	fix	operator	done	A dropdown menu inside a column with a video background is cut off and reads as broken
+SC-407	fix	operator	done	Builder: the row Frame panel's video fields sit on a different line from the rest of the column
+SC-408	feature	operator	done	Events can't repeat — staff must re-enter every weekly program by hand (Delray)
+SC-409	feature	operator	done	Events have no instructor or colour-coded venue, so the calendar can't match Delray's program guide
+SC-410	feature	operator	done	Visitors can't see repeating programs or a weekly schedule on the public calendar (Delray)
+SC-411	fix	agent	done	Every alarm the system raises has been silently rejected for five days, so nothing can tell you when a job dies
+SC-412	feature	operator	done	Staff have to type the weekly program guide in by hand — no way to upload the flyer and turn it into events (Delray)
+SC-413	fix	operator	done	Builder settings panels leave a wide empty strip on the right, so the form reads as loose rows instead of one block
+SC-414	fix	agent	duplicate	Pipeline alarms have not reached the party line for 5 days — every bus post fails with HTTP 400 since Sep 7
+SC-415	fix	operator	done	A frozen loop pass blocks the build loop forever — nothing got built overnight on Sep 12
+SC-416	fix	operator	done	The queue can't show which tickets a loop is working on — ClickUp's free plan refuses the Loop note field
+SC-417	fix	operator	done	The message relay and hourly health check report failure every run because the party line refuses posts — so they never check in
+SC-418	fix	operator	done	CRM form editor: the colour controls offer nothing to pick unless the project has a theme named "Go Navy"
+SC-419	feature	operator	done	CRM form editor: colour controls should use the standard theme colour picker, not a one-off swatch row
+SC-420	fix	operator	done	CRM form editor: clicking a colour swatch makes it vanish instead of opening the picker, and some rows still show the old swatch
+SC-421	fix	operator	done	A CRM form ignores its cell's Right/Center alignment and always sits at the left of the cell (Delray /contact)
+SC-422	fix	operator	done	Blog post list: clicking a post's headline does nothing; only the image and Read More open the post
+SC-423	feature	operator	done	Blog Post Feed: Posts Per Page only offers 3/6/9/12/18, so the blog page cannot show 14 posts
+SC-424	feature	operator	done	Saving a theme does not offer to update and publish the pages that use it
+SC-425	fix	operator	done	Pages with no theme of their own switch to whichever theme was saved last
+SC-426	fix	operator	done	Builder settings panels: a column that drops to a second line does not line up with the one above it
+SC-427	fix	agent	done	The Mini's own health report leaves out the two Pulse jobs, and a dead daily job is never announced as fixed
+SC-428	fix	operator	done	Saving a Builder page unlinks every shared block on it, so the page stops taking updates from the original
+SC-429	fix	operator	done	Answering "close it" on a ticket puts it back in the build queue instead of closing it
+SC-430	fix	operator	done	Builder: changing the template on several pages at once wipes their content, while changing it on one page keeps it
+SC-431	fix	operator	done	Builder: saving a page turns a full-width row back into a contained one
+SC-432	fix	operator	done	Builder: saving a page wipes that page's own heading sizes and line heights
+SC-433	operational	operator	done	Resolve the merge conflict on PR #692 (panel-sweep-14-blog-managers)
+SC-434	operational	operator	done	Resolve the merge conflict on PR #688 (panel-sweep-13-blog-discovery)
+SC-435	operational	operator	done	Resolve the merge conflict on PR #695 (legacy-detector-lineage)
+SC-436	fix	operator	done	Builder: saving a module on a page template wipes that template's heading sizes
+SC-437	fix	operator	done	The team chat is refusing every message, so decisions and alarms pile up on a holding ticket instead of reaching anyone
+SC-438	fix	agent	done	The relay fails every pass after Dane comments on a ticket, because the comment cannot reach the refused party line
+SC-439	feature	operator	done	Carousel editor: show each image's file name and size under the Image field, click the name to see the picture
+SC-440	fix	operator	done	The weekly report is saved inside the Mini's code folder and stops the Mini from updating; save it to Google Drive instead
+SC-441	feature	operator	done	Delray: new Latest Blog Posts module shows the newest posts as a row of cards, with optional tag and category filters
+SC-442	feature	operator	done	Carousel editor: the image name and size line is hard to read on the blue panel — make it white and larger
+SC-443	feature	operator	done	Carousel editor: show a thumbnail of each slide's image beside its Title, Link, Link Label and Alt Text fields
+SC-444	fix	operator	done	Delray: Latest Blog Posts module heading cannot be recolored or changed from H2 — add Level and Color controls
+SC-445	operational	operator	done	The weekly report cannot reach Google Drive — the saved Google sign-in has expired and needs Dane's browser login
+SC-446	fix	agent	test	Bug report: (no description) — proj_1
+SC-447	fix	agent	test	Bug report: Menu overlaps logo — proj_1
+SC-448	fix	agent	test	Bug report: (no description) — unknown site
+SC-449	fix	agent	test	Bug report: first — proj_1
+SC-450	fix	agent	test	Bug report: (no description) — unknown site
+SC-451	fix	agent	test	Bug report: x — proj_1
+SC-452	fix	agent	test	Bug report: no picture — proj_1
+SC-453	fix	agent	test	Bug report: (no description) — unknown site
+SC-454	fix	agent	test	Bug report: (no description) — unknown site
+SC-455	fix	agent	test	Bug report: (no description) — unknown site
+SC-456	fix	agent	test	Bug report: (no description) — unknown site
+SC-457	fix	agent	test	Bug report: (no description) — unknown site
+SC-458	fix	agent	test	Bug report: (no description) — unknown site
+SC-459	fix	agent	test	Bug report: (no description) — unknown site
+SC-460	fix	agent	test	Bug report: (no description) — unknown site
+SC-461	fix	agent	test	Bug report: (no description) — unknown site
+SC-462	fix	agent	test	Bug report: (no description) — unknown site
+SC-463	fix	agent	test	Bug report: Menu overlaps logo — proj_1
+SC-464	fix	agent	test	Bug report: (no description) — proj_1
+SC-465	fix	agent	test	Bug report: first — proj_1
+SC-466	fix	agent	test	Bug report: (no description) — unknown site
+SC-467	fix	agent	test	Bug report: x — proj_1
+SC-468	fix	agent	test	Bug report: (no description) — unknown site
+SC-469	fix	agent	test	Bug report: no picture — proj_1
+SC-470	fix	agent	test	Bug report: (no description) — unknown site
+SC-471	fix	agent	test	Bug report: (no description) — unknown site
+SC-472	fix	agent	test	Bug report: (no description) — unknown site
+SC-473	fix	agent	test	Bug report: (no description) — unknown site
+SC-474	fix	agent	test	Bug report: (no description) — unknown site
+SC-475	fix	agent	test	Bug report: (no description) — unknown site
+SC-476	fix	agent	test	Bug report: (no description) — unknown site
+SC-477	fix	agent	test	Bug report: (no description) — unknown site
+SC-478	fix	agent	test	Bug report: (no description) — unknown site
+SC-479	fix	agent	test	Bug report: (no description) — unknown site
+SC-480	fix	agent	done	The build and review loops stop themselves with a false 'pipeline is paused' message
+SC-481	fix	agent	done	Running the test suite spends the real ClickUp budget, so the tests fail themselves and live jobs stand down
+SC-482	fix	agent	done	Running the tests with the company keys loaded files fake bug reports into Dane's queue
+SC-483	fix	agent	done	The loops' own test gate fails on untouched code, so every unattended pass sees a red board it has to talk itself past
+SC-484	feature	operator	done	Builder: a row cannot be styled differently on phones and tablets (device styles 1 of 6)
+SC-485	feature	operator	done	Builder: a column cannot be styled differently on phones and tablets (device styles 2 of 4)
+SC-486	feature	operator	done	Builder: a module's spacing, size and font cannot differ on phones and tablets (device styles 3 of 4)
+SC-487	feature	operator	done	Builder: preview has no Tablet view and old phone rules use different screen widths (device styles 4 of 4)
+SC-488	fix	agent	done	Builder: Top and Bottom Padding do nothing on a row that has no background
+SC-489	fix	agent	done	Builder: a column's Border Style does nothing — Dashed and Dotted always render solid, and None still draws a border
+SC-490	operational	operator	done	Resolve the merge conflict on PR #715 (test-reserve-ledger)
+SC-491	operational	operator	done	The Mac Mini has no backup at all, so if it dies while Dane is travelling every scheduled job and the unpushed work on it are lost
+SC-492	feature	operator	done	Builder: the page list still has an old Desktop/Mobile switch that duplicates the new Phone/Tablet/Desktop one
+SC-493	operational	operator	done	Resolve the merge conflict on PR #723 (device-styles-preview-breakpoints)
+SC-494	fix	operator	done	The pipeline can sit dead for days while every status screen says it is healthy
+SC-495	operational	operator	done	Move both loop lanes to the MacBook so the queue drains while the Mini is unreachable
+SC-496	fix	operator	done	Delray: the Phone view can't resize the home page headline, so "Champions" breaks mid-word on phones
+SC-497	fix	operator	done	Delray: on a phone the paragraph under the hero headline runs off the right edge of the screen
+SC-498	feature	operator	done	Builder: Preview in Page Details should ask Phone, Tablet or Desktop, and show Phone/Tablet in a pop-up window
+SC-499	operational	operator	done	Resolve the merge conflict on PR #736 (retire-desktop-mobile-switch)
+SC-500	operational	agent	done	Archive upload skips files with accented characters in their names, so 284 screenshots never reached Google Drive
+SC-501	operational	operator	done	Family videos on MaxOne have no backup copy anywhere, and the next step erases the drive
+SC-502	operational	agent	done	The MaxOne erase guard would say 'all backed up' over a folder it could not open — an unreadable folder is counted as empty, not as missing
+SC-503	feature	operator	done	Galaxy module 1/6 — the star-field engine: seeded layout, spin and 3D rotation as pure, tested arithmetic
+SC-504	feature	operator	done	Galaxy module 2/6 — a Galaxy module in Special Effects that draws the animated spiral on a page
+SC-505	feature	operator	done	Galaxy module 3/6 — drag, arrow keys and cursor tilt rotate the galaxy
+SC-506	feature	operator	done	Galaxy module 4/6 — the intro: stars converge into the spiral on load and disperse as the visitor scrolls
+SC-507	feature	operator	done	Galaxy module 5/6 — bright flare stars, twinkle, core glow and four presets tuned against the reference picture
+SC-508	feature	operator	done	Galaxy module 6/6 — it stays smooth on phones and stops drawing when nobody can see it
+SC-509	fix	agent	done	Pipeline pulse report has not been saved for 12 days — it misreads every loop pass as hung and the report got too big for ClickUp
+SC-510	operational	operator	done	Move both loop lanes back to the Mac Mini now that it is signed in to Claude again
+SC-511	operational	agent	done	Both loop lanes home on the Mac Mini now that its scheduled passes can sign in again
+SC-512	fix	operator	done	Old delraytennis.com addresses show a blank page instead of the new page they moved to
+SC-513	fix	operator	done	A ticket Dane is working on by hand gets sent back to the build loop whenever anything comments on it
+SC-514	fix	agent	done	A build pass that runs out of time leaves no trace of what it was stuck on, so a stuck test looks like a dead machine
+SC-515	fix	agent	done	The status report tells Dane to sign in on the Mini when a build pass simply ran out of time
+SC-516	fix	operator	done	Acquire YouTube says only "fetch failed" when the Mac Mini is offline, and nothing warns that video downloads have stopped
+SC-517	feature	operator	done	Export a StarCaster site as a WordPress site built with Divi (Settings → Project)
+SC-518	feature	operator	done	Studio: footage dropped into Google Drive is never noticed, so nothing gets processed
+SC-519	feature	operator	done	Studio: downloaded footage never gets its length, date or device read, so it stops at 'downloaded'
+SC-520	feature	operator	done	Studio: footage never gets its small editing copy, so no file can ever reach 'ready'
+SC-521	fix	operator	done	Studio: the worker would start on the Mini with no settings and the wrong database, and crash every minute
+SC-522	operational	operator	done	Studio: switch the worker on at the Mac Mini and prove a real recording reaches the Footage screen
+SC-523	feature	operator	done	Project settings: put the WordPress export and Site Import together in one Import / Export section
+SC-524	feature	operator	done	Galaxy: replace the fly-in intro with an unfurl or fade-in, and add a Tilt setting that turns it into an oval
+SC-525	feature	operator	done	YouTube outreach 1/7: a saved list of target videos, each with its own comment settings (storage and server)
+SC-526	feature	operator	done	YouTube outreach 3/7: OpenClaw runs on the Mac Mini, logged into YouTube as Dane of Earth, with no door from the internet
+SC-527	feature	operator	done	YouTube outreach 2/7: the screen where Dane adds target videos and sets how each is commented on (do not start until 86bcda5vb is Live)
+SC-528	feature	operator	done	YouTube outreach 4/7: Starcaster drafts a comment for each target and Dane approves, edits or rejects it (do not start until 86bcda63z is Live)
+SC-529	feature	operator	done	YouTube outreach 5/7: approved comments post on YouTube from the Mini's browser, with a link as proof (do not start until 86bcda5wp and 86bcda661 are Live)
+SC-530	feature	operator	done	YouTube outreach 6/7: the agent drafts comments for due videos on its own, still waiting for approval (do not start until 86bcda661 is Live)
+SC-531	feature	operator	done	YouTube outreach 7/7: Dane is told by name when the Mini stops posting or YouTube signs it out (do not start until 86bcda68h is Live)
+SC-532	feature	operator	done	Studio: there is nowhere to keep a transcript of a recording
+SC-533	feature	operator	done	Studio: the Mac Mini has no speech-to-text installed
+SC-534	feature	operator	done	Studio: recordings reach 'ready' but nothing turns what you said into text
+SC-535	feature	operator	done	Footage screen: you can't watch a recording — nothing is clickable
+SC-536	feature	operator	done	Footage screen: you can't read what was said in a recording
+SC-537	feature	operator	done	Footage screen: you can't search your recordings for something you said
+SC-538	feature	operator	done	WordPress export: offer a .wpress file (All-in-One WP Migration) as well as the .xml file
+SC-539	fix	operator	done	Site Import flattens every page into one column, so a client site's grids and side-by-side blocks have to be rebuilt by hand
+SC-540	fix	operator	done	Delray site: links to PDFs (job application, flyers, policies) open a 'not found' page
+SC-541	feature	operator	done	Builder themes can only use 10 fonts, so an imported site in any other font (like Open Sans) cannot look like the original
+SC-542	feature	operator	done	An imported site loses its fonts, colours and button style; each import should create its own default theme named after the site
+SC-543	fix	operator	done	Imported pages lose their section backgrounds, card borders, rounded corners, shadows and spacing
+SC-544	fix	agent	done	Site Import drops every picture that is also a link, so a client's clickable tiles and logos arrive as empty blocks
+SC-545	fix	agent	done	Site Import stretches every picture to the full width of its column, so a client's small icons and logos arrive huge
+SC-546	fix	operator	done	Approved merges stall silently when a pull request has a real conflict: the Mini holds its merge turn forever and the others queue behind it
+SC-547	feature	operator	done	Substack Notes 1/7: a place to keep Dane's Notes, replies, restacks and likes, and their settings (storage and server)
+SC-548	feature	operator	done	Substack Notes 2/7: the screen where Dane jots Note ideas, picks Notes to reply to or like, and sets limits (do not start until 86bcet65t and 86bcda63z are Live)
+SC-549	feature	operator	done	Substack Notes 3/7: Starcaster drafts each Note and reply in Dane's voice and he approves, edits or rejects it (do not start until 86bcet6g7 is Live)
+SC-550	feature	operator	done	Substack Notes 4/7: when Dane publishes a video, article or blog post, a draft Note about it is waiting for his approval (do not start until 86bcet6pa is Live)
+SC-551	feature	operator	done	Substack Notes 5/7: Starcaster drafts Notes from Dane's topics on its own, at his daily pace, still waiting for approval (do not start until 86bcet6pa is Live)
+SC-552	feature	operator	done	Substack Notes 6/7: approved Notes, replies, restacks and likes happen on Substack from the Mini's browser, with proof (do not start until 86bcet6pa and 86bcda68h are Live)
+SC-553	feature	operator	done	Substack Notes 7/7: Starcaster checks the Mini is signed in to Substack as Dane of Earth and warns him when it is not; Dane signs in once after 10/13
+SC-554	feature	operator	done	Live browser view 1: decide how Dane and clients sign in to YouTube, Substack and other sites from inside Starcaster, safely (plan for approval, no code)
+SC-555	operational	operator	done	YouTube sign-in: Dane signs the Mini's browser in to YouTube as Dane of Earth, once (after 10/13, when his Apple account unlocks)
+SC-556	operational	operator	done	Studio's Inbox is on a Google account that is nearly full
+SC-557	feature	operator	done	New Zoom recordings never reach Studio
+SC-558	feature	operator	done	Videos in the Photos 'Studio' album never reach Studio
+SC-559	operational	operator	done	The duplicates report is out of date and does not cover iCloud Drive
+SC-560	operational	operator	done	The MacBook still holds hundreds of GB of files already safe on Google Drive
+SC-561	operational	operator	done	YouTube video downloads have been unreachable since Oct 5, because Tailscale stopped on the Mac Mini and nothing restarts it
+SC-562	feature	operator	done	Substack Miner 1/7: a place to keep the Substack writers Starcaster finds, the keyword list, and a Substack address on every contact (storage and server)
+SC-563	feature	operator	done	Substack Miner 2/7: Starcaster searches the web for Substack writers who use Dane's keywords and lists them as candidates (do not start until 86bcfprx5 is Live)
+SC-564	feature	operator	done	Substack Miner 3/7: for every approved writer, Starcaster reads who they recommend and adds those writers as candidates (do not start until 86bcfprx5 is Live)
+SC-565	feature	operator	done	Substack Miner 4/7: the screen where Dane approves or rejects each writer found, and approving puts them in Contacts (do not start until 86bcfprx5, 86bcfprxd and 86bcfprxk are Live)
+SC-566	feature	operator	done	Substack Miner 5/7: for each approved writer, the Mini's browser reads their newest Notes and lines them up on the Notes screen to like or reply (do not start until 86bcfprxq and 86bcet7qr are Live, and the Mini is signed in after 10/13)
+SC-567	feature	operator	done	Substack Miner 6/7: the Mini's browser searches Substack Notes for Dane's keywords and adds the writers it finds as candidates (do not start until 86bcfpry0 is Live)
+SC-568	feature	operator	done	Substack Miner 7/7: Dane can see whether the Substack push is working: writers found, approved, engaged, and which became subscribers (do not start until 86bcfprxq is Live)
+SC-569	operational	operator	done	Resolve the merge conflict on PR #803 (substack-notes-content-watch)
+SC-570	feature	operator	done	Button module has no background colour control, so nobody can change a button's fill
+SC-571	fix	operator	done	A Button set to Centered still sits at the left edge of the page
+SC-572	operational	operator	done	Resolve the merge conflict on PR #804 (substack-notes-poster)
+SC-573	fix	operator	done	Pasting from a Google Doc into a Paragraph module adds a blank line between every paragraph, so the live page shows double spacing
+SC-574	fix	operator	done	A Paragraph module silently cuts its text off at 10,000 characters, so a long article ends mid-sentence on the live site
+SC-575	fix	agent	done	npm run ship fails its server tests check on every branch with no failing test, so nothing can be merged through ship
+SC-576	fix	operator	done	A headline nudged over an image with Vertical Offset hides behind the image, and no setting brings it in front
+SC-577	fix	operator	done	Every photo-background section on every site is washed out grey by a white tint nobody set, and text on it turns white
+SC-578	fix	operator	done	CRM form editor opens every color control at its default instead of the color that was saved, so Dane cannot see or trust the form's colors when editing it
+SC-579	operational	operator	done	Resolve the merge conflict on PR #815 (substack-miner-stats)
+SC-580	operational	operator	done	Dane of Earth site: 43 images still load from the old Hostinger server and break on 10/23; old WordPress addresses need redirects; 3 junk pages are published
+SC-581	fix	operator	done	Menu drop-down links can vanish: the builder shows a dark default for the panel text, but the live site uses the menu's text colour, so a white menu gets white-on-white sub-links
+SC-582	fix	agent	done	Imported sites show visitors a builder note: "Imported form — rebuild with a real module" appears on 24 live pages (Dane of Earth and one other site)
+SC-583	feature	operator	done	The Galaxy effect cannot link anywhere: let the builder mark a point and a radius on it that visitors can click
+SC-584	feature	operator	done	Four loops and Dane share one Claude limit: the Mini's loops should stand down so he keeps his share
+SC-585	fix	operator	done	starcaster.pro shows the login screen instead of the company home page Dane built — move the admin app to app.starcaster.pro and serve the Starcaster site at starcaster.pro
+SC-586	fix	operator	done	Assets page: the table is wider than the screen, so the Resize Images and Delete All buttons and the last columns are cut off and Dane cannot click them
+SC-587	fix	operator	done	The Galaxy halfway down the Dane of Earth home page plays its entrance off-screen, so visitors see nothing happen when they scroll to it
+SC-588	feature	operator	done	An In Place Galaxy ignores the mouse unless you drag it: offer Tilt with Cursor so it leans toward the pointer
+SC-589	fix	operator	done	Builder page editor: a section's right-hand cell runs off the edge of the screen, so its Save Cell button, Saved Modules box and module toolbar are cut off and Dane cannot click them
+SC-590	feature	operator	done	Builder: after Save Page the screen should jump to the Publish button, and after Publish to Close Builder, so Dane doesn't have to scroll
+SC-591	fix	operator	done	Builder: Save Page still doesn't jump to the Publish button on a real page — the earlier fix (#832) doesn't work for Dane
+SC-592	fix	operator	done	Videos added to the Photos 'Studio' album never reach Studio when the original is still in iCloud, which is most new iPhone videos
+SC-593	fix	operator	done	Substack Miner: pasting a person's profile link (substack.com/@name) into the seed list is refused, so Dane cannot add the people he finds
+SC-594	feature	operator	done	Substack Miner: approving or rejecting a writer has no place to say why, only a cramped Note box in the table, so Dane cannot see his reasons later
+SC-595	feature	operator	done	Substack Miner: the Show filter has no way to see every writer at once, or everyone EXCEPT one group, so Dane cannot scan the whole list
+SC-596	feature	operator	done	Substack Miner: Dane has to judge every new writer from scratch, so suggest Approve or Reject with reasons from his past decisions, and let him Agree in one click
+SC-597	feature	operator	done	Reddit comments 1/4: Dane of Earth's canon (voice, DEO, ecosystem) is copied into Starcaster so the AI can write in his voice
+SC-598	feature	operator	done	Reddit comments 2/4: Starcaster reads a Reddit post and writes a comment on it in Dane's voice, with no self-promotion, waiting for his approval (do not start until 86bch3jmr is Live)
+SC-599	feature	operator	done	Reddit comments 3/4: Engage → Comments becomes the screen where Dane pastes a Reddit link, gets an AI comment, edits and approves it (do not start until 86bch3jp3 is Live)
+SC-600	feature	operator	done	Reddit comments 4/4: approved Reddit comments are posted by the Mini's browser, with proof; Dane signs it in to Reddit once (do not start until 86bch3jp7 is Live)
+SC-601	feature	operator	done	Builder: nested editor boxes should get steadily darker blue as you drill deeper, like the old Normie builder
+SC-602	fix	operator	done	Imports screen says COMPLETE when the site was only copied and no pages were built
+SC-603	feature	operator	done	Imports screen does not show what the build step would create (page list, leftovers, placeholders, theme)
+SC-604	fix	operator	done	Site import piles repeat copies of the home page onto one Home page instead of separate pages
+SC-605	fix	operator	done	Site import can make a theme with black text on a black page, so imported pages look blank
+SC-606	fix	operator	done	Imports screen: the website address in the Jobs list is white on grey and can't be read, so you can't tell which import is which
+SC-607	fix	operator	done	Admin events page: clicking Edit doesn't take you to the edit form, and Update leaves you at the bottom of the page
+SC-608	feature	operator	done	Builder: drill-down boxes should be a purer blue with the same 10px gap around every nested level
+SC-609	feature	operator	done	The Engage menu says Reddit, YouTube and Substack instead of Comments, YouTube Outreach and Substack Notes
+SC-610	operational	operator	done	Resolve the merge conflict on PR #843 (import-build-preview)
+SC-611	feature	operator	done	The YouTube and Substack screens' headings match the new Engage menu names
+SC-612	feature	operator	done	Font Library 1/7: Starcaster has nowhere to keep font files that are not Google Fonts, so sites cannot use other free fonts
+SC-613	feature	operator	done	Font Library 2/7: An Assets → Fonts screen where Dane sees every font drawn in its own lettering and uploads new ones (do not start until 86bchyd3n is Live)
+SC-614	feature	operator	done	Font Library 3/7: Themes and modules cannot pick a font from the font library, and live pages do not load it (do not start until 86bchyd3n is Live)
+SC-615	feature	operator	done	Font Library 4/7: The font library starts empty — fill it with a starter pack of 150–300 free fonts, sci-fi and display first (do not start until 86bchyd3n is Live)
+SC-616	feature	operator	done	Font Library 5/7: Fonts cannot be found by style — AI tags every font, and Dane can add, remove and filter by tags on the Fonts screen (do not start until 86bchyd41 is Live)
+SC-617	feature	operator	done	Font Library 6/7: Nobody can see which sites use a font — add a Used by Sites column linking to the live pages (do not start until 86bchyd41 and 86bchyd46 are Live)
+SC-618	feature	operator	done	Font Library 7/7: With hundreds of fonts, the Fonts screen needs search, category filters and a type-your-own sample line (do not start until 86bchyd41 is Live)
+SC-619	fix	operator	done	Site Import does not record a website's logo or its footer links, so imported sites arrive without them
+SC-620	feature	operator	done	Site Import builds one plain Header with no logo and no footer; it should build a Top Menu (logo left, menu right) and a Footer Menu
+SC-621	feature	operator	done	Imports screen does not show which menus the build step will create (Top Menu, logo, Footer Menu)
+SC-622	feature	operator	done	Font Library 8: Dane cannot mark favourite fonts — star fonts and switch the Fonts screen between Favourites and All fonts (do not start until 86bchyd41 is Live)
+SC-623	fix	operator	done	Builder: Button's Custom link shows no box to paste the web address into, and its Link/Text fields run outside the panel
+SC-624	feature	operator	done	Outreach wizard 1/19: One Outreach screen under Engage shows Dane, for YouTube, Substack and Reddit, where each stage stands and the one next step
+SC-625	fix	operator	done	Outreach wizard 2/19: Approved comments never post because the Mini's posting job was never installed, and Dane can't choose which account each channel posts as (do not start until 86bcrmb8x is Live)
+SC-626	feature	operator	done	Outreach wizard 3/19: Sign-in window 1: the Mini can show a live picture of its browser and pass clicks and keys to it (Mini only, not reachable yet)
+SC-627	feature	operator	done	Outreach wizard 4/19: Sign-in window 2: Starcaster gives a project admin a one-time pass to open the Mini's browser, and logs every window (do not start until 86bcrmbb4 is Live)
+SC-628	feature	operator	done	Outreach wizard 5/19: Sign-in window 3: Starcaster can reach the Mini's browser window over the internet, and nothing else on the Mini is exposed (do not start until 86bcrmbb4 is Live)
+SC-629	feature	operator	done	Outreach wizard 6/19: Sign-in window 4: a Connect button in the Outreach screen opens the Mini's browser inside Starcaster so Dane can sign in (do not start until 86bcrmb8x and 86bcrmba0 and 86bcrmbc9 and 86bcrmbdw is Live)
+SC-630	feature	operator		Outreach wizard 7/19: Sign-in window 5: Dane signs in to YouTube, Substack and Reddit through the window, and one real reply goes out on each (do not start until 86bcrmbfb is Live)
+SC-631	feature	operator	done	Outreach wizard 8/19: YouTube comments and Substack Notes don't use Dane of Earth's canon, so they don't sound like his Reddit comments
+SC-632	feature	operator	done	Outreach wizard 9/19: Dane gets one Reddit reply at a time: offer three different replies to choose from, with a one-click pick (do not start until 86bcrmb8x is Live)
+SC-633	feature	operator	done	Outreach wizard 10/19: YouTube replies come one at a time: offer three to choose from, like Reddit (do not start until 86bcrmbje and 86bcrmbke is Live)
+SC-634	feature	operator	done	Outreach wizard 11/19: Substack Notes and replies come one at a time: offer three to choose from, like Reddit (do not start until 86bcrmbje and 86bcrmbke is Live)
+SC-635	feature	operator	done	Outreach wizard 12/19: Rejecting a draft records no reason: ask why with one-click reason chips on every channel (do not start until 86bcrmbm0 and 86bcrmbmy is Live)
+SC-636	feature	operator	done	Outreach wizard 13/19: Drafts never learn from Dane's choices: turn his edits and reasons into plain lessons he can see, change and switch off (do not start until 86bcrmbnw is Live)
+SC-637	feature	operator	done	Outreach wizard 14/19: Substack never finds Notes to reply to on its own: run the readers on a schedule and rank what they find (do not start until 86bcrmb8x and 86bcrmbnw is Live)
+SC-638	feature	operator	done	Outreach wizard 15/19: YouTube has no list of approved creators: find channels for Dane's topics and suggest Approve or Reject, like the Substack Miner (do not start until 86bcrmb8x and 86bcrmbnw is Live)
+SC-639	feature	operator	done	Outreach wizard 16/19: Replying to a particular YouTube comment needs a comment id typed by hand: find and rank comments on approved creators' videos (do not start until 86bcrmbqu and 86bcrmbrf is Live)
+SC-640	feature	operator	done	Outreach wizard 17/19: Dane must paste a Reddit post's text by hand because Reddit blocks the reader: have the Mini's browser read it (do not start until 86bcrmba0 is Live)
+SC-641	feature	operator	done	Outreach wizard 18/19: Reddit never finds conversations on its own: watch chosen subreddits and keywords and rank fresh posts and comments (do not start until 86bcrmbqu and 86bcrmbrf and 86bcrmbuv is Live)
+SC-642	feature	operator		Outreach wizard 19/19: Final assembly: do every outreach step inside the Outreach screen, with a Today view and one button to work through replies (do not start until 86bcrmbh9 and 86bcrmbpm and 86bcrmbtn and 86bcrmbwm is Live)
+SC-643	operational	operator	done	Resolve the merge conflict on PR #865 (font-library-search)
+SC-644	fix	operator	done	On a phone, every admin screen scrolls sideways because the Starcaster logo is wider than the screen
+SC-645	fix	operator	done	Site Import stops building a whole site's pages when one image from the original site can't be downloaded
+SC-646	operational	operator	done	Resolve the merge conflict on PR #868 (reddit-three-options)
+SC-647	fix	operator	done	Imported themes can make buttons or text invisible, because only some colour combinations are checked for readability
+SC-648	feature	operator	done	Themes cannot have outlined buttons or rounded button corners, so an imported site's outline buttons become solid blocks
+SC-649	feature	operator	done	A theme has one button colour for every background, so a button that suits a dark section disappears on a white one
+SC-650	feature	operator	done	Adding an imported site's theme means re-running the whole page import — there is no way to create just the theme
+SC-651	fix	operator	done	A queued Site Import waits forever because nothing runs the import worker — Alphire's sat 14 days
+SC-652	fix	operator	done	Site Import's page builder can run out-of-date code and crash without saying why
+SC-653	documentation	operator	done	Doctrine: when a missing Starcaster feature blocks a job, file tickets for the missing feature instead of patching around it
+SC-654	fix	operator	done	Page editor: the Heading module's Font list only shows the 11 original fonts — library fonts and Google fonts cannot be chosen for a single heading (do not start until 86bctd64g is Live)
+SC-655	feature	operator	done	Any device on Dane's Tailscale can open the Mini's private OpenClaw and sign-in browser ports — add a Tailscale access rule to close them
+SC-656	feature	operator	done	Font picker: choosing a font is a plain dropdown — make it a scrolling window where every font name is drawn in its own font, and a click picks it
+SC-657	feature	operator	done	Nobody can see what a site import got wrong without comparing pages by eye: build a side-by-side difference report
+SC-658	fix	operator	done	Imported sections lose layered and radial colour backgrounds: Alphire's dark glowing hero came out plain
+SC-659	fix	operator	done	Imported pictures lose their rounded and organic shapes: the Alphire hero circle came out as a rectangle
+SC-660	fix	operator	done	Imported glows come out as grey shadows or nothing: Alphire's cyan glow around buttons and the hero is lost
+SC-661	fix	operator	done	A picture the original site paints onto an empty box is downloaded but never placed: Alphire's hero image went missing
+SC-662	feature	operator	done	Site Import never looks at decorative layers the stylesheet draws around elements: Alphire's starfield, glow ring and orbit line are invisible to it
+SC-663	fix	operator	done	Does Alphire's two-column hero still stack into one column once its picture box is captured, and why did the logo and brand name get their own grey band?
+SC-664	fix	operator	done	Imported headings lose their light weight, spacing and accent colour: Alphire's thin heading with cyan words came out heavy and black
+SC-665	fix	operator	done	A dark page on a mostly light site imports as a light page: Alphire's black home page came out white
+SC-666	fix	operator	done	Most files a site import downloads never show up in Assets: Alphire downloaded 48, Assets shows 10
+SC-667	fix	operator	done	Why does Alphire's imported top menu show as an empty white bar?
+SC-668	operational	operator	done	Loops on the Mini cannot finish setting up Dane's sign-in window because two commands always ask for permission: add a standing allow rule for just those two
+SC-669	operational	operator	done	Resolve the merge conflict on PR #881 (theme-button-style)
+SC-670	fix	operator	done	The browser door's outside check always fails its live-feed line, so a working sign-in window reads as broken
+SC-671	operational	operator	done	Resolve the merge conflict on PR #887 (substack-notes-schedule)
+SC-672	feature	operator	done	Projects cannot share sections, templates or themes with each other: add the database setting and the server side
+SC-673	feature	operator	done	Project settings: add a 'Share with' section to pick which projects get this project's sections, templates and themes (do not start until 86bcu6t1c is Live)
+SC-674	feature	operator	done	Saved sections another project shared with you: show them in the Builder and let you import a copy (do not start until 86bcu6t1c is Live)
+SC-675	feature	operator	done	Themes another project shared with you: show them on the Themes page and let you import a copy (do not start until 86bcu6t1c is Live)
+SC-676	feature	operator	done	Page templates another project shared with you: show them and let you import a copy, including the header and footer it uses (do not start until 86bcu6t1c and 86bcu6tzk are Live)
+SC-677	fix	operator	done	Dane cannot open the sign-in window from his MacBook: a computer on the Mini's private Tailscale network cannot reach the window's picture feed
+SC-678	operational	operator	done	Resolve the merge conflict on PR #892 (site-import-fidelity-report)
+SC-679	operational	operator	done	Resolve the merge conflict on PR #885 (site-import-worker-role)
+SC-680	operational	operator	done	Resolve the merge conflict on PR #888 (youtube-creators)
+SC-681	fix	agent	done	Features break on the live site because database changes that ship with the code are never applied, and nothing says so
+SC-682	fix	operator	done	Engage › Outreach: a stage that is already done has no link back, so approved and rejected drafts cannot be reopened from there
+SC-683	fix	operator	done	Acquire's X and Reddit run history is lost on the live site: it is saved to a file the server throws away
+SC-684	operational	operator	done	Resolve the merge conflict on PR #900 (shared-sections-import)
+SC-685	feature	agent	done	Imported sites lose their buttons: Alphire's "Let's Build Something Great" and other calls to action arrive as plain text links
+SC-686	operational	operator	done	Resolve the merge conflict on PR #907 (import-inline-text-styles)
+SC-687	operational	operator	done	Resolve the merge conflict on PR #906 (import-pseudo-decorations)
+SC-688	feature	operator	done	Substack Find creators: no box to add a writer or article by pasting its link, so only keyword-search finds get in
+SC-689	feature	operator	done	Substack Miner upgrade 1/4: the Miner keeps each writer's newest articles and pictures (the list and details page need them)
+SC-690	feature	operator	done	Substack Miner upgrade 2/4: the keyword list grows on its own from approved writers' articles and your approval reasons
+SC-691	feature	operator	done	Substack Miner upgrade 3/4: the Candidates list shows each writer's three newest articles, the latest date, and matching keywords
+SC-692	feature	operator	done	Substack Miner upgrade 4/4: a View button next to Approve opens one page with everything about a writer, pictures included
+SC-693	feature	agent	done	Imported logos can't sit beside their brand name: Builder has no way to put a small picture next to text inside a column (Alphire's star logo stacks above "Alphire AI Agency")
+SC-694	operational	operator	done	Resolve the merge conflict on PR #913 (import-glow-pictures-buttons)
+SC-695	operational	operator	done	Resolve the merge conflict on PR #917 (substack-keywords-grow)
+SC-696	operational	operator	done	Resolve the merge conflict on PR #920 (substack-writer-details)
+SC-697	fix	operator	done	AI replies and drafting stop when the Anthropic account runs out of credit, and nothing says which account Starcaster is spending from
+SC-698	fix	operator	done	The Mini's sign-in check drains the Anthropic account overnight: every hourly check re-sends one ever-growing AI conversation
+SC-699	feature	operator	done	AI Quota 1/5: AI spending has no home: add Settings › AI Quota showing what each feature and model costs and every job that uses AI
+SC-700	feature	operator	done	AI Quota 2/5: The AI Quota page only estimates spend: show what Anthropic actually billed, by key and model, and flag spending Starcaster cannot see (do not start until 86bcvj7k9 is Live)
+SC-701	feature	operator	done	AI Quota 3/5: The Mini's AI calls are invisible to Starcaster: count every OpenClaw request by job on the AI Quota page (do not start until 86bcvj7k9 is Live)
+SC-702	feature	operator	done	AI Quota 4/5: Nobody is told when AI spending runs away: alert Dane when a day passes his limit or jumps far above normal (do not start until 86bcvj7k9 is Live)
+SC-703	feature	operator	done	AI Quota 5/5: A runaway job on the Mini can spend without limit: cap the Mini's background AI requests per day, never blocking approved posts (do not start until 86bcvj7vc is Live)
+SC-704	fix	operator	done	Share with panel tells an owner of 13 projects 'You have no other projects' when it actually failed to load
+SC-705	operational	operator	done	Resolve the merge conflict on PR #923 (ai-keys-check)
+SC-706	fix	operator	done	Section overlays show rounded corners nobody set (starcaster.pro footer band)
+SC-707	feature	operator	done	Settings › Projects: clicking a project's check icon shows nothing for 5 seconds — make it turn green instantly with a loading ring
+SC-708	fix	agent	done	The build loop keeps claiming tickets that are blocked by an unfinished ticket: make the claim list and claim honour ClickUp dependencies
+SC-709	feature	operator	done	Share with: a project can also share specific website pages, and the receiving project's Pages screen gets a 'Shared by Project' button to import them
+SC-710	feature	operator	done	SQL you need to run is only announced to agent sessions, never to you: put it all on one ClickUp ticket assigned to you
+SC-711	feature	operator	done	Reel Spinner 1a: a place in the database to keep what each recording should cut
+SC-712	feature	operator	done	Reel Spinner 1b: the rules that spot the 'um's, repeated words, false starts and long pauses in a recording
+SC-713	feature	operator	done	Reel Spinner 1c: the Mac Mini finds what to cut in every recording by itself, including the 28 already there
+SC-714	feature	operator	done	Reel Spinner 1d: Footage › Transcript shows the words it would cut crossed out, and how much time that saves
+SC-715	operational	operator	done	SQL waiting for you
+SC-716	operational	operator		The Mac Mini is too full for Studio to download videos, and Dane's files are copied 4x across six places: free space, deduplicate, and make Blue Passport the offline video backup
+SC-717	fix	operator	done	Studio keeps every downloaded video on the Mac Mini forever, so the Mini fills up and new uploads stop downloading: delete the local copy once a video is ready
+SC-718	fix	operator	done	Saved modules don't show up when adding a module to a table cell
+SC-719	feature	operator	done	Website forms can't send visitors to a thank-you page or email them a confirmation, and the form's own success message never shows
+SC-720	fix	operator	done	Reel Spinner: one long recording's transcript never saves, and the Mini retries it forever, slowing every other video
+SC-721	fix	operator	done	Website forms throw away a returning visitor's second message, and there is no list of a form's submissions
+SC-722	feature	operator	done	Every website form alerts the same team addresses — a form can't have its own alert list or subject
+SC-723	feature	operator	done	Website forms can't email the visitor a confirmation after they submit
+SC-724	operational	operator	done	Resolve the merge conflict on PR #945 (form-confirmation-email)
+SC-725	operational	operator	done	Resolve the merge conflict on PR #944 (form-alert-list)
+SC-726	fix	operator	done	Renaming a page breaks every form set to send visitors there, and switching a form from a typed address to a page can refuse to save
+SC-727	fix	operator	done	Renaming a page breaks every button and link on the site that points to it (all settings that pick a page from a list)
+SC-728	fix	operator	done	Renaming a page breaks site menus and typed links that point to it (menus, text links, image and card links) (do not start until 86bcxmrw2 is Live)
+SC-729	feature	operator	done	Deleting a page gives no warning that buttons and menus still link to it, and nothing checks client sites for broken links (do not start until 86bcxmrw2 is Live)
+SC-730	fix	operator	done	Buttons and menus saved before 3 Nov still break when their page is renamed — the one-time upgrade of existing links has never been run (do not start until 86bcxmt5x is Live)
+SC-731	fix	operator	done	Links typed inside a text block still break when the page they point to is renamed (do not start until 86bcxmt5x is Live)
+SC-732	feature	operator	done	Form styling settings are buried under the form's other settings on CRM: Edit Form: give them their own column beside the preview
+SC-733	fix	operator	done	Save Page button stays floating on other screens after you leave Builder Pages
+SC-734	feature	operator	done	The Save Form button on the CRM form editor is small, blue and far from the preview — move it under the preview and make it the green Save Page button
+SC-735	feature	operator	done	Renaming a page breaks breadcrumbs, rotating headlines, the player sign-in redirect and blog-manager links that point to it (do not start until 86bcxmt5x is Live)
+SC-736	feature	operator	done	Site menu links cannot open in a new tab: each menu item needs an "Opens in" setting
+SC-737	feature	operator	done	The Publish button in the page editor is blue — make it the same green as Save Page
+SC-738	operational	operator	done	Broken links on client sites
+SC-739	fix	agent	done	The Breadcrumb module shows nothing on a client's live site — its trail never renders
+SC-740	fix	operator	done	The database stalls most days and the admin app and client sites time out — a request log table grows forever on the smallest database size
+SC-741	feature	operator	done	Settings › Projects: the Edit pencil looks ignored for several seconds after a click — make it spin while the project opens
+SC-742	fix	operator	done	After switching projects in Settings, Builder › Pages still lists the previous project's pages
+SC-743	fix	operator	done	Save buttons on Settings and other admin screens are blue and full-width instead of the standard green Save button
+SC-744	feature	operator	done	Starcaster forms can't show multiple-choice questions as visible choices — only as a dropdown (add 'Choose one' and 'Choose several')
+SC-745	feature	operator	done	Site Import can't tell what questions an imported form asks — it only keeps a picture of it
+SC-746	feature	operator	done	Imported sites show a screenshot of their sign-up form instead of a working one (do not start until 86bcynjvc is Live)
+SC-747	operational	operator	done	Strands Movie's home page still shows a picture of its sign-up form — rebuild forms on sites already imported (do not start until 86bcynjv7 and 86bcynjx2 is Live)
+SC-748	feature	operator	done	The CRM form editor's Styles column wastes space — a repeated Background heading, colour pickers on their own lines, and Save Form pushed to the left
+SC-749	feature	operator	done	Starcaster forms have no dropdown that lets a visitor choose several answers (do not start until 86bcynjv7 is Live)
+SC-750	fix	operator	done	Site Import copies the same site twice when it is imported again (wavecenter.com was captured twice, holding up other imports)
+SC-751	feature	operator	done	On the CRM form editor every heading is the same size, so columns, sections and settings run together — give it three clear heading sizes and a Form Actions title (UI normalization, screen 1)
+SC-752	fix	operator	done	Importing a site again adds a second set of pages instead of updating the first (do not start until 86bcyrt21 is Live)
+SC-753	documentation	operator	done	Review every editor screen and list the top 10 changes that would use the screen better and make the editors consistent (UI normalization)
+SC-754	feature	operator	done	The CRM form editor's headings, items and sub-items are hard to tell apart and its first column has no heading: one size per level, and Form Actions
+SC-755	documentation	operator	done	StarCaster's editors each look different and nobody has listed how: survey every editor against the form editor's new style
+SC-756	fix	agent	done	Form embed code and the form editor preview show a blank text box instead of the choices for 'Choose one', 'Choose several' and 'Dropdown list (choose several)' questions
+SC-757	fix	operator	done	Settings › Profile squeezes its form boxes to about 100px with the profile picture on top of them
+SC-758	feature	operator	done	Builder › Workspace: the Archive, Bulk Create and New Page buttons spill out of their box and cover the play button
+SC-759	fix	operator	done	Builder › Workspace Publish bar: the Check button sits on a red element and the blue bar stops short
+SC-760	feature	operator	done	UI normalization 1 of 10: The top of every admin screen loses about 230px to the logo and menu: make the header one row
+SC-761	feature	operator	done	UI normalization 2 of 10: Every admin screen starts its page differently, some with two stacked titles: give them one title row
+SC-762	feature	operator	done	UI normalization 3 of 10: Section headings look four different ways across the editors: use one style for each level
+SC-763	feature	operator	done	UI normalization 4 of 10: Buttons that do the same job are different colours and sizes on every screen: one button system
+SC-764	feature	operator	done	UI normalization 5 of 10: Switching views looks like three different controls across the app: one tab style
+SC-765	feature	operator	done	UI normalization 6 of 10: Short values sit in boxes that stretch across the whole screen: size each box to what goes in it
+SC-766	feature	operator	done	UI normalization 7 of 10: Labels sit above even a single toggle, wasting rows: put short settings' labels beside the control
+SC-767	feature	operator	done	UI normalization 8 of 10: Builder › Pages is about 5,900px tall and its column headings scroll away: one table look with headings that stay put
+SC-768	feature	operator	done	UI normalization 9 of 10: Errors show twice and a pink bar covers the bottom of the screen: one message strip that never covers the work
+SC-769	feature	operator	done	UI normalization 10 of 10: Projects are listed three times and some screens repeat themselves: say each thing once
+SC-770	feature	operator	done	Importing a site again can't recognise sections on pages that moved in the crawl — name sections by page address, not crawl order
+SC-771	feature	agent	done	Builder page editor on a narrow window: the Preview / Save buttons sit on top of the Page Details bar and its ▼ button
+SC-772	feature	operator	done	The admin logo is too small to read since the header became one row: make the header 20px taller and the logo about 35px taller
+SC-773	operational	operator	done	Resolve the merge conflict on PR #972 (workspace-pages-bar-overflow)
+SC-774	operational	operator	done	Resolve the merge conflict on PR #977 (ui-norm-2-page-title-row)
+SC-775	operational	operator	done	Resolve the merge conflict on PR #974 (site-import-rebuild-forms)
+SC-776	feature	agent	done	Imported blog posts turn the old site's comment box into a useless one-checkbox form
+SC-777	feature	operator	done	UI normalization 11: Form boxes, buttons and table heading rows are taller than they need to be on admin screens: 2px less padding top and bottom
+SC-778	operational	operator	done	Resolve the merge conflict on PR #978 (ui-norm-3-headings)
+SC-779	fix	operator	done	Dane can never sign in to the test links he is given: test signed-in screens on the local copy instead of a Vercel preview
+SC-780	feature	operator	done	Site Import: there's no button to build the pages, so every import waits for an agent session — add Preview and Build buttons
+SC-781	operational	operator	done	Resolve the merge conflict on PR #988 (ui-norm-9-message-strip)
+SC-782	feature	operator	done	Paragraph module: clicking a heading in the text editor turns it back into plain paragraph text
+SC-783	fix	operator	done	Paragraph module: giving a heading a colour shrinks it to small text, and the H1/H2/H3 buttons stop changing its size
+SC-784	fix	operator	done	Builder page editor: the Page Details, Publish, Page History and Workspace arrows can be clicked before the page has loaded — show a spinner until it has
+SC-785	documentation	operator	done	Plan: make the text editor show exactly what the theme will show — fully connect it to the theme builder, or build our own editor
+SC-786	fix	operator	done	AI-generated videos are saved inside the database instead of as files, which can stall or crash it and take every client site down
+SC-787	fix	agent	done	Themes: 'Base size (px)' does nothing to paragraph text on client sites — only headings change
+SC-788	feature	operator	done	People in Spirality projects cannot sign in to Spirality from a StarCaster page — part 1 of 2: StarCaster's server calls to the Spirality tracker
+SC-789	feature	operator	done	People in Spirality projects cannot sign in to Spirality from a StarCaster page — part 2 of 2: the Spirality Tasks module (do not start until 86bczt5kf is Live)
+SC-790	feature	operator	done	StarCaster cannot run Spirality's loop yet: add its settings, verify check, ticket door, loop skills and lanes
+SC-791	feature	operator	done	StarCaster's bus-relay, pulse, weekly report, review gate and app still call ClickUp: switch them to the tracker
+SC-792	feature	operator	done	Switch the weekly report from ClickUp to the tracker
+SC-793	feature	operator	done	Switch the pipeline pulse from ClickUp to the tracker
+SC-794	feature	operator	done	Switch the watchdogs' ClickUp reads to the tracker (roll call, throughput, stale tickets, SQL and broken-links tickets)
+SC-795	feature	operator	done	Switch the review gate from ClickUp to the tracker
+SC-796	feature	operator	done	Switch the live app's bug reports, AI alarms and YouTube worker posts from ClickUp to the tracker
+SC-797	operational	agent	done	Let the weekly report write its folder again: macOS has blocked the Mini's Monday job for four weeks
+SC-798	operational	operator	done	Put the review gate's tracker sign-in into GitHub's settings
+SC-799	operational	operator	done	Put the website's tracker sign-in into Vercel so bug reports and AI alarms reach the tracker
+SC-800	operational	operator	done	Find out why PR #1007 (watchdogs-to-tracker) will not merge
+SC-801	fix	agent	test	Bug report: SC-799 acceptance check: an agent session confirming the website can file tickets with TR… — Dane of Earth
+SC-802	fix	agent	test	Bug report: TEST for SC-799 (sent by an agent session): if you can see this in Waiting on you, websit… — Dane of Earth
+SC-803	feature	operator	done	Add the ability to edit template name
+SC-804	feature	operator	done	Bug report: The Bug Report module should have a site-wide option under Placement. As it is, you can o… — Dane of Earth
+SC-806	fix	operator	done	StarCaster's lanes ignore the Settings page and start Claude on every empty pass: bring them up to Spirality's runner
+SC-807	feature	operator	done	Make StarCaster's lanes follow the Settings page and skip Claude on an empty queue
+SC-808	feature	operator	done	Add a Context page under Assets for agent reference material
+SC-809	feature	operator	done	Let the Assets Context page accept file uploads
+SC-810	feature	operator	done	Add a command that lets agent sessions read a project's Context entries
+SC-811	documentation	operator	done	Point StarCaster's doctrine at Spirality for the loop's rules and remove the retired parts
+SC-812	feature	operator	done	Write every StarCaster form field label in Title Case
+SC-813	operational	operator		Give every existing StarCaster ticket a kind, who started it and how it ended
+SC-815	feature	operator	wont-do	Create Project: Bayside Partners with Wordpress zip
+SC-816	operational	operator	done	Weekly report: 2026-11-09 to 2026-11-15 — write the narrative
+SC-817	feature	operator	done	File the weekly report's narrative ticket in StarCaster's queue
+SC-818	operational	operator		Move StarCaster's bus into the StarCaster project
