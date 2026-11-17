@@ -133,3 +133,24 @@
 .context-manager-title a {
   overflow-wrap: anywhere;
 }
+
+/* SC-826: one switch per tool that may read the entry ("Reel Spinner reads
+   this"). The label stays on one line; the warning under it may wrap. */
+.context-manager-use {
+  min-width: 12rem;
+}
+
+.context-manager-use-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.context-manager-use-warning {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--btn-danger-flat);
+}

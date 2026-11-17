@@ -7,7 +7,8 @@
  *   GET    /api/context              → { ok, data: { entries, total } }   this project's entries, newest change first
  *   POST   /api/context              → { ok, data: { entry } }            JSON { title, bodyHtml } — a note
  *                                                                        JSON { kind: 'file', file: { url, name, size }, title?, bodyHtml? }
- *   PATCH  /api/context/:id          → { ok, data: { entry } }            JSON { title?, bodyHtml? }
+ *   PATCH  /api/context/:id          → { ok, data: { entry } }            JSON { title?, bodyHtml?, usedBy? }
+ *                                                                        usedBy: which tools read it, ids from lib/contextUses.js (SC-826)
  *   DELETE /api/context/:id          → { ok, data: { entry, file } }      file: null (a note), { removed: true },
  *                                                                        or { removed: false, error } — the row is gone either way
  *   POST   /api/context/blob-upload  → the Vercel Blob client-upload handshake (a token for ONE file)
@@ -125,7 +126,7 @@ async function handle(req, res, pathname, method) {
     const read = await readBody(req, res);
     if (!read.ok) return true;
     const result = await contextStore.createEntry(
-      { kind: read.body.kind, file: read.body.file, title: read.body.title, bodyHtml: read.body.bodyHtml },
+      { kind: read.body.kind, file: read.body.file, title: read.body.title, bodyHtml: read.body.bodyHtml, usedBy: read.body.usedBy },
       scope
     );
     if (!result.ok) return fail(res, result, 'Could not save the entry');
@@ -137,7 +138,7 @@ async function handle(req, res, pathname, method) {
     if (!read.ok) return true;
     const result = await contextStore.updateEntry(
       decodeURIComponent(idMatch[1]),
-      { title: read.body.title, bodyHtml: read.body.bodyHtml },
+      { title: read.body.title, bodyHtml: read.body.bodyHtml, usedBy: read.body.usedBy },
       scope
     );
     if (!result.ok) return fail(res, result, 'Could not change the entry');

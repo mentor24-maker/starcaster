@@ -13,20 +13,27 @@ const { Readable } = require('stream');
  * fails these tests rather than passing a hand-copied schema.
  */
 
+const fs = require('fs');
 const SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'context_entries_setup.sql');
-const { parseSchemaFile, createFakeDb } = require('./sqlSchemaFake.js');
+// SC-826: the column naming which tools read an entry. Applied after the
+// setup file, the way production runs them (its RUN AFTER line).
+const USED_BY_SQL_PATH = path.join(__dirname, '..', '..', 'docs', 'SQL', 'context_entries_used_by.sql');
+const ALL_SQL = [SQL_PATH, USED_BY_SQL_PATH];
+const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
 
 const supabasePath = require.resolve('../../lib/supabase.js');
 const scopePath = require.resolve('../../lib/projectScope.js');
 const storePath = require.resolve('../../lib/contextStore.js');
 const routePath = require.resolve('../../routes/context.js');
+const contextForPath = require.resolve('../../lib/contextFor.js');
 const blobPath = require.resolve('../../lib/blobStorage.js');
 
 const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
-function withStore({ sql = SQL_PATH, failWith = null, blob = {} } = {}) {
-  const db = sql ? createFakeDb(parseSchemaFile(sql)) : null;
+function withStore({ sql = ALL_SQL, failWith = null, blob = {} } = {}) {
+  const files = sql ? [].concat(sql) : [];
+  const db = files.length ? createFakeDb(parseSchemaText(files.map((f) => fs.readFileSync(f, 'utf8')).join('\n'))) : null;
   const fakeSupabase = {
     isConfigured: () => true,
     tableConfig: () => ({}),
@@ -59,17 +66,18 @@ function withStore({ sql = SQL_PATH, failWith = null, blob = {} } = {}) {
   const realBlob = require.cache[blobPath];
   require.cache[supabasePath] = { id: supabasePath, filename: supabasePath, loaded: true, exports: fakeSupabase };
   require.cache[blobPath] = { id: blobPath, filename: blobPath, loaded: true, exports: fakeBlob };
-  for (const p of [scopePath, storePath, routePath]) delete require.cache[p];
+  for (const p of [scopePath, storePath, routePath, contextForPath]) delete require.cache[p];
   const store = require(storePath);
   const route = require(routePath);
+  const contextFor = require(contextForPath);
   function restore() {
     if (realSupabase) require.cache[supabasePath] = realSupabase;
     else delete require.cache[supabasePath];
     if (realBlob) require.cache[blobPath] = realBlob;
     else delete require.cache[blobPath];
-    for (const p of [scopePath, storePath, routePath]) delete require.cache[p];
+    for (const p of [scopePath, storePath, routePath, contextForPath]) delete require.cache[p];
   }
-  return { db, store, route, restore, deleted, tokens };
+  return { db, store, route, contextFor, restore, deleted, tokens };
 }
 
 async function rawRows(db) {
@@ -396,3 +404,173 @@ test('file rules: size wording, folder, and the accept list', () => {
   }
 });
 
+
+// ── SC-826: which tools read an entry, and readContextFor ─────────────────────
+
+const MD_URL_A = 'https://abc123.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1731700000000_channel-Ab12.md';
+const PDF_URL_A = 'https://abc123.public.blob.vercel-storage.com/APP/Assets/Context/proj_a/1731700000001_deck-Cd34.pdf';
+const tick = () => new Promise((r) => setTimeout(r, 5));
+
+function fakeFetch(files) {
+  const asked = [];
+  const impl = async (url) => {
+    asked.push(url);
+    if (!(url in files)) return { ok: false, status: 404, text: async () => '' };
+    return { ok: true, status: 200, text: async () => files[url] };
+  };
+  return { impl, asked };
+}
+
+test('usedBy: a new entry reads as used by nothing; switching on and off is stored and read back', async (t) => {
+  const { db, store, restore } = withStore();
+  t.after(restore);
+  const note = await store.createEntry({ title: 'Channel', bodyHtml: '<p>Why</p>' }, SCOPE_A);
+  assert.deepEqual(note.data.usedBy, []);
+  assert.deepEqual((await rawRows(db))[0].used_by, [], "the column's default is an empty list, not text");
+
+  await tick(); // else the save and the switch share a millisecond and the updatedAt check below cannot fail
+  const on = await store.updateEntry(note.data.id, { usedBy: ['reel-spinner'] }, SCOPE_A);
+  assert.equal(on.ok, true, on.error);
+  const readBack = await store.getEntry(note.data.id, SCOPE_A);
+  assert.deepEqual(readBack.data.usedBy, ['reel-spinner']);
+  assert.equal(readBack.data.bodyHtml, '<p>Why</p>', 'switching a use leaves the text alone');
+  assert.equal(readBack.data.updatedAt, note.data.updatedAt, 'switching a use is not an edit of the material');
+
+  await store.updateEntry(note.data.id, { usedBy: [] }, SCOPE_A);
+  assert.deepEqual((await store.getEntry(note.data.id, SCOPE_A)).data.usedBy, []);
+});
+
+test('usedBy: only known uses are accepted, never free text', async (t) => {
+  const { db, store, restore } = withStore();
+  t.after(restore);
+  const note = await store.createEntry({ title: 'Channel', bodyHtml: '' }, SCOPE_A);
+  for (const bad of [['reel spinner'], 'reel-spinner', [42], ['reel-spinner', 'everything']]) {
+    const res = await store.updateEntry(note.data.id, { usedBy: bad }, SCOPE_A);
+    assert.equal(res.ok, false, `${JSON.stringify(bad)} must be refused`);
+    assert.equal(res.status, 400);
+  }
+  assert.deepEqual((await rawRows(db))[0].used_by, []);
+  const refusedCreate = await store.createEntry({ title: 'X', bodyHtml: '', usedBy: ['nope'] }, SCOPE_A);
+  assert.equal(refusedCreate.status, 400);
+  assert.match(refusedCreate.error, /reel-spinner/, 'the refusal names the uses that exist');
+});
+
+test('route: PATCH usedBy switches an entry on, and GET reads it back', async (t) => {
+  const { route, restore } = withStore();
+  t.after(restore);
+  const made = await call(route, 'POST', '/api/context', { json: { title: 'Channel', bodyHtml: '<p>x</p>' } });
+  const id = made.body.data.entry.id;
+  const patched = await call(route, 'PATCH', `/api/context/${id}`, { json: { usedBy: ['reel-spinner'] } });
+  assert.equal(patched.status, 200);
+  const listed = await call(route, 'GET', '/api/context');
+  assert.deepEqual(listed.body.data.entries[0].usedBy, ['reel-spinner']);
+});
+
+test('a database without the used_by column still lists and saves notes, and a switch says which file adds it', async (t) => {
+  const { store, contextFor, restore } = withStore({ sql: SQL_PATH });
+  t.after(restore);
+  const note = await store.createEntry({ title: 'Channel', bodyHtml: '<p>x</p>' }, SCOPE_A);
+  assert.equal(note.ok, true, note.error);
+  assert.deepEqual(note.data.usedBy, []);
+  const res = await store.updateEntry(note.data.id, { usedBy: ['reel-spinner'] }, SCOPE_A);
+  assert.equal(res.ok, false);
+  assert.equal(res.status, 503);
+  assert.match(res.error, /docs\/SQL\/context_entries_used_by\.sql/);
+  const read = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner' });
+  assert.equal(read.ok, false, 'could not tell is never reported as nothing switched on');
+  assert.match(read.error, /context_entries_used_by\.sql/);
+});
+
+test('readContextFor: only switched-on entries, notes as plain text, a .md file read in, a PDF named in unreadable', async (t) => {
+  const { store, contextFor, restore } = withStore();
+  t.after(restore);
+  const on = await store.createEntry({ title: 'What this channel is for', bodyHtml: '<p>Attract <strong>collaborators</strong>.</p>', usedBy: ['reel-spinner'] }, SCOPE_A);
+  await store.createEntry({ title: 'Off note', bodyHtml: '<p>Not for Reel Spinner</p>' }, SCOPE_A);
+  const md = await store.createEntry({ kind: 'file', file: { url: MD_URL_A, name: 'channel.md', size: 30 }, usedBy: ['reel-spinner'] }, SCOPE_A);
+  const pdf = await store.createEntry({ kind: 'file', file: { url: PDF_URL_A, name: 'deck.pdf', size: 30 }, usedBy: ['reel-spinner'] }, SCOPE_A);
+  assert.equal(pdf.ok, true, pdf.error);
+  const fetch = fakeFetch({ [MD_URL_A]: '# Audience\n\nPeople drawn to WaveCenter.' });
+
+  const read = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner', fetchImpl: fetch.impl });
+  assert.equal(read.ok, true, read.error);
+  const { text, entries, unreadable, reason } = read.data;
+  assert.match(text, /## What this channel is for\n\nAttract \*\*collaborators\*\*\./);
+  assert.match(text, /## channel\.md\n\n# Audience\n\nPeople drawn to WaveCenter\./);
+  assert.doesNotMatch(text, /Off note|Not for Reel Spinner/);
+  assert.deepEqual(entries.map((e) => e.id), [on.data.id, md.data.id], 'oldest first');
+  assert.equal(unreadable.length, 1);
+  assert.equal(unreadable[0].id, pdf.data.id);
+  assert.equal(unreadable[0].fileName, 'deck.pdf');
+  assert.match(unreadable[0].reason, /cannot read \.pdf files/);
+  assert.deepEqual(fetch.asked, [MD_URL_A], 'the PDF is never downloaded');
+  assert.equal(reason, '');
+});
+
+test('readContextFor: a .md file that will not download is named in unreadable, not dropped', async (t) => {
+  const { store, contextFor, restore } = withStore();
+  t.after(restore);
+  await store.createEntry({ kind: 'file', file: { url: MD_URL_A, name: 'channel.md', size: 30 }, usedBy: ['reel-spinner'] }, SCOPE_A);
+  const read = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner', fetchImpl: fakeFetch({}).impl });
+  assert.equal(read.ok, true);
+  assert.equal(read.data.text, '');
+  assert.match(read.data.unreadable[0].reason, /answered 404/);
+  assert.match(read.data.reason, /cannot read/);
+});
+
+test('readContextFor: the fingerprint is stable across reads, moves with a switched-on edit or switch, not with a switched-off edit', async (t) => {
+  const { store, contextFor, restore } = withStore();
+  t.after(restore);
+  const on = await store.createEntry({ title: 'Channel', bodyHtml: '<p>v1</p>', usedBy: ['reel-spinner'] }, SCOPE_A);
+  const off = await store.createEntry({ title: 'Other', bodyHtml: '<p>v1</p>' }, SCOPE_A);
+  const fp = async () => (await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner' })).data.fingerprint;
+
+  const first = await fp();
+  assert.match(first, /^[0-9a-f]{32}$/);
+  assert.equal(await fp(), first, 'two reads, one fingerprint');
+
+  await tick();
+  await store.updateEntry(off.data.id, { bodyHtml: '<p>v2</p>' }, SCOPE_A);
+  assert.equal(await fp(), first, 'editing a switched-off note changes nothing Reel Spinner read');
+
+  await tick();
+  await store.updateEntry(on.data.id, { bodyHtml: '<p>v2</p>' }, SCOPE_A);
+  const edited = await fp();
+  assert.notEqual(edited, first, 'editing a switched-on note is visible');
+
+  await store.updateEntry(off.data.id, { usedBy: ['reel-spinner'] }, SCOPE_A);
+  const switched = await fp();
+  assert.notEqual(switched, edited, 'switching another note on is visible');
+  await store.updateEntry(off.data.id, { usedBy: [] }, SCOPE_A);
+  assert.equal(await fp(), edited, 'and switching it back off returns to the same fingerprint');
+});
+
+test('readContextFor: nothing switched on is an empty text and a reason, never an error, and never another project\'s notes', async (t) => {
+  const { store, contextFor, restore } = withStore();
+  t.after(restore);
+  await store.createEntry({ title: 'B channel', bodyHtml: '<p>Project B only</p>', usedBy: ['reel-spinner'] }, SCOPE_B);
+
+  const empty = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner' });
+  assert.equal(empty.ok, true, empty.error);
+  assert.equal(empty.data.text, '');
+  assert.deepEqual(empty.data.entries, []);
+  assert.match(empty.data.reason, /no Context entries/);
+
+  await store.createEntry({ title: 'A note', bodyHtml: '<p>switched off</p>' }, SCOPE_A);
+  const off = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel-spinner' });
+  assert.equal(off.ok, true);
+  assert.equal(off.data.text, '');
+  assert.match(off.data.reason, /No Context entry in this project is switched on for Reel Spinner/);
+  assert.doesNotMatch(JSON.stringify(off.data), /Project B only|B channel/);
+
+  const b = await contextFor.readContextFor({ projectId: 'proj_b', use: 'reel-spinner' });
+  assert.match(b.data.text, /Project B only/);
+});
+
+test('readContextFor: no project or an unknown use is refused, not answered', async (t) => {
+  const { contextFor, restore } = withStore();
+  t.after(restore);
+  assert.equal((await contextFor.readContextFor({ projectId: '', use: 'reel-spinner' })).ok, false);
+  const unknown = await contextFor.readContextFor({ projectId: 'proj_a', use: 'reel spinner' });
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.error, /reel-spinner/);
+});
