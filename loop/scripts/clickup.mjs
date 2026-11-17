@@ -42,7 +42,7 @@ import {
   findPullRequest, newestFirst, ESCALATE_AT_ROUND,
 } from './lib/loopTrail.mjs';
 import { buildCard, cardSurvived, findBlockquoteLines, findBranchLinks, branchLinkRefusal, CONTEXT_MIN_WORDS, CONTEXT_MAX_WORDS } from './lib/operatorCard.mjs';
-import { isMachineComment, stripMachineMarker } from './lib/machineComment.mjs';
+import { isMachineAuthored, isOperatorAuthored, stripMachineMarker } from './lib/machineComment.mjs';
 import { parseHumanHours, findHumanHours } from '../lib/humanHours.js';
 import { createClickupTracker } from './tracker/clickupTracker.mjs';
 import { createApiTracker, trackerTokenEnv } from './tracker/apiTracker.mjs';
@@ -55,9 +55,11 @@ import { readLedgerFile, saveLedgerIfReadable } from '../lib/autoMergeLedgerFile
 import { readLeaseFile, saveLeaseIfReadable } from '../lib/mergeWindowLeaseFile.js';
 import { windowDecision } from '../lib/mergeWindowLease.js';
 
-import { loadProjectConfig, ProjectConfigError } from '../lib/projectConfig.mjs';
+import { loadProjectConfig, namedProjectFolder, ProjectConfigError } from '../lib/projectConfig.mjs';
 // Spirality's releases (SP-265): what one is, and reading the tags.
 import { isReleaseName, OWN_PROJECT_RELEASE, readReleaseTags, releaseRemote } from '../lib/releases.mjs';
+// A project moves to the newest release by itself after a quiet period (SP-277).
+import { followReleases, QUIET_DAYS_KEY } from '../lib/releaseFollow.mjs';
 // The merge lane's decisions (task 86bchpkxz). `mergeDecision` says whether
 // Dane's word authorizes a merge, `githubGate` whether GitHub allows it; the
 // notices pair the words he reads with the marker the next pass reads. All
@@ -68,12 +70,12 @@ import {
 } from '../lib/mergeOnComment.js';
 import {
   PR_VIEW_FIELDS, markerBookkeeping, recordBookkeeping, emptyBooks, mergeDestination, relayLine,
-  handbackAnswer, handbackPlan, closePlan, conflictFilingPlan, CATCH_UP_WORKED_STATUSES,
+  handbackAnswer, earlierAnswerIds, handbackPlan, closePlan, conflictFilingPlan, CATCH_UP_WORKED_STATUSES,
   mergeWithPreMergeStep, commandLine, mergedBusLine, conflictBusLine, busAnnouncer, stalledHandOffPlan, remindStalledHandOff,
 } from '../lib/relayLane.js';
 import {
   conflictTicketName, conflictTicketBody, conflictTicketFiledComment, findConflictTicket, unstuckPullRequest, aheadConflictVerdict,
-  stalledSummaryHeadline, catchUpClosePlan, fixupLiveNote,
+  stalledSummaryHeadline, catchUpClosePlan, fixupLiveNote, catchUpTicketFields,
 } from '../lib/conflictWork.js';
 import {
   handbackDoneText, handbackFailureText, repliesShowHandbackDone, repliesShowHandbackFailure, HANDBACK_FAILURE_MARKER,
@@ -84,13 +86,19 @@ import trackerBus from '../lib/trackerBus.js';
 import { FALLBACK_TASK_NAME } from '../lib/busFallback.js';
 // Tickets as data for scheduled checks (SP-205).
 import ticketsJson from '../lib/ticketsJson.js';
+import { CLASS_FIELDS, classValue, LOOP_FILING_CLASS } from '../lib/ticketClass.js';
 // Stage counts for StarCaster's weekly report (SP-206).
 import stageCounts from '../lib/stageCounts.js';
 // A ticket's `Waits on:` line (task 86bctfun6): the claim leaves it alone
 // until every ticket it names is closed.
 import { waitsOn, waitsOnText, holdReasons } from '../lib/waitsOn.js';
+import { isNoticeboard } from '../lib/loopNoticeboards.js';
 import waitingOnOperator from '../lib/waitingOnOperator.js';
-import { ticketLine } from '../lib/clickupTicketLink.js';
+import { ticketLine, findTicketId } from '../lib/clickupTicketLink.js';
+// Which files each open pull request changes (SP-349).
+import { parseRestFiles, sharedWith, refreshPlan, sharedLine, normalFiles } from '../lib/prFiles.js';
+// Holding a ticket back while open work changes the same files (SP-351).
+import { fileHolds, holdApplies, holdReason, holdNote, holdNoteDue, readLikelyFiles, withLikelyFilesLine } from '../lib/fileHold.js';
 // Telling in-flight tickets that main moved under them (task 86bctjffu).
 import {
   checkBranch, branchContains, tellTickets, latestMainMoved,
@@ -111,9 +119,16 @@ import {
 // lib/projectConfig.mjs). Each is still overridable from the environment
 // (CLICKUP_LOOP_QUEUE_LIST, CLICKUP_OPERATOR_ID, ...), so a moved list or a
 // renamed seat is a one-line change in Doppler, not a code change.
+//
+// THE PROJECT IT ACTS FOR (SP-270). With SPIRALITY_PROJECT set to a project's
+// checkout folder, this door, run from Spirality's folder, reads that
+// project's spirality.project.json (its tracker, prefix, queue, seats) and
+// does its git work in that checkout, so the project needs no copy of the
+// door. Unset: the manifest found from the current folder up, as always.
+const NAMED_PROJECT = namedProjectFolder();
 let project;
 try {
-  project = loadProjectConfig();
+  project = loadProjectConfig({ project: NAMED_PROJECT });
 } catch (err) {
   if (!(err instanceof ProjectConfigError)) throw err;
   console.error(`clickup: the project config is not usable — ${err.message}`);
@@ -212,7 +227,9 @@ npm run clickup -- <command> [flags]      (Loop Queue: list ${LOOP_QUEUE_LIST}, 
   whoami                                          prove the token works and say who it acts as
   repo-check                                      does the tracker project's GitHub repository agree with githubRepo? (exit 1 if not)
   lists [--space <id>]                            resolve list ids by name (default: the project's space)
-  queue [--list <id>] [--claimable | --status S]  the tickets, one per line: id, status, priority, created, name
+  queue [--list <id>] [--claimable [--note-holds] | --status S]  the tickets, one per line: id, status, priority, created, name.
+                                                  --claimable leaves out a Queued ticket that shares a file with an open pull
+                                                  request or a ticket in Building (SP-351); --note-holds tells it why, once
   pass-reconcile                                  FIRST in every build pass: the ticket the last runner pass claimed and left
                                                   in Building goes back (Rework if it has a PR, else Queued), with a note.
                                                   Exit 0 nothing to do / 3 handed one back / 1 a write failed / 2 could not tell
@@ -220,12 +237,18 @@ npm run clickup -- <command> [flags]      (Loop Queue: list ${LOOP_QUEUE_LIST}, 
   attachments --task <id> --to <folder>           save every file on the ticket into the folder, each checked against its
                                                   size; exit 1 if any did not save (or the tracker keeps no files)
   task-name --task <id>                           the name and nothing else (for a PR title)
+  move --task <id> --to <project slug>            move a ticket, with every comment, file, tag and event, into another
+                                                  tracker project under its next id; the old id keeps opening it. Read
+                                                  back: exit 1 if the comment count differs, 2 if refused (nothing moved)
   comments --task <id>                            the comments, oldest first
   waiting [--task <id>]                           read-only: is this ACTUALLY waiting on Dane? exit 0 no / 3 yes / 1 could not tell
   task --name "..." --body-file <f|-> [--list <id>] [--status S] [--priority p] [--tags a,b] [--id-out <file>]
+       [--kind k] [--started-by s] [--outcome o]  the ticket's class (SP-345), tracker only; see classify
   describe --task <id> --body-file <f|->          REPLACE the description (the left column)
+  likely-files --task <id> --files a,b,...        add the Likely files: line to a ticket that has none, read back (SP-351)
   comment --task <id> --body-file <f|->           a plain note
-  claim --task <id>                               safe claim: reads the status and guards the write on it
+  claim --task <id>                               safe claim: reads the status and guards the write on it; exit 3 if it
+                                                  waits on a ticket or shares a file with work in flight, 2 if it names no files
   status --task <id> --status S [--if-status S] [--assign <uid>] [--clear-assignees] [--no-auto-assign] [--no-card]
   ask --task <id> [--status "Needs your input"|"Ready to launch"] --body-file <f|-> [--no-move] [--after-his-answer]
                                                   [--ask-anyway] [--ask-again]
@@ -234,8 +257,16 @@ npm run clickup -- <command> [flags]      (Loop Queue: list ${LOOP_QUEUE_LIST}, 
                                                   4 not one (its own PR, none named, or not merged): carry on / 3 moved meanwhile /
                                                   1 a read or write failed
   pr-opened --task <id> --pr <url|number> [--repo owner/name] [--if-missing] [--human-hours <N>] [--body-file <f|->]
+  pr-files [--task <id>] [--files a,b,...] [--json]   which files each open pull request changes (SP-349); with --files or
+                                                  --task, the open pull requests sharing any of them. Exit 0 none shared /
+                                                  3 some shared / 1 could not tell
+  pr-files-refresh [--dry-run]                    the relay's step: re-read each open pull request's files when its branch
+                                                  moved, forget merged or closed ones. Exit 1 if any read or write failed
   verdict --task <id> --pass|--fail --if-status "In review" [--body-file <f|->] [--no-guard] [--fourth-round-anyway]
   priority --task <id> --priority urgent|high|normal|low [--operator-asked]
+  classify --task <id> [--kind feature|fix|operational|documentation] [--started-by operator|client|agent]
+           [--outcome done|wont-do|duplicate|test]   the ticket's class (SP-345, docs/LOOP_CONTRACT.md), each read
+                                                  back; "none" clears one. An ending only on a closed ticket. Tracker only
   tag --task <id> --add <name> | --remove <name>  e.g. wont-do, deferred, an epic name
   relay [--list <id>] [--dry-run]                 the merge lane: act on Dane's merge phrase on every "Ready to launch"
                                                   ticket (re-check every gate, merge, move the ticket, write the record),
@@ -243,11 +274,17 @@ npm run clickup -- <command> [flags]      (Loop Queue: list ${LOOP_QUEUE_LIST}, 
                                                   ticket moves it to Queued, Rework or Live by the contract's table.
                                                   With "autoMergeLanes" in the project config, the auto-merge lanes run too, up to
                                                   a "would merge" note: nothing merges without his word yet (SP-202).
+                                                  On the tracker's home project it also moves each other project whose
+                                                  release.quiet-days is above 0 to the newest release once that has run that
+                                                  many days with no ALARM on this project's bus, and tells its bus (SP-277).
                                                   One line per ticket he holds. --dry-run prints what it would do, writes nothing
   tickets --json [--include-closed] [--project <slug>] [--comments]
                                                   read-only: the tickets as JSON for a scheduled check, one object each (id,
-                                                  name, status, priority, tags, created, updated, statusSince; --comments adds
+                                                  name, status, priority, tags, kind, startedBy, outcome, created, updated, statusSince; --comments adds
                                                   the top-level comments). Exit 1 naming what failed, printing nothing, on any failed read
+  replies --task <id> --comment <id> --json       read-only: one comment's replies as a JSON list, oldest first, in the
+                                                  tickets --json comment shape (what stale-answer reads for the relay's
+                                                  hand-back-done reply). Exit 1, printing nothing, on a failed read
   stage-counts [--project <slug> | --list <id>] [--since YYYY-MM-DD [--until YYYY-MM-DD]]
                                                   read-only: one JSON object for the weekly report: tickets per status now
                                                   (byStatus, total) and, in the window (whole UTC days), how many shipped
@@ -296,6 +333,50 @@ async function fetchAllTasks(list, { includeClosed = false, markdown = false, st
   return tasks;
 }
 
+/** A ticket's class fields (SP-345): the API's name, the door's flag, and the key a read ticket carries. */
+const CLASS_FLAGS = Object.freeze([
+  { field: 'kind', flag: 'kind', key: 'kind' },
+  { field: 'startedBy', flag: 'started-by', key: 'started_by' },
+  { field: 'outcome', flag: 'outcome', key: 'outcome' },
+]);
+
+/**
+ * The class flags given on the command line, checked: `{ wanted }`, the API
+ * field -> its value (null for "none"), only the flags given. A value that
+ * is not one of the field's exits 2, and so does a class flag on a tracker
+ * that keeps none (ClickUp): nothing is written either way.
+ */
+function classFlags(doing) {
+  const wanted = {};
+  for (const { field, flag: name } of CLASS_FLAGS) {
+    if (!process.argv.includes(`--${name}`)) continue;
+    const given = arg(name);
+    if (given == null) { console.error(`--${name} needs a value: ${CLASS_FIELDS[field].values.join(', ')} or none. ${doing}`); process.exit(2); }
+    const read = classValue(field, given);
+    if (read.problem) { console.error(`--${name}: ${read.problem} ${doing}`); process.exit(2); }
+    wanted[field] = read.value;
+  }
+  if (Object.keys(wanted).length && project.tracker !== 'api') {
+    console.error(`A ticket's kind, who started it and how it ended are kept only on the tracker, not on ${project.tracker}. ${doing}`);
+    process.exit(2);
+  }
+  return wanted;
+}
+
+/**
+ * The class a ticket the door files on its own carries (SP-346,
+ * lib/ticketClass.js LOOP_FILING_CLASS): Operational, started by an agent
+ * session. Only the tracker keeps a class, so on ClickUp it is nothing.
+ */
+const ownFilingClass = () => (project.tracker === 'api' ? LOOP_FILING_CLASS : {});
+
+/** The class fields a read ticket carries that differ from `wanted`, as "kind: asked x, got y" lines. */
+function classMismatches(t, wanted) {
+  return CLASS_FLAGS.filter(({ field }) => field in wanted)
+    .filter(({ field, key }) => (t[key] ?? null) !== wanted[field])
+    .map(({ field, key }) => `${CLASS_FIELDS[field].label}: asked "${wanted[field] ?? 'none'}", got "${t[key] ?? 'none'}"`);
+}
+
 async function readTask(task) {
   const out = await tracker.getTask(task, { markdown: true });
   if (!out.res.ok) die('read the task', out);
@@ -325,6 +406,29 @@ async function prerequisiteStates(tickets, openIds = []) {
     }
   }
   return states;
+}
+
+/**
+ * The same-file hold (lib/fileHold.js) for every ticket in `candidates`,
+ * against `tasks` (the project's open tickets, markdown descriptions) and the
+ * tracker's record of each open pull request's files. Answers `{ holds }`, a
+ * Map from ticket id to fileHolds' answer, or `{ skipped }` with why the
+ * check could not run: a tracker that keeps no files (ClickUp), or one that
+ * did not answer. It fails open, as the work-in-progress cap does, and the
+ * caller says so: refusing on a passing outage would stop all work.
+ */
+async function sharedFileHolds(candidates, tasks) {
+  let out;
+  try { out = await tracker.prFiles(); } catch (err) { return { skipped: `the open pull requests' files could not be read (${err?.message || err})` }; }
+  if (out.unsupported) return { skipped: out.json?.err || 'this tracker keeps no pull request files' };
+  if (!out.res.ok || !Array.isArray(out.json?.pullRequests)) return { skipped: `the open pull requests' files could not be read (HTTP ${out.res.status})` };
+  const holds = new Map();
+  for (const t of candidates) {
+    holds.set(t.id, fileHolds({
+      ticket: t, tickets: tasks, records: out.json.pullRequests, repo: project.githubRepo, buildingStatus: BUILDING, queuedStatus: QUEUED,
+    }));
+  }
+  return { holds };
 }
 
 /** Every comment on the ticket, newest first, across ALL pages: ClickUp
@@ -399,6 +503,61 @@ function gh(args) {
 }
 
 /**
+ * Which files pull request `number` in `repo` changes, read from GitHub
+ * (SP-349): `{ ok: true, files, head, state }`, or `{ ok: false, why }`.
+ * The pull request's own head commit and changed-file count are read first,
+ * then every page of its files; a count that does not match (the branch
+ * moved between the two reads, or GitHub cut the list short) is a failed
+ * read, never a short list. A failed read is never "no files".
+ */
+function readPrFilesFromGitHub(repo, number) {
+  const first = (text) => String(text || '').trim().split('\n')[0] || 'gh failed';
+  const view = gh(['pr', 'view', String(number), '--repo', repo, '--json', 'headRefOid,changedFiles,state']);
+  if (!view.ok) return { ok: false, why: `GitHub did not answer for PR #${number}: ${first(view.stderr)}` };
+  let pr;
+  try { pr = JSON.parse(view.stdout); } catch { return { ok: false, why: `GitHub answered PR #${number} with something that is not JSON` }; }
+  if (!Number.isInteger(pr?.changedFiles) || typeof pr?.headRefOid !== 'string') return { ok: false, why: `GitHub's answer for PR #${number} has no changed-file count or head commit` };
+  const list = gh(['api', '--paginate', `repos/${repo}/pulls/${number}/files`, '--jq', '.[] | [.filename, (.previous_filename // "")] | @tsv']);
+  if (!list.ok) return { ok: false, why: `GitHub did not list PR #${number}'s files: ${first(list.stderr)}` };
+  const { files, count } = parseRestFiles(list.stdout);
+  if (files == null) return { ok: false, why: `GitHub's list of PR #${number}'s files could not be read` };
+  if (count !== pr.changedFiles) return { ok: false, why: `GitHub listed ${count} changed file(s) for PR #${number} but the pull request says ${pr.changedFiles}` };
+  return { ok: true, files, head: pr.headRefOid, state: pr.state };
+}
+
+/** True when `repo` is the project's own repository (owner/name, any case). */
+function isProjectRepo(repo) {
+  return String(repo || '').trim().toLowerCase() === String(project.githubRepo || '').trim().toLowerCase();
+}
+
+/**
+ * Read PR #number's files from GitHub and record them on the tracker for
+ * `ticket`, read back (SP-349). `{ ok, line }` on a record that stuck;
+ * `{ ok: false, unsupported?, notOpen?, otherRepo?, why }` otherwise,
+ * nothing stored. Only the project's own repository is kept: records are
+ * keyed by pull request number alone, and the relay's refresh lists only
+ * that repository, so another repository's #7 would be read back as this
+ * one's. Only an open pull request is kept: a merged or closed one would
+ * show other tickets a false shared-files line until the next refresh.
+ * `read` is an already-made GitHub read, to save a second one.
+ */
+async function recordPrFiles(ticket, repo, number, read = null) {
+  if (!isProjectRepo(repo)) return { ok: false, otherRepo: true, why: `PR #${number} is in ${repo}, not this project's repository (${project.githubRepo}), so its files are not kept` };
+  const got = read || readPrFilesFromGitHub(repo, number);
+  if (!got.ok) return { ok: false, why: got.why };
+  if (got.state !== 'OPEN') return { ok: false, notOpen: true, why: `PR #${number} is ${String(got.state || 'not open').toLowerCase()}, so its files are not kept` };
+  const out = await tracker.recordPrFiles(number, { ticket: String(ticket).toUpperCase(), repo, head: got.head, files: got.files });
+  if (out.unsupported) return { ok: false, unsupported: true, why: out.json?.err || 'not kept on this tracker' };
+  if (out.res.status === 404 && out.json?.error === 'unknown-ticket') return { ok: false, unknownTicket: true, why: `${String(ticket).toUpperCase()} is not a ticket on this project` };
+  if (!out.res.ok) return { ok: false, why: `the tracker refused the record (HTTP ${out.res.status}${out.json?.message ? `: ${out.json.message}` : out.json?.err ? `: ${out.json.err}` : ''})` };
+  const kept = normalFiles(out.json?.files);
+  if (!kept || JSON.stringify(kept) !== JSON.stringify(got.files) || out.json?.head !== got.head) {
+    return { ok: false, why: 'the record did not read back as written' };
+  }
+  return { ok: true, files: kept, line: `PR #${number} (${String(ticket).toUpperCase()}): ${kept.length} changed file(s) recorded at ${got.head.slice(0, 7)}, read back.` };
+}
+
+/**
  * A recorded PR's live state, as waitingVerdict reads it (SP-217): null for
  * no PR recorded, else { number, state } with state OPEN, MERGED or CLOSED,
  * or null when GitHub could not be read or the PR is in another repository.
@@ -447,21 +606,64 @@ async function readyToLaunchRefused(task, status) {
   return true;
 }
 
-/** Dane must not be asked for something he has already answered. */
+/**
+ * The relay's reading of who answered the card on a Needs your input ticket
+ * (SP-302): anyone on the project, and once an earlier answer after the card
+ * carries the done reply, only his own words newer than it. Shared by the
+ * relay and the `ask` guard, so the two cannot read a teammate differently.
+ * Returns { verdict } or { unreadable: <comment id> } when the replies under
+ * an earlier answer could not be read.
+ */
+async function teamAnswerVerdict(comments) {
+  const opts = { comments, operatorId: OPERATOR_ID, isMachine: isMachineAuthored, teammates: true };
+  let verdict = handbackAnswer(opts);
+  const earlier = earlierAnswerIds({ comments, verdict, operatorId: OPERATOR_ID, isMachine: isMachineAuthored });
+  if (!earlier.length) return { verdict };
+  const spent = [];
+  for (const id of earlier) {
+    const out = await tracker.listReplies(id);
+    if (!out.res.ok) return { unreadable: id };
+    if (repliesShowHandbackDone(out.json?.comments || out.json?.replies || [])) spent.push(id);
+  }
+  if (spent.length) verdict = handbackAnswer({ ...opts, spent });
+  return { verdict };
+}
+
+/**
+ * Dane must not be asked for something already answered: by him, or, on a
+ * Needs your input ticket, by a teammate whose reply the relay will act on
+ * (SP-302 round 2). A new card over that reply would make it older than the
+ * card, and the answer would be ignored.
+ */
 async function alreadyAnsweredRefused(task, status) {
   if (!isOperatorStatus(status)) return null;
   if (flag('after-his-answer')) {
-    console.error('Handing this back although he spoke last (--after-his-answer). Recorded in this transcript.');
+    console.error('Handing this back although it was answered last (--after-his-answer). Recorded in this transcript.');
     return null;
   }
   const comments = await readComments(task);
-  if (operatorSpokeLast(comments, OPERATOR_ID)) {
-    console.error(`\nREFUSED — Dane's own comment is the NEWEST one on ${task}, so a machine owes the next move.`);
-    console.error('Handing it back now asks him to answer twice. Read what he said:');
+  const refuse = (whose) => {
+    console.error(`\nREFUSED — ${whose} is the NEWEST one on ${task}, so a machine owes the next move.`);
+    console.error('Asking again now asks for the same answer twice. Read what was said:');
     console.error(`  npm run clickup -- waiting --task ${task}`);
     console.error('If this really is a NEW question, say so on the record: ... --after-his-answer');
     console.error('Nothing was posted and the status has NOT moved.');
     return 2;
+  };
+  if (operatorSpokeLast(comments, OPERATOR_ID)) return refuse("Dane's own comment");
+  const t = await readTask(task);
+  if (statusOf(t) !== NEEDS_YOUR_INPUT) return null;
+  const newest = newestFirst(comments)[0];
+  if (!newest) return null;
+  const read = await teamAnswerVerdict(comments);
+  if (read.unreadable != null) {
+    console.error(`\nREFUSED — the replies under comment ${read.unreadable} on ${task} could not be read, so it cannot be told whether a teammate's newest comment is an answer the relay will act on.`);
+    console.error('Nothing was posted and the status has NOT moved. Try again, or pass --after-his-answer if this really is a NEW question.');
+    return 1;
+  }
+  const { verdict } = read;
+  if (verdict.state === 'answered' && verdict.answer && String(verdict.answer.id) === String(newest.id)) {
+    return refuse(`${newest.user?.username ?? 'a teammate'}'s answer to the card`);
   }
   return null;
 }
@@ -534,7 +736,9 @@ async function alreadyAskedRefused(task, status) {
   const t = await readTask(task);
   if (statusOf(t.status?.status ?? '') !== statusOf(status)) return null;
   const comments = await readComments(task);
-  const verdict = handbackAnswer({ comments, operatorId: OPERATOR_ID, isMachine: isMachineComment });
+  // In Needs your input a teammate's reply answers the card too (SP-302).
+  const teammates = statusOf(status) === statusOf('Needs your input');
+  const verdict = handbackAnswer({ comments, operatorId: OPERATOR_ID, isMachine: isMachineAuthored, teammates });
   if (verdict.state !== 'none') return null;
   console.error(`\nREFUSED — ${task} is already in "${t.status?.status}" with a card Dane has not answered yet, so he has been asked.`);
   console.error('A second card puts the same question in front of him twice. To add something, post a plain note:');
@@ -593,7 +797,11 @@ function autoMergeLedgerPath() {
   return dir ? joinPath(dir, 'auto-merge-ledger.json') : null;
 }
 
-/** Every message on the bus project, or why it could not be read. One unread ticket is unreadable. */
+/**
+ * Every message on the bus, or why it could not be read. One unread ticket
+ * is unreadable. In the project's own queue the bus is its noticeboards
+ * only (SP-356): a comment on a work ticket is never a stop word.
+ */
 async function readBusMessages() {
   if (project.tracker !== 'api') return { ok: false, why: `the bus is a tracker project, and this project's tracker is "${project.tracker}"` };
   const bus = project.busProject;
@@ -601,23 +809,26 @@ async function readBusMessages() {
   const listed = await tracker.listTasksPage(bus, 0, { includeClosed: true });
   if (!listed.res.ok || !Array.isArray(listed.json?.tasks)) return { ok: false, why: `the bus project ${bus} could not be listed (HTTP ${listed.res.status})` };
   const messages = [];
-  for (const t of listed.json.tasks) {
+  for (const t of trackerBus.busTickets(listed.json.tasks, { ownQueue: trackerBus.busIsOwnQueue(project) })) {
     const read = await readCommentsOrProblem(t.id);
     if (read.problem) return { ok: false, why: `the comments on ${t.id} "${t.name}" could not be read (${read.problem})` };
     for (const c of read.comments) {
-      messages.push({ id: String(c.id), at: Number(c.date) || 0, authorId: c.user?.id == null ? null : Number(c.user.id), ticket: String(t.id), text: String(c.comment_text ?? '') });
+      messages.push({ id: String(c.id), at: Number(c.date) || 0, authorId: c.user?.id == null ? null : Number(c.user.id), authorKind: c.user?.kind ?? null, ticket: String(t.id), text: String(c.comment_text ?? '') });
     }
   }
   return { ok: true, messages };
 }
 
-/** Post to the bus's Team chat ticket and read it back. Never creates it: `bus-post` does that. */
-async function postBusMessage(text) {
-  if (project.tracker !== 'api' || !project.busProject) return { ok: false, why: 'this project has no bus' };
-  const bus = project.busProject;
+/**
+ * Post to the bus's Team chat ticket and read it back. Never creates it: `bus-post` does that.
+ * `bus` is this project's own bus unless another is named (the release
+ * step tells another project's bus that it moved, SP-277).
+ */
+async function postBusMessage(text, bus = project.busProject) {
+  if (project.tracker !== 'api' || !bus) return { ok: false, why: 'this project has no bus' };
   const listed = await tracker.listTasksPage(bus, 0, { includeClosed: true });
   if (!listed.res.ok || !Array.isArray(listed.json?.tasks)) return { ok: false, why: `the bus project ${bus} could not be listed (HTTP ${listed.res.status})` };
-  const chat = trackerBus.pickTeamChat(listed.json.tasks);
+  const chat = trackerBus.pickTeamChat(trackerBus.busTickets(listed.json.tasks, { ownQueue: true }));
   if (!chat) return { ok: false, why: `there is no "${FALLBACK_TASK_NAME}" ticket in ${bus} (npm run clickup -- bus-post makes one)` };
   const post = trackerBus.renderBusPost({ text, node: hostname(), at: trackerBus.mountainTime(Date.now()) });
   if (!post) return { ok: false, why: 'the message was empty' };
@@ -627,6 +838,79 @@ async function postBusMessage(text) {
   const back = await readCommentsOrProblem(chat.id);
   if (back.problem || !back.comments.some((c) => String(c.id) === id)) return { ok: false, why: `comment ${id || '(no id)'} did not read back` };
   return { ok: true, id };
+}
+
+/**
+ * The relay's release step (SP-277, lib/releaseFollow.mjs). Reads every
+ * project's Quiet Days Before Moving first, and nothing more when none is
+ * above 0, so the step costs one read while it is off everywhere. Acts only
+ * when this door's project is the tracker's home. Answers `{ lines, problems }`.
+ */
+async function releaseFollowStep({ dryRun }) {
+  const fail = (why) => ({ lines: [], problems: [`release-follow: ${why}; no project was moved by it this pass`] });
+  const controls = await tracker.allPipelineControls();
+  if (!controls.res.ok) return fail(`the pipeline controls could not be read (HTTP ${controls.res.status}: ${String(controls.json?.err || controls.text || '').slice(0, 200)})`);
+  const quietDaysOf = new Map(controls.json.projects.map((v) => [v.project?.slug, Number(v.controls?.find((c) => c.key === QUIET_DAYS_KEY)?.value ?? 0)]));
+  const on = [...quietDaysOf.values()].some((n) => n > 0);
+  if (!on) return { lines: [], problems: [] };
+
+  const all = await tracker.releases();
+  if (!all.res.ok) return fail(`the releases could not be read (HTTP ${all.res.status}: ${String(all.json?.err || all.text || '').slice(0, 200)})`);
+  const ownProject = all.json.ownProject ?? null;
+  if (!ownProject) return fail('the tracker cannot say which project is its home (its project config was not usable when it started)');
+  if (ownProject !== project.projectSlug) return { lines: [], problems: [] }; // the home project's relay does it
+  const git = (args) => spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 });
+  const remote = releaseRemote();
+  const tags = readReleaseTags({ git, remote });
+  if (tags.problem) return fail(`the release tags could not be read: ${tags.problem}`);
+  const slugs = new Set(all.json.projects.map((p) => p.slug));
+
+  return followReleases({
+    projects: all.json.projects.map((p) => ({ ...p, quietDays: quietDaysOf.get(p.slug) ?? 0 })),
+    newest: tags.tags[0] ?? null,
+    now: Date.now(),
+    dryRun,
+    io: {
+      // When the release's commit reached main: here already, or fetched
+      // (into FETCH_HEAD only; no branch or tag here is changed).
+      releasedAt: (commit) => {
+        const when = () => git(['show', '-s', '--format=%ct', `${commit}^{commit}`]);
+        let out = when();
+        if (out.status !== 0) {
+          const fetched = git(['fetch', '--quiet', '--no-tags', remote, 'main']);
+          if (fetched.status !== 0) return { problem: `git fetch ${remote} main failed: ${String(fetched.stderr || '').trim().slice(0, 200)}` };
+          out = when();
+        }
+        const secs = Number(String(out.stdout || '').trim());
+        return out.status === 0 && secs > 0 ? secs * 1000 : { problem: `commit ${commit.slice(0, 12)} is not in this checkout or on ${remote}'s main` };
+      },
+      alarms: async () => {
+        if (!project.busProject) return { problem: `${project.projectSlug}'s project config names no bus ("busProject"), so no alarm could be seen` };
+        const read = await readBusMessages();
+        if (!read.ok) return { problem: `its bus could not be read (${read.why})` };
+        return { times: read.messages.filter((m) => trackerBus.isAlarmPost(m.text)).map((m) => m.at) };
+      },
+      nameRelease: async (slug, to) => {
+        const out = await tracker.nameRelease(slug, to);
+        if (!out.res.ok) return { ok: false, problem: `HTTP ${out.res.status}: ${String(out.json?.err || out.text || '').slice(0, 200)}` };
+        const back = await tracker.projectRelease(slug);
+        if (!back.res.ok) return { ok: false, problem: `named, but the record could not be read back (HTTP ${back.res.status})` };
+        return { ok: true, release: back.json.release ?? null };
+      },
+      // Its "<slug>-bus" project, else itself when its own queue holds a
+      // Team chat (SP-356); a queue that cannot be read is no bus, said.
+      busOf: async (slug) => {
+        if (slugs.has(trackerBus.separateBusSlug(slug))) return trackerBus.separateBusSlug(slug);
+        const listed = await tracker.listTasksPage(slug, 0, { includeClosed: true });
+        if (!listed.res.ok || !Array.isArray(listed.json?.tasks)) return { problem: `its queue could not be read to find its bus (HTTP ${listed.res.status})` };
+        return trackerBus.busOfProject(slug, { slugs, tasks: listed.json.tasks });
+      },
+      postBus: async (bus, text) => {
+        const out = await postBusMessage(text, bus);
+        return out.ok ? { ok: true } : { ok: false, problem: out.why };
+      },
+    },
+  });
 }
 
 /** Post a lane notice on a ticket and read it back, returning the tracker's own time for it. */
@@ -688,9 +972,15 @@ function laneIo(repo) {
 }
 
 // ── Main moved: tell every ticket still in flight (task 86bctjffu) ───────────
-// The checkout this script lives in. The relay runs from the main checkout;
-// the git reads here are a fetch and an in-memory merge, so nothing in it moves.
-const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
+// The Spirality checkout this script lives in (its releases are read here).
+const SPIRALITY_ROOT = fileURLToPath(new URL('..', import.meta.url));
+// The checkout of the project the door acts for: the one SPIRALITY_PROJECT
+// names (SP-270), else this one. The relay runs from the main checkout; the
+// git reads here are a fetch and an in-memory merge, so nothing in it moves.
+const REPO_ROOT = NAMED_PROJECT ?? SPIRALITY_ROOT;
+// Where the git reads that follow the current folder run (worktrees, the
+// claim marker): the named project's checkout, else the current folder.
+const GIT_CWD = NAMED_PROJECT ?? undefined;
 
 /**
  * After PR `mergedNumber` merged: one `MAIN MOVED:` note on every ticket in a
@@ -788,7 +1078,7 @@ function ancestorPids() {
 
 /** Every linked worktree of the checkout the door runs in: path, branch, when it was made, pushed?, dirty? */
 function listWorktrees() {
-  const out = spawnSync('git', ['worktree', 'list', '--porcelain'], { encoding: 'utf8' });
+  const out = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: GIT_CWD, encoding: 'utf8' });
   if (out.status !== 0) return { problem: String(out.stderr || '').trim().slice(0, 200) || 'git worktree list failed', worktrees: [] };
   const entries = String(out.stdout).split(/\n\n+/).map((block) => {
     const e = {};
@@ -802,7 +1092,7 @@ function listWorktrees() {
   const worktrees = entries.slice(1).map((e) => {
     let createdMs = NaN;
     try { const st = statSync(joinPath(e.path, '.git')); createdMs = st.birthtimeMs || st.mtimeMs; } catch { /* gone or unreadable */ }
-    const pushed = Boolean(e.branch) && spawnSync('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${e.branch}`]).status === 0;
+    const pushed = Boolean(e.branch) && spawnSync('git', ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${e.branch}`], { cwd: GIT_CWD }).status === 0;
     const st = spawnSync('git', ['-C', e.path, 'status', '--porcelain'], { encoding: 'utf8' });
     return { path: e.path, branch: e.branch || '', createdMs, pushed, dirty: st.status === 0 && String(st.stdout).trim() !== '' };
   });
@@ -816,7 +1106,7 @@ function listWorktrees() {
  * pass's worktree, where plain `.git` is a FILE pointing elsewhere.
  */
 function passMarkerPath() {
-  const r = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8' });
+  const r = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: GIT_CWD, encoding: 'utf8' });
   const out = r.status === 0 ? String(r.stdout || '').trim() : '';
   return passClaim.markerPath(out || '.git');
 }
@@ -887,11 +1177,35 @@ if (cmd === 'claim') {
     console.error(`Claimable statuses, in drain order: ${CLAIMABLE_BY_BUILD.map((x) => DISPLAY[x]).join(', ')}. Take the next task.`);
     process.exit(3);
   }
+  // A noticeboard is not work (SP-356): with the bus in the project's own
+  // queue, a steward's question parked in a claimable status by hand must
+  // still never be built.
+  if (isNoticeboard(seen)) {
+    console.error(`NOT claimed: "${task}" is a noticeboard (Team chat, the pause switch, or tagged noticeboard), not work. Nothing was written. Take the next task.`);
+    process.exit(3);
+  }
   const states = await prerequisiteStates([seen]);
   const held = holdReasons(seen, (id) => states.get(id));
   if (held.reasons.length) {
     console.error(`NOT claimed: "${task}" ${held.reasons.join('; ')}. Nothing was written.${held.unreadable ? '' : ' Take the next task.'}`);
     process.exit(held.unreadable ? 1 : 3);
+  }
+  // Same files as work in flight (SP-351): the same rule queue --claimable
+  // applies, so the two never disagree.
+  if (holdApplies(seen, { queuedStatus: QUEUED })) {
+    const open = await fetchAllTasks(LOOP_QUEUE_LIST, { markdown: true });
+    const listed = open.some((t) => String(t.id).toUpperCase() === String(seen.id).toUpperCase());
+    const files = await sharedFileHolds([seen], listed ? open : [...open, seen]);
+    const hold = files.holds?.get(seen.id);
+    if (files.skipped) console.error(`  (same-file check NOT applied: ${files.skipped})`);
+    else if (hold?.applies && !hold.source && hold.inFlight) {
+      console.error(`NOT claimed: "${task}" names no files it will change (no Likely files: line, no paths under ## Affected files / artifacts), so it cannot be checked against the ${hold.inFlight} pull request(s) and ticket(s) in flight. Nothing was written.`);
+      console.error(`Work them out from its spec and write them first: npm run clickup -- likely-files --task ${task} --files <path>,<path>   then claim again.`);
+      process.exit(2);
+    } else if (hold?.holders.length) {
+      console.error(`NOT claimed: "${task}" ${holdReason(hold.holders)}. Nothing was written. Take the next task.`);
+      process.exit(3);
+    }
   }
   // Only a claim made under the build runner arms the marker (SP-101): a
   // hand-run session never does, so no loop pass can take its ticket back.
@@ -924,7 +1238,7 @@ if (cmd === 'whoami') {
   const out = await tracker.whoAmI();
   if (!out.res.ok) die('whoami', out);
   console.log(`Token valid. Acting as: ${out.json.user.username} <${out.json.user.email}> (id ${out.json.user.id})`);
-  if (Number(out.json.user.id) === OPERATOR_ID) console.error("  (This is Dane's own seat, as on StarCaster. Every comment this script posts carries the [machine] marker so readers can tell.)");
+  if (Number(out.json.user.id) === OPERATOR_ID) console.error("  (This is Dane's own seat, as on ClickUp. The ClickUp door stamps every comment it posts with the [machine] marker so readers can tell; on the tracker each loop signs in as its own machine actor instead.)");
   reportLimits();
 
 } else if (cmd === 'repo-check') {
@@ -973,13 +1287,41 @@ if (cmd === 'whoami') {
   if (claimable) {
     // A ticket from this (open-only) list is open; any other prerequisite
     // is read on its own, so queue and claim apply the same rule.
-    const ordered = claimOrder(tasks);
+    const ordered = claimOrder(tasks).filter((t) => {
+      if (isNoticeboard(t)) console.error(`skipped ${t.id}: a noticeboard, not work (SP-356)`);
+      return !isNoticeboard(t);
+    });
     const states = await prerequisiteStates(ordered, tasks.map((t) => t.id));
     wanted = ordered.filter((t) => {
       const held = holdReasons(t, (id) => states.get(id));
       if (held.reasons.length) console.error(`skipped ${t.id}: ${held.reasons.join('; ')}`);
       return !held.reasons.length;
     });
+    // Same files as work in flight (SP-351). With --note-holds (the build
+    // lane), a held ticket is told once which tickets and files hold it.
+    const files = await sharedFileHolds(wanted, tasks);
+    if (files.skipped) console.error(`same-file check NOT applied this time: ${files.skipped}`);
+    else {
+      const kept = [];
+      for (const t of wanted) {
+        const hold = files.holds.get(t.id);
+        if (hold.applies && !hold.source && hold.inFlight) console.error(`note ${t.id}: names no files it will change; write them before claiming (npm run clickup -- likely-files --task ${t.id} --files ...)`);
+        if (!hold.holders.length) { kept.push(t); continue; }
+        console.error(`skipped ${t.id}: ${holdReason(hold.holders)}`);
+        if (!flag('note-holds')) continue;
+        const read = await readCommentsOrProblem(t.id);
+        if (read.problem) { console.error(`  ${t.id}: its comments could not be read (${read.problem}), so no hold note was written; the next pass tries again.`); continue; }
+        if (!holdNoteDue(read.comments, hold.holders)) continue;
+        // Not postComment: it ends the command on a failed write, and one
+        // note that did not land must not stop the queue being listed.
+        const posted = await tracker.postComment(t.id, { comment_text: holdNote(hold.holders) });
+        const noteId = String(posted.json?.id ?? '');
+        const back = posted.res.ok ? await readCommentsOrProblem(t.id) : null;
+        if (back?.comments?.some((c) => String(c.id) === noteId && String(c.comment_text || '').trim())) console.error(`  ${t.id}: hold note ${noteId} written and read back.`);
+        else console.error(`  ${t.id}: the hold note did NOT land (${posted.res.ok ? (back?.problem || 'not found on the ticket when read back') : `HTTP ${posted.res.status}`}); the next pass tries again.`);
+      }
+      wanted = kept;
+    }
   } else {
     wanted = status ? tasks.filter((t) => (t.status?.status ?? '').toLowerCase() === status.toLowerCase()) : tasks.slice();
     wanted.sort(compareWithinStatus);
@@ -1075,6 +1417,12 @@ if (cmd === 'whoami') {
   console.log(`priority: ${t.priority?.priority ?? 'none'}`);
   console.log(`assigned: ${assigneeNames(t)}`);
   console.log(`tags:     ${(t.tags || []).map((x) => x.name).join(', ') || '(none)'}`);
+  // Its class (SP-345): only the tracker keeps one, so a ClickUp task shows none of these lines.
+  if ('kind' in t) {
+    console.log(`kind:     ${t.kind ?? '(none)'}`);
+    console.log(`started:  ${t.started_by ?? '(none)'}`);
+    console.log(`ended:    ${t.outcome ?? (t.status?.type === 'closed' ? '(none)' : '(still open)')}`);
+  }
   console.log(`list:     ${t.list?.name} (${t.list?.id})`);
   console.log(`pr:       ${pr ? pr.url : '(none recorded)'}`);
   console.log(`rounds:   ${sendBackRounds(comments)} send-back(s) so far`);
@@ -1162,12 +1510,50 @@ if (cmd === 'whoami') {
   if (!name.trim()) { console.error(`Task ${task} has an empty name.`); process.exit(1); }
   process.stdout.write(`${name}\n`);
 
+} else if (cmd === 'move') {
+  // Take a ticket into another project with all it carries (the buses' Team
+  // chat tickets into their own projects). The tracker does the move in one
+  // transaction; this reads the ticket before and after, and the comment
+  // count must match, else the move is reported as failed (rule 5).
+  const task = arg('task');
+  const to = arg('to');
+  if (!task || !to) usage();
+  const refuse = (why) => { console.error(`move: refused — ${why}`); reportLimits(); process.exit(2); };
+  const fail = (why) => { console.error(`move FAILED — ${why}`); reportLimits(); process.exit(1); };
+  const before = await tracker.ticketRecord(task);
+  if (!before.res.ok) {
+    if (before.unsupported) refuse(before.json.err);
+    die(`read ${task}`, before);
+  }
+  if (!Array.isArray(before.json?.comments)) fail(`the tracker answered ${task} without its comments, so the move could not be checked; nothing was moved.`);
+  if (before.json.project === to) refuse(`${before.json.id} is already in project "${to}"; nothing was moved.`);
+  const want = before.json.comments.length;
+  const out = await tracker.moveTicket(before.json.id, to);
+  if (!out.res.ok) {
+    if (out.res.status >= 400 && out.res.status < 500) refuse(`${out.json?.err || out.text} (HTTP ${out.res.status}); nothing was moved.`);
+    die(`move ${task} to ${to}`, out);
+  }
+  const newId = out.json?.ticket?.id;
+  if (!newId) fail(`the tracker answered the move of ${task} without the new id; read ${task} to see where it is.`);
+  const back = await tracker.ticketRecord(newId);
+  if (!back.res.ok || !Array.isArray(back.json?.comments)) fail(`the tracker said ${task} is now ${newId}, but reading ${newId} back failed (HTTP ${back.res.status}); treat the move as unchecked.`);
+  const got = back.json.comments.length;
+  if (back.json.id !== newId || back.json.project !== to) fail(`${newId} read back as ${back.json.id} in project "${back.json.project}", not in "${to}".`);
+  if (got !== want) fail(`${task} had ${want} comment(s); ${newId} reads back with ${got}.`);
+  const old = await tracker.ticketRecord(task);
+  if (!old.res.ok || old.json?.id !== newId) fail(`${newId} read back whole, but the old id ${task} does not open it (HTTP ${old.res.status}${old.json?.id ? `, it opens ${old.json.id}` : ''}).`);
+  console.log(`${before.json.id}\t${newId}`);
+  console.error(`Moved ${before.json.id} to ${newId} in ${to} with its ${got} comment(s), verified by reading it back; ${task} still opens it.`);
+  if (out.json.addedTags?.length) console.error(`  tag(s) made in ${to}: ${out.json.addedTags.join(', ')}`);
+  if (out.json.droppedTopics?.length) console.error(`  topic(s) left behind (a topic belongs to its own project): ${out.json.droppedTopics.join(', ')}`);
+  reportLimits();
+
 } else if (cmd === 'comments') {
   const task = arg('task');
   if (!task) usage();
   const comments = newestFirst(await readComments(task)).reverse();
   for (const c of comments) {
-    const who = isMachineComment(c.comment_text) ? `${c.user?.username ?? '?'} [machine]` : (c.user?.username ?? '?');
+    const who = isMachineAuthored(c) ? `${c.user?.username ?? '?'} [machine]` : (c.user?.username ?? '?');
     console.log(`[${clock(c.date)} MT] ${who} (${c.user?.id ?? '?'}, comment ${c.id}):`);
     console.log(stripMachineMarker(c.comment_text) || '(empty)');
     console.log('---');
@@ -1195,7 +1581,7 @@ if (cmd === 'whoami') {
     const prText = !isOperatorStatus(status) && recorded ? `PR #${recorded.number} not checked (machine status)` : prLabel(pr);
     const result = waitingVerdict({ task: t, comments, pr }, { operatorId: OPERATOR_ID });
     verdicts.push(result.verdict);
-    const lastWord = newest ? `${isMachineComment(newest.comment_text) ? 'a loop' : (newest.user?.username ?? '?')} ${clock(newest.date)} MT` : '(no comments)';
+    const lastWord = newest ? `${isMachineAuthored(newest) ? 'a loop' : (newest.user?.username ?? '?')} ${clock(newest.date)} MT` : '(no comments)';
     console.log(`${t.id}\t${status}\tassigned: ${assigned ? 'Dane' : 'not Dane'}\tlast word: ${lastWord}\t${prText}\t${verdictLine(result)}\t${t.name}`);
   }
   console.error(sweepSummary({
@@ -1223,13 +1609,17 @@ if (cmd === 'whoami') {
     process.exit(2);
   }
   refuseBranchLinks(body, 'Nothing was created.');
+  const classWanted = classFlags('Nothing was created.');
   const tags = arg('tags') ? arg('tags').split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+  const boardProblem = trackerBus.noticeboardFilingProblem({ status: arg('status'), tags });
+  if (boardProblem) { console.error(`task: ${boardProblem}. Nothing was created.`); process.exit(2); }
   const out = await tracker.createTask(list, {
     name,
     markdown_description: body,
     status: arg('status') || undefined,
     priority: PRIORITY[String(arg('priority', '')).toLowerCase()] || undefined,
     tags,
+    ...classWanted,
   });
   if (!out.res.ok) die('create task', out);
   const id = out.json.id;
@@ -1243,7 +1633,10 @@ if (cmd === 'whoami') {
   console.log(`  status:      ${t.status?.status}`);
   console.log(`  priority:    ${t.priority?.priority ?? '(none)'}`);
   console.log(`  tags:        ${(t.tags || []).map((x) => x.name).join(', ') || '(none)'}`);
+  if ('kind' in t) console.log(`  kind:        ${t.kind ?? '(none)'}; started by ${t.started_by ?? '(none)'}; ended ${t.outcome ?? '(none)'}`);
   console.log(`  description: ${chars} characters`);
+  const classWrong = classMismatches(t, classWanted);
+  if (classWrong.length) { console.error(`\n  CLASS DID NOT STICK: ${classWrong.join('; ')}`); process.exit(1); }
   if (tags && tags.length) {
     const landed = new Set((t.tags || []).map((x) => String(x.name || '').toLowerCase()));
     const missing = tags.filter((w) => !landed.has(w.toLowerCase()));
@@ -1270,6 +1663,31 @@ if (cmd === 'whoami') {
   const chars = (t.description || '').length;
   if (chars === 0) { console.error('The description came back EMPTY after the write.'); process.exit(1); }
   console.log(`Task ${task}: description replaced (${chars} characters, read back).`);
+  reportLimits();
+
+} else if (cmd === 'likely-files') {
+  // Add the Likely files: line to a ticket that has none (SP-351): an older
+  // ticket the same-file hold cannot check until it names its files. Only
+  // adds the line, never rewrites the rest, and reads it back.
+  const task = arg('task');
+  const files = arg('files') != null ? normalFiles(String(arg('files')).split(',')) : null;
+  if (!task || !files?.length) { console.error('likely-files --task <id> --files <path>,<path>   (repository-relative paths, comma-separated)'); process.exit(2); }
+  const t = await readTask(task);
+  const now = t.markdown_description ?? t.description ?? '';
+  const next = withLikelyFilesLine(now, files);
+  if (next.error) { console.error(`likely-files: ${task} was not changed: ${next.error}.`); process.exit(2); }
+  if (project.tracker !== 'api') {
+    const quoted = findBlockquoteLines(next.description);
+    if (quoted.length) { console.error(`likely-files: ${task}'s description has "> " blockquote lines (${quoted.join(', ')}), which ClickUp deletes on a write. Nothing was written.`); process.exit(2); }
+  }
+  const out = await tracker.updateTask(task, { markdown_description: next.description });
+  if (!out.res.ok) die('add the Likely files: line', out);
+  const back = readLikelyFiles((await readTask(task)).markdown_description ?? '');
+  if (back.source !== 'line' || back.files.join(',') !== files.join(',')) {
+    console.error(`likely-files: the line did NOT read back as written on ${task} (read: ${back.files.join(', ') || 'nothing'}).`);
+    process.exit(1);
+  }
+  console.log(`Task ${task}: Likely files: ${back.files.join(', ')} (added and read back).`);
   reportLimits();
 
 } else if (cmd === 'comment') {
@@ -1353,6 +1771,25 @@ if (cmd === 'whoami') {
   console.log(`Task ${task}: priority "${before.priority?.priority ?? '(none)'}" -> "${now}".`);
   reportLimits();
 
+} else if (cmd === 'classify') {
+  // A ticket's kind, who started it and how it ended (SP-345, lib/ticketClass.js),
+  // set after filing, each read back. "none" clears one. Only a closed ticket
+  // has an ending: the tracker refuses one on an open ticket, writing nothing.
+  const task = arg('task');
+  if (!task) usage();
+  const wanted = classFlags('Nothing was written.');
+  if (!Object.keys(wanted).length) { console.error('classify: give at least one of --kind, --started-by, --outcome. Nothing was written.'); usage(); }
+  const before = await readTask(task);
+  const out = await tracker.updateTask(task, wanted);
+  if (!out.res.ok) die('set the ticket class', out);
+  const t = await readTask(task);
+  const wrong = classMismatches(t, wanted);
+  if (wrong.length) { console.error(`The class did NOT stick on ${task}: ${wrong.join('; ')}.`); process.exit(1); }
+  const said = CLASS_FLAGS.filter(({ field }) => field in wanted)
+    .map(({ field, key }) => `${CLASS_FIELDS[field].label.toLowerCase()} "${before[key] ?? 'none'}" -> "${t[key] ?? 'none'}"`);
+  console.log(`Task ${task}: ${said.join(', ')} (read back).`);
+  reportLimits();
+
 } else if (cmd === 'tag') {
   const task = arg('task'), add = arg('add'), remove = arg('remove');
   if (!task || (!add && !remove) || (add && remove)) usage();
@@ -1410,7 +1847,100 @@ if (cmd === 'whoami') {
     console.log(`Task ${task}: PR #${prNumber} recorded (${prUrl}), read back and parsed by the gate's own reader.`);
     if (humanHours != null) console.log(`Task ${task}: human-hours estimate ${humanHours} recorded and read back.`);
   }
+  // Which files it changes (SP-349). The PR trail above is the record review
+  // and merge read, so a files read that fails does not undo it or fail the
+  // hand-off: it is said, nothing is stored as "no files", and the relay's
+  // pr-files-refresh reads them again on its next pass.
+  const filesKept = await recordPrFiles(task, repo, prNumber);
+  if (filesKept.ok) console.log(`Task ${task}: ${filesKept.line}`);
+  else if (filesKept.unsupported) console.error(`Task ${task}: changed files not recorded: ${filesKept.why}`);
+  else if (filesKept.notOpen || filesKept.otherRepo) console.log(`Task ${task}: ${filesKept.why}.`);
+  else console.error(`Task ${task}: PR #${prNumber}'s changed files were NOT recorded: ${filesKept.why}. Nothing was stored for them; the relay's next pr-files-refresh tries again.`);
   reportLimits();
+
+} else if (cmd === 'pr-files') {
+  // Read-only (SP-349): which files each open pull request changes, as the
+  // tracker keeps them. With --files (comma-separated paths), which open
+  // pull requests change any of them; with --task, that ticket's own pull
+  // request's files and the other open pull requests sharing any. --json for
+  // the lanes. Exit 0 nothing shared (or a plain list), 3 some open pull
+  // request shares a file, 1 could not tell.
+  const task = arg('task') ? String(arg('task')).toUpperCase() : null;
+  const asked = arg('files') != null ? normalFiles(String(arg('files')).split(',')) : null;
+  if (arg('files') != null && !asked?.length) { console.error('pr-files: --files names one or more paths, comma-separated.'); process.exit(2); }
+  const out = await tracker.prFiles();
+  if (out.unsupported) { console.error(`pr-files: ${out.json?.err}`); process.exit(1); }
+  if (!out.res.ok) { console.error(`pr-files: could not read the records (HTTP ${out.res.status}). Could not tell.`); process.exit(1); }
+  const records = out.json.pullRequests;
+  const own = task ? records.filter((r) => String(r.ticket).toUpperCase() === task) : [];
+  if (task && !asked && !own.length) {
+    if (flag('json')) console.log(JSON.stringify({ ticket: task, pullRequests: [], shared: [] }));
+    else console.log(`${task}: no open pull request of its has its files recorded.`);
+    reportLimits();
+    process.exit(0);
+  }
+  if (!task && !asked) {
+    if (flag('json')) console.log(JSON.stringify({ project: out.json.project, pullRequests: records }));
+    else for (const r of records) console.log(`#${r.number}\t${r.ticket}\t${r.files.length} file(s)\t${r.head ? r.head.slice(0, 7) : '-'}\t${r.readAt}`);
+    console.error(`pr-files: ${records.length} open pull request(s) with files recorded on ${out.json.project}.`);
+    reportLimits();
+    process.exit(0);
+  }
+  const files = asked || normalFiles(own.flatMap((r) => r.files));
+  const shared = sharedWith(records, files, task ? { ticket: task } : {});
+  if (flag('json')) console.log(JSON.stringify({ ticket: task, files, pullRequests: own, shared }));
+  else if (shared.length) for (const x of shared) console.log(sharedLine(x));
+  else console.log(`No other open pull request changes ${asked ? 'any of those files' : `the files ${task}'s pull request changes`}.`);
+  reportLimits();
+  process.exit(shared.length ? 3 : 0);
+
+} else if (cmd === 'pr-files-refresh') {
+  // Run by the relay every pass (scripts/run_relay.sh, SP-349): bring the
+  // tracker's record of each open pull request's files up to date. A pull
+  // request with no record, or whose branch has moved since it was read, is
+  // read again; a record whose pull request merged or closed is forgotten.
+  // A pull request whose body links no ticket is left out, said in one line.
+  // Exit 0 all current, 1 some read or write failed (each said); --dry-run
+  // reads and prints only.
+  const dryRun = flag('dry-run');
+  const repo = project.githubRepo;
+  const out = await tracker.prFiles();
+  if (out.unsupported) { console.log(`pr-files-refresh: nothing to do — ${out.json?.err}`); process.exit(0); }
+  if (!out.res.ok) { console.error(`pr-files-refresh FAILED: the records could not be read (HTTP ${out.res.status}). Nothing was changed.`); process.exit(1); }
+  // A record from another repository (kept before pr-opened refused them)
+  // is left alone: this project's open list says nothing about it.
+  const records = out.json.pullRequests.filter((r) => isProjectRepo(r.repo));
+  const elsewhere = out.json.pullRequests.length - records.length;
+  if (elsewhere) console.log(`pr-files-refresh: ${elsewhere} record(s) from a repository other than ${repo} left alone.`);
+  const listed = gh(['pr', 'list', '--repo', repo, '--state', 'open', '--json', 'number,headRefOid,body', '--limit', '500']);
+  let openPrs = null;
+  if (listed.ok) { try { openPrs = JSON.parse(listed.stdout); } catch { openPrs = null; } }
+  if (!Array.isArray(openPrs)) {
+    console.error(`pr-files-refresh FAILED: GitHub's open pull requests for ${repo} could not be listed (${listed.ok ? 'not a list' : listed.stderr.trim().split('\n')[0] || 'gh failed'}). Nothing was changed, nothing forgotten.`);
+    process.exit(1);
+  }
+  const plan = refreshPlan({ records, openPrs });
+  const failed = [];
+  let recorded = 0, forgotten = 0, untracked = 0;
+  for (const pr of plan.read) {
+    const had = records.find((r) => r.number === pr.number);
+    const ticket = had?.ticket || findTicketId(pr.body, project) || null;
+    if (!ticket) { untracked += 1; console.log(`PR #${pr.number}: its body links no ticket, so its files are not kept.`); continue; }
+    if (dryRun) { console.log(`PR #${pr.number} (${String(ticket).toUpperCase()}): would read its files (${had ? 'branch moved' : 'none recorded'}).`); continue; }
+    const kept = await recordPrFiles(ticket, repo, pr.number);
+    if (kept.ok) { recorded += 1; console.log(kept.line); } else if (kept.unknownTicket) { untracked += 1; console.log(`PR #${pr.number}: ${kept.why}, so its files are not kept.`); } else if (kept.notOpen) { console.log(`${kept.why} (it closed since GitHub listed it).`); } else { failed.push(`PR #${pr.number}: ${kept.why}`); }
+  }
+  for (const r of plan.forget) {
+    if (dryRun) { console.log(`PR #${r.number} (${r.ticket}): would forget its files (no longer open).`); continue; }
+    const gone = await tracker.forgetPrFiles(r.number);
+    if (!gone.res.ok) { failed.push(`PR #${r.number}: no longer open, but its record could NOT be forgotten (HTTP ${gone.res.status})`); continue; }
+    forgotten += 1;
+    console.log(`PR #${r.number} (${r.ticket}): no longer open, its files forgotten.`);
+  }
+  for (const f of failed) console.error(`pr-files-refresh: ${f}. Nothing was stored for it; the next pass tries again.`);
+  console.log(`pr-files-refresh: ${openPrs.length} open pull request(s); ${plan.current} already current, ${recorded} read, ${forgotten} forgotten, ${untracked} with no ticket, ${failed.length} failed${dryRun ? ' (dry run: nothing written)' : ''}.`);
+  reportLimits();
+  process.exit(failed.length ? 1 : 0);
 
 } else if (cmd === 'verdict') {
   const task = arg('task');
@@ -1609,9 +2139,7 @@ if (cmd === 'whoami') {
   // merge word (SP-294), so the body does not claim he has given it.
   const fileCatchUp = async (task, prRef, branch, name, commentId, ahead = null) => {
     const body = conflictTicketBody({ task, pr: prRef, branch, localVerdict: ahead ? aheadConflictVerdict(ahead) : null, commentId, ahead });
-    const out = await tracker.createTask(list, {
-      name, markdown_description: body, status: DISPLAY[QUEUED], priority: PRIORITY.high,
-    });
+    const out = await tracker.createTask(list, catchUpTicketFields({ name, body, keepsClass: project.tracker === 'api' }));
     const id = out.res.ok && out.json?.id ? String(out.json.id) : '';
     if (!id) {
       unchecked.push(`${task.id}: PR #${prRef.number} conflicts, and filing the catch-up ticket FAILED (HTTP ${out.res.status}) — the next pass tries again`);
@@ -1624,6 +2152,10 @@ if (cmd === 'whoami') {
       unchecked.push(`${task.id}: PR #${prRef.number} conflicts; catch-up ticket ${id} was created but ${why} — not counted as filed, a session must look`);
       return null;
     }
+    // Its class (SP-346) is read back too; one that did not stick is said, but
+    // the ticket still counts as filed: the conflict is the urgent part.
+    const classWrong = classMismatches(back, ownFilingClass());
+    if (classWrong.length) unchecked.push(`${task.id}: catch-up ticket ${id} is filed, but its class did not stick (${classWrong.join('; ')}) — set it with classify`);
     return { id, url: out.json.url || back.url || `https://app.clickup.com/t/${id}` };
   };
 
@@ -1743,7 +2275,7 @@ if (cmd === 'whoami') {
   // The decision is closePlan's (lib/relayLane.js). Returns true when it
   // decided this ticket, so the merge step does not also act on it.
   const relayCloseReadyToLaunch = async (task, comments) => {
-    const verdict = handbackAnswer({ comments, operatorId: OPERATOR_ID, isMachine: isMachineComment });
+    const verdict = handbackAnswer({ comments, operatorId: OPERATOR_ID, isMachine: isMachineAuthored });
     if (verdict.state !== 'answered' || !isCloseCommand(verdict.answer?.comment_text)) return false;
     const answerId = verdict.answer.id;
     const replies = await readReplies(answerId);
@@ -1825,7 +2357,7 @@ if (cmd === 'whoami') {
     // Only his merge phrases need their reply threads read — that is where an
     // earlier pass left its marker. Everything else costs a request and says nothing.
     const books = emptyBooks();
-    const hisPhrases = comments.filter((c) => Number(c.user?.id) === OPERATOR_ID && !isMachineComment(c.comment_text) && isMergeCommand(c.comment_text));
+    const hisPhrases = comments.filter((c) => isOperatorAuthored(c, OPERATOR_ID) && isMergeCommand(c.comment_text));
     for (const c of hisPhrases) {
       const out = await tracker.listReplies(c.id);
       if (!out.res.ok) {
@@ -2113,7 +2645,14 @@ if (cmd === 'whoami') {
   const relayNeedsYourInput = async (task) => {
     const comments = await readComments(task.id);
     seen.set(task.id, { task, comments });
-    const verdict = handbackAnswer({ comments, operatorId: OPERATOR_ID, isMachine: isMachineComment });
+    // Anyone on the project answers the card here, not only him (SP-302).
+    const read = await teamAnswerVerdict(comments);
+    if (read.unreadable != null) {
+      unchecked.push(`${task.id}: could not read the replies under an earlier answer (comment ${read.unreadable}) to see whether it was already acted on — not moved this pass`);
+      say(task, 'unchecked', `could not read the replies under comment ${read.unreadable}`);
+      return;
+    }
+    const { verdict } = read;
     let replies = [];
     if (verdict.state === 'answered') {
       replies = await readReplies(verdict.answer.id);
@@ -2137,7 +2676,9 @@ if (cmd === 'whoami') {
       }
       description = out.json.markdown_description || out.json.description || '';
     }
-    const plan = handbackPlan({ status: task.status?.status, verdict, answerReplies: replies, pr, description });
+    const plan = handbackPlan({
+      status: task.status?.status, verdict, answerReplies: replies, pr, description, noticeboard: isNoticeboard(task),
+    });
     if (plan.act === 'waiting') { say(task, 'waiting', `waiting on ${who}: ${plan.why}`); return; }
     if (plan.act === 'cannot-tell') {
       unchecked.push(`${task.id}: ${who} answered, but ${plan.why}`);
@@ -2324,6 +2865,20 @@ if (cmd === 'whoami') {
     }
   }
 
+  // Spirality's releases (SP-277): a project whose Quiet Days Before Moving
+  // is above 0 moves to the newest release once it has run that long on
+  // Spirality's own lanes with no alarm on Spirality's bus. Only the relay of
+  // the tracker's home project does it, for every other project.
+  if (project.tracker === 'api') {
+    try {
+      const follow = await releaseFollowStep({ dryRun });
+      for (const l of follow.lines) console.log(l);
+      unchecked.push(...follow.problems);
+    } catch (err) {
+      unchecked.push(`release-follow stopped (${err.message}); no project was moved by it this pass`);
+    }
+  }
+
   if (stalledHandOffs.length) {
     console.error(`\n${stalledSummaryHeadline(stalledHandOffs.map((h) => h.kind))} — ${stalledHandOffs.length} approved merge(s) are not moving:`);
     for (const h of stalledHandOffs) console.error(`  - ${h.line}`);
@@ -2363,10 +2918,25 @@ if (cmd === 'whoami') {
     if (!bodyFile) usage();
     const post = trackerBus.renderBusPost({ text: readBody(bodyFile), node: arg('from') || hostname(), at: trackerBus.mountainTime(Date.now()) });
     if (!post) { console.error('bus-post: the message is empty. Nothing was posted.'); process.exit(2); }
-    let chat = trackerBus.pickTeamChat(listed.json.tasks);
+    let chat = trackerBus.pickTeamChat(trackerBus.busTickets(listed.json.tasks, { ownQueue: true }));
     if (!chat) {
+      // The tag that keeps it off the work counts and in what bus-read reads
+      // (SP-356): saved on the project first, so the Tags page lists it.
+      const tagWord = trackerBus.NOTICEBOARD_TAG;
+      const saved = await tracker.listProjectTags(bus);
+      if (!saved.res.ok || !Array.isArray(saved.json?.tags)) die(`read the tags of ${bus}`, saved);
+      if (!saved.json.tags.some((g) => String(g.name).toLowerCase() === tagWord)) {
+        const add = await tracker.addProjectTag(bus, tagWord, 'A standing ticket that is not work: Team chat and other boards. No loop builds it.');
+        if (!add.res.ok && add.res.status !== 409) die(`save the ${tagWord} tag on ${bus}`, add);
+        const again = await tracker.listProjectTags(bus);
+        if (!again.res.ok || !Array.isArray(again.json?.tags) || !again.json.tags.some((g) => String(g.name).toLowerCase() === tagWord)) {
+          console.error(`bus-post: the ${tagWord} tag did NOT read back on ${bus}'s tag list. Nothing was created or posted.`);
+          process.exit(1);
+        }
+      }
       const made = await tracker.createTask(bus, {
         name: FALLBACK_TASK_NAME, markdown_description: trackerBus.renderTeamChatSeed(), status: trackerBus.TEAM_CHAT_STATUS,
+        tags: [tagWord], ...LOOP_FILING_CLASS,
       });
       if (!made.res.ok) die(`create the "${FALLBACK_TASK_NAME}" ticket in ${bus}`, made);
       chat = await readTask(made.json.id);
@@ -2374,12 +2944,16 @@ if (cmd === 'whoami') {
         console.error(`bus-post: created ${made.json.id}, but it read back named ${JSON.stringify(chat.name)}. Nothing was posted.`);
         process.exit(1);
       }
-      // Live is the only thing keeping a loop from claiming it (rule 5: read it back).
-      if (statusOf(chat) !== trackerBus.TEAM_CHAT_STATUS.toLowerCase()) {
-        console.error(`bus-post: created ${chat.id} "${chat.name}", but it read back in status ${JSON.stringify(statusOf(chat))}, not "${trackerBus.TEAM_CHAT_STATUS}", so a loop could claim it. Nothing was posted; move it to ${trackerBus.TEAM_CHAT_STATUS} on the page.`);
+      // Live keeps every loop from claiming it, the tag keeps it off the
+      // work counts and in what bus-read reads (rule 5: read both back).
+      const unstuck = trackerBus.teamChatReadBackProblems(chat);
+      if (unstuck.length) {
+        console.error(`bus-post: created ${chat.id} "${chat.name}", but ${unstuck.join('; and ')}. Nothing was posted; put that right on the page.`);
         process.exit(1);
       }
-      console.error(`bus-post: there was no "${FALLBACK_TASK_NAME}" ticket in ${bus}; created ${chat.id} in ${trackerBus.TEAM_CHAT_STATUS} (read back).`);
+      const classWrong = classMismatches(chat, LOOP_FILING_CLASS);
+      if (classWrong.length) console.error(`bus-post: created ${chat.id}, but its class did not stick (${classWrong.join('; ')}); set it with classify.`);
+      console.error(`bus-post: there was no "${FALLBACK_TASK_NAME}" ticket in ${bus}; created ${chat.id} in ${trackerBus.TEAM_CHAT_STATUS}, tagged ${trackerBus.NOTICEBOARD_TAG} (both read back).`);
     }
     const { id } = await postComment(chat.id, { comment_text: post });
     console.log(`Posted to the bus: comment ${id} on ${chat.id} "${chat.name}" in ${bus} (verified by reading it back).`);
@@ -2395,14 +2969,15 @@ if (cmd === 'whoami') {
     // chat above all): name it, carry on, and fail at the end.
     const tickets = [];
     const unread = [];
-    for (const t of listed.json.tasks) {
+    const ownQueue = trackerBus.busIsOwnQueue(project);
+    for (const t of trackerBus.busTickets(listed.json.tasks, { ownQueue })) {
       const read = await readCommentsOrProblem(t.id);
       if (read.problem) { unread.push(t); console.error(`bus-read: could NOT read the comments on ${t.id} "${t.name}" (${read.problem}); its messages are missing below.`); continue; }
       tickets.push({ id: t.id, name: t.name, comments: read.comments });
     }
     const messages = trackerBus.busMessages(tickets, { operatorId: OPERATOR_ID, operatorOnly: flag('operator'), since });
     for (const m of messages) console.log(trackerBus.busLine(m));
-    console.error(`${messages.length} message(s) on the bus (${bus}, ${tickets.length} ticket(s) read in full)${flag('operator') ? ', the operator\'s only' : ''}${since != null ? ` after ${trackerBus.mountainTime(since)}` : ''}.`);
+    console.error(`${messages.length} message(s) on the bus (${bus}, ${tickets.length} ${ownQueue ? 'noticeboard ' : ''}ticket(s) read in full)${flag('operator') ? ', the operator\'s only' : ''}${since != null ? ` after ${trackerBus.mountainTime(since)}` : ''}.`);
     if (unread.length) {
       console.error(`bus-read FAILED on ${unread.length} ticket(s): ${unread.map((t) => t.id).join(', ')}. The list above is incomplete.`);
       reportLimits();
@@ -2451,6 +3026,34 @@ if (cmd === 'whoami') {
   console.error(`${out.length} ticket(s) in ${slug || (project.tracker === 'api' ? project.projectSlug : `list ${LOOP_QUEUE_LIST}`)}${flag('include-closed') ? ', Live included' : ', open only'}${withComments ? ', with their comments' : ''}.`);
   reportLimits();
 
+} else if (cmd === 'replies') {
+  // One comment's reply thread as data (SP-267): stale-answer reads it, only
+  // for an answer already past its threshold, to see the relay's
+  // `[bus-relay-handback-done]` reply, the same marker the relay itself treats
+  // as "this answer is spent". Read-only. The ticket's comments are read first
+  // because the tracker finds a comment's replies through its ticket.
+  const task = arg('task');
+  const commentId = arg('comment');
+  if (!task || !commentId || !flag('json')) usage();
+  const read = await readCommentsOrProblem(task);
+  if (read.problem) {
+    console.error(`replies FAILED: the comments on ${task} could not be read (${read.problem}), so nothing was printed.`);
+    process.exit(1);
+  }
+  if (!read.comments.some((c) => String(c.id) === String(commentId))) {
+    console.error(`replies FAILED: ${task} has no top-level comment ${commentId}, so nothing was printed.`);
+    process.exit(1);
+  }
+  const out = await tracker.listReplies(commentId);
+  const replies = out.res.ok ? (out.json?.comments || out.json?.replies) : null;
+  if (!Array.isArray(replies)) {
+    console.error(`replies FAILED: the replies to comment ${commentId} could not be read (${out.res.ok ? 'no reply list in the answer' : `HTTP ${out.res.status}`}), so nothing was printed.`);
+    process.exit(1);
+  }
+  console.log(JSON.stringify(replies.map((c) => ticketsJson.commentJson(c, { operatorId: OPERATOR_ID })), null, 2));
+  console.error(`${replies.length} repl(ies) to comment ${commentId} on ${task}.`);
+  reportLimits();
+
 } else if (cmd === 'stage-counts') {
   // Every stage counted, as JSON, for StarCaster's weekly report
   // (lib/stageCounts.js holds the shape and the counting). Read-only. `--list`
@@ -2480,7 +3083,8 @@ if (cmd === 'whoami') {
   const histories = new Map();
   const problems = [];
   if (window.cutoff != null) {
-    for (const t of tickets) {
+    // A noticeboard is left out of the counts (SP-357), so its history is not read.
+    for (const t of tickets.filter((x) => !isNoticeboard(x))) {
       const read = await tracker.getStatusHistory(t.id);
       if (read.res.ok && Array.isArray(read.json?.moves)) histories.set(String(t.id), read.json.moves);
       else problems.push({ id: t.id, problem: read.res.ok ? 'no status moves in the answer' : `HTTP ${read.res.status}${read.json?.err ? `: ${read.json.err}` : ''}` });
@@ -2493,7 +3097,8 @@ if (cmd === 'whoami') {
     process.exit(1);
   }
   console.log(JSON.stringify(stageCounts.countStages(tickets, { list: where, since, until, window, histories }), null, 2));
-  console.error(`stage-counts: ${tickets.length} ticket(s) in ${where}${window.cutoff == null ? ', no window' : `, window ${since} to ${until || 'now'} (UTC days)`}.`);
+  const boards = tickets.filter((x) => isNoticeboard(x)).length;
+  console.error(`stage-counts: ${tickets.length - boards} ticket(s) in ${where}${boards ? ` (${boards} noticeboard(s) left out)` : ''}${window.cutoff == null ? ', no window' : `, window ${since} to ${until || 'now'} (UTC days)`}.`);
   reportLimits();
 
 } else if (cmd === 'settings') {
@@ -2595,7 +3200,7 @@ if (cmd === 'whoami') {
   // project runs is the tracker's record. The tags are read from the remote
   // of the Spirality checkout this door runs from, never a local copy.
   const sub = process.argv[3];
-  const git = (args) => spawnSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8', timeout: 60_000 });
+  const git = (args) => spawnSync('git', args, { cwd: SPIRALITY_ROOT, encoding: 'utf8', timeout: 60_000 });
   const remote = releaseRemote();
   const refuse = (why) => { console.error(`release ${sub}: refused — ${why}`); reportLimits(); process.exit(2); };
   const fail = (why) => { console.error(`release ${sub} FAILED — ${why}`); reportLimits(); process.exit(1); };

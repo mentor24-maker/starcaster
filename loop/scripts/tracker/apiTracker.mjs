@@ -37,17 +37,21 @@
  * With this tracker the project config's operator and machine ids are the
  * tracker's actor ids, so `user.id` compares as it does on ClickUp.
  *
- * The machine stamp keeps being written (the non-goal of this phase): a
- * comment or reply this tracker posts ends with the [machine] line, exactly
- * as on ClickUp, so the readers stay correct on either tracker.
+ * The machine stamp is not written (SP-26): every comment carries its
+ * author's actor, and every comment this door hands back says that actor's
+ * kind as `user.kind` ('human' or 'machine'), which is what the readers ask
+ * (lib/machineComment.js isMachineAuthored). Comments imported from ClickUp
+ * keep their stamp text as history, and the readers ignore it.
  *
  * The token is handed in, never printed and never logged.
  */
 
-import { stampCommentBody } from '../lib/machineComment.mjs';
 import { PRIORITY_VALUE, QUEUED, TERMINAL_STATUSES } from '../lib/loopStatuses.mjs';
 import { TRACKER_SEATS } from '../lib/expectedSecrets.mjs';
 import { fenceFor } from '../lib/operatorCard.mjs';
+
+/** A ticket's class fields (SP-345), by the API's names; createTask and updateTask pass each through. */
+const CLASS_KEYS = Object.freeze(['kind', 'startedBy', 'outcome']);
 
 /** ClickUp's priority number -> the tracker's name. */
 const PRIORITY_NAME = Object.freeze(Object.fromEntries(Object.entries(PRIORITY_VALUE).map(([k, v]) => [v, k])));
@@ -143,6 +147,8 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
   let requests = 0;
   /** Actor names, read once per run: the API's answers carry ids only. */
   const names = new Map();
+  /** Actor kinds ('human' | 'machine'), read with the names. */
+  const kinds = new Map();
   /** Comment id -> its ticket, from every comment this run has read or written.
    *  A reply is posted on the ticket, so the ticket must be known. */
   const commentTicket = new Map();
@@ -217,8 +223,17 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
     if (!names.has(id)) {
       const out = await call('GET', `/actors/${encodeURIComponent(id)}`);
       names.set(id, out.res.ok && out.json?.name ? out.json.name : `actor ${id}`);
+      const kind = out.res.ok ? out.json?.kind : null;
+      if (kind === 'human' || kind === 'machine') kinds.set(id, kind);
     }
     return names.get(id);
+  }
+
+  /** An actor's kind, read with its name; null when it could not be read. */
+  async function kindOf(id) {
+    if (id == null) return null;
+    await nameOf(id);
+    return kinds.get(id) ?? null;
   }
 
   async function taskFromTicket(t) {
@@ -242,6 +257,13 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       date_created: ms(t.createdAt),
       date_updated: ms(t.updatedAt),
       version: t.version,
+      // Its place in its queue (SP-249), or null; the order rule reads it.
+      place: t.place ?? null,
+      // Its class (SP-345, lib/ticketClass.js): each a value or null. ClickUp
+      // has no such fields, so a ClickUp task never carries these keys.
+      kind: t.kind ?? null,
+      started_by: t.startedBy ?? null,
+      outcome: t.outcome ?? null,
     };
   }
 
@@ -251,7 +273,7 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       id: String(c.id),
       comment_text: c.body,
       comment: [{ text: c.body }],
-      user: { id: c.author, username: await nameOf(c.author) },
+      user: { id: c.author, username: await nameOf(c.author), kind: await kindOf(c.author) },
       date: ms(c.createdAt),
       parent: c.parent == null ? null : String(c.parent),
     };
@@ -272,7 +294,7 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
   }
 
   async function postOn(ticket, body, parent = null) {
-    const text = commentText(stampCommentBody(body));
+    const text = commentText(body);
     const out = await call('POST', `${ticketPath(ticket)}/comments`, parent == null ? { body: text } : { body: text, parent: Number(parent) });
     if (!out.res.ok) return out;
     return withJson(out, await commentFromRow(out.json));
@@ -290,6 +312,7 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       const out = await call('GET', '/me');
       if (!out.res.ok) return out;
       names.set(out.json.id, out.json.name);
+      if (out.json.kind === 'human' || out.json.kind === 'machine') kinds.set(out.json.id, out.json.kind);
       return withJson(out, { user: { id: out.json.id, username: out.json.name, email: `${out.json.kind} actor in the tracker` } });
     },
 
@@ -304,6 +327,18 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       const out = await call('GET', `/pipeline-controls/${encodeURIComponent(project)}`);
       if (!out.res.ok) return out;
       if (!Array.isArray(out.json?.controls) || !out.json.controls.length) return refused(502, 'the tracker answered without any pipeline controls.');
+      return out;
+    },
+
+    /**
+     * Every project's pipeline controls this sign-in may see, `{ projects:
+     * [{ project: { slug, name }, own, controls }] }`: what the relay reads
+     * for each project's Quiet Days Before Moving (SP-277). Read-only.
+     */
+    async allPipelineControls() {
+      const out = await call('GET', '/pipeline-controls');
+      if (!out.res.ok) return out;
+      if (!Array.isArray(out.json?.projects)) return refused(502, 'the tracker answered the pipeline controls without a list of projects.');
       return out;
     },
 
@@ -324,6 +359,32 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
     nameRelease: (slug, release) => call('PUT', `/releases/${encodeURIComponent(slug)}`, { release }),
     /** Roll a project back to the release it ran before; the answer is the record as stored. */
     rollBackRelease: (slug) => call('POST', `/releases/${encodeURIComponent(slug)}/back`, {}),
+
+    /**
+     * Move a ticket, with every comment, file and event on it, into project
+     * `slug` under that project's next id; the answer names the new id
+     * (`ticket.id`), the old one (`from`) and the comment count. The old id
+     * keeps finding the ticket.
+     */
+    moveTicket: (task, slug) => call('POST', `${ticketPath(task)}/move`, { project: slug }),
+    /** The ticket as the tracker stores it, with every comment (replies too), for a read-back. */
+    ticketRecord: (task) => readTicket(task),
+
+    /**
+     * Which files each open pull request on the configured project changes
+     * (SP-349): `{ project, pullRequests: [{ number, ticket, repo, head,
+     * files, readAt }] }`. Read-only.
+     */
+    async prFiles() {
+      const out = await call('GET', `/pr-files/${encodeURIComponent(project)}`);
+      if (!out.res.ok) return out;
+      if (!Array.isArray(out.json?.pullRequests)) return refused(502, 'the tracker answered the pull request files without a list.');
+      return out;
+    },
+    /** Record pull request `number`'s files (`{ ticket, repo, head, files }`); the answer is the record as stored. */
+    recordPrFiles: (number, body) => call('PUT', `/pr-files/${encodeURIComponent(project)}/${encodeURIComponent(String(number))}`, body),
+    /** Forget pull request `number`'s files (it merged or closed); `{ forgotten }` says whether there was a record. */
+    forgetPrFiles: (number) => call('DELETE', `/pr-files/${encodeURIComponent(project)}/${encodeURIComponent(String(number))}`),
 
     /** The tracker has no spaces: its one "list" is the configured project. */
     listsInSpace: async () => ({ res: { ok: true, status: 200, headers: { get: () => null } }, json: { lists: [{ id: project, name: `${project} (tracker project)` }] }, text: '' }),
@@ -393,6 +454,7 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       };
       if (fields.priority != null) body.priority = PRIORITY_NAME[fields.priority] ?? fields.priority;
       if (fields.tags) body.tags = fields.tags;
+      for (const key of CLASS_KEYS) if (fields[key] != null) body[key] = fields[key];
       const out = await call('POST', `/projects/${encodeURIComponent(projectFor(list))}/tickets`, body);
       if (!out.res.ok) return out;
       return withJson(out, await taskFromTicket(out.json));
@@ -411,6 +473,7 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       if (fields.markdown_description !== undefined) body.description = fields.markdown_description;
       else if (fields.description !== undefined) body.description = fields.description;
       if (fields.priority !== undefined) body.priority = fields.priority == null ? null : (PRIORITY_NAME[fields.priority] ?? fields.priority);
+      for (const key of CLASS_KEYS) if (fields[key] !== undefined) body[key] = fields[key];
       const who = assigneeChange(fields.assignees);
       if (who.error) return refused(400, who.error);
       if (who.value !== undefined) body.assignee = who.value;
@@ -420,6 +483,12 @@ export function createApiTracker({ token, baseUrl, project, listId, timeoutMs, l
       if (!out.res.ok || !out.json?.ticket) return out;
       return withJson(out, await taskFromTicket(out.json.ticket));
     },
+
+    /** A project's tags, saved and in use, as `{ tags: [{ name, ... }] }` (SP-356). */
+    listProjectTags: (slug) => call('GET', `/projects/${encodeURIComponent(projectFor(slug))}/tags`),
+
+    /** Save a tag on a project's list; one already there (any case) is HTTP 409. */
+    addProjectTag: (slug, name, description = '') => call('POST', `/projects/${encodeURIComponent(projectFor(slug))}/tags`, { name, description }),
 
     /** Add or drop one tag, guarded on the version read just before, so a
      *  tag written by someone else in between is never overwritten. Any

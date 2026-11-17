@@ -20,24 +20,36 @@
  *   - closedInWindow: how many shipped inside the window (null without
  *     --since).
  *
- * Two fields are added, which StarCaster's report ignores:
+ * Three fields are added, which StarCaster's report ignores:
  *
  *   - startedInWindow: tickets filed inside the window;
+ *   - notFinishedInWindow: tickets that reached Live inside the window but
+ *     ended Won't do, Duplicate or Test (SP-347, lib/ticketClass.js
+ *     `countsAsFinished`). They are left out of closedInWindow: a dropped
+ *     ticket is not something that shipped;
  *   - enteredInWindow: for each of the eight statuses, how many tickets
  *     moved into it (or were filed in it) inside the window, from the
  *     ticket's history. A ticket that entered a status twice counts once.
  *
  * "Shipped" and "filed" are counted the way the tracker's Reporting page
  * counts Tasks started and Tasks finished in its Task Productivity table
- * (tracker/pageData.mjs, `reportsOf`): a ticket
- * finished when it LAST entered Live, and only if it is Live now; a ticket
+ * (tracker/pageData-reporting.mjs, `reportsOf`): a ticket
+ * finished when it LAST entered Live, only if it is Live now, and only if
+ * its ending (`outcome`) is not Won't do, Duplicate or Test; a ticket
  * started when it was filed.
+ *
+ * Noticeboards are left out of every figure (SP-357): a project's Team chat
+ * and any ticket tagged `noticeboard` sit in Live as standing boards, not
+ * shipped work, and every post to one would read as the ticket moving.
+ * `lib/loopNoticeboards.js` alone decides which tickets those are.
  *
  * The window is whole days in UTC, `--since` from midnight to `--until` at
  * the last millisecond, as StarCaster's command reads it.
  */
 
 const { STAGE_ORDER, LIVE } = require('./loopStatuses.js');
+const { countsAsFinished } = require('./ticketClass.js');
+const { workTickets } = require('./loopNoticeboards.js');
 
 const STATUSES = STAGE_ORDER.map((s) => s.toLowerCase());
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -81,13 +93,16 @@ function msOf(value) {
 /**
  * Count the stages.
  *
- * `tickets`: as the door lists them (`status.status`, `date_created`).
+ * `tickets`: as the door lists them (`status.status`, `date_created`,
+ * `outcome`, null where the tracker keeps none, and `name` and `tags`, which
+ * pick out the noticeboards to leave out). A noticeboard needs no history.
  * `histories`: a Map from ticket id to its status moves, oldest first, each
  * `{ at, to }` (the filing counts as a move into the status it was filed
  * in). Needed only when there is a window; a ticket with no entry in it is a
  * caller's bug, and throws.
  */
-function countStages(tickets, { list = null, since = null, until = null, window = { cutoff: null, ceiling: Infinity }, histories = new Map() } = {}) {
+function countStages(allTickets, { list = null, since = null, until = null, window = { cutoff: null, ceiling: Infinity }, histories = new Map() } = {}) {
+  const tickets = workTickets(allTickets);
   const byStatus = Object.fromEntries(STATUSES.map((s) => [s, 0]));
   for (const t of tickets) {
     const key = String(t.status?.status ?? 'unknown').toLowerCase();
@@ -99,6 +114,7 @@ function countStages(tickets, { list = null, since = null, until = null, window 
   const inside = (at) => Number.isFinite(at) && at >= window.cutoff && at <= window.ceiling;
   const entered = Object.fromEntries(STATUSES.map((s) => [s, 0]));
   let closed = 0;
+  let notFinished = 0;
   let started = 0;
   for (const t of tickets) {
     const moves = histories.get(String(t.id));
@@ -116,10 +132,14 @@ function countStages(tickets, { list = null, since = null, until = null, window 
       }
     }
     const isLive = String(t.status?.status ?? '').toLowerCase() === LIVE;
-    if (isLive && inside(lastLive)) closed += 1;
+    if (isLive && inside(lastLive)) {
+      if (countsAsFinished(t.outcome)) closed += 1;
+      else notFinished += 1;
+    }
   }
   out.closedInWindow = closed;
   out.startedInWindow = started;
+  out.notFinishedInWindow = notFinished;
   out.enteredInWindow = entered;
   return out;
 }
