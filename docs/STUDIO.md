@@ -427,6 +427,51 @@ with no cut-marks row and no job waiting, and prints the running tally —
 `cut marks: 27 done · 0 failed · 0 still to do`. It is a dry run until you add
 `-- --apply`, and a second `--apply` enqueues nothing.
 
+## YouTube (Reel Spinner step 6)
+
+Finished edits upload to the **Dane of Earth** channel (Dane's choice,
+2026-11-16), as Private first, made visible only after he approves them (6c).
+
+**Which sign-in.** Its own setting, `YOUTUBE_UPLOAD_REFRESH_TOKEN` in Doppler
+(`starcaster` / `prd`, so the Mini's `~/Studio` scope reads it), signed in as
+the account that owns Dane of Earth, with the `youtube` permission (upload,
+read the channel, change a video's visibility, delete). It uses the existing
+Google Cloud OAuth client (`GOOGLE_DRIVE_CLIENT_ID` / `_SECRET`, project
+`starcaster-498505`). The Drive sign-in (`GOOGLE_DRIVE_REFRESH_TOKEN`) was
+checked first on 2026-11-17 and carries Drive permission only — YouTube
+answered "insufficient authentication scopes" — so it cannot upload.
+
+```
+npm run studio:youtube-login         # Dane's browser login, once; stores the token, never prints it
+npm run studio:youtube-check         # read-only: which channel, is upload permission there?
+npm run studio:youtube-test-upload   # one 5-second Private test video, made unlisted, then deleted
+```
+
+`studio:youtube-check` prints `channel:` and `upload:` and exits 0 ready,
+1 not ready (Google answered no), 2 could not tell. It uses the upload
+sign-in when it is set and the Drive sign-in otherwise, and names which.
+`studio:youtube-login` refuses to store a sign-in for any channel but Dane of
+Earth, because the wrong account is the likeliest slip and would upload to
+the wrong place. It needs no checkout of its branch: it uses only Node's own
+modules, so `git show <ref>:scripts/studio_youtube_login.cjs | doppler run
+--project starcaster --config prd -- node -` runs it straight from git.
+
+**The Private lock.** YouTube used to hold every video uploaded through an
+unaudited Google Cloud project at Private, which would have stopped this step.
+Google's `videos.insert` page now says the opposite (read 2026-11-17):
+*"Videos uploaded from unverified API projects are not restricted to private
+viewing mode."* The test upload is the proof for this project: it asks for
+unlisted (the lock blocks every visibility but Private, so unlisted answers the
+question without the test ever being public) and reads the answer back.
+Audit state: **not yet measured** — recorded on SC-841 once the test runs.
+
+**Daily allowance**, from Google's quota page (read 2026-11-17): uploads have
+their own bucket, **100 uploads a day, each costing 1**; everything else shares
+**10,000 units a day**, where changing or deleting a video costs 50 and reading
+one costs 1. So upload count is the limit that matters, at 100 a day, far above
+what Reel Spinner will make. The project's own figures are on the Google Cloud
+console's Quotas page for `starcaster-498505` (a browser login).
+
 ## Where the pieces live
 
 For an agent session working on this, not for day-to-day use.
