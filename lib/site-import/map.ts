@@ -1277,12 +1277,17 @@ type Dispositions = { mapped: number; placeholder: number; deduped: number; form
 function applyBand(
   row: MappedSection,
   look: SurfaceLook | null,
-  at: { first: boolean; last: boolean; rows: number }
+  at: { first: boolean; last: boolean; rows: number; joinPlain?: boolean }
 ): void {
   if (!look) return;
   if (look.background) {
     row.background = { ...look.background };
     if (!at.first) row.joinWithPrevious = true;
+  } else if (at.joinPlain && !at.first) {
+    // One source band split over several rows stays one band even with no
+    // paint of its own (SC-849): unjoined, the theme's alternating bands gave
+    // Bayside Partners' Services heading row grey and its cards row white.
+    row.joinWithPrevious = true;
   }
   if (at.first && look.padding.top) row.paddingTop = look.padding.top;
   if (at.last && look.padding.bottom) row.paddingBottom = look.padding.bottom;
@@ -1446,7 +1451,7 @@ function splitIntoRows(args: {
         let end = i;
         while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
         const look = args.bandLookOf(key);
-        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1 });
+        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1, joinPlain: true });
         // A band that is this one row keeps its height (SC-849). A band split
         // over several rows is left content-sized: which row would take the
         // empty space is a guess.
