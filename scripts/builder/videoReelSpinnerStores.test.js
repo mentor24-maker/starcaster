@@ -83,6 +83,7 @@ const TWO_MOMENTS = {
   briefFingerprint: 'brief-1',
   model: 'claude-sonnet-5-5',
   rulesVersion: 'moment-rules-1',
+  runStartedAt: new Date().toISOString(),
   moments: [
     { start_s: 41.2, end_s: 78.9, score: 86, reasons: ['A clear story.'], project: 'delray', mood: 'warm', quote: 'We built it.' },
     { start_s: 120, end_s: 150, score: 40 },
@@ -143,7 +144,7 @@ test('moments: the upsert sends on_conflict AND the merge header, and a second s
   try {
     const sourceId = await seedSource(ctx);
     const first = await ctx.moments.upsertMoments(sourceId, TWO_MOMENTS, SCOPE_A);
-    const second = await ctx.moments.upsertMoments(sourceId, { status: 'failed', error: 'no audio' }, SCOPE_A);
+    const second = await ctx.moments.upsertMoments(sourceId, { status: 'failed', error: 'no audio', runStartedAt: new Date().toISOString() }, SCOPE_A);
     assert.equal(second.ok, true, JSON.stringify(second));
     assert.equal(second.data.id, first.data.id);
     assert.equal(ctx.db.data.get('video_moments').length, 1);
@@ -204,10 +205,81 @@ test('moments: a rescore request is stamped, and the next score clears it', asyn
     const theirs = await ctx.moments.requestRescore(sourceId, SCOPE_B);
     assert.equal(theirs.status, 404);
 
-    await ctx.moments.upsertMoments(sourceId, TWO_MOMENTS, SCOPE_A);
+    const answered = await ctx.moments.upsertMoments(
+      sourceId, { ...TWO_MOMENTS, runStartedAt: new Date(Date.now() + 1000).toISOString() }, SCOPE_A
+    );
+    assert.equal(answered.ok, true, JSON.stringify(answered));
+    assert.equal(answered.data.rescoreRequestedAt, '');
     assert.equal(ctx.db.data.get('video_moments')[0].rescore_requested_at, null);
     const read = await ctx.moments.getMomentsBySource(sourceId, SCOPE_A);
     assert.equal(read.data.rescoreRequestedAt, '');
+  } finally { ctx.restore(); }
+});
+
+test('moments: a rescore Dane asks for WHILE a run is scoring survives that run\'s answer', async () => {
+  const ctx = withDb();
+  try {
+    const sourceId = await seedSource(ctx);
+    await ctx.moments.upsertMoments(sourceId, TWO_MOMENTS, SCOPE_A);
+
+    // The run starts, then he asks (scoring takes minutes), then the run answers.
+    const runStartedAt = new Date(Date.now() - 60 * 1000).toISOString();
+    const asked = await ctx.moments.requestRescore(sourceId, SCOPE_A);
+    assert.equal(asked.ok, true, JSON.stringify(asked));
+    const stamp = ctx.db.data.get('video_moments')[0].rescore_requested_at;
+    assert.ok(stamp);
+
+    const oldRun = await ctx.moments.upsertMoments(sourceId, { ...TWO_MOMENTS, runStartedAt }, SCOPE_A);
+    assert.equal(oldRun.ok, true, JSON.stringify(oldRun));
+    assert.equal(oldRun.data.summary, TWO_MOMENTS.summary, 'the run\'s moments are still saved');
+    assert.equal(ctx.db.data.get('video_moments')[0].rescore_requested_at, stamp,
+      'a request made after the run began is not answered by it, and must still stand');
+    assert.ok(oldRun.data.rescoreRequestedAt, 'the reply shows the request still standing');
+
+    // The clear is ONE conditional write — never a read and then a write.
+    const clears = ctx.db.calls.filter((c) => c.method === 'PATCH' && c.table === 'video_moments'
+      && /rescore_requested_at=lte\./.test(c.query));
+    assert.equal(clears.length, 2);
+
+    // The next run, started after he asked, answers it.
+    const nextRun = await ctx.moments.upsertMoments(
+      sourceId, { ...TWO_MOMENTS, runStartedAt: new Date(Date.parse(stamp) + 1).toISOString() }, SCOPE_A
+    );
+    assert.equal(nextRun.data.rescoreRequestedAt, '');
+    assert.equal(ctx.db.data.get('video_moments')[0].rescore_requested_at, null);
+  } finally { ctx.restore(); }
+});
+
+test('moments: a score must say when its run began — missing, unreadable or future is refused', async () => {
+  const ctx = withDb();
+  try {
+    const sourceId = await seedSource(ctx);
+    const { runStartedAt, ...noStart } = TWO_MOMENTS;
+    assert.ok(runStartedAt);
+    const missing = await ctx.moments.upsertMoments(sourceId, noStart, SCOPE_A);
+    assert.equal(missing.status, 400);
+    assert.match(missing.error, /runStartedAt is required/);
+    const junk = await ctx.moments.upsertMoments(sourceId, { ...TWO_MOMENTS, runStartedAt: 'yesterday-ish' }, SCOPE_A);
+    assert.match(junk.error, /runStartedAt must be an ISO date and time/);
+    const future = await ctx.moments.upsertMoments(
+      sourceId, { ...TWO_MOMENTS, runStartedAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }, SCOPE_A
+    );
+    assert.match(future.error, /is in the future/);
+    assert.equal(ctx.db.data.get('video_moments').length, 0);
+  } finally { ctx.restore(); }
+});
+
+test('moments: a refused rescore clear is reported, never a success', async () => {
+  const ctx = withDb();
+  try {
+    const sourceId = await seedSource(ctx);
+    ctx.db.refuse = (req) => (req.table === 'video_moments' && req.method === 'PATCH'
+      ? Promise.resolve({ ok: false, status: 503, error: 'the database is read-only right now' })
+      : null);
+    const res = await ctx.moments.upsertMoments(sourceId, TWO_MOMENTS, SCOPE_A);
+    assert.equal(res.ok, false);
+    assert.equal(res.status, 503);
+    assert.match(res.error, /rescore request they answer was not cleared: the database is read-only/);
   } finally { ctx.restore(); }
 });
 
@@ -267,6 +339,42 @@ test("pairs: Dane's choice of sound survives a later measurement", async () => {
     assert.equal(listed.data.length, 1);
   } finally { ctx.restore(); }
 });
+
+// Dane's pick landing at EACH point inside a measurement's save: before its
+// first write, and between its two writes. A read-then-write store loses it at
+// the first point and still answers 200 (review of PR #1025).
+for (const at of ['POST', 'PATCH']) {
+  test(`pairs: Dane's pick landing mid-save (before the ${at}) is kept, not overwritten`, async () => {
+    const ctx = withDb();
+    try {
+      const one = await seedSource(ctx);
+      const two = await seedSource(ctx);
+      const saved = await ctx.pairs.upsertAudioPair(one, two, { status: 'done', audioSourceId: one }, SCOPE_A);
+      assert.equal(saved.data.audioSourceId, one.toLowerCase());
+
+      let fired = false;
+      ctx.db.refuse = (req) => {
+        if (fired || req.table !== 'video_audio_pairs' || req.method !== at) return null;
+        fired = true;
+        return ctx.pairs.chooseAudioSource(saved.data.id, two, SCOPE_A).then((chose) => {
+          assert.equal(chose.ok, true, JSON.stringify(chose));
+          return ctx.db.sbQuery(req);
+        });
+      };
+      const measured = await ctx.pairs.upsertAudioPair(one, two, {
+        status: 'done', offsetS: 3, audioSourceId: one,
+      }, SCOPE_A);
+      assert.ok(fired, `the pick was interleaved before the ${at}`);
+      assert.equal(measured.ok, true, JSON.stringify(measured));
+      const row = ctx.db.data.get('video_audio_pairs')[0];
+      assert.equal(row.chosen_by, 'dane');
+      assert.equal(row.audio_source_id, two.toLowerCase());
+      assert.equal(Number(row.offset_s), 3, 'the measurement itself still lands');
+      assert.equal(measured.data.chosenBy, 'dane', 'the reply shows his pick, not the measured one');
+      assert.equal(measured.data.audioSourceId, two.toLowerCase());
+    } finally { ctx.restore(); }
+  });
+}
 
 test('pairs: refusals — itself, another project, a stranger\'s sound, a failure with no why, a refused write', async () => {
   const ctx = withDb();
@@ -339,6 +447,14 @@ test('edits: the whole road, rough cut to YouTube, with one send-back counted as
     const recut = await walk(ctx, edit.id, [['rendering']]);
     assert.equal(recut.data.recutCount, 1);
     await walk(ctx, edit.id, [['review', { roughCutDriveFileId: 'drive-2' }]]);
+
+    // A second send-back must bring its OWN note; the first one's is stale.
+    const staleNote = await ctx.edits.reviewEdit(edit.id, { status: 'sent_back' }, SCOPE_A);
+    assert.equal(staleNote.status, 400);
+    assert.match(staleNote.error, /needs a note, in the same save/);
+    const blankNote = await ctx.edits.reviewEdit(edit.id, { status: 'sent_back', daneNote: '   ' }, SCOPE_A);
+    assert.equal(blankNote.status, 400);
+    assert.equal(ctx.db.data.get('video_edits')[0].status, 'review');
 
     const approved = await ctx.edits.reviewEdit(edit.id, {
       status: 'approved', youtubeTitle: 'Building the courts', youtubeTags: ['tennis', ' delray '],

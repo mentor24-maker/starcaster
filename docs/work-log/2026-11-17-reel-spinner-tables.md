@@ -10,7 +10,8 @@ those decisions, plus the code that reads and writes each one:
   reasons for each score.
 - **Sound pairs**: which two recordings were made together, how far apart
   they start, and whose sound to use. If Dane picks the sound himself, a later
-  measurement keeps his pick.
+  measurement keeps his pick, even if he picks it at the very moment a
+  measurement is being saved.
 - **Edits**: each video or short as it moves through its steps. A step can't
   be skipped: an edit can't jump from "draft" to "on YouTube", and any attempt
   is refused with a message naming both steps. The website can only record
@@ -20,3 +21,16 @@ Every row records which client project it belongs to. That record is the gap
 that once left 550 rows with no owner. The tables stay empty until Dane runs
 the setup file on production, and `npm run sql:unapplied` lists the file until
 he does.
+
+**After review sent it back**, three gaps were closed where something Dane did
+could be lost while the save still said "success":
+
+- His choice of sound could be overwritten if he made it in the split second
+  a new measurement was being saved. The protection is now part of the save
+  itself, so timing cannot beat it.
+- Asking for a recording to be scored again while a scoring run was already
+  going used to be wiped out by that run's answer, even though the run had
+  scored the old version. Now the request stays until a run that started
+  after it answers.
+- Sending an edit back a second time without a new note was accepted, using
+  the old note from the first time. Now each send-back needs its own note.
