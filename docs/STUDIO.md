@@ -448,6 +448,30 @@ For an agent session working on this, not for day-to-day use.
   text. No row means "not looked at yet", never a state. `rules_version` lets a
   later rule change find old rows and redo them; `cut_s` is derived from the
   marks by the store, never supplied.
+- Moments, sound pairs and edits (Reel Spinner 2b, SC-827):
+  `docs/SQL/video_reel_spinner_setup.sql` (apply after the catalog file).
+  Three tables, every row a set of DECISIONS and never an edited file:
+  - `video_moments`, one row per source: the scored moments (start, end,
+    score 0-100, reasons, project, mood, quote). Store
+    `lib/videoMomentsStore.js`; `requestRescore` stamps
+    `rescore_requested_at`, and a score clears it only if its run began
+    after the stamp (`runStartedAt`, required), so a rescore asked for
+    mid-run is kept for the next one.
+  - `video_audio_pairs`, one row per pair of recordings made together, filed
+    with the smaller source id as A whichever way round it is asked; offset
+    and drift are measured from A to B. Store `lib/videoAudioPairsStore.js`.
+    Dane's choice of sound (`chosen_by = 'dane'`) survives later measurements:
+    the measured pick is an update guarded on `chosen_by=eq.measured`, never a
+    read followed by a write.
+  - `video_edits`, one row per output (one full edit per source, one short per
+    moment). Store `lib/videoEditsStore.js`, which holds the allowed status
+    steps (`EDIT_STEPS`) and refuses any other move naming both statuses.
+    The Mini moves edits with `moveEdit`; the website writes only Dane's
+    verdict and the YouTube text with `reviewEdit` (a send-back must carry
+    its own note in the same call), and the Mini finds those
+    with `listEditsByStatus` because the website cannot reach its queue.
+    Every move is guarded on the status it was read in.
+  Shared input rules: `lib/reelSpinnerInput.js`. Nothing calls these stores yet.
 - The pipeline: `workers/studio/` — `drive.js` (watcher), `ingest.js`,
   `probe.js`, `proxy.js`, `queue.js` (the local work list on the Mini, SQLite,
   deliberately not Supabase — the queue writes thousands of rows per video).

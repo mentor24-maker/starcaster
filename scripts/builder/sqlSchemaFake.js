@@ -186,6 +186,15 @@ const TYPE_CHECKS = new Map([
  * The order is the whole point: matched shortest-first, `int` would swallow the
  * head of `interval` and `timestamp` the head of `timestamptz`.
  */
+/** Types an `lt`/`lte`/`gt`/`gte` filter can order, and how. */
+const ORDERED_TYPES = new Map([
+  ['timestamptz', (v) => Date.parse(String(v))],
+  ['numeric', Number],
+  ['integer', Number],
+  ['int', Number],
+  ['bigint', Number],
+]);
+
 const TYPE_NAMES_LONGEST_FIRST = [...TYPE_CHECKS.keys()].sort((a, b) => b.length - a.length);
 
 /**
@@ -1115,6 +1124,33 @@ function createFakeDb(schema, { idPrefix = 'row' } = {}) {
         rows = rows.filter((row) => {
           const lexemes = new Set(row[key] || []);
           return words.length > 0 && words.every((word) => lexemes.has(word));
+        });
+        continue;
+      }
+
+      // `col=lt|lte|gt|gte.value` — an ordered comparison, the way Postgres
+      // compares the column's type. Only types whose order this fake knows
+      // (timestamps and numbers); text order is collation-dependent, so a
+      // comparison on it throws rather than guessing. NULL matches none.
+      const ordered = /^(lt|lte|gt|gte)\.(.*)$/s.exec(value);
+      if (ordered) {
+        const [, op, wanted] = ordered;
+        const toOrder = ORDERED_TYPES.get(column.type);
+        if (!toOrder) {
+          throw new Error(`sqlSchemaFake: ${op} on "${key}" (${column.type}), whose order this fake does not implement`);
+        }
+        if (!filterValueFits(column.type, wanted)) {
+          return { error: `invalid input syntax for type ${column.type}: "${wanted}"` };
+        }
+        const bound = toOrder(wanted);
+        rows = rows.filter((row) => {
+          const cell = row[key];
+          if (cell === null || cell === undefined) return false;
+          const at = toOrder(cell);
+          if (op === 'lt') return at < bound;
+          if (op === 'lte') return at <= bound;
+          if (op === 'gt') return at > bound;
+          return at >= bound;
         });
         continue;
       }
