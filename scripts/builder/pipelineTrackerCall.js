@@ -20,6 +20,9 @@
  * the switch is a standing ticket in the BUS project, beside the roll call and
  * the pulse report, where no loop claims from. So "the Loop Queue, closed
  * included" is answered with both: the open work, then every bus ticket.
+ * Since SC-818 StarCaster's bus IS its own project, so the two listings
+ * overlap: each ticket is answered once, and comments are read from the one
+ * project.
  *
  * The paths answered, and nothing else:
  *
@@ -69,7 +72,10 @@ function trackerCall({ door = realDoor, project = door.PROJECT, busProject = doo
   async function commentsOf(id) {
     const key = String(id).toLowerCase();
     const first = seenIn.get(key);
-    const order = first ? [first, first === project ? busProject : project] : [project, busProject];
+    // One project when the bus is the project's own queue (SC-818): trying
+    // it twice would only repeat the same refusal.
+    const both = project === busProject ? [project] : [project, busProject];
+    const order = first && both.length > 1 ? [first, first === project ? busProject : project] : both;
     let last = null;
     for (const p of order) {
       try {
@@ -93,9 +99,14 @@ function trackerCall({ door = realDoor, project = door.PROJECT, busProject = doo
         door.forgetComments();
         const work = await door.listTasks({ project });
         const standing = await door.listTasks({ project: busProject, includeClosed: true });
+        // When the bus is the project's own queue (SC-818) the second listing
+        // holds the first one again; a ticket counted twice would read as two
+        // switch tickets, or as one stranded build to move twice.
+        const listed = new Set(work.map((t) => String(t.id).toLowerCase()));
+        const extra = standing.filter((t) => !listed.has(String(t.id).toLowerCase()));
         for (const t of work) seenIn.set(String(t.id).toLowerCase(), project);
-        for (const t of standing) seenIn.set(String(t.id).toLowerCase(), busProject);
-        return answer({ tasks: [...work, ...standing], last_page: true });
+        for (const t of extra) seenIn.set(String(t.id).toLowerCase(), busProject);
+        return answer({ tasks: [...work, ...extra], last_page: true });
       }
       if (method === 'GET' && (m = /^\/api\/v2\/task\/([^/]+)\/comment$/.exec(route))) {
         // Every comment comes back on the first page; a request for the page

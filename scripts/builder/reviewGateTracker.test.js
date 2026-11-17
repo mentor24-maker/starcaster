@@ -105,15 +105,18 @@ test('the gate turns each of those into CANNOT TELL, and a tracker PASS into PAS
 
 test('a waiver is posted on the bus project\'s Team chat ticket and read back', async () => {
   const fetchImpl = fakeFetch({
-    'GET /projects/bus/tickets?open=true': { status: 200, body: { tickets: [
+    'GET /projects/bus/tickets': { status: 200, body: { tickets: [
       { id: 'BUS-9', name: 'Team chat', createdAt: '2026-11-10T00:00:00Z' },
-      { id: 'BUS-2', name: 'Team chat', createdAt: '2026-11-01T00:00:00Z' },
+      { id: 'BUS-2', name: 'Team chat', status: 'live', createdAt: '2026-11-01T00:00:00Z' },
       { id: 'BUS-1', name: 'Something else', createdAt: '2026-10-01T00:00:00Z' },
     ] } },
     'POST /tickets/BUS-2/comments': { status: 201, body: (init) => ({ id: 5, ...JSON.parse(init.body) }) },
   });
   const out = await tracker.announceWaiver('PR #7 waived — hotfix', { token: 't', baseUrl: BASE, busProject: 'bus', fetchImpl, now: Date.parse('2026-11-12T18:00:00Z') });
   assert.deepEqual(out, { ok: true, why: '', ticket: 'BUS-2' });
+  // Team chat rests in Live, and `open=true` leaves Live out: the list must
+  // not ask for open tickets only, or the gate never finds it (SC-818).
+  assert.equal(fetchImpl.calls[0].key, 'GET /projects/bus/tickets');
   const posted = JSON.parse(fetchImpl.calls[1].init.body).body;
   assert.match(posted, /^\*\*From the review gate on GitHub\*\* · 11\/12\/2026, 11:00 AM MT/);
   assert.match(posted, /PR #7 waived — hotfix/);
@@ -121,12 +124,12 @@ test('a waiver is posted on the bus project\'s Team chat ticket and read back', 
 
 test('a waiver that cannot be posted says why, and nothing is created', async () => {
   const none = await tracker.announceWaiver('x', { token: 't', baseUrl: BASE, busProject: 'bus', fetchImpl: fakeFetch({
-    'GET /projects/bus/tickets?open=true': { status: 200, body: { tickets: [] } },
+    'GET /projects/bus/tickets': { status: 200, body: { tickets: [] } },
   }) });
   assert.equal(none.ok, false);
   assert.match(none.why, /no "Team chat" ticket in bus/);
   const lost = await tracker.announceWaiver('x', { token: 't', baseUrl: BASE, busProject: 'bus', fetchImpl: fakeFetch({
-    'GET /projects/bus/tickets?open=true': { status: 200, body: { tickets: [{ id: 'BUS-2', name: 'Team chat', createdAt: '2026-11-01T00:00:00Z' }] } },
+    'GET /projects/bus/tickets': { status: 200, body: { tickets: [{ id: 'BUS-2', name: 'Team chat', createdAt: '2026-11-01T00:00:00Z' }] } },
     'POST /tickets/BUS-2/comments': { status: 201, body: { id: 5, body: 'something else' } },
   }) });
   assert.equal(lost.ok, false);

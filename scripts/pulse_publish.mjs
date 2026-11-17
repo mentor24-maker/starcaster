@@ -58,7 +58,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 // read with the door's `tickets --json` and written with its `task` and
 // `describe`. Not in this project's own queue: a ticket there could be picked
 // up as work, and the bus project is one no loop claims from.
-const BUS_PROJECT = trackerTickets.projectConfig().busProject || 'starcaster-bus';
+const BUS_PROJECT = String(trackerTickets.projectConfig().busProject || '');
 // The status the record rests in, the same one "Team chat" wears.
 const DIGEST_STATUS = 'Live';
 const ROLE = 'pipeline-pulse';

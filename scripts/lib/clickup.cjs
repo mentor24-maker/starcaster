@@ -927,12 +927,18 @@ function busPostEnv({ node, env = process.env, project = readProjectConfig() } =
   return out;
 }
 
+/** The bus project spirality.project.json names, for a message (never a guess). */
+function busProjectName() {
+  const name = readProjectConfig().busProject;
+  return name ? String(name) : 'the project named as busProject';
+}
+
 /** The one line said when a scratch-channel override can no longer be honoured. */
 function busChannelOverrideWarning(env = process.env) {
   const override = env.CLICKUP_BUS_CHANNEL;
   if (!override || override === DEFAULT_BUS_CHANNEL) return null;
   return `postBusMessage: CLICKUP_BUS_CHANNEL=${override} is set, but the tracker has one bus `
-    + 'per project and no channels, so this post goes to the REAL bus (starcaster-bus, Team chat).';
+    + `per project and no channels, so this post goes to the REAL bus (${busProjectName()}, Team chat).`;
 }
 
 function postBusMessage(text, options = {}) {

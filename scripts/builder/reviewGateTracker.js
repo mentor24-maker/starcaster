@@ -114,13 +114,15 @@ async function readTicketComments(ticketId, { token, baseUrl, fetchImpl = fetch,
  * "Team chat" ticket, as `bus-post` writes it. Returns ok/why so a failure is
  * reported, never assumed. It never creates the ticket: `bus-post` does that,
  * and a gate making noticeboards on GitHub's machines would be a surprise.
+ * The list asks for every ticket, Live included: Team chat rests in Live, and
+ * an `open=true` list never held it (found while building SC-818).
  */
 async function announceWaiver(content, { token, baseUrl, busProject, fetchImpl = fetch, timeoutMs, now = Date.now() } = {}) {
   const problem = setupProblem({ token, baseUrl });
   if (problem) return { ok: false, why: problem };
   if (!busProject) return { ok: false, why: 'spirality.project.json names no busProject, so there is no bus to post to' };
   const base = trim(baseUrl);
-  const listed = await call('GET', `${base}/projects/${encodeURIComponent(busProject)}/tickets?open=true`, { token, fetchImpl, timeoutMs });
+  const listed = await call('GET', `${base}/projects/${encodeURIComponent(busProject)}/tickets`, { token, fetchImpl, timeoutMs });
   if (listed.transportError) return { ok: false, why: `the tracker is unreachable: ${listed.transportError?.message || listed.transportError}` };
   if (!listed.res.ok) return { ok: false, why: refusalWhy(listed.res, listed.json) };
   const tickets = Array.isArray(listed.json?.tickets) ? listed.json.tickets : null;

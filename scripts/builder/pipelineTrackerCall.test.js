@@ -87,6 +87,24 @@ test('an id never listed is tried in this project, then the bus project', async 
   assert.deepEqual(d.log.map((l) => l.slice(0, 3)), [['comments', 'SCBUS-4', 'starcaster'], ['comments', 'SCBUS-4', 'starcaster-bus']]);
 });
 
+test('when the bus is the project itself (SC-818), each ticket is listed once and read from that one project', async () => {
+  const d = fakeDoor({
+    work: [
+      { id: 'SC-1', name: 'a build', status: 'building', updated: iso(Date.now()) },
+      { id: 'SC-9', name: pause.SWITCH_TASK_NAME, status: 'live' },
+    ],
+    comments: { 'SC-9': [{ id: 1, text: 'paused', at: iso(1000) }] },
+  });
+  const call = trackerCall({ door: d, project: 'starcaster', busProject: 'starcaster' });
+  const page0 = await call('GET', '/api/v2/list/tracker/task?page=0');
+  assert.deepEqual(page0.json.tasks.map((t) => t.id), ['SC-1', 'SC-9'], 'no ticket twice, so the switch is never "two switch tickets"');
+  const out = await call('GET', '/api/v2/task/SC-9/comment');
+  assert.equal(out.ok, true);
+  assert.deepEqual(d.log.filter((l) => l[0] === 'comments'), [['comments', 'SC-9', 'starcaster']]);
+  const unseen = await trackerCall({ door: fakeDoor(), project: 'starcaster', busProject: 'starcaster' })('GET', '/api/v2/task/SC-404/comment');
+  assert.equal(unseen.ok, false, 'an id in no project is still a refusal, said once');
+});
+
 test('a failed read is a failed read: ok false with the reason, never a throw, never "no comments"', async () => {
   const d = fakeDoor({ work: [{ id: 'SC-1', name: 'x', status: 'building' }], fail: { comments: 'reading the comments on the starcaster tickets on the tracker failed: exit 1' } });
   const out = await trackerCall({ door: d })('GET', '/api/v2/task/SC-1/comment');
