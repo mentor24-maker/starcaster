@@ -24,6 +24,7 @@
     "studio:backfill-transcripts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_transcripts.cjs",
     "studio:backfill-cuts": "doppler run --scope \"$HOME/Studio\" --project starcaster --config prd --no-check-version -- node scripts/studio_backfill_cuts.cjs",
     "clickup": "node loop/scripts/with_doppler.mjs node loop/scripts/clickup.mjs",
+    "bus:move-in": "node loop/scripts/with_doppler.mjs node scripts/move_bus_into_project.mjs",
     "pipeline": "doppler run --project starcaster --config dev --no-check-version -- node scripts/pipeline.mjs",
     "connections:verify": "doppler run --project starcaster --config dev --no-check-version -- node scripts/connections_verify_sweep.mjs",
     "reconcile": "doppler run --project starcaster --config dev --no-check-version -- node scripts/reconcile_clickup_github.cjs",

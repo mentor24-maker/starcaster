@@ -19,3 +19,15 @@ Checking the places that look up Team chat turned up two problems:
 
 The tickets themselves move on the Mini right after this merges, using
 Spirality's new `move` command. The steps are in the pull request.
+
+**Sent back once, and why.** The starcaster project already held an older
+ticket under every board name: the copies brought over from ClickUp in
+September (SC-404 "Team chat" and five more). The bus finds its boards by
+name, and when two share a name the older one wins, so after the move every
+alarm would have landed on the September archive instead of the live board.
+The move is now one script, `npm run bus:move-in` (it only shows its plan
+unless given `--apply`). It first renames each old copy "… (ClickUp archive)",
+keeping all its history, then moves the bus tickets in, tags each board, and
+checks at the end that exactly one ticket of each name is left. The old pause
+switch is archived too, so the pause button keeps behaving exactly as it
+does today.
