@@ -35,7 +35,7 @@ import { looksLikeHtmlUrl, sameSite } from "./crawl";
 import type { AssetRef, ElementIR, NavItem, NavTree, PageIR, SectionIR, SiteIR } from "./ir";
 import { readSourceForm, type DataCaptureForm, type FormField } from "./forms";
 import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind, type Lockup } from "./columns";
-import { deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
+import { contrastRatio, deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import {
   buttonGlowSettings,
@@ -96,6 +96,14 @@ export type MappedSection = {
   rowBorderColor?: string;
   rowBorderStyle?: string;
   rowBorderRadius?: string;
+  /**
+   * A band that stood much taller than its content (a hero photo with one
+   * line of text near its foot): its measured height, in px, and where the
+   * content sat in it (task SC-849). Without these the row shrinks to fit the
+   * text and the picture behind it becomes a strip.
+   */
+  minHeight?: string;
+  cellVAlign?: Record<string, string>;
   cellBackgrounds?: Record<string, MappedBackground>;
   cellBorderWidth?: Record<string, string>;
   cellBorderColor?: Record<string, string>;
@@ -1050,7 +1058,14 @@ export type ProseThemeLook = {
   headingWeights: Record<number, number>;
   /** The theme's link colour (hex), or "" when it sets none. */
   linkColor: string;
+  /** The theme's heading and body text colours (hex), or "" for none. */
+  headingColor?: string;
+  textColor?: string;
 };
+
+/** Below this an element's own colour on a painted band is not trusted to be
+ *  readable there (WCAG's large-text floor; headings are what this is for). */
+const BAND_TEXT_CONTRAST = 3;
 
 /** A heading level the theme names no weight for paints at the browser's
  *  own heading weight. */
@@ -1060,7 +1075,37 @@ export function proseThemeLook(theme: { typography?: { scale?: Record<string, nu
   const scale = theme.typography?.scale || {};
   const headingWeights: Record<number, number> = {};
   for (let level = 1; level <= 6; level++) headingWeights[level] = Number(scale[`h${level}Fw`]) || DEFAULT_HEADING_WEIGHT;
-  return { headingWeights, linkColor: toHex(theme.typography?.colors?.link) };
+  return {
+    headingWeights,
+    linkColor: toHex(theme.typography?.colors?.link),
+    headingColor: toHex(theme.typography?.colors?.heading),
+    textColor: toHex(theme.typography?.colors?.text),
+  };
+}
+
+/**
+ * The element's own colour, when the band it sits on came along and the
+ * colour reads on it (task SC-849). Bayside Partners' hero heading is white
+ * over a photo; the import reproduced the photo, then dropped the white, and
+ * the theme painted the heading dark on the dark picture. A picture is
+ * trusted as the source showed it; a fill or gradient must clear
+ * BAND_TEXT_CONTRAST against every colour it paints. "" otherwise — and
+ * always when the colour is the theme's own for that element.
+ */
+export function ownColorOnBand(el: ElementIR, look: ProseThemeLook, band: MappedBackground | null | undefined): string {
+  if (!band || band.mode === "none") return "";
+  const own = toHex(el.computedStyles?.color);
+  if (!own) return "";
+  const isHeading = /^\s*<h[1-6]\b/i.test(String(el.html || "")) || el.class === "heading";
+  const themeColor = (isHeading ? look.headingColor || look.textColor : look.textColor) || "";
+  if (themeColor && own === themeColor) return "";
+  if (band.mode === "image") return own;
+  const fills = [band.color, band.mode === "gradient" ? band.color2 : ""]
+    .concat((band.gradientLayers || []).flatMap((layer) => (layer.stops || []).map((s) => s.color)))
+    .map((c) => toHex(c))
+    .filter(Boolean);
+  if (!fills.length) return "";
+  return fills.every((fill) => contrastRatio(own, fill) >= BAND_TEXT_CONTRAST) ? own : "";
 }
 
 function weightOf(value: string | undefined): number {
@@ -1090,19 +1135,22 @@ function withStyle(existing: string | undefined, decls: string[]): string {
  * carries what is typical; this carries what differs from it.
  *
  * - The element's OWN weight and letter spacing, where they differ from what
- *   the theme paints for that element. Its own colour is deliberately left to
- *   the theme: the theme rejects colours that cannot be read on the page's
- *   surface, and a white heading from a dark band the import did not
- *   reproduce would otherwise arrive invisible.
+ *   the theme paints for that element. Its own colour is left to the theme
+ *   unless `band` says the background it sat on came along and the colour
+ *   reads there (ownColorOnBand): the theme rejects colours that cannot be
+ *   read on the page's surface, and a white heading from a dark band the
+ *   import did not reproduce would otherwise arrive invisible.
  * - Each word's recorded difference from its parent (`inlineStyles`), except
  *   a link's colour where it is the theme's own link colour.
  *
  * Returns the html unchanged, byte for byte, when nothing differs.
  */
-export function styleProseHtml(el: ElementIR, look: ProseThemeLook): string {
+export function styleProseHtml(el: ElementIR, look: ProseThemeLook, band?: MappedBackground | null): string {
   const own = el.computedStyles || {};
   const level = Number((String(el.html || "").match(/^\s*<h([1-6])\b/i) || [])[1]) || 0;
   const rootDecls: string[] = [];
+  const bandColor = ownColorOnBand(el, look, band);
+  if (bandColor) rootDecls.push(`color:${bandColor}`);
   const weight = weightOf(own["font-weight"]);
   const themeWeight = level ? look.headingWeights[level] || DEFAULT_HEADING_WEIGHT : 400;
   if (weight !== themeWeight) rootDecls.push(`font-weight:${weight}`);
@@ -1246,6 +1294,37 @@ function applyBand(
   }
 }
 
+/** Builder's ceiling for a row's minimum height (builder-template.ts). */
+const MAX_ROW_MIN_HEIGHT = 1200;
+
+/**
+ * A band's measured height, when it stood clearly taller than its content
+ * plus padding, and where in it the content sat (task SC-849). Bayside
+ * Partners' hero photo is 750px tall with one line of text near its foot;
+ * keeping only the band's 54px padding shrank it to a 200px strip. Null when
+ * the band was content-sized, or when nothing was measured.
+ */
+export function bandHeightFor(
+  bandBox: { y: number; h: number } | undefined,
+  contentBoxes: Array<{ y: number; h: number } | undefined>,
+  padTop: number,
+  padBottom: number
+): { minHeight: string; vAlign: "top" | "center" | "bottom" } | null {
+  if (!bandBox || !(bandBox.h > 0)) return null;
+  const boxes = contentBoxes.filter((b): b is { y: number; h: number } => Boolean(b && b.h > 0));
+  if (!boxes.length) return null;
+  const top = Math.min(...boxes.map((b) => b.y));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.h));
+  const natural = bottom - top + padTop + padBottom;
+  // Room for measuring noise and ordinary spacing between modules: only a
+  // band with real empty space in it keeps its height.
+  if (bandBox.h < natural + 80 || bandBox.h < natural * 1.3) return null;
+  const gapTop = top - (bandBox.y + padTop);
+  const gapBottom = bandBox.y + bandBox.h - padBottom - bottom;
+  const vAlign = gapTop > 2 * gapBottom ? "bottom" : gapBottom > 2 * gapTop ? "top" : "center";
+  return { minHeight: String(Math.min(Math.round(bandBox.h), MAX_ROW_MIN_HEIGHT)), vAlign };
+}
+
 function setCell<K extends keyof MappedSection>(
   row: MappedSection,
   key: K,
@@ -1366,7 +1445,27 @@ function splitIntoRows(args: {
         while (start > 0 && rowBand[start - 1] === key) start--;
         let end = i;
         while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
-        applyBand(row, args.bandLookOf(key), { first: i === start, last: i === end, rows: end - start + 1 });
+        const look = args.bandLookOf(key);
+        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1 });
+        // A band that is this one row keeps its height (SC-849). A band split
+        // over several rows is left content-sized: which row would take the
+        // empty space is a guess.
+        if (start === end) {
+          const byId = new Map((section.elements || []).map((el) => [el.sourceId, el]));
+          const tall = bandHeightFor(
+            section.containerBoxes?.[key],
+            row.sourceElementIds.map((id) => byId.get(id)?.box),
+            Number(look?.padding.top) || 0,
+            Number(look?.padding.bottom) || 0
+          );
+          if (tall) {
+            row.minHeight = tall.minHeight;
+            if (tall.vAlign !== "top") {
+              const keys = layout === "single" ? ["main"] : columnKeys(cols.length);
+              row.cellVAlign = Object.fromEntries(keys.map((k) => [k, tall.vAlign]));
+            }
+          }
+        }
       }
     } else {
       applyBand(row, args.rootLook, { first: i === 0, last: i === bands.length - 1, rows: bands.length });
@@ -1438,6 +1537,89 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
   for (const nav of menuNavs(ir)) collectNav(nav.items);
   const menusOn = opts.menus !== false;
+  // The header menu's own pairs, to recognise the section the Top Menu is
+  // built from (setAside below).
+  const headerNavPairs = new Set<string>();
+  for (const nav of menuNavs(ir).filter((n) => n.location === "header")) {
+    const walk = (items: NavItem[]) => {
+      for (const item of items || []) {
+        headerNavPairs.add(`${collapse(item.label).toLowerCase()}|${normalizeHref(item.href)}`);
+        walk(item.children || []);
+      }
+    };
+    walk(nav.items);
+  }
+  const linkPair = (el: ElementIR) =>
+    `${collapse(el.textContent).toLowerCase()}|${normalizeHref(attrFromHtml(el.html, "href"))}`;
+  const logoTaxonomy = ir.taxonomy?.logo;
+
+  /**
+   * Elements that must not reach the page and must not shape its layout,
+   * decided before columns are read (task SC-849, Bayside Partners):
+   *
+   * - The header the Top Menu is built from. Its links were already consumed;
+   *   its logo picture and its hidden phone-menu leftovers were poured as
+   *   content too, so the page showed the logo twice and Divi's "Select Page"
+   *   label. With menus on, a section holding header-menu links gives up the
+   *   site logo (the Top Menu shows it) and any short text the capture saw no
+   *   position for — hidden on a desktop screen, which in a header is the
+   *   phone menu. Visible header text that is not the menu stays.
+   * - An "image" with nothing to show: a box painted only by CSS (Divi's
+   *   `et_pb_background_mask`, an SVG drawn as a background). It became an
+   *   image module with an empty address, and because it spanned the whole
+   *   band it stopped the contact text and form being read as two columns.
+   * - Prose that is nothing but markup (`<p><!-- /divi:paragraph --></p>`),
+   *   which was merged into the heading before it. Not `<p>&nbsp;</p>`: that
+   *   blank line is spacing the author typed (the Delray fixture has 46).
+   *
+   * Each is accounted: the logo as navConsumed, the rest skipped with a reason.
+   */
+  const setAside = (section: SectionIR): Map<string, { navConsumed: boolean; reason: string }> => {
+    const out = new Map<string, { navConsumed: boolean; reason: string }>();
+    const els = section.elements || [];
+    const measured = els.some((el) => el.box && el.box.w > 0);
+    const isHeader =
+      menusOn && headerNavPairs.size > 0 && els.some((el) => el.class === "link" && headerNavPairs.has(linkPair(el)));
+    for (const el of els) {
+      if (isHeader && el.class === "image" && logoTaxonomy?.src) {
+        const assetId = shownAssetId(el, assetsById);
+        const src = attrFromHtml(el.html, "src");
+        if ((logoTaxonomy.assetId && assetId === logoTaxonomy.assetId) || (src && src === logoTaxonomy.src)) {
+          out.set(el.sourceId, { navConsumed: true, reason: "" });
+          continue;
+        }
+      }
+      if (isHeader && measured && !el.box && PROSE_CLASSES.has(el.class) && el.class !== "link") {
+        const words = collapse(el.textContent);
+        if (words.length <= 40) {
+          out.set(el.sourceId, {
+            navConsumed: false,
+            reason: `hidden in the header on a desktop screen ("${words}") — the site's phone-menu chrome; the Top Menu replaces that menu`,
+          });
+          continue;
+        }
+      }
+      if (
+        el.class === "image" &&
+        !shownAssetId(el, assetsById) &&
+        !attrFromHtml(el.html, "src") &&
+        !/<(img|svg|picture|video|canvas)\b/i.test(el.html)
+      ) {
+        out.set(el.sourceId, {
+          navConsumed: false,
+          reason: "an image box with no picture in it — painted only by CSS (a background layer or mask), nothing to show",
+        });
+        continue;
+      }
+      // Nothing at all between the tags once comments are gone. A deliberate
+      // blank line (`<p>&nbsp;</p>`) is spacing its author typed, and stays.
+      const bare = String(el.html || "").replace(/<!--[\s\S]*?-->/g, "").replace(/<[^>]*>/g, "");
+      if (PROSE_CLASSES.has(el.class) && /^[ \t\r\n]*$/.test(bare) && !/<(img|svg|picture|video|iframe|br)\b/i.test(el.html)) {
+        out.set(el.sourceId, { navConsumed: false, reason: "nothing but markup — empty markup the site builder left behind" });
+      }
+    }
+    return out;
+  };
   // The footer's own links stay on the page even with a Footer Menu: on a
   // site whose footer band is nothing but links, consuming them deletes the
   // band and its background (the Dane of Earth fixture's #222 footer).
@@ -1836,7 +2018,10 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // by band says which boxes hold one cell's worth of content (cards);
       // the real plan then refuses to pour two different cards into one cell
       // (columns.ts, GridItem.group).
-      const sectionEls = section.elements || [];
+      // Set-aside elements (setAside) are accounted in the loop below but
+      // play no part in bands, cards or columns.
+      const asideOf = setAside(section);
+      const sectionEls = (section.elements || []).filter((el) => !asideOf.has(el.sourceId));
       const containerStyles = section.containers || {};
       const rowCtx = { surface: pageSurface, resolveImage: resolveBackgroundImage, maxPadding: 160 };
       const sectionGround = toHex(section.ground);
@@ -1864,6 +2049,13 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           return Boolean(look && (look.padding.top || look.padding.bottom));
         }
       );
+      /** What paints behind an element once imported: its band's background,
+       *  else the section's ground — for keeping its own colour (SC-849). */
+      const backdropOf = (sourceId: string): MappedBackground | null => {
+        const key = bandOf.get(sourceId);
+        const look = key ? bandLookOf(key) : null;
+        return look?.background || ground;
+      };
       const draft = planSectionGrid(
         sectionEls.map((el) => ({ id: el.sourceId, box: el.box, group: bandOf.get(el.sourceId), kind: gridKind(el) }))
       );
@@ -1918,7 +2110,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       // a stacked one is the section's whole span, or the site's measured
       // content width when that is wider (a section holding only a logo
       // spans only the logo). 0 = unmeasured.
-      const boxes = (section.elements || []).map((el) => el.box).filter((b) => b && b.w >= 2);
+      const boxes = sectionEls.map((el) => el.box).filter((b) => b && b.w >= 2);
       const sectionSpanPx = boxes.length
         ? Math.max(...boxes.map((b) => b!.x + b!.w)) - Math.min(...boxes.map((b) => b!.x))
         : 0;
@@ -2015,7 +2207,19 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           dispositions = dispositionsFor(cell.band);
         }
         report.elements.total += 1;
-        sourceElementIds.push(el.sourceId);
+        // Set aside: counted in the report, never filed under a row — it has
+        // no cell, and a row it was filed under would read its box and band.
+        const aside = asideOf.get(el.sourceId);
+        if (!aside) sourceElementIds.push(el.sourceId);
+        if (aside) {
+          if (aside.navConsumed) {
+            report.elements.navConsumed += 1;
+          } else {
+            report.elements.skipped += 1;
+            report.skipped.push({ sourceId: el.sourceId, class: el.class, reason: aside.reason });
+          }
+          continue;
+        }
         if (el.class === "heading" && !firstHeading) firstHeading = collapse(el.textContent);
 
         const slideshowLead = slideshowLeads.get(el.sourceId);
@@ -2134,7 +2338,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
                 alt: attrFromHtml(pic.html, "alt") || asset.altText || "",
                 widthPx: Math.min(shownWidthPx(pic.html, pic.box) || pic.box?.w || 64, 160),
                 gapPx: lockup.gapPx,
-                wordsHtml: words.map((w) => styleProseHtml(w as ElementIR, proseLook)).join(""),
+                wordsHtml: words.map((w) => styleProseHtml(w as ElementIR, proseLook, backdropOf((w as ElementIR).sourceId))).join(""),
                 link: imageLink(pic),
               }),
               settings: { importSourceIds: [lockup.image, ...lockup.texts].join(",") },
@@ -2164,7 +2368,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
               continue;
             }
           }
-          const html = styleProseHtml(el, proseLook);
+          const html = styleProseHtml(el, proseLook, backdropOf(el.sourceId));
           // Oversize ladder before merging.
           if (html.length > TEXT_MODULE_CHAR_BUDGET) {
             flushProse();

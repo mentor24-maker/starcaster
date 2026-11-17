@@ -1,0 +1,1928 @@
+{
+ "irVersion": "1.0",
+ "jobId": "simp_1794945570334_oh518a",
+ "sourceUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+ "capturedAt": "2026-11-17T20:02:57.349+00:00",
+ "pages": [
+  {
+   "url": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+   "path": "/",
+   "title": "Bayside Partners | Bayside Partners provides essential services and resources to deserving technology innovators — from strategic planning to back-office execution.",
+   "metaDescription": "",
+   "ogTags": {},
+   "canonicalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+   "lang": "en-US",
+   "sections": [
+    {
+     "sourceId": "p2a0c975e-08c2bf26",
+     "type": "unknown",
+     "screenshot": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/shots/home.desktop.s0.png",
+     "elements": [
+      {
+       "sourceId": "p2a0c975e-54868c56",
+       "class": "image",
+       "html": "<a href=\"https://safe-lavenderblush-llama-78.hostingersite.com/\">\n\t\t\t\t<img src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/logo_bayside_partners.png\" width=\"560\" height=\"145\" alt=\"Bayside Partners\" id=\"logo\" data-height-percentage=\"75\" data-actual-width=\"560\" data-actual-height=\"145\">\n\t\t\t\t</a>",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(46, 163, 242)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "23px",
+        "border-top-color": "rgb(46, 163, 242)",
+        "border-right-color": "rgb(46, 163, 242)",
+        "border-bottom-color": "rgb(46, 163, 242)",
+        "border-left-color": "rgb(46, 163, 242)",
+        "display": "inline"
+       },
+       "documentPosition": 0,
+       "depth": 6,
+       "assetRefs": [
+        "simpa_1794945895631_lzqeargk"
+       ],
+       "box": {
+        "x": 185,
+        "y": 31,
+        "w": 269,
+        "h": 27
+       },
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-a14f9e62",
+       "class": "link",
+       "html": "<a href=\"https://safe-lavenderblush-llama-78.hostingersite.com/\" aria-current=\"page\">Home</a>",
+       "textContent": "Home",
+       "textLength": 4,
+       "computedStyles": {
+        "color": "rgb(46, 163, 242)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "14px",
+        "font-weight": "600",
+        "line-height": "14px",
+        "border-top-color": "rgb(46, 163, 242)",
+        "border-right-color": "rgb(46, 163, 242)",
+        "border-bottom-color": "rgb(46, 163, 242)",
+        "border-left-color": "rgb(46, 163, 242)",
+        "padding-bottom": "40px",
+        "display": "block",
+        "position": "relative"
+       },
+       "documentPosition": 1,
+       "depth": 9,
+       "assetRefs": [],
+       "box": {
+        "x": 948,
+        "y": 39,
+        "w": 41,
+        "h": 54
+       },
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-e98c1e45",
+       "class": "link",
+       "html": "<a href=\"#about-us\">About Us</a>",
+       "textContent": "About Us",
+       "textLength": 8,
+       "computedStyles": {
+        "color": "rgba(0, 0, 0, 0.81)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "14px",
+        "font-weight": "600",
+        "line-height": "14px",
+        "border-top-color": "rgba(0, 0, 0, 0.81)",
+        "border-right-color": "rgba(0, 0, 0, 0.81)",
+        "border-bottom-color": "rgba(0, 0, 0, 0.81)",
+        "border-left-color": "rgba(0, 0, 0, 0.81)",
+        "padding-bottom": "40px",
+        "display": "block",
+        "position": "relative"
+       },
+       "documentPosition": 2,
+       "depth": 9,
+       "assetRefs": [],
+       "box": {
+        "x": 1015,
+        "y": 39,
+        "w": 62,
+        "h": 54
+       },
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-0fbb17dc",
+       "class": "link",
+       "html": "<a href=\"#services\">Services</a>",
+       "textContent": "Services",
+       "textLength": 8,
+       "computedStyles": {
+        "color": "rgba(0, 0, 0, 0.81)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "14px",
+        "font-weight": "600",
+        "line-height": "14px",
+        "border-top-color": "rgba(0, 0, 0, 0.81)",
+        "border-right-color": "rgba(0, 0, 0, 0.81)",
+        "border-bottom-color": "rgba(0, 0, 0, 0.81)",
+        "border-left-color": "rgba(0, 0, 0, 0.81)",
+        "padding-bottom": "40px",
+        "display": "block",
+        "position": "relative"
+       },
+       "documentPosition": 3,
+       "depth": 9,
+       "assetRefs": [],
+       "box": {
+        "x": 1104,
+        "y": 39,
+        "w": 55,
+        "h": 54
+       },
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-4d397a47",
+       "class": "link",
+       "html": "<a href=\"#contact-us\">Contact Us</a>",
+       "textContent": "Contact Us",
+       "textLength": 10,
+       "computedStyles": {
+        "color": "rgba(0, 0, 0, 0.81)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "14px",
+        "font-weight": "600",
+        "line-height": "14px",
+        "border-top-color": "rgba(0, 0, 0, 0.81)",
+        "border-right-color": "rgba(0, 0, 0, 0.81)",
+        "border-bottom-color": "rgba(0, 0, 0, 0.81)",
+        "border-left-color": "rgba(0, 0, 0, 0.81)",
+        "padding-bottom": "40px",
+        "display": "block",
+        "position": "relative"
+       },
+       "documentPosition": 4,
+       "depth": 9,
+       "assetRefs": [],
+       "box": {
+        "x": 1187,
+        "y": 39,
+        "w": 73,
+        "h": 54
+       },
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-76e1062d",
+       "class": "text",
+       "html": "Select Page",
+       "textContent": "Select Page",
+       "textLength": 11,
+       "computedStyles": {},
+       "documentPosition": 5,
+       "depth": 9,
+       "assetRefs": [],
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-2e62cf7d",
+       "class": "link",
+       "html": "<a href=\"https://safe-lavenderblush-llama-78.hostingersite.com/\" aria-current=\"page\">Home</a>",
+       "textContent": "Home",
+       "textLength": 4,
+       "computedStyles": {},
+       "documentPosition": 6,
+       "depth": 10,
+       "assetRefs": [],
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-135cd53a",
+       "class": "link",
+       "html": "<a href=\"#about-us\">About Us</a>",
+       "textContent": "About Us",
+       "textLength": 8,
+       "computedStyles": {},
+       "documentPosition": 7,
+       "depth": 10,
+       "assetRefs": [],
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-3e9e24df",
+       "class": "link",
+       "html": "<a href=\"#services\">Services</a>",
+       "textContent": "Services",
+       "textLength": 8,
+       "computedStyles": {},
+       "documentPosition": 8,
+       "depth": 10,
+       "assetRefs": [],
+       "containers": [
+        "2"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-121d14d4",
+       "class": "link",
+       "html": "<a href=\"#contact-us\">Contact Us</a>",
+       "textContent": "Contact Us",
+       "textLength": 10,
+       "computedStyles": {},
+       "documentPosition": 9,
+       "depth": 10,
+       "assetRefs": [],
+       "containers": [
+        "2"
+       ]
+      }
+     ],
+     "containers": {
+      "2": {
+       "background-color": "rgb(255, 255, 255)",
+       "box-shadow": "rgba(0, 0, 0, 0.1) 0px 1px 0px 0px"
+      }
+     },
+     "containerBoxes": {
+      "2": {
+       "x": 0,
+       "y": 0,
+       "w": 1440,
+       "h": 93
+      }
+     },
+     "rootStyles": {
+      "background-color": "rgb(255, 255, 255)",
+      "box-shadow": "rgba(0, 0, 0, 0.1) 0px 1px 0px 0px"
+     },
+     "decorations": []
+    },
+    {
+     "sourceId": "p2a0c975e-04c07a43",
+     "type": "unknown",
+     "screenshot": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/shots/home.desktop.s1.png",
+     "elements": [
+      {
+       "sourceId": "p2a0c975e-0721ea0b",
+       "class": "heading",
+       "html": "<h1>Bayside Partners provides advisory services that help CEOs succeed — from strategic planning to back-office execution.</h1>",
+       "textContent": "Bayside Partners provides advisory services that help CEOs succeed — from strategic planning to back-office execution.",
+       "textLength": 118,
+       "computedStyles": {
+        "color": "rgb(255, 255, 255)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "30px",
+        "font-weight": "500",
+        "line-height": "42px",
+        "border-top-color": "rgb(255, 255, 255)",
+        "border-right-color": "rgb(255, 255, 255)",
+        "border-bottom-color": "rgb(255, 255, 255)",
+        "border-left-color": "rgb(255, 255, 255)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 10,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 230,
+        "y": 622,
+        "w": 980,
+        "h": 94
+       },
+       "containers": [
+        "24"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-fffbfba3",
+       "class": "text",
+       "html": "<p><!-- /divi:paragraph --></p>",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {},
+       "documentPosition": 11,
+       "depth": 14,
+       "assetRefs": [],
+       "containers": [
+        "24"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-b247a87d",
+       "class": "heading",
+       "html": "<h2>About Us</h2>",
+       "textContent": "About Us",
+       "textLength": 8,
+       "computedStyles": {
+        "color": "rgb(0, 0, 0)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "30px",
+        "font-weight": "700",
+        "line-height": "30px",
+        "border-top-color": "rgb(0, 0, 0)",
+        "border-right-color": "rgb(0, 0, 0)",
+        "border-bottom-color": "rgb(0, 0, 0)",
+        "border-left-color": "rgb(0, 0, 0)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 12,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 922,
+        "w": 1080,
+        "h": 40
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-3f2272de",
+       "class": "image",
+       "html": "<img fetchpriority=\"high\" decoding=\"async\" width=\"400\" height=\"600\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/headshot_joshua_barrow_400x600.jpg\" alt=\"Joshua Barrow\" title=\"Joshua Barrow\" srcset=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/headshot_joshua_barrow_400x600.jpg 400w, https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/headshot_joshua_barrow_400x600-200x300.jpg 200w\" sizes=\"(max-width: 400px) 100vw, 400px\" class=\"wp-image-46\">",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "0px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "inline",
+        "position": "relative"
+       },
+       "documentPosition": 13,
+       "depth": 14,
+       "assetRefs": [
+        "simpa_1794945895631_69qjqme8",
+        "simpa_1794945895631_nluv2tyi"
+       ],
+       "box": {
+        "x": 180,
+        "y": 1016,
+        "w": 337,
+        "h": 505
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-da061fc1",
+       "class": "text",
+       "html": "<p><a href=\"https://www.linkedin.com/in/jbarrow/\" target=\"_blank\" rel=\"noopener\">Joshua Barrow – LinkedIn</a></p>",
+       "textContent": "Joshua Barrow – LinkedIn",
+       "textLength": 24,
+       "computedStyles": {
+        "color": "rgb(12, 113, 195)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(12, 113, 195)",
+        "border-right-color": "rgb(12, 113, 195)",
+        "border-bottom-color": "rgb(12, 113, 195)",
+        "border-left-color": "rgb(12, 113, 195)",
+        "display": "block"
+       },
+       "documentPosition": 14,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 1531,
+        "w": 396,
+        "h": 34
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-793ff2cf",
+       "class": "text",
+       "html": "<p>Mr. Barrow has nearly 30 years of executive leadership experience across multiple industries including IT Consulting, Customer Relationship Management, e-Commerce, IT Service Management, Mergers and Acquisitions, and Gaming. He’s also served in the public sector and non-profit sectors on boards and capital projects for over 10 years.</p>",
+       "textContent": "Mr. Barrow has nearly 30 years of executive leadership experience across multiple industries including IT Consulting, Customer Relationship Management, e-Commerce, IT Service Management, Mergers and Acquisitions, and Gaming. He’s also served in the public sector and non-profit sectors on boards and capital projects for over 10 years.",
+       "textLength": 335,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "28px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "20px",
+        "display": "block"
+       },
+       "documentPosition": 15,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 636,
+        "y": 1016,
+        "w": 624,
+        "h": 188
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-7d4237b2",
+       "class": "text",
+       "html": "<p>Mr. Barrow has been a founder, a later-state executive, acquirer, acquiree, and board member. He did his undergraduate work at Harvard University, was an early-stage executive at Breakaway Solutions with a successful IPO on NASDAQ. He was the founder of Third Sky, with a successful private sale to VMware.</p>",
+       "textContent": "Mr. Barrow has been a founder, a later-state executive, acquirer, acquiree, and board member. He did his undergraduate work at Harvard University, was an early-stage executive at Breakaway Solutions with a successful IPO on NASDAQ. He was the founder of Third Sky, with a successful private sale to VMware.",
+       "textLength": 306,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "28px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "20px",
+        "display": "block"
+       },
+       "documentPosition": 16,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 636,
+        "y": 1204,
+        "w": 624,
+        "h": 160
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-bd44db09",
+       "class": "text",
+       "html": "<p>He was the founder of Game Taco, with a successful acquisition of World Winner from Sony Pictures Entertainment, strategic partnership with FanDuel and private equity backing from Platinum Equity. He’s served on school boards, special district boards, and various non-profit boards. Leveraging this wide range of experience is what led him to start Bayside Partners as a CEO advisory services firm.</p>",
+       "textContent": "He was the founder of Game Taco, with a successful acquisition of World Winner from Sony Pictures Entertainment, strategic partnership with FanDuel and private equity backing from Platinum Equity. He’s served on school boards, special district boards, and various non-profit boards. Leveraging this wide range of experience is what led him to start Bayside Partners as a CEO advisory services firm.",
+       "textLength": 398,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "28px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 17,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 636,
+        "y": 1364,
+        "w": 624,
+        "h": 196
+       },
+       "containers": [
+        "30"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-923b0a12",
+       "class": "heading",
+       "html": "<h2>Services</h2>",
+       "textContent": "Services",
+       "textLength": 8,
+       "computedStyles": {
+        "color": "rgb(0, 0, 0)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "30px",
+        "font-weight": "700",
+        "line-height": "30px",
+        "border-top-color": "rgb(0, 0, 0)",
+        "border-right-color": "rgb(0, 0, 0)",
+        "border-bottom-color": "rgb(0, 0, 0)",
+        "border-left-color": "rgb(0, 0, 0)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 18,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 1727,
+        "w": 1080,
+        "h": 40
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-45f0a615",
+       "class": "image",
+       "html": "<img loading=\"lazy\" decoding=\"async\" width=\"108\" height=\"108\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_early_stage_100x100.png\" alt=\"Early Stage CEO Advisory\" title=\"icon_early_stage_100x100\" class=\"wp-image-184\">",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "0px",
+        "text-align": "center",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "inline",
+        "position": "relative"
+       },
+       "documentPosition": 19,
+       "depth": 14,
+       "assetRefs": [
+        "simpa_1794945895631_4xsi7qhl"
+       ],
+       "box": {
+        "x": 239,
+        "y": 1821,
+        "w": 108,
+        "h": 108
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-94034ddd",
+       "class": "heading",
+       "html": "<h3>Early Stage CEO Advisory</h3>",
+       "textContent": "Early Stage CEO Advisory",
+       "textLength": 24,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 20,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 1841,
+        "w": 755,
+        "h": 32
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-8a26774f",
+       "class": "text",
+       "html": "<p>Getting a company started requires a special skillset and often involves a team with gaps and people wearing multiple hats. The focus on business execution, fundraising, back-office setup, filling key positions, setting up governance, establishing culture, and establishing key relationships can be a lot to juggle. We help CEOs navigate all of this with an affordable advisory relationship.</p>",
+       "textContent": "Getting a company started requires a special skillset and often involves a team with gaps and people wearing multiple hats. The focus on business execution, fundraising, back-office setup, filling key positions, setting up governance, establishing culture, and establishing key relationships can be a lot to juggle. We help CEOs navigate all of this with an affordable advisory relationship.",
+       "textLength": 391,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 21,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 1873,
+        "w": 755,
+        "h": 170
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-e183806c",
+       "class": "image",
+       "html": "<img loading=\"lazy\" decoding=\"async\" width=\"108\" height=\"108\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_later_stage_100x100.png\" alt=\"Later Stage CEO Advisory\" title=\"icon_later_stage_100x100\" class=\"wp-image-183\">",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "0px",
+        "text-align": "center",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "inline",
+        "position": "relative"
+       },
+       "documentPosition": 22,
+       "depth": 14,
+       "assetRefs": [
+        "simpa_1794945895631_i0ox7rmp"
+       ],
+       "box": {
+        "x": 239,
+        "y": 2117,
+        "w": 108,
+        "h": 108
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-6edaba4c",
+       "class": "heading",
+       "html": "<h3>Later Stage CEO Advisory</h3>",
+       "textContent": "Later Stage CEO Advisory",
+       "textLength": 24,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 23,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2137,
+        "w": 755,
+        "h": 32
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-3cf1cbe4",
+       "class": "text",
+       "html": "<p>After the early startup period is over, the later stage growing pains set in. Capitalization needs are always persistent, and now they are joined by an expectation of maturity of governance, operations, and scalability. Preparation for an exit can also be well underway. We help CEOs navigate this stage with advisory services designed to level-up the organization for success.</p>",
+       "textContent": "After the early startup period is over, the later stage growing pains set in. Capitalization needs are always persistent, and now they are joined by an expectation of maturity of governance, operations, and scalability. Preparation for an exit can also be well underway. We help CEOs navigate this stage with advisory services designed to level-up the organization for success.",
+       "textLength": 377,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 24,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2169,
+        "w": 755,
+        "h": 170
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-0e046d9b",
+       "class": "image",
+       "html": "<img loading=\"lazy\" decoding=\"async\" width=\"108\" height=\"108\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_shop_100x100.png\" alt=\"Family-Run Business Advisory\" title=\"icon_shop_100x100\" class=\"wp-image-182\">",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "0px",
+        "text-align": "center",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "inline",
+        "position": "relative"
+       },
+       "documentPosition": 25,
+       "depth": 14,
+       "assetRefs": [
+        "simpa_1794945895631_5zze7s97"
+       ],
+       "box": {
+        "x": 239,
+        "y": 2413,
+        "w": 108,
+        "h": 108
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-9c4f51a7",
+       "class": "heading",
+       "html": "<h3>Family-Run Business Advisory</h3>",
+       "textContent": "Family-Run Business Advisory",
+       "textLength": 28,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 26,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2433,
+        "w": 755,
+        "h": 32
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-17321049",
+       "class": "text",
+       "html": "<p>Often family-run businesses grow to a level where organizational gaps emerge. We have experience helping the family shore up these gaps, handle scaling the business, and where desired prepare for an exit or succession plan.</p>",
+       "textContent": "Often family-run businesses grow to a level where organizational gaps emerge. We have experience helping the family shore up these gaps, handle scaling the business, and where desired prepare for an exit or succession plan.",
+       "textLength": 223,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 27,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2465,
+        "w": 755,
+        "h": 102
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-652b7b12",
+       "class": "image",
+       "html": "<img loading=\"lazy\" decoding=\"async\" width=\"108\" height=\"108\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_nonprofit_100x100.png\" alt=\"Non-Profit Advisory\" title=\"icon_nonprofit_100x100\" class=\"wp-image-180\">",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "0px",
+        "text-align": "center",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "inline",
+        "position": "relative"
+       },
+       "documentPosition": 28,
+       "depth": 14,
+       "assetRefs": [
+        "simpa_1794945895631_9moic8gt"
+       ],
+       "box": {
+        "x": 239,
+        "y": 2641,
+        "w": 108,
+        "h": 108
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-70c5be4e",
+       "class": "heading",
+       "html": "<h3>Non-Profit Advisory</h3>",
+       "textContent": "Non-Profit Advisory",
+       "textLength": 19,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 29,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2661,
+        "w": 755,
+        "h": 32
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-9d736346",
+       "class": "text",
+       "html": "<p>Non-profit executives need help too!  While there are parallels between for profit enterprises and non-profits, there are special considerations in the non-profit world.  Dealing with large donors, tax credit programs, project-based initiatives, public sector partnerships, and more takes specialized skillsets.  Combining the for-profit expertise of business operation with non-profit experience helps us provide the best of both worlds.</p>",
+       "textContent": "Non-profit executives need help too! While there are parallels between for profit enterprises and non-profits, there are special considerations in the non-profit world. Dealing with large donors, tax credit programs, project-based initiatives, public sector partnerships, and more takes specialized skillsets. Combining the for-profit expertise of business operation with non-profit experience helps us provide the best of both worlds.",
+       "textLength": 435,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 30,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 485,
+        "y": 2693,
+        "w": 755,
+        "h": 204
+       },
+       "containers": [
+        "51"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-fe98da15",
+       "class": "image",
+       "html": "<span class=\"et_pb_background_mask\"></span>",
+       "textContent": "",
+       "textLength": 0,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "background-image": "url(\"data:image/svg+xml;base64,PHN2ZyAgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjcxKSIgdmlld0JveD0iMCAwIDE5MjAgMTQ0MCIgcHJlc2VydmVBc3BlY3RSYXRpbz0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTkyMCwwSDExNzUuODRjLTExMC4zLDIwNy4zMy0xNzQuMzQsNDU0LjMzLTE3NC4zNCw3MTkuNSwwLDI2NS41OSw2NC4yNCw1MTMsMTc0Ljg4LDcyMC41SDE5MjBaIi8+PC9zdmc+\")",
+        "background-size": "calc(100% + 2px) calc(100% + 2px)",
+        "background-position": "50% 50%",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block",
+        "position": "absolute"
+       },
+       "documentPosition": 31,
+       "depth": 10,
+       "assetRefs": [],
+       "box": {
+        "x": 0,
+        "y": 2998,
+        "w": 1440,
+        "h": 750
+       },
+       "backgroundImage": {
+        "size": "calc(100% + 2px) calc(100% + 2px)",
+        "position": "50% 50%"
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-d0a9d368",
+       "class": "heading",
+       "html": "<h2>Contact Us</h2>",
+       "textContent": "Contact Us",
+       "textLength": 10,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "30px",
+        "font-weight": "700",
+        "line-height": "30px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 32,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3079,
+        "w": 510,
+        "h": 40
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-1a241b62",
+       "class": "heading",
+       "html": "<h3>Office:</h3>",
+       "textContent": "Office:",
+       "textLength": 7,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 33,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3148,
+        "w": 510,
+        "h": 32
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-a1643362",
+       "class": "text",
+       "html": "<p>25 Burgess Court<br>Sausalito, CA 94965</p>",
+       "textContent": "25 Burgess CourtSausalito, CA 94965",
+       "textLength": 35,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "20px",
+        "display": "block"
+       },
+       "documentPosition": 34,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3180,
+        "w": 510,
+        "h": 88
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-5628f704",
+       "class": "heading",
+       "html": "<h3>Phone:</h3>",
+       "textContent": "Phone:",
+       "textLength": 6,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 35,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3268,
+        "w": 510,
+        "h": 32
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-dd690f04",
+       "class": "text",
+       "html": "<p>415-272-4262</p>",
+       "textContent": "415-272-4262",
+       "textLength": 12,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "20px",
+        "display": "block"
+       },
+       "documentPosition": 36,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3300,
+        "w": 510,
+        "h": 54
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-1a2d15be",
+       "class": "heading",
+       "html": "<h3>Email:</h3>",
+       "textContent": "Email:",
+       "textLength": 6,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "22px",
+        "font-weight": "700",
+        "line-height": "22px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "padding-bottom": "10px",
+        "display": "block"
+       },
+       "documentPosition": 37,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3354,
+        "w": 510,
+        "h": 32
+       },
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-a16d2dbe",
+       "class": "text",
+       "html": "<p><a href=\"mailto:\" target=\"_blank\" rel=\"noopener\">info@baysidepartners.com</a></p>",
+       "textContent": "info@baysidepartners.com",
+       "textLength": 24,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 38,
+       "depth": 14,
+       "assetRefs": [],
+       "box": {
+        "x": 180,
+        "y": 3386,
+        "w": 510,
+        "h": 34
+       },
+       "inlineStyles": [
+        {
+         "index": 0,
+         "tag": "a",
+         "styles": {
+          "color": "rgb(46, 163, 242)"
+         }
+        }
+       ],
+       "containers": [
+        "97"
+       ]
+      },
+      {
+       "sourceId": "p2a0c975e-8a8a4bc3",
+       "class": "form",
+       "html": "<form id=\"wpforms-form-72\" class=\"wpforms-validate wpforms-form wpforms-ajax-form\" data-formid=\"72\" method=\"post\" enctype=\"multipart/form-data\" action=\"/\" data-token=\"4b7bed90d16db985d6d4f27302c3242a\" novalidate=\"novalidate\"><noscript class=\"wpforms-error-noscript\">Please enable JavaScript in your browser to complete this form.</noscript><div class=\"wpforms-field-container\"><div id=\"wpforms-72-field_0-container\" class=\"wpforms-field wpforms-field-name\" data-field-id=\"0\"><label class=\"wpforms-field-label\" for=\"wpforms-72-field_0\">Name <span class=\"wpforms-required-label\">*</span></label><div class=\"wpforms-field-row wpforms-field-large\"><div class=\"wpforms-field-row-block wpforms-first wpforms-one-half\"><input type=\"text\" id=\"wpforms-72-field_0\" class=\"wpforms-field-name-first wpforms-field-required\" name=\"wpforms[fields][0][first]\" required=\"\"><label for=\"wpforms-72-field_0\" class=\"wpforms-field-sublabel after \">First</label></div><div class=\"wpforms-field-row-block wpforms-one-half\"><input type=\"text\" id=\"wpforms-72-field_0-last\" class=\"wpforms-field-name-last wpforms-field-required\" name=\"wpforms[fields][0][last]\" required=\"\"><label for=\"wpforms-72-field_0-last\" class=\"wpforms-field-sublabel after \">Last</label></div></div></div><div id=\"wpforms-72-field_1-container\" class=\"wpforms-field wpforms-field-email\" data-field-id=\"1\"><label class=\"wpforms-field-label\" for=\"wpforms-72-field_1\">Email <span class=\"wpforms-required-label\">*</span></label><input type=\"email\" id=\"wpforms-72-field_1\" class=\"wpforms-field-large wpforms-field-required\" name=\"wpforms[fields][1]\" required=\"\"></div><div id=\"wpforms-72-field_3-container\" class=\"wpforms-field wpforms-field-text\" data-field-id=\"3\"><label class=\"wpforms-field-label\" for=\"wpforms-72-field_3\">Company</label><input type=\"text\" id=\"wpforms-72-field_3\" class=\"wpforms-field-large\" name=\"wpforms[fields][3]\"></div><div id=\"wpforms-72-field_4-container\" class=\"wpforms-field wpforms-field-text\" data-field-id=\"4\"><label class=\"wpforms-field-label\" for=\"wpforms-72-field_4\">Phone</label><input type=\"text\" id=\"wpforms-72-field_4\" class=\"wpforms-field-large\" name=\"wpforms[fields][4]\"></div><div id=\"wpforms-72-field_2-container\" class=\"wpforms-field wpforms-field-textarea\" data-field-id=\"2\"><label class=\"wpforms-field-label\" for=\"wpforms-72-field_2\">Question or Comment</label><textarea id=\"wpforms-72-field_2\" class=\"wpforms-field-small\" name=\"wpforms[fields][2]\"></textarea></div></div><div class=\"wpforms-submit-container\"><input type=\"hidden\" name=\"wpforms[id]\" value=\"72\"><input type=\"hidden\" name=\"wpforms[author]\" value=\"2\"><input type=\"hidden\" name=\"wpforms[post_id]\" value=\"2\"><button type=\"submit\" name=\"wpforms[submit]\" id=\"wpforms-submit-72\" class=\"wpforms-submit\" data-alt-text=\"Sending...\" data-submit-text=\"Submit\" aria-live=\"assertive\" value=\"wpforms-submit\">Submit</button><img loading=\"lazy\" decoding=\"async\" src=\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/plugins/wpforms/assets/images/submit-spin.svg\" class=\"wpforms-submit-spinner\" style=\"display: none;\" width=\"26\" height=\"26\" alt=\"Loading\"></div></form>",
+       "textContent": "Please enable JavaScript in your browser to complete this form.Name *FirstLastEmail *CompanyPhoneQuestion or CommentSubmit",
+       "textLength": 122,
+       "computedStyles": {
+        "color": "rgb(51, 51, 51)",
+        "font-family": "\"Open Sans\", Arial, sans-serif",
+        "font-size": "20px",
+        "font-weight": "500",
+        "line-height": "34px",
+        "border-top-color": "rgb(51, 51, 51)",
+        "border-right-color": "rgb(51, 51, 51)",
+        "border-bottom-color": "rgb(51, 51, 51)",
+        "border-left-color": "rgb(51, 51, 51)",
+        "display": "block"
+       },
+       "documentPosition": 39,
+       "depth": 15,
+       "screenshot": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/shots/home.desktop.ep2a0c975e-8a8a4bc3.png",
+       "assetRefs": [
+        "simpa_1794945895631_zg2tsm70"
+       ],
+       "box": {
+        "x": 801,
+        "y": 3104,
+        "w": 428,
+        "h": 526
+       },
+       "containers": [
+        "97",
+        "114"
+       ]
+      }
+     ],
+     "containers": {
+      "24": {
+       "background-color": "rgb(255, 255, 255)",
+       "background-image": "url(\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/bayside_partners_background_7_1920x800.jpg\")",
+       "padding-top": "54px",
+       "padding-bottom": "54px"
+      },
+      "30": {
+       "background-color": "rgb(255, 255, 255)",
+       "background-image": "linear-gradient(rgb(238, 238, 238) 0%, rgb(153, 153, 153) 98%)",
+       "padding-top": "54px",
+       "padding-bottom": "54px"
+      },
+      "51": {
+       "background-color": "rgb(255, 255, 255)",
+       "padding-top": "54px",
+       "padding-bottom": "54px"
+      },
+      "97": {
+       "background-color": "rgba(255, 255, 255, 0.26)",
+       "background-image": "url(\"https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/bayside_partners_background_8_1920x750.png\")",
+       "padding-top": "54px",
+       "padding-bottom": "54px"
+      },
+      "114": {
+       "background-color": "rgba(164, 200, 227, 0.77)",
+       "border-radius": "20px",
+       "border-top-width": "1px",
+       "border-right-width": "1px",
+       "border-bottom-width": "1px",
+       "border-left-width": "1px",
+       "border-top-style": "solid",
+       "border-right-style": "solid",
+       "border-bottom-style": "solid",
+       "border-left-style": "solid",
+       "border-top-color": "rgb(51, 51, 51)",
+       "border-right-color": "rgb(51, 51, 51)",
+       "border-bottom-color": "rgb(51, 51, 51)",
+       "border-left-color": "rgb(51, 51, 51)",
+       "padding-right": "30px",
+       "padding-left": "30px"
+      }
+     },
+     "containerBoxes": {
+      "24": {
+       "x": 0,
+       "y": 91,
+       "w": 1440,
+       "h": 750
+      },
+      "30": {
+       "x": 0,
+       "y": 841,
+       "w": 1440,
+       "h": 805
+      },
+      "51": {
+       "x": 0,
+       "y": 1646,
+       "w": 1440,
+       "h": 1352
+      },
+      "97": {
+       "x": 0,
+       "y": 2998,
+       "w": 1440,
+       "h": 750
+      },
+      "114": {
+       "x": 770,
+       "y": 3079,
+       "w": 490,
+       "h": 576
+      }
+     },
+     "ground": "rgb(255, 255, 255)",
+     "decorations": []
+    }
+   ]
+  }
+ ],
+ "assets": [
+  {
+   "id": "simpa_1794945895631_69qjqme8",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/headshot_joshua_barrow_400x600.jpg",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/87e332db09ce0ba550dc3bb95aa03805d3af867618121adadc3b7273ff6456f7.jpg",
+   "contentHash": "87e332db09ce0ba550dc3bb95aa03805d3af867618121adadc3b7273ff6456f7",
+   "mimeType": "image/jpeg",
+   "byteSize": 73895,
+   "width": 400,
+   "height": 600,
+   "altText": "Joshua Barrow",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-3f2272de"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_nluv2tyi",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/headshot_joshua_barrow_400x600-200x300.jpg",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/addd0971b0df7c68842faaa7257cea14d88f31e28604f23970594b02aff33e2f.jpg",
+   "contentHash": "addd0971b0df7c68842faaa7257cea14d88f31e28604f23970594b02aff33e2f",
+   "mimeType": "image/jpeg",
+   "byteSize": 11557,
+   "width": 200,
+   "height": 300,
+   "altText": "",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-3f2272de"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_4xsi7qhl",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_early_stage_100x100.png",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/600946b380932d59bbe66e2cb88bca51d6859a0295dc735a7a3f43a9d25aaf62.png",
+   "contentHash": "600946b380932d59bbe66e2cb88bca51d6859a0295dc735a7a3f43a9d25aaf62",
+   "mimeType": "image/png",
+   "byteSize": 7954,
+   "width": 108,
+   "height": 108,
+   "altText": "Early Stage CEO Advisory",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-45f0a615"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_i0ox7rmp",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_later_stage_100x100.png",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/8bce40c7b73f2ee62808105338c0649769989da3f3942aab27f2e74464f35fd8.png",
+   "contentHash": "8bce40c7b73f2ee62808105338c0649769989da3f3942aab27f2e74464f35fd8",
+   "mimeType": "image/png",
+   "byteSize": 7459,
+   "width": 108,
+   "height": 108,
+   "altText": "Later Stage CEO Advisory",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-e183806c"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_9moic8gt",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_nonprofit_100x100.png",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/935ff721254c5c25a8be73fa1d5dc4b5a62c2bde037c9411a06957fbd5291ba9.png",
+   "contentHash": "935ff721254c5c25a8be73fa1d5dc4b5a62c2bde037c9411a06957fbd5291ba9",
+   "mimeType": "image/png",
+   "byteSize": 6236,
+   "width": 108,
+   "height": 108,
+   "altText": "Non-Profit Advisory",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-652b7b12"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_lzqeargk",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/logo_bayside_partners.png",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/1a596140d9c5c86f93035a747ad1fb19a005d9bd982a6bdc55ca4b4660fd65c1.png",
+   "contentHash": "1a596140d9c5c86f93035a747ad1fb19a005d9bd982a6bdc55ca4b4660fd65c1",
+   "mimeType": "image/png",
+   "byteSize": 12697,
+   "width": 560,
+   "height": 145,
+   "altText": "Bayside Partners",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/2023/02/26/test-post-2/",
+     "sourceId": "p74c6e867-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/author/dane/",
+     "sourceId": "p30855dcd-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/category/uncategorized/",
+     "sourceId": "p885b53dc-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/2023/02/26/test-post-2/?replytocom=1",
+     "sourceId": "p74c6e867~2-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/2023/02/28/test-post-1/",
+     "sourceId": "p6905d88a-54868c56"
+    },
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/blog/",
+     "sourceId": "pda138bab-54868c56"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_5zze7s97",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/03/icon_shop_100x100.png",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/10b1c21b39fc5e3a590322c7a6327a5a37070adfc1f2660b5886278b27fb3e45.png",
+   "contentHash": "10b1c21b39fc5e3a590322c7a6327a5a37070adfc1f2660b5886278b27fb3e45",
+   "mimeType": "image/png",
+   "byteSize": 7483,
+   "width": 108,
+   "height": 108,
+   "altText": "Family-Run Business Advisory",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-0e046d9b"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  },
+  {
+   "id": "simpa_1794945895631_zg2tsm70",
+   "originalUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/plugins/wpforms/assets/images/submit-spin.svg",
+   "storageUrl": "https://astujhe2hvjqd0kf.public.blob.vercel-storage.com/SiteImport/simp_1794945570334_oh518a/assets/7ffd6ec4d1b1980400d8cc710d2edd0fb7833e2c83262f8401247043ca258149.svg",
+   "contentHash": "7ffd6ec4d1b1980400d8cc710d2edd0fb7833e2c83262f8401247043ca258149",
+   "mimeType": "image/svg+xml",
+   "byteSize": 509,
+   "altText": "Loading",
+   "referencedBy": [
+    {
+     "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+     "sourceId": "p2a0c975e-8a8a4bc3"
+    }
+   ],
+   "status": "downloaded",
+   "error": ""
+  }
+ ],
+ "taxonomy": {
+  "navs": [
+   {
+    "location": "header",
+    "pageUrl": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+    "items": [
+     {
+      "label": "Home",
+      "href": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+      "children": []
+     },
+     {
+      "label": "About Us",
+      "href": "#about-us",
+      "children": []
+     },
+     {
+      "label": "Services",
+      "href": "#services",
+      "children": []
+     },
+     {
+      "label": "Contact Us",
+      "href": "#contact-us",
+      "children": []
+     }
+    ]
+   }
+  ],
+  "logo": {
+   "src": "https://safe-lavenderblush-llama-78.hostingersite.com/wp-content/uploads/2023/02/logo_bayside_partners.png",
+   "alt": "Bayside Partners",
+   "href": "https://safe-lavenderblush-llama-78.hostingersite.com/",
+   "width": 560,
+   "height": 145,
+   "assetId": "simpa_1794945895631_lzqeargk"
+  },
+  "pageOrder": [
+   "/",
+   "/2023/02/26/test-post-2/",
+   "/author/dane/",
+   "/category/uncategorized/",
+   "/2023/02/26/test-post-2/",
+   "/2023/02/28/test-post-1/",
+   "/blog/"
+  ]
+ },
+ "rawTokens": {
+  "colors": [
+   {
+    "value": "rgb(51, 51, 51)",
+    "count": 2362
+   },
+   {
+    "value": "rgb(102, 102, 102)",
+    "count": 315
+   },
+   {
+    "value": "rgba(0, 0, 0, 0.81)",
+    "count": 135
+   },
+   {
+    "value": "rgb(46, 163, 242)",
+    "count": 115
+   },
+   {
+    "value": "rgb(0, 0, 0)",
+    "count": 55
+   },
+   {
+    "value": "rgb(221, 221, 221)",
+    "count": 49
+   },
+   {
+    "value": "rgb(187, 187, 187)",
+    "count": 48
+   },
+   {
+    "value": "rgb(255, 255, 255)",
+    "count": 44
+   },
+   {
+    "value": "rgb(204, 204, 204)",
+    "count": 24
+   },
+   {
+    "value": "rgb(12, 113, 195)",
+    "count": 20
+   },
+   {
+    "value": "rgb(238, 238, 238)",
+    "count": 13
+   },
+   {
+    "value": "rgb(153, 153, 153)",
+    "count": 12
+   },
+   {
+    "value": "rgb(255, 0, 0)",
+    "count": 10
+   },
+   {
+    "value": "rgba(164, 200, 227, 0.77)",
+    "count": 1
+   },
+   {
+    "value": "rgba(255, 255, 255, 0.26)",
+    "count": 1
+   }
+  ],
+  "fontSizes": [
+   {
+    "value": "20px",
+    "count": 435
+   },
+   {
+    "value": "14px",
+    "count": 111
+   },
+   {
+    "value": "26px",
+    "count": 26
+   },
+   {
+    "value": "16px",
+    "count": 17
+   },
+   {
+    "value": "22px",
+    "count": 13
+   },
+   {
+    "value": "18px",
+    "count": 12
+   },
+   {
+    "value": "30px",
+    "count": 9
+   },
+   {
+    "value": "13.3333px",
+    "count": 3
+   },
+   {
+    "value": "13px",
+    "count": 2
+   },
+   {
+    "value": "40px",
+    "count": 2
+   },
+   {
+    "value": "36px",
+    "count": 1
+   }
+  ],
+  "fontFamilies": [
+   {
+    "value": "\"Open Sans\", Arial, sans-serif",
+    "count": 631
+   }
+  ],
+  "spacing": [
+   {
+    "value": "10px",
+    "count": 78
+   },
+   {
+    "value": "20px",
+    "count": 50
+   },
+   {
+    "value": "12px",
+    "count": 48
+   },
+   {
+    "value": "180px",
+    "count": 42
+   },
+   {
+    "value": "9.8px",
+    "count": 40
+   },
+   {
+    "value": "40px",
+    "count": 33
+   },
+   {
+    "value": "6px",
+    "count": 33
+   },
+   {
+    "value": "27px",
+    "count": 24
+   },
+   {
+    "value": "30px",
+    "count": 24
+   },
+   {
+    "value": "22px",
+    "count": 21
+   },
+   {
+    "value": "54px",
+    "count": 14
+   },
+   {
+    "value": "59.3906px",
+    "count": 11
+   },
+   {
+    "value": "60px",
+    "count": 11
+   },
+   {
+    "value": "4px",
+    "count": 10
+   },
+   {
+    "value": "15px",
+    "count": 9
+   },
+   {
+    "value": "3px",
+    "count": 9
+   },
+   {
+    "value": "22.5469px",
+    "count": 8
+   },
+   {
+    "value": "302px",
+    "count": 7
+   },
+   {
+    "value": "94px",
+    "count": 7
+   },
+   {
+    "value": "23px",
+    "count": 5
+   },
+   {
+    "value": "28px",
+    "count": 5
+   },
+   {
+    "value": "50px",
+    "count": 5
+   },
+   {
+    "value": "58px",
+    "count": 5
+   },
+   {
+    "value": "17px",
+    "count": 3
+   },
+   {
+    "value": "25px",
+    "count": 3
+   },
+   {
+    "value": "29.6875px",
+    "count": 3
+   },
+   {
+    "value": "75px",
+    "count": 3
+   },
+   {
+    "value": "100px",
+    "count": 2
+   },
+   {
+    "value": "110px",
+    "count": 2
+   },
+   {
+    "value": "24px",
+    "count": 2
+   },
+   {
+    "value": "48px",
+    "count": 2
+   },
+   {
+    "value": "8px",
+    "count": 2
+   },
+   {
+    "value": "-1.02829px",
+    "count": 1
+   },
+   {
+    "value": "-1.51297px",
+    "count": 1
+   },
+   {
+    "value": "-1.77056px",
+    "count": 1
+   },
+   {
+    "value": "-20px",
+    "count": 1
+   },
+   {
+    "value": "-3.25447px",
+    "count": 1
+   },
+   {
+    "value": "-4.26554px",
+    "count": 1
+   },
+   {
+    "value": "17.125px",
+    "count": 1
+   },
+   {
+    "value": "38.8728px",
+    "count": 1
+   },
+   {
+    "value": "39.9697px",
+    "count": 1
+   },
+   {
+    "value": "450px",
+    "count": 1
+   },
+   {
+    "value": "59.4688px",
+    "count": 1
+   }
+  ]
+ },
+ "styleSummary": {
+  "pageBackgrounds": [
+   {
+    "value": "rgb(255, 255, 255)",
+    "count": 7
+   }
+  ],
+  "backgroundsByArea": [
+   {
+    "value": "rgb(255, 255, 255)",
+    "count": 14127
+   },
+   {
+    "value": "rgba(255, 255, 255, 0.26)",
+    "count": 1080
+   },
+   {
+    "value": "rgb(238, 238, 238)",
+    "count": 569
+   },
+   {
+    "value": "rgba(164, 200, 227, 0.77)",
+    "count": 282
+   },
+   {
+    "value": "rgb(221, 221, 221)",
+    "count": 15
+   }
+  ],
+  "headerBackgrounds": [
+   {
+    "value": "rgb(255, 255, 255)",
+    "count": 7
+   }
+  ],
+  "buttons": [
+   {
+    "value": "|rgb(46, 163, 242)|3",
+    "count": 2
+   }
+  ],
+  "buttonsByGround": [
+   {
+    "value": "|rgb(46, 163, 242)|rgb(255, 255, 255)",
+    "count": 2
+   }
+  ],
+  "contentWidths": [
+   {
+    "value": "1080",
+    "count": 48
+   },
+   {
+    "value": "1440",
+    "count": 18
+   },
+   {
+    "value": "800",
+    "count": 15
+   },
+   {
+    "value": "760",
+    "count": 4
+   },
+   {
+    "value": "510",
+    "count": 2
+   },
+   {
+    "value": "590",
+    "count": 2
+   },
+   {
+    "value": "620",
+    "count": 1
+   },
+   {
+    "value": "980",
+    "count": 1
+   }
+  ]
+ }
+}
