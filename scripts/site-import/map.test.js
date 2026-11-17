@@ -386,7 +386,10 @@ test('delraytennis IR maps with full reconciliation', () => {
   ));
   const out = mapSite(ir, { existingSlugs: [] });
   assert.ok(reportReconciles(out.report), JSON.stringify(out.report.elements));
-  assert.equal(out.report.elements.skipped, 0);
+  // Only the two bare <p></p> tags (SC-849); its 46 <p>&nbsp;</p> blank
+  // lines are spacing and stay.
+  assert.equal(out.report.elements.skipped, 2);
+  assert.ok(out.report.skipped.every((s) => /empty markup/.test(s.reason)), JSON.stringify(out.report.skipped));
   assert.equal(out.pages.length, 2);
   assert.equal(out.pages[0].slug, 'home');
   assert.ok(out.navItems.length > 0);
@@ -753,10 +756,11 @@ test('footer link lists outside a <nav> stay on the page and out of navConsumed'
   assert.deepEqual(withTree.navItems, baseline.navItems);
 
   // Menus on (task 86bchydp6): the links still stay on the page — only the
-  // credits paragraph goes, and it is accounted for with a reason.
+  // credits paragraph goes, and it is accounted for with a reason. The
+  // header's logo goes to the Top Menu instead of showing twice (SC-849).
   const withMenus = mapSite(ir, { existingSlugs: [] });
-  assert.equal(withMenus.report.elements.navConsumed, baseline.report.elements.navConsumed);
-  assert.equal(withMenus.report.elements.mapped, baseline.report.elements.mapped - 1);
+  assert.equal(withMenus.report.elements.navConsumed, baseline.report.elements.navConsumed + 1);
+  assert.equal(withMenus.report.elements.mapped, baseline.report.elements.mapped - 2);
   assert.equal(withMenus.report.skipped.length, 1);
   assert.match(withMenus.report.skipped[0].reason, /theme\/platform credit .*Elegant Themes/);
   assert.ok(reportReconciles(withMenus.report));
