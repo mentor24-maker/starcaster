@@ -929,10 +929,8 @@ function busPostEnv({ node, env = process.env, project = readProjectConfig() } =
 
 /** The bus project spirality.project.json names, for a message (never a guess). */
 function busProjectName() {
-  try {
-    const name = JSON.parse(fs.readFileSync(path.join(ROOT, 'spirality.project.json'), 'utf8')).busProject;
-    return name ? String(name) : 'the project named as busProject';
-  } catch { return 'the project named as busProject'; }
+  const name = readProjectConfig().busProject;
+  return name ? String(name) : 'the project named as busProject';
 }
 
 /** The one line said when a scratch-channel override can no longer be honoured. */

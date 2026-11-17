@@ -4,9 +4,13 @@
  *
  *   npm run bus:move-in               dry run: read both projects, print the plan, change nothing
  *   npm run bus:move-in -- --apply    carry it out, reading back every step
+ *   ... --since <ISO time>            also name every comment the old copies got
+ *                                     at or after that time (use the merge time:
+ *                                     between merge and move, posts land on them)
  *
  * The plan and the reasons behind it are lib/busMove.js. In order:
- *   1. put `noticeboard` on the project's tag list (a moved board is tagged);
+ *   1. put `noticeboard` on the project's tag list (a moved board is tagged),
+ *      and read the list back before anything else is written;
  *   2. rename each old ClickUp-era copy "<name> (ClickUp archive)", so the
  *      moved board is the only ticket under its name;
  *   3. move every bus ticket in (the tracker's `move`, which keeps every
@@ -32,14 +36,21 @@ import { createApiTracker, trackerTokenEnv } from '../loop/scripts/tracker/apiTr
 import { projectSeats } from '../loop/scripts/lib/expectedSecrets.mjs';
 
 const require = createRequire(import.meta.url);
-const { planBusMove, checkMoved, tagWords, BOARD_NAMES } = require('../lib/busMove.js');
+const { planBusMove, checkMoved, commentsSince, tagWords, ARCHIVE_SUFFIX, BOARD_NAMES } = require('../lib/busMove.js');
 const { NOTICEBOARD_TAG } = require('../loop/lib/loopNoticeboards.js');
+const { SWITCH_TASK_NAME } = require('../loop/lib/pipelinePause.js');
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const APPLY = argv.includes('--apply');
 const fromAt = argv.indexOf('--from');
 const FROM = fromAt >= 0 ? argv[fromAt + 1] : 'starcaster-bus';
+const sinceAt = argv.indexOf('--since');
+const SINCE = sinceAt >= 0 ? Date.parse(argv[sinceAt + 1] ?? '') : null;
+if (sinceAt >= 0 && !Number.isFinite(SINCE)) {
+  console.error(`move_bus_into_project: --since needs a time like 2026-11-17T06:30:00Z, not "${argv[sinceAt + 1] ?? ''}". Nothing was written.`);
+  process.exit(2);
+}
 
 const config = JSON.parse(readFileSync(join(ROOT, 'spirality.project.json'), 'utf8'));
 const TO = config.projectSlug;
@@ -66,14 +77,14 @@ const tracker = createApiTracker({
 
 const fail = (why) => { console.error(`move_bus_into_project FAILED: ${why}`); process.exit(1); };
 
-/** Every ticket in a project, Live included, as `{ id, name, tags }`; null when unreadable. */
+/** Every ticket in a project, Live included, as `{ id, name, tags, created }`; null when unreadable. */
 async function ticketsIn(slug) {
   const out = await tracker.listTasksPage(slug, 0, { includeClosed: true });
   if (!out.res?.ok || !Array.isArray(out.json?.tasks)) {
     console.error(`  could not list ${slug}: HTTP ${out.res?.status ?? '?'} ${out.json?.err || out.text || ''}`.trimEnd());
     return null;
   }
-  return out.json.tasks.map((t) => ({ id: t.id, name: t.name, tags: tagWords(t) }));
+  return out.json.tasks.map((t) => ({ id: t.id, name: t.name, tags: tagWords(t), created: t.date_created }));
 }
 
 async function commentCount(id) {
@@ -82,9 +93,24 @@ async function commentCount(id) {
   return out.json.comments.length;
 }
 
+/** The ticket's comments as the tracker stores them; null when unreadable. */
+async function commentsOf(id) {
+  const out = await tracker.ticketRecord(id);
+  return out.res?.ok && Array.isArray(out.json?.comments) ? out.json.comments : null;
+}
+
 const projectTickets = await ticketsIn(TO);
 const busTickets = await ticketsIn(FROM);
-const plan = planBusMove({ projectTickets, busTickets });
+// The pause switch IS its comments: its newest one says whether somebody is using it.
+const lastWrittenAt = {};
+for (const t of projectTickets || []) {
+  if (String(t.name).trim().toLowerCase() !== SWITCH_TASK_NAME.toLowerCase()) continue;
+  const comments = await commentsOf(t.id);
+  if (!comments) { console.error(`  could not read ${t.id}'s comments`); continue; }
+  const times = comments.map((c) => Date.parse(c.createdAt)).filter(Number.isFinite);
+  lastWrittenAt[t.id] = times.length ? Math.max(...times) : null;
+}
+const plan = planBusMove({ projectTickets, busTickets, lastWrittenAt });
 if (plan.problems.length) {
   for (const p of plan.problems) console.error(`  ${p}`);
   console.error('move_bus_into_project: could not plan, so nothing was written.');
@@ -93,7 +119,32 @@ if (plan.problems.length) {
 
 console.log(`From ${FROM} into ${TO}${APPLY ? '' : ' (dry run: nothing is written)'}:`);
 for (const r of plan.renames) console.log(`  rename ${r.id} "${r.from}" -> "${r.to}"`);
+for (const k of plan.kept) console.log(`  leave  ${k.id} "${k.name}": ${k.why}`);
 for (const m of plan.moves) console.log(`  move   ${m.id} "${m.name}"${m.tag ? `, then tag it ${NOTICEBOARD_TAG}` : ''}`);
+
+// Posts that landed on an old copy after the merge, named before anything is renamed.
+if (SINCE != null) {
+  const ids = new Set(plan.renames.map((r) => r.id));
+  for (const t of projectTickets) if (String(t.name).endsWith(ARCHIVE_SUFFIX)) ids.add(t.id);
+  const records = [];
+  for (const id of ids) {
+    const comments = await commentsOf(id);
+    if (!comments) {
+      console.error(`move_bus_into_project: could not read ${id}'s comments, so posts stranded on it since ${new Date(SINCE).toISOString()} cannot be named. Nothing was written.`);
+      process.exit(2);
+    }
+    records.push({ id, name: projectTickets.find((t) => t.id === id)?.name, comments });
+  }
+  const stranded = commentsSince(records, SINCE);
+  if (stranded.length) {
+    console.log(`  ${stranded.length} comment(s) landed on the old copies at or after ${new Date(SINCE).toISOString()}; they stay there, read them by id:`);
+    for (const c of stranded) console.log(`    ${c.id} "${c.name}" ${c.at}: ${c.firstLine}`);
+  } else {
+    console.log(`  no comment landed on the old copies (${[...ids].join(', ') || 'none'}) at or after ${new Date(SINCE).toISOString()}`);
+  }
+} else {
+  console.log('  (no --since given: comments the old copies got after the merge are not checked)');
+}
 if (!plan.renames.length && !plan.moves.length) {
   console.log('  nothing to do: the bus project is empty.');
   process.exit(0);
@@ -108,8 +159,11 @@ const listed = await tracker.listProjectTags(TO);
 if (!listed.res?.ok || !Array.isArray(listed.json?.tags)) fail(`could not read ${TO}'s tag list (HTTP ${listed.res?.status ?? '?'}); nothing was written.`);
 if (!listed.json.tags.some((t) => String(t.name).toLowerCase() === NOTICEBOARD_TAG)) {
   const added = await tracker.addProjectTag(TO, NOTICEBOARD_TAG, 'A standing board, not work: no loop claims it.');
-  if (!added.res?.ok && added.res?.status !== 409) fail(`could not add ${NOTICEBOARD_TAG} to ${TO}'s tag list (HTTP ${added.res?.status ?? '?'}).`);
-  console.log(`  added ${NOTICEBOARD_TAG} to ${TO}'s tag list`);
+  const back = await tracker.listProjectTags(TO);
+  const there = back.res?.ok && Array.isArray(back.json?.tags)
+    && back.json.tags.some((t) => String(t.name).toLowerCase() === NOTICEBOARD_TAG);
+  if (!there) fail(`adding ${NOTICEBOARD_TAG} to ${TO}'s tag list did not read back (add: HTTP ${added.res?.status ?? '?'}, read: HTTP ${back.res?.status ?? '?'}); nothing has been renamed or moved.`);
+  console.log(`  added ${NOTICEBOARD_TAG} to ${TO}'s tag list (read back)`);
 }
 
 // 2. The old copies out of the way, each read back.

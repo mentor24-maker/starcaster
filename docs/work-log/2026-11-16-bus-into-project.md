@@ -31,3 +31,15 @@ keeping all its history, then moves the bus tickets in, tags each board, and
 checks at the end that exactly one ticket of each name is left. The old pause
 switch is archived too, so the pause button keeps behaving exactly as it
 does today.
+
+**Sent back a second time, and why.** Three gaps in the move script. First,
+the pull request promised that between the merge and the move StarCaster's
+posts would fail loudly; in fact they would have landed quietly on the old
+September Team chat. The script now takes `--since <merge time>` and lists
+every comment that reached an old copy after that moment, so nothing posted
+in the gap is lost. Second, the script would have archived any ticket named
+"Pipeline pause switch", including a fresh one made by somebody pausing the
+pipeline in that gap, which would have silently lifted the pause. It now
+archives only copies created before the bus's own boards existed, and never
+a switch that has been written to since. Third, adding the `noticeboard` tag
+to the project is now read back before anything is renamed or moved.
