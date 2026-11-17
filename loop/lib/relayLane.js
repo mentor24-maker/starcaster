@@ -44,7 +44,7 @@
 const { latestMergeMarker, countMergeRefusals } = require('./mergeOnComment');
 const { REFUSAL_CODES } = require('./refusalClass.js');
 const {
-  answerAwaitingHandback, handbackDestination, isCloseCommand, latestCloseRefusal,
+  answerAwaitingHandback, operatorComments, commentAt, handbackDestination, isCloseCommand, latestCloseRefusal,
   repliesShowHandbackDone, repliesShowHandbackFailure,
 } = require('./busRelayPlan.js');
 const { NEXT_SLICE_RE, mergeDestination } = require('./nextSlice.js');
@@ -148,11 +148,41 @@ function emptyBooks() {
  * narrow mistake (a session moves it by hand) instead of the generous one
  * (a loop takes a ticket out of his status on something he said last week).
  * Spirality's `ask` always writes a card, so this is the hand-parked case.
+ *
+ * `teammates` (SP-302, Dane's choice A, 2026-11-14): on `Needs your input`
+ * the relay passes true, so another person's reply to the card is the answer
+ * and hands the ticket back, the same as his. The close word on `Ready to
+ * launch` (closePlan) is read with it false: that status waits on him.
  */
 const HANDBACK_WATCH = { label: 'Loop Queue', handback: { 'needs your input': 'Queued' } };
 
-function handbackAnswer({ comments, operatorId, isMachine }) {
-  return answerAwaitingHandback({ comments, operatorId, isMachine, delivered: () => true });
+function handbackAnswer({ comments, operatorId, isMachine, teammates = false, spent = [] }) {
+  const spentIds = new Set((spent || []).map(String));
+  const handled = spentIds.size ? (c) => spentIds.has(String(c && c.id)) : undefined;
+  return answerAwaitingHandback({ comments, operatorId, isMachine, teammates, handled, delivered: () => true });
+}
+
+/**
+ * Which earlier answers must the relay read before it acts on a TEAMMATE's
+ * (SP-302 round 2)? The ids of every other person's comment after the newest
+ * card, older than the answer, newest first. If one of them carries the
+ * `[bus-relay-handback-done]` reply, the hand-back already happened and the
+ * ticket was parked here again by hand: pass those ids back to
+ * handbackAnswer as `spent` and only his own word moves it.
+ *
+ * Empty when the answer is his own (his word moves a re-parked ticket as it
+ * always has, and handbackPlan reads its own replies), or when nothing is
+ * answered.
+ */
+function earlierAnswerIds({ comments, verdict, operatorId, isMachine }) {
+  if (!verdict || verdict.state !== 'answered' || !verdict.answer) return [];
+  if (Number(verdict.answer?.user?.id) === Number(operatorId)) return [];
+  const all = Array.isArray(comments) ? comments : [];
+  return operatorComments(all, { operatorId, isMachine, teammates: true })
+    .filter((c) => commentAt(c) > verdict.questionAt && commentAt(c) <= verdict.answerAt
+      && String(c.id) !== String(verdict.answer.id))
+    .sort((a, b) => commentAt(b) - commentAt(a))
+    .map((c) => c.id);
 }
 
 /**
@@ -164,10 +194,15 @@ function handbackAnswer({ comments, operatorId, isMachine }) {
  *                      with state '' and a `why` when it could not be read
  * @param description   the ticket's description; its "Next slice:" line
  *                      decides Live or Queued when the PR is already merged
+ * @param noticeboard   true when the ticket is a noticeboard
+ *                      (lib/loopNoticeboards.js isNoticeboard): a steward's
+ *                      question in the project's own queue (SP-356). It is
+ *                      not work, so an answer sends it back to Live, where no
+ *                      loop claims, never to Queued or Rework
  * @returns { act, target, why, failureNoted }
  *          act: 'move' | 'waiting' | 'held' | 'no-card' | 'handled' | 'skip' | 'cannot-tell'
  */
-function handbackPlan({ status, verdict, answerReplies, pr, description }) {
+function handbackPlan({ status, verdict, answerReplies, pr, description, noticeboard = false }) {
   const quiet = (act, why) => ({ act, target: null, why, failureNoted: false });
   const state = verdict && verdict.state;
   if (state === 'hand-held') return quiet('held', 'a "HELD BY HAND" note is newer than the question card — the session driving it moves it');
@@ -175,9 +210,22 @@ function handbackPlan({ status, verdict, answerReplies, pr, description }) {
     return quiet('no-card', 'there is no machine-written question card on this ticket, so no reply can be told apart from an older one — a session must move it');
   }
   if (state === 'none') return quiet('waiting', 'no reply of his is newer than the question card');
+  if (state === 'handled') {
+    return quiet('handled', 'an answer to the card was already acted on and the ticket was parked here again by hand, so it waits on his own word');
+  }
   if (state !== 'answered') return quiet('cannot-tell', `the answer could not be read (${state || 'no verdict'})`);
   if (repliesShowHandbackDone(answerReplies)) {
     return quiet('handled', 'his newest answer was already acted on — the ticket was parked here again by hand, so it stays');
+  }
+  if (noticeboard) {
+    // Before the bus moved into the project's own queue (SP-356) the
+    // steward's questions sat in a project no lane read; now Queued there is
+    // claimable, so a noticeboard goes back to Live, readable as the bus.
+    if (!handbackDestination(HANDBACK_WATCH, status, true, null, '', '').target) return quiet('skip', '');
+    return {
+      act: 'move', target: 'Live', failureNoted: repliesShowHandbackFailure(answerReplies),
+      why: 'it is a noticeboard, not work, so it goes back to Live, where no loop claims it; the answer stays on it for the bus to read',
+    };
   }
   const plan = handbackDestination(
     HANDBACK_WATCH, status, true, pr || null, verdict.answer && verdict.answer.comment_text, description,
@@ -589,6 +637,7 @@ module.exports = {
   emptyBooks,
   mergeDestination,
   handbackAnswer,
+  earlierAnswerIds,
   handbackPlan,
   closePlan,
   CATCH_UP_WORKED_STATUSES,

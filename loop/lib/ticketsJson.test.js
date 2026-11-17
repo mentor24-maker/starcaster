@@ -38,10 +38,20 @@ test('ticketJson: the fields a check reads, and nothing else (no description, no
     status: 'in review',
     priority: 'high',
     tags: ['tracker', 'tracker-5'],
+    kind: null,
+    startedBy: null,
+    outcome: null,
     created: '2025-11-10T18:40:00.000Z',
     updated: '2025-11-10T19:40:00.000Z',
     statusSince: '2025-11-10T19:00:00.000Z',
   });
+});
+
+test('ticketJson: a tracker ticket\'s kind, who started it and how it ended (SP-345)', () => {
+  const t = ticketJson({ ...TASK, kind: 'operational', started_by: 'agent', outcome: 'wont-do' });
+  assert.equal(t.kind, 'operational');
+  assert.equal(t.startedBy, 'agent');
+  assert.equal(t.outcome, 'wont-do');
 });
 
 test('ticketJson: no priority is null, no tags is an empty list, and no comments key without comments', () => {
@@ -54,14 +64,14 @@ test('ticketJson: no priority is null, no tags is an empty list, and no comments
 
 test('ticketJson with comments: top-level only, oldest first, operator or machine by the author\'s seat', () => {
   const comments = [ // newest first, as every adapter's listComments answers
-    { id: '3', comment_text: 'PR opened: x', user: { id: 2, username: 'Loop' }, date: '1762800300000', parent: null },
+    { id: '3', comment_text: 'PR opened: x', user: { id: 2, username: 'Loop', kind: 'machine' }, date: '1762800300000', parent: null },
     { id: '2', comment_text: 'a reply', user: { id: 1, username: 'Dana' }, date: '1762800200000', parent: '1' },
     { id: '1', comment_text: 'go', user: { id: 1, username: 'Dana' }, date: '1762800100000', parent: null },
   ];
   const t = ticketJson(TASK, { comments, operatorId: 1 });
   assert.deepEqual(t.comments, [
-    { id: '1', author: { id: 1, name: 'Dana' }, by: 'operator', at: '2025-11-10T18:41:40.000Z', text: 'go' },
-    { id: '3', author: { id: 2, name: 'Loop' }, by: 'machine', at: '2025-11-10T18:45:00.000Z', text: 'PR opened: x' },
+    { id: '1', author: { id: 1, name: 'Dana', kind: null }, by: 'operator', at: '2025-11-10T18:41:40.000Z', text: 'go' },
+    { id: '3', author: { id: 2, name: 'Loop', kind: 'machine' }, by: 'machine', at: '2025-11-10T18:45:00.000Z', text: 'PR opened: x' },
   ]);
   assert.deepEqual(ticketJson(TASK, { comments: [] }).comments, []);
 });

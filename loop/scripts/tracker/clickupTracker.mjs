@@ -15,7 +15,7 @@
  * The token is handed in, never printed and never logged.
  */
 
-import { stampCommentBody, isCommentPostPath } from '../lib/machineComment.mjs';
+import { stampCommentBody, isCommentPostPath, isMachineComment } from '../lib/machineComment.mjs';
 import { commentsReadable } from '../lib/loopTrail.mjs';
 import { pageComments } from '../../lib/commentPages.js';
 
@@ -23,6 +23,8 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 /** Files on a ticket are kept only by the tracker (docs/TRACKER_MVP.md, "Attachments"). */
 export const NO_ATTACHMENTS_ON_CLICKUP = 'Attachments are kept only in the tracker; this project\'s tickets are on ClickUp, where this door reads no files. Nothing was saved.';
+/** SP-349: which files each open pull request changes is kept only in the tracker. */
+export const NO_PR_FILES_ON_CLICKUP = 'Which files each open pull request changes is kept only in the tracker; this project\'s tickets are on ClickUp, where none is kept.';
 
 /** An answer made here, not by ClickUp: this door has no way to do what was asked. */
 function unsupported(message) {
@@ -57,6 +59,24 @@ export function clickupHost(target, apiBase = 'https://api.clickup.com') {
  * in the door's environment). `log` takes the retry notices and the limit
  * line; it is stderr in the door.
  */
+/**
+ * Every comment ClickUp hands back is under Dane's own id, so the readers'
+ * one question, "was this written by a machine?" (`user.kind`, SP-26), is
+ * answered here from the stamp this door writes on every comment it posts.
+ * The tracker's door reads the same answer off the author's actor instead.
+ */
+function kindFromStamp(c) {
+  if (!c || typeof c !== 'object' || !('comment_text' in c)) return c;
+  const kind = isMachineComment(c.comment_text) ? 'machine' : 'human';
+  return { ...c, user: { ...(c.user || {}), kind } };
+}
+
+export function withAuthorKind(json) {
+  if (!json || typeof json !== 'object') return json;
+  if (Array.isArray(json.comments)) return { ...json, comments: json.comments.map(kindFromStamp) };
+  return json;
+}
+
 export function createClickupTracker({ token, apiBase, timeoutMs, log = console.error } = {}) {
   const API = apiBase || 'https://api.clickup.com';
   const HTTP_TIMEOUT_MS = Number(timeoutMs) || 60 * 1000;
@@ -66,7 +86,9 @@ export function createClickupTracker({ token, apiBase, timeoutMs, log = console.
   async function callOnce(method, path, body) {
     requests += 1;
     // THE ONE PLACE A MACHINE COMMENT IS MARKED. The loops post under Dane's own
-    // seat, so a reader cannot tell their writing from his by author alone.
+    // seat, so a reader cannot tell their writing from his by author alone;
+    // `withAuthorKind` turns this stamp back into `user.kind` on every read.
+    // Only this door stamps: the tracker's records the author (SP-26).
     const sendBody = (method === 'POST' && isCommentPostPath(path)) ? stampCommentBody(body) : body;
     let res;
     try {
@@ -85,7 +107,7 @@ export function createClickupTracker({ token, apiBase, timeoutMs, log = console.
     const text = await res.text();
     let json = null;
     try { json = text ? JSON.parse(text) : null; } catch { json = null; }
-    return { res, json, text };
+    return { res, json: withAuthorKind(json), text };
   }
 
   /** A 429 is ClickUp itself throttling; it clears within a minute and is safe to repeat. */
@@ -151,11 +173,18 @@ export function createClickupTracker({ token, apiBase, timeoutMs, log = console.
     // window to count on a ClickUp project (SP-206).
     // The pipeline controls live in the tracker's own data (SP-224); ClickUp keeps none.
     pipelineSettings: async () => unsupported('the pipeline controls are kept only in the tracker; this project\'s tickets are on ClickUp, where there are none to read.'),
+    allPipelineControls: async () => unsupported('the pipeline controls are kept only in the tracker; this project\'s tickets are on ClickUp, where there are none to read.'),
     // Spirality's releases are a record in the tracker (SP-265); ClickUp keeps none.
     releases: async () => unsupported('which Spirality release each project runs is kept only in the tracker; this project\'s tickets are on ClickUp.'),
     projectRelease: async () => unsupported('which Spirality release each project runs is kept only in the tracker; this project\'s tickets are on ClickUp.'),
     nameRelease: async () => unsupported('which Spirality release each project runs is kept only in the tracker; this project\'s tickets are on ClickUp.'),
     rollBackRelease: async () => unsupported('which Spirality release each project runs is kept only in the tracker; this project\'s tickets are on ClickUp.'),
+    // Moving a ticket between projects is the tracker's; ClickUp's lists are not projects.
+    moveTicket: async () => unsupported('moving a ticket into another project is done only in the tracker; this project\'s tickets are on ClickUp.'),
+    ticketRecord: async () => unsupported('moving a ticket into another project is done only in the tracker; this project\'s tickets are on ClickUp.'),
+    prFiles: async () => unsupported(NO_PR_FILES_ON_CLICKUP),
+    recordPrFiles: async () => unsupported(NO_PR_FILES_ON_CLICKUP),
+    forgetPrFiles: async () => unsupported(NO_PR_FILES_ON_CLICKUP),
     getStatusHistory: async () => unsupported('ClickUp keeps no move-by-move status history this door reads; stage-counts counts a window only on the tracker.'),
     createTask: (list, fields) => call('POST', `/api/v2/list/${list}/task`, fields),
     updateTask: (task, fields) => call('PUT', `/api/v2/task/${task}`, fields),
