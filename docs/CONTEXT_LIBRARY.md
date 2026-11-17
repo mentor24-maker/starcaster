@@ -69,3 +69,39 @@ that are this project's own stored context files, the same check the store
 makes when the address is saved.
 
 Adding and editing stay on the Context page: the command never writes.
+
+## Which tools read an entry (SC-826)
+
+Each entry on Assets › Context carries one switch per tool that may read it —
+today one, **Reel Spinner reads this**. A tool reads only the entries switched
+on for it; nothing is switched on until somebody switches it on.
+
+- The list of tools is one place, `lib/contextUses.js`. The store refuses any
+  value not in it, so a switch can never be free text.
+- The column is `context_entries.used_by` (`docs/SQL/context_entries_used_by.sql`,
+  run after the setup file). Until a database has it, notes still list and save;
+  a switch refuses and names that file, and the reader below answers
+  "could not tell", never "nothing switched on".
+- Switching a tool on or off does **not** change an entry's *Last updated*:
+  that date is about the wording, and the fingerprint below reads it.
+- `list`, `get` and `dump` print which tools read each entry
+  (`reel-spinner`, or `read by no tool`).
+
+### How a tool reads its notes
+
+```js
+const { readContextFor } = require('./lib/contextFor');
+const res = await readContextFor({ projectId, use: 'reel-spinner' });
+// res.data: { text, fingerprint, entries, unreadable, reason }
+```
+
+- `text` — every switched-on note (and `.txt`/`.md` file, downloaded) as plain
+  text, oldest first, each under `## <title>`.
+- `fingerprint` — changes when a switched-on entry is added, removed, switched
+  off or edited, and not otherwise. Store it with anything made from `text`, so
+  a later edit shows on everything made under the old wording.
+- `unreadable` — each switched-on file whose words could not be read (a PDF,
+  an image, a failed download), with the reason. Never dropped silently; the
+  page says the same thing beside the switch.
+- Nothing switched on is `ok: true` with `text: ''` and a `reason`. A database
+  that could not be read is `ok: false`. Only this project's entries are read.

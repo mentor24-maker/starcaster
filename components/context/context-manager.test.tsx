@@ -403,4 +403,55 @@ describe("Assets › Context", () => {
       expect(container!.textContent).toContain(EMPTY_TEXT);
     });
   });
+
+  describe("which tools read an entry (SC-826)", () => {
+    function useBox(title: string): HTMLInputElement {
+      const tr = [...container!.querySelectorAll("tbody tr")].find((r) => r.querySelector(".context-manager-title")?.textContent === title);
+      const box = tr?.querySelector("input[data-use='reel-spinner']") as HTMLInputElement | null;
+      if (!box) throw new Error(`no Reel Spinner switch on "${title}"`);
+      return box;
+    }
+
+    it("switching Reel Spinner on saves usedBy, then shows what the server READ BACK", async () => {
+      byProject.proj_a = [{ id: "n1", title: "Channel", kind: "note", bodyHtml: "<p>x</p>", updatedAt: "2026-11-14T20:00:00Z", usedBy: [] }];
+      await mount();
+      expect(container!.textContent).toContain("Reel Spinner reads this");
+      expect(useBox("Channel").checked).toBe(false);
+      sent = [];
+      await click(useBox("Channel"));
+      expect(sent[0]).toEqual({ method: "PATCH", path: "/api/context/n1", body: { usedBy: ["reel-spinner"] } });
+      expect(sent[1]?.method).toBe("GET");
+      expect(useBox("Channel").checked).toBe(true);
+
+      await click(useBox("Channel"));
+      expect(sent[2]).toEqual({ method: "PATCH", path: "/api/context/n1", body: { usedBy: [] } });
+      expect(useBox("Channel").checked).toBe(false);
+    });
+
+    it("a refused switch shows the reason and stays as the server has it", async () => {
+      byProject.proj_a = [{ id: "n1", title: "Channel", kind: "note", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z", usedBy: [] }];
+      await mount();
+      const realApi = (window as any).App.api;
+      (window as any).App.api = async (path: string, options: RequestInit = {}) => (
+        String(options.method || "GET").toUpperCase() === "PATCH"
+          ? { ok: false, error: { message: "They are added by docs/SQL/context_entries_used_by.sql." } }
+          : realApi(path, options)
+      );
+      await click(useBox("Channel"));
+      expect(container!.textContent).toContain("context_entries_used_by.sql");
+      expect(useBox("Channel").checked).toBe(false);
+    });
+
+    it("a switched-on file Reel Spinner cannot read says so beside the switch; a .md file does not", async () => {
+      byProject.proj_a = [
+        { id: "f1", title: "Deck", kind: "file", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z", fileName: "deck.pdf", usedBy: ["reel-spinner"] },
+        { id: "f2", title: "Notes", kind: "file", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z", fileName: "notes.md", usedBy: ["reel-spinner"] },
+        { id: "f3", title: "Off deck", kind: "file", bodyHtml: "", updatedAt: "2026-11-14T20:00:00Z", fileName: "off.pdf", usedBy: [] },
+      ];
+      await mount();
+      const warnings = [...container!.querySelectorAll(".context-manager-use-warning")].map((w) => w.closest("tr")?.querySelector(".context-manager-title")?.textContent);
+      expect(warnings).toEqual(["Deck"]);
+      expect(container!.textContent).toContain("Reel Spinner cannot read .pdf files");
+    });
+  });
 });
