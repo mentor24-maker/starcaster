@@ -103,16 +103,16 @@ test('an empty project says so; it is not the same text as a failed read', () =>
   assert.doesNotMatch(missing + other, /No context entries/);
 });
 
-test('list prints one line per entry: id, title, kind, last updated (Mountain time)', () => {
+test('list prints one line per entry: id, title, kind, last updated (Mountain time), which tools read it', () => {
   const rows = [
     entry(),
-    entry({ id: 'b', title: 'Pricing', updated_at: '2026-11-14T01:05:00Z' }),
+    entry({ id: 'b', title: 'Pricing', updated_at: '2026-11-14T01:05:00Z', used_by: ['reel-spinner'] }),
     entry({ id: 'c', title: 'Style guide', kind: 'file', body_html: '' }),
   ];
   const lines = readout.formatList(rows, PROJECTS[0]).split('\n');
   assert.equal(lines.length, 3);
-  assert.equal(lines[0], '11111111-2222-3333-4444-555555555555\tBrand voice\tnote\t2026-11-15 14:30 MT');
-  assert.equal(lines[1], 'b\tPricing\tnote\t2026-11-13 18:05 MT');
+  assert.equal(lines[0], '11111111-2222-3333-4444-555555555555\tBrand voice\tnote\t2026-11-15 14:30 MT\tread by no tool');
+  assert.equal(lines[1], 'b\tPricing\tnote\t2026-11-13 18:05 MT\treel-spinner');
   assert.match(lines[2], /^c\tStyle guide\tfile\t/);
 });
 
@@ -140,10 +140,10 @@ test('dump holds every note in full in one document, headings nested under each 
   ];
   const doc = readout.formatDump(rows, PROJECTS[0], { saved: { d: '/tmp/s/g.pdf' } });
   assert.match(doc, /^# Context for IZIT:APP \(izit-app\)\n\n3 notes, 1 file\./);
-  assert.match(doc, /## Brand voice\n\nUpdated .* · id 11111111-2222-3333-4444-555555555555\n\n#### Tone\n\nWarm & \*\*direct\*\*\.\n\n- Short\n- Plain/);
+  assert.match(doc, /## Brand voice\n\nUpdated .* · id 11111111-2222-3333-4444-555555555555 · used by: read by no tool\n\n#### Tone\n\nWarm & \*\*direct\*\*\.\n\n- Short\n- Plain/);
   assert.match(doc, /## Pricing\n\n.*\n\n### Rules\n\n1\. Never discount/);
   assert.match(doc, /## Empty note\n\n.*\n\n\(This note has no text\.\)/);
-  assert.match(doc, /## Files\n- \*\*Style guide\*\*: g\.pdf, application\/pdf, 10 bytes\. https:\/\/u\/g\.pdf\n {2}Saved to: \/tmp\/s\/g\.pdf/);
+  assert.match(doc, /## Files\n- \*\*Style guide\*\*: g\.pdf, application\/pdf, 10 bytes, used by: read by no tool\. https:\/\/u\/g\.pdf\n {2}Saved to: \/tmp\/s\/g\.pdf/);
   // Only the four note/section titles sit at "##".
   assert.equal(doc.match(/^## /gm).length, 4);
 });
