@@ -40,6 +40,7 @@ const crmFormsStore = require(path.join(ROOT, 'lib/crmFormsStore.js'));
 const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'));
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
+const videoMomentsStore = require(path.join(ROOT, 'lib/videoMomentsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
@@ -1731,6 +1732,28 @@ const FIXTURE_TRANSCRIPTS = {
   }),
 };
 
+/**
+ * Reel Spinner's scored moments (Reel Spinner 2e, SC-830), on the hour-long
+ * file: a summary, a long unbroken quote that must wrap, and a fingerprint no
+ * current notes can match, so the Moments view shows its "scored against older
+ * notes" line and the Score again button — the states worth measuring.
+ * A full replacement, so a re-seed changes nothing.
+ */
+const FIXTURE_MOMENTS = {
+  'fixture-footage-01': () => ({
+    status: 'done',
+    summary: 'Saturday match-play: the tiebreak call-out and the follow-through drill are the two clips worth sharing.',
+    briefFingerprint: 'fixture-older-notes',
+    model: 'fixture',
+    runStartedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    moments: [
+      { start_s: 754, end_s: 790.5, score: 91, project: 'Delray Beach Tennis Center', mood: 'warm', reasons: ['Says the junior programme\'s promise in one sentence.', 'Clear sound, no one talking over it.'], quote: 'Every kid who walks onto court one gets the same coaching we give the ranked players.' },
+      { start_s: 25.9, end_s: 52, score: 74, project: 'Delray Beach Tennis Center', mood: 'light', reasons: ['A visible before-and-after on the forehand.'], quote: `Watch the follow-through here: ${'finish-high-over-the-shoulder-'.repeat(6)}` },
+      { start_s: 3100, end_s: 3108, score: 42, project: '', mood: '', reasons: [], quote: '' },
+    ],
+  }),
+};
+
 async function seedStudioFootage(scope) {
   // Not `must`: a lookup's miss is `data: null`, and `must` answers
   // `res.data ?? res` — the whole envelope, which is truthy, so every miss
@@ -1777,6 +1800,9 @@ async function seedStudioFootage(scope) {
         if (transcript) {
           must(await videoTranscriptsStore.upsertTranscript(existing.id, transcript(), scope), 'transcript footage file');
         }
+        if (FIXTURE_MOMENTS[file.hash]) {
+          must(await videoMomentsStore.upsertMoments(existing.id, FIXTURE_MOMENTS[file.hash](), scope), 'score footage file');
+        }
         // A fixture seeded before the File column existed has no localPath,
         // so the column would only ever measure its fallbacks. Fill it in.
         if (file.localPath && !existing.localPath) {
@@ -1791,6 +1817,9 @@ async function seedStudioFootage(scope) {
       );
       if (transcript) {
         must(await videoTranscriptsStore.upsertTranscript(created.id, transcript(), scope), 'transcript footage file');
+      }
+      if (FIXTURE_MOMENTS[hash]) {
+        must(await videoMomentsStore.upsertMoments(created.id, FIXTURE_MOMENTS[hash](), scope), 'score footage file');
       }
       made += 1;
     }
