@@ -25,7 +25,9 @@
  * 2. THE OFFSET (`measureOffset`) — a loudness curve of each analysis track
  *    (one level per 10 ms) and a search for where a 30-second stretch of the
  *    shorter recording best matches the longer one. Checked near the START and
- *    again near the END. If the two answers differ by more than 0.1 s the
+ *    again near the END of the stretch both recorded, not of either file, so a
+ *    phone started before Zoom or left running after it still pairs. If the
+ *    two answers differ by more than 0.1 s the
  *    clocks drift, and a drifting pair would slide out of lip sync over the
  *    edit — so it is reported and NOT paired.
  *
@@ -104,16 +106,26 @@ const MIN_OVERLAP_SHARE = 0.5;
 const MIN_SPEECH_S = 5;
 const MIN_QUIET_S = 1;
 
+/**
+ * Closer than this, and neither recording is called cleaner. On the noise
+ * fixture the clean track wins by well over 3 dB; a hair's difference is a
+ * measurement wobble, and picking a side on it would be a guess.
+ */
+const MIN_MARGIN_DB = 1;
+
 const REASONS = Object.freeze({
   NO_TIME: 'no_recording_time',
   NOT_IPHONE_AND_ZOOM: 'not_an_iphone_and_a_zoom_recording',
   TOO_LITTLE_OVERLAP: 'recording_times_overlap_less_than_half',
   TOO_SHORT: 'too_short_to_check_start_and_end',
+  OVERLAP_TOO_SHORT: 'overlap_too_short_to_check_start_and_end',
   NO_MATCH: 'no_match',
+  END_NO_MATCH: 'start_matched_but_end_did_not',
   DRIFT: 'drift',
   NO_AUDIO: 'audio_could_not_be_read',
   NOT_ENOUGH_QUIET: 'not_enough_quiet_between_words',
   NOT_ENOUGH_SPEECH: 'not_enough_speech',
+  TOO_CLOSE_TO_CALL: 'too_close_to_call',
 });
 
 // ── 1. candidates ────────────────────────────────────────────────────────────
@@ -345,9 +357,22 @@ function round3(v) {
 /**
  * How far apart two recordings are, from their loudness curves (`{ db }`).
  *
- * The shorter one is searched for in the longer: the first 30 s stretch from
- * its start that matches, and the first from its end. Their two offsets are
- * the start and end checks. Returns
+ * The start and end checks are taken at the start and end of the OVERLAP, not
+ * of either file: the likeliest real session is a phone started before the
+ * Zoom recording and left running after it, so the phone's own first and last
+ * minutes have nothing to match. In order:
+ *
+ *   1. A 30 s stretch from the shorter one's start, moving inward, searched
+ *      for in the longer. If the shorter started inside the longer, the first
+ *      that matches IS the start check.
+ *   2. If none matched, the shorter may have started first: the LONGER one's
+ *      opening stretches are searched for in the shorter. A match there places
+ *      the overlap, and the start check is then taken from the overlap's start.
+ *   3. The end check, from the end of the overlap moving inward.
+ *
+ * The overlap always begins at the later of the two starts, so one of the two
+ * files' openings lies inside it: between them, steps 1 and 2 cover every
+ * shape of overlap. Returns
  *   `{ ok: true,  offsetS, driftS, confidence, checks }` — paired
  *   `{ ok: false, reason, offsetS?, driftS?, confidence, checks }` — not, and why
  * with offset and drift measured from A to B either way.
@@ -362,47 +387,85 @@ function measureOffset(curveA, curveB) {
     return { ok: false, reason: REASONS.TOO_SHORT, confidence: 0, checks };
   }
   const long = prepareLong(longC, w);
-  // B after A: a stretch at short-frame i found at long-frame lag means the
-  // short recording started (lag - i) frames after the long one.
-  const toOffset = (i, lag) => {
-    const shortAfterLong = (lag - i) * FRAME_S;
-    return aLong ? shortAfterLong : -shortAfterLong;
-  };
-  const probeAt = (i, end) => {
-    const m = bestMatch(long, shortC.subarray(i, i + w));
+  // `lead` is how many frames after the long recording began the short one
+  // began (negative when the short one started first). A stretch at short
+  // frame i found at long frame lag gives lead = lag - i.
+  const toOffset = (lead) => (aLong ? lead : -lead) * FRAME_S;
+  const record = (end, probe, i, m, lead) => {
     const check = {
       end,
+      probe,
       atS: round3(i * FRAME_S),
       peak: m ? round3(m.peak) : null,
       runnerUp: m ? round3(m.runnerUp) : null,
       matched: isMatch(m),
-      offsetS: m ? round3(toOffset(i, m.lag)) : null,
+      offsetS: m ? round3(toOffset(lead)) : null,
     };
     checks.push(check);
-    return check.matched ? { i, offset: toOffset(i, m.lag), peak: m.peak, prominence: m.peak - m.runnerUp } : null;
+    return check.matched ? { i, lead, offset: toOffset(lead), peak: m.peak } : null;
+  };
+  /** The shorter recording's stretch at frame i, searched for in the longer. */
+  const probeShort = (i, end) => {
+    const m = bestMatch(long, shortC.subarray(i, i + w));
+    return record(end, 'shorter', i, m, m ? m.lag - i : 0);
   };
 
-  const last = shortC.length - w;
+  // 1. From the shorter one's start, inward.
   let first = null;
   for (let t = 0; t < MAX_TRIES && !first; t += 1) {
     const i = t * w;
-    if (i > last) break;
-    first = probeAt(i, 'start');
+    if (i > shortC.length - w) break;
+    first = probeShort(i, 'start');
   }
-  if (!first) return { ok: false, reason: REASONS.NO_MATCH, confidence: 0, checks };
+
+  // 2. Did the shorter one start first? Find the longer one's opening in it.
+  if (!first) {
+    const short = prepareLong(shortC, w);
+    let anchor = null;
+    for (let t = 0; t < MAX_TRIES && !anchor; t += 1) {
+      const j = t * w;
+      if (j > longC.length - w) break;
+      const m = bestMatch(short, longC.subarray(j, j + w));
+      // Long frame j sits at short frame m.lag, so the short began j - lag
+      // frames after the long.
+      anchor = record('anchor', 'longer', j, m, m ? j - m.lag : 0);
+    }
+    if (!anchor) return failedOffset(REASONS.NO_MATCH, checks);
+    const s0 = Math.max(0, Math.round(-anchor.lead));
+    const s1 = Math.min(shortC.length, Math.round(longC.length - anchor.lead));
+    for (let t = 0; t < MAX_TRIES && !first; t += 1) {
+      const i = s0 + t * w;
+      if (i > s1 - w) break;
+      first = probeShort(i, 'start');
+    }
+    // The longer one's opening matched, so the audio is related: a start
+    // check that then finds nothing is a stretch too unclear to measure, not
+    // unrelated sound.
+    if (!first) return failedOffset(REASONS.OVERLAP_TOO_SHORT, checks, { offsetS: round3(anchor.offset) });
+  }
+
+  // 3. The end of the overlap, inward.
+  const overlapEnd = Math.min(shortC.length, Math.round(longC.length - first.lead));
+  if (overlapEnd - first.i < 2 * w) {
+    return failedOffset(REASONS.OVERLAP_TOO_SHORT, checks, { offsetS: round3(first.offset) });
+  }
   let final = null;
   for (let t = 0; t < MAX_TRIES && !final; t += 1) {
-    const i = last - t * w;
+    const i = overlapEnd - w - t * w;
     if (i < first.i + w) break;
-    final = probeAt(i, 'end');
+    final = probeShort(i, 'end');
   }
-  if (!final) return { ok: false, reason: REASONS.TOO_SHORT, offsetS: round3(first.offset), confidence: 0, checks };
+  if (!final) return failedOffset(REASONS.END_NO_MATCH, checks, { offsetS: round3(first.offset) });
 
   const driftS = final.offset - first.offset;
   const confidence = round3(Math.min(1, Math.min(first.peak, final.peak)));
   const out = { offsetS: round3(first.offset), driftS: round3(driftS), confidence, checks };
   if (Math.abs(driftS) > MAX_DRIFT_S) return { ok: false, reason: REASONS.DRIFT, ...out };
   return { ok: true, ...out };
+}
+
+function failedOffset(reason, checks, extra = {}) {
+  return { ok: false, reason, ...extra, confidence: 0, checks };
 }
 
 // ── 3. the cleaner sound ─────────────────────────────────────────────────────
@@ -452,7 +515,8 @@ function compareCleanliness(a, b, offsetS) {
   if (quietN * FRAME_S < MIN_QUIET_S) return { ...out, winner: null, marginDb: null, reason: REASONS.NOT_ENOUGH_QUIET };
   if (speechN * FRAME_S < MIN_SPEECH_S) return { ...out, winner: null, marginDb: null, reason: REASONS.NOT_ENOUGH_SPEECH };
   const marginDb = round3(out.a.snrDb - out.b.snrDb);
-  return { ...out, winner: out.a.snrDb > out.b.snrDb ? 'a' : 'b', marginDb };
+  if (!(Math.abs(marginDb) >= MIN_MARGIN_DB)) return { ...out, winner: null, marginDb, reason: REASONS.TOO_CLOSE_TO_CALL };
+  return { ...out, winner: marginDb > 0 ? 'a' : 'b', marginDb };
 }
 
 // ── together ────────────────────────────────────────────────────────────────
@@ -465,11 +529,24 @@ function compareCleanliness(a, b, offsetS) {
  */
 function lineUp(a, b) {
   const offset = measureOffset(a.curve, b.curve);
-  const base = { rulesVersion: RULES_VERSION, offsetS: offset.offsetS ?? null, driftS: offset.driftS ?? null, confidence: offset.confidence, checks: offset.checks };
-  if (!offset.ok) return { status: 'failed', error: offset.reason, ...base };
+  if (!offset.ok) return failed(offset.reason, offset);
   const cleaner = compareCleanliness(a, b, offset.offsetS);
   const audioSourceId = cleaner.winner === 'a' ? a.id : cleaner.winner === 'b' ? b.id : null;
-  return { status: 'done', ...base, audioSourceId, cleaner };
+  return {
+    status: 'done',
+    rulesVersion: RULES_VERSION,
+    offsetS: offset.offsetS,
+    driftS: offset.driftS,
+    confidence: offset.confidence,
+    checks: offset.checks,
+    audioSourceId,
+    cleaner,
+  };
+}
+
+/** Every refusal has one shape, whichever step refused. */
+function failed(error, { offsetS = null, driftS = null, confidence = 0, checks = [] } = {}) {
+  return { status: 'failed', rulesVersion: RULES_VERSION, error, offsetS, driftS, confidence, checks };
 }
 
 /**
@@ -513,6 +590,9 @@ function readCurve(wavPath, { run, ffmpeg = 'ffmpeg' } = {}) {
     return { ok: false, error: `${REASONS.NO_AUDIO}: ${(r && (r.error && r.error.message)) || String((r && r.stderr) || '').trim().slice(-300) || 'ffmpeg failed'}` };
   }
   const buf = Buffer.isBuffer(r.stdout) ? r.stdout : Buffer.from(r.stdout);
+  // A zero-length Buffer is truthy: ffmpeg exiting 0 with no audio is still
+  // audio that could not be read, not a recording too short to line up.
+  if (buf.length < 2) return { ok: false, error: `${REASONS.NO_AUDIO}: ffmpeg returned no audio` };
   const samples = new Int16Array(buf.buffer, buf.byteOffset, Math.floor(buf.length / 2));
   return { ok: true, curve: loudnessCurve(samples, SAMPLE_RATE), durationS: samples.length / SAMPLE_RATE };
 }
@@ -535,9 +615,9 @@ function alignPair(a, b, { run, ffmpeg = 'ffmpeg' } = {}) {
   const sides = [];
   for (const s of [a, b]) {
     const c = readCurve(s.wavPath, { run, ffmpeg });
-    if (!c.ok) return { status: 'failed', error: c.error, offsetS: null, driftS: null, confidence: 0, checks: [] };
+    if (!c.ok) return failed(c.error);
     const q = readSilences(s.wavPath, { run, ffmpeg });
-    if (!q.ok) return { status: 'failed', error: q.error, offsetS: null, driftS: null, confidence: 0, checks: [] };
+    if (!q.ok) return failed(q.error);
     sides.push({ id: s.id, curve: c.curve, silences: q.silences, durationS: c.durationS });
   }
   return lineUp(sides[0], sides[1]);
@@ -551,6 +631,7 @@ module.exports = {
   MIN_PROMINENCE,
   MAX_DRIFT_S,
   MIN_OVERLAP_SHARE,
+  MIN_MARGIN_DB,
   REASONS,
   timeOverlap,
   candidateReason,

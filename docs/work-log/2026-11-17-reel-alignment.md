@@ -17,3 +17,13 @@ Along the way it turned out Zoom stamps a file with the time it finished
 writing it, not when the recording began; the rules allow for that.
 
 Nothing runs on its own yet and nothing is saved; a later step does that.
+
+**After review (same day).** Review found that it refused the likeliest real
+session: a phone started before the Zoom recording, or left running after
+it. It looked for the match at the start and end of the phone's own file,
+and those minutes were never in Zoom at all. Now it finds the stretch both
+recordings share and checks the start and end of THAT. On the real call it
+now pairs a phone started 250 seconds early and one left running 200 seconds
+late, both to the exact second with no drift. It also no longer picks a
+"cleaner" track on a difference under 1 dB (too close to call), and an audio
+file that decodes to nothing is reported as unreadable rather than too short.
