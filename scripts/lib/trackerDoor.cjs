@@ -58,8 +58,13 @@ const PROJECT_CONFIG = readProjectConfig();
 
 /** The tracker project the loop's tickets live in. */
 const PROJECT = PROJECT_CONFIG.projectSlug || 'starcaster';
-/** The tracker project the standing tickets (roll call, SQL, broken links) and the bus live in. */
-const BUS_PROJECT = PROJECT_CONFIG.busProject || 'starcaster-bus';
+/**
+ * The tracker project the standing tickets (roll call, SQL, broken links) and
+ * the bus live in. Since SC-818 it is StarCaster's own project, so it can be
+ * the same slug as PROJECT. Read only from spirality.project.json: a guessed
+ * name posted alarms to a project that no longer holds the bus.
+ */
+const BUS_PROJECT = PROJECT_CONFIG.busProject ? String(PROJECT_CONFIG.busProject) : '';
 /** Dane's seat ON THE TRACKER. Not the ClickUp id 48012725: that seat writes nothing here. */
 const OPERATOR_ID = Number(PROJECT_CONFIG.operatorUserId || 1);
 /** The page a person opens for a ticket (not the API address the door calls). */
