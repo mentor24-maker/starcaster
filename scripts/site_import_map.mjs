@@ -191,7 +191,7 @@ const {
   referenceSectionLinks, demoteEditedSectionLinks,
 } = require('./lib/site-import/dist/map.js');
 const { referenceJumpLinks } = require('./lib/siteImportJumpLinks.js');
-const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
+const { planImportTheme, saveImportTheme, undoLine, importPageThemePatch, followedThemeId } = require('./lib/siteImportTheme.js');
 const crmConfigStore = require('./lib/crmConfigStore.js');
 const crmFormsStore = require('./lib/crmFormsStore.js');
 const {
@@ -725,6 +725,28 @@ async function main() {
     }), 'record form ids');
   }
 
+  // 3b. The import theme: create, make default, READ BACK (landmine 12 —
+  //     an insert that "succeeds" can still land without its tenant). Saved
+  //     BEFORE the pages, because every page this run writes names it: a page
+  //     that names no theme gets none of its type or text colours on the live
+  //     site, only the shell's colours (SC-861 — Bayside's headings went live
+  //     in the app's own blue).
+  let themeCheckpoint = null;
+  if (themePlan) {
+    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: makeThemeDefault });
+    if (makeThemeDefault) {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
+      log(`  ${undoLine(themeCheckpoint)}`);
+    } else {
+      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}); the project default is unchanged (refresh).`);
+    }
+  }
+  const pageTheme = {
+    followThemeId: followedThemeId(themePlan, themeCheckpoint),
+    previousDefaultId: themeCheckpoint?.previousDefaultId || '',
+  };
+  if (pageTheme.followThemeId) log(`  every page this run writes names theme ${pageTheme.followThemeId}, unless it was pointed at another theme on purpose`);
+
   // 4. Write pages: rewrite URLs, attach overflow links, strip engine
   //    bookkeeping, respect the hash guard, create or update.
   const sectionHashes = { ...sectionHashesIn };
@@ -761,9 +783,10 @@ async function main() {
       isPublished: false,
       layoutSections: sections,
       ...pageGroundPatch(page, null),
+      ...importPageThemePatch(null, pageTheme),
     }, scope), `create ${page.slug}`),
     updatePage: async (page, current, merged) =>
-      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged, ...pageGroundPatch(page, current) }, scope), `update ${page.slug}`),
+      must(await pagesStore.updatePage(current.id, { ...current, layoutSections: merged, ...pageGroundPatch(page, current), ...importPageThemePatch(current, pageTheme) }, scope), `update ${page.slug}`),
     mergeSections: (existing, incoming, page) => {
       const stale = dropStaleImportSections(existing, incoming, staleIo);
       const pageId = String(priorPageIds[page.key]);
@@ -811,6 +834,25 @@ async function main() {
     process.exitCode = 1;
   }
 
+  // 4-. Read back the theme each page names (SC-861): a page left naming
+  //     none renders with no theme type at all on the live site.
+  if (pageTheme.followThemeId) {
+    const unnamed = [];
+    for (const page of out.pages) {
+      const id = pageIds[page.key];
+      if (!id) continue;
+      const after = must(await pagesStore.getPage(id, scope), `read back /${page.slug}`);
+      if (!String(after.themeId || '').trim()) unnamed.push(`/${page.slug}`);
+    }
+    if (unnamed.length) {
+      console.error(`\nERROR: ${unnamed.length} page(s) name no theme after the write: ${unnamed.join(', ')}`);
+      warn(`${unnamed.length} page(s) name no theme, so their headings and links ignore the import theme on the live site.`);
+      process.exitCode = 1;
+    } else {
+      log('Theme: read back — every page this run wrote names a theme.');
+    }
+  }
+
   // 4-. Jump links by reference, now that every page has its id (SC-854).
   //     Never throws: the checkpoint below must still record these pages,
   //     or the next run builds a second set. A failed page fails the run.
@@ -839,19 +881,6 @@ async function main() {
       log(`Forms: read back ${links.checked} Form module(s) — each holds its form's id.`);
     }
     if (links.skipped.length) log(`  not rewritten (section edited by a person, so protected): ${links.skipped.join(', ')}`);
-  }
-
-  // 4b. The import theme: create, make default, READ BACK (landmine 12 —
-  //     an insert that "succeeds" can still land without its tenant).
-  let themeCheckpoint = null;
-  if (themePlan) {
-    themeCheckpoint = await saveImportTheme(themePlan, scope, { makeDefault: makeThemeDefault });
-    if (makeThemeDefault) {
-      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}) and is now the project default.`);
-      log(`  ${undoLine(themeCheckpoint)}`);
-    } else {
-      log(`Theme "${themeCheckpoint.name}" created (${themeCheckpoint.id}); the project default is unchanged (refresh).`);
-    }
   }
 
   // 5. Checkpoint + final report (now carrying page ids).

@@ -24,6 +24,7 @@
  */
 
 import type { CapturedStyles, DecorationIR, SectionIR, AssetRef, PageIR } from "./ir";
+import * as cheerio from "cheerio";
 import { LAYOUT_RATIOS } from "./columns";
 import { jumpLands, jumpOf, parsePageLink } from "../builder-client/page-link";
 
@@ -519,6 +520,45 @@ function checkColumns(
   return { findings, notMeasured: "" };
 }
 
+/**
+ * The part of a module's html that is THIS element: the top-level block whose
+ * words are the element's. One text module often holds several captured
+ * elements (Bayside's Contact module is a heading, three labels and three
+ * paragraphs), and reading the whole module's html gave every heading in it
+ * the paragraphs' inline weight and the email link's colour (SC-861). The
+ * words alone when they are a bare stretch of text between blocks; the whole
+ * html when nothing matches, so nothing is read less than it was.
+ */
+export function ownBlockHtml(moduleHtml: string, words: string): string {
+  const want = collapse(words);
+  if (!want) return moduleHtml;
+  try {
+    const $ = cheerio.load(String(moduleHtml || ""), null, false);
+    const blocks = $.root().children().toArray();
+    if (blocks.length < 2) return moduleHtml;
+    const hits = blocks.filter((b) => collapse($(b).text()) === want);
+    if (hits.length === 1) return $.html(hits[0]);
+    // Words that are a bare stretch of text between blocks ("on" between two
+    // links) carry no styling of their own, so none of the blocks' applies.
+    const bare = $.root().contents().toArray().some((n) => n.type === "text" && collapse($(n).text()) === want);
+    return bare ? want : moduleHtml;
+  } catch {
+    return moduleHtml;
+  }
+}
+
+/** The inline values of `prop` on the html's OWN opening tag only. */
+function rootInlineValues(html: string, prop: string): string[] {
+  const open = (String(html || "").trim().match(/^<[^>]*>/) || [""])[0];
+  return inlineValues(open, prop);
+}
+
+/** True when a block is nothing but one link, so the link colour paints it. */
+function isSingleLink(html: string): boolean {
+  const h = String(html || "").trim();
+  return /^<(p|div|span)\b[^>]*>\s*<a\b[^>]*>[\s\S]*?<\/a>\s*<\/\1>$/i.test(h) && (h.match(/<a\b/gi) || []).length === 1;
+}
+
 function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | null): FidelityFinding[] {
   const out: FidelityFinding[] = [];
   const modules = rows.flatMap((r) => r.modules || []);
@@ -537,7 +577,7 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
     const st = el.computedStyles || {};
     const mod = moduleFor(el.sourceId);
     if (!mod) continue; // a nav link the menu took, or a deduped repeat — the map report owns those
-    const html = String(mod.text || "");
+    const html = ownBlockHtml(String(mod.text || ""), el.textContent || "");
     const name = quote(el.textContent);
     const tag = tagOf(el.html);
     const isHeading = /^h[1-6]$/.test(tag);
@@ -545,10 +585,11 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
     // Weight: inline in the imported HTML, else the theme's for that heading level.
     const wanted = weightOf(st["font-weight"]);
     const inline = inlineValues(html, "font-weight").map(weightOf);
+    const ownWeight = rootInlineValues(html, "font-weight").map(weightOf);
     const themeWeight = isHeading ? theme?.headingWeights?.[tag] : undefined;
-    const got = inline.length ? inline[0] : themeWeight ?? (isHeading ? 700 : 400);
+    const got = ownWeight.length ? ownWeight[0] : themeWeight ?? (isHeading ? 700 : 400);
     if (!inline.includes(wanted) && got !== wanted) {
-      add(`font weight ${wanted}`, `weight ${got}${inline.length ? " (inline)" : themeWeight !== undefined ? ` (the theme's ${tag})` : " (the browser default)"}`, name);
+      add(`font weight ${wanted}`, `weight ${got}${ownWeight.length ? " (inline)" : themeWeight !== undefined ? ` (the theme's ${tag})` : " (the browser default)"}`, name);
     }
 
     const spacing = st["letter-spacing"];
@@ -563,14 +604,18 @@ function checkText(section: SectionIR, rows: BuilderRow[], theme: ThemeText | nu
       add(`text-transform ${st["text-transform"]}`, "as typed", name);
     }
 
-    const colour = hexOf(st.color || "");
+    // A block that is one link shows the LINK's colour: the run recorded on
+    // its <a> when it differed from the block, else the block's own.
+    const linkRun = isSingleLink(html) ? (el.inlineStyles || []).find((r) => r.tag === "a" && r.styles?.color) : undefined;
+    const colour = hexOf(linkRun?.styles?.color || st.color || "");
     if (colour) {
       const inlineColours = inlineValues(html, "(?<![-a-z])color").map(hexOf).filter(Boolean);
       const settingColours = settingValues(mod.settings, /color/i).map((v) => (v.startsWith("#") ? v : hexOf(v)));
-      const themeColour = !theme ? "" : el.class === "link" ? theme.linkColor : isHeading ? theme.headingColor : theme.textColor;
-      const effective = inlineColours[0] || settingColours[0] || themeColour || "";
+      const ownColours = rootInlineValues(html, "(?<![-a-z])color").map(hexOf).filter(Boolean);
+      const themeColour = !theme ? "" : el.class === "link" || isSingleLink(html) ? theme.linkColor : isHeading ? theme.headingColor : theme.textColor;
+      const effective = (isSingleLink(html) ? inlineColours[inlineColours.length - 1] : ownColours[0]) || settingColours[0] || themeColour || "";
       if (![...inlineColours, ...settingColours].includes(colour) && effective.toLowerCase() !== colour) {
-        add(`text colour ${colour}`, effective ? `${effective}${inlineColours.length || settingColours.length ? "" : " (the theme's)"}` : "the theme's default", name);
+        add(`text colour ${colour}`, effective ? `${effective}${effective !== themeColour || !themeColour ? "" : " (the theme's)"}` : "the theme's default", name);
       }
     }
   }
@@ -714,6 +759,21 @@ export function sideBusyness(img: { data: Uint8Array | Buffer; width: number; he
     left: edgeDensity(img, { x: 0, y: 0, w: half, h: img.height }),
     right: edgeDensity(img, { x: half, y: 0, w: img.width - half, h: img.height }),
   };
+}
+
+/**
+ * The theme whose TYPE a page renders with — the public site's rule
+ * (`pickPageRenderTheme`, components/BuilderPublicSitePage.tsx): the theme the
+ * page names, or the project's first when that one is gone; and NONE when the
+ * page names no theme, however many the project has. This report used to take
+ * the default theme for an unthemed page, and so measured Bayside's headings
+ * as the theme's grey while the live site painted them the app's blue
+ * (SC-861). Pass the themes in listThemes' order (default first).
+ */
+export function themeForPageType<T extends { id?: unknown }>(page: { themeId?: unknown } | null | undefined, themes: T[]): T | null {
+  const named = String(page?.themeId || "").trim();
+  if (!named) return null;
+  return themes.find((t) => String(t.id || "").trim() === named) || themes[0] || null;
 }
 
 /** The theme's text defaults, from a builder_themes record (rowToTheme). */
