@@ -439,6 +439,12 @@ async function handle(req, res, pathname, method) {
     if (body.stylesPatch && typeof body.stylesPatch === 'object' && !Array.isArray(body.stylesPatch)) {
       patch.stylesPatch = body.stylesPatch;
     }
+    // Only the question widths the caller changed ({ <key>: 'half'|'full' }),
+    // applied to the stored questions by the store — the Builder panel's
+    // counterpart of stylesPatch for fields (SC-860).
+    if (body.fieldLayoutPatch && typeof body.fieldLayoutPatch === 'object' && !Array.isArray(body.fieldLayoutPatch)) {
+      patch.fieldLayoutPatch = body.fieldLayoutPatch;
+    }
     if (body.fields !== undefined) patch.fields = Array.isArray(body.fields) ? body.fields : [];
     if (body.handling !== undefined) patch.handling = normalizeFormHandling(body.handling);
     if (patch.handling !== undefined || patch.fields !== undefined) {

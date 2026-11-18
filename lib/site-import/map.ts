@@ -421,7 +421,7 @@ export type ImportFormPlan = {
   dropped: DataCaptureForm["dropped"];
   notes: DataCaptureForm["notes"];
   /** Button looks read off the source, only where it said: CRM form style keys. */
-  styles: { buttonBackgroundColor?: string; buttonTextColor?: string; buttonTextSize?: string };
+  styles: { buttonBackgroundColor?: string; buttonTextColor?: string; buttonTextSize?: string; labelPosition?: "above" | "beside" };
   uses: { pageKey: string; pagePath: string; moduleId: string; sourceId: string }[];
 };
 
@@ -1864,7 +1864,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       kept: reading.kept,
       dropped: reading.dropped,
       notes: reading.notes,
-      styles: { ...siteButton, ...submitButtonLook(el.html) },
+      // Where the labels sit is read off the form itself (SC-860); a form
+      // read before it existed has no answer and keeps the form's default.
+      styles: { ...siteButton, ...submitButtonLook(el.html), ...(reading.labelPosition ? { labelPosition: reading.labelPosition } : {}) },
       uses: [],
     };
     formPlans.set(key, plan);

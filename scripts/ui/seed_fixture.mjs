@@ -1576,9 +1576,10 @@ async function ensureCrm(projectId, userId) {
       submitLabel: 'Send it to the front desk',
       successMessage: 'Thank you — the desk has your details.',
       accentColor: '#0f4f8f',
+      styles: { labelPosition: 'above' },
       fields: [
         { key: 'email', label: 'Email', type: 'email', required: true },
-        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'first_name', label: 'First Name', type: 'text', required: true, width: 'half' },
         { key: 'ntrp_rating', label: 'NTRP Rating', type: 'text', required: false },
       ],
     }, scope);
@@ -1586,6 +1587,16 @@ async function ensureCrm(projectId, userId) {
   if (!form?.id) {
     console.error('  could not create the fixture CRM form — the crm-form panel will seed empty.');
     return { crmConfigId: config.id, crmFormId: '' };
+  }
+  // Labels above (SC-860): the panel lists a Full / Half width row per
+  // question only in that layout, so a fixture left with labels beside would
+  // measure the Form Appearance column without them and report OK on rows it
+  // never saw. Patched onto an existing fixture form, and read back.
+  if (form.styles?.labelPosition !== 'above') {
+    const patched = await crmFormsStore.updateForm(form.id, { stylesPatch: { labelPosition: 'above' } }, scope);
+    if (patched?.styles?.labelPosition !== 'above') {
+      console.error('  could not set the fixture CRM form\'s labels above — the question width rows will not be measured.');
+    }
   }
   return { crmConfigId: config.id, crmFormId: form.id };
 }

@@ -86,7 +86,8 @@
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
  *   ... --no-theme   skip the import theme (see below)
  *   ... --theme-only [--apply]   ONLY the import theme; touches no page
- *   ... --forms-only [--apply]   ONLY the form screenshots → Form modules
+ *   ... --forms-only [--apply]   ONLY forms: screenshots → Form modules, and forms it
+ *       already placed brought up to date (SC-860); touches no other module
  *   ... --skip-form <key>   (with --forms-only, repeatable) keep that form a picture
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
@@ -1057,7 +1058,7 @@ async function runFormsOnly(job, scope) {
   const allPages = must(await pagesStore.listPages(5000, scope), 'list pages');
   const owned = allPages.filter((p) => ownedIds.has(String(p.id)));
   const gone = ownedIds.size - owned.length;
-  const plan = planFormsOnly(owned, mapOut, sourceHtml, { skip: SKIP_FORMS });
+  const plan = planFormsOnly(owned, mapOut, sourceHtml, { skip: SKIP_FORMS, priorForms: prior.forms || {} });
   const unknownSkips = [...SKIP_FORMS].filter((key) => !(mapOut.forms || []).some((f) => f.key === key));
   if (unknownSkips.length) throw new Error(`--skip-form names no form this import read: ${unknownSkips.join(', ')} — check the key in the dry run.`);
 
@@ -1087,13 +1088,20 @@ async function runFormsOnly(job, scope) {
   }
 
   if (!APPLY) {
-    log(plan.replacements.length
-      ? '\nDry run complete — nothing was written. Re-run with --forms-only --apply to swap them.'
-      : '\nDry run complete — nothing to swap, nothing was written.');
+    log(plan.replacements.length || plan.refresh.length
+      ? '\nDry run complete — nothing was written. Re-run with --forms-only --apply to make these changes.'
+      : '\nDry run complete — nothing to swap or update, nothing was written.');
+    return;
+  }
+  if (!plan.replacements.length && !plan.refresh.length) {
+    log('\nNothing to change: no form screenshot on this import\'s pages is waiting to be swapped, and no form it placed needs updating. Nothing was written.');
     return;
   }
   if (!plan.replacements.length) {
-    log('\nNothing to change: no form screenshot on this import\'s pages is waiting to be swapped. Nothing was written.');
+    // Only forms already on the pages: update the form records. A page holds
+    // its form by id and the form is read when the page is shown, so no page
+    // is written and nothing is republished.
+    await refreshPlacedForms(plan.refresh, owner, prior, scope);
     return;
   }
 
@@ -1111,11 +1119,12 @@ async function runFormsOnly(job, scope) {
 
   // 2. The forms — the same writer as a full import; recorded at once on the
   //    job that holds the pages, so a failure below cannot lead to twins.
-  log(`Forms: building ${plan.plans.length} form(s) under Contacts › Forms`);
-  const applied = await applyImportForms(plan.plans, {
+  log(`Forms: building ${plan.plans.length} form(s) under Contacts › Forms${plan.refresh.length ? `, and updating ${plan.refresh.length} already placed` : ''}`);
+  const applied = await applyImportForms([...plan.plans, ...plan.refresh], {
     configStore: crmConfigStore, formsStore: crmFormsStore, scope, prior: prior.forms || {}, log,
+    updateOnly: new Set(plan.refresh.map((p) => p.key)),
   });
-  for (const r of applied.results) log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+  for (const r of applied.results) log(r.skipped ? `  "${r.name}"${r.formId ? ` (${r.formId})` : ''}: ${r.outcome}` : `  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
   const formCheckpoint = { ...(prior.forms || {}), ...applied.checkpoint };
   const ownerNow = must(await store.getJob(owner.id), 'reload the job that built the pages');
   must(await store.updateJob(owner.id, {
@@ -1129,7 +1138,7 @@ async function runFormsOnly(job, scope) {
     const fresh = must(await pagesStore.getPage(id, scope), `re-read page ${id}`);
     // Re-planned on the page as it is NOW: an edit made since the dry-run
     // read is caught here, not overwritten.
-    const now = planFormsOnly([fresh], mapOut, sourceHtml, { skip: SKIP_FORMS });
+    const now = planFormsOnly([fresh], mapOut, sourceHtml, { skip: SKIP_FORMS, priorForms: prior.forms || {} });
     for (const left of now.leftAlone) log(`  /${fresh.slug}: left ${left.moduleId} alone — ${left.reason}`);
     if (!now.replacements.length) { log(`  /${fresh.slug}: nothing left to swap (changed since it was read)`); continue; }
     const before = fresh.layoutSections || [];
@@ -1183,6 +1192,27 @@ async function runFormsOnly(job, scope) {
   log(`Rollback: restore snapshot ${snapshot.id} (Builder > page snapshots) or ${path.relative(ROOT, backupPath)}`);
 }
 
+/**
+ * --forms-only with nothing to swap: bring the forms this import already
+ * placed up to date (SC-860). The same writer as every other path, so a form
+ * changed in Contacts › Forms since the import wrote it is left alone and
+ * named. Each form is read back by the writer; the checkpoint is recorded
+ * on the job that holds the pages.
+ */
+async function refreshPlacedForms(plans, owner, prior, scope) {
+  log(`\nForms: updating ${plans.length} form(s) this import already placed`);
+  const applied = await applyImportForms(plans, {
+    configStore: crmConfigStore, formsStore: crmFormsStore, scope, prior: prior.forms || {}, log,
+    updateOnly: new Set(plans.map((p) => p.key)),
+  });
+  for (const r of applied.results) log(r.skipped ? `  "${r.name}"${r.formId ? ` (${r.formId})` : ''}: ${r.outcome}` : `  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+  const ownerNow = must(await store.getJob(owner.id), 'reload the job that built the pages');
+  must(await store.updateJob(owner.id, {
+    checkpoints: { ...(ownerNow.checkpoints || {}), map: { ...(ownerNow.checkpoints?.map || {}), forms: { ...(prior.forms || {}), ...applied.checkpoint } } },
+  }), 'record form ids');
+  log('\nAPPLY complete: no page was changed and nothing was published — each page shows its form by id, so the update is live at once.');
+}
+
 /** The forms-only dry run's promise, in plain words — --apply prints it too. */
 function logFormsOnlyPlan(plan, prior) {
   const pagesWith = new Set(plan.replacements.map((r) => r.slug));
@@ -1203,6 +1233,11 @@ function logFormsOnlyPlan(plan, prior) {
     log(`  kept as a picture (--skip-form ${key}): ${on.join(', ')}`);
   }
   if (plan.alreadyForms.length) log(`  already a working form: ${plan.alreadyForms.length} (${[...new Set(plan.alreadyForms.map((a) => `/${a.slug}`))].join(', ')})`);
+  for (const f of plan.refresh || []) {
+    const made = prior.forms?.[f.key]?.formId;
+    log(`  update "${f.name}"${made ? ` (${made})` : ''} to what the source shows now — labels ${f.styles?.labelPosition || 'as they are'}, ${f.fields.filter((q) => q.width === 'half').length} half-width question(s); a form changed in Contacts › Forms is left alone`);
+  }
+  for (const s of plan.refreshSkipped || []) log(`  not updating "${s.name}" on ${s.slugs.join(', ')}: ${s.reason}`);
   for (const l of plan.leftAlone) log(`  left alone on /${l.slug} (${l.moduleId}): ${l.reason}`);
   for (const m of plan.missing) {
     log(m.pageDeleted
