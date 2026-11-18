@@ -3935,6 +3935,67 @@ export const RENDER_CONTRACTS = [
     },
   })),
 
+  /*
+   * THE SECTION SHAPE LAYER (task SC-859) — a curve, wave or slant painted as
+   * an SVG background over the section's own. No computed style says where an
+   * SVG's fill landed, so these read the PIXELS: on a dark band, a white curve
+   * chosen for the LEFT must be white near the left edge and leave the band
+   * dark near the right — and the same curve on the RIGHT the other way
+   * round, so "it painted somewhere" cannot pass for "it painted where it was
+   * put". Plus the absence: a section without a shape mounts no layer.
+   */
+  ...[
+    { id: 'section-shape-curve-paints-on-the-left', side: 'left', white: 0.06, dark: 0.94 },
+    { id: 'section-shape-curve-paints-on-the-right', side: 'right', white: 0.94, dark: 0.06 },
+  ].map(({ id, side, white, dark }) => ({
+    id,
+    why:
+      'Bayside\'s Contact Us band has a white curve over its photo so the address sits on white; a ' +
+      'section had nowhere to hold one, so the import dropped it (SC-859). The shape is an SVG ' +
+      'background, so only its pixels prove it rendered, and on the side chosen.',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      shapeLayer: { shape: 'curve', side, color: '#ffffff', opacity: 100 },
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-section-layered',
+    read: ['position'],
+    pixelsInside: { points: [[white, 0.85], [dark, 0.85]], size: 8 },
+    expect(sample) {
+      const px = sample.pixelsInside;
+      if (!px || !px[0] || !px[1]) {
+        return 'the pixels inside the section could not be read (off-screen, or the screenshot failed) — nothing was measured.';
+      }
+      const [onShape, offShape] = px;
+      const sum = (c) => c.r + c.g + c.b;
+      if (sum(offShape) > 120) {
+        return `the band away from the shape reads rgb(${offShape.r}, ${offShape.g}, ${offShape.b}), not the dark ` +
+          'background — either the shape covers the wrong side or the scene is wrong.';
+      }
+      if (sum(onShape) < 700) {
+        return `near the ${side} edge the band reads rgb(${onShape.r}, ${onShape.g}, ${onShape.b}), not the white ` +
+          `shape — the ${side} curve did not paint there.`;
+      }
+      return null;
+    },
+  })),
+
+  {
+    id: 'section-without-a-shape-mounts-no-shape-layer',
+    why:
+      'A row with no shape must render exactly as it did before shapes existed: no extra element ' +
+      '(the phone reverse-stack rules count a row\'s children). Paired with the two contracts above, ' +
+      'so it cannot pass because shapes never render at all (SC-859).',
+    section: {
+      layout: 'single',
+      background: { mode: 'color', color: '#101820' },
+      modules: [{ type: 'heading', text: 'No shape', settings: {}, column: 'left' }],
+    },
+    selector: '.builder-preview-row-shape-layer',
+    absent: true,
+  },
+
   {
     id: 'row-overlay-screen-keeps-a-radius-the-operator-set',
     why:

@@ -131,6 +131,8 @@ function documentForSection({
   background,
   pageBackground,
   overlayScreen,
+  // The section's shape layer (task SC-859) — a real element, like the tint.
+  shapeLayer,
   cellBackgrounds,
   cellOverlayScreens,
   spacers = 0,
@@ -226,6 +228,7 @@ function documentForSection({
     // real element, so a contract cannot reach it without them.
     ...(background ? { background } : {}),
     ...(overlayScreen ? { overlayScreen } : {}),
+    ...(shapeLayer ? { shapeLayer } : {}),
     // The CELL's fill and tint, for the same reason as the two above: a cell
     // overlay is a real element, so a contract cannot reach it unless the
     // fixture carries the field. Whitelisted rather than spread, so a typo in
@@ -707,6 +710,49 @@ async function readPixelsAround(page, target, selector, { gap = 2, band = 6, far
       right: await mean(box.x + box.w + gap, box.y + box.h / 4, band, midH),
       far: await mean(box.x + box.w + far, box.y + box.h / 4, band, midH),
     };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * The mean colour of a small patch at each of `points` INSIDE `selector`'s
+ * box — `[fx, fy]` fractions of its width and height, `size` px square — read
+ * off a screenshot, as { r, g, b } per point (null for a point that could not
+ * be read). It exists for a layer painted as a background image, which no
+ * computed style describes: the section shape (task SC-859) is an SVG data
+ * URL, and only the pixels say whether the curve landed on the side chosen.
+ * Main-page only, for the reason readPixelsAround gives.
+ */
+async function readPixelsInside(page, target, selector, { points = [], size = 8 } = {}) {
+  if (target !== page) return null;
+  try {
+    const box = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) return null;
+      el.scrollIntoView({ block: 'center' });
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height, vw: window.innerWidth, vh: window.innerHeight };
+    }, selector);
+    if (!box || box.w < size * 2 || box.h < size * 2) return null;
+    const sharp = require('sharp');
+    const out = [];
+    for (const [fx, fy] of points) {
+      const clip = {
+        x: Math.max(0, Math.round(box.x + box.w * fx - size / 2)),
+        y: Math.max(0, Math.round(box.y + box.h * fy - size / 2)),
+        width: size,
+        height: size,
+      };
+      if (clip.x + clip.width > box.vw || clip.y + clip.height > box.vh) { out.push(null); continue; }
+      const png = await page.screenshot({ clip, animations: 'disabled' });
+      const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const sum = [0, 0, 0];
+      for (let i = 0; i < data.length; i += info.channels) for (let c = 0; c < 3; c += 1) sum[c] += data[i + c];
+      const n = data.length / info.channels;
+      out.push({ r: Math.round(sum[0] / n), g: Math.round(sum[1] / n), b: Math.round(sum[2] / n) });
+    }
+    return out;
   } catch (_) {
     return null;
   }
@@ -1197,6 +1243,10 @@ try {
      */
     if (result && result.found && contract.pixels) {
       result.pixels = await readPixelsAround(page, target, contract.selector, contract.pixels);
+    }
+    // Optional PIXELS INSIDE the element, at named points (readPixelsInside).
+    if (result && result.found && contract.pixelsInside) {
+      result.pixelsInside = await readPixelsInside(page, target, contract.selector, contract.pixelsInside);
     }
     for (const [url, handler] of served) await page.unroute(url, handler);
     if (contract.emulate?.reducedMotion) await page.emulateMedia({ reducedMotion: null });

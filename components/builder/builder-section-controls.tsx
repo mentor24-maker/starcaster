@@ -8,14 +8,18 @@ import type {
   BackgroundSettings,
   BuilderOverlayBlendMode,
   BuilderTemplateLayout,
-  BuilderTemplateSection
+  BuilderTemplateSection,
+  SectionShapeLayer
 } from "@/lib/builder-template";
 import {
   BUILDER_OVERLAY_BLEND_MODES,
   getLayoutColumnPercents,
   getLayoutColumns,
   normalizeRowOverlayScreenSettings,
+  normalizeSectionShapeLayer,
   normalizeSignedOffsetValue,
+  SECTION_SHAPE_KINDS,
+  SECTION_SHAPE_SIDES,
   seedVideoBackgroundOverlayScreen
 } from "@/lib/builder-template";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -169,6 +173,26 @@ function updateSectionOverlayBlendMode(
 }
 
 /**
+ * The section's shape layer (task SC-859). Normalize-first for the overlay's
+ * reason: the key is absent on nearly every row. Choosing "None" removes the
+ * key outright, so a row that tried a shape and gave it up saves exactly as
+ * it did before.
+ */
+function updateSectionShapeLayer(
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
+  patch: Partial<SectionShapeLayer>
+) {
+  onUpdateSection((current) => {
+    const next = { ...normalizeSectionShapeLayer(current.shapeLayer), ...patch };
+    if (next.shape === "none") {
+      const { shapeLayer: _dropped, ...rest } = current;
+      return rest as BuilderTemplateSection;
+    }
+    return { ...current, shapeLayer: next };
+  });
+}
+
+/**
  * The row's background mode, plus the one thing choosing Video also does:
  * turn the tint on (operator's call, 2026-08-31 — "Default overlay tint ON").
  *
@@ -265,6 +289,7 @@ export function BuilderSectionControls({
   // The normalizer is also what the renderer and the serializer read it
   // through, so the panel shows exactly the value that will be painted.
   const overlayScreen = normalizeRowOverlayScreenSettings(section.overlayScreen);
+  const shapeLayer = normalizeSectionShapeLayer(section.shapeLayer);
 
   return (
     <div className={`builder-section-settings is-lattice${device ? " is-device-mode" : ""}`}>
@@ -729,6 +754,69 @@ export function BuilderSectionControls({
                     </option>
                   ))}
                 </select>
+              </BuilderSettingRow>
+            </>
+          ) : null}
+        </div>
+        )}
+        {/*
+         * SHAPE — a curve, wave or slant over the background (task SC-859).
+         * Its own lattice column for the Overlay group's reason above:
+         * check_panels measures columns, so this group is measured too.
+         */}
+        {device ? null : (
+        <div className="builder-schema-panel-column">
+          <div className="builder-schema-group-title">Shape</div>
+          <BuilderSettingRow label="Shape">
+            <select
+              value={shapeLayer.shape}
+              onChange={(event) =>
+                updateSectionShapeLayer(onUpdateSection, {
+                  shape: event.target.value as SectionShapeLayer["shape"]
+                })
+              }
+            >
+              {SECTION_SHAPE_KINDS.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
+                </option>
+              ))}
+            </select>
+          </BuilderSettingRow>
+          {shapeLayer.shape !== "none" ? (
+            <>
+              <BuilderSettingRow label="Side">
+                <select
+                  value={shapeLayer.side}
+                  onChange={(event) =>
+                    updateSectionShapeLayer(onUpdateSection, {
+                      side: event.target.value as SectionShapeLayer["side"]
+                    })
+                  }
+                >
+                  {SECTION_SHAPE_SIDES.map((side) => (
+                    <option key={side.value} value={side.value}>
+                      {side.label}
+                    </option>
+                  ))}
+                </select>
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Color">
+                <BuilderThemeColorField
+                  fallback="#ffffff"
+                  themeColors={themeColors}
+                  value={shapeLayer.color}
+                  onChange={(color) => updateSectionShapeLayer(onUpdateSection, { color })}
+                />
+              </BuilderSettingRow>
+              <BuilderSettingRow label="Opacity">
+                <BuilderNumberSelectControl
+                  value={String(shapeLayer.opacity)}
+                  min={0}
+                  max={100}
+                  fallback="100"
+                  onChange={(value) => updateSectionShapeLayer(onUpdateSection, { opacity: Number(value) })}
+                />
               </BuilderSettingRow>
             </>
           ) : null}
