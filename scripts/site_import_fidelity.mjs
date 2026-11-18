@@ -36,6 +36,14 @@
  *                      (Doppler `dev`), for a machine with no production keys.
  *                      Needs the local Supabase container running.
  *   --no-upload        write the local copy only
+ *   --own-server       photograph through a files-only server of this
+ *                      checkout's public/ folder, started and stopped here,
+ *                      instead of a running app (the build's last step uses
+ *                      this on the import worker — SC-862). Never the full
+ *                      app: that starts background jobs against production.
+ *   --result-file <p>  write what the run found as JSON, success or failure
+ *                      (the build reads it and records it on the job for the
+ *                      Imports screen; lib/siteImportFidelityRun.js)
  *
  * EXIT
  *   0  report written; every page was found and photographed
@@ -50,6 +58,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { comparePixels, describeChange } from './ui/visual-diff.mjs';
+import { startStaticPreviewServer } from './lib/static_preview_server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(path.join(ROOT, 'package.json'));
@@ -66,9 +75,21 @@ const flagValue = (name) => {
 
 const JOB_ID = flagValue('--job');
 const PAGE_FILTER = flagValue('--page');
-const BASE_URL = (flagValue('--base-url') || process.env.UI_HARNESS_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
+const OWN_SERVER = flag('--own-server');
+let BASE_URL = (flagValue('--base-url') || process.env.UI_HARNESS_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 const READONLY_DB = flag('--readonly-db');
 const NO_UPLOAD = flag('--no-upload');
+const RESULT_FILE = flagValue('--result-file');
+
+/** What this run found, for the build that ran it (SC-862). Never throws. */
+function writeResult(value) {
+  if (!RESULT_FILE) return;
+  try {
+    writeFileSync(RESULT_FILE, JSON.stringify(value, null, 2));
+  } catch (err) {
+    console.error(`could not write --result-file ${RESULT_FILE}: ${err.message || err}`);
+  }
+}
 const PREVIEW_SLUG = 'site-import-fidelity-preview';
 
 if (!JOB_ID) {
@@ -367,6 +388,16 @@ async function main() {
   const builderPages = await loader.pages(irPages.map(({ key }) => pageIds[key]).filter(Boolean));
   const themes = await loader.themes(job.projectId);
 
+  let ownServer = null;
+  if (OWN_SERVER) {
+    try {
+      ownServer = await startStaticPreviewServer(ROOT);
+      BASE_URL = ownServer.url;
+      console.log(`Camera:  files-only preview server at ${BASE_URL}`);
+    } catch (err) {
+      console.log(`Camera:  could not start the files-only preview server (${err.message})`);
+    }
+  }
   const camera = await openCamera();
   if (camera.error) console.log(`Camera:  CANNOT TELL — ${camera.error}`);
 
@@ -486,6 +517,7 @@ async function main() {
       `${blindSections ? `; ${blindSections} section(s) CANNOT TELL` : ''}`);
   }
   if (!camera.error) await camera.close();
+  if (ownServer) await ownServer.close();
 
   const totals = fidelity.countByCategory(allFindings);
   const html = renderReport({ job, pages: reportPages, totals, generatedAt: new Date().toISOString() });
@@ -507,10 +539,26 @@ async function main() {
   }
   if (blindPages) console.log(`\n${blindPages} page(s) CANNOT TELL — see the report; that is not "no differences".`);
   console.log(`\nReport: ${link}${uploadNote ? `  (${uploadNote}; local copy)` : ''}`);
-  process.exit(blindPages || uploadNote.startsWith('NOT') ? 2 : 0);
+  const exitCode = blindPages || uploadNote.startsWith('NOT') ? 2 : 0;
+  writeResult({
+    ok: true,
+    exitCode,
+    reportUrl: upload ? link : '',
+    localFile,
+    totals: fidelity.FIDELITY_CATEGORIES.map((c) => ({ key: c.key, label: c.label, count: totals[c.key] || 0 })),
+    pages: reportPages.map((p) => ({ path: p.path, status: p.status, reason: p.reason || '' })),
+    blindSections: reportPages.reduce((n, p) => n + p.sections.filter((x) => x.status === 'cannot-tell').length, 0),
+    notes: [
+      ...(camera.error ? [`No section was photographed: ${camera.error}`] : []),
+      ...(uploadNote && uploadNote.startsWith('NOT') ? [`The report was ${uploadNote}.`] : []),
+      ...(decorativeBlind(reportPages) ? [`Decorative layers: CANNOT TELL on ${decorativeBlind(reportPages)} section(s) captured before layers were recorded.`] : []),
+    ],
+  });
+  process.exit(exitCode);
 }
 
 main().catch((err) => {
   console.error(`\nNo report: ${err.message}`);
+  writeResult({ ok: false, exitCode: 1, error: String(err.message || err) });
   process.exit(1);
 });

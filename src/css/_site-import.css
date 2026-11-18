@@ -425,3 +425,12 @@
 .site-import-build-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .site-import-build-actions .site-import-theme-default { margin: 0; }
 .site-import-build-preview p { margin: 6px 0; font-size: var(--text-sm); }
+
+/* Difference report (SC-862): the build's last step, shown under Built pages. */
+.site-import-fidelity { margin-top: 14px; }
+.site-import-fidelity h4 { margin: 0 0 6px; }
+.site-import-fidelity p { margin: 4px 0; }
+.site-import-fidelity-blind,
+.site-import-fidelity-notes { margin: 4px 0 0; padding-left: 20px; }
+.site-import-fidelity-blind li,
+.site-import-fidelity-notes li { margin: 2px 0; }
