@@ -1,4 +1,4 @@
-## 2026-11-18 — Section backgrounds can't have a curve or wave shape over the photo, so imported Divi and Elementor sections lose theirs (Bayside's Contact) (SC-859)
+## 2026-11-18 — Section backgrounds can't have a curve or wave shape over the photo, so imported Divi and Elementor sections lose theirs (Bayside's Contact) (#1042)
 
 **What was wrong.** On Bayside's original site, the Contact Us band has a big
 white curve laid over the city photo. The address sits on the white and the
