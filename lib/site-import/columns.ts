@@ -29,7 +29,18 @@ export type Box = { x: number; y: number; w: number; h: number };
 /** `group` names the styled box (a card) the item sits in, if any: rows only
  *  merge when each column holds the same cards, so two cards are never
  *  poured into one Builder cell that can wear only one card's look. */
-export type GridItem = { id: string; box?: Box | null; group?: string; kind?: GridKind };
+export type GridItem = {
+  id: string;
+  box?: Box | null;
+  group?: string;
+  kind?: GridKind;
+  /** Names the list entry the item belongs to, when the mapper already knows
+   *  the section is a list of separate entries (SC-858: Bayside's Services,
+   *  four icon-beside-text rows). Rows with different entries never merge, so
+   *  each entry is its own Builder row and its picture lines up with its own
+   *  words. Unlike `group`, it does not stop a row counting as one of a list. */
+  row?: string;
+};
 
 /** What an item is, as far as the lockup rule cares: a picture, words, or
  *  anything else (a button, a placeholder). Absent = "other". */
@@ -123,7 +134,7 @@ function validBox(box: Box | null | undefined): box is Box {
   );
 }
 
-type Positioned = { id: string; box: Box; group: string; kind: GridKind; order: number };
+type Positioned = { id: string; box: Box; group: string; kind: GridKind; row: string; order: number };
 type RawColumn = { x0: number; x1: number; ids: string[]; groups: string[]; items: Positioned[] };
 type RawBand = { columns: RawColumn[] };
 
@@ -184,6 +195,11 @@ function sameGroups(a: RawBand, b: RawBand): boolean {
   return a.columns.every((ca, i) => ca.groups.join("\u0000") === b.columns[i].groups.join("\u0000"));
 }
 
+/** The list entries a band holds (GridItem.row); "" for none. */
+function entriesOf(band: RawBand): string {
+  return Array.from(new Set(band.columns.flatMap((c) => c.items.map((p) => p.row)))).sort().join("\u0000");
+}
+
 function unionGroups(a: string[], b: string[]): string[] {
   return Array.from(new Set([...a, ...b])).sort();
 }
@@ -216,7 +232,14 @@ function aligned(a: RawBand, b: RawBand): boolean {
 export function planSectionGrid(items: GridItem[]): SectionGrid {
   const positioned: Positioned[] = items
     .filter((it) => validBox(it.box))
-    .map((it, order) => ({ id: it.id, box: it.box as Box, group: it.group || "", kind: it.kind || "other", order }));
+    .map((it, order) => ({
+      id: it.id,
+      box: it.box as Box,
+      group: it.group || "",
+      kind: it.kind || "other",
+      row: it.row || "",
+      order,
+    }));
 
   const cells = new Map<string, Cell>();
   if (positioned.length < 2) {
@@ -269,11 +292,15 @@ export function planSectionGrid(items: GridItem[]): SectionGrid {
   // 3c. Merge runs: stacked after stacked, and rows whose columns line up —
   // as long as each column holds the same cards (GridItem.group). Content
   // with no cards has one empty group everywhere, so it merges as it always
-  // did; a 2x2 grid of cards stays two rows of two (task 86bce9wx3).
+  // did; a 2x2 grid of cards stays two rows of two (task 86bce9wx3). And
+  // never across list entries (GridItem.row): each entry keeps its own row,
+  // so a tall paragraph cannot push the next entry's icon out of line (SC-858).
   const merged: RawBand[] = [];
   for (const band of bands) {
     const prev = merged[merged.length - 1];
-    if (prev && prev.columns.length === 1 && band.columns.length === 1 && sameGroups(prev, band)) {
+    if (prev && entriesOf(prev) !== entriesOf(band)) {
+      merged.push(band);
+    } else if (prev && prev.columns.length === 1 && band.columns.length === 1 && sameGroups(prev, band)) {
       merged[merged.length - 1] = stacked({ columns: [...prev.columns, ...band.columns] });
     } else if (prev && aligned(prev, band) && sameGroups(prev, band)) {
       merged[merged.length - 1] = {
