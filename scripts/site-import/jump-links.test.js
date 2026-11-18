@@ -19,8 +19,9 @@ const path = require('path');
 
 const { normalizeSite } = require('../../lib/site-import/dist/normalize.js');
 const {
-  mapSite, referenceSectionLinks, buildMenuSection, isSkipLink,
+  mapSite, referenceSectionLinks, buildMenuSection, isSkipLink, demoteEditedSectionLinks,
 } = require('../../lib/site-import/dist/map.js');
+const { referenceJumpLinks } = require('../../lib/siteImportJumpLinks.js');
 const { resolvePageLink, buildPageAddressMap } = require('../../lib/builder-client/page-link.js');
 
 const IR = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'bayside-home.json'), 'utf8'));
@@ -43,7 +44,8 @@ test('Bayside: the three menu links become links to their sections', () => {
     assert.ok(section, `the "${word}" section exists`);
     assert.equal(section.anchorName, name, `the "${word}" section carries the original's id as its anchor name`);
     const target = out.sectionLinks.find((t) => t.fallback === `/#${name}`);
-    assert.deepEqual(target, { fallback: `/#${name}`, pageKey: home.key, sectionId: section.id });
+    assert.deepEqual({ ...target, uses: undefined }, { fallback: `/#${name}`, pageKey: home.key, sectionId: section.id, uses: undefined });
+    assert.ok(target.uses.length >= 1, 'it remembers the links pointed at it');
   }
   // Only linked sections are named: nothing links to "resources" or the
   // page wrappers, so no section wears those.
@@ -213,7 +215,9 @@ test('an import from before jump-link capture says so, never that each id is mis
   assert.equal(j.notRecorded.links, 3);
   assert.match(j.notRecorded.why, /prepared before/);
   assert.match(j.notRecorded.why, new RegExp(`--stage normalize --job ${old.jobId}`));
-  assert.match(j.notRecorded.why, /no fresh capture needed/);
+  assert.match(j.notRecorded.why, /no fresh capture is needed/);
+  assert.match(j.notRecorded.why, /doppler run --config prd -- node scripts\/site_import_worker\.mjs/, 'the step as it actually runs');
+  assert.match(j.notRecorded.why, /agent session/, 'a step an agent session runs, not a command for the operator');
   // The links still point at the right page, as written.
   const byLabel = Object.fromEntries(out.menus.top.items.map((i) => [i.label, i.href]));
   assert.equal(byLabel['Contact Us'], '/#contact-us');
@@ -238,4 +242,121 @@ test('an href the whole-link pass cannot match is still localized, never left po
   assert.match(text, /href="\/#services">odd services/);
   assert.match(text, /href="\/">odd home/);
   assert.doesNotMatch(text, /\u0001/, 'the pass marker never reaches the stored text');
+});
+
+test('a designed link to "#content" is a real link when the import built a section carrying that id', () => {
+  // Review of SC-854: the id test ran before the lookup, so a button to a
+  // section named "content" went dead. Only the words "Skip to …" decide
+  // before the lookup; an id like "content" is a skip link only when nothing
+  // built carries it.
+  const ir = baysideWithLinks('<a href="#content">what we cover</a> <a href="#main">Skip to content</a>');
+  const servicesEl = ir.pages[0].sections.flatMap((s) => s.elements).find((e) => (e.anchors || []).includes('services'));
+  servicesEl.anchors.push('content');
+  const out = mapBayside(ir);
+  const text = out.pages[0].sections.flatMap((s) => s.modules).map((m) => m.text || '').join('');
+  assert.match(text, /<a href="\/#[^"]+">what we cover<\/a>/, text);
+  assert.equal(out.report.jumpLinks.skipLinks, 1, 'the "Skip to content" link is still left out by its words');
+  assert.equal(out.report.jumpLinks.linked, 4);
+  assert.deepEqual(out.report.jumpLinks.unresolved, []);
+  // Nothing built carries "main": still a skip link by its id.
+  const plain = mapBayside(baysideWithLinks('<a href="#primary">x</a>'));
+  assert.equal(plain.report.jumpLinks.skipLinks, 1);
+});
+
+test('a link to a section a person edited is a leftover, not counted as linked', () => {
+  const out = mapBayside();
+  const contact = headingSection(out.pages[0], 'Contact Us');
+  const editedLive = new Map([[contact.id, { id: contact.id, modules: [] }]]);
+  const kept = demoteEditedSectionLinks(out.report, out.sectionLinks, editedLive);
+  assert.equal(kept.length, 2);
+  assert.ok(!kept.some((t) => t.sectionId === contact.id), 'not stored by reference');
+  assert.equal(out.report.jumpLinks.linked, 2);
+  const left = out.report.jumpLinks.unresolved;
+  assert.equal(left.length, 1, JSON.stringify(left));
+  assert.equal(left[0].label, 'Contact Us');
+  assert.match(left[0].why, /edited by hand.*"contact-us"/);
+
+  // Kept copy already wears the name: the link works, so it stays linked.
+  const again = mapBayside();
+  const c2 = headingSection(again.pages[0], 'Contact Us');
+  const ok = demoteEditedSectionLinks(again.report, again.sectionLinks, new Map([[c2.id, { anchorName: 'contact-us' }]]));
+  assert.equal(ok.length, 3);
+  assert.equal(again.report.jumpLinks.linked, 3);
+});
+
+/** An in-memory page store with the real store's envelope shape. */
+function fakePages(pages, { failUpdate = new Set(), failGet = new Set(), dropOnWrite = new Set() } = {}) {
+  const rows = new Map(pages.map((p) => [String(p.id), JSON.parse(JSON.stringify(p))]));
+  const calls = { updates: [] };
+  return {
+    calls,
+    rows,
+    async getPage(id) {
+      if (failGet.has(String(id))) return { ok: false, status: 503, error: { message: 'database unavailable' } };
+      const row = rows.get(String(id));
+      return row ? { ok: true, status: 200, data: JSON.parse(JSON.stringify(row)) } : { ok: false, status: 404 };
+    },
+    async updatePage(id, page) {
+      calls.updates.push(String(id));
+      if (failUpdate.has(String(id))) return { ok: false, status: 500, error: { message: 'write refused' } };
+      const stored = JSON.parse(JSON.stringify(page));
+      if (dropOnWrite.has(String(id))) stored.layoutSections = page.layoutSections.map(() => ({ id: 'x', modules: [] }));
+      rows.set(String(id), stored);
+      return { ok: true, status: 200, data: stored };
+    },
+  };
+}
+
+function twoBaysidePages() {
+  // The same Bayside home mapped as two pages, so one can fail and the other
+  // must still be done.
+  const out = mapBayside(baysideWithLinks(`<a href="${SITE}#services">our services</a>`));
+  const home = out.pages[0];
+  const layout = home.sections.map(({ sourceElementIds, dispositions, ...s }) => s);
+  const second = { ...home, key: `${home.key}-copy`, slug: 'copy' };
+  out.pages.push(second);
+  // Its links point at the home page's sections: a link to another page's
+  // section, which the read-back must count too.
+  const pageIds = { [home.key]: '11', [second.key]: '12' };
+  const owned = new Map([['11', layout.map((s) => s.id)], ['12', layout.map((s) => s.id)]]);
+  const rows = [{ id: '11', slug: '', layoutSections: layout }, { id: '12', slug: 'copy', layoutSections: layout }];
+  return { out, pageIds, owned, rows };
+}
+
+for (const [name, opts] of [
+  ['the write is refused', { failUpdate: new Set(['11']) }],
+  ['the page cannot be read', { failGet: new Set(['11']) }],
+  ['the read-back is short', { dropOnWrite: new Set(['11']) }],
+]) {
+  test(`a jump-link write that fails (${name}) never throws, so the build still records its pages`, async () => {
+    // Review of SC-854: a throw here ran before the map checkpoint recorded
+    // the page ids, so the next build made a second set of pages.
+    const { out, pageIds, owned, rows } = twoBaysidePages();
+    const store = fakePages(rows, opts);
+    const warnings = [];
+    const errors = [];
+    const result = await referenceJumpLinks({
+      out, pageIds, ownedSectionIds: owned, pagesStore: store, scope: {}, referenceSectionLinks,
+      warn: (l) => warnings.push(l), error: (l) => errors.push(l),
+    });
+    assert.deepEqual(result.failed, [out.pages[0].slug]);
+    assert.equal(result.pagesChanged, 1, 'the other page is still done');
+    assert.ok(result.linksReferenced > 0);
+    assert.match(JSON.stringify(store.rows.get('12').layoutSections), /page:11#/);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /not stored by reference/);
+    assert.equal(errors.length, 1);
+  });
+}
+
+test('the runner records its pages even when the jump-link step fails', () => {
+  // The step returns failures instead of throwing; the runner must mark the
+  // run failed from them and must not reintroduce a throw before the
+  // checkpoint. Read from the source, since the runner is not importable.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'site_import_map.mjs'), 'utf8');
+  const call = src.indexOf('await referenceJumpLinks(');
+  const checkpoint = src.indexOf('pageIds,\n      sectionHashes,');
+  assert.ok(call > 0 && checkpoint > call, 'the step runs before the checkpoint is built');
+  assert.match(src.slice(call, checkpoint), /if \(jump\.failed\.length\) process\.exitCode = 1;/);
+  assert.doesNotMatch(src, /async function referenceJumpLinks/, 'no throwing local copy');
 });

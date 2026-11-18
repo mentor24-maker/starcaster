@@ -304,11 +304,6 @@ export type MapReport = {
     pictures: { pagePath: string; sourceId: string; reason: string }[];
   };
   /**
-   * The menus --apply will build, in counts and plain words, so the dry run
-   * and the Imports screen can say what is coming — and, when a part is
-   * missing, why (task 86bchydp6).
-   */
-  /**
    * The original's jump links (`#contact-us`) and what became of them (task
    * SC-854): `linked` now point at an imported section, `skipLinks` were
    * "skip to content" links left out on purpose, and `unresolved` lists the
@@ -327,6 +322,11 @@ export type MapReport = {
      */
     notRecorded?: { links: number; why: string };
   };
+  /**
+   * The menus --apply will build, in counts and plain words, so the dry run
+   * and the Imports screen can say what is coming — and, when a part is
+   * missing, why (task 86bchydp6).
+   */
   menus: {
     top: { items: number; topLevel: number; logo: boolean } | null;
     footer: { items: number } | null;
@@ -446,7 +446,15 @@ export type MapOutput = {
 
 /** One imported section a jump link points at. `fallback` is the address the
  *  mapper wrote for it, the page's path plus the section's anchor name. */
-export type SectionLinkTarget = { fallback: string; pageKey: string; sectionId: string };
+export type SectionLinkTarget = {
+  fallback: string;
+  pageKey: string;
+  sectionId: string;
+  /** Each link the mapper pointed here, as the original wrote it — so the
+   *  runner can list them as leftovers if the section turns out to be one a
+   *  person edited (demoteEditedSectionLinks). */
+  uses: { page: string; href: string; label: string }[];
+};
 
 /** A jump link the import could not point at a section, and why — the
  *  build's leftovers list, so it is never dropped quietly. */
@@ -2949,13 +2957,21 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
     } catch {
       /* keep it as written */
     }
-    if (isSkipLink(id, label)) {
+    // Read by its words first: "Skip to content" is a skip link wherever it
+    // jumps. By its id ("#main", "#content") only when nothing the import
+    // built carries that id — a designed link to a section named "content"
+    // is a real link (review of SC-854).
+    if (isSkipLabel(label)) {
       report.jumpLinks.skipLinks += 1;
       return { href: "", drop: true };
     }
     // Every browser scrolls "#top" to the top of the page by itself.
     if (id.toLowerCase() === "top") return { href: at === 0 ? "#top" : `${localizeHref(raw.slice(0, at))}#top` };
     const entry = pageAnchorsFor(abs);
+    if (isSkipLinkId(id) && !entry?.byId.has(id)) {
+      report.jumpLinks.skipLinks += 1;
+      return { href: "", drop: true };
+    }
     if (!entry) {
       const bare = new URL(abs.href);
       bare.hash = "";
@@ -2973,7 +2989,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       return { href: `${entry.local}#${hash}` };
     }
     const fallback = `${entry.local}#${anchorNameFor(entry, section, id)}`;
-    sectionLinks.set(fallback, { fallback, pageKey: entry.mapped.key, sectionId: section.id });
+    const target = sectionLinks.get(fallback) || { fallback, pageKey: entry.mapped.key, sectionId: section.id, uses: [] };
+    target.uses.push({ page: onPage, href: raw, label: collapse(label).slice(0, 80) });
+    sectionLinks.set(fallback, target);
     report.jumpLinks.linked += 1;
     return { href: fallback };
   };
@@ -3045,8 +3063,8 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       links: notRecordedLinks,
       why:
         `this import was prepared before the import recorded where jump links land, so its ids were never looked for. ` +
-        `The capture already holds them: re-run the normalize stage on the existing capture ` +
-        `(node scripts/site_import_worker.mjs --stage normalize --job ${ir.jobId || "<job id>"}; no fresh capture needed), then Preview Build again.`,
+        `The capture already holds them, so no fresh capture is needed: ask an agent session to re-run the normalize stage on it ` +
+        `(doppler run --config prd -- node scripts/site_import_worker.mjs --stage normalize --job ${ir.jobId || "<job id>"}), then Preview Build again.`,
     };
   }
   report.menus = {
@@ -3259,8 +3277,63 @@ const SKIP_LINK_IDS = /^(main|content|main-content|maincontent|primary|site-cont
  * content"), then by the id it jumps to.
  */
 export function isSkipLink(id: string, label = ""): boolean {
-  if (/\bskip\s+(to|navigation|the\s+nav)|\bjump\s+to\s+(main\s+)?content\b/i.test(String(label))) return true;
+  return isSkipLabel(label) || isSkipLinkId(id);
+}
+
+/** "Skip to content", "Skip navigation", "Jump to main content". */
+export function isSkipLabel(label = ""): boolean {
+  return /\bskip\s+(to|navigation|the\s+nav)|\bjump\s+to\s+(main\s+)?content\b/i.test(String(label));
+}
+
+/** An id themes give the main content box (#main, #genesis-content). The
+ *  mapper treats it as a skip link only when nothing it built carries it. */
+export function isSkipLinkId(id: string): boolean {
   return SKIP_LINK_IDS.test(String(id || "").trim());
+}
+
+/**
+ * A section somebody edited since the last build is kept exactly as they
+ * left it (the clobber guard), so it never receives the anchor name the
+ * mapper gave its fresh copy. A link pointed at it would then jump to a name
+ * nothing carries: a dead link reported as working (review of SC-854). For
+ * each such target — unless the kept copy already wears that very name —
+ * take its links out of `linked`, list each as a leftover saying why, and
+ * leave the target out so the runner does not store it by reference. The
+ * link keeps the plain address it was written with. `editedLive` maps a
+ * protected section's id to the copy on the page now. Returns the targets
+ * still safe to reference.
+ */
+export function demoteEditedSectionLinks(
+  report: MapReport,
+  targets: SectionLinkTarget[],
+  editedLive: Map<string, { anchorName?: unknown } | null | undefined>
+): SectionLinkTarget[] {
+  const kept: SectionLinkTarget[] = [];
+  for (const t of targets || []) {
+    if (!editedLive.has(t.sectionId)) {
+      kept.push(t);
+      continue;
+    }
+    const name = t.fallback.slice(t.fallback.indexOf("#") + 1);
+    const live = editedLive.get(t.sectionId);
+    if (live && String(live.anchorName || "") === name) {
+      kept.push(t);
+      continue;
+    }
+    for (const use of t.uses || []) {
+      report.jumpLinks.linked = Math.max(0, report.jumpLinks.linked - 1);
+      const seen = report.jumpLinks.unresolved.some((u) => u.page === use.page && u.href === use.href);
+      if (!seen) {
+        report.jumpLinks.unresolved.push({
+          page: use.page,
+          href: use.href,
+          label: use.label,
+          why: `the section it jumps to was edited by hand since the last build, so it was not given the anchor name "${name}"`,
+        });
+      }
+    }
+  }
+  return kept;
 }
 
 type LinkModule = { type?: string; text?: string; settings?: Record<string, string> };

@@ -187,8 +187,9 @@ const {
   mapSite, reportReconciles, mergeMappedSections, adoptLegacySectionIds,
   writeMappedPages, summarizePageWrites, dropStaleImportSections,
   buildMenuSection, planMenuTarget, attachMenuInstances, menuSiteLabel,
-  referenceSectionLinks,
+  referenceSectionLinks, demoteEditedSectionLinks,
 } = require('./lib/site-import/dist/map.js');
+const { referenceJumpLinks } = require('./lib/siteImportJumpLinks.js');
 const { planImportTheme, saveImportTheme, undoLine } = require('./lib/siteImportTheme.js');
 const crmConfigStore = require('./lib/crmConfigStore.js');
 const crmFormsStore = require('./lib/crmFormsStore.js');
@@ -406,6 +407,13 @@ async function main() {
     out.report.elements.form -= form;
   }
   const protectedIds = new Set(protectedSections.map((p) => p.section.id));
+  // A jump link to a section a person edited would point at an anchor name
+  // the kept copy never received: list it as a leftover, not as linked, and
+  // do not store it by reference (review of SC-854). Before the dry run's
+  // report, so preview and apply say the same thing.
+  out.sectionLinks = demoteEditedSectionLinks(
+    out.report, out.sectionLinks || [], new Map(protectedSections.map((p) => [p.section.id, p.live])),
+  );
   const refreshLine = refresh
     ? refreshSummaryLine(refresh, planRefresh(out.pages, priorPageIds, existingPages), protectedIds.size, { recreateDeleted: RECREATE_DELETED })
     : '';
@@ -803,7 +811,13 @@ async function main() {
   }
 
   // 4-. Jump links by reference, now that every page has its id (SC-854).
-  await referenceJumpLinks(out, pageIds, ownedSectionIds, scope);
+  //     Never throws: the checkpoint below must still record these pages,
+  //     or the next run builds a second set. A failed page fails the run.
+  const jump = await referenceJumpLinks({
+    out, pageIds, ownedSectionIds, pagesStore, scope, referenceSectionLinks,
+    log, warn, error: (line) => console.error(`\n${line}`),
+  });
+  if (jump.failed.length) process.exitCode = 1;
 
   // 4a. Read the Form modules back: each must hold its form's id.
   if (out.forms.length) {
@@ -1239,42 +1253,6 @@ function logJumpLinks(out) {
     for (const u of j.unresolved) log(`  - ${u.page}: "${u.label || u.href}" (${u.href}) — ${u.why}`);
   }
   if (j.notRecorded) log(`  ${j.notRecorded.links} not matched yet: ${j.notRecorded.why}`);
-}
-
-/**
- * --apply (task SC-854): the mapper wrote each jump link as a plain address
- * ("/#contact-us") because page ids did not exist yet. Now they do, so store
- * each by reference — page id and section id — the way the Builder's link
- * picker does, and read every changed page back. Only sections this run owns
- * are touched: one somebody edited since is left as they left it.
- */
-async function referenceJumpLinks(out, pageIds, ownedSectionIds, scope) {
-  if (!out.sectionLinks.length) return;
-  let pagesChanged = 0;
-  let linksReferenced = 0;
-  for (const page of out.pages) {
-    const pageId = pageIds[page.key];
-    if (!pageId) continue;
-    const owned = new Set(ownedSectionIds.get(String(pageId)) || []);
-    const current = must(await pagesStore.getPage(pageId, scope), `read /${page.slug} for jump links`);
-    const sections = current.layoutSections || [];
-    const mine = sections.filter((s) => owned.has(s.id));
-    const { sections: swapped, referenced } = referenceSectionLinks(mine, out.sectionLinks, pageIds);
-    if (!referenced) continue;
-    const byId = new Map(swapped.map((s) => [s.id, s]));
-    const next = sections.map((s) => byId.get(s.id) || s);
-    // Spread the page and pass the ARRAY (landmine 13), then read it back.
-    must(await pagesStore.updatePage(pageId, { ...current, layoutSections: next }, scope), `store jump links on /${page.slug}`);
-    const after = must(await pagesStore.getPage(pageId, scope), `re-read /${page.slug}`);
-    const stored = (JSON.stringify(after.layoutSections || []).match(new RegExp(`page:${pageId}#`, 'g')) || []).length;
-    const expected = (JSON.stringify(next).match(new RegExp(`page:${pageId}#`, 'g')) || []).length;
-    if (stored < expected) {
-      throw new Error(`/${page.slug} (page ${pageId}): ${expected} section link(s) written, ${stored} read back.`);
-    }
-    pagesChanged += 1;
-    linksReferenced += referenced;
-  }
-  log(`Jump links: stored ${linksReferenced} link(s) by reference on ${pagesChanged} page(s); read back.`);
 }
 
 /** What the menu step will build — the dry run's promise, and --apply's. */
