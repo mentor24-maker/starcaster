@@ -174,6 +174,26 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   min-width: 12ch;
 }
 
+/* Recorded together with (Reel Spinner 3b, SC-832): one line per pair under
+   the file name, the sound switch after it. Wraps with the cell (T0). */
+.studio-footage-pairs {
+  list-style: none;
+  margin: var(--space-1, 4px) 0 0;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--muted, #6b7280);
+}
+
+.studio-footage-pair + .studio-footage-pair {
+  margin-top: var(--space-1, 4px);
+}
+
+.studio-footage-pair-switch {
+  margin-left: var(--space-1, 4px);
+  padding: 0 var(--space-1, 4px);
+  font-size: var(--text-xs);
+}
+
 /* Transcript (86bcdek0e). The state is a sentence, so its cell wraps like the
    File cell rather than pushing the table off a phone screen (T0). */
 .studio-footage-table td.studio-footage-transcript-cell {

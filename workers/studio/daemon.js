@@ -57,6 +57,7 @@ const { runProbe, STAGE_PROBE } = require('./probePass.js');
 const { runProxy, STAGE_PROXY } = require('./proxyPass.js');
 const { runTranscribe, STAGE_TRANSCRIBE } = require('./transcribePass.js');
 const { runCutMarks, STAGE_CUT_MARKS } = require('./cutMarksPass.js');
+const { runAlign, STAGE_ALIGN } = require('./alignPass.js');
 const { sweepReadyOriginals } = require('./evict.js');
 
 /** How long to wait after a tick that found nothing to do. */
@@ -165,6 +166,12 @@ const STAGE_RUNNERS = {
   [STAGE_CUT_MARKS]: {
     label: 'cut marks',
     run: ({ queue, owner, env }) => runCutMarks({ queue, owner, env, max: 1 }),
+  },
+  // After cut marks, for the same reason: the align backfill queues every
+  // ready iPhone and Zoom recording at once, and none of it is urgent.
+  [STAGE_ALIGN]: {
+    label: 'line-up',
+    run: ({ queue, owner, env }) => runAlign({ queue, owner, env, max: 1 }),
   },
 };
 

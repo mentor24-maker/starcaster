@@ -18,7 +18,10 @@
  *   POST …/moments/rescore                     and asking for a rescore
  *                                              (routes/studioMoments.js)
  *
- * Read-only but for the rescore flag. The pipeline writes the catalog from
+ *   POST /api/studio/pairs/:id/sound           Dane's choice of whose sound a
+ *                                              pair uses (routes/studioPairs.js)
+ *
+ * Read-only but for the rescore flag and the choice of sound. The pipeline writes the catalog from
  * the Mac Mini (workers/studio/).
  *
  * WHERE THE PICTURES COME FROM. Nothing in the pipeline makes a thumbnail of
@@ -45,9 +48,13 @@ const {
 const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
 const { handleMoments } = require('./studioMoments');
+const { handlePairs } = require('./studioPairs');
+const { listAudioPairs } = require('../lib/videoAudioPairsStore');
 
 /** The most rows one read takes. resolveLimit's own ceiling. */
 const READ_LIMIT = 1000;
+/** Pairs are at most a few per recording; past this the screen would undercount. */
+const PAIR_READ_LIMIT = 5000;
 
 /** A search shorter than this is refused rather than run: one letter matches
  *  nearly every recording and says nothing. */
@@ -152,9 +159,11 @@ async function sendFootage(req, res, urlObj) {
   if (!sessions.ok) return sendErr(res, sessions.status || 500, `Could not read the sessions: ${sessions.error}`);
   if (!sources.ok) return sendErr(res, sources.status || 500, `Could not read the files: ${sources.error}`);
 
-  const [transcripts, cutMarks] = await Promise.all([
+  const [transcripts, cutMarks, pairs] = await Promise.all([
     readTranscriptStates(sources.data, scope),
     readCutMarkStates(sources.data, scope),
+    // Same terms as the states: a failed read keeps the list up and says so.
+    listAudioPairs(PAIR_READ_LIMIT, scope),
   ]);
   const view = buildFootage({
     sessions: sessions.data,
@@ -162,6 +171,7 @@ async function sendFootage(req, res, urlObj) {
     filters: read.filters,
     transcripts: transcripts.states,
     cutMarks: cutMarks.states,
+    pairs: pairs.ok ? pairs.data : [],
   });
   // At the ceiling there may be more rows than were read, so the counts are a
   // floor and the screen has to say so.
@@ -172,6 +182,7 @@ async function sendFootage(req, res, urlObj) {
     readLimit: READ_LIMIT,
     transcriptsError: transcripts.error,
     cutMarksError: cutMarks.error,
+    pairsError: pairs.ok ? '' : (pairs.error || `status ${pairs.status}`),
   });
 }
 
@@ -370,8 +381,9 @@ async function googleDriveMeta(token, fileId) {
 }
 
 async function handle(req, res, pathname, method) {
-  // Reel Spinner's moments, and the one write here: a rescore request.
+  // Reel Spinner's moments and a rescore request; a pair's choice of sound.
   if (await handleMoments(req, res, pathname, method)) return true;
+  if (await handlePairs(req, res, pathname, method)) return true;
   if (method !== 'GET') return false;
 
   if (pathname === '/api/studio/footage') {

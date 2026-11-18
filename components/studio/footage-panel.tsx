@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MomentsView from './moments-view';
+import PairLines, { type PairView } from './pair-lines';
 
 /**
  * Assets › Footage — every video file the Studio pipeline has catalogued,
@@ -53,6 +54,8 @@ type SourceRow = {
   transcript: TranscriptState;
   /** lib/studioFootage.js cutMarksStateFor (Reel Spinner 1d). */
   cutMarks?: { state: 'done' | 'failed' | 'not_yet' | 'unknown'; reason: string; cutS: number | null };
+  /** lib/studioFootage.js pairsViewFor (Reel Spinner 3b). */
+  pairs?: PairView[];
 };
 
 type TranscriptState = {
@@ -109,6 +112,8 @@ type Footage = {
   transcriptsError?: string;
   /** Why the cut-marks states could not be read; '' when they were. */
   cutMarksError?: string;
+  /** Why the iPhone/Zoom pairs could not be read; '' when they were. */
+  pairsError?: string;
 };
 
 type AppShape = {
@@ -1032,6 +1037,7 @@ export default function FootagePanel(): React.ReactElement {
           {data.truncated ? ` Only the newest ${data.readLimit} rows were read, so these counts are a minimum.` : ''}
           {anyStandInDate ? ' A date marked * is not the file\'s own recording date yet — hover it to see which date it is.' : ''}
           {data.transcriptsError ? ` Transcript status could not be read: ${data.transcriptsError}` : ''}
+          {data.pairsError ? ` Which recordings were made together could not be read: ${data.pairsError}` : ''}
         </p>
       ) : null}
 
@@ -1077,7 +1083,15 @@ export default function FootagePanel(): React.ReactElement {
                           <Thumbnail source={source} attempt={attempt} />
                         </DriveLink>
                       </td>
-                      <td className="studio-footage-file-cell"><FileCell source={source} /></td>
+                      <td className="studio-footage-file-cell">
+                        <FileCell source={source} />
+                        <PairLines
+                          pairs={source.pairs}
+                          sourceId={source.id}
+                          thisName={source.fileName}
+                          onChanged={() => void load()}
+                        />
+                      </td>
                       <td>{laneLabel(source.lane)}</td>
                       <td>{source.layerRole}</td>
                       <td>{duration(source.durationS)}</td>
