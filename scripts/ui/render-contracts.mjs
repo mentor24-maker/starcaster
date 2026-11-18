@@ -3904,7 +3904,6 @@ export const RENDER_CONTRACTS = [
       'background, so only its pixels prove it rendered, and on the side chosen.',
     section: {
       layout: 'single',
-      minHeight: '320',
       background: { mode: 'color', color: '#101820' },
       shapeLayer: { shape: 'curve', side, color: '#ffffff', opacity: 100 },
       modules: [{ type: 'heading', text: 'Contact Us', settings: {}, column: 'left' }],

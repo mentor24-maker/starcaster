@@ -131,6 +131,8 @@ function documentForSection({
   background,
   pageBackground,
   overlayScreen,
+  // The section's shape layer (task SC-859) — a real element, like the tint.
+  shapeLayer,
   cellBackgrounds,
   cellOverlayScreens,
   spacers = 0,
@@ -226,6 +228,7 @@ function documentForSection({
     // real element, so a contract cannot reach it without them.
     ...(background ? { background } : {}),
     ...(overlayScreen ? { overlayScreen } : {}),
+    ...(shapeLayer ? { shapeLayer } : {}),
     // The CELL's fill and tint, for the same reason as the two above: a cell
     // overlay is a real element, so a contract cannot reach it unless the
     // fixture carries the field. Whitelisted rather than spread, so a typo in
