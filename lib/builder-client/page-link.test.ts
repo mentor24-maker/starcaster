@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addressForSlug,
+  jumpLands,
+  jumpOf,
   buildPageAddressMap,
   collectPageLinkIds,
   makePageLink,
@@ -235,5 +237,35 @@ describe("links to a SECTION of a page (task SC-852)", () => {
     ]);
     expect(listSectionAnchors('{"sections":[{"id":"q","anchorName":"q"}]}')).toEqual([{ sectionId: "q", anchorName: "q", title: "" }]);
     expect(listSectionAnchors("not json")).toEqual([]);
+  });
+});
+
+// Task SC-855: the one answer to "does this #name link land?", shared by the
+// import difference report and the weekly broken-links scan.
+describe("jumpOf / jumpLands", () => {
+  it("reads the three shapes a jump is stored in, and ignores placeholders", () => {
+    expect(jumpOf("#services")).toEqual({ kind: "same-page", name: "services" });
+    expect(jumpOf("/About/#team")).toEqual({ kind: "address", address: "about", name: "team" });
+    expect(jumpOf("/home#team")).toEqual({ kind: "address", address: "", name: "team" });
+    expect(jumpOf("page:7#sec-1|/about#team")).toEqual({ kind: "reference", pageId: "7", sectionId: "sec-1", name: "team" });
+    expect(jumpOf("https://client.com/about#team", ["client.com"])).toEqual({ kind: "address", address: "about", name: "team" });
+    for (const none of ["#", "#top", "#!/route", "/about", "page:7|/about", "https://elsewhere.com/x#y", "mailto:a@b.c"]) {
+      expect(jumpOf(none)).toBeNull();
+    }
+  });
+
+  it("lands on a section's anchor name or an id inside a module, and nowhere else", () => {
+    const layout = { sections: [
+      { id: "a", anchorName: "about", modules: [] },
+      { id: "b", modules: [{ type: "text", text: '<h2 id="contact">Hi</h2>' }] },
+    ] };
+    expect(jumpLands({ kind: "same-page", name: "about" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "same-page", name: "contact" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "same-page", name: "services" }, layout).lands).toBe(false);
+    expect(jumpLands({ kind: "reference", pageId: "1", sectionId: "a", name: "" }, layout)).toEqual({ lands: true });
+    expect(jumpLands({ kind: "reference", pageId: "1", sectionId: "b", name: "" }, layout)).toEqual({
+      lands: false,
+      why: "jumps to a section that has no Anchor Name, so it opens the top of the page",
+    });
   });
 });
