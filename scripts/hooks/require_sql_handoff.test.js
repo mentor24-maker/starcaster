@@ -11,6 +11,8 @@ const HOOK = path.join(__dirname, 'require_sql_handoff.cjs');
 const {
   renderBlock,
   messageHandsOff,
+  messageHandsOffMerged,
+  mentionedSqlFiles,
   newSqlFiles,
   blockUrl,
 } = require('../lib/sql_handoff.cjs');
@@ -789,4 +791,118 @@ test('the brake survives an ordinary hand-off, so a LATER new file is still caug
 
   assert.equal(result.code, 2, 'a new, never-handed-off SQL file must still be caught');
   assert.match(result.stderr, /add_second\.sql/, 'and it must name the file that is outstanding');
+});
+
+
+/* ------------------------------------------------------------------------- *
+ * SQL that is ALREADY MERGED and waiting to be run (SC-867, 2026-11-18).
+ *
+ * On 2026-11-17 a build pass put "Run docs/SQL/video_reel_spinner_setup.sql in
+ * Supabase" on SC-832's card -- a file merged the day before. The hook only
+ * ever asked about SQL the branch ADDS and stood aside on main, so that
+ * sentence passed every check there was. These drive the real hook with a
+ * file that is on origin/main and named in the reply.
+ * ------------------------------------------------------------------------- */
+
+/** A repo whose origin/main already carries docs/SQL/<name>, as after a merge. */
+function makeRepoWithMergedSql(name = 'video_reel_spinner_setup.sql') {
+  const dir = makeRepo();
+  const file = addSql(dir, name);
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'ignore' });
+  git('add', '-A');
+  git('commit', '-m', 'merge the sql');
+  git('branch', '-f', 'origin/main');
+  return { dir, file };
+}
+
+const SC_832_CARD = '**1. Run docs/SQL/video_reel_spinner_setup.sql in Supabase (it is listed on "SQL waiting for you").**';
+
+test('REFUSES the SC-832 card on main: a merged SQL file named as a bare path', () => {
+  const { dir } = makeRepoWithMergedSql();
+  const { code, stderr } = runHook(dir, { message: SC_832_CARD, sessionId: fallbackSid('merged-main') });
+  assert.equal(code, 2, 'a bare path to merged SQL is not a handoff, on main too');
+  assert.match(stderr, /docs\/SQL\/video_reel_spinner_setup\.sql/);
+  assert.match(stderr, /blob\/main\/docs\/SQL\/video_reel_spinner_setup\.sql/, 'hands back the main-linked block');
+});
+
+test('REFUSES the same sentence on a branch that adds no SQL of its own', () => {
+  const { dir } = makeRepoWithMergedSql();
+  onBranch(dir, 'some-ui-work');
+  const { code } = runHook(dir, { message: SC_832_CARD, sessionId: fallbackSid('merged-branch') });
+  assert.equal(code, 2);
+});
+
+test('REFUSES a bare file name and a markdown link to merged SQL', () => {
+  const { dir } = makeRepoWithMergedSql();
+  assert.equal(runHook(dir, { message: 'Please run video_reel_spinner_setup.sql.', sessionId: fallbackSid('bare-name') }).code, 2);
+  assert.equal(runHook(dir, {
+    message: 'Run [the file](docs/SQL/video_reel_spinner_setup.sql) in Supabase.',
+    sessionId: fallbackSid('md-link'),
+  }).code, 2);
+});
+
+test('ALLOWS a merged SQL file handed off as a main-linked block, on main and on a branch', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  const message = `It adds three tables; it changes nothing.\n\n\n${renderBlock('main', file)}\n\n\n`;
+  assert.equal(runHook(dir, { message, sessionId: fallbackSid('ok-main') }).code, 0);
+  onBranch(dir, 'some-ui-work');
+  assert.equal(runHook(dir, { message, sessionId: fallbackSid('ok-branch') }).code, 0);
+});
+
+test('ALLOWS a merged SQL file linked by a commit', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  assert.equal(runHook(dir, { message: renderBlock('0ad5cdc3453d', file), sessionId: fallbackSid('ok-commit') }).code, 0);
+});
+
+test('REFUSES a merged SQL file linked by a BRANCH — merged branches are deleted', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  onBranch(dir, 'some-ui-work');
+  assert.equal(runHook(dir, { message: renderBlock('some-ui-work', file), sessionId: fallbackSid('branch-link') }).code, 2);
+});
+
+test('REFUSES a correct block that sits inside a code fence — the link goes dead', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  const message = 'Here:\n\n```\n' + renderBlock('main', file) + '\n```\n';
+  assert.equal(runHook(dir, { message, sessionId: fallbackSid('fenced') }).code, 2);
+});
+
+test('REFUSES a fenced block for a file the BRANCH adds, too', () => {
+  const dir = makeRepo();
+  onBranch(dir, 'add-revisions');
+  const file = addSql(dir);
+  const message = '```\n' + renderBlock('add-revisions', file) + '\n```';
+  assert.equal(runHook(dir, { message, sessionId: fallbackSid('fenced-branch') }).code, 2);
+});
+
+test('ALLOWS a file the branch adds when linked by its pushed commit', () => {
+  const dir = makeRepo();
+  onBranch(dir, 'add-revisions');
+  const file = addSql(dir);
+  assert.equal(runHook(dir, { message: renderBlock('1f40e0dc0000', file), sessionId: fallbackSid('commit-branch') }).code, 0);
+});
+
+test('does not fire on a .sql name that is not a docs/SQL file, or one quoted in a fence', () => {
+  const { dir } = makeRepoWithMergedSql();
+  assert.equal(runHook(dir, { message: 'pg_dump wrote backup.sql to the Desktop.', sessionId: fallbackSid('other-sql') }).code, 0);
+  assert.equal(runHook(dir, {
+    message: 'The test reads it:\n\n```\nreadFileSync("docs/SQL/video_reel_spinner_setup.sql")\n```\n',
+    sessionId: fallbackSid('quoted'),
+  }).code, 0);
+});
+
+test('a merged file handed off once is not re-demanded later in the session', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  const sid = fallbackSid('merged-sticky');
+  assert.equal(runHook(dir, { message: renderBlock('main', file), sessionId: sid }).code, 0);
+  assert.equal(runHook(dir, { message: `Did ${file} run cleanly?`, sessionId: sid }).code, 0);
+});
+
+test('mentionedSqlFiles and messageHandsOffMerged, directly', () => {
+  const { dir, file } = makeRepoWithMergedSql();
+  assert.deepEqual(mentionedSqlFiles(SC_832_CARD, dir), [file]);
+  assert.deepEqual(mentionedSqlFiles(`https://github.com/x/y/blob/main/${file}`, dir), [file]);
+  assert.deepEqual(mentionedSqlFiles('nothing here', dir), []);
+  assert.equal(messageHandsOffMerged(renderBlock('main', file), file), true);
+  assert.equal(messageHandsOffMerged(blockUrl('main', file), file), false, 'URL alone is not the block');
+  assert.equal(messageHandsOffMerged(renderBlock('my-branch', file), file), false, 'branch link dies on merge');
 });

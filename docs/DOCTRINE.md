@@ -1995,11 +1995,36 @@ has on something he has already said yes to.
 
 ### 6.5 SQL for the operator goes in the SQL handoff block, as a GitHub URL
 
-**Enforcement: `scripts/hooks/require_sql_handoff.cjs` (Stop hook, blocking).**
-If the branch adds a `docs/SQL/*.sql` and the reply does not carry the block
-with that file's branch-qualified URL, the turn is refused and the ready-made
-block is handed back. `npm run sql:handoff` prints it on demand. Tested in
-`scripts/hooks/require_sql_handoff.test.js`, gated in CI by `npm run test:hooks`.
+**Enforcement — two checks, one for each place SQL reaches him:**
+
+- **Chat replies: `scripts/hooks/require_sql_handoff.cjs` (Stop hook,
+  blocking).** If the branch adds a `docs/SQL/*.sql`, or the reply NAMES one
+  outside a code fence (a path, a bare file name, a markdown link or a GitHub
+  URL), on main as well as on a branch, and the reply does not carry the block
+  for it, the turn is refused and the ready-made block is handed back. A block
+  inside a fence does not count. Tested in
+  `scripts/hooks/require_sql_handoff.test.js`, gated in CI by `npm run test:hooks`.
+- **Tickets: the door, `npm run clickup -- ask` and `comment`** (Spirality
+  #313, `sqlFilesWithoutBlock` in `loop/scripts/lib/operatorCard.mjs`). A body
+  that names a `.sql` file without its block is refused with exit 2 before
+  anything is posted or the status moves, and the block is printed to paste.
+  Tested by `npm run test:loop`. `describe` and `task` do not check: a spec
+  names SQL without handing it over.
+
+`npm run sql:handoff` prints the block on demand: with no argument, for the
+SQL this branch adds; `npm run sql:handoff -- docs/SQL/<file>.sql` for a named
+file, usually one already merged.
+
+**Why it kept happening (2026-11-17, SC-832 → SC-867).** A build pass put
+"Run docs/SQL/video_reel_spinner_setup.sql in Supabase" on SC-832's question
+card: a bare path, for a file merged the day before. Two holes let it through.
+The Stop hook asked only about SQL the branch ADDS and stood aside on main, so
+SQL that was merged and still waiting to be run (the usual case) was never
+checked. And the ticket door's refusal already existed, but only in Spirality,
+built eight hours earlier; StarCaster's copy in `loop/` was from the day
+before and checked nothing. **A control built in Spirality is not in force here
+until `loop/` is brought up to it**, and nothing announces the gap. Read the
+commit `loop/README.md` names before trusting that a Spirality fix applies.
 
 *Why this rule has a hook when most do not.* It was written down, binding, and
 sitting in the file CLAUDE.md tells every agent to read first — and on
@@ -2039,8 +2064,16 @@ The SQL handoff block itself survives being unfenced: an ATX heading takes at mo
 `#`, so a run of twenty renders as the literal text it looks like. Do not
 shorten the rules to six or fewer or they will turn into a heading.
 
-The URL is the file on **its branch**, not on `main`:
-`https://github.com/mentor24-maker/starcaster/blob/<branch>/docs/SQL/<file>.sql`
+The URL names **a commit or `main`, never only a branch**:
+
+- a file already on `main`: `https://github.com/mentor24-maker/starcaster/blob/main/docs/SQL/<file>.sql`
+- a file only on your branch: the pushed commit,
+  `https://github.com/mentor24-maker/starcaster/blob/<commit>/docs/SQL/<file>.sql`
+
+A branch link opens nothing once the pull request merges, because GitHub
+deletes the branch, and SQL is often run after the merge. The door refuses
+branch links on tickets; the chat check still accepts one for a file the
+branch adds, and prints the commit form once the branch is pushed.
 
 **Why a URL and not the SQL itself.** Applying SQL by hand is the one schema
 step no agent can do here — the Supabase CLI on this machine has no access
@@ -2055,8 +2088,8 @@ GitHub.
 `.claude/worktrees/<topic>/`, and his editor is open on `main`, where the file
 does not exist — the link resolved to nothing and cost a round trip. **Any link
 to a file this session created is broken for him until the branch merges**,
-which is exactly why the URL in the SQL handoff block must be branch-qualified. Check that
-the branch is pushed before emitting the block.
+which is exactly why the URL in the SQL handoff block must point at GitHub, by a
+pushed commit. Check that the branch is pushed before emitting the block.
 
 **Also:**
 
