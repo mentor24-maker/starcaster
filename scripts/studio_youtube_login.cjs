@@ -20,7 +20,8 @@
  * or, once merged:  npm run studio:youtube-login
  *
  * What it does:
- *   1. Opens Google's sign-in page in the browser on THIS machine.
+ *   1. Waits for Dane to open http://localhost:53682/start in a PRIVATE window
+ *      on THIS machine, which hands him on to Google's sign-in.
  *   2. Waits for Google to hand back a one-time code on localhost:53682.
  *   3. Swaps the code for a refresh token, in memory.
  *   4. Asks YouTube which channel that sign-in belongs to, and REFUSES to store
@@ -111,6 +112,9 @@ function storeInDoppler(token) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
+  // A short address Dane can type into a PRIVATE window, which hands him on to
+  // Google. See START_URL below for why the sign-in no longer opens by itself.
+  if (url.pathname === '/start') { res.writeHead(302, { Location: authUrl }); res.end(); return; }
   if (url.pathname !== '/oauth2callback') { res.writeHead(404); res.end(); return; }
   const reply = (text) => { res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end(text); };
   try {
@@ -134,11 +138,23 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+// The first attempt (2026-11-17) opened Google in Dane's everyday browser and
+// ended, after "Advanced → Go to the app", on Google's own page "The server
+// cannot process the request because it is malformed". The address itself was
+// sound — Google accepts it and the return address is registered (checked the
+// same evening) — so the failure was inside Google's sign-in pages, and the
+// usual cause there is a browser signed in to several Google accounts at once.
+// A private window starts signed in to none, so the sign-in starts there, from
+// a short address that is easy to type, instead of opening by itself.
+const START_URL = `http://localhost:${PORT}/start`;
+
 server.listen(PORT, () => {
-  console.log(`Opening Google sign-in in your browser. Sign in as the account that owns "${EXPECTED_CHANNEL}",`);
-  console.log(`and if Google asks which channel, pick "${EXPECTED_CHANNEL}".`);
-  console.log('If Google warns the app is not verified: click Advanced, then Go to (the app name).');
-  console.log(`\nIf no browser opens, paste this address into one on this same computer:\n${authUrl}\n`);
-  spawn('open', [authUrl], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+  console.log('Ready. Now, on THIS computer:');
+  console.log('  1. Open a PRIVATE browser window (Safari: Shift-Command-N; Chrome: Shift-Command-N).');
+  console.log(`  2. Type this address into it and press Return:   ${START_URL}`);
+  console.log(`  3. Sign in as the Google account that owns "${EXPECTED_CHANNEL}".`);
+  console.log(`     If Google asks which account or channel to use, pick "${EXPECTED_CHANNEL}".`);
+  console.log('  4. If Google warns the app is not verified: click Advanced, then Go to (the app name).');
+  console.log('\nLeave this Terminal window open; it waits up to 10 minutes and says here when it is done.');
 });
 setTimeout(() => fail('no sign-in arrived within 10 minutes; nothing was stored'), WAIT_MS).unref();

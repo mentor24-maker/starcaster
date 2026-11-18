@@ -456,6 +456,15 @@ the wrong place. It needs no checkout of its branch: it uses only Node's own
 modules, so `git show <ref>:scripts/studio_youtube_login.cjs | doppler run
 --project starcaster --config prd -- node -` runs it straight from git.
 
+**It does not open the browser itself; it waits at `http://localhost:53682/start`,
+to be opened in a PRIVATE window.** The first attempt (2026-11-17) opened
+Google in Dane's everyday browser and ended, after "Advanced → Go to the app",
+on Google's page "The server cannot process the request because it is
+malformed". The address was sound: Google accepts it and the return address is
+registered on the client, both checked that evening. So the failure was inside
+Google's own sign-in pages, where the usual cause is a browser signed in to
+several Google accounts at once. A private window starts signed in to none.
+
 **The Private lock.** YouTube used to hold every video uploaded through an
 unaudited Google Cloud project at Private, which would have stopped this step.
 Google's `videos.insert` page now says the opposite (read 2026-11-17):

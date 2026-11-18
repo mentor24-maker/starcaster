@@ -18,3 +18,11 @@ project to Private until Google audits the project. Google's own page now
 says that restriction no longer applies. The test upload will confirm it for
 our project once Dane has signed in. Uploads get their own allowance of 100
 a day, far more than Reel Spinner will use.
+
+**Second round, same evening.** Dane's first try at the sign-in ended on a
+Google page saying the request was "malformed". The address we send Google
+turned out to be fine (Google accepts it, and our return address is on its
+list), so the trouble was inside Google's own sign-in screens. The usual
+cause there is a browser signed in to several Google accounts at once. The
+sign-in now starts from a short address, `localhost:53682/start`, that Dane
+opens in a private window, which starts signed in to no account at all.
