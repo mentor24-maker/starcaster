@@ -86,7 +86,8 @@
  *   ... --force-section <sectionId>   (repeatable)   ... --allow-local
  *   ... --no-theme   skip the import theme (see below)
  *   ... --theme-only [--apply]   ONLY the import theme; touches no page
- *   ... --forms-only [--apply]   ONLY the form screenshots → Form modules
+ *   ... --forms-only [--apply]   ONLY forms: screenshots → Form modules, and forms it
+ *       already placed brought up to date (SC-860); touches no other module
  *   ... --skip-form <key>   (with --forms-only, repeatable) keep that form a picture
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes

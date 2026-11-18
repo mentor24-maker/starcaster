@@ -1,0 +1,41 @@
+## 2026-11-18 — Forms can't put labels above the boxes or two fields on one row, so imported contact forms (Bayside's) come out a different shape (#1044)
+
+**What was wrong.** Every StarCaster form drew its labels to the left of each
+box, one question per row, with no mark on required questions. Most contact
+forms on the web look different — label on top, box underneath, First and
+Last name side by side, a red asterisk on the required ones. Bayside's
+original contact form is exactly that, so when Site Import rebuilt it, it came
+out a different shape from the original.
+
+**What changed.**
+
+- A form now has a **Labels** setting: *Beside* (how every existing form
+  looks, so nothing already published moves) or *Above*.
+- With labels above, each question can be **Full** or **Half** width. Two
+  half questions in a row share a line; on a phone (or in a narrow column)
+  each takes the whole row again, because two half boxes are too narrow to
+  type in there.
+- Required questions show an **asterisk** after the label by default; a
+  **Required Mark** setting turns it off.
+- All three are in the Builder, on the Form module's **Form Appearance**
+  column, and are saved on the form itself, so the form looks the same on
+  every page it is placed on.
+- **Site Import reads them from the original form.** It recognises the
+  half-width classes the common form plugins use (WPForms, Gravity Forms,
+  Elementor, Divi, Formidable, HubSpot) and the few "labels beside" settings,
+  and sets them on the form it builds.
+- The import's `--forms-only` pass can now bring a form it **already built**
+  up to date, without touching any page. That is how Bayside's form gets the
+  new layout once this is live. As before, a form somebody changed by hand in
+  Contacts › Forms is left alone and named.
+
+**A trap avoided.** The Contacts › Forms editor is the old (frozen) screen,
+and it knows nothing about these new settings: it re-sends every field and
+every style it knows on each save. Taken as sent, one save there would have
+quietly put every half question back to full and the labels back beside. The
+form store now keeps any setting a save does not mention, and a test pins it.
+
+**Checked.** Unit tests for the storage rules, the import reading Bayside's
+real form markup (saved as a test fixture), the page rendering, and two
+browser checks that measure First and Last really sitting side by side on a
+desktop and stacking on a phone.
