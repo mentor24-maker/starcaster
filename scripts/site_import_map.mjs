@@ -1058,7 +1058,7 @@ async function runFormsOnly(job, scope) {
   const allPages = must(await pagesStore.listPages(5000, scope), 'list pages');
   const owned = allPages.filter((p) => ownedIds.has(String(p.id)));
   const gone = ownedIds.size - owned.length;
-  const plan = planFormsOnly(owned, mapOut, sourceHtml, { skip: SKIP_FORMS });
+  const plan = planFormsOnly(owned, mapOut, sourceHtml, { skip: SKIP_FORMS, priorForms: prior.forms || {} });
   const unknownSkips = [...SKIP_FORMS].filter((key) => !(mapOut.forms || []).some((f) => f.key === key));
   if (unknownSkips.length) throw new Error(`--skip-form names no form this import read: ${unknownSkips.join(', ')} — check the key in the dry run.`);
 
@@ -1122,8 +1122,9 @@ async function runFormsOnly(job, scope) {
   log(`Forms: building ${plan.plans.length} form(s) under Contacts › Forms${plan.refresh.length ? `, and updating ${plan.refresh.length} already placed` : ''}`);
   const applied = await applyImportForms([...plan.plans, ...plan.refresh], {
     configStore: crmConfigStore, formsStore: crmFormsStore, scope, prior: prior.forms || {}, log,
+    updateOnly: new Set(plan.refresh.map((p) => p.key)),
   });
-  for (const r of applied.results) log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+  for (const r of applied.results) log(r.skipped ? `  "${r.name}"${r.formId ? ` (${r.formId})` : ''}: ${r.outcome}` : `  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
   const formCheckpoint = { ...(prior.forms || {}), ...applied.checkpoint };
   const ownerNow = must(await store.getJob(owner.id), 'reload the job that built the pages');
   must(await store.updateJob(owner.id, {
@@ -1137,7 +1138,7 @@ async function runFormsOnly(job, scope) {
     const fresh = must(await pagesStore.getPage(id, scope), `re-read page ${id}`);
     // Re-planned on the page as it is NOW: an edit made since the dry-run
     // read is caught here, not overwritten.
-    const now = planFormsOnly([fresh], mapOut, sourceHtml, { skip: SKIP_FORMS });
+    const now = planFormsOnly([fresh], mapOut, sourceHtml, { skip: SKIP_FORMS, priorForms: prior.forms || {} });
     for (const left of now.leftAlone) log(`  /${fresh.slug}: left ${left.moduleId} alone — ${left.reason}`);
     if (!now.replacements.length) { log(`  /${fresh.slug}: nothing left to swap (changed since it was read)`); continue; }
     const before = fresh.layoutSections || [];
@@ -1202,8 +1203,9 @@ async function refreshPlacedForms(plans, owner, prior, scope) {
   log(`\nForms: updating ${plans.length} form(s) this import already placed`);
   const applied = await applyImportForms(plans, {
     configStore: crmConfigStore, formsStore: crmFormsStore, scope, prior: prior.forms || {}, log,
+    updateOnly: new Set(plans.map((p) => p.key)),
   });
-  for (const r of applied.results) log(`  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
+  for (const r of applied.results) log(r.skipped ? `  "${r.name}"${r.formId ? ` (${r.formId})` : ''}: ${r.outcome}` : `  "${r.name}" (${r.formId}): ${r.outcome}, ${r.questions} question(s); read back with project_id and owner_user_id`);
   const ownerNow = must(await store.getJob(owner.id), 'reload the job that built the pages');
   must(await store.updateJob(owner.id, {
     checkpoints: { ...(ownerNow.checkpoints || {}), map: { ...(ownerNow.checkpoints?.map || {}), forms: { ...(prior.forms || {}), ...applied.checkpoint } } },
@@ -1235,6 +1237,7 @@ function logFormsOnlyPlan(plan, prior) {
     const made = prior.forms?.[f.key]?.formId;
     log(`  update "${f.name}"${made ? ` (${made})` : ''} to what the source shows now — labels ${f.styles?.labelPosition || 'as they are'}, ${f.fields.filter((q) => q.width === 'half').length} half-width question(s); a form changed in Contacts › Forms is left alone`);
   }
+  for (const s of plan.refreshSkipped || []) log(`  not updating "${s.name}" on ${s.slugs.join(', ')}: ${s.reason}`);
   for (const l of plan.leftAlone) log(`  left alone on /${l.slug} (${l.moduleId}): ${l.reason}`);
   for (const m of plan.missing) {
     log(m.pageDeleted

@@ -479,12 +479,13 @@ export function readSourceForm(html: string): SourceFormReading {
   // A lone half question has nobody to share its row with: the source's
   // half-width box sat beside something this reader did not keep (a CAPTCHA,
   // a dropped control), and a single half box with empty space beside it is
-  // not what the visitor saw. Halves are kept only in runs of two or more.
+  // not what the visitor saw. Halves pair up two to a row, so in a run of
+  // an ODD length the last one would be alone on its row: it goes full width.
   for (let i = 0; i < fields.length; i++) {
     if (fields[i].width !== "half") continue;
     let j = i;
     while (j < fields.length && fields[j].width === "half") j++;
-    if (j - i < 2) delete fields[i].width;
+    if ((j - i) % 2 === 1) delete fields[j - 1].width;
     i = j - 1;
   }
 

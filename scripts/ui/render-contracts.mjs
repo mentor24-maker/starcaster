@@ -1153,6 +1153,65 @@ export const RENDER_CONTRACTS = [
     },
   })),
   {
+    id: 'crm-form-labels-above-thank-you-takes-the-whole-row-on-a-phone',
+    why:
+      'With Label Position "Above" the form is a two-column grid so two half questions can share a ' +
+      'row (task SC-860). The older phone and narrow-column rules put the Thank-you and error banners ' +
+      'in column 1, and with labels above that is only HALF the form: on a phone the visitor\'s ' +
+      '"Thank you" sat squeezed into the left half beside an empty cell (SC-860 review). Only a ' +
+      'browser after a real submit can see it, so this presses Send at 420px against a served reply ' +
+      'and measures the banner against the form. No database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_thanks' } }],
+    },
+    serve: [
+      {
+        url: /\/api\/crm\/forms\/form_contract_thanks/,
+        json: {
+          ok: true,
+          data: {
+            id: 'form_contract_thanks',
+            heading: '',
+            submitLabel: 'Send',
+            successMessage: 'Thanks for writing to us',
+            errorMessage: 'Sorry',
+            crmConfigId: 'crm_contract',
+            styles: { labelPosition: 'above', fieldWidth: '100%' },
+            fields: [
+              { key: 'first_name', label: 'First', type: 'text', required: false, width: 'half' },
+              { key: 'last_name', label: 'Last', type: 'text', required: false, width: 'half' },
+            ],
+          },
+        },
+      },
+      { url: /\/api\/crm\/contact-submit/, json: { ok: true, data: {} } },
+    ],
+    emulate: { liveSite: true, viewport: { width: 420, height: 900 } },
+    click: ['form.builder-crm-form button[type="submit"]'],
+    selector: 'form.builder-crm-form .builder-contact-form-message',
+    read: ['display'],
+    probes: {
+      banner: {
+        subject: 'form.builder-crm-form .builder-contact-form-message',
+        against: 'form.builder-crm-form',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Thank-you banner appeared after pressing Send — the submit was not answered or the message did not render, so its width cannot be judged.';
+      const probe = sample.probes?.banner;
+      if (!probe) return 'no probe was taken — the contract measured nothing.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — nothing to measure the banner against.`;
+      const banner = probe.subjectBox.right - probe.subjectBox.left;
+      const form = probe.againstBox.right - probe.againstBox.left;
+      if (form < 200) return `the form is ${Math.round(form)}px wide — too narrow to tell half from whole.`;
+      if (banner < form * 0.8) {
+        return `the Thank-you banner is ${Math.round(banner)}px in a ${Math.round(form)}px form — it is sitting in one of the two label-above columns instead of taking the whole row.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
     why:
       'A "Choose one" question (task 86bcynjv7) shows every choice on the page as a round button, ' +

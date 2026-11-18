@@ -8815,7 +8815,9 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 .builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-submit,
-.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-stub {
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-stub,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-message,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-error {
   grid-column: 1 / -1;
 }
 

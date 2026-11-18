@@ -5,7 +5,8 @@ import type { BackgroundSettings, BuilderTemplateModule } from "@/lib/builder-te
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import {
   DEFAULT_CRM_FORM_STYLES,
-  normalizeCrmFormStyles
+  normalizeCrmFormStyles,
+  publicFormFields
 } from "../../lib/crmFormStyles.js";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -65,10 +66,9 @@ function announceFormStyles(formId: string, styles: Record<string, string>, fiel
 }
 
 /** The questions a visitor sees, in order — not the hidden meta entries. */
+/** The questions a visitor sees — the renderer's own rule, so the two lists cannot disagree. */
 function visibleQuestions(fields: CrmFormFieldRecord[] | undefined): CrmFormFieldRecord[] {
-  return (Array.isArray(fields) ? fields : []).filter(
-    (f) => f && f.key && !f.key.startsWith("__") && f.type !== "meta"
-  );
+  return publicFormFields(fields ?? []) as CrmFormFieldRecord[];
 }
 
 function widthsOf(fields: CrmFormFieldRecord[]): Record<string, string> {

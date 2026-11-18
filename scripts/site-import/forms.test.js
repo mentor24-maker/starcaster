@@ -232,6 +232,16 @@ test('a lone half-width question is read as full width — nothing shared its ro
   assert.deepEqual(r.fields.map((f) => f.width || 'full'), ['full', 'full']);
 });
 
+test('a run of three halves pairs the first two; the third, alone on its row, goes full width', () => {
+  const r = readSourceForm('<form>'
+    + '<div class="gfield gf_left_half"><label for="a">City</label><input id="a" name="city"></div>'
+    + '<div class="gfield gf_right_half"><label for="b">State</label><input id="b" name="state"></div>'
+    + '<div class="gfield gf_left_half"><label for="c">Zip</label><input id="c" name="zip"></div>'
+    + '<div class="gfield"><label for="d">Notes</label><textarea id="d" name="notes"></textarea></div>'
+    + '<button>Send</button></form>');
+  assert.deepEqual(r.fields.map((f) => [f.label, f.width || 'full']), [['City', 'half'], ['State', 'half'], ['Zip', 'full'], ['Notes', 'full']]);
+});
+
 test('Gravity Forms halves pair up, and a left-label form reads as labels beside', () => {
   const r = readSourceForm('<form><ul class="gform_fields left_label">'
     + '<li class="gfield gf_left_half"><label for="c">City</label><input id="c" name="input_1"></li>'

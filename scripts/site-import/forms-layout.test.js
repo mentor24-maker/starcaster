@@ -141,8 +141,54 @@ test('--forms-only offers to update a form the import already placed, and --skip
   const pages = [{ id: '1', slug: 'home', isPublished: true, layoutSections: [{ id: 's', modules: [
     { id: 'm', type: 'crm-form', settings: { crmFormId: 'crmf_9', importFormKey: key, importSourceId: 'p2a0c975e-8a8a4bc3' } },
   ] }] }];
-  const plan = planFormsOnly(pages, out);
+  const priorForms = { [key]: { formId: 'crmf_9', fingerprint: 'x' } };
+  const plan = planFormsOnly(pages, out, new Map(), { priorForms });
   assert.equal(plan.replacements.length, 0, 'no screenshot to swap');
   assert.deepEqual(plan.refresh.map((p) => p.key), [key]);
-  assert.equal(planFormsOnly(pages, out, new Map(), { skip: new Set([key]) }).refresh.length, 0);
+  assert.deepEqual(plan.refreshSkipped, []);
+  assert.equal(planFormsOnly(pages, out, new Map(), { skip: new Set([key]), priorForms }).refresh.length, 0);
+});
+
+test('--forms-only never updates a placed form the import has no record of — it names it instead', () => {
+  // SC-860 review: with no prior entry the writer's create path ran, and the
+  // pass (which repoints no page) left a new form nobody's page shows.
+  const out = mapSite(IR(), { existingSlugs: [] });
+  const key = out.forms[0].key;
+  const pages = [{ id: '1', slug: 'home', isPublished: true, layoutSections: [{ id: 's', modules: [
+    { id: 'm', type: 'crm-form', settings: { crmFormId: 'crmf_9', importFormKey: key, importSourceId: 'p2a0c975e-8a8a4bc3' } },
+  ] }] }];
+  const plan = planFormsOnly(pages, out, new Map(), { priorForms: {} });
+  assert.equal(plan.refresh.length, 0);
+  assert.equal(plan.refreshSkipped.length, 1);
+  assert.deepEqual(plan.refreshSkipped[0].slugs, ['/home']);
+  assert.match(plan.refreshSkipped[0].reason, /recorded no form/);
+});
+
+test('--forms-only leaves alone a placed module that was pointed at a different form', () => {
+  const out = mapSite(IR(), { existingSlugs: [] });
+  const key = out.forms[0].key;
+  const pages = [{ id: '1', slug: 'home', isPublished: true, layoutSections: [{ id: 's', modules: [
+    { id: 'm', type: 'crm-form', settings: { crmFormId: 'crmf_other', importFormKey: key, importSourceId: 'p2a0c975e-8a8a4bc3' } },
+  ] }] }];
+  const plan = planFormsOnly(pages, out, new Map(), { priorForms: { [key]: { formId: 'crmf_9', fingerprint: 'x' } } });
+  assert.equal(plan.refresh.length, 0, 'updating crmf_9 would change a form no page shows');
+  assert.match(plan.refreshSkipped[0].reason, /crmf_other, not crmf_9/);
+});
+
+test('an update-only plan whose recorded form is gone is skipped, never created', async () => {
+  const out = mapSite(IR(), { existingSlugs: [] });
+  const key = out.forms[0].key;
+  const stores = fakeStores();
+  const prior = { [key]: { formId: 'crmf_deleted', fingerprint: 'x' } };
+  const res = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior, updateOnly: new Set([key]) });
+  assert.equal(stores.state.forms.length, 0, 'no orphan form was created');
+  assert.equal(res.results[0].skipped, true);
+  assert.match(res.results[0].outcome, /gone/);
+  assert.deepEqual(res.checkpoint, {}, 'the checkpoint is not pointed at anything new');
+  const none = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior: {}, updateOnly: new Set([key]) });
+  assert.equal(stores.state.forms.length, 0);
+  assert.equal(none.results[0].skipped, true);
+  // Without updateOnly the full import still re-creates a gone form.
+  const full = await applyImportForms(out.forms, { ...stores, scope: SCOPE, prior });
+  assert.match(full.results[0].outcome, /created again/);
 });

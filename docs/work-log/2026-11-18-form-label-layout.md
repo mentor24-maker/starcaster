@@ -39,3 +39,20 @@ form store now keeps any setting a save does not mention, and a test pins it.
 real form markup (saved as a test fixture), the page rendering, and two
 browser checks that measure First and Last really sitting side by side on a
 desktop and stacking on a phone.
+
+**After review (same day).** Review sent it back with two real problems,
+both fixed:
+
+- On a phone, or in a narrow column, a labels-above form's "Thank you" and
+  error banners sat squeezed into the left half of the form beside an empty
+  space. They now take the whole row, and a new browser check presses Send at
+  phone width and measures the banner against the form.
+- The forms-only update could quietly make a brand-new form that no page
+  shows (when the import had no record of the form, or the form had been
+  deleted) and still report success. It now only updates a form the import
+  recorded AND that the page still shows; anything else is skipped and named
+  in the run's output, never created.
+
+Also tidied: three half-width questions in a row now pair the first two and
+give the third its own row, and two small pieces of duplicated logic now
+read from the one shared source.
