@@ -74,3 +74,40 @@ test('a link picked inside a text block is looked up too, so the live page gets 
   assert.deepEqual(map, { 55: 'menu-v2' });
   assert.match(queries[0].query, /id=in\.\(55\)/);
 });
+
+// Links to a SECTION of a page (task SC-852): `page:<id>#<sectionId>|…`.
+test('a section link is served with the section\'s CURRENT anchor name', async () => {
+  reset(async () => ({
+    ok: true,
+    data: [{ id: 12, slug: 'about', layout_sections: JSON.stringify({ sections: [{ id: 'sec-team', anchorName: 'our-team' }, { id: 'sec-plain' }] }) }],
+  }));
+  const served = { id: 99, layoutSections: [{ modules: [{ type: 'button', settings: { href: 'page:12#sec-team|/about#team' } }] }] };
+  const map = await pageAddressesFor('proj_1', served);
+  assert.match(queries[0].query, /select=id,slug,layout_sections/);
+  assert.equal(map['12#sec-team'], 'our-team');
+  assert.equal('12#sec-plain' in map, false);
+  assert.equal(pageLinkHref('page:12#sec-team|/about#team', map), '/about#our-team');
+});
+
+test('page links that name no section do not read any page\'s sections', async () => {
+  reset(async () => ({ ok: true, data: [{ id: 12, slug: 'about' }, { id: 40, slug: 'menu' }] }));
+  await pageAddressesFor('proj_1', page);
+  assert.match(queries[0].query, /select=id,slug&/);
+});
+
+test('a page linking to its own section uses the names it is being SERVED with', async () => {
+  // The draft renamed the section; the published copy being served has not.
+  reset(async () => ({
+    ok: true,
+    data: [{ id: 7, slug: '', layout_sections: { sections: [{ id: 's1', anchorName: 'renamed-in-draft' }] } }],
+  }));
+  const served = {
+    id: 7,
+    layoutSections: [
+      { id: 's1', anchorName: 'contact-us', modules: [] },
+      { id: 'nav', modules: [{ type: 'navigation', settings: { navItems: JSON.stringify([{ href: 'page:7#s1|/#contact-us' }]) } }] },
+    ],
+  };
+  const map = await pageAddressesFor('proj_1', served);
+  assert.equal(map['7#s1'], 'contact-us');
+});

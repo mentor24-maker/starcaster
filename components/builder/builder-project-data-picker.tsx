@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { builderAdminFetch } from "@/lib/builder-admin-fetch";
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import { sortPagesByName } from "../../public/shared/pageSort.js";
-import { makePageLink, parsePageLink } from "@/lib/page-link";
+import { listSectionAnchors, makePageLink, parsePageLink } from "@/lib/page-link";
+import { useBuilderPageSections } from "./builder-page-sections-context";
 
 /**
  * The shared "pick it from a list" control — master rules C1/C2
@@ -21,7 +22,17 @@ import { makePageLink, parsePageLink } from "@/lib/page-link";
 export type BuilderPickerSource = "pages" | "posts" | "crm-forms";
 export type BuilderPickerValueKind = "path" | "slug" | "id";
 
-export type BuilderPickerOption = { label: string; path: string; slug: string; id: string };
+/** A named section of a page, as a link picker offers it (task SC-852). */
+export type BuilderPickerSection = { sectionId: string; anchorName: string; title: string };
+
+export type BuilderPickerOption = {
+  label: string;
+  path: string;
+  slug: string;
+  id: string;
+  /** Pages only: the page's named sections, in page order. */
+  sections?: BuilderPickerSection[];
+};
 
 /** The copied address an option stands for, in the configured kind. */
 function pickerOptionAddress(option: BuilderPickerOption, valueKind: BuilderPickerValueKind): string {
@@ -41,11 +52,32 @@ function pickerOptionAddress(option: BuilderPickerOption, valueKind: BuilderPick
 export function pickerOptionValue(
   option: BuilderPickerOption,
   valueKind: BuilderPickerValueKind,
-  source: BuilderPickerSource = "pages"
+  source: BuilderPickerSource = "pages",
+  section?: BuilderPickerSection | null
 ): string {
   const address = pickerOptionAddress(option, valueKind);
-  if (source === "pages" && valueKind !== "id" && option.id) return makePageLink(option.id, address);
+  if (source === "pages" && valueKind !== "id" && option.id) {
+    // A section is stored by its id, never its name (task SC-852); the name is
+    // only today's fallback address, used if the section is ever gone.
+    if (section) return makePageLink(option.id, `${address}#${section.anchorName}`, section.sectionId);
+    return makePageLink(option.id, address);
+  }
   return address;
+}
+
+/**
+ * The named sections a picker offers for one page. The page being edited is
+ * read from the editor itself (BuilderPageSectionsContext), so a section named
+ * a moment ago is offered before the page is saved; every other page from the
+ * page list.
+ */
+export function pickerSectionsFor(
+  option: BuilderPickerOption | undefined,
+  editing: { pageId: string; sections: unknown } | null
+): BuilderPickerSection[] {
+  if (!option) return [];
+  if (editing && editing.pageId && editing.pageId === option.id) return listSectionAnchors(editing.sections);
+  return option.sections ?? [];
 }
 
 /**
@@ -60,12 +92,20 @@ export function resolvePickerSelection(
   value: string,
   valueKind: BuilderPickerValueKind,
   source: BuilderPickerSource = "pages"
-): { mode: "none" | "option" | "custom" | "missing"; selected?: BuilderPickerOption; fallback?: string } {
+): {
+  mode: "none" | "option" | "custom" | "missing";
+  selected?: BuilderPickerOption;
+  fallback?: string;
+  /** The section of the selected page the value links to; "" for the top of the page. */
+  sectionId?: string;
+} {
   if (!value) return { mode: "none" };
   const reference = parsePageLink(value);
   if (reference) {
     const selected = options.find((option) => option.id === reference.pageId);
-    return selected ? { mode: "option", selected } : { mode: "missing", fallback: reference.fallback };
+    return selected
+      ? { mode: "option", selected, sectionId: reference.sectionId }
+      : { mode: "missing", fallback: reference.fallback };
   }
   const selected = options.find((option) => pickerOptionAddress(option, valueKind) === value);
   return selected ? { mode: "option", selected } : { mode: "custom" };
@@ -86,13 +126,14 @@ export function loadPickerOptions(source: BuilderPickerSource): Promise<BuilderP
       // A-Z by the name the operator reads, before the mapping flattens name
       // and slug into one label — sorting after it would file an unnamed page
       // under "Untitled page" instead of sending it to the end.
-      return sortPagesByName(pages).map((page: { id?: string; name?: string; slug?: string }) => {
+      return sortPagesByName(pages).map((page: { id?: string; name?: string; slug?: string; layoutSections?: unknown }) => {
         const slug = String(page.slug ?? "").replace(/^\/+/, "");
         return {
           id: String(page.id ?? ""),
           label: String(page.name || slug || page.id || "Untitled page"),
           slug,
-          path: `/${slug}`
+          path: `/${slug}`,
+          sections: listSectionAnchors(page.layoutSections)
         };
       });
     }
@@ -137,6 +178,11 @@ const CUSTOM = "__custom__";
 const MISSING = "__missing__";
 
 type BuilderProjectDataPickerProps = {
+  /**
+   * Pages only: once a page is chosen, also offer "a section of that page"
+   * from its named sections (task SC-852). Menus turn it on.
+   */
+  allowSections?: boolean;
   source: BuilderPickerSource;
   /** What gets stored: the page path ("/about"), the bare slug, or the record id. */
   valueKind: BuilderPickerValueKind;
@@ -156,8 +202,10 @@ export function BuilderProjectDataPicker({
   onChange,
   noneLabel,
   placeholder,
-  ariaLabel
+  ariaLabel,
+  allowSections = false
 }: BuilderProjectDataPickerProps) {
+  const editingPage = useBuilderPageSections();
   const [options, setOptions] = useState<BuilderPickerOption[] | null>(null);
   const [failed, setFailed] = useState(false);
   // Sticky: once the operator picks Custom…, stay in custom mode even
@@ -205,6 +253,16 @@ export function BuilderProjectDataPicker({
   // The <select> is keyed by what an option IS, never by the stored string:
   // an old copied address and a reference to the same page select one row.
   const optionKey = (option: BuilderPickerOption) => option.id || pickerOptionAddress(option, valueKind);
+  // "This page" names the page being edited, so a menu link to one of its own
+  // sections is easy to find in a long list.
+  const optionLabel = (option: BuilderPickerOption) =>
+    source === "pages" && editingPage?.pageId && option.id === editingPage.pageId ? `${option.label} (this page)` : option.label;
+  const sectionChoices =
+    allowSections && source === "pages" && !customMode && selection.mode === "option"
+      ? pickerSectionsFor(selection.selected, editingPage)
+      : [];
+  const chosenSectionId = selection.sectionId || "";
+  const chosenSectionKnown = !chosenSectionId || sectionChoices.some((entry) => entry.sectionId === chosenSectionId);
 
   return (
     <span className="builder-project-data-picker">
@@ -236,11 +294,34 @@ export function BuilderProjectDataPicker({
         {missing ? <option value={MISSING}>Missing page ({selection.fallback || "no saved address"})</option> : null}
         {options.map((option) => (
           <option key={optionKey(option)} value={optionKey(option)}>
-            {option.label}
+            {optionLabel(option)}
           </option>
         ))}
         <option value={CUSTOM}>Custom…</option>
       </select>
+      {sectionChoices.length || chosenSectionId ? (
+        <select
+          className="builder-picker-section-select"
+          aria-label={ariaLabel ? `${ariaLabel} (section)` : "Section"}
+          value={chosenSectionKnown ? chosenSectionId : MISSING}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === MISSING || !selection.selected) return;
+            const section = sectionChoices.find((entry) => entry.sectionId === next) ?? null;
+            onChange(pickerOptionValue(selection.selected, valueKind, source, section));
+          }}
+        >
+          <option value="">Top of the page</option>
+          {!chosenSectionKnown ? (
+            <option value={MISSING}>A section that no longer has an anchor name</option>
+          ) : null}
+          {sectionChoices.map((entry) => (
+            <option key={entry.sectionId} value={entry.sectionId}>
+              #{entry.anchorName}{entry.title ? ` — ${entry.title}` : ""}
+            </option>
+          ))}
+        </select>
+      ) : null}
       {missing ? (
         <span className="builder-project-data-picker-missing" role="note">
           The page this linked to no longer exists. Visitors are sent to its old address

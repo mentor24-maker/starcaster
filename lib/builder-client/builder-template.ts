@@ -26,6 +26,7 @@ import {
 import { normalizeBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { escapeHtmlText, sanitizeInlineHtml, sanitizeRichTextHtml } from "@/lib/sanitize-html";
 import { rewriteRichTextImageSrcInHtml } from "@/lib/rich-text-image";
+import { normalizeAnchorName } from "@/lib/page-link";
 
 export { normalizeBuilderAssetUrl, resolvePublicBuilderAssetUrl, safeText } from "@/lib/builder-asset-url";
 import { backgroundImageUrlFor } from "@/lib/image-renditions";
@@ -630,6 +631,14 @@ export type BuilderTemplateSection = {
   title: string;
   locked: boolean;
   isPrivate: boolean;
+  /**
+   * The section's anchor name ("contact-us"): rendered as the section's `id`
+   * on the page, so `/#contact-us` lands on it, and what a link to this
+   * section shows in the address (task SC-852). Absent when the section has
+   * none — the key is never written empty, so untouched rows save unchanged.
+   * Cleaned by `normalizeAnchorName` (lib/builder-client/page-link.js).
+   */
+  anchorName?: string;
   /** ID of the saved section this was instantiated from, if any. */
   savedSectionId?: string;
   /** When true, this instance stays in sync with the master saved section. */
@@ -3648,11 +3657,15 @@ export function normalizeLayoutSections(value: unknown): BuilderTemplateSection[
       // same normalized value the legacy key ends up with.
       const cellPadding = normalizeCellPadding(normalizedSection.cellPadding, layout);
       const deviceOverrides = normalizeSectionDeviceOverrides(normalizedSection.deviceOverrides);
+      const anchorName = normalizeAnchorName(normalizedSection.anchorName);
       const cellDeviceOverrides = normalizeCellDeviceOverrides(normalizedSection.cellDeviceOverrides, layout);
 
       return {
         id: safeText(normalizedSection.id, 120) || `section-${sectionIndex + 1}`,
         title: safeText(normalizedSection.title, 255),
+        // Spread for the same reason as deviceOverrides below: a row with no
+        // anchor name must not gain the key.
+        ...(anchorName ? { anchorName } : {}),
         layout,
         widthMode: normalizedSection.widthMode === "full-width" ? "full-width" : "contained",
         widthPercent: normalizeSpacingValue(normalizedSection.widthPercent, "100", 25, 100),
