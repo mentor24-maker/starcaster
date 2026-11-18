@@ -352,3 +352,82 @@ table.studio-footage-table:not(.builder-module-preview-table):not(.builder-previ
   padding: 0 0.1em;
   border-radius: 2px;
 }
+
+/* Moments (Reel Spinner 2e, SC-830). One card per scored moment, best first:
+   the score as a chip, when and how long, the quote, then the reasons. Every
+   line wraps rather than widening the page (T0). */
+.studio-moments {
+  margin-top: 0.75rem;
+  min-width: 0;
+}
+
+.studio-moments-summary {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.studio-moments-note {
+  margin: 0 0 0.5rem;
+  color: var(--muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.studio-moments-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.studio-moment {
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+}
+
+.studio-moment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  min-width: 0;
+}
+
+.studio-moment-score {
+  display: inline-block;
+  min-width: 2.25rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.studio-moment-when {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.studio-moment-watch {
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+}
+
+.studio-moment-quote {
+  margin: 0.5rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border-light);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.studio-moment-reasons {
+  margin: 0.4rem 0 0;
+  padding-left: 1.25rem;
+  overflow-wrap: anywhere;
+}
