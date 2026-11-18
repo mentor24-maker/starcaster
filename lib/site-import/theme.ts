@@ -367,6 +367,31 @@ export function guardPaletteReadability(
 
 type SurfaceButtonRoles = [BuilderThemePaletteRole, BuilderThemePaletteRole, "light" | "dark"];
 
+/** True for a colour with (almost) no hue — black, white or a grey. */
+function isGrey(value: string): boolean {
+  const hex = toHex(value);
+  if (!hex) return true;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return Math.max(r, g, b) - Math.min(r, g, b) < 24;
+}
+
+/** The colour of each link inside a text block: an <a> run's own colour,
+ *  else (a block that is nothing but one link) the block's. */
+export function contentLinkColors(texts: ElementIR[]): string[] {
+  const out: string[] = [];
+  for (const el of texts) {
+    const runs = (el.inlineStyles || []).filter((r) => r.tag === "a" && r.styles?.color);
+    if (runs.length) {
+      for (const r of runs) out.push(r.styles.color as string);
+      continue;
+    }
+    const html = String(el.html || "").trim();
+    const only = /^<(p|div|span)\b[^>]*>\s*<a\b[^>]*>[\s\S]*?<\/a>\s*<\/\1>$/i.test(html) && (html.match(/<a\b/gi) || []).length === 1;
+    if (only && el.computedStyles?.color) out.push(el.computedStyles.color);
+  }
+  return out;
+}
+
 /* ---------- the derivation ---------- */
 
 export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
@@ -409,7 +434,20 @@ export function deriveImportTheme(ir: SiteIR, name: string): ImportTheme {
   // Text colours.
   const text = toHex(mode(texts.map((e) => style(e, "color"))));
   const heading = toHex(mode(headings.map((e) => style(e, "color")))) || text;
-  const link = toHex(mode(links.map((e) => style(e, "color"))));
+  // The link colour paints links inside body text (--bx-link); menu links
+  // paint from their own nav colour. So it is measured from links IN the
+  // site's text first — a run recorded on an <a>, or a text block that is one
+  // link — and from standalone link elements only when the text has none.
+  // Bayside's standalone links are its menu, near-black, and the theme then
+  // painted its blue "Joshua Barrow – LinkedIn" link black (SC-861).
+  // A link is told apart from its text by hue, so a coloured link colour
+  // outranks a grey one: Bayside's blog bylines carry more grey links than
+  // its pages carry blue ones, and grey would have won a plain count.
+  const inText = contentLinkColors(texts);
+  const link =
+    toHex(mode(inText.filter((c) => !isGrey(c)))) ||
+    toHex(mode(inText)) ||
+    toHex(mode(links.map((e) => style(e, "color"))));
   const colors: Record<string, string> = {};
   if (text) colors.text = text;
   if (heading) colors.heading = heading;

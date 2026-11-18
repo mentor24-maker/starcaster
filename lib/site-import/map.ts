@@ -1161,17 +1161,24 @@ export type ProseThemeLook = {
   /** The theme's heading and body text colours (hex), or "" for none. */
   headingColor?: string;
   textColor?: string;
+  /** The page surface the theme paints (hex), or "" when it names none. Text
+   *  with no band of its own sits on this, so its own colour is checked
+   *  against it (SC-861). */
+  surface?: string;
 };
 
 /** Below this an element's own colour on a painted band is not trusted to be
  *  readable there (WCAG's large-text floor; headings are what this is for). */
 const BAND_TEXT_CONTRAST = 3;
+/** Body text on the plain page surface is held to WCAG's normal-text floor,
+ *  the same one the theme holds its own text colour to. */
+const SURFACE_TEXT_CONTRAST = 4.5;
 
 /** A heading level the theme names no weight for paints at the browser's
  *  own heading weight. */
 const DEFAULT_HEADING_WEIGHT = 700;
 
-export function proseThemeLook(theme: { typography?: { scale?: Record<string, number>; colors?: Record<string, string> } }): ProseThemeLook {
+export function proseThemeLook(theme: { typography?: { scale?: Record<string, number>; colors?: Record<string, string> }; palette?: Record<string, string> }): ProseThemeLook {
   const scale = theme.typography?.scale || {};
   const headingWeights: Record<number, number> = {};
   for (let level = 1; level <= 6; level++) headingWeights[level] = Number(scale[`h${level}Fw`]) || DEFAULT_HEADING_WEIGHT;
@@ -1180,12 +1187,14 @@ export function proseThemeLook(theme: { typography?: { scale?: Record<string, nu
     linkColor: toHex(theme.typography?.colors?.link),
     headingColor: toHex(theme.typography?.colors?.heading),
     textColor: toHex(theme.typography?.colors?.text),
+    surface: toHex(theme.palette?.surface),
   };
 }
 
 /**
  * The element's own colour, when the band it sits on came along and the
- * colour reads on it (task SC-849). Bayside Partners' hero heading is white
+ * colour reads on it (task SC-849) — or, with no band, when it reads on the
+ * theme's page surface (SC-861; held to 3:1 for a heading, 4.5:1 for text). Bayside Partners' hero heading is white
  * over a photo; the import reproduced the photo, then dropped the white, and
  * the theme painted the heading dark on the dark picture. A picture is
  * trusted as the source showed it; a fill or gradient must clear
@@ -1193,12 +1202,20 @@ export function proseThemeLook(theme: { typography?: { scale?: Record<string, nu
  * always when the colour is the theme's own for that element.
  */
 export function ownColorOnBand(el: ElementIR, look: ProseThemeLook, band: MappedBackground | null | undefined): string {
-  if (!band || band.mode === "none") return "";
   const own = toHex(el.computedStyles?.color);
   if (!own) return "";
   const isHeading = /^\s*<h[1-6]\b/i.test(String(el.html || "")) || el.class === "heading";
-  const themeColor = (isHeading ? look.headingColor || look.textColor : look.textColor) || "";
+  const isLink = el.class === "link" || /^\s*<a\b/i.test(String(el.html || ""));
+  const themeColor = (isHeading ? look.headingColor || look.textColor : isLink ? look.linkColor || look.textColor : look.textColor) || "";
   if (themeColor && own === themeColor) return "";
+  if (!band || band.mode === "none") {
+    // No band came along: the text sits on the theme's page surface. Its own
+    // colour is kept where it reads there (SC-861) — Bayside's black section
+    // headings and its blue LinkedIn line had come out in the theme's grey.
+    const surface = look.surface || "";
+    if (!surface) return "";
+    return contrastRatio(own, surface) >= (isHeading ? BAND_TEXT_CONTRAST : SURFACE_TEXT_CONTRAST) ? own : "";
+  }
   if (band.mode === "image") return own;
   const fills = [band.color, band.mode === "gradient" ? band.color2 : ""]
     .concat((band.gradientLayers || []).flatMap((layer) => (layer.stops || []).map((s) => s.color)))
@@ -1235,11 +1252,12 @@ function withStyle(existing: string | undefined, decls: string[]): string {
  * carries what is typical; this carries what differs from it.
  *
  * - The element's OWN weight and letter spacing, where they differ from what
- *   the theme paints for that element. Its own colour is left to the theme
- *   unless `band` says the background it sat on came along and the colour
- *   reads there (ownColorOnBand): the theme rejects colours that cannot be
- *   read on the page's surface, and a white heading from a dark band the
- *   import did not reproduce would otherwise arrive invisible.
+ *   the theme paints for that element. Its own colour is kept where it reads
+ *   on what it will sit on (ownColorOnBand): the band that came along, else
+ *   the theme's page surface (SC-861). The theme rejects colours that cannot
+ *   be read on the page's surface, and a white heading from a dark band the
+ *   import did not reproduce would otherwise arrive invisible. Links inside
+ *   that matched the block take the same colour.
  * - Each word's recorded difference from its parent (`inlineStyles`), except
  *   a link's colour where it is the theme's own link colour.
  *
@@ -1259,7 +1277,15 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook, band?: Mappe
   const runs = el.inlineStyles || [];
   if (!rootDecls.length && !runs.length) return el.html;
 
-  const $ = cheerio.load(el.html, null, false); // fragment mode
+  // Words captured with no tag of their own (a blog excerpt, "on" between two
+  // links) have nowhere to carry a weight or colour, so they get an inline
+  // <span> — inline, so nothing moves (SC-861: Bayside's excerpts lost their
+  // 500 weight). Recorded runs index the element's descendants, which the
+  // span wraps unchanged.
+  // Wrapped whenever it starts with words, so a run's index counts from the
+  // element itself rather than from its first tag.
+  const bare = !/^\s*</.test(String(el.html || ""));
+  const $ = cheerio.load(bare ? `<span>${el.html}</span>` : el.html, null, false); // fragment mode
   const root = $.root().children().first();
   if (!root.length) return el.html;
   let changed = false;
@@ -1282,6 +1308,20 @@ export function styleProseHtml(el: ElementIR, look: ProseThemeLook, band?: Mappe
     if (!decls.length) continue;
     $(node).attr("style", withStyle($(node).attr("style"), decls));
     changed = true;
+  }
+  // A link recorded no colour of its own because it matched its block. When
+  // the block's own colour is written inline, the link needs it too: the
+  // stylesheet paints every link with the theme's link colour, not the
+  // block's (SC-861 — Bayside's blue "Joshua Barrow – LinkedIn" line came out
+  // a link in the theme's black, or plain grey where no theme was named).
+  if (bandColor) {
+    const coloured = new Set(runs.filter((r) => r.tag === "a" && toHex(r.styles.color)).map((r) => r.index));
+    descendants.forEach((node, index) => {
+      if (((node as { name?: string }).name || "").toLowerCase() !== "a" || coloured.has(index)) return;
+      if (/(?:^|;)\s*color\s*:/i.test(String($(node).attr("style") || ""))) return;
+      $(node).attr("style", withStyle($(node).attr("style"), [`color:${bandColor}`]));
+      changed = true;
+    });
   }
   return changed ? $.html() : el.html;
 }
