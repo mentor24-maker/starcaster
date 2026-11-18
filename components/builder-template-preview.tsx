@@ -535,7 +535,7 @@ function ContactFormPreview({
   );
 }
 
-type CrmFormField = { key: string; label: string; type: string; required: boolean; options?: string[] };
+type CrmFormField = { key: string; label: string; type: string; required: boolean; options?: string[]; width?: string };
 type CrmFormStyles = Record<string, string | undefined>;
 type CrmFormData = {
   id?: string;
@@ -989,7 +989,14 @@ function CrmFormPreview({
     const onStyles = (event: Event) => {
       const detail = (event as CustomEvent<CrmFormStylesEventDetail>).detail;
       if (!detail || detail.formId !== crmFormId) return;
-      setForm((current) => (current ? { ...current, styles: detail.styles } : current));
+      setForm((current) => {
+        if (!current) return current;
+        const widths = detail.fieldWidths;
+        const fields = widths
+          ? (current.fields ?? []).map((f) => (f.key in widths ? { ...f, width: widths[f.key] } : f))
+          : current.fields;
+        return { ...current, styles: detail.styles, fields };
+      });
     };
     window.addEventListener(CRM_FORM_STYLES_EVENT, onStyles);
     return () => window.removeEventListener(CRM_FORM_STYLES_EVENT, onStyles);
@@ -1083,10 +1090,12 @@ function CrmFormPreview({
    * impossible. The canvas still draws it, which is where it can be fixed.
    */
   if (liveSite && visibleFields.length === 0) return null;
+  // Labels above sit in a flex column, where `alignSelf: start` would shrink
+  // the label to its words and lose Label Align; stretched, text-align works.
   const labelStyle = {
     justifySelf: renderStyles.cssVars['--crm-form-label-justify'],
     textAlign: renderStyles.normalized.labelAlign as CSSProperties['textAlign'],
-    alignSelf: 'start'
+    alignSelf: renderStyles.normalized.labelPosition === "above" ? 'stretch' : 'start'
   } as CSSProperties;
   const shellStyle = {
     ...themeContextStyle,
@@ -1103,6 +1112,21 @@ function CrmFormPreview({
   const buttonStyle = {
     ...renderStyles.button
   } as CSSProperties;
+  // Label Position and Required Mark (SC-860). Half width only means
+  // something with labels above: beside, every question is a label|box row of
+  // the form's own two-track grid, and two of those cannot share a line.
+  const labelsAbove = renderStyles.normalized.labelPosition === "above";
+  const showRequiredMark = renderStyles.normalized.requiredMarker !== "none";
+  const fieldClass = (base: string, field: CrmFormField) =>
+    labelsAbove && field.width === "half" ? `${base} is-half` : base;
+  const labelText = (field: CrmFormField) => (
+    <>
+      {field.label}
+      {showRequiredMark && field.required ? (
+        <span className="builder-crm-form-required" aria-hidden="true">*</span>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="builder-crm-form-shell" style={shellStyle}>
@@ -1111,7 +1135,11 @@ function CrmFormPreview({
           {form.heading}
         </div>
       ) : null}
-      <form className="builder-contact-form builder-crm-form" onSubmit={submitCrmForm} style={formStyle}>
+      <form
+        className={`builder-contact-form builder-crm-form${labelsAbove ? " is-labels-above" : ""}`}
+        onSubmit={submitCrmForm}
+        style={formStyle}
+      >
         <input type="text" name="_trap" value={honeypot} onChange={(e) => setHoneypot(e.target.value)} style={{ display: "none" }} aria-hidden="true" tabIndex={-1} />
         {message ? <div className="builder-contact-form-message">{message}</div> : null}
         {error ? <div className="builder-contact-form-error">{error}</div> : null}
@@ -1130,8 +1158,8 @@ function CrmFormPreview({
             // cannot sit inside a <label> either; its label is named by id.
             if (field.type === "multiselect") {
               return (
-                <div className="builder-contact-form-field builder-crm-form-multiselect-field" key={field.key}>
-                  <span id={labelId} style={labelStyle}>{field.label}</span>
+                <div className={fieldClass("builder-contact-form-field builder-crm-form-multiselect-field", field)} key={field.key}>
+                  <span id={labelId} style={labelStyle}>{labelText(field)}</span>
                   {control}
                 </div>
               );
@@ -1141,15 +1169,15 @@ function CrmFormPreview({
             // hold only one control.
             if (crmIsChoiceGroupField(field)) {
               return (
-                <fieldset className="builder-contact-form-field builder-crm-form-choice-field" key={field.key}>
-                  <legend style={labelStyle}>{field.label}</legend>
+                <fieldset className={fieldClass("builder-contact-form-field builder-crm-form-choice-field", field)} key={field.key}>
+                  <legend style={labelStyle}>{labelText(field)}</legend>
                   {control}
                 </fieldset>
               );
             }
             return (
-              <label className="builder-contact-form-field" key={field.key}>
-                <span style={labelStyle}>{field.label}</span>
+              <label className={fieldClass("builder-contact-form-field", field)} key={field.key}>
+                <span style={labelStyle}>{labelText(field)}</span>
                 {control}
               </label>
             );

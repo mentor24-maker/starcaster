@@ -1068,6 +1068,149 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  ...[
+    { width: 1280, phone: false },
+    { width: 420, phone: true },
+  ].map(({ width, phone }) => ({
+    id: phone
+      ? 'crm-form-half-width-questions-stack-on-a-phone'
+      : 'crm-form-labels-above-and-two-half-questions-share-a-row',
+    why:
+      'Label Position "Above" and half-width questions (task SC-860) exist so an imported contact form ' +
+      'comes out the shape of the original: Bayside\'s has every label over its box and First and Last ' +
+      'side by side. jsdom checks the classes; only a browser can say the two boxes really sit on one ' +
+      'line, at about half the width of a full question, with each label above its box — and that on a ' +
+      'phone they take a whole row each again, because two half boxes at 420px are too narrow to type in. ' +
+      'The form is served from a fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_layout' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_layout/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_layout',
+          heading: '',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          styles: { labelPosition: 'above', fieldWidth: '100%' },
+          fields: [
+            { key: 'first_name', label: 'First', type: 'text', required: true, width: 'half' },
+            { key: 'last_name', label: 'Last', type: 'text', required: true, width: 'half' },
+            { key: 'email', label: 'Email', type: 'email', required: true },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true, viewport: { width, height: 900 } },
+    selector: 'form.builder-crm-form',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      selectors: {
+        first: 'input[name="first_name"]',
+        last: 'input[name="last_name"]',
+        email: 'input[name="email"]',
+        firstLabel: 'label:has(> input[name="first_name"]) > span',
+        mark: 'label:has(> input[name="first_name"]) .builder-crm-form-required',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no CRM form rendered — the fixture form was not served or the module drew nothing.';
+      const f = sample.series?.[0];
+      if (!f) return 'no series frame was taken — the contract measured nothing.';
+      if (!f.first || !f.last || !f.email) return 'a question\'s box is missing — First, Last and Email must all render.';
+      if (!f.firstLabel) return 'First has no label span.';
+      if (!f.mark) return 'First is required but its label carries no asterisk.';
+      if (f.email.width < 100) return `the Email box is ${Math.round(f.email.width)}px wide — too narrow to judge anything against.`;
+      if (!(f.firstLabel.top + f.firstLabel.height <= f.first.top + 1)) {
+        return `First's label (top ${Math.round(f.firstLabel.top)}, height ${Math.round(f.firstLabel.height)}) is not above its box (top ${Math.round(f.first.top)}) — the labels are still beside.`;
+      }
+      if (phone) {
+        if (!(f.last.top > f.first.top + f.first.height)) {
+          return `at ${width}px Last (top ${Math.round(f.last.top)}) sits on First's line (top ${Math.round(f.first.top)}) — half questions must stack on a phone.`;
+        }
+        if (Math.abs(f.first.width - f.email.width) > 2) {
+          return `at ${width}px First is ${Math.round(f.first.width)}px and Email ${Math.round(f.email.width)}px — a half question must take the whole row on a phone.`;
+        }
+        return null;
+      }
+      if (Math.abs(f.first.top - f.last.top) > 1) {
+        return `First (top ${Math.round(f.first.top)}) and Last (top ${Math.round(f.last.top)}) are not on one line — two half-width questions must share a row.`;
+      }
+      const ratio = f.first.width / f.email.width;
+      if (ratio < 0.4 || ratio > 0.6) {
+        return `First is ${Math.round(f.first.width)}px against Email's ${Math.round(f.email.width)}px (${ratio.toFixed(2)}) — a half question should be about half as wide.`;
+      }
+      if (!(f.email.top > f.first.top + f.first.height)) return 'Email is not below First and Last — a full question must take its own row.';
+      return null;
+    },
+  })),
+  {
+    id: 'crm-form-labels-above-thank-you-takes-the-whole-row-on-a-phone',
+    why:
+      'With Label Position "Above" the form is a two-column grid so two half questions can share a ' +
+      'row (task SC-860). The older phone and narrow-column rules put the Thank-you and error banners ' +
+      'in column 1, and with labels above that is only HALF the form: on a phone the visitor\'s ' +
+      '"Thank you" sat squeezed into the left half beside an empty cell (SC-860 review). Only a ' +
+      'browser after a real submit can see it, so this presses Send at 420px against a served reply ' +
+      'and measures the banner against the form. No database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_thanks' } }],
+    },
+    serve: [
+      {
+        url: /\/api\/crm\/forms\/form_contract_thanks/,
+        json: {
+          ok: true,
+          data: {
+            id: 'form_contract_thanks',
+            heading: '',
+            submitLabel: 'Send',
+            successMessage: 'Thanks for writing to us',
+            errorMessage: 'Sorry',
+            crmConfigId: 'crm_contract',
+            styles: { labelPosition: 'above', fieldWidth: '100%' },
+            fields: [
+              { key: 'first_name', label: 'First', type: 'text', required: false, width: 'half' },
+              { key: 'last_name', label: 'Last', type: 'text', required: false, width: 'half' },
+            ],
+          },
+        },
+      },
+      { url: /\/api\/crm\/contact-submit/, json: { ok: true, data: {} } },
+    ],
+    emulate: { liveSite: true, viewport: { width: 420, height: 900 } },
+    click: ['form.builder-crm-form button[type="submit"]'],
+    selector: 'form.builder-crm-form .builder-contact-form-message',
+    read: ['display'],
+    probes: {
+      banner: {
+        subject: 'form.builder-crm-form .builder-contact-form-message',
+        against: 'form.builder-crm-form',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Thank-you banner appeared after pressing Send — the submit was not answered or the message did not render, so its width cannot be judged.';
+      const probe = sample.probes?.banner;
+      if (!probe) return 'no probe was taken — the contract measured nothing.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — nothing to measure the banner against.`;
+      const banner = probe.subjectBox.right - probe.subjectBox.left;
+      const form = probe.againstBox.right - probe.againstBox.left;
+      if (form < 200) return `the form is ${Math.round(form)}px wide — too narrow to tell half from whole.`;
+      if (banner < form * 0.8) {
+        return `the Thank-you banner is ${Math.round(banner)}px in a ${Math.round(form)}px form — it is sitting in one of the two label-above columns instead of taking the whole row.`;
+      }
+      return null;
+    },
+  },
   {
     id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
     why:
