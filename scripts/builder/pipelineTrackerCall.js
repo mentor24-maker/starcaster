@@ -19,16 +19,29 @@
  * project's own queue (open tickets — Building and In review are open), and
  * the switch is a standing ticket in the BUS project, beside the roll call and
  * the pulse report, where no loop claims from. So "the Loop Queue, closed
- * included" is answered with both: the open work, then every bus ticket.
- * Since SC-818 StarCaster's bus IS its own project, so the two listings
- * overlap: each ticket is answered once, and comments are read from the one
- * project.
+ * included" is answered with both: the open work, then the bus project's
+ * ticket(s) carrying the switch's NAME, Live included. Since SC-818
+ * StarCaster's bus IS its own project, so the two listings can overlap: each
+ * ticket is answered once.
+ *
+ * ONLY THE SWITCH, NOT EVERY CLOSED TICKET (SC-851). This used to answer with
+ * every bus ticket, and since SC-818 that is every StarCaster ticket ever
+ * closed — 849 on 2026-11-17, each costing the door a status-history request.
+ * From the MacBook that read never finished inside its deadline, so the pause
+ * check there failed safe to PAUSED and `npm run ship` merged nothing. Nothing
+ * that reads this list wants a closed ticket other than the switch: the store
+ * finds the switch by name, and the sweep and the drain count only Building
+ * and In review, which are open. Comments, likewise, are read from the one
+ * ticket asked about, never from every ticket in the project.
+ *
+ * `call.findSwitch()` is the check's own path: the switch ticket alone, no
+ * work queue at all (pipelinePauseStore.readSwitch, `findSwitch`).
  *
  * The paths answered, and nothing else:
  *
  *   GET  /api/v2/list/<any>/task?...page=N   page 0: the reading above; later pages: empty
  *   GET  /api/v2/task/<id>                   `get`
- *   GET  /api/v2/task/<id>/comment[?start=]  every comment, newest first, on the first page
+ *   GET  /api/v2/task/<id>/comment[?start=]  that ticket's comments, newest first, on the first page
  *   POST /api/v2/task/<id>/comment           `comment` (the door reads it back)
  *   PUT  /api/v2/task/<id>  { status }       `status`, guarded on "Building" — the sweep
  *                                            only ever moves a stranded build
@@ -45,6 +58,7 @@
  */
 
 const realDoor = require('../lib/trackerDoor.cjs');
+const { SWITCH_TASK_NAME } = require('./pipelinePause.js');
 
 function answer(json, status = 200) {
   return { ok: true, status, res: { ok: true, status }, json, text: '' };
@@ -65,31 +79,10 @@ function notFound(why) {
  * @param {string} [o.busProject]  where the switch lives
  */
 function trackerCall({ door = realDoor, project = door.PROJECT, busProject = door.BUS_PROJECT } = {}) {
-  // Which project each id was seen in, so its comments are read from the right
-  // one first. An id never seen is tried in both.
-  const seenIn = new Map();
+  /** The bus project's ticket(s) named as the switch is, Live included. Throws on a failed read. */
+  const switchTickets = () => door.findTasksNamed({ project: busProject, name: SWITCH_TASK_NAME });
 
-  async function commentsOf(id) {
-    const key = String(id).toLowerCase();
-    const first = seenIn.get(key);
-    // One project when the bus is the project's own queue (SC-818): trying
-    // it twice would only repeat the same refusal.
-    const both = project === busProject ? [project] : [project, busProject];
-    const order = first && both.length > 1 ? [first, first === project ? busProject : project] : both;
-    let last = null;
-    for (const p of order) {
-      try {
-        return await door.getTaskCommentRecords(id, { project: p });
-      } catch (err) {
-        last = err;
-        // Only "not in this project" moves on to the other; a failed read is a failed read.
-        if (!/is not in the .* project on the tracker/.test(String(err?.message || ''))) throw err;
-      }
-    }
-    throw last;
-  }
-
-  return async function call(method, path, body) {
+  async function call(method, path, body) {
     const [route, query = ''] = String(path).split('?');
     const params = new URLSearchParams(query);
     let m;
@@ -98,21 +91,20 @@ function trackerCall({ door = realDoor, project = door.PROJECT, busProject = doo
         if (Number(params.get('page') || 0) > 0) return answer({ tasks: [], last_page: true });
         door.forgetComments();
         const work = await door.listTasks({ project });
-        const standing = await door.listTasks({ project: busProject, includeClosed: true });
-        // When the bus is the project's own queue (SC-818) the second listing
-        // holds the first one again; a ticket counted twice would read as two
-        // switch tickets, or as one stranded build to move twice.
+        const standing = await switchTickets();
+        // When the bus is the project's own queue (SC-818) an OPEN switch
+        // ticket is in both listings; counted twice it would read as two
+        // switch tickets.
         const listed = new Set(work.map((t) => String(t.id).toLowerCase()));
         const extra = standing.filter((t) => !listed.has(String(t.id).toLowerCase()));
-        for (const t of work) seenIn.set(String(t.id).toLowerCase(), project);
-        for (const t of extra) seenIn.set(String(t.id).toLowerCase(), busProject);
         return answer({ tasks: [...work, ...extra], last_page: true });
       }
       if (method === 'GET' && (m = /^\/api\/v2\/task\/([^/]+)\/comment$/.exec(route))) {
         // Every comment comes back on the first page; a request for the page
-        // after it (`start=`) is the end of the trail.
+        // after it (`start=`) is the end of the trail. Read from THIS ticket
+        // alone: one request, wherever the ticket lives (SC-851).
         if (params.has('start')) return answer({ comments: [] });
-        return answer({ comments: await commentsOf(decodeURIComponent(m[1])) });
+        return answer({ comments: await door.readTaskComments(decodeURIComponent(m[1])) });
       }
       if (method === 'GET' && (m = /^\/api\/v2\/task\/([^/]+)$/.exec(route))) {
         const out = await door.getTask(decodeURIComponent(m[1]));
@@ -139,7 +131,23 @@ function trackerCall({ door = realDoor, project = door.PROJECT, busProject = doo
       return failed(err);
     }
     return failed(`${method} ${route} has no tracker equivalent here (scripts/builder/pipelineTrackerCall.js) — nothing was sent`);
+  }
+
+  /**
+   * The switch ticket alone, for a check that needs nothing else (SC-851):
+   * `{ readable: true, tasks }`, where an empty list is a CONFIRMED absence
+   * because it only ever comes from a read that worked, or
+   * `{ readable: false, why }`. Never throws.
+   */
+  call.findSwitch = async function findSwitch() {
+    try {
+      return { readable: true, why: '', tasks: await switchTickets() };
+    } catch (err) {
+      return { readable: false, why: `finding the switch ticket on the tracker: ${String(err?.message || err)}`, tasks: [] };
+    }
   };
+
+  return call;
 }
 
 module.exports = { trackerCall };
