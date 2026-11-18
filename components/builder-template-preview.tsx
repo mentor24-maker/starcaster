@@ -234,6 +234,7 @@ import { resolveEmailMergeTokensForPreview } from "@/lib/builder-email-template"
 import { getPlayerPortalAuthSettings, PlayerPortalAuthForm } from "@/components/player-portal-auth-form";
 import { useGoogleFontLinks } from "@/components/builder/use-google-font-links";
 import { useLibraryFontFaces } from "@/components/builder/use-library-font-faces";
+import { skipLinkTargetElementId } from "@/lib/skip-link-target";
 
 type BuilderTemplatePreviewProps = {
   layoutSections: BuilderTemplateSection[];
@@ -279,6 +280,14 @@ type BuilderTemplatePreviewProps = {
    * live site: the Builder shows each page as it is.
    */
   siteWideBugReport?: SiteWideBugReport | null;
+  /**
+   * The section the live page's hidden "Skip to content" link jumps to
+   * (SC-857), picked by `pickSkipLinkTarget`. Matched by object identity, not
+   * id: copies of one saved section share an id. That section wears the
+   * link's target id and `tabIndex={-1}`, so focus moves there, not just the
+   * scroll position. Only honoured with `liveSite`.
+   */
+  skipLinkTarget?: BuilderTemplateSection | null;
 };
 
 /**
@@ -1951,7 +1960,8 @@ export function BuilderTemplatePreview({
   applyThemePageMargins = true,
   suppressShellBackground = false,
   pageAddresses = null,
-  siteWideBugReport = null
+  siteWideBugReport = null,
+  skipLinkTarget = null
 }: BuilderTemplatePreviewProps) {
   const siteWideBugReportActive = liveSite && Boolean(siteWideBugReport);
   const shellBackground = suppressShellBackground
@@ -2106,6 +2116,11 @@ export function BuilderTemplatePreview({
       // 400s. Found in review round 5 of the Bug Report module (PR #365),
       // where it fired `?projectId=` empty.
       projectId={projectId}
+      skipLinkTargetId={
+        liveSite && skipLinkTarget && section === skipLinkTarget
+          ? skipLinkTargetElementId(section)
+          : undefined
+      }
       section={
         joined
           ? { ...section, background: createDefaultBackgroundSettings(), widthMode: "contained" }
@@ -2225,7 +2240,8 @@ function BuilderSectionPreview({
   heroBannerUrl,
   heroOverlay,
   heroOverlayOpacity,
-  overlapsHero = false
+  overlapsHero = false,
+  skipLinkTargetId
 }: {
   section: BuilderTemplateSection;
   emailPreview?: boolean;
@@ -2248,6 +2264,8 @@ function BuilderSectionPreview({
   heroOverlayOpacity?: number;
   /** Treatment: this section pulls up over the previous image section. */
   overlapsHero?: boolean;
+  /** Set on the one section the live page's "Skip to content" link targets (SC-857). */
+  skipLinkTargetId?: string;
 }) {
   // Names this row in its own tablet/phone CSS. useId rather than section.id:
   // copies of one saved section share an id, and must not share rules.
@@ -2568,7 +2586,11 @@ function BuilderSectionPreview({
       }`}
       // The section's anchor name (task SC-852): `/#contact-us` lands here.
       // Absent when the section has none, so no row gains an id it never had.
-      id={section.anchorName || undefined}
+      // The "Skip to content" target (SC-857) keeps the anchor name when it has
+      // one (skipLinkTargetElementId), and takes focus so the next Tab lands
+      // in the page's content rather than back in the menu.
+      id={skipLinkTargetId || section.anchorName || undefined}
+      tabIndex={skipLinkTargetId ? -1 : undefined}
       style={gridStyle}
       {...(deviceCss ? { [BUILDER_DEVICE_SCOPE_ATTRIBUTE]: deviceScopeId } : {})}
     >
