@@ -6,7 +6,7 @@ repository (`npm run doctor`).
 
 Every file here except this README is copied byte for byte from
 [Spirality](https://github.com/mentor24-maker/spirality) at commit
-`d538a7f` (2026-11-16, SC-819), keeping Spirality's layout (`scripts/` beside `lib/`) so no import
+`a262334` (2026-11-18, SC-867), keeping Spirality's layout (`scripts/` beside `lib/`) so no import
 changes. The project settings it reads are StarCaster's own
 `spirality.project.json` at the repository root.
 
@@ -23,6 +23,15 @@ own queue (Spirality #290, `804c1f4`) and the `move` command (Spirality #299,
 tests that read Spirality's own `docs/` or `tracker/` folders (for example
 `trackerBus.test.js` and `moveDoor.test.mjs`) are not copied, because those
 folders are not here.
+
+`a262334` (SC-867) brings in the door's SQL check (Spirality #313): `ask`
+and `comment` refuse, before anything is posted or moved, a body that names a
+`.sql` file without the DOCTRINE 6.5 run block for it. StarCaster's build pass
+ran the older copy on 2026-11-17 and put a bare SQL path on SC-832's card eight
+hours after Spirality had the check. Only six files differed from `d538a7f`
+(`scripts/clickup.mjs`, `scripts/lib/operatorCard.mjs` and its test,
+`scripts/lib/expectedSecrets.mjs`, `lib/relayLane.js` and its test); every
+other file here was already identical, so the whole door is now that commit.
 
 ## The runner scripts
 
