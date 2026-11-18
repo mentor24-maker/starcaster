@@ -51,11 +51,11 @@ test('an added service takes a key setting NAME; a pasted key is refused', () =>
   const service = { label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'gsk_live_abc123' };
   const b = body(ALL, { customProviders: [service] });
   b.providers.push({ id: 'custom-groq', enabled: false, fast: 'llama-4', strong: 'llama-4' });
-  assert.match(store.validateInput(b).error, /NAME of the setting/);
-  service.keyEnv = 'GROQ_API_KEY';
+  assert.match(store.validateInput(b).error, /NAME of its own key setting/);
+  service.keyEnv = 'AI_SERVICE_GROQ_API_KEY';
   const ok = store.validateInput(b);
   assert.equal(ok.ok, true);
-  assert.deepEqual(ok.data.customProviders, [{ id: 'custom-groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'GROQ_API_KEY' }]);
+  assert.deepEqual(ok.data.customProviders, [{ id: 'custom-groq', label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'AI_SERVICE_GROQ_API_KEY' }]);
 });
 
 test('a built-in provider\'s key can never be sent to a typed address', () => {
@@ -64,9 +64,31 @@ test('a built-in provider\'s key can never be sent to a typed address', () => {
   assert.match(store.validateInput(b).error, /Anthropic's key/);
 });
 
+test('an added service cannot borrow ANY existing secret, aliases included (SC-844 review)', () => {
+  // GOOGLE_GEMINI_API_KEY holds the same Gemini key (lib/apiSettings.js,
+  // lib/geminiClient.js); the others are live secrets elsewhere in the code.
+  for (const keyEnv of ['GOOGLE_GEMINI_API_KEY', 'GOOGLE_API_KEY', 'YOUTUBE_API_KEY', 'OPENCLAW_API_KEY', 'GROQ_API_KEY', 'AI_SERVICE__API_KEY']) {
+    const b = body(ALL, { customProviders: [{ label: 'Proxy', baseUrl: 'https://attacker.example/v1', keyEnv }] });
+    b.providers.unshift({ id: 'custom-proxy', enabled: true, fast: 'x', strong: 'x' });
+    const res = store.validateInput(b);
+    assert.equal(res.ok, false, `${keyEnv} must be refused`);
+    assert.match(res.error, /AI_SERVICE_/);
+  }
+});
+
+test('a saved row naming a non-AI_SERVICE_ key is ignored on read, never sent', async () => {
+  const row = {
+    providers: [{ id: 'custom-proxy', enabled: true, fast: 'x', strong: 'x' }, { id: 'anthropic', enabled: true, fast: '', strong: '' }],
+    customProviders: [{ id: 'custom-proxy', label: 'Proxy', baseUrl: 'https://attacker.example/v1', keyEnv: 'GOOGLE_GEMINI_API_KEY' }],
+  };
+  const { providers, ignored } = ai.orderFromSettings(row);
+  assert.deepEqual(providers.map((p) => p.id), ['anthropic']);
+  assert.deepEqual(ignored, ['custom-proxy']);
+});
+
 test('an added service needs an https address with no sign-in details', () => {
   for (const baseUrl of ['http://api.groq.com/v1', 'https://user:pw@api.groq.com/v1', 'not a url']) {
-    const b = body(ALL, { customProviders: [{ label: 'Groq', baseUrl, keyEnv: 'GROQ_API_KEY' }] });
+    const b = body(ALL, { customProviders: [{ label: 'Groq', baseUrl, keyEnv: 'AI_SERVICE_GROQ_API_KEY' }] });
     b.providers.push({ id: 'custom-groq', enabled: false, fast: 'x', strong: 'x' });
     assert.equal(store.validateInput(b).ok, false, baseUrl);
   }
@@ -89,12 +111,12 @@ test('the saved order wins: OpenAI moved to the top is tried first, switched-off
 });
 
 test('an added service becomes an OpenAI-style provider with its own key setting', async () => {
-  const b = body(ALL, { customProviders: [{ label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'GROQ_API_KEY' }] });
+  const b = body(ALL, { customProviders: [{ label: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', keyEnv: 'AI_SERVICE_GROQ_API_KEY' }] });
   b.providers.unshift({ id: 'custom-groq', enabled: true, fast: 'llama-fast', strong: 'llama-big' });
   const v = store.validateInput(b).data;
   const { providers } = await ai.getAiProviderOrder({ env: {}, readSettings: async () => saved(v) });
   assert.equal(providers[0].kind, 'openai-style');
-  assert.equal(providers[0].keyEnv, 'GROQ_API_KEY');
+  assert.equal(providers[0].keyEnv, 'AI_SERVICE_GROQ_API_KEY');
   assert.equal(providers[0].models.strong, 'llama-big');
   const req = ai.buildRequest(providers[0], 'llama-big', 'k', { messages: 'hi' });
   assert.equal(req.url, 'https://api.groq.com/openai/v1/chat/completions');

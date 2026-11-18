@@ -306,13 +306,15 @@ export default function AiProviderPanel(): React.ReactElement {
         <details style={{ marginTop: '1rem' }}>
           <summary>Add an OpenAI-style service</summary>
           <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-            For any service that copies OpenAI&apos;s chat API. Put its key in Doppler production under the setting name
-            you give here; never type the key itself on this screen. It is added switched off.
+            For any service that copies OpenAI&apos;s chat API. Put its key in Doppler production under a setting of its
+            own, named AI_SERVICE_&lt;NAME&gt;_API_KEY (for Groq: AI_SERVICE_GROQ_API_KEY), and give that name here. Only
+            names starting AI_SERVICE_ are accepted, so an added service can never be handed a key that belongs to
+            something else. Never type the key itself on this screen. It is added switched off.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))', gap: '0.5rem' }}>
             <label>Name<input type="text" style={smallInput} value={adding.label} placeholder="Groq" onChange={(e) => setAdding({ ...adding, label: e.target.value })} /></label>
             <label>Address<input type="text" style={smallInput} value={adding.baseUrl} placeholder="https://api.groq.com/openai/v1" onChange={(e) => setAdding({ ...adding, baseUrl: e.target.value })} /></label>
-            <label>Key Setting Name<input type="text" style={smallInput} value={adding.keyEnv} placeholder="GROQ_API_KEY" autoComplete="off" onChange={(e) => setAdding({ ...adding, keyEnv: e.target.value })} /></label>
+            <label>Key Setting Name<input type="text" style={smallInput} value={adding.keyEnv} placeholder="AI_SERVICE_GROQ_API_KEY" autoComplete="off" onChange={(e) => setAdding({ ...adding, keyEnv: e.target.value })} /></label>
             <label>Fast Model<input type="text" style={smallInput} value={adding.fast} onChange={(e) => setAdding({ ...adding, fast: e.target.value })} /></label>
             <label>Strong Model<input type="text" style={smallInput} value={adding.strong} onChange={(e) => setAdding({ ...adding, strong: e.target.value })} /></label>
           </div>
