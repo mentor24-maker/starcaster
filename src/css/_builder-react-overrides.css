@@ -1122,6 +1122,53 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
 }
 
 /* ============================================================== */
+/* SKIP TO CONTENT — the hidden first link on every live page (SC-857). */
+/* Clipped off-screen, never display:none, so screen readers still find */
+/* it; a Tab press shows it top-left, above everything. Not themed per */
+/* site: it must read on any page. Render contracts: skip-link-* in */
+/* scripts/ui/render-contracts.mjs. */
+/* ============================================================== */
+.site-skip-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.site-skip-link:focus,
+.site-skip-link:focus-visible {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2147483647;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 10px 16px;
+  overflow: visible;
+  clip-path: none;
+  background: var(--site-skip-link-bg, #111);
+  color: var(--site-skip-link-ink, #fff);
+  font: 600 16px/1.3 sans-serif;
+  text-decoration: underline;
+  border-radius: 4px;
+  outline: 3px solid var(--site-skip-link-ring, #ffbf47);
+  outline-offset: 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+/* The section the link lands on takes focus (tabIndex -1) only to move the */
+/* keyboard there; it must not draw a focus ring around a whole band. */
+.builder-preview-section[tabindex="-1"]:focus {
+  outline: none;
+}
+
+/* ============================================================== */
 /* ADMIN NAV LINK — visible to logged-in admin users on public site */
 /* JS in BuilderPublicSitePage positions it just above the language icon. */
 /* ============================================================== */
@@ -8783,6 +8830,61 @@ body:has(#builderThemesPage:not(.hidden)) .builder-floating-save-rail {
   .builder-react-root .builder-crm-form .builder-crm-form-multiselect {
     grid-column: 1;
   }
+}
+
+/* ── CRM form: labels above the boxes, half-width questions (task SC-860) ──
+ * Label Position "Above" turns the form's label|box grid into two equal
+ * tracks. Every question spans both unless it is half width, so two half
+ * questions in a row (First / Last, City / Zip) share a line — and each
+ * question is its own little column: label on top, box under it. The field
+ * wrappers are `display: contents` in the beside layout; here they are real
+ * boxes, so the label, the box and a choice group stack inside them.
+ * On a narrow form or a phone, a half question takes the whole row again. */
+.builder-react-root .builder-crm-form.is-labels-above {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 14px;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+  grid-column: span 1;
+}
+
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-submit,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-stub,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-message,
+.builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-error {
+  grid-column: 1 / -1;
+}
+
+@container crmform (max-width: 420px) {
+  .builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .builder-react-root .builder-crm-form.is-labels-above .builder-contact-form-field.is-half {
+    grid-column: 1 / -1;
+  }
+}
+
+/* The mark after a required question's label (Required Mark: Asterisk). */
+.builder-react-root .builder-crm-form .builder-crm-form-required {
+  margin-left: 0.25em;
+  color: var(--btn-danger-flat);
+  font-weight: 700;
 }
 
 /* ── Event Manager: Harvest PDF (task 86bbztj0e) ─────────────────────────

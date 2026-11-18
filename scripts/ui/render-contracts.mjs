@@ -1068,6 +1068,149 @@ export const RENDER_CONTRACTS = [
       return null;
     },
   },
+  ...[
+    { width: 1280, phone: false },
+    { width: 420, phone: true },
+  ].map(({ width, phone }) => ({
+    id: phone
+      ? 'crm-form-half-width-questions-stack-on-a-phone'
+      : 'crm-form-labels-above-and-two-half-questions-share-a-row',
+    why:
+      'Label Position "Above" and half-width questions (task SC-860) exist so an imported contact form ' +
+      'comes out the shape of the original: Bayside\'s has every label over its box and First and Last ' +
+      'side by side. jsdom checks the classes; only a browser can say the two boxes really sit on one ' +
+      'line, at about half the width of a full question, with each label above its box — and that on a ' +
+      'phone they take a whole row each again, because two half boxes at 420px are too narrow to type in. ' +
+      'The form is served from a fixture, so this needs no database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_layout' } }],
+    },
+    serve: [{
+      url: /\/api\/crm\/forms\/form_contract_layout/,
+      json: {
+        ok: true,
+        data: {
+          id: 'form_contract_layout',
+          heading: '',
+          submitLabel: 'Send',
+          successMessage: 'Thanks',
+          errorMessage: 'Sorry',
+          crmConfigId: 'crm_contract',
+          styles: { labelPosition: 'above', fieldWidth: '100%' },
+          fields: [
+            { key: 'first_name', label: 'First', type: 'text', required: true, width: 'half' },
+            { key: 'last_name', label: 'Last', type: 'text', required: true, width: 'half' },
+            { key: 'email', label: 'Email', type: 'email', required: true },
+          ],
+        },
+      },
+    }],
+    emulate: { liveSite: true, viewport: { width, height: 900 } },
+    selector: 'form.builder-crm-form',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      selectors: {
+        first: 'input[name="first_name"]',
+        last: 'input[name="last_name"]',
+        email: 'input[name="email"]',
+        firstLabel: 'label:has(> input[name="first_name"]) > span',
+        mark: 'label:has(> input[name="first_name"]) .builder-crm-form-required',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no CRM form rendered — the fixture form was not served or the module drew nothing.';
+      const f = sample.series?.[0];
+      if (!f) return 'no series frame was taken — the contract measured nothing.';
+      if (!f.first || !f.last || !f.email) return 'a question\'s box is missing — First, Last and Email must all render.';
+      if (!f.firstLabel) return 'First has no label span.';
+      if (!f.mark) return 'First is required but its label carries no asterisk.';
+      if (f.email.width < 100) return `the Email box is ${Math.round(f.email.width)}px wide — too narrow to judge anything against.`;
+      if (!(f.firstLabel.top + f.firstLabel.height <= f.first.top + 1)) {
+        return `First's label (top ${Math.round(f.firstLabel.top)}, height ${Math.round(f.firstLabel.height)}) is not above its box (top ${Math.round(f.first.top)}) — the labels are still beside.`;
+      }
+      if (phone) {
+        if (!(f.last.top > f.first.top + f.first.height)) {
+          return `at ${width}px Last (top ${Math.round(f.last.top)}) sits on First's line (top ${Math.round(f.first.top)}) — half questions must stack on a phone.`;
+        }
+        if (Math.abs(f.first.width - f.email.width) > 2) {
+          return `at ${width}px First is ${Math.round(f.first.width)}px and Email ${Math.round(f.email.width)}px — a half question must take the whole row on a phone.`;
+        }
+        return null;
+      }
+      if (Math.abs(f.first.top - f.last.top) > 1) {
+        return `First (top ${Math.round(f.first.top)}) and Last (top ${Math.round(f.last.top)}) are not on one line — two half-width questions must share a row.`;
+      }
+      const ratio = f.first.width / f.email.width;
+      if (ratio < 0.4 || ratio > 0.6) {
+        return `First is ${Math.round(f.first.width)}px against Email's ${Math.round(f.email.width)}px (${ratio.toFixed(2)}) — a half question should be about half as wide.`;
+      }
+      if (!(f.email.top > f.first.top + f.first.height)) return 'Email is not below First and Last — a full question must take its own row.';
+      return null;
+    },
+  })),
+  {
+    id: 'crm-form-labels-above-thank-you-takes-the-whole-row-on-a-phone',
+    why:
+      'With Label Position "Above" the form is a two-column grid so two half questions can share a ' +
+      'row (task SC-860). The older phone and narrow-column rules put the Thank-you and error banners ' +
+      'in column 1, and with labels above that is only HALF the form: on a phone the visitor\'s ' +
+      '"Thank you" sat squeezed into the left half beside an empty cell (SC-860 review). Only a ' +
+      'browser after a real submit can see it, so this presses Send at 420px against a served reply ' +
+      'and measures the banner against the form. No database.',
+    section: {
+      layout: 'single',
+      modules: [{ type: 'crm-form', text: '', settings: { crmFormId: 'form_contract_thanks' } }],
+    },
+    serve: [
+      {
+        url: /\/api\/crm\/forms\/form_contract_thanks/,
+        json: {
+          ok: true,
+          data: {
+            id: 'form_contract_thanks',
+            heading: '',
+            submitLabel: 'Send',
+            successMessage: 'Thanks for writing to us',
+            errorMessage: 'Sorry',
+            crmConfigId: 'crm_contract',
+            styles: { labelPosition: 'above', fieldWidth: '100%' },
+            fields: [
+              { key: 'first_name', label: 'First', type: 'text', required: false, width: 'half' },
+              { key: 'last_name', label: 'Last', type: 'text', required: false, width: 'half' },
+            ],
+          },
+        },
+      },
+      { url: /\/api\/crm\/contact-submit/, json: { ok: true, data: {} } },
+    ],
+    emulate: { liveSite: true, viewport: { width: 420, height: 900 } },
+    click: ['form.builder-crm-form button[type="submit"]'],
+    selector: 'form.builder-crm-form .builder-contact-form-message',
+    read: ['display'],
+    probes: {
+      banner: {
+        subject: 'form.builder-crm-form .builder-contact-form-message',
+        against: 'form.builder-crm-form',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no Thank-you banner appeared after pressing Send — the submit was not answered or the message did not render, so its width cannot be judged.';
+      const probe = sample.probes?.banner;
+      if (!probe) return 'no probe was taken — the contract measured nothing.';
+      if (probe.missing) return `the probe could not find \`${probe.missing}\` — nothing to measure the banner against.`;
+      const banner = probe.subjectBox.right - probe.subjectBox.left;
+      const form = probe.againstBox.right - probe.againstBox.left;
+      if (form < 200) return `the form is ${Math.round(form)}px wide — too narrow to tell half from whole.`;
+      if (banner < form * 0.8) {
+        return `the Thank-you banner is ${Math.round(banner)}px in a ${Math.round(form)}px form — it is sitting in one of the two label-above columns instead of taking the whole row.`;
+      }
+      return null;
+    },
+  },
   {
     id: 'crm-form-choose-one-draws-every-option-as-one-radio-group',
     why:
@@ -6837,6 +6980,7 @@ export const RENDER_CONTRACTS = [
       return statusesInOrder(sample, ['Requested', 'Ready to launch', 'Live']);
     },
   },
+  ...skipLinkContracts(),
   {
     id: 'spirality-tasks-stacks-to-one-column-on-a-phone',
     why:
@@ -6871,4 +7015,132 @@ function statusesInOrder(sample, names) {
   return got.join(' | ') === names.join(' | ')
     ? null
     : `the status groups read "${got.join(' | ')}", not "${names.join(' | ')}" (the tracker's order and names, empty statuses left out).`;
+}
+
+/**
+ * The hidden "Skip to content" link every live page starts with (SC-857): a
+ * menu row above a content row, rendered as a published page. Three readings,
+ * because the link is three promises — hidden until Tab, visible on Tab, and
+ * Enter moves the keyboard past the menu. The page with no sections (no link)
+ * is a unit test in lib/builder-client/skip-link-target.test.ts.
+ */
+function skipLinkContracts() {
+  const section = {
+    layout: 'single',
+    leadSections: [{
+      modules: [{
+        type: 'navigation',
+        settings: { navItems: JSON.stringify([{ id: 'home', label: 'Home', href: '/' }]) },
+      }],
+    }],
+    modules: [{ type: 'heading', text: 'Page content', settings: {} }],
+  };
+  const why =
+    'Delray\'s and Press Play\'s original sites both opened with a hidden "Skip to content" link, ' +
+    'and StarCaster pages had none (task SC-857, from the 2026-11-17 anchor sweep). Keyboard and ' +
+    'screen-reader visitors had to tab through the whole menu on every page, and accessibility ' +
+    'checkers flag the gap. ';
+  return [
+    {
+      id: 'skip-link-is-on-the-live-page-and-hidden-until-tabbed-to',
+      why: why + 'Before anyone presses Tab the link must be on the page (a screen reader finds it) ' +
+        'and take up no visible space, so every page looks exactly as it did; and it must point at ' +
+        'the content row, never the menu row.',
+      section,
+      emulate: { liveSite: true },
+      selector: 'a.site-skip-link',
+      read: ['clipPath', 'display'],
+      series: {
+        count: 1,
+        everyMs: 0,
+        read: ['display'],
+        attrs: ['href', 'tabindex'],
+        selectors: {
+          target: 'section#site-main-content',
+          menuTarget: '.builder-preview-section-navigation#site-main-content',
+        },
+      },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.matches !== 1) return `${sample.matches} skip links on the page — expected exactly one.`;
+        if (sample.text !== 'Skip to content') return `the link reads "${sample.text}", expected "Skip to content".`;
+        if (sample.styles.display === 'none') return 'the link is display:none, so screen readers cannot find it either — hide it by clipping instead.';
+        if (sample.box.width > 1 || sample.box.height > 1) {
+          return `before any key is pressed the link is ${sample.box.width}×${sample.box.height}px — it shows on every page.`;
+        }
+        const frame = sample.series?.[0];
+        if (!frame) return 'no series frame was taken — the contract measured nothing.';
+        if (frame.menuTarget) return 'the link jumps to the menu row, not past it.';
+        if (!frame.target) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (frame.target.tabindex !== '-1') return `the target section has tabindex ${JSON.stringify(frame.target.tabindex)} — without -1 the keyboard does not follow the jump.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-shows-top-left-when-tabbed-to',
+      why: why + 'Once the keyboard reaches it the link must be plainly visible: a solid box in the ' +
+        'top-left corner of the window with a visible outline.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Shift' },
+      selector: 'a.site-skip-link',
+      read: ['position', 'outlineStyle', 'clipPath'],
+      series: { count: 1, everyMs: 0, read: ['left'], selectors: { link: 'a.site-skip-link' } },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.box.width < 60 || sample.box.height < 20) {
+          return `with keyboard focus the link is ${sample.box.width}×${sample.box.height}px — it does not show when tabbed to.`;
+        }
+        if (sample.styles.clipPath && sample.styles.clipPath !== 'none') return `the focused link is still clipped (${sample.styles.clipPath}).`;
+        if (sample.styles.position !== 'fixed') return `the focused link is position:${sample.styles.position} — it must sit in the window's corner wherever the page is scrolled.`;
+        if (!sample.styles.outlineStyle || sample.styles.outlineStyle === 'none') return 'the focused link has no outline.';
+        const link = sample.series?.[0]?.link;
+        if (!link) return 'no series frame was taken — where the link sits could not be read.';
+        if (link.top < 0 || link.top > 40 || parseFloat(link.left) > 40) return `the focused link sits at top ${Math.round(link.top)}px, left ${link.left} — expected the top-left corner.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-jumps-past-a-shared-header-that-holds-no-menu',
+      why: why + 'A real site\'s header is usually a shared (saved) section, often a logo or contact ' +
+        'strip with the menu in its own row below it. The link must jump past BOTH. The first build ' +
+        'pointed at the shared strip, above the menu, because the page loader dropped the ' +
+        '"shared section" marker before the link chose its target (the SC-857 send-back).',
+      section: {
+        ...section,
+        leadSections: [
+          {
+            savedSectionId: 'saved-render-contract-logo-bar',
+            canonical: true,
+            modules: [{ type: 'heading', text: 'Shared logo bar', settings: {} }],
+          },
+          ...section.leadSections,
+        ],
+      },
+      emulate: { liveSite: true },
+      selector: 'section#site-main-content',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (sample.matches !== 1) return `${sample.matches} sections carry the skip link's target id — expected exactly one.`;
+        if (/Shared logo bar/.test(sample.text)) return 'the link jumps to the shared logo bar, above the menu — the next Tab goes straight into the menu.';
+        if (!/Page content/.test(sample.text)) return `the link jumps to a section reading "${sample.text.slice(0, 60)}", not the page content.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-enter-moves-focus-past-the-menu',
+      why: why + 'Pressing Enter must move keyboard focus to the content row, not just scroll: ' +
+        'otherwise the next Tab lands back in the menu and the link saved nothing.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Enter' },
+      selector: 'section#site-main-content:focus',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'after Enter on the skip link the content section does not have focus — the jump moved the scroll at most, not the keyboard.';
+        return null;
+      },
+    },
+  ];
 }

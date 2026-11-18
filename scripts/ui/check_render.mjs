@@ -260,6 +260,10 @@ function documentForSection({
     locked: false,
     alignment: 'left',
     widthMode: 'contained',
+    // A lead row may be a shared (saved) section, the way a real site's header
+    // usually is (SC-857's skip link has to see it as header).
+    ...(section.savedSectionId ? { savedSectionId: section.savedSectionId } : {}),
+    ...(typeof section.canonical === 'boolean' ? { canonical: section.canonical } : {}),
     modules: (section.modules || []).map(moduleFrom),
   }));
 
