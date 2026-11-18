@@ -41,6 +41,7 @@ const videoSessionsStore = require(path.join(ROOT, 'lib/videoSessionsStore.js'))
 const videoSourcesStore = require(path.join(ROOT, 'lib/videoSourcesStore.js'));
 const videoTranscriptsStore = require(path.join(ROOT, 'lib/videoTranscriptsStore.js'));
 const videoMomentsStore = require(path.join(ROOT, 'lib/videoMomentsStore.js'));
+const videoAudioPairsStore = require(path.join(ROOT, 'lib/videoAudioPairsStore.js'));
 const youtubeOutreachStore = require(path.join(ROOT, 'lib/youtubeOutreachStore.js'));
 const substackNotesStore = require(path.join(ROOT, 'lib/substackNotesStore.js'));
 const substackMinerStore = require(path.join(ROOT, 'lib/substackMinerStore.js'));
@@ -1576,9 +1577,10 @@ async function ensureCrm(projectId, userId) {
       submitLabel: 'Send it to the front desk',
       successMessage: 'Thank you — the desk has your details.',
       accentColor: '#0f4f8f',
+      styles: { labelPosition: 'above' },
       fields: [
         { key: 'email', label: 'Email', type: 'email', required: true },
-        { key: 'first_name', label: 'First Name', type: 'text', required: true },
+        { key: 'first_name', label: 'First Name', type: 'text', required: true, width: 'half' },
         { key: 'ntrp_rating', label: 'NTRP Rating', type: 'text', required: false },
       ],
     }, scope);
@@ -1586,6 +1588,16 @@ async function ensureCrm(projectId, userId) {
   if (!form?.id) {
     console.error('  could not create the fixture CRM form — the crm-form panel will seed empty.');
     return { crmConfigId: config.id, crmFormId: '' };
+  }
+  // Labels above (SC-860): the panel lists a Full / Half width row per
+  // question only in that layout, so a fixture left with labels beside would
+  // measure the Form Appearance column without them and report OK on rows it
+  // never saw. Patched onto an existing fixture form, and read back.
+  if (form.styles?.labelPosition !== 'above') {
+    const patched = await crmFormsStore.updateForm(form.id, { stylesPatch: { labelPosition: 'above' } }, scope);
+    if (patched?.styles?.labelPosition !== 'above') {
+      console.error('  could not set the fixture CRM form\'s labels above — the question width rows will not be measured.');
+    }
   }
   return { crmConfigId: config.id, crmFormId: form.id };
 }
@@ -1798,6 +1810,7 @@ async function seedStudioFootage(scope) {
   ];
   let made = 0;
   let found = 0;
+  const idByHash = {};
   for (const shoot of shoots) {
     let session = lookup(await videoSessionsStore.findSessionByTitle(shoot.title, scope), 'find footage session');
     if (!session) {
@@ -1811,6 +1824,7 @@ async function seedStudioFootage(scope) {
       const transcript = FIXTURE_TRANSCRIPTS[file.hash];
       if (existing) {
         found += 1;
+        idByHash[file.hash] = existing.id;
         if (transcript) {
           must(await videoTranscriptsStore.upsertTranscript(existing.id, transcript(), scope), 'transcript footage file');
         }
@@ -1829,6 +1843,7 @@ async function seedStudioFootage(scope) {
         await videoSourcesStore.createSource({ sessionId: session.id, contentHash: hash, ...rest }, scope),
         'create footage file'
       );
+      idByHash[hash] = created.id;
       if (transcript) {
         must(await videoTranscriptsStore.upsertTranscript(created.id, transcript(), scope), 'transcript footage file');
       }
@@ -1838,8 +1853,23 @@ async function seedStudioFootage(scope) {
       made += 1;
     }
   }
+  // Reel Spinner 3b (SC-832): one pair lined up, one refused with its reason,
+  // so the File column measures the long "recorded together with" lines.
+  // Upserts, so a re-seed changes nothing.
+  for (const [a, b, data] of FIXTURE_PAIRS) {
+    if (!idByHash[a] || !idByHash[b]) continue;
+    const pairData = typeof data === 'function' ? data(idByHash) : data;
+    must(await videoAudioPairsStore.upsertAudioPair(idByHash[a], idByHash[b], pairData, scope), 'pair footage files');
+  }
   return { made, found };
 }
+
+const FIXTURE_PAIRS = [
+  ['fixture-footage-01', 'fixture-footage-02', (ids) => ({
+    status: 'done', offsetS: -30.12, driftS: 0.02, confidence: 0.88, audioSourceId: ids['fixture-footage-02'],
+  })],
+  ['fixture-footage-01', 'fixture-footage-05', { status: 'failed', error: 'drift', offsetS: 12.5, driftS: 0.31, confidence: 0.7 }],
+];
 
 let footageSeeded = null;
 try {

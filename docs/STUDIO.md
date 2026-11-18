@@ -427,6 +427,52 @@ with no cut-marks row and no job waiting, and prints the running tally —
 `cut marks: 27 done · 0 failed · 0 still to do`. It is a dry run until you add
 `-- --apply`, and a second `--apply` enqueues nothing.
 
+## Matching iPhone and Zoom recordings (Reel Spinner step 3)
+
+When Dane films a session on the iPhone while Zoom records it too, the edit
+keeps one recording's picture and uses the **cleaner sound** of the two
+(Dane's choice, 2026-11-16: "Better sound"). Nothing is mixed or laid over
+anything here: each answer is a **decision** stored in `video_audio_pairs`,
+one row per pair — how many seconds apart the two start, how far the clocks
+drift by the end, and whose sound to use.
+
+**When it runs.** Every time an iPhone or Zoom recording reaches `ready`, the
+Mini queues an `align` job for it. The job looks at every OTHER ready
+recording from the other device whose recording time overlaps it by at least
+half of the shorter one, and lines each one up by listening to both (the rules
+are `workers/studio/alignment.js`, step 3a). If the second half of a session
+arrives hours later, its own job finds the first, so a pair is always looked
+at once both exist.
+
+**What Footage shows.** Under the file name: *"Recorded together with
+zoom_call.mp4, sound from zoom_call.mp4 (cleaner)"*, with a button to use the
+other recording's sound instead. Pressing it saves **your choice**, and the
+Mini never overwrites it — a later line-up still updates the timing but keeps
+your pick (it is guarded inside the database write itself). When neither
+sound is clearly better, it says so and offers both.
+
+**A pair that did not match says so, and why** — rather than not showing:
+*"Recorded at the same time as …, but the two could not be lined up: the two
+clocks drift apart (0.25 s by the end), so the sound would slide off the
+lips"*. The other reasons: the sound did not match anywhere, the start
+matched but the end did not, one is too short (a minute is the least), or the
+sound file of one could not be read. A refused pair costs a manual line-up; a
+wrong one would put the sound off the lips for the whole edit, so when unsure
+it refuses.
+
+- **ffmpeg missing**, or the database unreachable, is the machine's fault: the
+  job waits 15 minutes and tries again, and nothing is written.
+- **A sound file missing or unreadable** is that pair's fault: a `failed` row
+  names the file and says to re-run the proxy step for it.
+- Line-ups run **last** of all the Mini's steps, so a backlog never delays a
+  new recording's transcription.
+
+**Catching up:** `npm run studio:backfill-align` (on the Mini) finds every pair
+of ready recordings recorded at overlapping times that has no row yet, queues
+one job per recording needed, and always prints how many pairs exist —
+`pairs: 1 lined up · 0 refused with a reason · 0 not looked at yet`. A dry run
+until you add `-- --apply`; a second `--apply` enqueues nothing.
+
 ## YouTube (Reel Spinner step 6)
 
 Finished edits upload to the **Dane of Earth** channel (Dane's choice,

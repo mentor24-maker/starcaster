@@ -5,7 +5,8 @@ import type { BackgroundSettings, BuilderTemplateModule } from "@/lib/builder-te
 import { starcasterScopedHeaders } from "@/lib/adapters/starcaster-app";
 import {
   DEFAULT_CRM_FORM_STYLES,
-  normalizeCrmFormStyles
+  normalizeCrmFormStyles,
+  publicFormFields
 } from "../../lib/crmFormStyles.js";
 import { BuilderAlignmentIconGroup } from "./builder-alignment-icon-group";
 import { BuilderBackgroundControls } from "./builder-background-controls";
@@ -18,11 +19,14 @@ import {
 } from "./builder-theme-color-field";
 import { getModuleAlignment, getModuleBackgroundSettings } from "./builder-utils";
 
+type CrmFormFieldRecord = { key: string; label?: string; type?: string; width?: string };
+
 type CrmFormRecord = {
   id: string;
   name: string;
   accentColor?: string;
   styles?: Record<string, string | undefined>;
+  fields?: CrmFormFieldRecord[];
 };
 
 type Props = {
@@ -47,13 +51,28 @@ export const CRM_FORM_STYLE_SNAPSHOT_KEY = "crmFormStyleSnapshot";
 /** Tells a rendered CRM Form on the canvas that its form's styles changed. */
 export const CRM_FORM_STYLES_EVENT = "starcaster:crm-form-styles";
 
-export type CrmFormStylesEventDetail = { formId: string; styles: Record<string, string> };
+export type CrmFormStylesEventDetail = {
+  formId: string;
+  styles: Record<string, string>;
+  /** Question widths by field key, when they changed too (SC-860). */
+  fieldWidths?: Record<string, string>;
+};
 
-function announceFormStyles(formId: string, styles: Record<string, string>) {
+function announceFormStyles(formId: string, styles: Record<string, string>, fieldWidths?: Record<string, string>) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent<CrmFormStylesEventDetail>(CRM_FORM_STYLES_EVENT, { detail: { formId, styles } })
+    new CustomEvent<CrmFormStylesEventDetail>(CRM_FORM_STYLES_EVENT, { detail: { formId, styles, fieldWidths } })
   );
+}
+
+/** The questions a visitor sees, in order — not the hidden meta entries. */
+/** The questions a visitor sees — the renderer's own rule, so the two lists cannot disagree. */
+function visibleQuestions(fields: CrmFormFieldRecord[] | undefined): CrmFormFieldRecord[] {
+  return publicFormFields(fields ?? []) as CrmFormFieldRecord[];
+}
+
+function widthsOf(fields: CrmFormFieldRecord[]): Record<string, string> {
+  return Object.fromEntries(fields.map((f) => [f.key, f.width === "half" ? "half" : "full"]));
 }
 
 /**
@@ -107,12 +126,40 @@ export function BuilderCrmFormModuleSettings({
   const [forms, setForms] = useState<{ id: string; name: string }[]>([]);
   const [formsLoading, setFormsLoading] = useState(true);
   const [formStyles, setFormStyles] = useState<Record<string, string>>({});
+  const [questions, setQuestions] = useState<CrmFormFieldRecord[]>([]);
   const [stylesLoading, setStylesLoading] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Keys changed since the last save went out. Only these are sent, so a
   // Padding change cannot carry a stale copy of every colour with it.
   const pendingPatchRef = useRef<Record<string, string>>({});
+  // The same for question widths: only the questions changed since the last
+  // save, sent as a fieldLayoutPatch, never the whole field list.
+  const pendingWidthsRef = useRef<Record<string, string>>({});
+
+  // The form the panel shows right now, for a save reply to check against.
+  const currentFormIdRef = useRef(crmFormId);
+  currentFormIdRef.current = crmFormId;
+
+  // Switching the module to another form (or closing the panel) sends any
+  // save still waiting out its 500ms to the form it was MADE on, at once.
+  // Left alone, the timer would fire later carrying the old form's edits, and
+  // an edit on the new form inside that wait would send the old form's
+  // leftovers to the NEW form's id. Sending now empties both pending lists
+  // before the new form's first edit can join them.
+  useEffect(() => {
+    const formId = crmFormId;
+    return () => {
+      if (!saveTimerRef.current) return;
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (formId) sendFormStylesSave(formId);
+      else { pendingPatchRef.current = {}; pendingWidthsRef.current = {}; }
+    };
+    // sendFormStylesSave reads only refs and state setters, so the copy from
+    // this render is as good as any later one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crmFormId]);
 
   // The parent passes a fresh arrow function on every render, so this callback
   // can never be an effect dependency — the style-snapshot write below would
@@ -136,6 +183,7 @@ export function BuilderCrmFormModuleSettings({
   useEffect(() => {
     if (!crmFormId) {
       setFormStyles({});
+      setQuestions([]);
       return;
     }
 
@@ -149,10 +197,12 @@ export function BuilderCrmFormModuleSettings({
         const form = (d?.form ?? d?.data) as CrmFormRecord | null;
         if (!form || form.id !== crmFormId) {
           setFormStyles({});
+          setQuestions([]);
           return;
         }
         const normalized = normalizeCrmFormStyles(form.styles, form.accentColor) as Record<string, string>;
         setFormStyles(normalized);
+        setQuestions(visibleQuestions(form.fields));
         announceFormStyles(crmFormId, normalized);
         dropStyleSnapshot(onUpdateModuleRef.current);
       })
@@ -176,37 +226,57 @@ export function BuilderCrmFormModuleSettings({
     pendingPatchRef.current = { ...pendingPatchRef.current, ...changes };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      const stylesPatch = pendingPatchRef.current;
-      pendingPatchRef.current = {};
-      fetch(`/api/crm/forms/${encodeURIComponent(formId)}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          ...starcasterScopedHeaders(),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ stylesPatch })
-      })
-        .then(async (r) => {
-          const d = await r.json().catch(() => null);
-          const form = (d?.form ?? d?.data) as CrmFormRecord | null;
-          if (!r.ok || !form?.styles) throw new Error("save failed");
-          // The server merged our keys onto what the form holds NOW, which may
-          // include colours saved in the CRM editor since this panel opened.
-          // Adopt that, keeping any change made while this save was in flight.
-          const saved = normalizeCrmFormStyles(
-            { ...form.styles, ...pendingPatchRef.current },
-            form.accentColor
-          ) as Record<string, string>;
-          setFormStyles(saved);
-          announceFormStyles(formId, saved);
-          setSaveNotice("Form styles saved");
-        })
-        .catch(() => setSaveNotice("Could not save form styles"))
-        .finally(() => {
-          setTimeout(() => setSaveNotice(""), 2400);
-        });
+      saveTimerRef.current = null;
+      sendFormStylesSave(formId);
     }, 500);
+  }
+
+  /** Send what is waiting to `formId` now. Only its reply's form may update the panel. */
+  function sendFormStylesSave(formId: string) {
+    const stylesPatch = pendingPatchRef.current;
+    const fieldLayoutPatch = pendingWidthsRef.current;
+    pendingPatchRef.current = {};
+    pendingWidthsRef.current = {};
+    const body: Record<string, Record<string, string>> = {};
+    if (Object.keys(stylesPatch).length) body.stylesPatch = stylesPatch;
+    if (Object.keys(fieldLayoutPatch).length) body.fieldLayoutPatch = fieldLayoutPatch;
+    fetch(`/api/crm/forms/${encodeURIComponent(formId)}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        ...starcasterScopedHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        const form = (d?.form ?? d?.data) as CrmFormRecord | null;
+        if (!r.ok || !form?.styles) throw new Error("save failed");
+        // The module was switched to another form while this save was in
+        // flight: the reply is the OLD form's, and the panel now shows the
+        // new one. The save stuck; nothing here may paint it over the new form.
+        if (form.id !== formId || formId !== currentFormIdRef.current) return;
+        // The server merged our keys onto what the form holds NOW, which may
+        // include colours saved in the CRM editor since this panel opened.
+        // Adopt that, keeping any change made while this save was in flight.
+        const saved = normalizeCrmFormStyles(
+          { ...form.styles, ...pendingPatchRef.current },
+          form.accentColor
+        ) as Record<string, string>;
+        setFormStyles(saved);
+        // Widths as the server stored them, with any changed since in flight.
+        const savedQuestions = visibleQuestions(form.fields).map((q) =>
+          q.key in pendingWidthsRef.current ? { ...q, width: pendingWidthsRef.current[q.key] } : q
+        );
+        setQuestions(savedQuestions);
+        announceFormStyles(formId, saved, widthsOf(savedQuestions));
+        setSaveNotice("Form styles saved");
+      })
+      .catch(() => setSaveNotice("Could not save form styles"))
+      .finally(() => {
+        setTimeout(() => setSaveNotice(""), 2400);
+      });
   }
 
   function updateFormStyle(key: string, value: string) {
@@ -219,6 +289,17 @@ export function BuilderCrmFormModuleSettings({
     announceFormStyles(crmFormId, nextStyles);
     queueFormStylesSave(crmFormId, { [key]: nextStyles[key] });
   }
+
+  function updateQuestionWidth(key: string, width: string) {
+    const next = questions.map((q) => (q.key === key ? { ...q, width } : q));
+    setQuestions(next);
+    if (!crmFormId) return;
+    announceFormStyles(crmFormId, formStyles, widthsOf(next));
+    pendingWidthsRef.current = { ...pendingWidthsRef.current, [key]: width };
+    queueFormStylesSave(crmFormId, {});
+  }
+
+  const labelsAbove = formStyles.labelPosition === "above";
 
   const borderSize = parsePxNumber(formStyles.borderSize, DEFAULT_CRM_FORM_STYLES.borderSize);
   const borderRadius = parsePxNumber(formStyles.borderRadius, DEFAULT_CRM_FORM_STYLES.borderRadius);
@@ -328,6 +409,42 @@ export function BuilderCrmFormModuleSettings({
               <p className="builder-module-runtime-note">Loading form styles…</p>
             ) : (
               <>
+                {/* Layout first (D9): where labels sit decides whether the
+                    question widths below mean anything at all. */}
+                <BuilderModuleField label="Labels" width="select-sm">
+                  <select
+                    value={labelsAbove ? "above" : "beside"}
+                    onChange={(e) => updateFormStyle("labelPosition", e.target.value)}
+                  >
+                    <option value="beside">Beside</option>
+                    <option value="above">Above</option>
+                  </select>
+                </BuilderModuleField>
+                {/* Half width only exists with labels above, where two
+                    questions can share a row; beside, each is its own row. */}
+                {labelsAbove
+                  ? questions.map((q) => (
+                      <BuilderModuleField key={q.key} label={q.label || q.key} width="select-sm">
+                        <select
+                          aria-label={`Width of ${q.label || q.key}`}
+                          value={q.width === "half" ? "half" : "full"}
+                          onChange={(e) => updateQuestionWidth(q.key, e.target.value)}
+                        >
+                          <option value="full">Full</option>
+                          <option value="half">Half</option>
+                        </select>
+                      </BuilderModuleField>
+                    ))
+                  : null}
+                <BuilderModuleField label="Required Mark" width="select-sm">
+                  <select
+                    value={formStyles.requiredMarker === "none" ? "none" : "asterisk"}
+                    onChange={(e) => updateFormStyle("requiredMarker", e.target.value)}
+                  >
+                    <option value="asterisk">Asterisk</option>
+                    <option value="none">None</option>
+                  </select>
+                </BuilderModuleField>
                 <BuilderModuleField label="Border Size" width="num">
                   <BuilderNumberSelectControl
                     fallback="0"
