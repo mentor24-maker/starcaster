@@ -133,7 +133,7 @@ const IGNORED_SECTION_FIELDS = new Set(["id", "savedSectionId", "canonical", "ca
  */
 const SECTION_FIELD_LABELS: Record<string, string> = {
   title: "Section title",
-  anchorName: "Anchor name",
+  anchorName: "Anchor Name",
   layout: "Column layout",
   widthMode: "Width mode",
   widthPercent: "Width %",

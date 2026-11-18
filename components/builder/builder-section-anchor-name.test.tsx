@@ -29,7 +29,7 @@ function mount(section: BuilderTemplateSection, pageSections: BuilderTemplateSec
       </BuilderPageSectionsContext.Provider>
     );
   act(() => render());
-  const input = () => host.querySelector<HTMLInputElement>('input[aria-label="Anchor name"]')!;
+  const input = () => host.querySelector<HTMLInputElement>('input[aria-label="Anchor Name"]')!;
   return {
     host,
     input,

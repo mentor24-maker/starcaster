@@ -93,13 +93,13 @@ export function SectionAnchorNameRow({
       return next ? { ...rest, anchorName: next } : rest;
     });
   return (
-    <BuilderSettingRow label="Anchor name">
+    <BuilderSettingRow label="Anchor Name">
       <div className="builder-section-anchor-name">
         <input
           type="text"
           value={value}
           placeholder="e.g. contact-us"
-          aria-label="Anchor name"
+          aria-label="Anchor Name"
           aria-invalid={takenBy ? true : undefined}
           title="A name a link can jump to: letters, digits and hyphens. A menu item can then link to this section."
           onChange={(event) => write(typingAnchorName(event.target.value))}
