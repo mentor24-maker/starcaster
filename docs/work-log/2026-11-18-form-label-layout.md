@@ -56,3 +56,17 @@ both fixed:
 Also tidied: three half-width questions in a row now pair the first two and
 give the third its own row, and two small pieces of duplicated logic now
 read from the one shared source.
+
+**Second review (same day).** Two more, both fixed:
+
+- The import decided "labels beside" for a WHOLE form if any one thing in
+  it carried a beside class. Ninja Forms puts that class on every lone
+  "I agree" checkbox by default, so a normal labels-above Ninja form would
+  have been imported as labels beside, and its side-by-side questions would
+  have stopped sitting side by side. The import now goes by what most of the
+  form's typed-answer questions do, and ignores checkboxes and radio buttons.
+- In the Builder's form settings, switching a module to a different form
+  within half a second of a change could send the old form's change to the
+  new form, or paint the old form's questions over the new one. A waiting
+  change now goes straight to the form it was made on, and a late reply for
+  a form no longer showing is ignored.

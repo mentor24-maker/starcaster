@@ -137,6 +137,30 @@ export function BuilderCrmFormModuleSettings({
   // save, sent as a fieldLayoutPatch, never the whole field list.
   const pendingWidthsRef = useRef<Record<string, string>>({});
 
+  // The form the panel shows right now, for a save reply to check against.
+  const currentFormIdRef = useRef(crmFormId);
+  currentFormIdRef.current = crmFormId;
+
+  // Switching the module to another form (or closing the panel) sends any
+  // save still waiting out its 500ms to the form it was MADE on, at once.
+  // Left alone, the timer would fire later carrying the old form's edits, and
+  // an edit on the new form inside that wait would send the old form's
+  // leftovers to the NEW form's id. Sending now empties both pending lists
+  // before the new form's first edit can join them.
+  useEffect(() => {
+    const formId = crmFormId;
+    return () => {
+      if (!saveTimerRef.current) return;
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      if (formId) sendFormStylesSave(formId);
+      else { pendingPatchRef.current = {}; pendingWidthsRef.current = {}; }
+    };
+    // sendFormStylesSave reads only refs and state setters, so the copy from
+    // this render is as good as any later one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crmFormId]);
+
   // The parent passes a fresh arrow function on every render, so this callback
   // can never be an effect dependency — the style-snapshot write below would
   // re-trigger the fetch that produced it, looping once per round trip.
@@ -202,47 +226,57 @@ export function BuilderCrmFormModuleSettings({
     pendingPatchRef.current = { ...pendingPatchRef.current, ...changes };
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      const stylesPatch = pendingPatchRef.current;
-      const fieldLayoutPatch = pendingWidthsRef.current;
-      pendingPatchRef.current = {};
-      pendingWidthsRef.current = {};
-      const body: Record<string, Record<string, string>> = {};
-      if (Object.keys(stylesPatch).length) body.stylesPatch = stylesPatch;
-      if (Object.keys(fieldLayoutPatch).length) body.fieldLayoutPatch = fieldLayoutPatch;
-      fetch(`/api/crm/forms/${encodeURIComponent(formId)}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          ...starcasterScopedHeaders(),
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(body)
-      })
-        .then(async (r) => {
-          const d = await r.json().catch(() => null);
-          const form = (d?.form ?? d?.data) as CrmFormRecord | null;
-          if (!r.ok || !form?.styles) throw new Error("save failed");
-          // The server merged our keys onto what the form holds NOW, which may
-          // include colours saved in the CRM editor since this panel opened.
-          // Adopt that, keeping any change made while this save was in flight.
-          const saved = normalizeCrmFormStyles(
-            { ...form.styles, ...pendingPatchRef.current },
-            form.accentColor
-          ) as Record<string, string>;
-          setFormStyles(saved);
-          // Widths as the server stored them, with any changed since in flight.
-          const savedQuestions = visibleQuestions(form.fields).map((q) =>
-            q.key in pendingWidthsRef.current ? { ...q, width: pendingWidthsRef.current[q.key] } : q
-          );
-          setQuestions(savedQuestions);
-          announceFormStyles(formId, saved, widthsOf(savedQuestions));
-          setSaveNotice("Form styles saved");
-        })
-        .catch(() => setSaveNotice("Could not save form styles"))
-        .finally(() => {
-          setTimeout(() => setSaveNotice(""), 2400);
-        });
+      saveTimerRef.current = null;
+      sendFormStylesSave(formId);
     }, 500);
+  }
+
+  /** Send what is waiting to `formId` now. Only its reply's form may update the panel. */
+  function sendFormStylesSave(formId: string) {
+    const stylesPatch = pendingPatchRef.current;
+    const fieldLayoutPatch = pendingWidthsRef.current;
+    pendingPatchRef.current = {};
+    pendingWidthsRef.current = {};
+    const body: Record<string, Record<string, string>> = {};
+    if (Object.keys(stylesPatch).length) body.stylesPatch = stylesPatch;
+    if (Object.keys(fieldLayoutPatch).length) body.fieldLayoutPatch = fieldLayoutPatch;
+    fetch(`/api/crm/forms/${encodeURIComponent(formId)}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: {
+        ...starcasterScopedHeaders(),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    })
+      .then(async (r) => {
+        const d = await r.json().catch(() => null);
+        const form = (d?.form ?? d?.data) as CrmFormRecord | null;
+        if (!r.ok || !form?.styles) throw new Error("save failed");
+        // The module was switched to another form while this save was in
+        // flight: the reply is the OLD form's, and the panel now shows the
+        // new one. The save stuck; nothing here may paint it over the new form.
+        if (form.id !== formId || formId !== currentFormIdRef.current) return;
+        // The server merged our keys onto what the form holds NOW, which may
+        // include colours saved in the CRM editor since this panel opened.
+        // Adopt that, keeping any change made while this save was in flight.
+        const saved = normalizeCrmFormStyles(
+          { ...form.styles, ...pendingPatchRef.current },
+          form.accentColor
+        ) as Record<string, string>;
+        setFormStyles(saved);
+        // Widths as the server stored them, with any changed since in flight.
+        const savedQuestions = visibleQuestions(form.fields).map((q) =>
+          q.key in pendingWidthsRef.current ? { ...q, width: pendingWidthsRef.current[q.key] } : q
+        );
+        setQuestions(savedQuestions);
+        announceFormStyles(formId, saved, widthsOf(savedQuestions));
+        setSaveNotice("Form styles saved");
+      })
+      .catch(() => setSaveNotice("Could not save form styles"))
+      .finally(() => {
+        setTimeout(() => setSaveNotice(""), 2400);
+      });
   }
 
   function updateFormStyle(key: string, value: string) {

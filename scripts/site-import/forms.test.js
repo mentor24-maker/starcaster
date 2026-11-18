@@ -252,6 +252,32 @@ test('Gravity Forms halves pair up, and a left-label form reads as labels beside
   assert.deepEqual(r.fields.map((f) => [f.label, f.width || 'full']), [['City', 'half'], ['Zip', 'half'], ['Email', 'full']]);
 });
 
+// Ninja Forms, as it ships: every text field label-above, and its single
+// "I agree" checkbox label-right by default. One consent box must not turn
+// the whole form beside (which would also stop its half widths rendering).
+const NINJA_WITH_CONSENT = '<form><div class="nf-form-content">'
+  + '<div class="nf-field-container textbox-container label-above one-half"><div class="nf-field-label"><label for="f1">First</label></div><input id="f1" name="fname"></div>'
+  + '<div class="nf-field-container textbox-container label-above one-half"><div class="nf-field-label"><label for="f2">Last</label></div><input id="f2" name="lname"></div>'
+  + '<div class="nf-field-container email-container label-above"><div class="nf-field-label"><label for="f3">Email</label></div><input type="email" id="f3" name="email"></div>'
+  + '<div class="nf-field-container checkbox-container label-right"><div class="nf-field-label"><label for="f4">I agree to be contacted</label></div><input type="checkbox" id="f4" name="agree"></div>'
+  + '</div><button>Send</button></form>';
+
+test('Ninja Forms: a label-right consent checkbox does not make a labels-above form read as beside', () => {
+  const r = readSourceForm(NINJA_WITH_CONSENT);
+  assert.equal(r.labelPosition, 'above');
+  assert.deepEqual(r.fields.map((f) => [f.label, f.width || 'full']), [
+    ['First', 'half'], ['Last', 'half'], ['Email', 'full'], ['I agree to be contacted', 'full'],
+  ]);
+});
+
+test('labels beside is decided by most of the text questions, not by any one of them', () => {
+  const field = (cls, id, label) => `<div class="nf-field-container textbox-container ${cls}"><label for="${id}">${label}</label><input id="${id}" name="${id}"></div>`;
+  const one = readSourceForm('<form>' + field('label-left', 'a', 'A') + field('label-above', 'b', 'B') + field('label-above', 'c', 'C') + '<button>Go</button></form>');
+  assert.equal(one.labelPosition, 'above', 'one beside field out of three');
+  const most = readSourceForm('<form>' + field('label-left', 'a', 'A') + field('label-left', 'b', 'B') + field('label-above', 'c', 'C') + '<button>Go</button></form>');
+  assert.equal(most.labelPosition, 'beside', 'two beside fields out of three');
+});
+
 test('a form with no layout classes reads as labels above, every question full width', () => {
   const r = read('plain-contact.html');
   assert.equal(r.labelPosition, 'above');

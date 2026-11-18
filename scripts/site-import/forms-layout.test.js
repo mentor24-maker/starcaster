@@ -23,7 +23,7 @@ const { resolveStylesPatch, sanitizeForm } = require('../../lib/crmFormsStore.js
 
 const BAYSIDE_FORM = fs.readFileSync(path.join(__dirname, 'fixtures', 'forms', 'bayside-wpforms.html'), 'utf8');
 
-const IR = () => ({
+const IR = (formHtml = BAYSIDE_FORM) => ({
   irVersion: '1.0', jobId: 'job-bayside', sourceUrl: 'https://bayside.test/',
   capturedAt: '2026-11-17T00:00:00.000Z', assets: [],
   taxonomy: { navs: [], pageOrder: ['/'] },
@@ -33,7 +33,7 @@ const IR = () => ({
     metaDescription: '', ogTags: {}, canonicalUrl: '', lang: 'en',
     screenshots: { desktop: '', tablet: '', mobile: '' },
     sections: [{ sourceId: 'sec', type: 'unknown', screenshot: '', elements: [{
-      sourceId: 'p2a0c975e-8a8a4bc3', class: 'form', html: BAYSIDE_FORM, textContent: '', textLength: 0,
+      sourceId: 'p2a0c975e-8a8a4bc3', class: 'form', html: formHtml, textContent: '', textLength: 0,
       computedStyles: {}, documentPosition: 0, depth: 1, assetRefs: [], screenshot: 'https://blob.test/form.png',
     }] }],
   }],
@@ -72,6 +72,26 @@ test('Bayside: the plan carries labels above and First / Last at half width', ()
   const [plan] = mapSite(IR(), { existingSlugs: [] }).forms;
   assert.equal(plan.styles.labelPosition, 'above');
   assert.deepEqual(plan.fields.map((f) => f.width || 'full'), ['half', 'half', 'full', 'full', 'full', 'full']);
+});
+
+test('Ninja Forms: a default label-right consent checkbox leaves the import labels above, halves intact', async () => {
+  // Ninja puts label-right on every single checkbox by default. Reading that
+  // as the whole form's setting made the import write a labels-beside form,
+  // which also stops its half widths rendering.
+  const ninja = '<form><div class="nf-form-content">'
+    + '<div class="nf-field-container textbox-container label-above one-half"><label for="f1">First</label><input id="f1" name="fname"></div>'
+    + '<div class="nf-field-container textbox-container label-above one-half"><label for="f2">Last</label><input id="f2" name="lname"></div>'
+    + '<div class="nf-field-container email-container label-above"><label for="f3">Email</label><input type="email" id="f3" name="email"></div>'
+    + '<div class="nf-field-container checkbox-container label-right"><label for="f4">I agree</label><input type="checkbox" id="f4" name="agree"></div>'
+    + '</div><button>Send</button></form>';
+  const out = mapSite(IR(ninja), { existingSlugs: [] });
+  const [plan] = out.forms;
+  assert.equal(plan.styles.labelPosition, 'above');
+  assert.deepEqual(plan.fields.map((f) => f.width || 'full'), ['half', 'half', 'full', 'full']);
+  const stores = fakeStores();
+  const made = await applyImportForms(out.forms, { ...stores, scope: SCOPE });
+  const row = await stores.formsStore.getForm(made.formIds[plan.key]);
+  assert.equal(row.styles.labelPosition, 'above');
 });
 
 test('Bayside: the form the import makes stores both, and a re-run is an update', async () => {

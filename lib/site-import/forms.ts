@@ -392,6 +392,11 @@ export function readSourceForm(html: string): SourceFormReading {
     return name ? `${t} "${name}"` : t;
   };
 
+  // The control behind each kept question, split by kind, for the
+  // labels-above-or-beside vote after the loop.
+  const textQuestionControls: El[] = [];
+  const choiceQuestionControls: El[] = [];
+
   for (const c of fillable) {
     const t = tag(c);
     const type = attr(c, "type").toLowerCase() || "text";
@@ -406,6 +411,7 @@ export function readSourceForm(html: string): SourceFormReading {
         const s = controlLabel(c);
         const label = s.text || humanize(name);
         fields.push({ key: claimKey("", label), label, type: "boolean", required: isRequired(c) || s.starred, options: [], sourceName: name || undefined, controls: 1, ...half(c) });
+        choiceQuestionControls.push(c);
         continue;
       }
       const s = groupLabel(members);
@@ -420,6 +426,7 @@ export function readSourceForm(html: string): SourceFormReading {
         controls: members.length,
         ...half(c),
       });
+      choiceQuestionControls.push(c);
       continue;
     }
 
@@ -474,6 +481,7 @@ export function readSourceForm(html: string): SourceFormReading {
     const label = s.text || humanize(name) || "Untitled question";
     if (!s.text) notes.push({ what: `question "${label}"`, why: "the source gave this box no visible label, so its name was used" });
     fields.push({ key: claimKey(preferred, label), label, type: fieldType, required, options, sourceName: name || undefined, controls: 1, ...half(c) });
+    textQuestionControls.push(c);
   }
 
   // A lone half question has nobody to share its row with: the source's
@@ -489,8 +497,18 @@ export function readSourceForm(html: string): SourceFormReading {
     i = j - 1;
   }
 
-  const besideNodes = [root, ...($root.find("[class]").toArray() as unknown as El[])];
-  const labelPosition: "above" | "beside" = besideNodes.some((n) => BESIDE_CLASS.test(attr(n, "class"))) ? "beside" : "above";
+  // Labels above or beside is decided by the form's TEXT questions, most of
+  // them, never by any one element. A checkbox or radio wrapper is no
+  // evidence: Ninja Forms puts label-right on every single "I agree" box by
+  // default (its label sits right of the box whatever the form does), and
+  // Formidable puts frm_left_container on single fields. Letting one of those
+  // decide made a whole labels-above form read as beside, which also stops
+  // its half widths rendering. A form-wide class (Gravity's left_label on the
+  // field list) is an ancestor of every question, so it still counts for all.
+  const besideFor = (c: El): boolean => [c, ...ancestors(c, root), root].some((n) => BESIDE_CLASS.test(attr(n, "class")));
+  const votes = textQuestionControls.length ? textQuestionControls : choiceQuestionControls;
+  const besideCount = votes.filter(besideFor).length;
+  const labelPosition: "above" | "beside" = votes.length > 0 && besideCount * 2 > votes.length ? "beside" : "above";
 
   return {
     kind: "data-capture",
