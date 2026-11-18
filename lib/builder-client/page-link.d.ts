@@ -27,3 +27,11 @@ export declare function sectionsOfLayout(layout: unknown): unknown[];
 export declare function addSectionAnchors(map: Record<string, string>, pageId: unknown, layout: unknown): Record<string, string>;
 export declare function listSectionAnchors(layout: unknown): Array<{ sectionId: string; anchorName: string; title: string }>;
 export declare function mentionsSectionLink(value: unknown): boolean;
+
+export type PageJump =
+  | { kind: "reference"; pageId: string; sectionId: string; name: string }
+  | { kind: "same-page"; name: string }
+  | { kind: "address"; address: string; name: string };
+export declare function anchorTargetsOf(layout: unknown): Set<string>;
+export declare function jumpOf(value: unknown, ownHosts?: string[]): PageJump | null;
+export declare function jumpLands(jump: PageJump, layout: unknown): { lands: true } | { lands: false; why: string };
