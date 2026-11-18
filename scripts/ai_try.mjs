@@ -7,6 +7,9 @@
 //   node scripts/ai_try.mjs --tier strong   # the "strong" tier
 //   node scripts/ai_try.mjs --json          # ask for JSON, and show it parsed
 //
+// The order comes from Settings › APIs › AI provider (AI switch 2, SC-844),
+// or AI_PROVIDER_ORDER when nothing is saved there or it cannot be read.
+//
 // It needs the provider keys in its environment, so run it inside Doppler:
 //   doppler run --project starcaster --config prd -- node scripts/ai_try.mjs
 //
@@ -26,8 +29,10 @@ const tierAt = args.indexOf('--tier');
 const tier = tierAt >= 0 ? args[tierAt + 1] : 'fast';
 const json = args.includes('--json');
 
-const { providers, source, ignored } = getAiProviderOrder();
-console.log(`order (${source === 'default' ? 'the built-in default' : 'from AI_PROVIDER_ORDER'}): ${providers.map((p) => `${p.id} (${p.models[tier] || '?'})`).join(' → ') || '(none)'}`);
+const { providers, source, ignored, fallbackReason } = await getAiProviderOrder();
+const from = source === 'settings' ? 'from Settings › APIs' : source === 'default' ? 'the built-in default' : 'from AI_PROVIDER_ORDER';
+console.log(`order (${from}): ${providers.map((p) => `${p.id} (${p.models[tier] || '?'})`).join(' → ') || '(none)'}`);
+if (fallbackReason) console.log(`not using Settings › APIs: ${fallbackReason}`);
 if (ignored.length) console.log(`ignored, not providers this door knows: ${ignored.join(', ')}`);
 
 const result = await generate({
