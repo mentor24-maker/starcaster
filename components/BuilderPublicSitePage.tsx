@@ -29,6 +29,7 @@ import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcast
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 import { SiteSkipLink, pickPageSkipLinkTarget } from "@/components/site-skip-link";
+import { withSectionLineage } from "@/lib/skip-link-target";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
 import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
 
@@ -80,7 +81,8 @@ function mapSitePageRecord(page: Record<string, unknown>): SitePage {
     slug: String(page.slug ?? "").trim(),
     pageBackground: doc.pageBackground,
     theme: doc.theme,
-    layoutSections: doc.layoutSections,
+    // Lineage back on, so the skip link can see a shared header (SC-857).
+    layoutSections: withSectionLineage(page, doc.layoutSections),
     projectId: String(page.projectId ?? page.project_id ?? ""),
     primaryColor: String(page.primaryColor ?? page.primary_color ?? ""),
     secondaryColor: String(page.secondaryColor ?? page.secondary_color ?? ""),

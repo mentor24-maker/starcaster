@@ -24,6 +24,7 @@ import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
 import { SiteSkipLink, pickPageSkipLinkTarget } from "@/components/site-skip-link";
+import { withSectionLineage } from "@/lib/skip-link-target";
 
 /**
  * The frames this page can show. `email` is not one of the buttons — an email
@@ -157,7 +158,7 @@ async function fetchPageBySlug(slug: string): Promise<PreviewDraft | null> {
       name: String(match.name ?? "").trim(),
       pageBackground: doc.pageBackground,
       theme: doc.theme,
-      layoutSections: doc.layoutSections,
+      layoutSections: withSectionLineage(match, doc.layoutSections),
       themePalette: resolvedPalette,
       themeStyles: themeRecord.styles,
       themeId,
@@ -266,7 +267,7 @@ export function BuilderPreviewPage() {
           name: String(parsed.name ?? "").trim(),
           pageBackground: document.pageBackground,
           theme: document.theme,
-          layoutSections: document.layoutSections,
+          layoutSections: withSectionLineage(parsed, document.layoutSections),
           themePalette: storedPalette,
           themeStyles: resolvedStyles,
           themeId,

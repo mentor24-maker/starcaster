@@ -6958,6 +6958,34 @@ function skipLinkContracts() {
       },
     },
     {
+      id: 'skip-link-jumps-past-a-shared-header-that-holds-no-menu',
+      why: why + 'A real site\'s header is usually a shared (saved) section, often a logo or contact ' +
+        'strip with the menu in its own row below it. The link must jump past BOTH. The first build ' +
+        'pointed at the shared strip, above the menu, because the page loader dropped the ' +
+        '"shared section" marker before the link chose its target (the SC-857 send-back).',
+      section: {
+        ...section,
+        leadSections: [
+          {
+            savedSectionId: 'saved-render-contract-logo-bar',
+            canonical: true,
+            modules: [{ type: 'heading', text: 'Shared logo bar', settings: {} }],
+          },
+          ...section.leadSections,
+        ],
+      },
+      emulate: { liveSite: true },
+      selector: 'section#site-main-content',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (sample.matches !== 1) return `${sample.matches} sections carry the skip link's target id — expected exactly one.`;
+        if (/Shared logo bar/.test(sample.text)) return 'the link jumps to the shared logo bar, above the menu — the next Tab goes straight into the menu.';
+        if (!/Page content/.test(sample.text)) return `the link jumps to a section reading "${sample.text.slice(0, 60)}", not the page content.`;
+        return null;
+      },
+    },
+    {
       id: 'skip-link-enter-moves-focus-past-the-menu',
       why: why + 'Pressing Enter must move keyboard focus to the content row, not just scroll: ' +
         'otherwise the next Tab lands back in the menu and the link saved nothing.',

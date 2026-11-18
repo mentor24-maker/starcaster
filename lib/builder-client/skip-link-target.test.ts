@@ -3,8 +3,10 @@ import {
   SKIP_LINK_TARGET_ID,
   pickSkipLinkTarget,
   skipLinkTargetElementId,
+  withSectionLineage,
   type SkipLinkSection
 } from './skip-link-target';
+import { normalizeBuilderDocument } from './builder-template';
 
 /**
  * Which section the live page's hidden "Skip to content" link jumps to
@@ -81,5 +83,63 @@ describe('skipLinkTargetElementId', () => {
 
   it("keeps the section's own anchor name, because that is already its id", () => {
     expect(skipLinkTargetElementId(plain('hero', { anchorName: 'welcome' }))).toBe('welcome');
+  });
+});
+
+/**
+ * The SC-857 send-back: live pages run sections through
+ * normalizeBuilderDocument, which drops savedSectionId/canonical, so the
+ * shared-header rule above never fired on a real page. These go through the
+ * REAL normalizer, the way BuilderPublicSitePage and the preview page do.
+ */
+describe('withSectionLineage (through the real page loader)', () => {
+  const rawPage = (shape: 'array' | 'wrapped' | 'string') => {
+    const sections = [
+      { id: 'logo-bar', canonical: true, savedSectionId: 'saved-logo', layout: 'single', modules: [{ type: 'text', text: 'Logo' }] },
+      { id: 'menu', layout: 'single', modules: [{ type: 'navigation', settings: {} }] },
+      { id: 'content', layout: 'single', modules: [{ type: 'text', text: 'Hello' }] }
+    ];
+    if (shape === 'wrapped') return { name: 'Home', layoutSections: { sections } };
+    if (shape === 'string') return { name: 'Home', layoutSections: JSON.stringify(sections) };
+    return { name: 'Home', layoutSections: sections };
+  };
+
+  it('the loader alone loses the marker (why this helper exists)', () => {
+    const doc = normalizeBuilderDocument(rawPage('array'));
+    expect(doc.layoutSections[0].savedSectionId).toBeUndefined();
+  });
+
+  for (const shape of ['array', 'string'] as const) {
+    it(`a shared logo bar with no menu, then a menu: the link skips both (${shape})`, () => {
+      const page = rawPage(shape);
+      const sections = withSectionLineage(page, normalizeBuilderDocument(page).layoutSections);
+      expect(sections[0]).toMatchObject({ canonical: true, savedSectionId: 'saved-logo' });
+      expect(pickSkipLinkTarget(sections)?.id).toBe('content');
+    });
+  }
+
+  it('reads the { sections } wrapper the way the loader does', () => {
+    const page = { name: 'Home', sections: (rawPage('array').layoutSections as unknown[]) };
+    const sections = withSectionLineage(page, normalizeBuilderDocument(page).layoutSections);
+    expect(pickSkipLinkTarget(sections)?.id).toBe('content');
+  });
+
+  it('pairs sections the way the loader does when it drops a junk row', () => {
+    const page = rawPage('array') as { layoutSections: unknown[] };
+    page.layoutSections = [null, ...page.layoutSections, 'junk'];
+    const sections = withSectionLineage(page, normalizeBuilderDocument(page).layoutSections);
+    expect(sections.map((s) => s.id)).toEqual(['logo-bar', 'menu', 'content']);
+    expect(pickSkipLinkTarget(sections)?.id).toBe('content');
+  });
+
+  it('changes nothing when the two lists do not pair up one-for-one', () => {
+    const normalized = normalizeBuilderDocument(rawPage('array')).layoutSections;
+    expect(withSectionLineage({ layoutSections: [] }, normalized)).toBe(normalized);
+  });
+
+  it('leaves a section with no lineage untouched (same object)', () => {
+    const page = rawPage('array');
+    const normalized = normalizeBuilderDocument(page).layoutSections;
+    expect(withSectionLineage(page, normalized)[2]).toBe(normalized[2]);
   });
 });

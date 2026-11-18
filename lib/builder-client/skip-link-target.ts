@@ -57,3 +57,64 @@ export function skipLinkTargetElementId(section: SkipLinkSection): string {
   const anchor = typeof section.anchorName === "string" ? section.anchorName.trim() : "";
   return anchor || SKIP_LINK_TARGET_ID;
 }
+
+/**
+ * WHY THIS EXISTS (the SC-857 send-back)
+ *
+ * `normalizeLayoutSections` rebuilds every section from a whitelist that does
+ * not include `savedSectionId` or `canonical`, so a live page that runs its
+ * sections through `normalizeBuilderDocument` loses the very marker
+ * `isFrameSection` reads. Without this, no section on a published page ever
+ * counted as shared header, and a page opening with a shared strip that holds
+ * no menu (a logo or contact bar) pointed the link at that strip — above the
+ * menu, so the next Tab went straight back into it.
+ *
+ * This copies the two lineage fields from the raw page back onto the
+ * normalized sections, pairing them the way the normalizer does (it keeps
+ * every plain-object section, in order, and drops anything else). Nothing
+ * renders these fields; they only let the skip link see the shared header.
+ * The normalizer itself is left alone on purpose: it also shapes what pages
+ * SAVE, and a change there has a much wider reach than this link.
+ */
+function rawSectionObjects(value: unknown): Record<string, unknown>[] {
+  let raw: unknown = value;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const document = raw as Record<string, unknown>;
+    raw = document.sections ?? document.layoutSections;
+  }
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (section): section is Record<string, unknown> =>
+      Boolean(section) && typeof section === "object" && !Array.isArray(section)
+  );
+}
+
+/**
+ * `normalized` with each section's `savedSectionId` / `canonical` restored
+ * from `rawDocument` (whatever was handed to `normalizeBuilderDocument`).
+ * If the two do not pair up one-for-one it returns `normalized` unchanged:
+ * a guessed pairing could mark the wrong section as header.
+ */
+export function withSectionLineage<S extends object>(rawDocument: unknown, normalized: S[]): S[] {
+  const raw = rawSectionObjects(rawDocument);
+  if (raw.length !== normalized.length) return normalized;
+  return normalized.map((section, index) => {
+    const source = raw[index];
+    const savedSectionId =
+      typeof source.savedSectionId === "string" ? source.savedSectionId.trim().slice(0, 120) : "";
+    const canonical = typeof source.canonical === "boolean" ? source.canonical : undefined;
+    if (!savedSectionId && canonical === undefined) return section;
+    return {
+      ...section,
+      ...(savedSectionId ? { savedSectionId } : {}),
+      ...(canonical !== undefined ? { canonical } : {})
+    };
+  });
+}
