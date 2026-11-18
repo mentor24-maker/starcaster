@@ -1,0 +1,11 @@
+## 2026-11-18 — Add an AI provider switch to Settings › APIs (AI switch 2) (#1048)
+
+Until now, which AI company StarCaster used was decided by a hidden setting. Changing it meant editing Doppler and redeploying. Settings › APIs now has an **AI provider** section where an owner or admin can put the providers in order, switch any off, choose each one's fast and strong model, and add another OpenAI-style service. The website and the Mac Mini pick up a change within about a minute, with no redeploy.
+
+Key values never go near this screen. Each provider shows only the *name* of the setting its key lives in, and says plainly when that key is missing ("no key: add MOONSHOT_API_KEY to Doppler production"). A save only reports success after the database has been read back.
+
+If the saved setting is missing or can't be read, everything carries on exactly as it does today, and the screen says which order is in charge and why. Production needs one new table (docs/SQL/ai_provider_settings_setup.sql) before the screen can save there.
+
+Dane ran that table in production the same afternoon, and it was read back there. A timing test with real AI keys then confirmed the "about a minute" promise: one running program made a call, a separate program saved a new order, and the running program's calls switched over 61 seconds later with no restart. That test also found Google had retired both Gemini models StarCaster offered by default (any call to them came back "no longer available"), so the defaults now name the replacements Google itself recommends.
+
+Review then found a hole in "Add an OpenAI-style service". The screen refused a new service's key setting only if it exactly matched a built-in provider's name, but some keys go by two names (the Gemini key is also read as GOOGLE_GEMINI_API_KEY), and other secrets such as the YouTube key were accepted outright. So someone could have pointed an added service at a web address of their choosing and had StarCaster send it a real key. Now an added service may only use a setting whose name starts `AI_SERVICE_` (for Groq: `AI_SERVICE_GROQ_API_KEY`). No existing secret is named that way, so no existing key can ever be handed over. The rule is checked when saving and again every time the AI code reads the saved list, so an old or hand-edited row cannot slip past it.

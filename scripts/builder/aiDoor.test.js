@@ -17,7 +17,7 @@ require.cache[observePath] = {
 };
 
 const {
-  generate, getAiProviderOrder, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, _resetNoticeMemory,
+  generate, envProviderOrder, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, _resetNoticeMemory,
 } = require('../../lib/aiClient');
 const { generateAlt } = require('../../lib/altTextProviders');
 
@@ -57,7 +57,7 @@ function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a',
     return 'unknown';
   };
   const deps = {
-    order: () => getAiProviderOrder({ env: { AI_PROVIDER_ORDER: order } }),
+    order: () => envProviderOrder({ env: { AI_PROVIDER_ORDER: order } }),
     getKey: (def) => keys[def.id] || '',
     fetchImpl: async (url, init) => {
       const provider = providerOf(url);
@@ -230,19 +230,19 @@ test('Kimi is an OpenAI-style service: its own address, OpenAI chat shape, max_c
 });
 
 test('Kimi is off unless the order names it', () => {
-  assert.equal(getAiProviderOrder({ env: {} }).providers.some((p) => p.id === 'kimi'), false);
+  assert.equal(envProviderOrder({ env: {} }).providers.some((p) => p.id === 'kimi'), false);
 });
 
 // ── The order and its models ───────────────────────────────────────────────
 
 test('the default order is today\'s behaviour: Anthropic first', () => {
-  const { providers, source } = getAiProviderOrder({ env: {} });
+  const { providers, source } = envProviderOrder({ env: {} });
   assert.equal(source, 'default');
   assert.deepEqual(providers.map((p) => p.id), ['anthropic', 'openai', 'gemini']);
 });
 
 test('AI_PROVIDER_ORDER and AI_MODEL_<PROVIDER>_<TIER> override it', () => {
-  const { providers, source, ignored } = getAiProviderOrder({ env: { AI_PROVIDER_ORDER: ' OpenAI , anthropic,openai,nope', AI_MODEL_OPENAI_FAST: 'gpt-5.4-nano' } });
+  const { providers, source, ignored } = envProviderOrder({ env: { AI_PROVIDER_ORDER: ' OpenAI , anthropic,openai,nope', AI_MODEL_OPENAI_FAST: 'gpt-5.4-nano' } });
   assert.equal(source, 'AI_PROVIDER_ORDER');
   assert.deepEqual(providers.map((p) => p.id), ['openai', 'anthropic']);
   assert.equal(providers[0].models.fast, 'gpt-5.4-nano');

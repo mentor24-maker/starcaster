@@ -44,6 +44,7 @@ const projectShares = require('./projectShares');
 const projects    = require('./projects');
 const invitations = require('./invitations');
 const settings    = require('./settings');
+const aiProviders = require('./aiProviders');
 const acquire     = require('./acquire');
 const promoLeads  = require('./promoLeads');
 const assets      = require('./assets');
@@ -102,6 +103,8 @@ const ROUTE_MODULES = [
   projectShares,
   projects,
   invitations,
+  // Ahead of `settings`, which owns the wider '/api/settings' prefix.
+  aiProviders,
   settings,
   // Ahead of `acquire`: it owns the narrower '/api/acquire/substack-miner'
   // prefix, the same arrangement as substackNotes and engage below.

@@ -45,6 +45,18 @@ const VERDICT_COLOR: Record<string, string> = {
   'NOT SET': 'var(--muted)',
 };
 
+/**
+ * The AI provider panel beside this one shows each provider's reading, and
+ * the probes behind it are paid requests, so it reuses this panel's reading
+ * rather than sending its own (AI switch 2, SC-844).
+ */
+export const AI_KEYS_READING_EVENT = 'starcaster:ai-keys-reading';
+
+function shareReading(reading: Reading): void {
+  (window as unknown as { __starcasterAiKeysReading?: Reading }).__starcasterAiKeysReading = reading;
+  window.dispatchEvent(new CustomEvent(AI_KEYS_READING_EVENT, { detail: reading }));
+}
+
 function getAppApi(): AppApi | null {
   const app = (window as unknown as { App?: any }).App;
   return typeof app?.api === 'function' ? app.api : null;
@@ -111,7 +123,9 @@ export default function AiKeysPanel(): React.ReactElement {
       if (res && res.ok === false) {
         setError(String(res?.error?.message || 'Could not check the AI keys.'));
       } else {
-        setReading((res?.data || res) as Reading);
+        const next = (res?.data || res) as Reading;
+        setReading(next);
+        shareReading(next);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check the AI keys.');
