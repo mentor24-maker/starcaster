@@ -28,7 +28,8 @@
  * check: <project>" — and never counted as clean.
  *
  * Exit: 0 nothing broken, 1 broken links found, 2 CANNOT TELL (a project could
- * not be read, or the ticket could not be written). run_bus_relay.sh guards the
+ * not be read, a link to part of a page could not be judged, or the ticket
+ * could not be written). run_bus_relay.sh guards the
  * call with `|| true` — a finding about client sites is not this script's
  * failure.
  */
@@ -145,6 +146,8 @@ function readProjects(conn) {
     const links = scan.collectProjectLinks({ ...got.data, domain: project.domain });
     project.pageCount = got.data.pages.length;
     project.broken = scan.brokenLinks(links, got.data.pages);
+    // Jumps to part of a page it could not judge: CANNOT TELL, never clean (SC-855).
+    project.unchecked = scan.uncheckedLinks(links, got.data.pages);
   }
   return { projects };
 }
@@ -176,16 +179,18 @@ const projects = reading.error ? [{ id: 'every project', name: 'every project', 
 const read = projects.filter((p) => !p.error);
 const failed = projects.filter((p) => p.error);
 const brokenCount = read.reduce((sum, p) => sum + p.broken.length, 0);
+const uncheckedCount = read.reduce((sum, p) => sum + (p.unchecked || []).length, 0);
 
 console.log(`broken-links: ${read.length} project(s) read${LOCAL ? ' (this machine\'s database)' : ' (production)'}, `
-  + `${brokenCount} broken link(s), ${failed.length} could not be checked.`);
+  + `${brokenCount} broken link(s), ${uncheckedCount} link(s) CANNOT TELL, ${failed.length} project(s) could not be checked.`);
 for (const p of read) {
   console.log(`  ${p.broken.length ? 'BROKEN ' : 'ok     '} ${p.name || p.id}${p.domain ? ` (${p.domain})` : ''}: ${p.pageCount} page(s), ${p.broken.length} broken`);
   for (const link of p.broken) console.log(`      - ${scan.describeLink(link)} — ${link.reason}`);
+  for (const link of p.unchecked || []) console.log(`      ? CANNOT TELL: ${scan.describeLink(link)} — ${link.reason}`);
 }
 for (const p of failed) console.log(`  COULD NOT CHECK ${p.name || p.id}: ${p.error}`);
 
-const exitCode = failed.length ? 2 : brokenCount ? 1 : 0;
+const exitCode = failed.length || uncheckedCount ? 2 : brokenCount ? 1 : 0;
 
 /**
  * Find the ticket (by the id this machine remembers, else by NAME — the name is
