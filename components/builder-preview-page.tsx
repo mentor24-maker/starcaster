@@ -23,6 +23,7 @@ import { buildPageAddressMap } from "@/lib/page-link";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
 import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
+import { SiteSkipLink, pickPageSkipLinkTarget } from "@/components/site-skip-link";
 
 /**
  * The frames this page can show. `email` is not one of the buttons — an email
@@ -326,7 +327,12 @@ export function BuilderPreviewPage() {
    * (Bug Report would post for real). The old admin card around it is what
    * made the preview look nothing like the site (86bbq2y7x).
    */
+  // `?live=1` carries the live page's "Skip to content" link too (SC-857), so
+  // the render contracts measure what a visitor gets.
+  const skipLinkTarget = isLive ? pickPageSkipLinkTarget(sections) : null;
   const pagePreview = draft ? (
+    <>
+    <SiteSkipLink target={skipLinkTarget} />
     <BuilderViewportShellLayout
       className="builder-public-site-layout"
       pageBackground={draft.pageBackground}
@@ -344,10 +350,12 @@ export function BuilderPreviewPage() {
         suppressShellBackground
         previewMode
         liveSite={isLive}
+        skipLinkTarget={skipLinkTarget}
         pageAddresses={draft.pageAddresses}
         siteWideBugReport={draft.siteWideBugReport ?? null}
       />
     </BuilderViewportShellLayout>
+    </>
   ) : null;
 
   return (

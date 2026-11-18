@@ -28,6 +28,7 @@ import {
 import { starcasterScopedHeaders, unwrapEnvelope } from "@/lib/adapters/starcaster-app";
 import { isPrivateSiteSlug } from "@/lib/public-site-page-slugs";
 import { filterPublicSections } from "@/lib/public-site-sections";
+import { SiteSkipLink, pickPageSkipLinkTarget } from "@/components/site-skip-link";
 import { registerImageRenditionMap } from "@/lib/image-renditions";
 import { readSiteWideBugReport, type SiteWideBugReport } from "@/components/builder/builder-bug-report-module";
 
@@ -384,6 +385,9 @@ export function BuilderPublicSitePage({ projectId }: Props) {
     ? page.layoutSections
     : filterPublicSections(page.layoutSections);
 
+  // The hidden "Skip to content" link (SC-857); no sections, no link.
+  const skipLinkTarget = pickPageSkipLinkTarget(sections);
+
   const effectiveThemeStyles = page.themeShell
     ? buildBuilderThemeStyles(page.themeShell)
     : themeStyles;
@@ -394,6 +398,8 @@ export function BuilderPublicSitePage({ projectId }: Props) {
 
   return (
     <>
+      {/* First focusable thing on the page, before the admin corner link. */}
+      <SiteSkipLink target={skipLinkTarget} />
       {cornerLink ? (
         <a
           ref={adminLinkRef}
@@ -422,6 +428,7 @@ export function BuilderPublicSitePage({ projectId }: Props) {
           projectId={projectId}
           pageAddresses={page.pageAddresses}
           siteWideBugReport={page.siteWideBugReport ?? null}
+          skipLinkTarget={skipLinkTarget}
           liveSite
         />
       </BuilderViewportShellLayout>

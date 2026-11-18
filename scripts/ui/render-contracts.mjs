@@ -6837,6 +6837,7 @@ export const RENDER_CONTRACTS = [
       return statusesInOrder(sample, ['Requested', 'Ready to launch', 'Live']);
     },
   },
+  ...skipLinkContracts(),
   {
     id: 'spirality-tasks-stacks-to-one-column-on-a-phone',
     why:
@@ -6871,4 +6872,104 @@ function statusesInOrder(sample, names) {
   return got.join(' | ') === names.join(' | ')
     ? null
     : `the status groups read "${got.join(' | ')}", not "${names.join(' | ')}" (the tracker's order and names, empty statuses left out).`;
+}
+
+/**
+ * The hidden "Skip to content" link every live page starts with (SC-857): a
+ * menu row above a content row, rendered as a published page. Three readings,
+ * because the link is three promises — hidden until Tab, visible on Tab, and
+ * Enter moves the keyboard past the menu. The page with no sections (no link)
+ * is a unit test in lib/builder-client/skip-link-target.test.ts.
+ */
+function skipLinkContracts() {
+  const section = {
+    layout: 'single',
+    leadSections: [{
+      modules: [{
+        type: 'navigation',
+        settings: { navItems: JSON.stringify([{ id: 'home', label: 'Home', href: '/' }]) },
+      }],
+    }],
+    modules: [{ type: 'heading', text: 'Page content', settings: {} }],
+  };
+  const why =
+    'Delray\'s and Press Play\'s original sites both opened with a hidden "Skip to content" link, ' +
+    'and StarCaster pages had none (task SC-857, from the 2026-11-17 anchor sweep). Keyboard and ' +
+    'screen-reader visitors had to tab through the whole menu on every page, and accessibility ' +
+    'checkers flag the gap. ';
+  return [
+    {
+      id: 'skip-link-is-on-the-live-page-and-hidden-until-tabbed-to',
+      why: why + 'Before anyone presses Tab the link must be on the page (a screen reader finds it) ' +
+        'and take up no visible space, so every page looks exactly as it did; and it must point at ' +
+        'the content row, never the menu row.',
+      section,
+      emulate: { liveSite: true },
+      selector: 'a.site-skip-link',
+      read: ['clipPath', 'display'],
+      series: {
+        count: 1,
+        everyMs: 0,
+        read: ['display'],
+        attrs: ['href', 'tabindex'],
+        selectors: {
+          target: 'section#site-main-content',
+          menuTarget: '.builder-preview-section-navigation#site-main-content',
+        },
+      },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.matches !== 1) return `${sample.matches} skip links on the page — expected exactly one.`;
+        if (sample.text !== 'Skip to content') return `the link reads "${sample.text}", expected "Skip to content".`;
+        if (sample.styles.display === 'none') return 'the link is display:none, so screen readers cannot find it either — hide it by clipping instead.';
+        if (sample.box.width > 1 || sample.box.height > 1) {
+          return `before any key is pressed the link is ${sample.box.width}×${sample.box.height}px — it shows on every page.`;
+        }
+        const frame = sample.series?.[0];
+        if (!frame) return 'no series frame was taken — the contract measured nothing.';
+        if (frame.menuTarget) return 'the link jumps to the menu row, not past it.';
+        if (!frame.target) return 'no section carries id="site-main-content", so the link jumps nowhere.';
+        if (frame.target.tabindex !== '-1') return `the target section has tabindex ${JSON.stringify(frame.target.tabindex)} — without -1 the keyboard does not follow the jump.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-shows-top-left-when-tabbed-to',
+      why: why + 'Once the keyboard reaches it the link must be plainly visible: a solid box in the ' +
+        'top-left corner of the window with a visible outline.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Shift' },
+      selector: 'a.site-skip-link',
+      read: ['position', 'outlineStyle', 'clipPath'],
+      series: { count: 1, everyMs: 0, read: ['left'], selectors: { link: 'a.site-skip-link' } },
+      expect(sample) {
+        if (!sample.found) return 'no "Skip to content" link on the live page.';
+        if (sample.box.width < 60 || sample.box.height < 20) {
+          return `with keyboard focus the link is ${sample.box.width}×${sample.box.height}px — it does not show when tabbed to.`;
+        }
+        if (sample.styles.clipPath && sample.styles.clipPath !== 'none') return `the focused link is still clipped (${sample.styles.clipPath}).`;
+        if (sample.styles.position !== 'fixed') return `the focused link is position:${sample.styles.position} — it must sit in the window's corner wherever the page is scrolled.`;
+        if (!sample.styles.outlineStyle || sample.styles.outlineStyle === 'none') return 'the focused link has no outline.';
+        const link = sample.series?.[0]?.link;
+        if (!link) return 'no series frame was taken — where the link sits could not be read.';
+        if (link.top < 0 || link.top > 40 || parseFloat(link.left) > 40) return `the focused link sits at top ${Math.round(link.top)}px, left ${link.left} — expected the top-left corner.`;
+        return null;
+      },
+    },
+    {
+      id: 'skip-link-enter-moves-focus-past-the-menu',
+      why: why + 'Pressing Enter must move keyboard focus to the content row, not just scroll: ' +
+        'otherwise the next Tab lands back in the menu and the link saved nothing.',
+      section,
+      emulate: { liveSite: true },
+      press: { selector: 'a.site-skip-link', key: 'Enter' },
+      selector: 'section#site-main-content:focus',
+      read: ['display'],
+      expect(sample) {
+        if (!sample.found) return 'after Enter on the skip link the content section does not have focus — the jump moved the scroll at most, not the keyboard.';
+        return null;
+      },
+    },
+  ];
 }
