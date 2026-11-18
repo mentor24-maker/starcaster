@@ -27,3 +27,13 @@ this change were reporting every jump link as "missing", which was untrue:
 nobody had looked yet. They now say the import is older and how to refresh it
 from the capture already saved, with no new capture needed. And links to a
 file at a page number (`menu.pdf#page=3`) are no longer mistaken for jump links.
+
+**Second review (2026-11-18).** If saving the jump links failed partway
+through a site's very first build, the build stopped before writing down
+which pages it had just made, so the next attempt would have made a second
+copy of every page. Now a failed page is reported and the build is marked
+failed, but it always records its pages first. A link to a section somebody
+had edited by hand is now listed as needing attention rather than counted as
+working, since that section never got its name. A real button pointing at a
+section called "content" or "main" is no longer mistaken for a "skip to
+content" shortcut and thrown away.
