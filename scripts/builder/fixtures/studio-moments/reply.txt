@@ -1,0 +1,52 @@
+```json
+{
+  "summary": "Dane shows where WaveCenter stands a few days into building it: a task list with teams, messaging and an admin section, and the idea at its heart — newcomers learn the project by guessing how many points each task is worth, with their guesses weighted against AI and against experienced members so nobody can game the score. It is for people who might want to help build WaveCenter.",
+  "moments": [
+    {
+      "start_s": 290.6,
+      "end_s": 333.0,
+      "score": 88,
+      "reasons": ["Explains how a newcomer learns WaveCenter by guessing what a task is worth — exactly the kind of person the brief wants to draw.", "Makes sense without the screen."],
+      "project": "WaveCenter",
+      "mood": "hopeful",
+      "quote": "That's the only way they're going to be able to make accurate guesses about how many points these tasks are worth."
+    },
+    {
+      "start_s": 563.3,
+      "end_s": 614.5,
+      "score": 84,
+      "reasons": ["Lays out why AI and informed people score tasks together.", "Invites people who think about fair systems."],
+      "project": "WaveCenter",
+      "mood": "determined",
+      "quote": "I'll take the opinion of an informed human about how much each of these are really worth over AI."
+    },
+    {
+      "start_s": 762.8,
+      "end_s": 796.0,
+      "score": 80,
+      "reasons": ["The self-tuning idea in one breath; a would-be collaborator hears what is different about WaveCenter."],
+      "project": "WaveCenter",
+      "mood": "hopeful",
+      "quote": "this is going to be a highly fine-tuning, self-tuning system with AI and humans working together"
+    },
+    {
+      "start_s": 658.9,
+      "end_s": 710.7,
+      "score": 72,
+      "reasons": ["Shows how someone trying to game the system gets caught."],
+      "project": "WaveCenter",
+      "mood": "determined",
+      "quote": "AI knows better and it's going to contradict you"
+    },
+    {
+      "start_s": 457.3,
+      "end_s": 495.7,
+      "score": 55,
+      "reasons": ["Explains tasks, proposals and teams; useful but leans on the screen."],
+      "project": "WaveCenter",
+      "mood": "calm",
+      "quote": "Anybody can make a proposal."
+    }
+  ]
+}
+```
