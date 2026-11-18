@@ -15,13 +15,13 @@ const path = require('path');
 
 const fs = require('fs');
 const {
-  buildFootage, readFilters, effectiveDate, transcriptStateFor, cutMarksStateFor, cutsViewFor,
+  buildFootage, readFilters, effectiveDate, transcriptStateFor, cutMarksStateFor, cutsViewFor, momentsViewFor,
   buildSearchResults, clockOf, SEARCH_MOMENTS_PER_FILE,
   NO_SESSION_TITLE, UNREAD_SESSION_TITLE, UNKNOWN_LANE,
 } = require('../../lib/studioFootage');
 
 const SQL_DIR = path.join(__dirname, '..', '..', 'docs', 'SQL');
-const SQL_TEXT = ['video_studio_setup.sql', 'video_transcripts_setup.sql', 'video_cut_marks_setup.sql']
+const SQL_TEXT = ['video_studio_setup.sql', 'video_transcripts_setup.sql', 'video_cut_marks_setup.sql', 'video_reel_spinner_setup.sql']
   .map((file) => fs.readFileSync(path.join(SQL_DIR, file), 'utf8'))
   .join('\n');
 const { parseSchemaText, createFakeDb } = require('./sqlSchemaFake.js');
@@ -33,6 +33,9 @@ const sourcesStorePath = require.resolve('../../lib/videoSourcesStore.js');
 const transcriptsStorePath = require.resolve('../../lib/videoTranscriptsStore.js');
 const cutMarksStorePath = require.resolve('../../lib/videoCutMarksStore.js');
 const googleDrivePath = require.resolve('../../lib/googleDrive.js');
+const momentsStorePath = require.resolve('../../lib/videoMomentsStore.js');
+const contextForPath = require.resolve('../../lib/contextFor.js');
+const momentsRoutePath = require.resolve('../../routes/studioMoments.js');
 const routePath = require.resolve('../../routes/studio.js');
 
 // ── the pure view ───────────────────────────────────────────────────────────
@@ -193,10 +196,18 @@ const SCOPE_A = { projectId: 'proj_a', userId: 'user_1' };
 const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
 const ROUTE_MODULES = [
-  projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, cutMarksStorePath, routePath,
+  projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, cutMarksStorePath,
+  momentsStorePath, momentsRoutePath, routePath,
 ];
 
-function withRoute({ drive, failTranscripts = false, failCutMarks = false } = {}) {
+/** What readContextFor answers in these tests: one note, fingerprint 'fp-now'. */
+const NOTES_NOW = {
+  ok: true,
+  status: 200,
+  data: { text: '## Channel\n\nGood tennis.', fingerprint: 'fp-now', entries: [{ id: 'n1' }], unreadable: [], reason: '' },
+};
+
+function withRoute({ drive, failTranscripts = false, failCutMarks = false, notes = NOTES_NOW } = {}) {
   const db = createFakeDb(parseSchemaText(SQL_TEXT));
   const missing = new Set([
     ...(failTranscripts ? ['video_transcripts'] : []),
@@ -217,31 +228,37 @@ function withRoute({ drive, failTranscripts = false, failCutMarks = false } = {}
       videoSources: 'video_sources',
       videoTranscripts: 'video_transcripts',
       videoCutMarks: 'video_cut_marks',
+      videoMoments: 'video_moments',
     }),
     sbQuery,
   });
   if (drive) swap(googleDrivePath, drive);
+  const notesAsked = [];
+  swap(contextForPath, {
+    readContextFor: async (args) => { notesAsked.push(args); return typeof notes === 'function' ? notes(args) : notes; },
+  });
   for (const p of ROUTE_MODULES) delete require.cache[p];
   const route = require(routePath);
   const sessions = require(sessionsStorePath);
   const sources = require(sourcesStorePath);
   const transcripts = require(transcriptsStorePath);
   const cutMarks = require(cutMarksStorePath);
+  const moments = require(momentsStorePath);
   const restore = () => {
     for (const [p, entry] of Object.entries(saved)) {
       if (entry) require.cache[p] = entry; else delete require.cache[p];
     }
     for (const p of ROUTE_MODULES) delete require.cache[p];
   };
-  return { route, sessions, sources, transcripts, cutMarks, restore };
+  return { route, sessions, sources, transcripts, cutMarks, moments, notesAsked, db, restore };
 }
 
-function call(route, url, scope) {
+function call(route, url, scope, method = 'GET') {
   const req = {
     url,
-    method: 'GET',
+    method,
     headers: { host: 'localhost' },
-    projectContext: { project: { id: scope.projectId } },
+    projectContext: { project: { id: scope.projectId, name: scope.name || '' } },
     authUser: { id: scope.userId },
   };
   const res = {
@@ -254,7 +271,7 @@ function call(route, url, scope) {
     end(chunk) { this.body = chunk; },
   };
   const pathname = new URL(url, 'http://localhost').pathname;
-  return route.handle(req, res, pathname, 'GET').then((handled) => ({ handled, res }));
+  return route.handle(req, res, pathname, method).then((handled) => ({ handled, res }));
 }
 
 /** A source needs a session to belong to; make one and read the id back. */
@@ -840,5 +857,182 @@ test('the route ignores paths and methods it does not own', async () => {
     assert.equal(handled, false);
   } finally {
     restore();
+  }
+});
+
+// ── Reel Spinner 2e (SC-830): a recording's scored moments ─────────────────
+
+const NOTES_ROW = (fingerprint) => ({
+  sourceId: 'm1', status: 'done', summary: 'A good talk.', briefFingerprint: fingerprint, model: 'x',
+  rescoreRequestedAt: '', error: '', updatedAt: '2026-11-17T10:00:00Z',
+  moments: [
+    { start_s: 10, end_s: 25.5, score: 60, reasons: ['funny'], project: 'Delray', mood: 'light', quote: 'Low' },
+    { start_s: 90, end_s: 120, score: 91, reasons: ['clear', ' '], project: 'Delray', mood: '', quote: 'High' },
+    { start_s: 5, end_s: 9, score: 60, reasons: [], project: '', mood: '', quote: 'Tie, said first' },
+  ],
+});
+
+test('moments view: best first, ties in the order said, with each length', () => {
+  const view = momentsViewFor({ sourceId: 'm1', driveFileId: 'd1', row: NOTES_ROW('fp-now'), notes: NOTES_NOW, projectName: 'Dane of Earth' });
+  assert.equal(view.state, 'done');
+  assert.deepEqual(view.moments.map((m) => m.quote), ['High', 'Tie, said first', 'Low']);
+  assert.equal(view.moments[2].lengthS, 15.5);
+  assert.deepEqual(view.moments[0].reasons, ['clear']);
+  assert.equal(view.driveUrl, 'https://drive.google.com/file/d/d1/view');
+  assert.equal(view.notesState, 'current');
+  assert.equal(view.notesMissing, '');
+});
+
+test('moments view: scored against older notes reads as stale and can be scored again', () => {
+  const view = momentsViewFor({ sourceId: 'm1', row: NOTES_ROW('fp-old'), notes: NOTES_NOW });
+  assert.equal(view.notesState, 'stale');
+  assert.equal(view.canRescore, true);
+});
+
+test('moments view: a score that never recorded its notes is "unrecorded", never "current"', () => {
+  const view = momentsViewFor({ sourceId: 'm1', row: NOTES_ROW(''), notes: NOTES_NOW });
+  assert.equal(view.notesState, 'unrecorded');
+});
+
+test('moments view: notes that could not be read are "unknown", never "current" or "stale"', () => {
+  const view = momentsViewFor({ sourceId: 'm1', row: NOTES_ROW('fp-now'), notes: { ok: false, status: 503, error: 'used_by missing' } });
+  assert.equal(view.notesState, 'unknown');
+  assert.match(view.notesError, /used_by missing/);
+  assert.equal(view.notesMissing, '', 'could not read is not "nothing switched on"');
+});
+
+test('moments view: not scored yet is its own answer, with nothing to rescore', () => {
+  const view = momentsViewFor({ sourceId: 'm1', row: null, notes: NOTES_NOW });
+  assert.equal(view.state, 'not_yet');
+  assert.equal(view.canRescore, false);
+  assert.equal(view.notesState, 'not_scored');
+  assert.deepEqual(view.moments, []);
+});
+
+test('moments view: a failed score carries its reason', () => {
+  const view = momentsViewFor({ sourceId: 'm1', row: { ...NOTES_ROW('fp-now'), status: 'failed', error: 'the model timed out', moments: [] }, notes: NOTES_NOW });
+  assert.equal(view.state, 'failed');
+  assert.equal(view.error, 'the model timed out');
+  assert.equal(view.canRescore, true);
+});
+
+test('moments view: no notes switched on names the project; unreadable ones say why', () => {
+  const none = { ok: true, data: { text: '', fingerprint: 'f', entries: [], unreadable: [], reason: 'No Context entry…' } };
+  assert.equal(
+    momentsViewFor({ sourceId: 'm1', row: null, notes: none, projectName: 'Dane of Earth' }).notesMissing,
+    'No Reel Spinner notes are switched on in Dane of Earth.'
+  );
+  const unreadable = { ok: true, data: { text: '', fingerprint: 'f', entries: [], unreadable: [{ id: 'x' }], reason: 'Every Context entry switched on for Reel Spinner is one it cannot read (see unreadable).' } };
+  assert.match(momentsViewFor({ sourceId: 'm1', row: null, notes: unreadable }).notesMissing, /cannot read/);
+});
+
+const SCORED = (fingerprint) => ({
+  status: 'done',
+  summary: 'Two good bits.',
+  briefFingerprint: fingerprint,
+  runStartedAt: new Date(Date.now() - 1000).toISOString(),
+  moments: [
+    { start_s: 10, end_s: 20, score: 40, reasons: ['ok'], project: 'Delray', mood: '', quote: 'second' },
+    { start_s: 30, end_s: 50, score: 88, reasons: ['great'], project: 'Delray', mood: '', quote: 'first' },
+  ],
+});
+
+test('GET moments: this project\'s row, best first, compared with this project\'s notes', async () => {
+  const stores = withRoute();
+  const { route, moments, notesAsked, restore } = stores;
+  try {
+    const made = await sourceIn(stores, SCOPE_A, { driveFileId: 'dm1' });
+    const saved = await moments.upsertMoments(made.id, SCORED('fp-old'), SCOPE_A);
+    assert.equal(saved.ok, true, saved.error);
+    const { handled, res } = await call(route, `/api/studio/sources/${made.id}/moments`, { ...SCOPE_A, name: 'Dane of Earth' });
+    assert.equal(handled, true);
+    assert.equal(res.statusCode, 200);
+    const body = json(res).data;
+    assert.deepEqual(body.moments.map((m) => m.quote), ['first', 'second']);
+    assert.equal(body.notesState, 'stale');
+    assert.equal(body.projectName, 'Dane of Earth');
+    assert.deepEqual(notesAsked.map((a) => [a.projectId, a.use]), [['proj_a', 'reel-spinner']]);
+  } finally {
+    restore();
+  }
+});
+
+test('GET moments: our own recording not scored yet is a 200 saying not_yet', async () => {
+  const stores = withRoute();
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(stores.route, `/api/studio/sources/${made.id}/moments`, SCOPE_A);
+    assert.equal(res.statusCode, 200);
+    assert.equal(json(res).data.state, 'not_yet');
+  } finally {
+    stores.restore();
+  }
+});
+
+test('GET moments: another project\'s recording is a 404, never its moments', async () => {
+  const stores = withRoute();
+  try {
+    const theirs = await sourceIn(stores, SCOPE_B);
+    const saved = await stores.moments.upsertMoments(theirs.id, { ...SCORED('fp'), summary: 'Project B secrets' }, SCOPE_B);
+    assert.equal(saved.ok, true, saved.error);
+    const { res } = await call(stores.route, `/api/studio/sources/${theirs.id}/moments`, SCOPE_A);
+    assert.equal(res.statusCode, 404);
+    assert.doesNotMatch(String(res.body), /Project B secrets/);
+  } finally {
+    stores.restore();
+  }
+});
+
+test('POST rescore: stamps our own row and reads it back; the next GET says it is waiting', async () => {
+  const stores = withRoute();
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    assert.equal((await stores.moments.upsertMoments(made.id, SCORED('fp-old'), SCOPE_A)).ok, true);
+    const { res } = await call(stores.route, `/api/studio/sources/${made.id}/moments/rescore`, SCOPE_A, 'POST');
+    assert.equal(res.statusCode, 200);
+    assert.ok(json(res).data.rescoreRequestedAt);
+    const again = json((await call(stores.route, `/api/studio/sources/${made.id}/moments`, SCOPE_A)).res).data;
+    assert.ok(again.rescoreRequestedAt, 'the request must be on the row the screen reads');
+  } finally {
+    stores.restore();
+  }
+});
+
+test('POST rescore: another project\'s recording is a 404 and its row is left alone', async () => {
+  const stores = withRoute();
+  try {
+    const theirs = await sourceIn(stores, SCOPE_B);
+    assert.equal((await stores.moments.upsertMoments(theirs.id, SCORED('fp'), SCOPE_B)).ok, true);
+    const { res } = await call(stores.route, `/api/studio/sources/${theirs.id}/moments/rescore`, SCOPE_A, 'POST');
+    assert.equal(res.statusCode, 404);
+    const row = await stores.moments.getMomentsBySource(theirs.id, SCOPE_B);
+    assert.equal(row.ok, true, row.error);
+    assert.equal(row.data.rescoreRequestedAt, '', 'project A must not be able to stamp project B\'s row');
+  } finally {
+    stores.restore();
+  }
+});
+
+test('POST rescore: a recording never scored says there is nothing to score again', async () => {
+  const stores = withRoute();
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { res } = await call(stores.route, `/api/studio/sources/${made.id}/moments/rescore`, SCOPE_A, 'POST');
+    assert.equal(res.statusCode, 404);
+    assert.equal(json(res).error.code, 'NOT_SCORED');
+  } finally {
+    stores.restore();
+  }
+});
+
+test('GET on the rescore address is refused, not run', async () => {
+  const stores = withRoute();
+  try {
+    const made = await sourceIn(stores, SCOPE_A);
+    const { handled, res } = await call(stores.route, `/api/studio/sources/${made.id}/moments/rescore`, SCOPE_A, 'GET');
+    assert.equal(handled, true);
+    assert.equal(res.statusCode, 405);
+  } finally {
+    stores.restore();
   }
 });
