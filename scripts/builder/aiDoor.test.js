@@ -1,0 +1,332 @@
+'use strict';
+
+/**
+ * The AI door (lib/aiClient.js generate(), AI switch 1, SC-843): every rule it
+ * makes about falling through, proved with recorded provider replies — no
+ * network, no key, no database.
+ */
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+// The meter's storage layer, stubbed before anything reaches for it.
+const observePath = require.resolve('../../lib/observeStore');
+require.cache[observePath] = {
+  id: observePath, filename: observePath, loaded: true, children: [], paths: [],
+  exports: { logUsage: async () => {} },
+};
+
+const {
+  generate, getAiProviderOrder, buildRequest, parseJsonReply, AI_PROVIDERS, NOTICE_EVERY_MS, _resetNoticeMemory,
+} = require('../../lib/aiClient');
+const { generateAlt } = require('../../lib/altTextProviders');
+
+// ── Recorded replies, in each provider's own shape ─────────────────────────
+
+const REPLIES = {
+  anthropicOk: (text = 'from claude') => ({ status: 200, body: { model: 'claude-sonnet-5-5', content: [{ type: 'text', text }], stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 } } }),
+  anthropicNoCredit: () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.' } } }),
+  anthropicBadRequest: () => ({ status: 400, body: { type: 'error', error: { type: 'invalid_request_error', message: 'messages: text content blocks must be non-empty' } } }),
+  anthropicBadKey: () => ({ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }),
+  anthropicBusy: () => ({ status: 429, body: { type: 'error', error: { type: 'rate_limit_error', message: 'Number of request tokens has exceeded your per-minute rate limit' } } }),
+  openaiOk: (text = 'from gpt') => ({ status: 200, body: { model: 'gpt-5.5-2026-04-23', choices: [{ message: { content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: 12, completion_tokens: 4, total_tokens: 16 } } }),
+  openaiNoCredit: () => ({ status: 429, body: { error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' } } }),
+  geminiOk: (text = 'from gemini') => ({ status: 200, body: { modelVersion: 'gemini-2.5-pro', candidates: [{ content: { parts: [{ text }] }, finishReason: 'STOP' }], usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 3, totalTokenCount: 11 } } }),
+};
+
+function fakeResponse({ status, body }) {
+  const text = typeof body === 'string' ? body : JSON.stringify(body);
+  return { ok: status >= 200 && status < 300, status, text: async () => text, headers: { get: () => '' } };
+}
+
+/**
+ * A door with everything injected. `script` maps a provider id to the reply
+ * it gives (a function, so each call can differ). Records every request sent,
+ * every meter row and every bus post.
+ */
+function harness({ order = 'anthropic,openai,gemini', keys = { anthropic: 'k-a', openai: 'k-o', gemini: 'k-g', kimi: 'k-k' }, script = {}, now = 1_000_000 } = {}) {
+  const sent = [];
+  const metered = [];
+  const posts = [];
+  const clock = { now };
+  const providerOf = (url) => {
+    if (url.includes('anthropic.com')) return 'anthropic';
+    if (url.includes('openai.com')) return 'openai';
+    if (url.includes('googleapis.com')) return 'gemini';
+    if (url.includes('moonshot.ai')) return 'kimi';
+    return 'unknown';
+  };
+  const deps = {
+    order: () => getAiProviderOrder({ env: { AI_PROVIDER_ORDER: order } }),
+    getKey: (def) => keys[def.id] || '',
+    fetchImpl: async (url, init) => {
+      const provider = providerOf(url);
+      sent.push({ provider, url, body: JSON.parse(init.body), headers: init.headers });
+      const reply = script[provider];
+      if (!reply) throw new Error(`test: no scripted reply for ${provider}`);
+      const r = reply();
+      if (r instanceof Error) throw r;
+      return fakeResponse(r);
+    },
+    recordUsage: async (row) => { metered.push(row); },
+    postBus: async (text) => { posts.push(text); return { ok: true }; },
+    now: () => clock.now,
+  };
+  return { deps, sent, metered, posts, clock };
+}
+
+const ASK = { feature: 'test-feature', tier: 'strong', system: 'Be brief.', messages: 'Hello' };
+
+test.beforeEach(() => _resetNoticeMemory());
+
+// ── Falling through ────────────────────────────────────────────────────────
+
+test('the first provider out of credit falls through to the second, and the meter names the one that answered', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: () => REPLIES.openaiOk('hi') } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.ok, true);
+  assert.equal(r.provider, 'openai');
+  assert.equal(r.text, 'hi');
+  assert.equal(r.model, 'gpt-5.5-2026-04-23');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['anthropic', 'openai']);
+  assert.equal(h.metered.length, 1, 'exactly one meter row: the call that was served');
+  assert.equal(h.metered[0].provider, 'openai');
+  assert.equal(h.metered[0].model, 'gpt-5.5-2026-04-23');
+  assert.equal(h.metered[0].feature, 'test-feature');
+  assert.equal(h.metered[0].usage.totalTokens, 16);
+  assert.equal(r.skipped[0].provider, 'anthropic');
+  assert.equal(r.skipped[0].verdict, 'OUT OF CREDIT');
+});
+
+test('a refused key falls through too', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicBadKey, openai: REPLIES.openaiOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.equal(r.skipped[0].verdict, 'INVALID');
+});
+
+test("OpenAI's own out-of-quota reply (a 429 with insufficient_quota) counts as out of credit, not as busy", async () => {
+  const h = harness({ order: 'openai,anthropic', script: { openai: REPLIES.openaiNoCredit, anthropic: REPLIES.anthropicOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.provider, 'anthropic');
+  assert.equal(r.skipped[0].verdict, 'OUT OF CREDIT');
+});
+
+test('a 400 bad request does NOT fall through: it is returned, and the next provider is never billed', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicBadRequest, openai: REPLIES.openaiOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'provider_error');
+  assert.equal(r.status, 400);
+  assert.match(r.error, /Anthropic refused the request \(400\): messages: text content blocks must be non-empty/);
+  assert.deepEqual(h.sent.map((s) => s.provider), ['anthropic']);
+  assert.equal(h.metered.length, 0);
+});
+
+test('a rate limit (429 without a quota message) does not fall through', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicBusy, openai: REPLIES.openaiOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.code, 'provider_error');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['anthropic']);
+});
+
+test('no answer at all (a timeout) does not fall through', async () => {
+  const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+  const h = harness({ script: { anthropic: () => timeout, openai: REPLIES.openaiOk } });
+  const r = await generate({ ...ASK, timeoutMs: 5000 }, h.deps);
+  assert.equal(r.code, 'no_answer');
+  assert.match(r.error, /Anthropic did not answer: no answer within 5s/);
+  assert.deepEqual(h.sent.map((s) => s.provider), ['anthropic']);
+});
+
+test('a provider with no key is skipped without a request', async () => {
+  const h = harness({ keys: { openai: 'k-o' }, script: { openai: REPLIES.openaiOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.deepEqual(h.sent.map((s) => s.provider), ['openai']);
+  assert.equal(r.skipped[0].verdict, 'NOT SET');
+  assert.match(r.skipped[0].reason, /add ANTHROPIC_API_KEY/);
+});
+
+test('when every provider is out, the error names each one and its reason', async () => {
+  const h = harness({ keys: { anthropic: 'k-a', openai: 'k-o' }, script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiNoCredit } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'no_provider');
+  assert.match(r.error, /^No AI provider could answer\./);
+  assert.match(r.error, /Anthropic: anthropic answered 400 — "Your credit balance is too low/);
+  assert.match(r.error, /OpenAI: openai answered 429 — "You exceeded your current quota/);
+  assert.match(r.error, /Google Gemini: no key set \(add GEMINI_API_KEY\)/);
+  assert.equal(h.metered.length, 0);
+});
+
+test('an unknown name in AI_PROVIDER_ORDER is reported, never silently dropped', async () => {
+  const h = harness({ order: 'openia,openai', script: { openai: REPLIES.openaiOk } });
+  const r = await generate(ASK, h.deps);
+  assert.equal(r.provider, 'openai');
+  assert.equal(r.skipped[0].provider, 'openia');
+  assert.match(r.skipped[0].reason, /not a provider this door knows/);
+});
+
+test('a tier that is not fast or strong is refused before anything is sent', async () => {
+  const h = harness({ script: {} });
+  const r = await generate({ ...ASK, tier: 'turbo' }, h.deps);
+  assert.equal(r.code, 'bad_request');
+  assert.equal(h.sent.length, 0);
+});
+
+// ── Prose and JSON on every adapter ────────────────────────────────────────
+
+for (const [provider, reply] of [['anthropic', REPLIES.anthropicOk], ['openai', REPLIES.openaiOk], ['gemini', REPLIES.geminiOk]]) {
+  test(`json: false returns prose from ${provider}, and asks for no JSON`, async () => {
+    const h = harness({ order: provider, script: { [provider]: () => reply('Plain words.') } });
+    const r = await generate({ ...ASK, json: false }, h.deps);
+    assert.equal(r.ok, true);
+    assert.equal(r.text, 'Plain words.');
+    assert.equal(r.json, undefined);
+    const wire = JSON.stringify(h.sent[0].body);
+    assert.doesNotMatch(wire, /json_object|application\/json|single JSON object/);
+  });
+
+  test(`json: true asks ${provider} for JSON and returns it parsed`, async () => {
+    const h = harness({ order: provider, script: { [provider]: () => reply('```json\n{"a": 1}\n```') } });
+    const r = await generate({ ...ASK, json: true }, h.deps);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.json, { a: 1 });
+    assert.match(JSON.stringify(h.sent[0].body), /single JSON object/);
+  });
+
+  test(`json: true with a prose reply from ${provider} is a named failure, not a crash`, async () => {
+    const h = harness({ order: provider, script: { [provider]: () => reply('Sorry, I cannot.') } });
+    const r = await generate({ ...ASK, json: true }, h.deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.code, 'bad_json');
+    assert.match(r.error, /answered, but not with JSON/);
+    assert.equal(r.text, 'Sorry, I cannot.');
+  });
+}
+
+test('each adapter asks for JSON the way its provider understands', () => {
+  const ask = { system: 's', messages: 'm', json: true, maxTokens: 50 };
+  const openai = buildRequest(AI_PROVIDERS.openai, 'gpt-5.5', 'k', ask);
+  assert.deepEqual(openai.body.response_format, { type: 'json_object' });
+  const gemini = buildRequest(AI_PROVIDERS.gemini, 'gemini-2.5-pro', 'k', ask);
+  assert.equal(gemini.body.generationConfig.responseMimeType, 'application/json');
+  const claude = buildRequest(AI_PROVIDERS.anthropic, 'claude-sonnet-5-5', 'k', ask);
+  assert.match(claude.body.system, /single JSON object/);
+});
+
+test('Kimi is an OpenAI-style service: its own address, OpenAI chat shape, max_completion_tokens', async () => {
+  const h = harness({ order: 'kimi', script: { kimi: () => REPLIES.openaiOk('kimi says hi') } });
+  const r = await generate({ ...ASK, tier: 'fast', maxTokens: 77 }, h.deps);
+  assert.equal(r.provider, 'kimi');
+  assert.equal(h.sent[0].url, 'https://api.moonshot.ai/v1/chat/completions');
+  assert.equal(h.sent[0].body.model, 'kimi-k3.1-pro-highspeed');
+  assert.equal(h.sent[0].body.max_completion_tokens, 77);
+  assert.equal(h.sent[0].headers.authorization, 'Bearer k-k');
+  // The meter cannot read a "kimi" usage block by name, so the door hands it one.
+  assert.equal(h.metered[0].provider, 'kimi');
+  assert.equal(h.metered[0].usage.totalTokens, 16);
+});
+
+test('Kimi is off unless the order names it', () => {
+  assert.equal(getAiProviderOrder({ env: {} }).providers.some((p) => p.id === 'kimi'), false);
+});
+
+// ── The order and its models ───────────────────────────────────────────────
+
+test('the default order is today\'s behaviour: Anthropic first', () => {
+  const { providers, source } = getAiProviderOrder({ env: {} });
+  assert.equal(source, 'default');
+  assert.deepEqual(providers.map((p) => p.id), ['anthropic', 'openai', 'gemini']);
+});
+
+test('AI_PROVIDER_ORDER and AI_MODEL_<PROVIDER>_<TIER> override it', () => {
+  const { providers, source, ignored } = getAiProviderOrder({ env: { AI_PROVIDER_ORDER: ' OpenAI , anthropic,openai,nope', AI_MODEL_OPENAI_FAST: 'gpt-5.4-nano' } });
+  assert.equal(source, 'AI_PROVIDER_ORDER');
+  assert.deepEqual(providers.map((p) => p.id), ['openai', 'anthropic']);
+  assert.equal(providers[0].models.fast, 'gpt-5.4-nano');
+  assert.equal(providers[0].models.strong, 'gpt-5.5');
+  assert.deepEqual(ignored, ['nope']);
+});
+
+test('callers never name a model: the tier picks it', async () => {
+  const h = harness({ order: 'anthropic', script: { anthropic: REPLIES.anthropicOk } });
+  await generate({ ...ASK, tier: 'fast' }, h.deps);
+  await generate({ ...ASK, tier: 'strong' }, h.deps);
+  assert.deepEqual(h.sent.map((s) => s.body.model), ['claude-haiku-4-5', 'claude-sonnet-5-5']);
+});
+
+// ── The bus notice ─────────────────────────────────────────────────────────
+
+test('a fall-through posts to the bus once per 6 hours per provider, and again after', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk } });
+  await generate(ASK, h.deps);
+  await generate(ASK, h.deps);
+  assert.equal(h.posts.length, 1);
+  assert.match(h.posts[0], /^AI calls are using OpenAI: Anthropic is out of credit\./);
+  h.clock.now += NOTICE_EVERY_MS - 1;
+  await generate(ASK, h.deps);
+  assert.equal(h.posts.length, 1, 'still inside the 6 hours');
+  h.clock.now += 1;
+  await generate(ASK, h.deps);
+  assert.equal(h.posts.length, 2, '6 hours later it says so again');
+});
+
+test('the notice clears the first time that provider works again', async () => {
+  let anthropicFunded = false;
+  const h = harness({ script: { anthropic: () => (anthropicFunded ? REPLIES.anthropicOk() : REPLIES.anthropicNoCredit()), openai: REPLIES.openaiOk } });
+  await generate(ASK, h.deps);
+  anthropicFunded = true;
+  await generate(ASK, h.deps); // Anthropic answers: the notice is cleared
+  anthropicFunded = false;
+  await generate(ASK, h.deps); // ...so running dry again is news straight away
+  assert.equal(h.posts.length, 2);
+});
+
+test('a missing key alone is not news: no bus post', async () => {
+  const h = harness({ keys: { openai: 'k-o' }, script: { openai: REPLIES.openaiOk } });
+  await generate(ASK, h.deps);
+  assert.equal(h.posts.length, 0);
+});
+
+test('a notice that was not delivered is tried again on the next fall-through', async () => {
+  const h = harness({ script: { anthropic: REPLIES.anthropicNoCredit, openai: REPLIES.openaiOk } });
+  let deliver = false;
+  const tries = [];
+  h.deps.postBus = async (text) => { tries.push(text); return deliver ? { ok: true } : { ok: false, why: 'tracker down' }; };
+  await generate(ASK, h.deps);
+  deliver = true;
+  await generate(ASK, h.deps);
+  assert.equal(tries.length, 2);
+});
+
+// ── The first caller: alt text ─────────────────────────────────────────────
+
+test('alt text goes through the door on the fast tier and returns trimmed text', async () => {
+  const asked = [];
+  const text = await generateAlt({ prompt: 'a photo', scope: { projectId: 'p1' } }, {
+    door: async (opts) => { asked.push(opts); return { ok: true, text: '  A tennis coach serving.  ', provider: 'openai' }; },
+  });
+  assert.equal(text, 'A tennis coach serving.');
+  assert.equal(asked[0].feature, 'seo_alt_text');
+  assert.equal(asked[0].tier, 'fast');
+  assert.equal(asked[0].maxTokens, 128);
+  assert.deepEqual(asked[0].scope, { projectId: 'p1' });
+});
+
+test('alt text throws with the door\'s reason when nothing could answer, so the image is noted as skipped', async () => {
+  await assert.rejects(
+    generateAlt({ prompt: 'a photo' }, { door: async () => ({ ok: false, code: 'no_provider', error: 'No AI provider could answer. Anthropic: out of credit.' }) }),
+    /Alt text could not be written: No AI provider could answer\. Anthropic: out of credit\./,
+  );
+  await assert.rejects(
+    generateAlt({ prompt: 'a photo' }, { door: async () => ({ ok: true, text: '  ', provider: 'openai', providerLabel: 'OpenAI', stopReason: 'length' }) }),
+    /OpenAI answered with nothing \(finish: length\)/,
+  );
+});
+
+test('parseJsonReply tolerates code fences and names a failure', () => {
+  assert.deepEqual(parseJsonReply('```json\n{"x":2}\n```').value, { x: 2 });
+  assert.equal(parseJsonReply('nope').ok, false);
+});
