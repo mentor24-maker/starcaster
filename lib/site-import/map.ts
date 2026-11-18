@@ -38,6 +38,7 @@ import { chooseLayout, columnKeys, planSectionGrid, type Cell, type GridKind, ty
 import { contrastRatio, deriveImportTheme, importSurfaceColor, pageTextColors, toHex } from "./theme";
 import { isCreditLink } from "./normalize";
 import { makePageLink, normalizeAnchorName } from "../builder-client/page-link";
+import { matchSectionShape, type SectionShapeLayer } from "../builder-client/section-shape-layer";
 import {
   buttonGlowSettings,
   hasPaint,
@@ -121,6 +122,11 @@ export type MappedSection = {
    * the original's own id (task SC-854).
    */
   anchorName?: string;
+  /**
+   * A curve, wave or slant painted over the band (task SC-859): the
+   * original's background mask, matched to the nearest built-in shape.
+   */
+  shapeLayer?: SectionShapeLayer;
   /** Engine bookkeeping for the runner (stripped before write): */
   sourceElementIds: string[];
   /** How this section's elements were disposed — the runner moves these
@@ -253,6 +259,12 @@ export type MapReport = {
     skipped: number;
   };
   skipped: { sourceId: string; class: string; reason: string }[];
+  /**
+   * Background masks and dividers matched onto a section's shape layer
+   * (task SC-859). Present only when a page had one, so a site without any
+   * reports exactly as before. Unmatched ones are in `skipped`, with why.
+   */
+  shapes?: { pagePath: string; sourceId: string; shape: string; what: string }[];
   pages: {
     path: string;
     /** MappedPage.key — unique per page, unlike path. */
@@ -1647,6 +1659,42 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   const logoTaxonomy = ir.taxonomy?.logo;
 
   /**
+   * A CSS-painted box that is a site builder's background mask (task SC-859):
+   * Divi's `et_pb_background_mask` and anything like it — an SVG drawing as
+   * the box's background, covering the whole band. Matched onto the band's
+   * shape layer when it can be; when it cannot, still set aside, with a
+   * reason naming the mask so the report says what was lost.
+   *
+   * A box much smaller than its band is a divider along one edge, not a
+   * full-band shape, and a full-band shape would paint it far too big, so it
+   * is named rather than guessed.
+   *
+   * Null when the box is not an SVG background at all — the caller then
+   * skips it as "nothing to show", exactly as before.
+   */
+  const readShapeMask = (section: SectionIR, el: ElementIR): Aside | null => {
+    const styles = (el.computedStyles || {}) as Record<string, string>;
+    const bg = String(styles["background-image"] || "");
+    if (!/data:image\/svg\+xml/i.test(bg)) return null;
+    const containers = el.containers || [];
+    const container = containers[containers.length - 1] || "";
+    const band = container ? section.containerBoxes?.[container] : undefined;
+    const lost = (why: string): Aside => ({
+      navConsumed: false,
+      reason: `a background shape (a mask drawn by CSS) that was not carried over — ${why}`,
+    });
+    if (el.box && band && band.w > 0 && band.h > 0) {
+      const cover = (el.box.w * el.box.h) / (band.w * band.h);
+      if (cover < 0.9) {
+        return lost(`it covers ${Math.round(cover * 100)}% of its band, so it is a divider along an edge, and only full-band shapes are matched`);
+      }
+    }
+    const match = matchSectionShape(bg, String(styles.transform || ""));
+    if (!match.ok) return lost(match.reason);
+    return { navConsumed: false, reason: "", shape: { layer: match.layer, container, note: match.note } };
+  };
+
+  /**
    * Elements that must not reach the page and must not shape its layout,
    * decided before columns are read (task SC-849, Bayside Partners):
    *
@@ -1667,8 +1715,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
    *
    * Each is accounted: the logo as navConsumed, the rest skipped with a reason.
    */
-  const setAside = (section: SectionIR): Map<string, { navConsumed: boolean; reason: string }> => {
-    const out = new Map<string, { navConsumed: boolean; reason: string }>();
+  type Aside = { navConsumed: boolean; reason: string; shape?: { layer: SectionShapeLayer; container: string; note: string } };
+  const setAside = (section: SectionIR): Map<string, Aside> => {
+    const out = new Map<string, Aside>();
     const els = section.elements || [];
     const measured = els.some((el) => el.box && el.box.w > 0);
     const isHeader =
@@ -1692,12 +1741,29 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           continue;
         }
       }
+      // Elementor's shape divider (`<div class="elementor-shape …"><svg>`):
+      // its colour lives in the site's stylesheet, which the capture does
+      // not record, so a match would guess the colour. Named, not guessed
+      // (SC-859); poured as content it was a stray picture over the band.
+      if (/^\s*<div\b[^>]*\bclass\s*=\s*"[^"]*\belementor-shape\b/i.test(String(el.html || ""))) {
+        out.set(el.sourceId, {
+          navConsumed: false,
+          reason:
+            "a background shape (an Elementor shape divider) that was not carried over — its colour is set by the site's stylesheet, which the capture does not record",
+        });
+        continue;
+      }
       if (
         el.class === "image" &&
         !shownAssetId(el, assetsById) &&
         !attrFromHtml(el.html, "src") &&
         !/<(img|svg|picture|video|canvas)\b/i.test(el.html)
       ) {
+        const shape = readShapeMask(section, el);
+        if (shape) {
+          out.set(el.sourceId, shape);
+          continue;
+        }
         out.set(el.sourceId, {
           navConsumed: false,
           reason: "an image box with no picture in it — painted only by CSS (a background layer or mask), nothing to show",
@@ -2321,7 +2387,17 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         const aside = asideOf.get(el.sourceId);
         if (!aside) sourceElementIds.push(el.sourceId);
         if (aside) {
-          if (aside.navConsumed) {
+          if (aside.shape) {
+            // Carried onto the band's shape layer once its rows exist (below).
+            report.elements.mapped += 1;
+            dispositions.mapped += 1;
+            (report.shapes ||= []).push({
+              pagePath: page.path,
+              sourceId: el.sourceId,
+              shape: aside.shape.layer.shape,
+              what: aside.shape.note,
+            });
+          } else if (aside.navConsumed) {
             report.elements.navConsumed += 1;
           } else {
             report.elements.skipped += 1;
@@ -2677,6 +2753,20 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
         ground,
         cardLookOf,
       });
+      // A matched background mask (SC-859) goes on the row(s) holding the
+      // elements of the band it painted. A band split into several rows gets
+      // it on the FIRST: one shape over the top row reads as the original far
+      // better than the same curve repeated on every row.
+      for (const [, aside] of asideOf) {
+        if (!aside.shape) continue;
+        const inBand = new Set(
+          (section.elements || [])
+            .filter((e) => (e.containers || []).includes(aside.shape!.container))
+            .map((e) => e.sourceId)
+        );
+        const row = built.find((r) => r.sourceElementIds.some((id) => inBand.has(id))) || built[0];
+        if (row) row.shapeLayer = aside.shape.layer;
+      }
       mappedSections.push(...built);
       pageModules += modules.length;
     }

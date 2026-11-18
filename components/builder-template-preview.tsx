@@ -28,6 +28,7 @@ import {
   formatRichTextContent,
   getBuilderBackgroundStyle,
   getBuilderRowOverlayScreenStyle,
+  getSectionShapeLayerStyle,
   getLayoutColumns,
   groupJoinedSections,
   isPlainTextVariant,
@@ -2336,6 +2337,11 @@ function BuilderSectionPreview({
   const sectionOverlayScreenStyle = isOverlayLayoutCollapsed
     ? undefined
     : getBuilderRowOverlayScreenStyle(section.overlayScreen);
+  // The section's shape layer (task SC-859): a curve, wave or slant over the
+  // background and tint, under the columns. Undefined when there is none, so
+  // no element is mounted and the row renders exactly as before.
+  const sectionShapeLayerStyle = isOverlayLayoutCollapsed ? undefined : getSectionShapeLayerStyle(section.shapeLayer);
+  const sectionHasLayers = Boolean(sectionBackgroundLayer || sectionOverlayScreenStyle || sectionShapeLayerStyle);
 
   // A function of the row, not a constant, so the tablet and phone rules below
   // are computed by exactly this code on the row as each device sees it.
@@ -2413,9 +2419,7 @@ function BuilderSectionPreview({
       // out is the point of 86bbwmp2y rather than a side effect — a dropdown in
       // a tinted row was cut off for the same reason it was in a video one.
       // (`row-overlay-screen-only-leaves-the-row-uncontained` holds this.)
-      ...(sectionBackgroundLayer || sectionOverlayScreenStyle
-        ? { position: "relative" }
-        : {}),
+      ...(sectionHasLayers ? { position: "relative" } : {}),
       display: "grid",
       gridTemplateColumns: sectionGridTemplate,
       ...(isOverlayLayoutCollapsed ? { gap: 0 } : getSectionColumnGapStyle(s)),
@@ -2471,9 +2475,7 @@ function BuilderSectionPreview({
       }${
         section.widthMode === "full-width" ? " builder-preview-section-full-width" : ""
       }${
-        sectionBackgroundLayer || sectionOverlayScreenStyle
-          ? " builder-preview-section-layered"
-          : ""
+        sectionHasLayers ? " builder-preview-section-layered" : ""
       }${
         // Drops the stylesheet's default section corner, which the overlay
         // screen would otherwise inherit and paint (86bcvqemm).
@@ -2503,6 +2505,14 @@ function BuilderSectionPreview({
       ) : null}
       {sectionOverlayScreenStyle ? (
         <div className="builder-preview-row-overlay-screen" style={sectionOverlayScreenStyle} />
+      ) : null}
+      {sectionShapeLayerStyle ? (
+        <div
+          className="builder-preview-row-shape-layer"
+          data-shape={section.shapeLayer?.shape}
+          data-shape-side={section.shapeLayer?.side}
+          style={sectionShapeLayerStyle}
+        />
       ) : null}
       {columnKeys.map((columnKey) => {
         const columnModules = section.modules.filter((module) => module.column === columnKey);

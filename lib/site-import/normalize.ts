@@ -562,6 +562,9 @@ export const CAPTURE_STYLE_PROPS: string[] = [
   // layout essentials
   "display", "position", "gap", "flex-direction", "justify-content",
   "align-items",
+  // A mirror on a background mask: Divi draws Bayside's curve on the right
+  // and flips it to the left with `scale(-1,1)` (task SC-859).
+  "transform",
 ];
 
 const KEEP_SET = new Set(CAPTURE_STYLE_PROPS);
@@ -592,6 +595,7 @@ const STYLE_DEFAULTS: Record<string, string[]> = {
   "flex-direction": ["row"],
   "justify-content": ["normal", "flex-start"],
   "align-items": ["normal", "stretch"],
+  transform: ["none"],
   "margin-top": ["0px"], "margin-right": ["0px"],
   "margin-bottom": ["0px"], "margin-left": ["0px"],
   "padding-top": ["0px"], "padding-right": ["0px"],
