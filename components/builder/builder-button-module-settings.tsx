@@ -149,6 +149,7 @@ export function BuilderButtonModuleSettings({
               control: "picker",
               source: "pages",
               valueKind: "path",
+              allowSections: true,
               noneLabel: "— No link —",
               placeholder: "/path-or-url",
               visibleWhen: () => !isEmailTemplate,

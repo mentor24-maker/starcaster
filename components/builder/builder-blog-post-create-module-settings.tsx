@@ -52,6 +52,7 @@ export function BuilderBlogPostCreateModuleSettings({
               control: "picker",
               source: "pages",
               valueKind: "path",
+              allowSections: true,
               noneLabel: "— Stay on this page —",
               placeholder: "/admin/posts  (leave blank to stay on this page)"
             }
