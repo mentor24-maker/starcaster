@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { mapSite, ownColorOnBand, bandHeightFor, styleProseHtml } = require('../../lib/site-import/dist/map.js');
+const { mapSite, ownColorOnBand, bandHeightFor, styleProseHtml, blocksStack } = require('../../lib/site-import/dist/map.js');
 
 const IR = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'bayside-home.json'), 'utf8'));
 const LOGO = IR.taxonomy.logo.assetId;
@@ -79,10 +79,10 @@ test('one plain band split over two rows stays one band', () => {
   // a cards row, the theme's alternating bands painted the heading row grey.
   const { sections } = home();
   const heading = sections.findIndex((s) => s.modules.some((m) => /<h2>Services<\/h2>/.test(m.text || '')));
-  const cards = sections.findIndex((s) => s.modules.some((m) => m.type === 'feature-cards'));
-  assert.equal(cards, heading + 1);
+  const rows = sections.findIndex((s) => s.modules.some((m) => /Early Stage CEO Advisory/.test(m.text || '')));
+  assert.equal(rows, heading + 1);
   assert.equal(sections[heading].joinWithPrevious, undefined, 'the band starts at the heading');
-  assert.equal(sections[cards].joinWithPrevious, true, 'the cards row joins it');
+  for (let i = rows; i < rows + 4; i++) assert.equal(sections[i].joinWithPrevious, true, 'each service row joins it');
   // A row from a different band never joins the one above it.
   const contact = sections.findIndex((s) => s.modules.some((m) => m.type === 'crm-form'));
   assert.notEqual(sections[contact].joinWithPrevious, true);
@@ -117,4 +117,45 @@ test('bandHeightFor: only a band with real empty space keeps its height', () => 
   assert.equal(bandHeightFor(undefined, [{ y: 0, h: 10 }], 0, 0), null);
   assert.equal(bandHeightFor({ y: 0, h: 900 }, [undefined], 0, 0), null);
   assert.equal(bandHeightFor({ y: 0, h: 5000 }, [{ y: 10, h: 10 }], 0, 0).minHeight, '1200', 'Builder caps a row at 1200');
+});
+
+// SC-858: Services on the original is four rows, each a 108px round icon on
+// the left with a heading and paragraph beside it. It repeats
+// image+heading+text four times, so the card-grid guess made it four tall
+// squeezed cards with huge icons.
+test('Services imports as four stacked icon-left rows, not a row of cards', () => {
+  const { out, sections } = home();
+  assert.ok(!modulesOf(sections).some((m) => m.type === 'feature-cards'), 'no card grid on this page');
+  assert.equal(out.cardGrids.length, 0);
+  const titles = ['Early Stage CEO Advisory', 'Later Stage CEO Advisory', 'Family-Run Business Advisory', 'Non-Profit Advisory'];
+  const at = sections.findIndex((s) => s.modules.some((m) => m.text && m.text.includes(titles[0])));
+  titles.forEach((title, i) => {
+    const row = sections[at + i];
+    assert.ok(row.layout !== 'single', `${title}: a two-column row (${row.layout})`);
+    assert.equal(row.modules.length, 2, `${title}: an icon and its words`);
+    const [icon, words] = [row.modules.find((m) => m.type === 'image'), row.modules.find((m) => m.type === 'text')];
+    assert.ok(icon && words, title);
+    assert.equal(icon.column, 'left', `${title}: the icon on the left`);
+    assert.equal(words.column, 'right', `${title}: the words on the right`);
+    assert.match(words.text, new RegExp(`<h3[^>]*>${title}</h3>`), `${title}: its own heading, in its own row`);
+    // The file is 108px, as the original showed it, and the image module never
+    // draws a picture larger than its file — so no cap is needed to keep it so.
+    const asset = IR.assets.find((a) => a.storageUrl === icon.settings.url);
+    assert.equal(asset && asset.width, 108, `${title}: the icon is the 108px file`);
+    assert.ok(!icon.settings.maxWidthPx || Number(icon.settings.maxWidthPx) <= 108);
+  });
+  assert.ok(reconciles(out.report.elements), JSON.stringify(out.report.elements));
+});
+
+test('blocksStack: a list of blocks one above another, never a row of cards', () => {
+  const b = (x, y, w, h) => ({ box: { x, y, w, h } });
+  // Bayside's Services: icon tops 1821, 2117, 2413, 2641; each block ends before the next starts.
+  assert.equal(blocksStack([[b(239, 1821, 108, 108), b(485, 1873, 755, 170)], [b(239, 2117, 108, 108), b(485, 2169, 755, 170)], [b(239, 2413, 108, 108), b(485, 2465, 755, 102)]]), true);
+  // A row of three cards shares a line.
+  assert.equal(blocksStack([[b(0, 100, 300, 400)], [b(320, 100, 300, 400)], [b(640, 100, 300, 400)]]), false);
+  // Six cards as 3 + 3: the second row stacks under the first, but cards share lines within it.
+  const six = [0, 1, 2, 3, 4, 5].map((i) => [b((i % 3) * 320, i < 3 ? 0 : 500, 300, 400)]);
+  assert.equal(blocksStack(six), false);
+  // Unknown positions leave the old behaviour.
+  assert.equal(blocksStack([[{ box: null }], [b(0, 500, 10, 10)], [b(0, 900, 10, 10)]]), false);
 });

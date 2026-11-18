@@ -785,6 +785,30 @@ function decodeEntities(value: string): string {
     });
 }
 
+/**
+ * True when a repeated run's blocks sit one above another rather than side by
+ * side (SC-858): no block starts before the one above it ends. A row of cards
+ * always has two blocks sharing a line — six cards are 3 + 3, never 1 x 6.
+ * A block with no recorded position means the answer is unknown, and the run
+ * stays a card grid as it always did.
+ */
+export function blocksStack(groups: { box?: { y: number; h: number } | null }[][]): boolean {
+  if (groups.length < 2) return false;
+  const spans: { top: number; bottom: number }[] = [];
+  for (const group of groups) {
+    const boxes = group
+      .map((e) => e.box)
+      .filter((b): b is { y: number; h: number } => !!b && Number.isFinite(b.y) && Number.isFinite(b.h) && b.h > 0);
+    if (!boxes.length) return false;
+    spans.push({
+      top: Math.min(...boxes.map((b) => b.y)),
+      bottom: Math.max(...boxes.map((b) => b.y + b.h)),
+    });
+  }
+  const TOLERANCE_PX = 2;
+  return spans.every((span, i) => i === 0 || span.top >= spans[i - 1].bottom - TOLERANCE_PX);
+}
+
 /** Column count for an imported card grid: the largest of 4/3/2 that divides
  *  the card count evenly, else 3 (the Feature Cards module's own default). */
 export function pickCardColumns(cardCount: number): number {
@@ -1910,6 +1934,9 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
   };
 
   const cardGridRuns: CardGridRun[] = [];
+  /** Elements of a run declined because its blocks stack (SC-858) → which
+   *  block they belong to, so the column planner keeps one row per block. */
+  const stackedRowOf = new Map<string, string>();
   (ir.pages || []).forEach((irPage, pageIdx) => {
     if (cardsVetoed(pageIdx)) return; // vetoed: blocks stay as separate modules
     for (const section of irPage.sections || []) {
@@ -1921,6 +1948,15 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
       const groups: ElementIR[][] = [];
       for (let g = 0; g < found.reps; g++) {
         groups.push(els.slice(found.start + g * found.size, found.start + (g + 1) * found.size));
+      }
+      // A row of cards sits side by side. Blocks that sit one above another
+      // are a list — Bayside's Services, four icon-beside-text rows, came out
+      // as four squeezed tall cards (SC-858). Each block keeps its own row.
+      if (blocksStack(groups)) {
+        groups.forEach((group, gi) => {
+          for (const el of group) stackedRowOf.set(el.sourceId, `${groups[0][0].sourceId}#${gi}`);
+        });
+        continue;
       }
       cardGridRuns.push({
         pageIdx,
@@ -2088,6 +2124,7 @@ export function mapSite(sourceIr: SiteIR, opts: MapOptions): MapOutput {
           id: el.sourceId,
           box: el.box,
           group: `${bandOf.get(el.sourceId) || ""}\u0001${cardOf.get(el.sourceId) || ""}`,
+          row: stackedRowOf.get(el.sourceId),
           kind: gridKind(el),
         }))
       );

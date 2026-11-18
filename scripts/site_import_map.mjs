@@ -91,14 +91,18 @@
  *   ... --no-menus   skip the Top Menu / Footer Menu (see MENUS above)
  *   ... --nav-master <savedSectionId> pin which header master --nav writes
  *       to (default: the one the most pages reference)
+ *   ... --no-fidelity   skip the difference report a real build ends with
+ *       (SC-862 — see THE DIFFERENCE REPORT below)
  *   ... --result-file <path>   write what the run planned / did as JSON (the
  *       import worker passes this when the Site Import screen's Preview build
  *       / Build draft pages buttons queued the run — task 86bcz9wcx)
  */
 
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { mainCheckoutDir } from './lib/main_checkout.mjs';
 import { copyPromotedAssets, SourceUnreachableError } from './lib/site_import_copy.mjs';
@@ -192,6 +196,9 @@ const {
 } = require('./lib/siteImportForms.js');
 const publishStore = require('./lib/builderPublishStore.js');
 const {
+  FIDELITY_TIMEOUT_MS, fidelityScriptArgs, fidelityFailureReason, fidelityCheckpoint, fidelitySummaryLine,
+} = require('./lib/siteImportFidelityRun.js');
+const {
   resolveRefreshSource, planRefresh, refreshSummaryLine, findHumanModifiedSections, themeMakesDefault,
 } = require('./lib/siteImportRefresh.js');
 
@@ -199,6 +206,7 @@ const APPLY = flag('--apply');
 const NAV = flag('--nav');
 const NAV_REPLACE = flag('--nav-replace');
 const NO_THEME = flag('--no-theme');
+const NO_FIDELITY = flag('--no-fidelity');
 const RECREATE_DELETED = flag('--recreate-deleted');
 const THEME_ONLY = flag('--theme-only');
 const FORMS_ONLY = flag('--forms-only');
@@ -226,7 +234,7 @@ function must(res, what) {
  * Written to --result-file at the end, success or failure. Plain words only —
  * the operator reads these lines as they are.
  */
-const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '' };
+const RESULT = { mode: APPLY ? 'apply' : 'preview', pages: [], theme: null, warnings: [], refresh: '', applied: null, reportUrl: '', fidelity: null };
 const warn = (line) => { RESULT.warnings.push(String(line)); };
 function writeResult(extra = {}) {
   if (!RESULT_FILE) return;
@@ -890,6 +898,74 @@ async function main() {
     checkpoints: { ...checkpoints, map: { ...checkpoints.map, sectionHashes: settledHashes } },
   }), 'record settled section hashes');
   log(`Clobber guard: fingerprinted ${Object.keys(settledHashes).length} import-owned section(s).`);
+
+  // 6. The difference report, LAST — it measures the pages as built.
+  if (NO_FIDELITY) {
+    log('\nDifference report: skipped (--no-fidelity).');
+  } else {
+    await runDifferenceReport(job.id);
+  }
+}
+
+/**
+ * THE DIFFERENCE REPORT (SC-862). A real build ends by running
+ * scripts/site_import_fidelity.mjs over the pages it just wrote and recording
+ * the outcome on the job (checkpoints.fidelity), so the Imports screen shows
+ * it without anyone having to remember. Dane's rule (DOCTRINE §6.25) is that
+ * every difference it lists is a missing capability to file; it ran only by
+ * hand until Bayside went live on 2026-11-17 without it.
+ *
+ * A report that cannot be made does NOT fail the build — the pages are
+ * written and good — but it is recorded as 'failed' with the reason, shown on
+ * the screen and added to the build's warnings. Never skipped quietly.
+ */
+async function runDifferenceReport(jobId) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'site-import-fidelity-run-'));
+  const resultFile = path.join(dir, 'result.json');
+  log('\nDifference report: comparing every built page with the original (this takes a few minutes)…');
+  const run = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'site_import_fidelity.mjs'), ...fidelityScriptArgs(jobId, resultFile)], {
+      cwd: ROOT, env: process.env, stdio: ['ignore', 'inherit', 'pipe'],
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
+      stderr = (stderr + chunk).slice(-20000);
+    });
+    const timer = setTimeout(() => child.kill('SIGTERM'), FIDELITY_TIMEOUT_MS);
+    child.on('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, stderr }); });
+    child.on('error', (err) => { clearTimeout(timer); resolve({ code: 1, signal: null, stderr: '', error: `could not start the report script: ${err.message}` }); });
+  });
+  let result = null;
+  try { result = JSON.parse(readFileSync(resultFile, 'utf8')); } catch { /* none written */ }
+  rmSync(dir, { recursive: true, force: true });
+  const checkpoint = fidelityCheckpoint({
+    exitCode: run.code,
+    result,
+    error: run.error || fidelityFailureReason(run.stderr, run.code, run.signal),
+  });
+  RESULT.fidelity = checkpoint;
+  const line = fidelitySummaryLine(checkpoint);
+  log(line);
+  if (checkpoint.status !== 'done') warn(line);
+  // Re-read: the report runs for minutes, and the row must not be written
+  // from a copy older than that.
+  const fresh = must(await store.getJob(jobId), 'reload job for the difference report');
+  const saved = await store.updateJob(jobId, { checkpoints: { ...(fresh.checkpoints || {}), fidelity: checkpoint } });
+  if (!saved || saved.ok === false) {
+    const why = `Difference report: made, but it could not be recorded on the import (${saved?.error || `status ${saved?.status}`}), so the Imports screen will not show it.`;
+    console.error(`\nERROR: ${why}`);
+    warn(why);
+    process.exitCode = 1;
+    return;
+  }
+  const back = must(await store.getJob(jobId), 'read back the difference report');
+  if (back.checkpoints?.fidelity?.at !== checkpoint.at) {
+    const why = 'Difference report: the import row did not read back with the report on it, so the Imports screen will not show it.';
+    console.error(`\nERROR: ${why}`);
+    warn(why);
+    process.exitCode = 1;
+  }
 }
 
 /**
