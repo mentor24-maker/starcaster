@@ -1247,6 +1247,60 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'menu-link-to-a-named-section-lands-on-it',
+    why:
+      'On baysidepartners.com the menu\'s About Us, Services and Contact Us did nothing: they were ' +
+      '`/#about-us`-style jump links and no section on any StarCaster page could carry a name ' +
+      '(task SC-852, operator 2026-11-17). A section now has an Anchor name, rendered as its id, ' +
+      'and a menu item stores the section by its id — so the name in the address is looked up at ' +
+      'render time and renaming the anchor breaks nothing. This puts a menu at the top of a page ' +
+      'that scrolls, links one item to the subject section by REFERENCE with a stale saved name ' +
+      '("old-name"), says the section is now named "contact-us", clicks the item and measures ' +
+      'where the section ended up: at the top of the window, with the link pointing at #contact-us.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      leadSections: [{
+        modules: [{
+          type: 'navigation',
+          settings: {
+            navItems: JSON.stringify([
+              { id: 'jump', label: 'Contact Us', href: 'page:4242#section-render-contract|/old-page#old-name' },
+            ]),
+          },
+        }],
+      }],
+      modules: [{ type: 'heading', text: 'Contact Us', settings: {} }],
+    },
+    // The page the preview is drawn on, and the section's name NOW.
+    pageAddresses: { 4242: 'builder-preview.html', '4242#section-render-contract': 'contact-us' },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.site-nav-link[href*="#"]',
+    selector: '#contact-us',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['href', 'id'],
+      selectors: { link: '.site-nav-link[href*="#"]', section: 'section#contact-us' },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no section carries the id "contact-us" — the Anchor name did not reach the rendered page.';
+      const frame = sample.series?.[0];
+      if (!frame?.link) return 'the menu item did not render as a link, so where it points could not be read.';
+      if (!frame.section) return 'the named section was not found after the click, so where it landed could not be measured.';
+      const href = String(frame.link.href || '');
+      if (href.endsWith('#old-name')) return `the menu link still points at the name saved when it was picked (${href}) — the section reference was not resolved to its current anchor name.`;
+      if (!href.endsWith('#contact-us')) return `the menu link points at ${JSON.stringify(href)}, expected the section's current name (#contact-us).`;
+      if (Math.abs(frame.section.top) > 4) {
+        return `after clicking the menu item the section sits ${Math.round(frame.section.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-linked-to-a-renamed-page-follows-it',
     why:
       'A Button whose Link was picked from the page list saved a COPY of the page\'s address, so ' +

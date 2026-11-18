@@ -25,6 +25,8 @@ import { BuilderSettingRow } from "./builder-setting-row";
 import { BuilderModuleSpacingFields } from "./builder-spacing-fields";
 import { BuilderThemeColorField } from "./builder-theme-color-field";
 import { formatColumnName } from "./builder-utils";
+import { useBuilderPageSections } from "./builder-page-sections-context";
+import { normalizeAnchorName } from "@/lib/page-link";
 import type { ReactNode } from "react";
 import {
   BUILDER_DEVICE_LABELS,
@@ -53,6 +55,67 @@ type BuilderSectionControlsProps = {
   themePrimaryColor?: string;
   themeColors?: Array<{ label: string; hex: string }>;
 };
+
+/**
+ * While typing, only what an anchor name can never hold is dropped — the
+ * trailing hyphen of "about-" has to survive the keystroke before "us". The
+ * full rule (`normalizeAnchorName`) runs when the box loses focus, and again
+ * whenever the page is saved or loaded.
+ */
+function typingAnchorName(value: string): string {
+  return value.toLowerCase().replace(/^#+/, "").replace(/[\s_]+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 80);
+}
+
+/**
+ * "Anchor name" (task SC-852): the name a link uses to jump to this section,
+ * rendered as the section's `id`. Says so when another section on the page
+ * already carries the name, because two sections with one name means a link
+ * can only ever reach the first.
+ */
+export function SectionAnchorNameRow({
+  section,
+  onUpdateSection
+}: {
+  section: BuilderTemplateSection;
+  onUpdateSection: BuilderSectionControlsProps["onUpdateSection"];
+}) {
+  const page = useBuilderPageSections();
+  const value = section.anchorName ?? "";
+  const name = normalizeAnchorName(value);
+  const takenBy = name
+    ? (page?.sections ?? []).find(
+        (other) => other.id !== section.id && normalizeAnchorName(other.anchorName ?? "") === name
+      )
+    : undefined;
+  const write = (next: string) =>
+    onUpdateSection((current) => {
+      const { anchorName: _previous, ...rest } = current;
+      return next ? { ...rest, anchorName: next } : rest;
+    });
+  return (
+    <BuilderSettingRow label="Anchor name">
+      <div className="builder-section-anchor-name">
+        <input
+          type="text"
+          value={value}
+          placeholder="e.g. contact-us"
+          aria-label="Anchor name"
+          aria-invalid={takenBy ? true : undefined}
+          title="A name a link can jump to: letters, digits and hyphens. A menu item can then link to this section."
+          onChange={(event) => write(typingAnchorName(event.target.value))}
+          onBlur={() => {
+            if (value !== name) write(name);
+          }}
+        />
+        {takenBy ? (
+          <p className="builder-section-anchor-name-taken" role="alert">
+            “{name}” is already the anchor name of {takenBy.title ? `the section “${takenBy.title}”` : "another section"} on this page. Links can only reach the first one; choose another name.
+          </p>
+        ) : null}
+      </div>
+    </BuilderSettingRow>
+  );
+}
 
 function updateSectionBackground(
   onUpdateSection: BuilderSectionControlsProps["onUpdateSection"],
@@ -325,6 +388,7 @@ export function BuilderSectionControls({
                       <option value="50">50% (centered)</option>
                     </select>
                   </BuilderSettingRow>
+          {!device ? <SectionAnchorNameRow section={section} onUpdateSection={onUpdateSection} /> : null}
           {canJoinPrevious && !device ? (
                     <BuilderSettingRow label="Share Background">
                       <input

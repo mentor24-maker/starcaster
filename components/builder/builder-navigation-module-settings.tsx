@@ -1488,6 +1488,7 @@ export function BuilderNavigationModuleSettings({
                         <BuilderProjectDataPicker
                           source="pages"
                           valueKind="path"
+                          allowSections
                           value={item.href}
                           onChange={(href) => updateItem(item.id, { href })}
                           noneLabel="— No link —"
