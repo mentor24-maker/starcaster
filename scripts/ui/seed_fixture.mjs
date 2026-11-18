@@ -1061,6 +1061,12 @@ const buildPanelCheckSection = (ids) => {
     opacity: 45,
   },
   /*
+   * A SHAPE (task SC-859), for the Overlay group's reason above: with no
+   * shape the Shape group renders one "None" dropdown and its Side, Color and
+   * Opacity rows are never measured.
+   */
+  shapeLayer: { shape: 'curve', side: 'left', color: '#ffffff', opacity: 71 },
+  /*
    * AND A VIDEO CELL FILL, which is a THIRD panel again — and the one that
    * reached the operator staggered.
    *
