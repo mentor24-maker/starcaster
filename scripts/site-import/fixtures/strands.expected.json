@@ -3,6 +3,7 @@
     "irVersion": "1.0",
     "jobId": "job-fixture-strands",
     "sourceUrl": "https://strandsmovie.com/",
+    "anchorsRecorded": true,
     "capturedAt": "2026-10-13T00:00:00.000Z",
     "pages": [
       {
@@ -30,6 +31,11 @@
                 "depth": 5,
                 "assetRefs": [
                   "asset-logo"
+                ],
+                "anchors": [
+                  "page-container",
+                  "main-header",
+                  "logo"
                 ]
               },
               {
@@ -41,7 +47,12 @@
                 "computedStyles": {},
                 "documentPosition": 1,
                 "depth": 8,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "et-top-navigation",
+                  "top-menu-nav",
+                  "top-menu"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-16ac119d",
@@ -323,7 +334,11 @@
                 "computedStyles": {},
                 "documentPosition": 26,
                 "depth": 4,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "et-main-area",
+                  "main-content"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-5bb253dc",
@@ -345,7 +360,11 @@
                 "computedStyles": {},
                 "documentPosition": 28,
                 "depth": 8,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "main-footer",
+                  "footer-bottom"
+                ]
               },
               {
                 "sourceId": "p2a0c975e-abf1c690",
@@ -367,7 +386,10 @@
                 "computedStyles": {},
                 "documentPosition": 30,
                 "depth": 6,
-                "assetRefs": []
+                "assetRefs": [],
+                "anchors": [
+                  "footer-info"
+                ]
               }
             ]
           }
