@@ -24,7 +24,8 @@ const {
   placeMoment,
   momentsConfig,
   NO_BRIEF_REASON,
-  DEFAULT_MODEL,
+  DEFAULT_TIER,
+  queryThroughDoor,
   RULES_VERSION,
   MIN_S,
   MAX_S,
@@ -74,12 +75,12 @@ function stub(text, extra = {}) {
   const calls = [];
   const query = async (system, user, options) => {
     calls.push({ system, user, options });
-    return { ok: true, text, model: DEFAULT_MODEL, usage: { input_tokens: 9000, output_tokens: 1200 }, ...extra };
+    return { ok: true, text, provider: 'anthropic', model: 'anthropic/claude-sonnet-5-5', usage: { input_tokens: 9000, output_tokens: 1200 }, ...extra };
   };
   return { query, calls };
 }
 
-const CONFIG = { model: DEFAULT_MODEL, maxTokens: 8000, timeoutMs: 1000 };
+const CONFIG = { tier: DEFAULT_TIER, maxTokens: 8000, timeoutMs: 1000 };
 
 test('the fixture is the real recording it says it is', () => {
   assert.equal(recording.sourceId, 'e8699ace-b192-40f3-b574-110ac98347df');
@@ -242,30 +243,62 @@ test('a brief without a fingerprint is refused, because a later edit could not b
   assert.equal(calls.length, 0);
 });
 
-test('a failed call is a retryable failure naming the model', async () => {
-  const query = async () => ({ ok: false, error: 'Your credit balance is too low' });
+test('a failed call is a retryable failure carrying the door\'s code', async () => {
+  const query = async () => ({ ok: false, code: 'no_provider', error: 'No AI provider could answer. Anthropic: out of credit; OpenAI: no key set (add OPENAI_API_KEY).' });
   const res = await scoreMoments(input(), { query, config: CONFIG });
   assert.equal(res.state, 'failed');
   assert.equal(res.retryable, true);
-  assert.match(res.reason, /claude-sonnet-5-5 failed: Your credit balance is too low/);
+  assert.equal(res.callCode, 'no_provider');
+  assert.match(res.reason, /AI door failed: No AI provider could answer\. Anthropic: out of credit/);
   const thrown = await scoreMoments(input(), { query: async () => { throw new Error('socket hang up'); }, config: CONFIG });
   assert.equal(thrown.retryable, true);
+  assert.equal(thrown.callCode, 'no_answer');
   assert.match(thrown.reason, /socket hang up/);
 });
 
-test('model and token limit come from configuration, defaulting to the current Sonnet', async () => {
-  assert.deepEqual(momentsConfig({}), { model: 'claude-sonnet-5-5', maxTokens: 8000, timeoutMs: 180000 });
-  const set = momentsConfig({ STUDIO_MOMENTS_MODEL: 'claude-opus-5-5', STUDIO_MOMENTS_MAX_TOKENS: '12000' });
-  assert.equal(set.model, 'claude-opus-5-5');
+test('tier and token limit come from configuration; no provider or model is named here', async () => {
+  assert.deepEqual(momentsConfig({}), { tier: 'strong', maxTokens: 8000, timeoutMs: 180000 });
+  const set = momentsConfig({ STUDIO_MOMENTS_TIER: 'fast', STUDIO_MOMENTS_MAX_TOKENS: '12000' });
+  assert.equal(set.tier, 'fast');
   assert.equal(set.maxTokens, 12000);
   assert.equal(momentsConfig({ STUDIO_MOMENTS_MAX_TOKENS: 'lots' }).maxTokens, 8000);
-  assert.notEqual(DEFAULT_MODEL, 'claude-opus-4-8', 'never the retired default in lib/aiClient.js');
+  assert.equal(momentsConfig({ STUDIO_MOMENTS_TIER: 'opus' }).tier, 'strong', 'a tier the door lacks is ignored');
 
   const { query, calls } = stub(replyText);
-  await scoreMoments(input(), { query, config: set });
-  assert.equal(calls[0].options.anthropicModel, 'claude-opus-5-5');
+  const res = await scoreMoments(input(), { query, config: set });
+  assert.equal(calls[0].options.tier, 'fast');
   assert.equal(calls[0].options.maxTokens, 12000);
   assert.equal(calls[0].options.feature, 'studio_reel_moments');
+  assert.equal(res.model, 'anthropic/claude-sonnet-5-5', 'the model that ANSWERED, as the door reports it');
+  assert.equal(res.provider, 'anthropic');
+  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'workers', 'studio', 'moments.js'), 'utf8');
+  assert.doesNotMatch(source, /queryAnthropic|claude-[a-z]+-\d/, 'moments.js asks the door, never a provider by name');
+});
+
+test('the default call goes through generate() and reads its answer and its refusal', async () => {
+  const asked = [];
+  const door = async (opts) => {
+    asked.push(opts);
+    return { ok: true, text: '{}', provider: 'openai', providerLabel: 'OpenAI', model: 'gpt-5.5', usage: { promptTokens: 10 }, stopReason: 'stop', skipped: [] };
+  };
+  const ok = await queryThroughDoor('SYS', 'USER', { tier: 'strong', maxTokens: 8000, timeoutMs: 1000, feature: 'studio_reel_moments' }, door);
+  assert.equal(asked[0].system, 'SYS');
+  assert.equal(asked[0].messages, 'USER');
+  assert.equal(asked[0].tier, 'strong');
+  assert.equal(asked[0].feature, 'studio_reel_moments');
+  assert.equal(ok.model, 'openai/gpt-5.5');
+  assert.equal(ok.provider, 'openai');
+  const no = await queryThroughDoor('S', 'U', {}, async () => ({ ok: false, code: 'no_provider', error: 'nobody can pay', skipped: [{ provider: 'anthropic' }] }));
+  assert.deepEqual([no.ok, no.code, no.error], [false, 'no_provider', 'nobody can pay']);
+});
+
+test('an answer cut off is caught whichever provider wrote it', async () => {
+  for (const stopReason of ['max_tokens', 'length', 'MAX_TOKENS']) {
+    const { query } = stub(replyText, { stopReason });
+    const res = await scoreMoments(input(), { query, config: CONFIG });
+    assert.equal(res.state, 'failed', stopReason);
+    assert.match(res.reason, /cut off/);
+  }
 });
 
 test('buildPrompt lists no cuts as "none" rather than an empty heading', () => {

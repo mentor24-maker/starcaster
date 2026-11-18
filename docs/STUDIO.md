@@ -427,6 +427,64 @@ with no cut-marks row and no job waiting, and prints the running tally —
 `cut marks: 27 done · 0 failed · 0 still to do`. It is a dry run until you add
 `-- --apply`, and a second `--apply` enqueues nothing.
 
+## Scoring moments (Reel Spinner step 2)
+
+Once a recording's cut marks are `done`, the cut-marks step puts a `moments`
+job on the queue and the Mini picks out the stretches of 20 to 60 seconds worth
+sharing on their own, plus a one-paragraph summary. Like the cut marks, each
+result is a list of **decisions** — "41.2 s to 78.9 s scores 86, it speaks to
+WaveCenter" — stored in `video_moments`, one row per recording. No video file
+is touched.
+
+**What it is judged against is Dane's own notes**: every Context entry
+switched on for Reel Spinner (Assets › Context), read at the moment of scoring
+and put in the request word for word. Each row keeps a fingerprint of the
+notes it was scored against. **Editing the notes does not rescore anything by
+itself** — every rescore costs money, so it is Dane's call; the row simply
+shows it was scored against an older version. No notes switched on writes a
+`failed` row saying so, and nothing is sent.
+
+**Which AI answers** is the AI door's choice (Settings › APIs › AI provider),
+never this step's: the first provider in the order that can pay. The row's
+`model` says which one did, e.g. `openai/gpt-5.5-2026-04-23`.
+
+- **No provider able to pay** (every one out of credit or without a key), or
+  no network at all, is the machine's fault: the job waits **an hour**, no
+  attempt is used up, no row is written, and the bus hears once every six
+  hours — *"Reel Spinner scoring is stopped: no AI provider can pay.
+  Anthropic: out of credit. OpenAI: no key."* The next successful score clears
+  that, so if it stops again it is announced straight away.
+- **An answer the rules refuse** (not the agreed shape, cut off, no moment
+  that fits) writes a `failed` row with the reason, and the job is finished —
+  retrying would pay for the same refusal again.
+- **Any other failed call** (a timeout, a rate limit) retries on the queue's
+  usual schedule, and only when the retries run out is a `failed` row written,
+  saying why.
+- **A save that fails after the AI answered** keeps the answer on the Mini for
+  a day, so the retry saves it without paying for it twice.
+- **Rescoring:** the screen (step 2e) stamps `rescore_requested_at`; the
+  daemon looks for stamps once a minute and queues one job per recording. A
+  request made while that recording was being scored is kept and answered by
+  the next run.
+- Scoring waits behind every new recording's transcription and cut marks.
+
+**Measured on the Mini (2026-11-18)**, the 14-minute recording in the tests
+(835 s, 1,877 words, 59 cut marks): one call, **59 seconds**, 10 moments,
+answered by OpenAI (`gpt-5.5`) because the Anthropic account could not pay —
+**4,906 tokens in and 5,050 out**. The request grows with the recording and
+the answer does not, so **an hour of recording is about 21,000 tokens in and
+5,000 out**. In dollars: on Anthropic's Sonnet 5.5 ($2 in / $10 out per
+million) that is about **$0.09 an hour of recording**. The OpenAI dollar
+figure is not known here — `lib/aiPricing.js` has no OpenAI rates yet, so it
+is reported as "not priced", never as $0; OpenAI's own usage page has it.
+
+**Catching up:** recordings whose cut marks were found before this existed
+were never queued. `npm run studio:backfill-moments` (on the Mini) lists every
+recording with finished cut marks, no moments row and no job waiting, and
+prints the running tally — `moments: 33 done · 0 failed · 0 still to do`. It
+is a dry run until you add `-- --apply` (each job is one paid AI call), and a
+second `--apply` queues nothing.
+
 ## Matching iPhone and Zoom recordings (Reel Spinner step 3)
 
 When Dane films a session on the iPhone while Zoom records it too, the edit
@@ -566,7 +624,11 @@ For an agent session working on this, not for day-to-day use.
     `lib/videoMomentsStore.js`; `requestRescore` stamps
     `rescore_requested_at`, and a score clears it only if its run began
     after the stamp (`runStartedAt`, required), so a rescore asked for
-    mid-run is kept for the next one.
+    mid-run is kept for the next one. Written by the Mini's scoring pass,
+    `workers/studio/momentsPass.js` (Reel Spinner 2d), whose rules are
+    `workers/studio/moments.js` (2c); `listRescoreRequests` is what its
+    `moments.rescore` watcher reads, `listMomentStates` what
+    `scripts/studio_backfill_moments.cjs` reads.
   - `video_audio_pairs`, one row per pair of recordings made together, filed
     with the smaller source id as A whichever way round it is asked; offset
     and drift are measured from A to B. Store `lib/videoAudioPairsStore.js`.

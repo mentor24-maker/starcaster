@@ -18,6 +18,10 @@
  *
  * A cut mark is a decision, never an edit: no video file is touched.
  *
+ * A `done` row hands the source on: the pass queues a `moments` job for it
+ * (workers/studio/momentsPass.js, Reel Spinner 2d), which scores its best
+ * moments against Dane's notes.
+ *
  * WHAT IS CHARGED TO THE FILE, AND WHAT IS NOT — the same line transcribePass
  * draws. whisper, ffmpeg or the model missing, or the catalog unreachable, is a
  * fact about the machine: the job is released for 15 minutes with no attempt
@@ -244,7 +248,19 @@ async function cutMarksJob({
       return { ...base, outcome: 'failed', jobAction: 'failed', reason };
     }
     const completed = queue.complete(job.id, owner);
-    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason };
+    // Reel Spinner 2d (SC-829): finished cut marks are what scoring waits on.
+    // Keyed by source, so a second pass over the same recording is one job.
+    let scoring = null;
+    if (completed) {
+      try {
+        scoring = require('./momentsPass.js').enqueueMoments(queue, { sourceId, why: 'its cut marks are done' });
+      } catch (err) {
+        return { ...base, outcome, jobAction: 'completed', reason,
+          momentsNotQueued: `the scoring job could not be queued: ${err.message} — npm run studio:backfill-moments queues it` };
+      }
+    }
+    return { ...base, outcome, jobAction: completed ? 'completed' : 'none', reason,
+      ...(scoring ? { momentsJobId: scoring.job.id } : {}) };
   };
   const failIt = (reason, extra = {}, keep = false) => settle({ state: CUTS_FAILED, reason, rulesVersion: RULES_VERSION, ...extra },
     'failed', reason, { keep });
