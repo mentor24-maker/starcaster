@@ -309,6 +309,11 @@
        },
        "containers": [
         "24"
+       ],
+       "anchors": [
+        "et-main-area",
+        "main-content",
+        "post-2"
        ]
       },
       {
@@ -355,6 +360,9 @@
        },
        "containers": [
         "30"
+       ],
+       "anchors": [
+        "about-us"
        ]
       },
       {
@@ -548,6 +556,10 @@
        },
        "containers": [
         "51"
+       ],
+       "anchors": [
+        "services",
+        "resources"
        ]
       },
       {
@@ -1011,6 +1023,9 @@
        },
        "containers": [
         "97"
+       ],
+       "anchors": [
+        "contact-us"
        ]
       },
       {
