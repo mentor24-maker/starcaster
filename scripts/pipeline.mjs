@@ -202,7 +202,10 @@ async function buildStartFor(taskId) {
 /** Find the switch and read its trail — see pipelinePauseStore for the three
  *  outcomes and why "could not read" and "no switch" must never be conflated. */
 function readSwitch(opts = {}) {
-  return storeReadSwitch({ call, list: LOOP_QUEUE_LIST, pauseTaskId: PAUSE_TASK, ...opts });
+  // `findSwitch` lets a read that wants only the switch (`check`) skip the
+  // work queue entirely — the switch ticket and its trail, nothing else
+  // (SC-851). A read `withQueue` still reads the queue, as before.
+  return storeReadSwitch({ call, list: LOOP_QUEUE_LIST, pauseTaskId: PAUSE_TASK, findSwitch: toTracker.findSwitch, ...opts });
 }
 
 function fetchQueue() {
