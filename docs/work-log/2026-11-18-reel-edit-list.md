@@ -15,7 +15,9 @@ had not started yet (or had already stopped) and nothing is being said, that
 bit of silence is simply trimmed. Only when real speech would lose its sound
 does the edit fall back to its own recording, and it says why. (Review caught
 that the first version gave up the cleaner sound on every full edit, because
-every recording opens on a quarter second of kept silence.)
+every recording opens on a quarter second of kept silence. A second review caught
+that two cameras started almost together could leave a hundredth-of-a-second
+scrap of silence in the edit; that is now dropped like any other sliver.)
 
 One thing learned on the real recording: the transcriber stretches a word's
 time over the pause after it, so by its raw times most cut edges looked like

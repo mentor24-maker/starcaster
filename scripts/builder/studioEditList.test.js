@@ -300,3 +300,38 @@ test('a moment dropped for bad times, no score, or starting past the end is list
   assert.ok(why.some((w) => /starts at 900 s, after the recording ends \(835\.65 s\)/.test(w)));
   assert.deepEqual(plan.shorts.map((s) => s.moment.score), [88, 84, 80], 'bad moments must not displace good ones');
 });
+
+test('a trim that leaves less than a quarter second of silence drops it, and counts it as trimmed', () => {
+  // B started 0.24 s after A — two cameras started together land here. The
+  // opening pause A keeps is 0-0.25 s, so trimming to B's first frame leaves
+  // 0.24-0.25 s: a 0.01 s sliver no render could use. It goes, and the full
+  // 0.25 s counts as trimmed so kept + cut still equals the length.
+  const pair = { sourceAId: A, sourceBId: B, offsetS: 0.24, status: 'done', audioSourceId: B, chosenBy: 'measured' };
+  const full = fullEdit(input({ sourceId: A, pair, otherDurationS: 2000 }));
+  assert.equal(full.sound.sourceId, B);
+  assert.deepEqual(full.ranges[0], { start: 3.193, end: 6.412 });
+  assert.equal(full.sound.trimmedS, 0.25);
+  for (const r of full.ranges) {
+    assert.ok(r.end - r.start >= SLIVER_S - EPS || sounding.some((w) => w.start < r.end - EPS && w.end > r.start + EPS),
+      `${r.start}-${r.end} is a silent sliver`);
+  }
+  assert.equal(full.sound.ranges.length, full.ranges.length);
+  assert.ok(Math.abs(full.keptS + full.cutS - recording.durationS) < 0.002, 'kept + cut no longer equals the length');
+});
+
+test('a short never reaches outside the recording, even when its moment does', () => {
+  const s = shortEdit(input(), { start_s: 829.75, end_s: 900, score: 90 });
+  assert.ok(s.startS >= 0 && s.endS <= recording.durationS, `${s.startS}-${s.endS} is outside 0-${recording.durationS}`);
+  assert.equal(s.endS, recording.durationS);
+  for (const r of s.ranges) assert.ok(r.end <= recording.durationS + EPS);
+  const early = shortEdit(input(), { start_s: -5, end_s: 10, score: 90 });
+  assert.equal(early.startS, 0);
+});
+
+test('a config naming one setting keeps the other from the settings', () => {
+  const plan = planEdits(input(), { config: { minShortScore: 70 } });
+  assert.deepEqual(plan.config, { minShortScore: 70, shortsPerRecording: DEFAULT_SHORTS_PER_RECORDING });
+  assert.deepEqual(plan.shorts.map((s) => s.moment.score), [88, 84, 80], 'the cap of 3 must still hold');
+  const capOnly = planEdits(input(), { config: { shortsPerRecording: 1 } });
+  assert.deepEqual(capOnly.config, { minShortScore: DEFAULT_SHORT_MIN_SCORE, shortsPerRecording: 1 });
+});

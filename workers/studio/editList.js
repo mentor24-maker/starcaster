@@ -39,7 +39,7 @@
 const { PAUSE_KEEP_S } = require('./cutMarks.js');
 
 /** Bump when any rule below changes, so a stored edit can say which rules made it. */
-const RULES_VERSION = '2';
+const RULES_VERSION = '3';
 
 /** Without a measured frame rate, a frame is this long (30 fps). */
 const DEFAULT_FPS = 30;
@@ -298,17 +298,29 @@ function soundFor(ranges, sourceId, pair, otherDurationS, sounding = []) {
       return ownSound(`own sound: the other recording ${spoken.at === 'start' ? 'had not started' : 'had already stopped'} where this edit has speech (${round(spoken.start)}-${round(spoken.end)} s)`);
     }
     trimmedS += lost.reduce((n, l) => n + (l.end - l.start), 0);
-    if (end - start > EPS) picture.push({ start: round(start), end: round(end) });
+    if (end - start <= EPS) continue;
+    // keepRanges tidied BEFORE this trim, so tidy what the trim left: a
+    // remnant under a quarter second is a sliver like any other, and goes
+    // unless a word sounds in it (a 0-0.25 s opening pause with the other
+    // recording starting at 0.24 s left 0.24-0.25 s otherwise).
+    if (end - start < SLIVER_S - EPS && !soundsIn(sounding, start, end)) {
+      trimmedS += end - start;
+      continue;
+    }
+    picture.push({ start: round(start), end: round(end) });
   }
   if (!picture.length) return ownSound('own sound: the other recording covers none of this edit');
 
+  // Offsets are measured to the millisecond; round the shift before adding it
+  // so sound times stay on the same millisecond grid as picture times.
+  const shiftS = round(src.shiftS);
   const notes = [src.why];
   if (trimmedS > EPS) notes.push(`${round(trimmedS)} s of silence the other recording did not cover was trimmed`);
   if (!knowsEnd) notes.push("could not check the other recording's end: its length was not given");
   return {
     sourceId: src.sourceId,
-    shiftS: round(src.shiftS),
-    ranges: picture.map((r) => ({ start: round(r.start + src.shiftS), end: round(r.end + src.shiftS) })),
+    shiftS,
+    ranges: picture.map((r) => ({ start: round(r.start + shiftS), end: round(r.end + shiftS) })),
     pictureRanges: picture,
     trimmedS: round(trimmedS),
     why: notes.join('; '),
@@ -393,7 +405,9 @@ function shortWindow(moment, ctx) {
     if (c.end <= from + EPS && c.end > start) start = c.end;
     if (c.start >= to - EPS && c.start < end) end = c.start;
   }
-  return { start: Math.min(start, from), end: Math.max(end, to) };
+  // The moment's own times win over the lead-in rules, but never past the
+  // recording's ends: a moment stamped beyond them must not reach outside.
+  return { start: Math.max(0, Math.min(start, from)), end: Math.min(ctx.duration, Math.max(end, to)) };
 }
 
 /**
@@ -413,10 +427,16 @@ function shortEdit(input, moment) {
       ...(moment.project ? { project: moment.project } : {}),
       ...(moment.mood ? { mood: moment.mood } : {}),
     },
-    leadInS: round(moment.start_s - window.start),
-    leadOutS: round(window.end - moment.end_s),
+    leadInS: round(Math.max(0, moment.start_s - window.start)),
+    leadOutS: round(Math.max(0, window.end - moment.end_s)),
     sound,
   });
+}
+
+function pickDefined(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) if (v !== undefined) out[k] = v;
+  return out;
 }
 
 /**
@@ -427,10 +447,11 @@ function shortEdit(input, moment) {
  *
  * @param {object} input  as fullEdit, plus `moments` (2c's list)
  * @param {object} [deps]
- * @param {object} [deps.config] `{ minShortScore, shortsPerRecording }`; editListConfig() by default
+ * @param {object} [deps.config] `{ minShortScore, shortsPerRecording }`, either or both;
+ *   laid over editListConfig(), so naming one never unsets the other
  */
 function planEdits(input, deps = {}) {
-  const config = deps.config || editListConfig();
+  const config = { ...editListConfig(), ...pickDefined(deps.config) };
   const ctx = context(input);
   const shorts = [];
   const passedOver = [];
