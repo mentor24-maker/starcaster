@@ -5,3 +5,5 @@ Until now, which AI company StarCaster used was decided by a hidden setting. Cha
 Key values never go near this screen. Each provider shows only the *name* of the setting its key lives in, and says plainly when that key is missing ("no key: add MOONSHOT_API_KEY to Doppler production"). A save only reports success after the database has been read back.
 
 If the saved setting is missing or can't be read, everything carries on exactly as it does today, and the screen says which order is in charge and why. Production needs one new table (docs/SQL/ai_provider_settings_setup.sql) before the screen can save there.
+
+Dane ran that table in production the same afternoon, and it was read back there. A timing test with real AI keys then confirmed the "about a minute" promise: one running program made a call, a separate program saved a new order, and the running program's calls switched over 61 seconds later with no restart. That test also found Google had retired both Gemini models StarCaster offered by default (any call to them came back "no longer available"), so the defaults now name the replacements Google itself recommends.
