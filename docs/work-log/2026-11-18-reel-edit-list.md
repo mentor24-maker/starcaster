@@ -10,8 +10,12 @@ Every recording gets one full edit (the whole thing minus the cuts) and up to
 three shorts, one per moment scoring 60 or more. Both numbers are settings,
 not fixed in the code. When an iPhone take and a Zoom recording of the same
 session have been lined up, the edit uses the cleaner recording's sound,
-shifted by exactly how far apart the two started. If the other recording does
-not cover the whole edit, the edit uses its own sound and says why.
+shifted by exactly how far apart the two started. Where the other recording
+had not started yet (or had already stopped) and nothing is being said, that
+bit of silence is simply trimmed. Only when real speech would lose its sound
+does the edit fall back to its own recording, and it says why. (Review caught
+that the first version gave up the cleaner sound on every full edit, because
+every recording opens on a quarter second of kept silence.)
 
 One thing learned on the real recording: the transcriber stretches a word's
 time over the pause after it, so by its raw times most cut edges looked like
@@ -19,4 +23,7 @@ they fell mid-word. They do not. They fall in silence. The edit list measures
 a word by where it actually sounds, and the tests check every edge that way.
 
 On the test recording (835.65 s) the full edit keeps 752.4 s and cuts 83.3 s;
-the three shorts run 43.5, 51.2 and 33.8 s. No rendering, no database yet.
+the three shorts (scores 88, 84, 80) span 43.5, 51.2 and 33.8 s and keep 40.9,
+50.2 and 33.8 s once their own cuts are out. Paired with a second recording
+that started 2.345 s later, the full edit still uses that recording's sound,
+losing only the 0.25 s of opening silence. No rendering, no database yet.

@@ -39,7 +39,7 @@
 const { PAUSE_KEEP_S } = require('./cutMarks.js');
 
 /** Bump when any rule below changes, so a stored edit can say which rules made it. */
-const RULES_VERSION = '1';
+const RULES_VERSION = '2';
 
 /** Without a measured frame rate, a frame is this long (30 fps). */
 const DEFAULT_FPS = 30;
@@ -184,7 +184,9 @@ function keepRanges(window, cuts, { frameS, sounding }) {
   const joined = [];
   for (const r of ranges) {
     const last = joined[joined.length - 1];
-    if (last && r.start - last.end < frameS - EPS) {
+    // A cut shorter than one frame cannot be rendered, so it is joined over.
+    // (No EPS slack here: `frameS - EPS` left a 0.030 s cut at 30 fps unjoined.)
+    if (last && r.start - last.end < frameS) {
       last.end = r.end;
       merged += 1;
     } else joined.push({ ...r });
@@ -254,29 +256,73 @@ function soundSource(sourceId, pair) {
 }
 
 /**
- * The sound's keep ranges: the picture's, shifted onto the sound's clock. A
- * stretch the other recording did not record (before its first frame, or past
- * its end when that is known) means the pairing cannot cover this edit, so
- * the edit falls back to its own sound and says why — a clip with half its
- * sound missing is worse than a clip with the plainer sound.
+ * The sound's keep ranges: the picture's, shifted onto the sound's clock.
+ *
+ * The other recording only covers part of this one's clock: from its first
+ * frame (`-shiftS` here) to its end (`otherDurationS - shiftS`, when known). A
+ * kept stretch that runs outside that is trimmed to the covered part WHEN NO
+ * WORD SOUNDS in the trimmed-off piece — the opening quarter second of pause
+ * every recording keeps is the usual case, and losing it costs nothing. The
+ * picture is trimmed the same way, so picture and sound stay the same length.
+ * Only when real speech would lose its sound does the edit fall back to its
+ * own sound and say why: a clip with half its sound missing is worse than a
+ * clip with the plainer sound.
+ *
+ * @returns {{ sourceId, shiftS, ranges, pictureRanges, trimmedS, why }}
  */
-function soundFor(ranges, sourceId, pair, otherDurationS) {
+function soundFor(ranges, sourceId, pair, otherDurationS, sounding = []) {
   const src = soundSource(sourceId, pair);
-  if (!src.paired) return { sourceId: src.sourceId, shiftS: 0, ranges: ranges.map((r) => ({ ...r })), why: src.why };
-  const shifted = ranges.map((r) => ({ start: round(r.start + src.shiftS), end: round(r.end + src.shiftS) }));
-  const before = shifted.find((r) => r.start < -EPS);
-  const after = isSeconds(otherDurationS) && otherDurationS > 0
-    ? shifted.find((r) => r.end > otherDurationS + EPS) : null;
-  if (before || after) {
-    const own = soundSource(sourceId, null);
-    return {
-      sourceId: own.sourceId,
-      shiftS: 0,
-      ranges: ranges.map((r) => ({ ...r })),
-      why: `own sound: the other recording ${before ? 'had not started' : 'had already stopped'} at part of this edit`,
-    };
+  const ownSound = (why) => ({
+    sourceId: soundSource(sourceId, null).sourceId,
+    shiftS: 0,
+    ranges: ranges.map((r) => ({ ...r })),
+    pictureRanges: ranges.map((r) => ({ ...r })),
+    trimmedS: 0,
+    why,
+  });
+  if (!src.paired) return { ...ownSound(src.why) };
+
+  const knowsEnd = isSeconds(otherDurationS) && otherDurationS > 0;
+  const lo = -src.shiftS;
+  const hi = knowsEnd ? otherDurationS - src.shiftS : Infinity;
+  const picture = [];
+  let trimmedS = 0;
+  for (const r of ranges) {
+    const start = Math.max(r.start, lo);
+    const end = Math.min(r.end, hi);
+    const lost = [];
+    if (start > r.start + EPS) lost.push({ start: r.start, end: Math.min(r.end, start), at: 'start' });
+    if (end < r.end - EPS) lost.push({ start: Math.max(r.start, end), end: r.end, at: 'end' });
+    const spoken = lost.find((l) => soundsIn(sounding, l.start, l.end));
+    if (spoken) {
+      return ownSound(`own sound: the other recording ${spoken.at === 'start' ? 'had not started' : 'had already stopped'} where this edit has speech (${round(spoken.start)}-${round(spoken.end)} s)`);
+    }
+    trimmedS += lost.reduce((n, l) => n + (l.end - l.start), 0);
+    if (end - start > EPS) picture.push({ start: round(start), end: round(end) });
   }
-  return { sourceId: src.sourceId, shiftS: round(src.shiftS), ranges: shifted, why: src.why };
+  if (!picture.length) return ownSound('own sound: the other recording covers none of this edit');
+
+  const notes = [src.why];
+  if (trimmedS > EPS) notes.push(`${round(trimmedS)} s of silence the other recording did not cover was trimmed`);
+  if (!knowsEnd) notes.push("could not check the other recording's end: its length was not given");
+  return {
+    sourceId: src.sourceId,
+    shiftS: round(src.shiftS),
+    ranges: picture.map((r) => ({ start: round(r.start + src.shiftS), end: round(r.end + src.shiftS) })),
+    pictureRanges: picture,
+    trimmedS: round(trimmedS),
+    why: notes.join('; '),
+  };
+}
+
+/**
+ * Settle the sound, and let it trim the picture: an edit's `ranges` and its
+ * `sound.ranges` always pair up one to one and run the same length.
+ */
+function withSound(kept, input, ctx) {
+  const sound = soundFor(kept.ranges, input.sourceId, input.pair, input.otherDurationS, ctx.sounding);
+  const { pictureRanges, ...rest } = sound;
+  return { kept: { ...kept, ranges: pictureRanges }, sound: rest };
 }
 
 function summarise(kind, window, kept, extra) {
@@ -325,10 +371,8 @@ function context(input) {
 function fullEdit(input) {
   const ctx = context(input);
   const window = { start: 0, end: ctx.duration };
-  const kept = keepRanges(window, ctx.cuts, ctx);
-  return summarise('full', window, kept, {
-    sound: soundFor(kept.ranges, input.sourceId, input.pair, input.otherDurationS),
-  });
+  const { kept, sound } = withSound(keepRanges(window, ctx.cuts, ctx), input, ctx);
+  return summarise('full', window, kept, { sound });
 }
 
 /**
@@ -359,7 +403,7 @@ function shortWindow(moment, ctx) {
 function shortEdit(input, moment) {
   const ctx = context(input);
   const window = shortWindow(moment, ctx);
-  const kept = keepRanges(window, ctx.cuts, ctx);
+  const { kept, sound } = withSound(keepRanges(window, ctx.cuts, ctx), input, ctx);
   return summarise('short', window, kept, {
     moment: {
       startS: moment.start_s,
@@ -371,7 +415,7 @@ function shortEdit(input, moment) {
     },
     leadInS: round(moment.start_s - window.start),
     leadOutS: round(window.end - moment.end_s),
-    sound: soundFor(kept.ranges, input.sourceId, input.pair, input.otherDurationS),
+    sound,
   });
 }
 
@@ -388,12 +432,20 @@ function shortEdit(input, moment) {
 function planEdits(input, deps = {}) {
   const config = deps.config || editListConfig();
   const ctx = context(input);
-  const moments = (Array.isArray(input.moments) ? input.moments : [])
-    .filter((m) => m && isSeconds(m.start_s) && isSeconds(m.end_s) && m.end_s > m.start_s && isSeconds(m.score))
-    .filter((m) => m.start_s < ctx.duration);
-  const ranked = [...moments].sort((a, b) => b.score - a.score || a.start_s - b.start_s);
   const shorts = [];
   const passedOver = [];
+  const moments = [];
+  for (const m of Array.isArray(input.moments) ? input.moments : []) {
+    const at = { startS: m && m.start_s, endS: m && m.end_s, score: m && m.score };
+    if (!m || !isSeconds(m.start_s) || !isSeconds(m.end_s) || m.end_s <= m.start_s) {
+      passedOver.push({ ...at, why: 'its times are not usable (missing, or it ends before it starts)' });
+    } else if (!isSeconds(m.score)) {
+      passedOver.push({ ...at, why: 'it has no score' });
+    } else if (m.start_s >= ctx.duration) {
+      passedOver.push({ ...at, why: `it starts at ${m.start_s} s, after the recording ends (${round(ctx.duration)} s)` });
+    } else moments.push(m);
+  }
+  const ranked = [...moments].sort((a, b) => b.score - a.score || a.start_s - b.start_s);
   for (const m of ranked) {
     const at = { startS: m.start_s, endS: m.end_s, score: m.score };
     if (m.score < config.minShortScore) passedOver.push({ ...at, why: `scored ${m.score}, under the ${config.minShortScore} a short needs` });

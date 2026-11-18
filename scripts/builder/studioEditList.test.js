@@ -147,6 +147,14 @@ test('ranges closer than a frame are joined; a sliver goes unless a word sounds 
   const merged = keepRanges(window, [{ start: 4, end: 4.02 }], frame);
   assert.deepEqual(merged.ranges, [{ start: 0, end: 10 }]);
   assert.equal(merged.merged, 1);
+  // 0.03 s is still under a 30 fps frame (0.0333 s), so it is joined too.
+  const nearFrame = keepRanges(window, [{ start: 4, end: 4.03 }], frame);
+  assert.deepEqual(nearFrame.ranges, [{ start: 0, end: 10 }]);
+  assert.equal(nearFrame.merged, 1);
+  // A cut of two frames is real, and stays.
+  const twoFrames = keepRanges(window, [{ start: 4, end: 4.067 }], frame);
+  assert.equal(twoFrames.ranges.length, 2);
+  assert.equal(twoFrames.merged, 0);
 
   const cuts = [{ start: 4, end: 5 }, { start: 5.1, end: 6 }]; // leaves 5.0-5.1
   const silent = keepRanges(window, cuts, frame);
@@ -163,7 +171,6 @@ test('a paired recording\'s sound ranges are shifted by exactly the offset', () 
   const pair = { sourceAId: A, sourceBId: B, offsetS: 2.345, status: 'done', audioSourceId: B, chosenBy: 'measured' };
 
   // B started 2.345 s after A, so A's clock reads 2.345 s more than B's.
-  // (A FULL edit from A's 0 s cannot use B — the next test — so use a short.)
   const asA = shortEdit(input({ sourceId: A, pair, otherDurationS: 2000 }), moments[0]);
   assert.equal(asA.sound.sourceId, B);
   assert.equal(asA.sound.shiftS, -2.345);
@@ -189,15 +196,43 @@ test('a paired recording\'s sound ranges are shifted by exactly the offset', () 
   });
 });
 
-test('the edit falls back to its own sound, and says why', () => {
-  const pair = { sourceAId: A, sourceBId: B, offsetS: 2.345, status: 'done', audioSourceId: B };
+test('the recording that started first still gets the paired sound on its full edit', () => {
+  // The full edit opens on the quarter second of pause every recording keeps
+  // (0-0.25 s). B started 2.345 s after A, so B has nothing there — but no
+  // word sounds there either, so that silence is trimmed, not the pairing.
+  const pair = { sourceAId: A, sourceBId: B, offsetS: 2.345, status: 'done', audioSourceId: B, chosenBy: 'measured' };
+  const own = fullEdit(input({ sourceId: A }));
+  const full = fullEdit(input({ sourceId: A, pair, otherDurationS: 2000 }));
+  assert.equal(full.sound.sourceId, B);
+  assert.equal(full.sound.shiftS, -2.345);
+  assert.deepEqual(own.ranges[0], { start: 0, end: 0.25 });
+  assert.deepEqual(full.ranges, own.ranges.slice(1), 'only the uncovered opening silence went');
+  assert.equal(full.sound.trimmedS, 0.25);
+  assert.match(full.sound.why, /0\.25 s of silence .* trimmed/);
+  assert.equal(full.sound.ranges.length, full.ranges.length);
+  full.ranges.forEach((r, i) => {
+    assert.ok(Math.abs(full.sound.ranges[i].start - (r.start - 2.345)) < 1e-9, `range ${i} not shifted`);
+    assert.ok(full.sound.ranges[i].start >= 0, `range ${i} starts before B's first frame`);
+  });
+  assert.ok(Math.abs(full.keptS + full.cutS - recording.durationS) < 0.002, 'kept + cut no longer equals the length');
+});
+
+test('the edit falls back to its own sound only when speech would lose its sound, and says why', () => {
+  const pair = { sourceAId: A, sourceBId: B, offsetS: 4, status: 'done', audioSourceId: B };
+  // B started 4 s in, and A is already talking at 3.193 s.
   const early = fullEdit(input({ sourceId: A, pair, otherDurationS: 2000 }));
   assert.equal(early.sound.sourceId, A);
-  assert.match(early.sound.why, /had not started/);
+  assert.match(early.sound.why, /had not started where this edit has speech/);
+  assert.deepEqual(early.sound.ranges, early.ranges);
 
   const short = fullEdit(input({ sourceId: A, pair: { ...pair, offsetS: -1 }, otherDurationS: 500 }));
   assert.equal(short.sound.sourceId, A);
   assert.match(short.sound.why, /had already stopped/);
+
+  // The other recording's length not given: used, and the gap in the check is named.
+  const unknownEnd = fullEdit(input({ sourceId: A, pair: { ...pair, offsetS: -1 } }));
+  assert.equal(unknownEnd.sound.sourceId, B);
+  assert.match(unknownEnd.sound.why, /could not check the other recording's end: its length was not given/);
 
   assert.match(soundSource(A, null).why, /no line-up/);
   assert.match(soundSource(A, { ...pair, status: 'failed', error: 'clocks drift' }).why, /failed: clocks drift/);
@@ -247,4 +282,21 @@ test('every moment not made into a short says why', () => {
   assert.deepEqual(plan.passedOver.map((p) => p.score), [72, 55]);
   assert.match(plan.passedOver[0].why, /3 better-scoring/);
   assert.match(plan.passedOver[1].why, /scored 55, under the 60/);
+});
+
+test('a moment dropped for bad times, no score, or starting past the end is listed with why', () => {
+  const extra = [
+    { start_s: 50, end_s: 40, score: 99 },
+    { start_s: 'x', end_s: 10, score: 99 },
+    { start_s: 100, end_s: 120 },
+    { start_s: 900, end_s: 910, score: 99 },
+    null,
+  ];
+  const plan = planEdits(input({ moments: [...moments, ...extra] }), { config: CONFIG });
+  assert.equal(plan.shorts.length + plan.passedOver.length, moments.length + extra.length);
+  const why = plan.passedOver.map((p) => p.why);
+  assert.equal(why.filter((w) => /times are not usable/.test(w)).length, 3);
+  assert.equal(why.filter((w) => /no score/.test(w)).length, 1);
+  assert.ok(why.some((w) => /starts at 900 s, after the recording ends \(835\.65 s\)/.test(w)));
+  assert.deepEqual(plan.shorts.map((s) => s.moment.score), [88, 84, 80], 'bad moments must not displace good ones');
 });
