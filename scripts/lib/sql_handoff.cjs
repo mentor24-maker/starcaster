@@ -19,6 +19,7 @@
  * what the block looks like, the same reason `map` and `tidy` share theirs.
  */
 
+const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -106,20 +107,120 @@ function blockUrl(branch, file) {
   return `${REMOTE}/${branch}/${file}`;
 }
 
-/** The block exactly as §6.5 specifies: plain text, never fenced. */
-function renderBlock(branch, file) {
-  return `${BANNER_OPEN}\n\n${blockUrl(branch, file)}\n\n${BANNER_CLOSE}`;
+/**
+ * The block exactly as §6.5 specifies: plain text, never fenced. `ref` is
+ * `main` for a merged file, or the pushed commit (or, before the push, the
+ * branch) for a file only on a branch.
+ */
+function renderBlock(ref, file) {
+  return `${BANNER_OPEN}\n\n${blockUrl(ref, file)}\n\n${BANNER_CLOSE}`;
 }
 
 /**
- * Has this message already handed off `file`? Requires both the banner and
- * that file's branch-qualified URL — a banner alone, or a URL pointing at
- * main, is the failure mode we are catching.
+ * The message with every fenced code block removed. A block inside a fence
+ * renders its link as dead text (operator, 2026-08-12: "can you make that link
+ * clickable?"), so a fenced block is not a hand-off, and a path quoted inside a
+ * fence is quoting, not asking him to run anything.
+ */
+function splitFences(message) {
+  const prose = [];
+  const fenced = [];
+  let fence = null;
+  let body = [];
+  for (const line of String(message || '').split('\n')) {
+    const m = /^\s*(`{3,}|~{3,})/.exec(line);
+    if (fence) {
+      if (m && m[1][0] === fence[0] && m[1].length >= fence.length) {
+        fenced.push(body.join('\n'));
+        fence = null;
+        body = [];
+      } else {
+        body.push(line);
+      }
+      continue;
+    }
+    if (m) { fence = m[1]; continue; }
+    prose.push(line);
+  }
+  if (fence) fenced.push(body.join('\n')); // an unclosed fence still renders as code
+  return { prose: prose.join('\n'), fenced };
+}
+
+function proseOf(message) {
+  return splitFences(message).prose;
+}
+
+const isCommit = (ref) => /^[0-9a-f]{7,40}$/i.test(String(ref || ''));
+
+/**
+ * Has this message handed off `file` with a link whose ref `acceptRef` allows?
+ * Both the banner and the file's own GitHub URL must be in the prose -- a
+ * banner alone, a URL alone, or either inside a code fence is the failure.
+ */
+function handsOffWith(message, file, acceptRef) {
+  const prose = proseOf(message);
+  if (!prose.includes(BANNER_OPEN)) return false;
+  const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`${REMOTE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/([^\\s/]+)/${escaped}(?![\\w.-])`, 'g');
+  for (const m of prose.matchAll(re)) {
+    if (acceptRef(m[1])) return true;
+  }
+  return false;
+}
+
+/**
+ * Has this message already handed off a file THIS BRANCH adds? Its link names
+ * the branch or a commit. A link by `main` is refused: the file is not on main
+ * yet (or main has an older copy), which is the broken-link trap §6.5 records.
  */
 function messageHandsOff(message, branch, file) {
-  const text = String(message || '');
-  if (!text.includes(BANNER_OPEN)) return false;
-  return text.includes(blockUrl(branch, file));
+  return handsOffWith(message, file, (ref) => ref === branch || isCommit(ref));
+}
+
+/**
+ * Has this message handed off a file that is ALREADY ON MAIN -- merged, and
+ * waiting to be run in production? Its link names `main` or a commit; a branch
+ * link is refused, because merged branches are deleted and the link dies.
+ */
+function messageHandsOffMerged(message, file) {
+  return handsOffWith(message, file, (ref) => ref === 'main' || isCommit(ref));
+}
+
+/**
+ * Every docs/SQL file this message names outside a code fence (or inside a
+ * fence that holds the SQL handoff block's banner), as its
+ * repository path, in the order named. A bare file name, a repo-relative path,
+ * a markdown link and a GitHub URL all count, as long as `docs/SQL/<name>`
+ * exists in this checkout -- so talk about some other `.sql` file is not
+ * mistaken for a hand-off.
+ *
+ * WHY: on 2026-11-17 a card said "Run docs/SQL/video_reel_spinner_setup.sql in
+ * Supabase" for a file merged a day earlier (SC-832). The Stop hook above only
+ * ever asked about SQL the branch ADDS, and stood aside on main, so a reply
+ * pointing at merged-but-unapplied SQL -- the usual case -- was never checked.
+ */
+function mentionedSqlFiles(message, root) {
+  const found = [];
+  // A fence that carries the banner is a hand-off put where its link cannot
+  // be clicked, not a quotation -- so its files count, and then fail.
+  const { prose, fenced } = splitFences(message);
+  const scanned = [prose, ...fenced.filter((body) => body.includes(BANNER_OPEN))].join('\n');
+  for (const m of scanned.matchAll(/[\w.-]+\.sql(?![\w])/gi)) {
+    const file = `${SQL_DIR}${m[0]}`;
+    if (found.includes(file)) continue;
+    if (root && fs.existsSync(path.join(root, file))) found.push(file);
+  }
+  return found;
+}
+
+/** Is `file` on origin/main, so a `main` link opens it? */
+function onMain(root, file) {
+  return Boolean(tryGit(['cat-file', '-t', `origin/main:${file}`], root));
+}
+
+/** The pushed commit to link a branch's file by, or '' when it is not pushed. */
+function pushedCommit(root) {
+  return isPushed(root) ? tryGit(['rev-parse', '--short=12', 'HEAD'], root) : '';
 }
 
 module.exports = {
@@ -133,4 +234,10 @@ module.exports = {
   blockUrl,
   renderBlock,
   messageHandsOff,
+  messageHandsOffMerged,
+  mentionedSqlFiles,
+  proseOf,
+  onMain,
+  pushedCommit,
+  isCommit,
 };
