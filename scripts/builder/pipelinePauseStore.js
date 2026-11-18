@@ -146,9 +146,58 @@ function findSwitchByName(tasks) {
  *                        "not paused".
  *   otherwise            { task, comments } for pipelinePause.readTrail.
  */
-async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
+async function readSwitch({ call, list, pauseTaskId = '', withQueue = false, findSwitch = null }) {
   let task = null;
   let queue = null;
+
+  /** Read the found switch's whole trail. Shared by both ways of finding it. */
+  async function readTrailOf(found, withList) {
+    // EVERY page of the trail, not the newest 25.
+    //
+    // The state is ONE comment on a task that also collects an hourly reminder
+    // comment while it is paused, so an unpaged read loses the pause record after
+    // about 25 hours and reports the pipeline RUNNING — the two headline features
+    // cancelling each other out, failing open, overnight, which is exactly when
+    // the reminder exists. Found in review on 2026-08-26.
+    const trail = await pageComments({
+      get: async (path) => {
+        const out = await safely(call, 'GET', path);
+        // The RAW status, not `statusOf`'s number, when it is the reserve's
+        // non-numeric sentinel (task 86bc0w6my). `Number('YIELDED (…)')` is NaN,
+        // and `whyOf` then printed `HTTP ?` — the reserve's own words lost one
+        // layer below the place that was built to print them.
+        const raw = out?.res?.status ?? out?.status;
+        const status = (typeof raw === 'string' && !/^\d+$/.test(raw.trim())) ? raw : statusOf(out);
+        return { ok: okOf(out), status, json: out?.json ?? null, threw: out?.threw, text: out?.text, yielded: out?.yielded };
+      },
+      taskId: found.id,
+    });
+    if (!trail.complete) {
+      const why = trail.capped
+        ? 'the trail did not end within the page budget, so the state record may be beyond it'
+        : whyOf(trail.failed);
+      return { readable: false, why: `reading the switch's comments: ${why}`, yielded: !trail.capped && yieldedOf(trail.failed) };
+    }
+
+    return { readable: true, switchFound: true, task: found, comments: trail.comments, queue: withList };
+  }
+
+  // THE SWITCH ALONE, when the caller can find it without the queue (SC-851).
+  // `check` wants one thing, the switch, and reading the whole queue for it
+  // read every closed ticket on the tracker: 851 requests, which from the
+  // MacBook never finished, so every check there failed safe to PAUSED. The
+  // same three outcomes apply: a read that did not work is UNREADABLE, and
+  // only a read that worked and named no such ticket is a confirmed absence.
+  if (findSwitch && !withQueue && !pauseTaskId) {
+    let found;
+    try { found = await findSwitch(); } catch (err) { found = { readable: false, why: String(err && err.message) }; }
+    if (!found || !found.readable || !Array.isArray(found.tasks)) {
+      return { readable: false, why: (found && found.why) || 'finding the switch ticket: no answer' };
+    }
+    task = findSwitchByName(found.tasks);
+    if (!task) return { readable: true, switchFound: false, queue: null };
+    return readTrailOf(task, null);
+  }
 
   /** Read the list once, lazily — `status` always wants it, `check` only does
    *  when it has to fall back to the name lookup. */
@@ -194,34 +243,7 @@ async function readSwitch({ call, list, pauseTaskId = '', withQueue = false }) {
     if (!task) return { readable: true, switchFound: false, queue };
   }
 
-  // EVERY page of the trail, not the newest 25.
-  //
-  // The state is ONE comment on a task that also collects an hourly reminder
-  // comment while it is paused, so an unpaged read loses the pause record after
-  // about 25 hours and reports the pipeline RUNNING — the two headline features
-  // cancelling each other out, failing open, overnight, which is exactly when
-  // the reminder exists. Found in review on 2026-08-26.
-  const trail = await pageComments({
-    get: async (path) => {
-      const out = await safely(call, 'GET', path);
-      // The RAW status, not `statusOf`'s number, when it is the reserve's
-      // non-numeric sentinel (task 86bc0w6my). `Number('YIELDED (…)')` is NaN,
-      // and `whyOf` then printed `HTTP ?` — the reserve's own words lost one
-      // layer below the place that was built to print them.
-      const raw = out?.res?.status ?? out?.status;
-      const status = (typeof raw === 'string' && !/^\d+$/.test(raw.trim())) ? raw : statusOf(out);
-      return { ok: okOf(out), status, json: out?.json ?? null, threw: out?.threw, text: out?.text, yielded: out?.yielded };
-    },
-    taskId: task.id,
-  });
-  if (!trail.complete) {
-    const why = trail.capped
-      ? 'the trail did not end within the page budget, so the state record may be beyond it'
-      : whyOf(trail.failed);
-    return { readable: false, why: `reading the switch's comments: ${why}`, yielded: !trail.capped && yieldedOf(trail.failed) };
-  }
-
-  return { readable: true, switchFound: true, task, comments: trail.comments, queue };
+  return readTrailOf(task, queue);
 }
 
 module.exports = { fetchQueue, readSwitch, findSwitchByName, loopNoteOf, whyOf, safely, okOf, statusOf, yieldedOf };

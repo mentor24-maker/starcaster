@@ -74,6 +74,20 @@ test('the contact details and the form sit side by side, with no empty picture',
   assert.equal(empty.length, 0, 'no image module without a picture');
 });
 
+test('one plain band split over two rows stays one band', () => {
+  // Services is one white band on the original; split into a heading row and
+  // a cards row, the theme's alternating bands painted the heading row grey.
+  const { sections } = home();
+  const heading = sections.findIndex((s) => s.modules.some((m) => /<h2>Services<\/h2>/.test(m.text || '')));
+  const cards = sections.findIndex((s) => s.modules.some((m) => m.type === 'feature-cards'));
+  assert.equal(cards, heading + 1);
+  assert.equal(sections[heading].joinWithPrevious, undefined, 'the band starts at the heading');
+  assert.equal(sections[cards].joinWithPrevious, true, 'the cards row joins it');
+  // A row from a different band never joins the one above it.
+  const contact = sections.findIndex((s) => s.modules.some((m) => m.type === 'crm-form'));
+  assert.notEqual(sections[contact].joinWithPrevious, true);
+});
+
 test('ownColorOnBand: a picture is trusted, a fill must be readable, the theme colour adds nothing', () => {
   const look = { headingWeights: {}, linkColor: '', headingColor: '#333333', textColor: '#333333' };
   const white = { class: 'heading', html: '<h1>x</h1>', computedStyles: { color: 'rgb(255, 255, 255)' } };

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MomentsView from './moments-view';
 
 /**
  * Assets › Footage — every video file the Studio pipeline has catalogued,
@@ -522,7 +523,7 @@ function MarkedTranscript({ cuts, fileDurationS }: { cuts: Cuts; fileDurationS: 
 function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () => void }): React.ReactElement {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [error, setError] = useState('');
-  const [mode, setMode] = useState<'clean' | 'cuts'>('clean');
+  const [mode, setMode] = useState<'clean' | 'cuts' | 'moments'>('clean');
   const [cuts, setCuts] = useState<Cuts | null>(null);
   const [cutsError, setCutsError] = useState('');
 
@@ -587,7 +588,7 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
         <button type="button" className="btn" onClick={onClose}>Close</button>
       </div>
       <div className="studio-footage-cuts-switch" role="group" aria-label="How to show the transcript">
-        {([['clean', 'Clean'], ['cuts', 'With cuts marked']] as const).map(([value, label]) => (
+        {([['clean', 'Clean'], ['cuts', 'With cuts marked'], ['moments', 'Moments']] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -607,6 +608,7 @@ function TranscriptView({ source, onClose }: { source: SourceRow; onClose: () =>
           {cuts ? <MarkedTranscript cuts={cuts} fileDurationS={source.durationS} /> : null}
         </>
       ) : null}
+      {mode === 'moments' ? <MomentsView sourceId={source.id} /> : null}
       {mode === 'clean' && error ? <p className="studio-footage-error" role="alert">{`Transcript not shown: ${error}`}</p> : null}
       {mode === 'clean' && !error && !transcript ? <p className="studio-footage-empty">Loading the transcript…</p> : null}
       {mode === 'clean' && transcript && !transcript.segments.length ? (

@@ -416,3 +416,39 @@ export function mergeMappedSections<T extends { id: string }>(
   merged.push(...unanchored);
   return merged;
 }
+
+/**
+ * On a rebuild, the sections an earlier build of this import made that the
+ * new build no longer produces (SC-850). mergeMappedSections only ever
+ * replaces and adds, so when an import fix stops the mapper making a section
+ * — SC-849's doubled header — the old one stayed on every page.
+ *
+ * A section is the import's to remove only when all three hold: its id is an
+ * import id (`imps_`), this build does not produce it, and its content still
+ * matches the fingerprint the import recorded for it. One that was edited
+ * since (fingerprint differs) stays and is returned in `keptEdited` so the
+ * build report can name it. One with no recorded fingerprint is not known to
+ * be the import's work and stays, unreported.
+ */
+export function dropStaleImportSections<T extends { id: string }>(
+  currentSections: T[],
+  mappedSections: { id: string }[],
+  io: { recordedHash: (id: string) => string | undefined; fingerprint: (section: T) => string }
+): { sections: T[]; removed: T[]; keptEdited: T[] } {
+  const produced = new Set(mappedSections.map((s) => s.id));
+  const sections: T[] = [];
+  const removed: T[] = [];
+  const keptEdited: T[] = [];
+  for (const s of currentSections) {
+    const recorded = String(s.id || "").startsWith("imps_") && !produced.has(s.id) ? io.recordedHash(s.id) : undefined;
+    if (!recorded) {
+      sections.push(s);
+    } else if (io.fingerprint(s) === recorded) {
+      removed.push(s);
+    } else {
+      keptEdited.push(s);
+      sections.push(s);
+    }
+  }
+  return { sections, removed, keptEdited };
+}

@@ -14,8 +14,12 @@
  *   GET /api/studio/search?q=<words>           every recording where those
  *                                              words were said, and when
  *
- * Read-only. The pipeline writes the catalog from the Mac Mini
- * (workers/studio/); nothing here changes a row.
+ *   GET /api/studio/sources/:id/moments        Reel Spinner's scored moments,
+ *   POST …/moments/rescore                     and asking for a rescore
+ *                                              (routes/studioMoments.js)
+ *
+ * Read-only but for the rescore flag. The pipeline writes the catalog from
+ * the Mac Mini (workers/studio/).
  *
  * WHERE THE PICTURES COME FROM. Nothing in the pipeline makes a thumbnail of
  * its own — the proxies it renders live on the Mini's disk, which a serverless
@@ -40,6 +44,7 @@ const {
 } = require('../lib/videoCutMarksStore');
 const googleDrive = require('../lib/googleDrive');
 const { checkEndpointLimit } = require('../lib/rateLimiter');
+const { handleMoments } = require('./studioMoments');
 
 /** The most rows one read takes. resolveLimit's own ceiling. */
 const READ_LIMIT = 1000;
@@ -365,6 +370,8 @@ async function googleDriveMeta(token, fileId) {
 }
 
 async function handle(req, res, pathname, method) {
+  // Reel Spinner's moments, and the one write here: a rescore request.
+  if (await handleMoments(req, res, pathname, method)) return true;
   if (method !== 'GET') return false;
 
   if (pathname === '/api/studio/footage') {

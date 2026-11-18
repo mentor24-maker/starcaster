@@ -48,7 +48,7 @@ import {
   type MappedBackground,
   type SurfaceLook,
 } from "./surfaces";
-export { mergeMappedSections } from "./columns";
+export { mergeMappedSections, dropStaleImportSections } from "./columns";
 export { deriveImportTheme, nextThemeName, siteNameFromUrl, guardPaletteReadability, uncoveredPaletteRoles, PALETTE_PAIRS } from "./theme";
 
 /** Keep merged text modules comfortably under the hard 10k normalizer cap. */
@@ -588,12 +588,21 @@ export function dropRepeatCaptures(pages: PageIR[]): {
 }
 
 export type PageWrite = { key: string; slug: string; pageId: string; action: "created" | "updated" };
+/** A page an earlier build of this import made that has since been deleted. */
+export type LeftOutPage = { key: string; slug: string; pageId: string };
 
 /**
  * The --apply page write loop, with the store passed in so it can be tested
  * without a database. Each mapped page is looked up, and recorded, under its
  * OWN key: a page whose key has a prior id is merged into that page, any
  * other page is created.
+ *
+ * A page the import built that is gone now (`getPage` returns null — only a
+ * clean "not found", never a failed read) was deleted by somebody, so it is
+ * LEFT OUT, not made again (SC-850: Bayside's author page came back on every
+ * rebuild and was deleted by hand each time). Its id stays in `pageIds`, so
+ * the next rebuild still knows it was deleted rather than never built.
+ * `recreateDeleted` makes them again, on request.
  */
 export async function writeMappedPages<S>(
   pages: MappedPage[],
@@ -603,22 +612,28 @@ export async function writeMappedPages<S>(
     getPage: (id: string) => Promise<{ id: string | number; layoutSections?: S[] } | null>;
     createPage: (page: MappedPage, sections: S[]) => Promise<{ id: string | number }>;
     updatePage: (page: MappedPage, current: { id: string | number; layoutSections?: S[] }, merged: S[]) => Promise<{ id: string | number }>;
-    mergeSections: (existing: S[], incoming: S[]) => S[];
+    mergeSections: (existing: S[], incoming: S[], page: MappedPage) => S[];
     onWrite?: (page: MappedPage, pageId: string, sections: S[], action: PageWrite["action"]) => void;
+    recreateDeleted?: boolean;
   }
-): Promise<{ pageIds: Record<string, string>; writes: PageWrite[] }> {
+): Promise<{ pageIds: Record<string, string>; writes: PageWrite[]; leftOut: LeftOutPage[] }> {
   const pageIds: Record<string, string> = { ...io.priorPageIds };
   const writes: PageWrite[] = [];
+  const leftOut: LeftOutPage[] = [];
   for (const page of pages) {
     const sections = io.prepareSections(page);
     const existingId = pageIds[page.key];
     // Read the page's CURRENT state at write time — a listing taken at
     // startup is stale by now, and merging against it reverts edits.
-    const current = existingId ? await io.getPage(existingId) : null; // vanished page → recreate
+    const current = existingId ? await io.getPage(existingId) : null;
+    if (existingId && !current && !io.recreateDeleted) {
+      leftOut.push({ key: page.key, slug: page.slug, pageId: String(existingId) });
+      continue;
+    }
     let saved: { id: string | number };
     let action: PageWrite["action"];
     if (current) {
-      saved = await io.updatePage(page, current, io.mergeSections(current.layoutSections || [], sections));
+      saved = await io.updatePage(page, current, io.mergeSections(current.layoutSections || [], sections, page));
       action = "updated";
     } else {
       saved = await io.createPage(page, sections);
@@ -629,7 +644,7 @@ export async function writeMappedPages<S>(
     writes.push({ key: page.key, slug: page.slug, pageId, action });
     io.onWrite?.(page, pageId, sections, action);
   }
-  return { pageIds, writes };
+  return { pageIds, writes, leftOut };
 }
 
 /**
@@ -1277,12 +1292,17 @@ type Dispositions = { mapped: number; placeholder: number; deduped: number; form
 function applyBand(
   row: MappedSection,
   look: SurfaceLook | null,
-  at: { first: boolean; last: boolean; rows: number }
+  at: { first: boolean; last: boolean; rows: number; joinPlain?: boolean }
 ): void {
   if (!look) return;
   if (look.background) {
     row.background = { ...look.background };
     if (!at.first) row.joinWithPrevious = true;
+  } else if (at.joinPlain && !at.first) {
+    // One source band split over several rows stays one band even with no
+    // paint of its own (SC-849): unjoined, the theme's alternating bands gave
+    // Bayside Partners' Services heading row grey and its cards row white.
+    row.joinWithPrevious = true;
   }
   if (at.first && look.padding.top) row.paddingTop = look.padding.top;
   if (at.last && look.padding.bottom) row.paddingBottom = look.padding.bottom;
@@ -1446,7 +1466,7 @@ function splitIntoRows(args: {
         let end = i;
         while (end < bands.length - 1 && rowBand[end + 1] === key) end++;
         const look = args.bandLookOf(key);
-        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1 });
+        applyBand(row, look, { first: i === start, last: i === end, rows: end - start + 1, joinPlain: true });
         // A band that is this one row keeps its height (SC-849). A band split
         // over several rows is left content-sized: which row would take the
         // empty space is a guess.
