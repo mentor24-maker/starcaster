@@ -36,6 +36,8 @@ const googleDrivePath = require.resolve('../../lib/googleDrive.js');
 const momentsStorePath = require.resolve('../../lib/videoMomentsStore.js');
 const contextForPath = require.resolve('../../lib/contextFor.js');
 const momentsRoutePath = require.resolve('../../routes/studioMoments.js');
+const pairsStorePath = require.resolve('../../lib/videoAudioPairsStore.js');
+const pairsRoutePath = require.resolve('../../routes/studioPairs.js');
 const routePath = require.resolve('../../routes/studio.js');
 
 // ── the pure view ───────────────────────────────────────────────────────────
@@ -197,7 +199,7 @@ const SCOPE_B = { projectId: 'proj_b', userId: 'user_2' };
 
 const ROUTE_MODULES = [
   projectScopePath, sessionsStorePath, sourcesStorePath, transcriptsStorePath, cutMarksStorePath,
-  momentsStorePath, momentsRoutePath, routePath,
+  momentsStorePath, momentsRoutePath, pairsStorePath, pairsRoutePath, routePath,
 ];
 
 /** What readContextFor answers in these tests: one note, fingerprint 'fp-now'. */
@@ -229,6 +231,7 @@ function withRoute({ drive, failTranscripts = false, failCutMarks = false, notes
       videoTranscripts: 'video_transcripts',
       videoCutMarks: 'video_cut_marks',
       videoMoments: 'video_moments',
+      videoAudioPairs: 'video_audio_pairs',
     }),
     sbQuery,
   });
@@ -244,19 +247,21 @@ function withRoute({ drive, failTranscripts = false, failCutMarks = false, notes
   const transcripts = require(transcriptsStorePath);
   const cutMarks = require(cutMarksStorePath);
   const moments = require(momentsStorePath);
+  const pairs = require(pairsStorePath);
   const restore = () => {
     for (const [p, entry] of Object.entries(saved)) {
       if (entry) require.cache[p] = entry; else delete require.cache[p];
     }
     for (const p of ROUTE_MODULES) delete require.cache[p];
   };
-  return { route, sessions, sources, transcripts, cutMarks, moments, notesAsked, db, restore };
+  return { route, sessions, sources, transcripts, cutMarks, moments, pairs, notesAsked, db, restore };
 }
 
-function call(route, url, scope, method = 'GET') {
+function call(route, url, scope, method = 'GET', body = undefined) {
   const req = {
     url,
     method,
+    body,
     headers: { host: 'localhost' },
     projectContext: { project: { id: scope.projectId, name: scope.name || '' } },
     authUser: { id: scope.userId },
@@ -1034,5 +1039,103 @@ test('GET on the rescore address is refused, not run', async () => {
     assert.equal(res.statusCode, 405);
   } finally {
     stores.restore();
+  }
+});
+
+// ── Reel Spinner 3b (SC-832): recorded together with ─────────────────────────
+
+test('pairsViewFor: each file sees its partner, whose sound is used, and whether it was Dane', () => {
+  const { pairsViewFor, buildFootage } = require('../../lib/studioFootage');
+  const names = new Map([['src_a', 'IMG_1.MOV'], ['src_b', 'zoom.mp4']]);
+  const pairs = [{ id: 'p1', sourceAId: 'src_a', sourceBId: 'src_b', status: 'done', offsetS: 20, driftS: 0, audioSourceId: 'src_b', chosenBy: 'measured' }];
+  const [fromA] = pairsViewFor('src_a', pairs, names);
+  assert.equal(fromA.partnerName, 'zoom.mp4');
+  assert.equal(fromA.soundFromName, 'zoom.mp4');
+  assert.equal(fromA.soundIsThisFile, false);
+  assert.equal(fromA.offsetS, 20);
+  const [fromB] = pairsViewFor('src_b', pairs, names);
+  assert.equal(fromB.partnerName, 'IMG_1.MOV');
+  assert.equal(fromB.soundIsThisFile, true);
+  assert.equal(fromB.offsetS, -20, 'the offset is said from this file\'s side');
+  assert.deepEqual(pairsViewFor('src_c', pairs, names), []);
+
+  const view = buildFootage({
+    sources: [{ id: 'src_a', localPath: '/c/IMG_1.MOV' }, { id: 'src_b', localPath: '/c/zoom.mp4' }],
+    pairs,
+  });
+  const files = view.sessions.flatMap((s) => s.sources);
+  assert.equal(files.find((f) => f.id === 'src_a').pairs[0].partnerName, 'zoom.mp4');
+});
+
+test('pairsViewFor: a refused pair says why in words, drift with how far', () => {
+  const { pairsViewFor, pairReasonText } = require('../../lib/studioFootage');
+  const [drift] = pairsViewFor('src_a', [{ id: 'p', sourceAId: 'src_a', sourceBId: 'src_b', status: 'failed', error: 'drift', driftS: -0.25 }]);
+  assert.equal(drift.status, 'failed');
+  assert.match(drift.reason, /clocks drift apart \(0\.25 s by the end\)/);
+  assert.equal(pairReasonText('no_match'), 'their sound did not match anywhere');
+  assert.match(pairReasonText('audio_could_not_be_read: the sound file is not on disk at /x.wav'), /could not be read — the sound file is not on disk/);
+  assert.equal(pairReasonText('something_new'), 'something_new', 'an unknown code is shown, never dropped');
+  assert.equal(pairReasonText(''), 'no reason was recorded');
+});
+
+test('GET /api/studio/footage shows each recording its partner, and POST …/sound is Dane\'s switch', async () => {
+  const stores = withRoute();
+  const { route, pairs, restore } = stores;
+  try {
+    const zoom = await sourceIn(stores, SCOPE_A, { deviceLane: 'zoom', localPath: '/c/zoom/call.mp4' });
+    const phone = await sourceIn(stores, SCOPE_A, { deviceLane: 'iphone', localPath: '/c/iphone/IMG_2001.MOV' });
+    const saved = await pairs.upsertAudioPair(zoom.id, phone.id, {
+      status: 'done', offsetS: 20, driftS: 0.01, confidence: 0.9, audioSourceId: zoom.id,
+    }, SCOPE_A);
+    assert.equal(saved.ok, true, saved.error);
+
+    const listed = json((await call(route, '/api/studio/footage', SCOPE_A)).res);
+    assert.equal(listed.data.pairsError, '');
+    const files = listed.data.sessions.flatMap((g) => g.sources);
+    const onPhone = files.find((f) => f.id === phone.id).pairs;
+    assert.equal(onPhone.length, 1);
+    assert.equal(onPhone[0].partnerName, 'call.mp4');
+    assert.equal(onPhone[0].soundFromName, 'call.mp4');
+    assert.equal(onPhone[0].chosenBy, 'measured');
+
+    // The switch: the phone's sound, then reload — it stays switched.
+    const chose = await call(route, `/api/studio/pairs/${saved.data.id}/sound`, SCOPE_A, 'POST', { audioSourceId: phone.id });
+    assert.equal(chose.res.statusCode, 200, chose.res.body);
+    assert.equal(json(chose.res).data.chosenBy, 'dane');
+    const again = json((await call(route, '/api/studio/footage', SCOPE_A)).res).data.sessions.flatMap((g) => g.sources);
+    const after = again.find((f) => f.id === zoom.id).pairs[0];
+    assert.equal(after.soundIsThisFile, false);
+    assert.equal(after.soundFromName, 'IMG_2001.MOV');
+    assert.equal(after.chosenBy, 'dane');
+
+    // Another project cannot reach the pair; a stranger's sound is refused; GET is not the switch.
+    const foreign = await call(route, `/api/studio/pairs/${saved.data.id}/sound`, SCOPE_B, 'POST', { audioSourceId: phone.id });
+    assert.equal(foreign.res.statusCode, 404);
+    const stranger = await call(route, `/api/studio/pairs/${saved.data.id}/sound`, SCOPE_A, 'POST', { audioSourceId: 'src_nobody' });
+    assert.equal(stranger.res.statusCode, 400);
+    const empty = await call(route, `/api/studio/pairs/${saved.data.id}/sound`, SCOPE_A, 'POST', {});
+    assert.equal(empty.res.statusCode, 400);
+    const get = await call(route, `/api/studio/pairs/${saved.data.id}/sound`, SCOPE_A, 'GET');
+    assert.equal(get.res.statusCode, 405);
+  } finally {
+    restore();
+  }
+});
+
+test('GET /api/studio/footage: pairs that cannot be read keep the list up and say so', async () => {
+  const stores = withRoute();
+  const { route, db, restore } = stores;
+  try {
+    await sourceIn(stores, SCOPE_A, { deviceLane: 'zoom' });
+    const real = db.sbQuery.bind(db);
+    db.sbQuery = (args) => (args.table === 'video_audio_pairs'
+      ? Promise.resolve({ ok: false, status: 404, error: 'relation "video_audio_pairs" does not exist' })
+      : real(args));
+    const body = json((await call(route, '/api/studio/footage', SCOPE_A)).res);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.totalSources, 1);
+    assert.match(body.data.pairsError, /video_audio_pairs/);
+  } finally {
+    restore();
   }
 });

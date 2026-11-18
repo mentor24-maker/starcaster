@@ -46,6 +46,7 @@ const videoSourcesStore = require('../../lib/videoSourcesStore.js');
 const videoTranscriptsStore = require('../../lib/videoTranscriptsStore.js');
 const { enqueueTranscribe, TRANSCRIPT_NO_AUDIO } = require('./transcribePass.js');
 const { evictOriginal, enqueueRefetch } = require('./evict.js');
+const { enqueueAlign, isPairable } = require('./alignPass.js');
 
 const STAGE_PROXY = 'proxy';
 const SUBJECT_VIDEO_SOURCE = 'video_source';
@@ -303,6 +304,15 @@ async function proxyJob({
     }
   }
 
+  // An iPhone take or a Zoom recording may have a partner made at the same
+  // time: queue the line-up (Reel Spinner 3b, alignPass.js). It needs the WAV
+  // made above, so it is queued here and nowhere earlier.
+  let alignment = 'not asked for: only iPhone and Zoom recordings are lined up';
+  if (isPairable(readBack.data)) {
+    const queuedAlign = enqueueAlign(queue, { sourceId });
+    alignment = queuedAlign.created ? 'line-up queued' : 'line-up already queued';
+  }
+
   // The original has done its work: every stage after this reads the derived
   // copies. Delete it so the cache holds only sources not yet ready (evict.js
   // says when it is kept instead). AFTER the read-back, so a row that did not
@@ -320,6 +330,7 @@ async function proxyJob({
     proxyPath,
     proxyAction: proxyOut.action,
     transcription,
+    alignment,
     eviction,
     reason: proxyOut.action === ACTIONS.SKIPPED
       ? `original used directly (${proxyOut.reason}), WAV and contact sheet made`
