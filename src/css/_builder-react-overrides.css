@@ -12931,3 +12931,27 @@ a.builder-react-root .builder-event-calendar-item-title:hover,
   font-size: var(--text-sm);
   color: var(--ink-secondary);
 }
+
+/*
+ * A section's "Anchor name" (task SC-852). The "already taken" line is a plain
+ * sentence like the video warning above: the operator may still save, it is
+ * the link that would only ever reach the first section.
+ */
+.builder-section-anchor-name input {
+  width: 16ch;
+  max-width: 100%;
+}
+
+.builder-section-anchor-name-taken {
+  margin: 6px 0 0;
+  max-width: 48ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-primary, #1a202c);
+  font-weight: 600;
+}
+
+/* A menu item linking to a section: the page and the section side by side. */
+.builder-picker-section-select {
+  margin-top: 4px;
+}

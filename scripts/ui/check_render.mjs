@@ -134,6 +134,15 @@ function documentForSection({
   cellBackgrounds,
   cellOverlayScreens,
   spacers = 0,
+  /*
+   * The section's ANCHOR NAME, rendered as its id (task SC-852), and LEAD
+   * sections placed above everything else — a menu at the top of the page
+   * that links down to the subject. Together with `spacers` they let a
+   * contract click a link and measure whether the page actually landed on the
+   * named section, which is the only reading that proves a jump works.
+   */
+  anchorName,
+  leadSections = [],
   themeTreatments,
   // The theme's role palette (surface / inverse / button pairs …), for
   // rendering that depends on which ground a module sits on (86bctakk0).
@@ -237,8 +246,19 @@ function documentForSection({
     ...(rowBorderColor ? { rowBorderColor } : {}),
     ...(rowBorderStyle ? { rowBorderStyle } : {}),
     ...(rowBorderRadius ? { rowBorderRadius } : {}),
+    ...(anchorName ? { anchorName } : {}),
     modules: modules.map(moduleFrom),
   };
+
+  const lead = leadSections.map((section, index) => ({
+    id: `section-render-contract-lead-${index}`,
+    title: `Lead ${index}`,
+    layout: 'single',
+    locked: false,
+    alignment: 'left',
+    widthMode: 'contained',
+    modules: (section.modules || []).map(moduleFrom),
+  }));
 
   const before = Array.from({ length: spacers }, (_, i) => spacer('before', i));
   const after = Array.from({ length: spacers }, (_, i) => spacer('after', i));
@@ -279,7 +299,7 @@ function documentForSection({
 
   return {
     name: 'Render Contract Section',
-    layoutSections: [...before, subject, ...after],
+    layoutSections: [...lead, ...before, subject, ...after],
     /*
      * THE PAGE's own background, for the same reason `background` above is
      * carried: a page video background is a real ELEMENT behind the whole
