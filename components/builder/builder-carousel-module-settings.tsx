@@ -602,6 +602,7 @@ export function BuilderCarouselModuleSettings({
                   <BuilderProjectDataPicker
                     source="pages"
                     valueKind="path"
+                    allowSections
                     value={item.linkUrl}
                     onChange={(linkUrl) => updateItem(item.id, { linkUrl })}
                     noneLabel="— No link —"

@@ -3,7 +3,13 @@
 import Link from "@tiptap/extension-link";
 import { useEffect, useState } from "react";
 import { isPageLink, makePageLink, PAGE_LINK_ATTR, parsePageLink } from "@/lib/page-link";
-import { type BuilderPickerOption, loadPickerOptions } from "@/components/builder/builder-project-data-picker";
+import {
+  type BuilderPickerOption,
+  type BuilderPickerSection,
+  loadPickerOptions,
+  pickerSectionsFor
+} from "@/components/builder/builder-project-data-picker";
+import { useBuilderPageSections } from "@/components/builder/builder-page-sections-context";
 
 /**
  * A link inside rich text that can point at one of the site's own pages BY
@@ -18,6 +24,11 @@ import { type BuilderPickerOption, loadPickerOptions } from "@/components/builde
  * in lib/builder-client/page-link.js), so renaming the page never breaks the
  * link. A link typed as a web address carries no attribute and is exactly
  * what it always was.
+ *
+ * A link may also name one SECTION of the page (task SC-853, the shape SC-852
+ * built): `<a href="/team#bios" data-page-link="page:20#s-bios|/team#bios">`.
+ * The section is stored by its id, so renaming its anchor name never breaks
+ * the link.
  *
  * Without this extension tiptap's Link mark knows only href/target/rel/class
  * and would silently drop the attribute the moment the text was opened.
@@ -43,29 +54,49 @@ export type RichTextLinkValue = { href: string; pageLink: string | null };
 
 type Mode = "page" | "web";
 
+const MISSING_SECTION = "__missing__";
+
 /** Which mode and page the dialog opens on, for the link under the cursor. Exported for tests. */
 export function initialLinkChoice(
   current: RichTextLinkValue,
   pages: BuilderPickerOption[]
-): { mode: Mode; pageId: string; missingFallback: string } {
+): { mode: Mode; pageId: string; missingFallback: string; sectionId: string } {
   const reference = parsePageLink(current.pageLink);
   if (reference) {
     const found = pages.some((page) => page.id === reference.pageId);
-    return { mode: "page", pageId: reference.pageId, missingFallback: found ? "" : reference.fallback };
+    return {
+      mode: "page",
+      pageId: reference.pageId,
+      missingFallback: found ? "" : reference.fallback,
+      sectionId: found ? reference.sectionId : ""
+    };
   }
   if (current.href) {
     // An old typed address that is one of the site's pages opens on that
     // page, so applying the dialog upgrades it to a reference.
     const match = pages.find((page) => page.path === current.href);
-    return match ? { mode: "page", pageId: match.id, missingFallback: "" } : { mode: "web", pageId: "", missingFallback: "" };
+    return match
+      ? { mode: "page", pageId: match.id, missingFallback: "", sectionId: "" }
+      : { mode: "web", pageId: "", missingFallback: "", sectionId: "" };
   }
-  return { mode: pages.length ? "page" : "web", pageId: "", missingFallback: "" };
+  return { mode: pages.length ? "page" : "web", pageId: "", missingFallback: "", sectionId: "" };
 }
 
 /** What a choice saves. Exported for tests. */
-export function linkValueForChoice(mode: Mode, page: BuilderPickerOption | undefined, address: string): RichTextLinkValue | null {
+export function linkValueForChoice(
+  mode: Mode,
+  page: BuilderPickerOption | undefined,
+  address: string,
+  section?: BuilderPickerSection | null
+): RichTextLinkValue | null {
   if (mode === "page") {
     if (!page) return null;
+    if (section) {
+      // The href is today's address, so a copy of the HTML that never meets
+      // the resolver still lands on the section.
+      const href = `${page.path}#${section.anchorName}`;
+      return { href, pageLink: makePageLink(page.id, href, section.sectionId) };
+    }
     return { href: page.path, pageLink: makePageLink(page.id, page.path) };
   }
   const href = address.trim();
@@ -92,6 +123,8 @@ export function RichTextLinkDialog({
   const [mode, setMode] = useState<Mode>("web");
   const [pageId, setPageId] = useState("");
   const [missingFallback, setMissingFallback] = useState("");
+  const [sectionId, setSectionId] = useState("");
+  const editingPage = useBuilderPageSections();
   const [address, setAddress] = useState(current.pageLink ? "https://" : current.href || "https://");
 
   useEffect(() => {
@@ -103,6 +136,7 @@ export function RichTextLinkDialog({
       setMode(choice.mode);
       setPageId(choice.pageId);
       setMissingFallback(choice.missingFallback);
+      setSectionId(choice.sectionId);
     };
     // A page list that will not load must never block typing an address.
     loadPickerOptions("pages").then(settle, () => settle([]));
@@ -114,7 +148,15 @@ export function RichTextLinkDialog({
   }, []);
 
   const selectedPage = pages?.find((page) => page.id === pageId);
-  const next = linkValueForChoice(mode, selectedPage, address);
+  const sectionChoices = pickerSectionsFor(selectedPage, editingPage);
+  // A stored section that no longer has an anchor name stays chosen (its link
+  // still opens the page) until another choice is made.
+  const sectionKnown = !sectionId || sectionChoices.some((entry) => entry.sectionId === sectionId);
+  const selectedSection = sectionChoices.find((entry) => entry.sectionId === sectionId) ?? null;
+  const next =
+    mode === "page" && !sectionKnown && current.pageLink
+      ? { href: current.href, pageLink: current.pageLink }
+      : linkValueForChoice(mode, selectedPage, address, selectedSection);
 
   return (
     <div
@@ -155,7 +197,7 @@ export function RichTextLinkDialog({
       </div>
       {mode === "page" ? (
         <>
-          <select aria-label="Page" value={pageId} onChange={(event) => { setPageId(event.target.value); setMissingFallback(""); }}>
+          <select aria-label="Page" value={pageId} onChange={(event) => { setPageId(event.target.value); setMissingFallback(""); setSectionId(""); }}>
             <option value="">{pages === null ? "Loading…" : "Choose a page…"}</option>
             {missingFallback ? <option value={pageId}>Missing page ({missingFallback})</option> : null}
             {(pages ?? []).map((page) => (
@@ -164,6 +206,23 @@ export function RichTextLinkDialog({
               </option>
             ))}
           </select>
+          {selectedPage && (sectionChoices.length || sectionId) ? (
+            <select
+              aria-label="Section"
+              value={sectionKnown ? sectionId : MISSING_SECTION}
+              onChange={(event) => {
+                if (event.target.value !== MISSING_SECTION) setSectionId(event.target.value);
+              }}
+            >
+              <option value="">Top of the page</option>
+              {!sectionKnown ? <option value={MISSING_SECTION}>A section that no longer has an anchor name</option> : null}
+              {sectionChoices.map((entry) => (
+                <option key={entry.sectionId} value={entry.sectionId}>
+                  #{entry.anchorName}{entry.title ? ` — ${entry.title}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {missingFallback ? (
             <span className="builder-rich-text-link-dialog-note" role="note">
               The page this linked to no longer exists. Visitors are sent to its old address ({missingFallback}); choose another page.

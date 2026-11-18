@@ -41,6 +41,7 @@ export function BuilderEventDetailModuleSettings({
               control: "picker",
               source: "pages",
               valueKind: "path",
+              allowSections: true,
               noneLabel: "No back link",
               placeholder: "/whats-on",
               rendersVia: "EventDetailPreview back link"

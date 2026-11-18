@@ -117,6 +117,13 @@ export type BuilderSchemaField = BuilderSchemaFieldBase &
         control: "picker";
         source: "pages" | "posts" | "crm-forms";
         valueKind: "path" | "slug" | "id";
+        /**
+         * Pages only: also offer "a section on that page" once a page is
+         * chosen (tasks SC-852, SC-853). On for every link a visitor follows;
+         * off where the module builds an address on top of the page
+         * (NO_SECTION_LINK_SETTINGS in lib/pageInboundLinks.js).
+         */
+        allowSections?: boolean;
         /** Label for the empty-value option ("Current page", "Default"). */
         noneLabel?: string;
         placeholder?: string;
@@ -632,6 +639,7 @@ function renderControl(field: BuilderSchemaField, ctx: BuilderSchemaFieldContext
         <BuilderProjectDataPicker
           source={field.source}
           valueKind={field.valueKind}
+          allowSections={field.allowSections}
           noneLabel={field.noneLabel}
           placeholder={field.placeholder}
           ariaLabel={typeof field.label === "string" ? field.label : undefined}

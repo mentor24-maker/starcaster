@@ -469,6 +469,7 @@ export function BuilderFeatureCardsModuleSettings({
                 <BuilderProjectDataPicker
                   source="pages"
                   valueKind="path"
+                  allowSections
                   value={card.linkUrl}
                   onChange={(linkUrl) => updateCard(card.id, { linkUrl })}
                   noneLabel="— No link —"

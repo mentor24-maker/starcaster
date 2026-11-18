@@ -71,6 +71,7 @@ export function BuilderPlayerPortalSettings({ module, onUpdateModule }: BuilderP
           <BuilderProjectDataPicker
             source="pages"
             valueKind="path"
+            allowSections
             value={settings.redirectPath ?? "/portal/dashboard"}
             onChange={(redirectPath) => updateSetting("redirectPath", redirectPath)}
             noneLabel="— Default (/portal/dashboard) —"
