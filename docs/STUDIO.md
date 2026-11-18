@@ -472,7 +472,17 @@ Google's `videos.insert` page now says the opposite (read 2026-11-17):
 viewing mode."* The test upload is the proof for this project: it asks for
 unlisted (the lock blocks every visibility but Private, so unlisted answers the
 question without the test ever being public) and reads the answer back.
-Audit state: **not yet measured** — recorded on SC-841 once the test runs.
+Audit state: **not locked, no audit needed** — measured 2026-11-17, 8:40 PM MT,
+from the Mini, after the sign-in was in place. The probe printed
+`channel: Dane of Earth` / `upload: yes`; a Private test upload was changed to
+unlisted and read back `unlisted`, then deleted and confirmed gone.
+
+**Read the change back after a pause, not at once.** The first run that
+evening got `unlisted` as the update's own answer and then `private` from an
+immediate read, and reported LOCKED. Run again with the read repeated for up
+to 30 seconds, it read `unlisted`. So YouTube's read can lag its own write by
+a few seconds. The script now waits out that lag; anything in 6c that changes
+a video's visibility must do the same before believing either answer.
 
 **Daily allowance**, from Google's quota page (read 2026-11-17): uploads have
 their own bucket, **100 uploads a day, each costing 1**; everything else shares

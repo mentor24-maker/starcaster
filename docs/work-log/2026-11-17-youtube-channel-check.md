@@ -26,3 +26,12 @@ list), so the trouble was inside Google's own sign-in screens. The usual
 cause there is a browser signed in to several Google accounts at once. The
 sign-in now starts from a short address, `localhost:53682/start`, that Dane
 opens in a private window, which starts signed in to no account at all.
+
+**Later the same evening:** Dane finished the sign-in, and the Mini proved it
+works. The check printed "Dane of Earth" and "upload: yes". A 5-second test
+video went up as Private and was switched to Unlisted, which means YouTube is
+**not** locking our uploads, so Dane does not have to fill in Google's audit
+form. The first try wrongly said "locked": YouTube said yes to the change and
+then, a moment later, still reported the old setting. The test now waits up
+to 30 seconds before it decides. Both test videos were deleted, and YouTube
+confirmed they are gone.

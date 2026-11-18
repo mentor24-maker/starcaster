@@ -130,8 +130,17 @@ async function main() {
     });
     console.log(`change:   asked for unlisted — ${change.ok ? `YouTube answered privacy "${change.json.status && change.json.status.privacyStatus}"` : `refused (${why(change)})`}`);
 
-    const after = await readStatus(token, videoId);
-    const status = after.ok && after.json.items && after.json.items[0] && after.json.items[0].status;
+    // The update's own answer is not the verdict: on 2026-11-17 YouTube
+    // answered "unlisted" and an immediate read said "private". Read again
+    // for up to 30 seconds so a lagging read is not mistaken for the lock.
+    let after;
+    let status;
+    for (let attempt = 0; attempt < 7; attempt += 1) {
+      if (attempt) await new Promise((r) => setTimeout(r, 5000));
+      after = await readStatus(token, videoId);
+      status = after.ok && after.json.items && after.json.items[0] && after.json.items[0].status;
+      if (!status || status.privacyStatus === 'unlisted') break;
+    }
     if (!status) {
       console.log(`readback: could not read the video's status (${after.ok ? 'no such video' : why(after)})`);
     } else {
