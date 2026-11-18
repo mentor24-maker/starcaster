@@ -1374,6 +1374,57 @@ export const RENDER_CONTRACTS = [
     },
   },
   {
+    id: 'rich-text-headings-get-anchors-numbered-across-the-page',
+    why:
+      'Long pages gave a reader no way to jump to a heading: the original Delray and Dane of Earth ' +
+      'pages carried heading ids and StarCaster dropped them (task SC-856, from the 2026-11-17 ' +
+      'anchor sweep). Every heading in a Text module now gets an id from its words as the page ' +
+      'is drawn, numbered across the WHOLE page — each Text module is drawn on its own, so a ' +
+      'per-module count would hand two modules the same id. This puts "Junior Programs" in two ' +
+      'modules, a heading with its own id, and a "Contact Us" heading in a section already ' +
+      'named contact-us; reads every id; then clicks a link to the second "Junior Programs" and ' +
+      'measures that the page landed on it.',
+    section: {
+      layout: 'single',
+      anchorName: 'contact-us',
+      spacers: 3,
+      modules: [
+        { type: 'text', text: '<p><a href="#junior-programs-2">Jump to the second</a></p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>First.</p>' },
+        { type: 'text', text: '<h2>Junior Programs</h2><p>Second.</p>' },
+        { type: 'text', text: '<h2 id="my-name">Kept Its Name</h2><h3>Contact Us</h3>' },
+      ],
+    },
+    emulate: { reducedMotion: 'reduce' },
+    click: '.builder-preview-text a[href="#junior-programs-2"]',
+    selector: '#junior-programs-2',
+    read: ['display'],
+    series: {
+      count: 1,
+      everyMs: 0,
+      read: ['display'],
+      attrs: ['id'],
+      selectors: {
+        first: '#junior-programs',
+        second: '#junior-programs-2',
+        kept: 'h2#my-name',
+        contact: 'h3#contact-us-2',
+      },
+    },
+    expect(sample) {
+      if (!sample.found) return 'no heading carries the id "junior-programs-2" — the second "Junior Programs" was not numbered across the page.';
+      const frame = sample.series?.[0] || {};
+      if (!frame.first) return 'the first "Junior Programs" heading has no id "junior-programs" — headings in rich text are not getting anchors.';
+      if (!frame.kept) return 'the heading written with id="my-name" lost it — an id a heading already has must be kept.';
+      if (!frame.contact) return 'the "Contact Us" heading is not "contact-us-2" — it collided with (or was not numbered past) the section\'s anchor name.';
+      if (!frame.second) return 'the second "Junior Programs" heading could not be found after the click, so where it landed could not be measured.';
+      if (Math.abs(frame.second.top) > 4) {
+        return `after clicking the link the second "Junior Programs" heading sits ${Math.round(frame.second.top)}px from the top of the window — the page did not jump to it.`;
+      }
+      return null;
+    },
+  },
+  {
     id: 'button-linked-to-a-renamed-page-follows-it',
     why:
       'A Button whose Link was picked from the page list saved a COPY of the page\'s address, so ' +
