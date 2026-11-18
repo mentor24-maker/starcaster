@@ -48,11 +48,11 @@ describe("the Link dialog's choices", () => {
   });
 
   it("opens on the page a link already points at, by id, whatever its saved address", () => {
-    expect(initialLinkChoice({ href: "/old", pageLink: "page:13|/old" }, PAGES)).toEqual({ mode: "page", pageId: "13", missingFallback: "" });
+    expect(initialLinkChoice({ href: "/old", pageLink: "page:13|/old" }, PAGES)).toEqual({ mode: "page", pageId: "13", missingFallback: "", sectionId: "" });
   });
 
   it("says when the linked page is gone", () => {
-    expect(initialLinkChoice({ href: "/gone", pageLink: "page:99|/gone" }, PAGES)).toEqual({ mode: "page", pageId: "99", missingFallback: "/gone" });
+    expect(initialLinkChoice({ href: "/gone", pageLink: "page:99|/gone" }, PAGES)).toEqual({ mode: "page", pageId: "99", missingFallback: "/gone", sectionId: "" });
   });
 
   it("opens an old typed address that IS a page on that page, and anything else as a web address", () => {
